@@ -18,6 +18,27 @@
 | 0.12 | Create .env.local | [x] |
 | 0.13 | Verify database connection | [x] |
 
+## Phase 2: Authentication & Assessment Setup — COMPLETE
+
+| # | Task | Done |
+|---|------|------|
+| 2.1 | Implement magic link auth | [x] |
+| 2.2 | Implement User and Organization models | [x] |
+| 2.3 | Implement Session management | [x] |
+| 2.4 | Implement TOTP MFA enrollment | [x] |
+| 2.5 | Implement TOTP MFA verification | [x] |
+| 2.6 | Implement MFA enforcement middleware | [x] |
+| 2.7 | Implement role-based routing | [x] |
+| 2.8 | Implement area-locked permissions middleware | [x] |
+| 2.9 | Create login page | [x] |
+| 2.10 | Create MFA setup page | [x] |
+| 2.11 | Create MFA verify page | [x] |
+| 2.12 | Create assessment list page | [x] |
+| 2.13 | Create assessment creation flow | [x] |
+| 2.14 | Stakeholder management + onboarding | [x] |
+| 2.15 | Assessment status machine | [x] |
+| 2.16 | Per-company progress dashboard | [x] |
+
 ## Phase 1: Data Ingestion Pipeline — COMPLETE
 
 | # | Task | Done |
