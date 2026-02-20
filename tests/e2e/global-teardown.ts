@@ -9,7 +9,7 @@ import { config } from "dotenv";
 
 config({ path: path.join(__dirname, "../../.env.local") });
 
-const STORAGE_STATE_PATH = path.join(__dirname, ".auth-state.json");
+const STATE_DIR = __dirname;
 
 async function globalTeardown(): Promise<void> {
   const prisma = new PrismaClient();
@@ -20,9 +20,10 @@ async function globalTeardown(): Promise<void> {
       where: { user: { email: { endsWith: "@aptus.test" } } },
     });
 
-    // Remove storage state file
-    if (fs.existsSync(STORAGE_STATE_PATH)) {
-      fs.unlinkSync(STORAGE_STATE_PATH);
+    // Remove all storage state files
+    const stateFiles = fs.readdirSync(STATE_DIR).filter((f) => f.startsWith(".auth-state"));
+    for (const f of stateFiles) {
+      fs.unlinkSync(path.join(STATE_DIR, f));
     }
 
     console.log("[E2E Teardown] Test data cleaned up");

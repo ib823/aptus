@@ -1,7 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 import path from "path";
 
-const STORAGE_STATE = path.join(__dirname, "tests/e2e/.auth-state.json");
+function statePath(role: string): string {
+  return path.join(__dirname, `tests/e2e/.auth-state-${role}.json`);
+}
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -32,7 +34,47 @@ export default defineConfig({
       testMatch: /.*\.auth\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
-        storageState: STORAGE_STATE,
+        storageState: statePath("admin"),
+      },
+    },
+    {
+      name: "admin",
+      testMatch: /.*\.admin\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: statePath("admin"),
+      },
+    },
+    {
+      name: "consultant",
+      testMatch: /.*\.consultant\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: statePath("consultant"),
+      },
+    },
+    {
+      name: "process-owner",
+      testMatch: /.*\.po\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: statePath("processOwner"),
+      },
+    },
+    {
+      name: "it-lead",
+      testMatch: /.*\.it\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: statePath("itLead"),
+      },
+    },
+    {
+      name: "executive",
+      testMatch: /.*\.exec\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: statePath("executive"),
       },
     },
   ],
