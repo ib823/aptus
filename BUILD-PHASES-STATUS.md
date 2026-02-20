@@ -18,21 +18,21 @@
 | 0.12 | Create .env.local | [x] |
 | 0.13 | Verify database connection | [x] |
 
-## Phase 1: Data Ingestion Pipeline — PENDING
+## Phase 1: Data Ingestion Pipeline — COMPLETE
 
 | # | Task | Done |
 |---|------|------|
-| 1.1 | Create ingestion script | [ ] |
-| 1.2 | Parse BPD XLSX files | [ ] |
-| 1.3 | Parse BPD DOCX files | [ ] |
-| 1.4 | Parse Config XLSM | [ ] |
-| 1.5 | Parse Links XLSX | [ ] |
-| 1.6 | Store Setup PDFs | [ ] |
-| 1.7 | Store General files | [ ] |
-| 1.8 | Store Others files | [ ] |
-| 1.9 | Store README.rtf | [ ] |
-| 1.10 | Cross-reference functional areas | [ ] |
-| 1.11 | Cross-reference tutorial URLs | [ ] |
-| 1.12 | Normalize step types | [ ] |
-| 1.13 | Derive process flow groups | [ ] |
-| 1.14 | Create verification script | [ ] |
+| 1.1 | Create ingestion script | [x] |
+| 1.2 | Parse BPD XLSX files | [x] |
+| 1.3 | Parse BPD DOCX files | [x] |
+| 1.4 | Parse Config XLSM | [x] |
+| 1.5 | Parse Links XLSX | [x] |
+| 1.6 | Store Setup PDFs | [x] |
+| 1.7 | Store General files | [x] |
+| 1.8 | Store Others files | [x] |
+| 1.9 | Store README.rtf | [x] |
+| 1.10 | Cross-reference functional areas | [x] |
+| 1.11 | Cross-reference tutorial URLs | [x] |
+| 1.12 | Normalize step types | [x] |
+| 1.13 | Derive process flow groups | [x] |
+| 1.14 | Create verification script | [x] |

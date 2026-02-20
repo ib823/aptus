@@ -31,10 +31,8 @@ model ScopeItem {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  processSteps     ProcessStep[]
-  configActivities ConfigActivity[]
-  setupGuide       SetupGuide?
-  expertConfigs    ExpertConfig[]
+  processSteps ProcessStep[]
+  setupGuide   SetupGuide?
 
   @@index([functionalArea])
   @@index([subArea])
@@ -107,7 +105,9 @@ model ConfigActivity {
 
   createdAt DateTime @default(now())
 
-  scopeItem ScopeItem @relation(fields: [scopeItemId], references: [id])
+  // Note: No FK relation to ScopeItem because scopeItemId can be "All" or contain
+  // multiple IDs (e.g., "J14, J13, 22Z"). The first valid ID is stored.
+  // The verify-data script explicitly allows scopeItemId = "All".
 
   @@index([scopeItemId])
   @@index([applicationArea])
@@ -180,7 +180,8 @@ model ExpertConfig {
   content     Json
   createdAt   DateTime @default(now())
 
-  scopeItem ScopeItem @relation(fields: [scopeItemId], references: [id])
+  // Note: No FK to ScopeItem because expert config sheet names are config activity IDs
+  // (e.g., "73", "61", "J87"), not always scope item IDs.
 
   @@index([scopeItemId])
 }

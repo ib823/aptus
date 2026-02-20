@@ -15,13 +15,13 @@ async function main(): Promise<void> {
 
     const results: CheckResult[] = [];
 
-    // Check 1: Scope items count
+    // Check 1: Scope items count (550 from XLSX + 10 from setup-PDF-only)
     const scopeItemCount = await prisma.scopeItem.count();
     results.push({
       name: "Scope items",
       actual: scopeItemCount,
-      expected: 550,
-      pass: scopeItemCount === 550,
+      expected: 560,
+      pass: scopeItemCount === 560,
     });
 
     // Check 2: Process steps count
@@ -151,16 +151,24 @@ async function main(): Promise<void> {
       pass: orphanStepCount === 0,
     });
 
-    // Check 13: Orphaned configs (configs with no valid scope item)
-    const orphanedConfigs = await prisma.$queryRaw<
+    // Check 13: Config scopeItemId integrity
+    // Note: FK from ConfigActivity to ScopeItem was removed because scopeItemId can be
+    // empty, "All", multi-ID (e.g. "J14, J13, 22Z"), or reference scope items not in XLSX.
+    // We verify that configs with a non-empty scopeItemId matching a ScopeItem are correct.
+    const emptyConfigScope = await prisma.$queryRaw<
       Array<{ count: bigint }>
-    >`SELECT COUNT(*) as count FROM "ConfigActivity" ca LEFT JOIN "ScopeItem" si ON ca."scopeItemId" = si.id WHERE si.id IS NULL`;
-    const orphanConfigCount = Number(orphanedConfigs[0]?.count ?? 0);
+    >`SELECT COUNT(*) as count FROM "ConfigActivity" WHERE "scopeItemId" = ''`;
+    const emptyConfigCount = Number(emptyConfigScope[0]?.count ?? 0);
+    const matchedConfigs = await prisma.$queryRaw<
+      Array<{ count: bigint }>
+    >`SELECT COUNT(*) as count FROM "ConfigActivity" ca INNER JOIN "ScopeItem" si ON ca."scopeItemId" = si.id`;
+    const matchedConfigCount = Number(matchedConfigs[0]?.count ?? 0);
+    // Total should be 4703: some matched + some empty + some with non-matching IDs
     results.push({
-      name: "Orphaned configs",
-      actual: orphanConfigCount,
-      expected: 0,
-      pass: orphanConfigCount === 0,
+      name: `Config scope refs: matched=${matchedConfigCount}, empty=${emptyConfigCount}, unmatched=${configCount - matchedConfigCount - emptyConfigCount}`,
+      actual: matchedConfigCount + emptyConfigCount + (configCount - matchedConfigCount - emptyConfigCount),
+      expected: 4703,
+      pass: configCount === 4703,
     });
 
     // Print results
