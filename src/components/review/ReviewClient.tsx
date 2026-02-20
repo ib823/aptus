@@ -321,7 +321,7 @@ export function ReviewClient({
       />
 
       {/* Main content */}
-      <div className="ml-[280px] flex-1 p-8">
+      <div className="sm:ml-[280px] flex-1 p-8">
         <div className="max-w-3xl mx-auto">
           {loading ? (
             <div className="space-y-4">
@@ -408,7 +408,7 @@ export function ReviewClient({
                   <ChevronLeft className="w-4 h-4 mr-1" />
                   Previous
                 </Button>
-                <span className="text-sm text-gray-500">
+                <span className="hidden sm:inline text-sm text-gray-500">
                   Use ← → keys to navigate
                 </span>
                 <Button

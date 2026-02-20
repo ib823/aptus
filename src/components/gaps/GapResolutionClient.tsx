@@ -137,7 +137,7 @@ export function GapResolutionClient({
   return (
     <div className="flex gap-8">
       {/* Sidebar summary */}
-      <div className="w-[280px] shrink-0">
+      <div className="hidden sm:block w-[280px] shrink-0">
         <div className="sticky top-8">
           <GapSummary
             total={summary.total}

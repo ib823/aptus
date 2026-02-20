@@ -95,18 +95,18 @@ export default async function AssessmentsPage() {
                     </div>
                     <StatusBadge status={assessment.status} />
                   </div>
-                  <div className="flex items-center gap-6 mt-4 text-sm text-gray-500">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 text-sm text-gray-500">
                     <span>
-                      {assessment._count.scopeSelections} scope items selected
+                      {assessment._count.scopeSelections} scope items
                     </span>
                     <span>
                       {assessment._count.stepResponses} steps reviewed
                     </span>
                     <span>
-                      {assessment._count.stakeholders} team members
+                      {assessment._count.stakeholders} members
                     </span>
-                    <span className="ml-auto">
-                      Updated {formatDistanceToNow(assessment.updatedAt, { addSuffix: true })}
+                    <span className="sm:ml-auto">
+                      {formatDistanceToNow(assessment.updatedAt, { addSuffix: true })}
                     </span>
                   </div>
                 </CardContent>

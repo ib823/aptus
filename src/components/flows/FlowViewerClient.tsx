@@ -157,7 +157,7 @@ export function FlowViewerClient({ assessmentId, diagrams: initialDiagrams }: Fl
       ) : (
         <div className="flex gap-6">
           {/* Sidebar */}
-          <div className="w-72 shrink-0">
+          <div className="hidden sm:block w-72 shrink-0">
             <div className="mb-3">
               <select
                 value={scopeFilter}

@@ -257,7 +257,7 @@ export function ScopeSelectionClient({
       )}
 
       {/* Filter bar */}
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex flex-wrap items-center gap-3 mb-6">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
@@ -328,7 +328,7 @@ export function ScopeSelectionClient({
 
       {/* Action bar */}
       <div className="sticky bottom-0 bg-white border-t border-gray-200 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-4 mt-8">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <Link href={`/assessments`}>
             <Button variant="outline">
               <ArrowLeft className="w-4 h-4 mr-1.5" />

@@ -3,6 +3,7 @@ interface ProgressBarProps {
   max?: number;
   showPercentage?: boolean;
   className?: string;
+  label?: string;
 }
 
 export function ProgressBar({
@@ -10,6 +11,7 @@ export function ProgressBar({
   max = 100,
   showPercentage = false,
   className = "",
+  label,
 }: ProgressBarProps) {
   const percentage = max > 0 ? Math.round((value / max) * 100) : 0;
 
@@ -23,6 +25,7 @@ export function ProgressBar({
           className="h-2 rounded-full bg-blue-500 transition-all duration-500 ease-out"
           style={{ width: `${percentage}%` }}
           role="progressbar"
+          aria-label={label ?? `${percentage}% complete`}
           aria-valuenow={value}
           aria-valuemin={0}
           aria-valuemax={max}

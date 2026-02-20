@@ -43,7 +43,7 @@ export function ReviewSidebar({
   onToggleRepetitive,
 }: ReviewSidebarProps) {
   return (
-    <div className="w-[280px] bg-gray-50 border-r border-gray-200 flex flex-col h-screen fixed left-0 top-0 overflow-hidden">
+    <div className="hidden sm:flex sm:w-[280px] bg-gray-50 border-r border-gray-200 flex-col h-screen fixed left-0 top-0 overflow-hidden">
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
         <Link
