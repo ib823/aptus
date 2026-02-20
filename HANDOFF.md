@@ -1,4 +1,4 @@
-# Handoff Document — Bound Fit Portal
+# Handoff Document — Aptus
 
 ## Current State
 

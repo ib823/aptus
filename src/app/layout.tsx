@@ -4,7 +4,7 @@ import { Providers } from "@/components/shared/Providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Bound Fit Portal",
+  title: "Aptus",
   description: "SAP S/4HANA Cloud best practices process validation portal",
 };
 

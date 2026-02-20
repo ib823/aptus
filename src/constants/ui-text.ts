@@ -2,12 +2,12 @@
 
 export const UI_TEXT = {
   app: {
-    name: "Bound Fit Portal",
+    name: "Aptus",
     tagline: "SAP S/4HANA Cloud Fit-Gap Assessment",
     sapVersion: "SAP Best Practices 2508",
   },
   auth: {
-    loginTitle: "Sign in to Bound",
+    loginTitle: "Sign in to Aptus",
     loginSubtitle: "Enter your email to receive a magic link",
     emailPlaceholder: "you@company.com",
     sendMagicLink: "Send Magic Link",

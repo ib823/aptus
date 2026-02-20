@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" role="img" aria-label="aptus wordmark">
+  <title>aptus</title>
+
+  <!-- Wordmark only. Uses Apple system font (SF Pro) when available. -->
+  <text
+    x="50%"
+    y="50%"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    fill="#000000"
+    font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif"
+    font-size="220"
+    font-weight="500"
+    letter-spacing="-8"
+    text-rendering="geometricPrecision"
+  >aptus</text>
+</svg>

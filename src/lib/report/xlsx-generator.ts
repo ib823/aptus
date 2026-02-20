@@ -10,7 +10,7 @@ interface SheetConfig {
 
 export async function generateXlsx(sheets: SheetConfig[]): Promise<Uint8Array> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Bound Fit Portal";
+  workbook.creator = "Aptus";
   workbook.created = new Date();
 
   for (const sheet of sheets) {

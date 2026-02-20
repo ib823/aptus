@@ -28,7 +28,7 @@ export const authOptions: NextAuthOptions = {
         port: 1025,
         auth: { user: "", pass: "" },
       },
-      from: process.env.EMAIL_FROM ?? "noreply@bound.dev",
+      from: process.env.EMAIL_FROM ?? "noreply@aptus.dev",
       sendVerificationRequest: async ({ identifier: email, url }) => {
         // In development, log the magic link to console
         if (process.env.NODE_ENV === "development") {

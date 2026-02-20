@@ -8,7 +8,7 @@ export const APP_CONFIG = {
   mfaChallengeExpiryMinutes: 5,
   mfaMaxAttempts: 5,
   totpWindow: 1, // allows 1 step before/after current for clock skew
-  totpIssuer: process.env.TOTP_ISSUER ?? "Bound Fit Portal",
+  totpIssuer: process.env.TOTP_ISSUER ?? "Aptus",
   sapVersion: "2508",
   pagination: {
     defaultLimit: 50,

@@ -5,7 +5,7 @@ import { encryptTotpSecret, decryptTotpSecret, generateTotpSecret } from "@/lib/
 beforeAll(() => {
   process.env.TOTP_ENCRYPTION_KEY =
     "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6";
-  process.env.TOTP_ISSUER = "Bound Fit Portal";
+  process.env.TOTP_ISSUER = "Aptus";
 });
 
 describe("MFA Utilities", () => {
@@ -46,7 +46,7 @@ describe("MFA Utilities", () => {
       expect(result.secret.length).toBeGreaterThan(10);
       expect(result.uri).toContain("otpauth://totp/");
       expect(result.uri).toContain("user%40example.com");
-      expect(result.uri).toContain("Bound");
+      expect(result.uri).toContain("Aptus");
     });
 
     it("should generate different secrets for different emails", () => {
