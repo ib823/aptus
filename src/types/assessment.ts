@@ -50,7 +50,9 @@ export type DecisionAction =
   | "SESSION_REVOKED"
   | "PERMISSION_OVERRIDE"
   | "REMAINING_ITEM_ADDED"
-  | "FLOW_DIAGRAM_GENERATED";
+  | "FLOW_DIAGRAM_GENERATED"
+  | "CONFIG_INCLUDED"
+  | "CONFIG_EXCLUDED";
 
 export interface AssessmentSummary {
   id: string;

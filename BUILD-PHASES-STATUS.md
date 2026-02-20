@@ -85,6 +85,18 @@
 | 4.14 | IT Lead technical notes | [x] |
 | 4.15 | Consultant override | [x] |
 
+## Phase 6: Configuration Matrix — COMPLETE
+
+| # | Task | Done |
+|---|------|------|
+| 6.1 | Build config matrix page | [x] |
+| 6.2 | Category filtering | [x] |
+| 6.3 | Self-service indicator | [x] |
+| 6.4 | Scope item grouping | [x] |
+| 6.5 | Include/exclude for Recommended/Optional | [x] |
+| 6.6 | Summary counts | [x] |
+| 6.7 | Setup guide links | [x] |
+
 ## Phase 1: Data Ingestion Pipeline — COMPLETE
 
 | # | Task | Done |
