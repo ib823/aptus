@@ -61,12 +61,15 @@ export const authOptions: NextAuthOptions = {
 
       if (!existingUser) {
         // Auto-create user on first magic link sign-in
-        // Role defaults to consultant; admin assigns proper role
+        // First user ever gets admin role; subsequent users default to consultant
+        const userCount = await prisma.user.count();
+        const role = userCount === 0 ? "admin" : "consultant";
+
         await prisma.user.create({
           data: {
             email: user.email,
             name: user.name ?? user.email.split("@")[0] ?? "User",
-            role: "consultant",
+            role,
           },
         });
       } else if (!existingUser.isActive) {

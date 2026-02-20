@@ -72,7 +72,7 @@ export function PortalNav({ user }: PortalNavProps) {
             <span className="text-sm text-gray-600">{user.name}</span>
             <button
               onClick={() => {
-                window.location.href = "/api/auth/signout";
+                window.location.href = "/api/auth/logout";
               }}
               className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
               aria-label={UI_TEXT.auth.signOut}
