@@ -2,7 +2,7 @@
 
 ## Current State
 
-**Phase 4: Process Deep Dive — COMPLETE**
+**Phase 5: Gap Resolution — COMPLETE**
 
 ### Completed Phases
 
@@ -11,52 +11,43 @@
 #### Phase 2: Authentication & Assessment Setup (COMPLETE)
 #### Phase 3: Scope Selection (COMPLETE)
 #### Phase 4: Process Deep Dive (COMPLETE)
+#### Phase 5: Gap Resolution (COMPLETE)
 
-### Phase 4 Implementation Details
+### Phase 5 Implementation Details
 
-**DB Queries** (`src/lib/db/process-steps.ts`):
-- `getSelectedScopeItemsWithProgress(assessmentId)`: Selected scope items with review progress counts per status
-- `getStepsForScopeItem(scopeItemId, assessmentId, opts)`: Paginated steps with responses, optional repetitive-step filter
-- `getConfigsForScopeItem(scopeItemId)`: Config activities for a scope item
-- `getOverallReviewProgress(assessmentId)`: Aggregate progress across all selected scope items
+**DB Queries** (`src/lib/db/gap-resolutions.ts`):
+- `getGapsForAssessment(assessmentId, opts)`: Gap resolutions with step/scope item context and client notes
+- `getGapSummaryStats(assessmentId)`: Aggregate counts by type, effort totals, resolved/pending
 
 **API Routes**:
-- `api/assessments/[id]/steps` (GET): Step responses with cursor pagination, filter by scopeItemId/fitStatus/stepType
-- `api/assessments/[id]/steps/[stepId]` (PUT): Upsert step response with area-lock permissions, IT lead fitStatus restriction, gap note validation (min 10 chars), auto-create GapResolution on GAP, decision logging
-- `api/assessments/[id]/steps/bulk` (POST): Bulk mark un-responded steps as FIT/NA, with step type exclusion
-- `api/catalog/scope-items/[scopeItemId]/steps` (GET): Process steps for a scope item, with repetitive-step filter
-- `api/catalog/scope-items/[scopeItemId]/configs` (GET): Config activities for a scope item
+- `api/assessments/[id]/gaps` (GET): All gaps with summary stats, filter by scopeItemId/resolutionType
+- `api/assessments/[id]/gaps/[gapId]` (PUT): Update resolution with rationale validation (min 20 chars for non-FIT), decision logging
 
 **Pages**:
-- `(portal)/assessment/[id]/review/page.tsx`: Server component fetching scope items with progress + overall stats
+- `(portal)/assessment/[id]/gaps/page.tsx`: Server component fetching gaps for assessment
 
 **Components**:
-- `review/ReviewClient`: Main client orchestrator — sidebar + step viewer, keyboard nav (←/→), bulk FIT, optimistic updates
-- `review/ReviewSidebar`: 280px fixed sidebar with scope item list, per-item progress bars, status dot counts, overall progress, hide-repetitive toggle, status summary
-- `review/StepReviewCard`: Step display card — SAP HTML content, expected result, related configs with category badges, fit/configure/gap/na radio selection, gap note (min 10 chars), configure note, IT lead notes-only mode, activity context with SAP link
+- `gaps/GapResolutionClient`: Main client with sidebar summary, scope/type filters, optimistic updates
+- `gaps/GapCard`: Individual gap display — scope item context, client needs, 8 resolution options in 2-col grid, rationale textarea, effort/risk display
+- `gaps/GapSummary`: Stats overview (total/resolved/pending/effort) + resolution type breakdown
 
 **Tests**: 57 tests total (step-response: 17, scope-selection: 19, mfa: 5, permissions: 15, setup: 1)
-- Gap validation: null note, short note, exact boundary (9/10 chars), non-GAP status
-- Progress calculation: counts, reviewed/pending, empty/all-done/all-pending
-- IT Lead permissions: can add notes, cannot change fitStatus
-- Bulk FIT: targets only PENDING steps, skips existing responses
 
 ### Quality Gate Results
 1. `pnpm typecheck:strict` — 0 errors
 2. `pnpm lint:strict` — 0 errors, 0 warnings
-3. `pnpm build` — success (26 routes including /assessment/[id]/review + catalog APIs)
+3. `pnpm build` — success (29 routes including /assessment/[id]/gaps)
 4. `pnpm test --run` — 57 tests passed
 
 ### Technical Notes
-- exactOptionalPropertyTypes: optional params need `| undefined` (e.g., `reason?: string | undefined`)
-- React 19 lint: no setState in effects, no ref access during render; use derived state pattern instead
-- React Compiler: remove manual useCallback when compiler can infer dependencies
-- Step responses save immediately for fitStatus, debounce 1000ms for text (clientNote)
-- Bulk operations skip steps that already have non-PENDING responses
-- GapResolution auto-created with `resolutionType: "PENDING"` when step marked as GAP
+- GapResolution auto-created in Phase 4 when step marked as GAP
+- Rationale required (min 20 chars) for non-FIT/non-PENDING resolutions via Zod refine
+- `costEstimate` is a nullable Json field — use `Prisma.InputJsonValue` cast or `Prisma.JsonNull`
+- Summary stats derived via `useMemo` (not useEffect) to avoid cascading renders in React 19
+- Record<string, unknown> needs `z.record(z.string(), z.unknown())` in Zod (2 args, not 1)
 
 ### Next Phase
-**Phase 5: Gap Resolution** — Gap analysis UI, resolution type selection, effort estimation
+**Phase 6: Config Matrix** — Configuration activity matrix, filtering, status tracking
 
 ### Known Issues
 None.

@@ -113,27 +113,23 @@ describe("Step progress calculation", () => {
   });
 });
 
+function canItLeadChange(existingFitStatus: string, newFitStatus: string): boolean {
+  return existingFitStatus === newFitStatus;
+}
+
 describe("IT Lead permission logic", () => {
   it("IT leads can add notes", () => {
-    // IT leads can modify clientNote
+    // IT leads can modify clientNote but not fitStatus
     const canModifyNote = true;
     expect(canModifyNote).toBe(true);
   });
 
   it("IT leads cannot change fitStatus", () => {
-    const existingFitStatus = "FIT";
-    const newFitStatus = "GAP";
-    const isItLead = true;
-    const canChange = !isItLead || existingFitStatus === newFitStatus;
-    expect(canChange).toBe(false);
+    expect(canItLeadChange("FIT", "GAP")).toBe(false);
   });
 
   it("IT leads can keep same fitStatus", () => {
-    const existingFitStatus = "FIT";
-    const newFitStatus = "FIT";
-    const isItLead = true;
-    const canChange = !isItLead || existingFitStatus === newFitStatus;
-    expect(canChange).toBe(true);
+    expect(canItLeadChange("FIT", "FIT")).toBe(true);
   });
 });
 

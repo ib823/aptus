@@ -52,6 +52,19 @@
 | 3.7 | Decision logging | [x] |
 | 3.8 | Save/resume | [x] |
 
+## Phase 5: Gap Resolution — COMPLETE
+
+| # | Task | Done |
+|---|------|------|
+| 5.1 | Build gap summary page | [x] |
+| 5.2 | Resolution option cards | [x] |
+| 5.3 | Cost/effort display | [x] |
+| 5.4 | ADAPT comparison | [x] |
+| 5.5 | Rationale capture | [x] |
+| 5.6 | Resolution persistence | [x] |
+| 5.7 | Summary statistics | [x] |
+| 5.8 | "What if" calculator | [x] |
+
 ## Phase 4: Process Deep Dive — COMPLETE
 
 | # | Task | Done |
