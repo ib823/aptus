@@ -14,7 +14,7 @@ interface LogEntryInput {
   newValue: InputJsonValue;
   actor: string;
   actorRole: UserRole;
-  reason?: string;
+  reason?: string | undefined;
 }
 
 /**

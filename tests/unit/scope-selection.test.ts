@@ -156,41 +156,33 @@ describe("Scope selection stats", () => {
   });
 });
 
+// Simulates the relevance → selection logic from ScopeItemCard
+function deriveSelected(relevance: string): boolean {
+  return relevance !== "NO";
+}
+
 describe("Scope selection state transitions", () => {
   it("selecting an item sets relevance to YES", () => {
     const item = SAMPLE_ITEMS[4]; // J11, not selected
     expect(item?.selected).toBe(false);
-    // When toggling, the handler sets relevance to YES
-    const newRelevance = "YES";
-    const newSelected = true;
-    expect(newSelected).toBe(true);
-    expect(newRelevance).toBe("YES");
+    expect(deriveSelected("YES")).toBe(true);
   });
 
   it("deselecting an item sets relevance to NO", () => {
     const item = SAMPLE_ITEMS[0]; // J01, selected
     expect(item?.selected).toBe(true);
-    const newRelevance = "NO";
-    const newSelected = false;
-    expect(newSelected).toBe(false);
-    expect(newRelevance).toBe("NO");
+    expect(deriveSelected("NO")).toBe(false);
   });
 
   it("setting relevance to NO deselects the item", () => {
-    const newRelevance = "NO";
-    const newSelected = newRelevance !== "NO";
-    expect(newSelected).toBe(false);
+    expect(deriveSelected("NO")).toBe(false);
   });
 
   it("setting relevance to MAYBE keeps item selected", () => {
-    const newRelevance = "MAYBE";
-    const newSelected = newRelevance !== "NO";
-    expect(newSelected).toBe(true);
+    expect(deriveSelected("MAYBE")).toBe(true);
   });
 
   it("setting relevance to YES keeps item selected", () => {
-    const newRelevance = "YES";
-    const newSelected = newRelevance !== "NO";
-    expect(newSelected).toBe(true);
+    expect(deriveSelected("YES")).toBe(true);
   });
 });

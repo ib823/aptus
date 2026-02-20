@@ -52,6 +52,26 @@
 | 3.7 | Decision logging | [x] |
 | 3.8 | Save/resume | [x] |
 
+## Phase 4: Process Deep Dive — COMPLETE
+
+| # | Task | Done |
+|---|------|------|
+| 4.1 | Build sidebar navigation | [x] |
+| 4.2 | Build process flow overview | [x] |
+| 4.3 | Build step review card | [x] |
+| 4.4 | SAP HTML rendering | [x] |
+| 4.5 | Client response capture | [x] |
+| 4.6 | Gap note capture | [x] |
+| 4.7 | Related config display | [x] |
+| 4.8 | Step navigation | [x] |
+| 4.9 | Step type filtering | [x] |
+| 4.10 | Progress persistence | [x] |
+| 4.11 | Batch operations | [x] |
+| 4.12 | File attachment | [x] |
+| 4.13 | Area-locked step editing | [x] |
+| 4.14 | IT Lead technical notes | [x] |
+| 4.15 | Consultant override | [x] |
+
 ## Phase 1: Data Ingestion Pipeline — COMPLETE
 
 | # | Task | Done |
