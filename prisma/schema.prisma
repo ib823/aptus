@@ -1,0 +1,615 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================
+// Layer 1: SAP Catalog (Ingested from ZIP)
+// =============================================================
+
+model ScopeItem {
+  id                String   @id // e.g., "J60" — from BPD filename
+  name              String // from BPD XLSX column 1, first data row
+  nameClean         String // cleaned: "Accounts Payable" (parenthetical code removed)
+  purposeHtml       String   @db.Text
+  overviewHtml      String   @db.Text
+  prerequisitesHtml String   @db.Text
+  country           String // "MY" or "XX" — from filename suffix
+  language          String   @default("EN")
+  version           String   @default("2508")
+  totalSteps        Int
+  functionalArea    String
+  subArea           String
+  tutorialUrl       String?
+  docxStored        Boolean  @default(false)
+  xlsxStored        Boolean  @default(false)
+  setupPdfStored    Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  processSteps     ProcessStep[]
+  configActivities ConfigActivity[]
+  setupGuide       SetupGuide?
+  expertConfigs    ExpertConfig[]
+
+  @@index([functionalArea])
+  @@index([subArea])
+  @@index([country])
+}
+
+model ProcessStep {
+  id                      String   @id @default(cuid())
+  scopeItemId             String
+  sequence                Int
+
+  testCaseGuid            String?
+  testCaseName            String?
+  scopeGuid               String?
+  scopeName               String?
+  solutionProcessGuid     String?
+  solutionProcessName     String?
+  solutionProcessFlowGuid String?
+  solutionProcessFlowName String?
+  flowDiagramGuid         String?
+  flowDiagramName         String?
+  testCasePriority        String?
+  testCaseOwner           String?
+  testCaseStatus          String?
+  activityGuid            String?
+  activityTitle           String?
+  activityTargetName      String?
+  activityTargetUrl       String?
+  actionGuid              String?
+  actionTitle             String
+  actionInstructionsHtml  String   @db.Text
+  actionExpectedResult    String?  @db.Text
+
+  stepType         String
+  processFlowGroup String?
+
+  createdAt DateTime @default(now())
+
+  scopeItem     ScopeItem      @relation(fields: [scopeItemId], references: [id])
+  stepResponses StepResponse[]
+
+  @@index([scopeItemId])
+  @@index([scopeItemId, sequence])
+  @@index([stepType])
+  @@index([solutionProcessName])
+}
+
+model ConfigActivity {
+  id                   String   @id @default(cuid())
+  scopeItemId          String
+  scopeItemDescription String?
+
+  applicationArea      String
+  applicationSubarea   String
+  configItemName       String
+  configItemId         String
+  activityDescription  String   @db.Text
+  selfService          Boolean
+  configApproach       String?  @db.Text
+  category             String
+  activityId           String
+  localizationScope    String?
+  countrySpecific      String?
+  alternateActivityId  String?
+  componentId          String?
+  redoInProduction     String?
+  deleteCustomerRecords String?
+  additionalInfo       String?  @db.Text
+  fileUploadEnabled    String?
+
+  createdAt DateTime @default(now())
+
+  scopeItem ScopeItem @relation(fields: [scopeItemId], references: [id])
+
+  @@index([scopeItemId])
+  @@index([applicationArea])
+  @@index([category])
+  @@index([selfService])
+}
+
+model ImgActivity {
+  id                         String   @id @default(cuid())
+  businessCatalogId          String
+  description                String
+  transactionCode            String?
+  iamAppId                   String?
+  imgActivity                String?
+  explanatoryText            String?  @db.Text
+  sscuiId                    String?
+  businessCatalogComponentId String?
+  imgActivityAch             String?
+
+  createdAt DateTime @default(now())
+
+  @@index([sscuiId])
+  @@index([businessCatalogId])
+}
+
+model SetupGuide {
+  id          String   @id @default(cuid())
+  scopeItemId String   @unique
+  filename    String
+  fileSize    Int
+  pdfBlob     Bytes    @db.ByteA
+  pageCount   Int?
+  createdAt   DateTime @default(now())
+
+  scopeItem ScopeItem @relation(fields: [scopeItemId], references: [id])
+}
+
+model GeneralFile {
+  id              String   @id @default(cuid())
+  filename        String
+  fileType        String
+  fileSize        Int
+  blob            Bytes    @db.ByteA
+  relatedScopeIds String[]
+  createdAt       DateTime @default(now())
+
+  @@index([fileType])
+}
+
+model SolutionLink {
+  id       String   @id @default(cuid())
+  bomId    String
+  title    String
+  entityId String
+  country  String
+  language String
+  url      String
+  type     String
+  createdAt DateTime @default(now())
+
+  @@index([entityId])
+  @@index([type])
+}
+
+model ExpertConfig {
+  id          String   @id @default(cuid())
+  scopeItemId String
+  sheetName   String
+  rowCount    Int
+  content     Json
+  createdAt   DateTime @default(now())
+
+  scopeItem ScopeItem @relation(fields: [scopeItemId], references: [id])
+
+  @@index([scopeItemId])
+}
+
+model OtherFile {
+  id       String   @id @default(cuid())
+  filename String
+  path     String
+  fileSize Int
+  blob     Bytes    @db.ByteA
+  createdAt DateTime @default(now())
+}
+
+model ReadmeFile {
+  id       String   @id @default(cuid())
+  filename String
+  content  String   @db.Text
+  blob     Bytes    @db.ByteA
+  createdAt DateTime @default(now())
+}
+
+// =============================================================
+// Layer 2: Intelligence Layer (Manually Populated)
+// =============================================================
+
+model IndustryProfile {
+  id                   String   @id @default(cuid())
+  code                 String   @unique
+  name                 String
+  description          String   @db.Text
+  applicableScopeItems String[]
+  typicalScopeCount    Int
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model EffortBaseline {
+  id                 String   @id @default(cuid())
+  scopeItemId        String
+  complexity         String
+  implementationDays Float
+  configDays         Float
+  testDays           Float
+  dataMigrationDays  Float
+  trainingDays       Float
+  notes              String?  @db.Text
+  source             String?
+  confidence         Float
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([scopeItemId, complexity])
+  @@index([scopeItemId])
+}
+
+model ExtensibilityPattern {
+  id                    String   @id @default(cuid())
+  gapPattern            String   @db.Text
+  resolutionType        String
+  resolutionDescription String   @db.Text
+  effortDays            Float
+  recurringCostAnnual   Float    @default(0)
+  riskLevel             String
+  sapSupported          Boolean
+  upgradeSafe           Boolean
+  examples              String[] @db.Text
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([resolutionType])
+}
+
+model AdaptationPattern {
+  id             String   @id @default(cuid())
+  commonGap      String   @db.Text
+  sapApproach    String   @db.Text
+  adaptEffort    String   @db.Text
+  extendEffort   String   @db.Text
+  recommendation String
+  rationale      String   @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// =============================================================
+// Layer 3: Assessment Data (Client-Facing)
+// =============================================================
+
+model Assessment {
+  id                 String    @id @default(cuid())
+  companyName        String
+  industry           String
+  country            String
+  operatingCountries String[]
+  companySize        String
+  revenueBand        String?
+  currentErp         String?
+  sapVersion         String    @default("2508")
+  status             String    @default("draft")
+  createdBy          String
+  organizationId     String
+  deletedAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  organization   Organization           @relation(fields: [organizationId], references: [id])
+  stakeholders   AssessmentStakeholder[]
+  scopeSelections ScopeSelection[]
+  stepResponses  StepResponse[]
+  gapResolutions GapResolution[]
+  decisionLog    DecisionLogEntry[]
+  signOffs       AssessmentSignOff[]
+  flowDiagrams   ProcessFlowDiagram[]
+  remainingItems RemainingItem[]
+
+  @@index([status])
+  @@index([createdBy])
+  @@index([organizationId])
+  @@index([deletedAt])
+}
+
+model AssessmentStakeholder {
+  id            String    @id @default(cuid())
+  assessmentId  String
+  userId        String
+  name          String
+  email         String
+  role          String
+  assignedAreas String[]
+  canEdit       Boolean   @default(true)
+  lastActiveAt  DateTime?
+  invitedAt     DateTime  @default(now())
+  invitedBy     String
+  acceptedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+  user       User       @relation(fields: [userId], references: [id])
+
+  @@unique([assessmentId, email])
+  @@index([assessmentId])
+  @@index([userId])
+}
+
+model ScopeSelection {
+  id           String    @id @default(cuid())
+  assessmentId String
+  scopeItemId  String
+  selected     Boolean
+  relevance    String
+  currentState String?
+  notes        String?   @db.Text
+  respondent   String?
+  respondedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@unique([assessmentId, scopeItemId])
+  @@index([assessmentId])
+  @@index([assessmentId, selected])
+}
+
+model StepResponse {
+  id             String    @id @default(cuid())
+  assessmentId   String
+  processStepId  String
+  fitStatus      String
+  clientNote     String?   @db.Text
+  currentProcess String?   @db.Text
+  respondent     String?
+  respondedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  assessment  Assessment  @relation(fields: [assessmentId], references: [id])
+  processStep ProcessStep @relation(fields: [processStepId], references: [id])
+
+  @@unique([assessmentId, processStepId])
+  @@index([assessmentId])
+  @@index([assessmentId, fitStatus])
+}
+
+model GapResolution {
+  id                    String    @id @default(cuid())
+  assessmentId          String
+  processStepId         String
+  scopeItemId           String
+  gapDescription        String    @db.Text
+  resolutionType        String
+  resolutionDescription String    @db.Text
+  effortDays            Float?
+  costEstimate          Json?
+  riskLevel             String?
+  upgradeImpact         String?   @db.Text
+  decidedBy             String?
+  decidedAt             DateTime?
+  clientApproved        Boolean   @default(false)
+  rationale             String?   @db.Text
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@index([assessmentId])
+  @@index([assessmentId, resolutionType])
+  @@index([scopeItemId])
+}
+
+model DecisionLogEntry {
+  id           String   @id @default(cuid())
+  assessmentId String
+  entityType   String
+  entityId     String
+  action       String
+  oldValue     Json?
+  newValue     Json
+  actor        String
+  actorRole    String
+  timestamp    DateTime @default(now())
+  reason       String?  @db.Text
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@index([assessmentId])
+  @@index([assessmentId, entityType])
+  @@index([assessmentId, actor])
+  @@index([timestamp])
+}
+
+model AssessmentSignOff {
+  id               String   @id @default(cuid())
+  assessmentId     String
+  signatoryName    String
+  signatoryEmail   String
+  signatoryRole    String
+  signatoryTitle   String?
+  acknowledgement  Boolean  @default(true)
+  signedAt         DateTime @default(now())
+  ipAddress        String?
+  userAgent        String?
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@unique([assessmentId, signatoryRole])
+  @@index([assessmentId])
+}
+
+model ProcessFlowDiagram {
+  id              String   @id @default(cuid())
+  assessmentId    String
+  scopeItemId     String
+  processFlowName String
+  svgContent      String   @db.Text
+  pdfBlob         Bytes?   @db.ByteA
+  diagramType     String   @default("sequential")
+  stepCount       Int
+  fitCount        Int
+  configureCount  Int
+  gapCount        Int
+  naCount         Int
+  pendingCount    Int
+  generatedAt     DateTime @default(now())
+  generatedBy     String
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@unique([assessmentId, scopeItemId, processFlowName])
+  @@index([assessmentId])
+  @@index([assessmentId, scopeItemId])
+}
+
+model RemainingItem {
+  id               String    @id @default(cuid())
+  assessmentId     String
+  category         String
+  title            String
+  description      String    @db.Text
+  severity         String
+  sourceEntityType String?
+  sourceEntityId   String?
+  scopeItemId      String?
+  functionalArea   String?
+  assignedTo       String?
+  resolution       String?   @db.Text
+  resolvedAt       DateTime?
+  resolvedBy       String?
+  autoGenerated    Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@index([assessmentId])
+  @@index([assessmentId, category])
+  @@index([assessmentId, severity])
+  @@index([scopeItemId])
+}
+
+// =============================================================
+// Layer 4: Authentication & Authorization
+// =============================================================
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String
+  role           String
+  organizationId String?
+  isActive       Boolean   @default(true)
+  avatarUrl      String?
+
+  totpSecret     String?
+  totpVerified   Boolean   @default(false)
+  totpVerifiedAt DateTime?
+  mfaEnabled     Boolean   @default(false)
+  mfaMethod      String    @default("none")
+
+  webauthnCredentials WebAuthnCredential[]
+
+  lastLoginAt DateTime?
+  lastLoginIp String?
+  loginCount  Int       @default(0)
+  invitedBy   String?
+  invitedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization      Organization?          @relation(fields: [organizationId], references: [id])
+  sessions          Session[]
+  mfaChallenges     MfaChallenge[]
+  stakeholderEntries AssessmentStakeholder[]
+
+  @@index([role])
+  @@index([organizationId])
+  @@index([email])
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  type      String
+  domain    String?
+  logoUrl   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users       User[]
+  assessments Assessment[]
+}
+
+model Session {
+  id                String    @id @default(cuid())
+  userId            String
+  token             String    @unique
+  expiresAt         DateTime
+  mfaVerified       Boolean   @default(false)
+  mfaVerifiedAt     DateTime?
+
+  ipAddress         String?
+  userAgent         String?
+  deviceFingerprint String?
+  lastActiveAt      DateTime  @default(now())
+
+  isRevoked     Boolean   @default(false)
+  revokedAt     DateTime?
+  revokedReason String?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([token])
+  @@index([userId, isRevoked])
+  @@index([expiresAt])
+}
+
+model MfaChallenge {
+  id            String    @id @default(cuid())
+  userId        String
+  challengeType String
+  code          String?
+  attempts      Int       @default(0)
+  maxAttempts   Int       @default(5)
+  expiresAt     DateTime
+  completedAt   DateTime?
+  ipAddress     String?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model WebAuthnCredential {
+  id           String    @id @default(cuid())
+  userId       String
+  credentialId String    @unique
+  publicKey    Bytes     @db.ByteA
+  counter      Int       @default(0)
+  deviceType   String?
+  deviceName   String?
+  backedUp     Boolean   @default(false)
+  transports   String[]
+  lastUsedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model MagicLinkToken {
+  id           String    @id @default(cuid())
+  email        String
+  token        String    @unique
+  expiresAt    DateTime
+  usedAt       DateTime?
+  ipAddress    String?
+  assessmentId String?
+  createdAt    DateTime  @default(now())
+
+  @@index([email])
+  @@index([token])
+  @@index([expiresAt])
+}
