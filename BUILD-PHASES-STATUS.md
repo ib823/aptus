@@ -39,6 +39,19 @@
 | 2.15 | Assessment status machine | [x] |
 | 2.16 | Per-company progress dashboard | [x] |
 
+## Phase 3: Scope Selection — COMPLETE
+
+| # | Task | Done |
+|---|------|------|
+| 3.1 | Build scope selection page | [x] |
+| 3.2 | Industry filter | [x] |
+| 3.3 | Current state capture | [x] |
+| 3.4 | Step count display | [x] |
+| 3.5 | Progress tracking | [x] |
+| 3.6 | Scope dependencies | [x] |
+| 3.7 | Decision logging | [x] |
+| 3.8 | Save/resume | [x] |
+
 ## Phase 1: Data Ingestion Pipeline — COMPLETE
 
 | # | Task | Done |
