@@ -111,3 +111,51 @@
     -moz-osx-font-smoothing: grayscale;
   }
 }
+
+/* Print styles for report pages */
+@media print {
+  header,
+  nav,
+  aside,
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    font-size: 12px;
+    color: #000;
+    background: #fff;
+  }
+
+  .max-w-5xl,
+  .max-w-6xl,
+  .max-w-7xl {
+    max-width: 100%;
+  }
+
+  /* Ensure tables don't break across pages */
+  table {
+    page-break-inside: auto;
+  }
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  /* Remove shadows and borders for cleaner print */
+  .shadow,
+  .shadow-sm,
+  .shadow-md {
+    box-shadow: none !important;
+  }
+
+  .border {
+    border-color: #ddd !important;
+  }
+
+  /* Page margins */
+  @page {
+    margin: 1.5cm;
+  }
+}

@@ -29,7 +29,7 @@ export function PortalNav({ user }: PortalNavProps) {
     },
     {
       label: UI_TEXT.nav.admin,
-      href: "/intelligence/industries",
+      href: "/admin",
       icon: Settings,
       show: user.role === "admin",
     },
