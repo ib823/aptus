@@ -97,6 +97,17 @@
 | 6.6 | Summary counts | [x] |
 | 6.7 | Setup guide links | [x] |
 
+## Phase 8: Intelligence Layer Admin — COMPLETE
+
+| # | Task | Done |
+|---|------|------|
+| 8.1 | Industry profile CRUD | [x] |
+| 8.2 | Effort baseline editor | [x] |
+| 8.3 | Extensibility pattern library | [x] |
+| 8.4 | Adaptation pattern library | [x] |
+| 8.5 | SAP release management | [x] |
+| 8.6 | Assessment dashboard | [x] |
+
 ## Phase 7: Report Generation — COMPLETE
 
 | # | Task | Done |
