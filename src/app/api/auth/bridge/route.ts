@@ -8,7 +8,11 @@ import { prisma } from "@/lib/db/prisma";
 import { APP_CONFIG } from "@/constants/config";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const redirectTo = request.nextUrl.searchParams.get("callbackUrl") ?? "/assessments";
+  const rawCallback = request.nextUrl.searchParams.get("callbackUrl") ?? "/assessments";
+  // Prevent open redirect — only allow relative paths
+  const redirectTo = rawCallback.startsWith("/") && !rawCallback.startsWith("//")
+    ? rawCallback
+    : "/assessments";
 
   // Get the NextAuth session
   const session = await getServerSession(authOptions);
@@ -28,11 +32,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Create a custom session
-  const ipAddress =
-    request.headers.get("x-forwarded-for") ??
-    request.headers.get("x-real-ip") ??
-    null;
+  // Create a custom session — use first IP from X-Forwarded-For (leftmost = client)
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  const ipAddress = forwardedFor
+    ? (forwardedFor.split(",")[0]?.trim() ?? null)
+    : (request.headers.get("x-real-ip") ?? null);
   const userAgent = request.headers.get("user-agent") ?? null;
   const token = await createSession(user.id, ipAddress, userAgent);
 

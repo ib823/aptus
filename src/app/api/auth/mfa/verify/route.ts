@@ -6,6 +6,7 @@ import { verifyTotpCode } from "@/lib/auth/mfa";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { APP_CONFIG } from "@/constants/config";
+import { checkRateLimit, RATE_LIMITS, getClientIp } from "@/lib/security/rate-limit";
 import { z } from "zod";
 
 const verifySchema = z.object({
@@ -13,6 +14,16 @@ const verifySchema = z.object({
 });
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  // IP-based rate limiting
+  const clientIp = getClientIp(request.headers);
+  const rateCheck = checkRateLimit(`mfa:${clientIp}`, RATE_LIMITS.mfa);
+  if (!rateCheck.allowed) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.RATE_LIMITED, message: "Too many attempts. Please try again later." } },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(rateCheck.resetMs / 1000)) } },
+    );
+  }
+
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json(

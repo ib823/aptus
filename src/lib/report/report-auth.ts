@@ -38,7 +38,7 @@ export async function authenticateForReport(
 
   const assessment = await prisma.assessment.findUnique({
     where: { id: assessmentId, deletedAt: null },
-    select: { id: true, companyName: true, status: true },
+    select: { id: true, companyName: true, status: true, organizationId: true },
   });
 
   if (!assessment) {
@@ -46,6 +46,22 @@ export async function authenticateForReport(
       { error: { code: ERROR_CODES.NOT_FOUND, message: "Assessment not found" } },
       { status: 404 },
     );
+  }
+
+  // Verify user has access to this assessment
+  if (user.role !== "admin") {
+    // Check org membership or stakeholder association
+    const isStakeholder = await prisma.assessmentStakeholder.findFirst({
+      where: { assessmentId, userId: user.id },
+      select: { id: true },
+    });
+    const hasOrgAccess = user.organizationId && user.organizationId === assessment.organizationId;
+    if (!isStakeholder && !hasOrgAccess) {
+      return NextResponse.json(
+        { error: { code: ERROR_CODES.FORBIDDEN, message: "You do not have access to this assessment" } },
+        { status: 403 },
+      );
+    }
   }
 
   if (requireCompleted) {

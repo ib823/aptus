@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { sanitizeSvgContent } from "@/lib/security/sanitize";
 
 interface DiagramInfo {
   id: string;
@@ -258,7 +259,7 @@ export function FlowViewerClient({ assessmentId, diagrams: initialDiagrams }: Fl
                   ) : svgContent ? (
                     <div
                       className="p-4"
-                      dangerouslySetInnerHTML={{ __html: svgContent }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeSvgContent(svgContent) }}
                     />
                   ) : (
                     <div className="flex items-center justify-center h-64 text-gray-400 text-sm">

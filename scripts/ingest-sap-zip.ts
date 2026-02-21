@@ -466,7 +466,7 @@ async function main(): Promise<void> {
 
     // --- Expert config sheets (Tasks 3-15 in the XLSM, excluding Doc. Info) ---
     const expertSheetNames = workbook.SheetNames.filter(
-      (name) => name !== "2508 S4H Cloud" && name !== "IMG Activity TRAN in BC" && name !== "Doc. Info"
+      (name: string) => name !== "2508 S4H Cloud" && name !== "IMG Activity TRAN in BC" && name !== "Doc. Info"
     );
     console.log(`  Expert config sheets: ${expertSheetNames.length}`);
 

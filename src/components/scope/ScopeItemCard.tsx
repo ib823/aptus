@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { sanitizeHtmlContent } from "@/lib/security/sanitize";
 
 interface ScopeItemData {
   id: string;
@@ -177,19 +178,19 @@ export function ScopeItemCard({ item, onSelectionChange, isPreSelected }: ScopeI
             <TabsContent value="purpose" className="mt-3">
               <div
                 className="prose prose-sm max-w-none text-gray-700"
-                dangerouslySetInnerHTML={{ __html: item.purposeHtml }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(item.purposeHtml) }}
               />
             </TabsContent>
             <TabsContent value="overview" className="mt-3">
               <div
                 className="prose prose-sm max-w-none text-gray-700"
-                dangerouslySetInnerHTML={{ __html: item.overviewHtml }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(item.overviewHtml) }}
               />
             </TabsContent>
             <TabsContent value="prerequisites" className="mt-3">
               <div
                 className="prose prose-sm max-w-none text-gray-700"
-                dangerouslySetInnerHTML={{ __html: item.prerequisitesHtml }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(item.prerequisitesHtml) }}
               />
             </TabsContent>
             {item.tutorialUrl && (

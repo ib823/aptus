@@ -1,10 +1,12 @@
-/** NextAuth configuration — magic link authentication */
+/** NextAuth configuration — magic link authentication via Brevo */
 
 import type { NextAuthOptions } from "next-auth";
 import EmailProvider from "next-auth/providers/email";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/db/prisma";
 import { createSession, SESSION_COOKIE_NAME } from "./session";
+import { sendEmail } from "@/lib/email/brevo";
+import { magicLinkEmail } from "@/lib/email/templates";
 import type { Adapter } from "next-auth/adapters";
 
 /**
@@ -22,22 +24,28 @@ export const authOptions: NextAuthOptions = {
   adapter: getAdapter(),
   providers: [
     EmailProvider({
-      // In development, magic links are logged to console instead of sent
       server: process.env.EMAIL_SERVER ?? {
         host: "localhost",
         port: 1025,
         auth: { user: "", pass: "" },
       },
-      from: process.env.EMAIL_FROM ?? "noreply@aptus.dev",
+      from: process.env.EMAIL_FROM ?? "no-reply@brevo.com",
       sendVerificationRequest: async ({ identifier: email, url }) => {
-        // In development, log the magic link to console
-        if (process.env.NODE_ENV === "development") {
+        // In development without Brevo key, log to console
+        if (process.env.NODE_ENV === "development" && !process.env.BREVO_API_KEY) {
           console.log(`\n[MAGIC LINK] For ${email}:\n${url}\n`);
           return;
         }
-        // In production, send actual email
-        // TODO: Implement email sending
-        console.log(`[EMAIL] Send magic link to ${email}: ${url}`);
+
+        // Send via Brevo
+        const template = magicLinkEmail(url, email);
+        await sendEmail({
+          to: { email },
+          subject: template.subject,
+          htmlContent: template.html,
+          textContent: template.text,
+          tags: ["magic-link", "auth"],
+        });
       },
     }),
   ],

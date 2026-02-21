@@ -25,19 +25,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     maxAge: 0,
   });
 
-  // Clear NextAuth cookies
-  response.cookies.set("next-auth.session-token", "", {
+  // Clear NextAuth cookies with proper security flags
+  const cookieClearOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
     path: "/",
     maxAge: 0,
-  });
-  response.cookies.set("next-auth.csrf-token", "", {
-    path: "/",
-    maxAge: 0,
-  });
-  response.cookies.set("next-auth.callback-url", "", {
-    path: "/",
-    maxAge: 0,
-  });
+  };
+  response.cookies.set("next-auth.session-token", "", cookieClearOptions);
+  response.cookies.set("next-auth.csrf-token", "", cookieClearOptions);
+  response.cookies.set("next-auth.callback-url", "", cookieClearOptions);
 
   return response;
 }

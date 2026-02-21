@@ -6,36 +6,23 @@ interface BoundLogoProps {
 }
 
 const sizeMap = {
-  sm: { height: 24, wordmark: true },
-  md: { height: 36, wordmark: true },
-  lg: { height: 48, wordmark: true },
+  sm: { height: 24 },
+  md: { height: 36 },
+  lg: { height: 48 },
 } as const;
 
 /**
- * Aptus logo — uses the triple-bar mark + wordmark for md/lg,
- * and wordmark only for sm (nav bar).
+ * Aptus logo — wordmark only (SF Pro Display).
+ * The triple-bar mark is reserved for the favicon.
  */
 export function BoundLogo({ size = "md", className = "" }: BoundLogoProps) {
   const { height } = sizeMap[size];
 
   return (
     <span
-      className={`inline-flex items-center gap-2 ${className}`}
+      className={`inline-flex items-center ${className}`}
       aria-label="Aptus"
     >
-      {/* Triple-bar mark */}
-      <svg
-        viewBox="0 0 180 148"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        height={height}
-        aria-hidden="true"
-      >
-        <rect x="0" y="0" width="180" height="28" rx="14" fill="currentColor" />
-        <rect x="0" y="60" width="180" height="28" rx="14" fill="currentColor" />
-        <rect x="0" y="120" width="180" height="28" rx="14" fill="currentColor" />
-      </svg>
-      {/* Wordmark */}
       <span
         className="text-gray-950"
         style={{

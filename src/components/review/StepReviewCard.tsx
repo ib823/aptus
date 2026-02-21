@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { ExternalLink } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { sanitizeHtmlContent } from "@/lib/security/sanitize";
 
 interface ConfigItem {
   id: string;
@@ -157,7 +158,7 @@ export function StepReviewCard({
         </span>
         <div
           className="prose prose-sm max-w-none text-gray-950 mt-2"
-          dangerouslySetInnerHTML={{ __html: step.actionInstructionsHtml }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(step.actionInstructionsHtml) }}
         />
         {step.actionExpectedResult && (
           <div className="mt-3">
@@ -166,7 +167,7 @@ export function StepReviewCard({
             </span>
             <div
               className="prose prose-sm max-w-none text-gray-600 italic mt-1"
-              dangerouslySetInnerHTML={{ __html: step.actionExpectedResult }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(step.actionExpectedResult) }}
             />
           </div>
         )}
