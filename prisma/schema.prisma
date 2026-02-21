@@ -345,10 +345,29 @@ model Assessment {
   // Phase 25: Report Generation
   reportGenerations  ReportGeneration[]
 
+  // Phase 30: Sign-Off & Handoff
+  snapshots            AssessmentSnapshot[]
+  signOffProcess       SignOffProcess?
+  handoffPackages      HandoffPackage[]
+  almExportRecords     AlmExportRecord[]
+
+  // Phase 31: Lifecycle Continuity
+  parentAssessmentId   String?
+  parentAssessment     Assessment?          @relation("AssessmentPhases", fields: [parentAssessmentId], references: [id])
+  childAssessments     Assessment[]         @relation("AssessmentPhases")
+  phaseNumber          Int                  @default(1)
+  currentSnapshotId    String?
+  clonedFromSnapshotId String?
+  carryForwardConfig   Json?
+  changeRequests       ChangeRequest[]
+  reassessmentTriggers ReassessmentTrigger[]
+
   @@index([status])
   @@index([createdBy])
   @@index([organizationId])
   @@index([deletedAt])
+  @@index([parentAssessmentId])
+  @@index([phaseNumber])
 }
 
 model AssessmentStakeholder {
@@ -1443,4 +1462,240 @@ model UsageEvent {
   @@index([organizationId, eventType])
   @@index([createdAt])
   @@index([stripeSent])
+}
+
+// =============================================================
+// Phase 30: Sign-Off & Handoff
+// =============================================================
+
+model AssessmentSnapshot {
+  id            String   @id @default(cuid())
+  assessmentId  String
+  version       Int
+  label         String?
+  snapshotData  Json
+  dataHash      String
+  createdById   String
+  reason        String   @db.Text
+  createdAt     DateTime @default(now())
+
+  assessment    Assessment      @relation(fields: [assessmentId], references: [id])
+  signOffProcess SignOffProcess?
+
+  // Phase 31: Change request relations
+  changeRequestsPrevious ChangeRequest[] @relation("ChangeRequestPreviousSnapshot")
+  changeRequestsNew      ChangeRequest[] @relation("ChangeRequestNewSnapshot")
+
+  @@unique([assessmentId, version])
+  @@index([assessmentId])
+}
+
+model SignOffProcess {
+  id                 String    @id @default(cuid())
+  assessmentId       String    @unique
+  snapshotId         String    @unique
+  status             String    @default("VALIDATION_NOT_STARTED") // SignOffStatus enum values
+  rejectedToStatus   String?
+  rejectionReason    String?   @db.Text
+  certificatePdfUrl  String?
+  certificateHash    String?
+  verificationToken  String?   @unique
+  initiatedById      String
+  createdAt          DateTime  @default(now())
+  completedAt        DateTime?
+
+  assessment           Assessment              @relation(fields: [assessmentId], references: [id])
+  snapshot             AssessmentSnapshot       @relation(fields: [snapshotId], references: [id])
+  areaValidations      AreaValidation[]
+  technicalValidation  TechnicalValidation?
+  crossFuncValidation  CrossFunctionalValidation?
+  signatures           SignatureRecord[]
+
+  @@index([assessmentId])
+  @@index([status])
+}
+
+model AreaValidation {
+  id              String    @id @default(cuid())
+  signOffId       String
+  functionalArea  String
+  validatedById   String
+  validatorName   String
+  validatorEmail  String
+  validatorRole   String
+  status          String    // PENDING, APPROVED, REJECTED
+  comments        String?   @db.Text
+  rejectionReason String?   @db.Text
+  validatedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  signOff SignOffProcess @relation(fields: [signOffId], references: [id])
+
+  @@unique([signOffId, functionalArea])
+  @@index([signOffId])
+}
+
+model TechnicalValidation {
+  id            String    @id @default(cuid())
+  signOffId     String    @unique
+  itLeadId      String?
+  itLeadName    String?
+  itLeadEmail   String?
+  itLeadStatus  String?   // PENDING, APPROVED, REJECTED
+  itLeadComments String?  @db.Text
+  itLeadAt      DateTime?
+  dmLeadId      String?
+  dmLeadName    String?
+  dmLeadEmail   String?
+  dmLeadStatus  String?   // PENDING, APPROVED, REJECTED
+  dmLeadComments String?  @db.Text
+  dmLeadAt      DateTime?
+  createdAt     DateTime  @default(now())
+
+  signOff SignOffProcess @relation(fields: [signOffId], references: [id])
+}
+
+model CrossFunctionalValidation {
+  id                String    @id @default(cuid())
+  signOffId         String    @unique
+  validatedById     String
+  validatorName     String
+  validatorEmail    String
+  status            String    // PENDING, APPROVED, REJECTED
+  comments          String?   @db.Text
+  conflictsReviewed Boolean   @default(false)
+  conflictCount     Int       @default(0)
+  conflictsResolved Int       @default(0)
+  validatedAt       DateTime?
+  createdAt         DateTime  @default(now())
+
+  signOff SignOffProcess @relation(fields: [signOffId], references: [id])
+}
+
+model SignatureRecord {
+  id                  String   @id @default(cuid())
+  signOffId           String
+  signatureType       String   // EXECUTIVE, PARTNER
+  signerId            String
+  signerName          String
+  signerEmail         String
+  signerRole          String
+  signerOrganization  String
+  signerTitle         String?
+  authorityStatement  String   @db.Text
+  ipAddress           String
+  userAgent           String   @db.Text
+  authMethod          String
+  mfaVerified         Boolean
+  documentHash        String
+  signedAt            DateTime
+  status              String   @default("PENDING") // PENDING, COMPLETED, DECLINED
+  declineReason       String?  @db.Text
+
+  signOff SignOffProcess @relation(fields: [signOffId], references: [id])
+
+  @@index([signOffId])
+}
+
+model AlmExportRecord {
+  id            String    @id @default(cuid())
+  assessmentId  String
+  targetSystem  String    // JIRA, AZURE_DEVOPS, SAP_SOLMAN, CSV
+  status        String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, FAILED
+  exportedById  String
+  exportConfig  Json
+  exportMapping Json?
+  resultSummary Json?
+  errorMessage  String?   @db.Text
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@index([assessmentId])
+}
+
+model HandoffPackage {
+  id              String   @id @default(cuid())
+  assessmentId    String
+  snapshotVersion Int
+  packageType     String   @default("FULL") // FULL, SCOPE_ONLY, TECHNICAL, EXECUTIVE_SUMMARY
+  contents        String[]
+  fileSize        Int?
+  blobUrl         String?
+  generatedById   String
+  generatedAt     DateTime @default(now())
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@index([assessmentId])
+}
+
+// =============================================================
+// Phase 31: Lifecycle Continuity
+// =============================================================
+
+model ChangeRequest {
+  id                  String    @id @default(cuid())
+  assessmentId        String
+  requestedById       String
+  title               String
+  reason              String    @db.Text
+  impactSummary       Json
+  status              String    @default("REQUESTED") // REQUESTED, APPROVED, REJECTED, IN_PROGRESS, COMPLETED
+  approvedById        String?
+  approvedAt          DateTime?
+  rejectedReason      String?   @db.Text
+  changes             Json?
+  unlockedEntities    Json
+  previousSnapshotId  String
+  newSnapshotId       String?
+  expeditedSignOff    Boolean   @default(true)
+  signOffCompleted    Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  assessment        Assessment          @relation(fields: [assessmentId], references: [id])
+  previousSnapshot  AssessmentSnapshot  @relation("ChangeRequestPreviousSnapshot", fields: [previousSnapshotId], references: [id])
+  newSnapshot       AssessmentSnapshot? @relation("ChangeRequestNewSnapshot", fields: [newSnapshotId], references: [id])
+
+  @@index([assessmentId])
+  @@index([status])
+}
+
+model ReassessmentTrigger {
+  id              String    @id @default(cuid())
+  assessmentId    String
+  triggerType     String    // SAP_UPDATE, REGULATORY_CHANGE, ORG_CHANGE, SCOPE_DRIFT, MANUAL
+  title           String
+  description     String    @db.Text
+  sourceReference String?
+  detectedAt      DateTime  @default(now())
+  detectedById    String?
+  status          String    @default("OPEN") // OPEN, ACKNOWLEDGED, IN_PROGRESS, RESOLVED, DISMISSED
+  resolution      String?   @db.Text
+  resolvedAt      DateTime?
+  resolvedById    String?
+  changeRequestId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@index([assessmentId])
+  @@index([triggerType])
+}
+
+model SnapshotComparison {
+  id                String   @id @default(cuid())
+  assessmentId      String
+  baseSnapshotId    String
+  compareSnapshotId String
+  deltaReport       Json
+  summary           Json
+  computedAt        DateTime @default(now())
+
+  @@unique([baseSnapshotId, compareSnapshotId])
+  @@index([assessmentId])
 }
