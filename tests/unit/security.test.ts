@@ -451,21 +451,31 @@ describe("Permission Boundaries", () => {
 
 // ── Security Headers Presence ─────────────────────────────────────────────
 describe("Security Headers Configuration", () => {
-  test("next.config.ts defines all required security headers", async () => {
+  test("next.config.ts imports centralized security headers", async () => {
     const fs = await import("fs");
     const path = await import("path");
     const configPath = path.resolve(__dirname, "../../next.config.ts");
     const content = fs.readFileSync(configPath, "utf-8");
 
-    expect(content).toContain("X-Content-Type-Options");
-    expect(content).toContain("nosniff");
-    expect(content).toContain("X-Frame-Options");
-    expect(content).toContain("DENY");
-    expect(content).toContain("Strict-Transport-Security");
-    expect(content).toContain("Content-Security-Policy");
-    expect(content).toContain("Referrer-Policy");
-    expect(content).toContain("Permissions-Policy");
-    expect(content).toContain("frame-ancestors 'none'");
-    expect(content).toContain("object-src 'none'");
+    expect(content).toContain("getSecurityHeaders");
+    expect(content).toContain("security-headers");
+    expect(content).toContain("headers()");
+  });
+
+  test("getSecurityHeaders returns all required security headers", async () => {
+    const { getSecurityHeaders } = await import("@/lib/pwa/security-headers");
+    const headers = getSecurityHeaders();
+    const allValues = headers.map((h) => `${h.key}: ${h.value}`).join("\n");
+
+    expect(allValues).toContain("X-Content-Type-Options");
+    expect(allValues).toContain("nosniff");
+    expect(allValues).toContain("X-Frame-Options");
+    expect(allValues).toContain("DENY");
+    expect(allValues).toContain("Strict-Transport-Security");
+    expect(allValues).toContain("Content-Security-Policy");
+    expect(allValues).toContain("Referrer-Policy");
+    expect(allValues).toContain("Permissions-Policy");
+    expect(allValues).toContain("frame-ancestors 'none'");
+    expect(allValues).toContain("object-src 'none'");
   });
 });
