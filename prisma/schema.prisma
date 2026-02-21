@@ -139,7 +139,8 @@ model SetupGuide {
   scopeItemId String   @unique
   filename    String
   fileSize    Int
-  pdfBlob     Bytes    @db.ByteA
+  pdfBlob     Bytes?   @db.ByteA
+  blobUrl     String?
   pageCount   Int?
   createdAt   DateTime @default(now())
 
@@ -151,7 +152,8 @@ model GeneralFile {
   filename        String
   fileType        String
   fileSize        Int
-  blob            Bytes    @db.ByteA
+  blob            Bytes?   @db.ByteA
+  blobUrl         String?
   relatedScopeIds String[]
   createdAt       DateTime @default(now())
 
@@ -192,7 +194,8 @@ model OtherFile {
   filename String
   path     String
   fileSize Int
-  blob     Bytes    @db.ByteA
+  blob     Bytes?   @db.ByteA
+  blobUrl  String?
   createdAt DateTime @default(now())
 }
 
@@ -200,7 +203,8 @@ model ReadmeFile {
   id       String   @id @default(cuid())
   filename String
   content  String   @db.Text
-  blob     Bytes    @db.ByteA
+  blob     Bytes?   @db.ByteA
+  blobUrl  String?
   createdAt DateTime @default(now())
 }
 

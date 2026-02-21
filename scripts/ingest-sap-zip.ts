@@ -16,12 +16,40 @@
  */
 
 import { PrismaClient } from "@prisma/client";
+import { put } from "@vercel/blob";
 import AdmZip from "adm-zip";
 import * as XLSX from "xlsx";
 import mammoth from "mammoth";
 import path from "path";
 
 const prisma = new PrismaClient();
+
+const USE_BLOB = !!process.env.BLOB_READ_WRITE_TOKEN;
+
+function contentTypeForFilename(filename: string): string {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (lower.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (lower.endsWith(".xlsm")) return "application/vnd.ms-excel.sheet.macroEnabled.12";
+  if (lower.endsWith(".csv")) return "text/csv";
+  if (lower.endsWith(".zip")) return "application/zip";
+  if (lower.endsWith(".rtf")) return "application/rtf";
+  return "application/octet-stream";
+}
+
+async function uploadToBlob(
+  blobPath: string,
+  data: Buffer,
+  filename: string,
+): Promise<string | null> {
+  if (!USE_BLOB) return null;
+  const { url } = await put(blobPath, data, {
+    access: "private",
+    contentType: contentTypeForFilename(filename),
+  });
+  return url;
+}
 
 // ---------------------------------------------------------------------------
 // Step type normalization (DATA-CONTRACT.md Section 12)
@@ -108,6 +136,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  console.log(`Blob storage: ${USE_BLOB ? "Vercel Blob (BLOB_READ_WRITE_TOKEN set)" : "PostgreSQL (no BLOB_READ_WRITE_TOKEN)"}`);
   console.log(`Loading ZIP: ${zipPath}`);
   const zip = new AdmZip(zipPath);
   const entries = zip.getEntries();
@@ -604,12 +633,19 @@ async function main(): Promise<void> {
     }
 
     try {
+      const blobUrl = await uploadToBlob(
+        `sap-catalog/setup-guide/${scopeId}/${filename}`,
+        buffer,
+        filename,
+      );
+
       await prisma.setupGuide.create({
         data: {
           scopeItemId: scopeId,
           filename,
           fileSize: buffer.length,
-          pdfBlob: new Uint8Array(buffer),
+          pdfBlob: blobUrl ? null : new Uint8Array(buffer),
+          blobUrl,
           pageCount,
         },
       });
@@ -663,12 +699,19 @@ async function main(): Promise<void> {
       }
     }
 
+    const blobUrl = await uploadToBlob(
+      `sap-catalog/general/${filename}`,
+      buffer,
+      filename,
+    );
+
     await prisma.generalFile.create({
       data: {
         filename,
         fileType,
         fileSize: buffer.length,
-        blob: new Uint8Array(buffer),
+        blob: blobUrl ? null : new Uint8Array(buffer),
+        blobUrl,
         relatedScopeIds: [],
       },
     });
@@ -684,12 +727,19 @@ async function main(): Promise<void> {
     const filename = path.basename(entry.entryName);
     const buffer = entry.getData();
 
+    const blobUrl = await uploadToBlob(
+      `sap-catalog/other/${filename}`,
+      buffer,
+      filename,
+    );
+
     await prisma.otherFile.create({
       data: {
         filename,
         path: entry.entryName,
         fileSize: buffer.length,
-        blob: new Uint8Array(buffer),
+        blob: blobUrl ? null : new Uint8Array(buffer),
+        blobUrl,
       },
     });
   }
@@ -711,11 +761,18 @@ async function main(): Promise<void> {
       .replace(/[{}]/g, "")
       .trim();
 
+    const blobUrl = await uploadToBlob(
+      `sap-catalog/readme/README.rtf`,
+      buffer,
+      "README.rtf",
+    );
+
     await prisma.readmeFile.create({
       data: {
         filename: "README.rtf",
         content: textContent || "SAP Best Practices README",
-        blob: new Uint8Array(buffer),
+        blob: blobUrl ? null : new Uint8Array(buffer),
+        blobUrl,
       },
     });
     console.log("  README.rtf stored");

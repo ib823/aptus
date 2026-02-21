@@ -1,6 +1,7 @@
 /** GET: Serve Setup PDF for a scope item */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { getDownloadUrl } from "@vercel/blob";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
@@ -30,12 +31,27 @@ export async function GET(
   const guide = await prisma.setupGuide.findUnique({
     where: { scopeItemId },
     select: {
+      blobUrl: true,
       pdfBlob: true,
       filename: true,
     },
   });
 
-  if (!guide || !guide.pdfBlob) {
+  if (!guide) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.NOT_FOUND, message: "Setup guide not found" } },
+      { status: 404 },
+    );
+  }
+
+  // Prefer Vercel Blob (private store — generate signed temporary URL)
+  if (guide.blobUrl) {
+    const downloadUrl = await getDownloadUrl(guide.blobUrl);
+    return NextResponse.redirect(downloadUrl);
+  }
+
+  // Fallback to DB blob during migration transition
+  if (!guide.pdfBlob) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.NOT_FOUND, message: "Setup guide not found" } },
       { status: 404 },
