@@ -6,6 +6,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/components/shared/Providers";
 import "./globals.css";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 export const metadata: Metadata = {
   title: "aptus",
   description: "SAP S/4HANA Cloud best practices process validation portal",
