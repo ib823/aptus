@@ -23,6 +23,15 @@ const gapUpdateSchema = z
     upgradeImpact: z.string().max(5000).optional(),
     rationale: z.string().max(5000).optional(),
     clientApproved: z.boolean().optional(),
+    // Phase 13: V2 fields
+    priority: z.enum(["critical", "high", "medium", "low"]).nullable().optional(),
+    oneTimeCost: z.number().min(0).nullable().optional(),
+    recurringCost: z.number().min(0).nullable().optional(),
+    costCurrency: z.string().min(3).max(3).nullable().optional(),
+    implementationDays: z.number().min(0).nullable().optional(),
+    riskCategory: z.enum(["technical", "business", "compliance", "integration"]).nullable().optional(),
+    upgradeStrategy: z.enum(["standard_upgrade", "needs_revalidation", "custom_maintenance"]).nullable().optional(),
+    clientApprovalNote: z.string().max(5000).nullable().optional(),
   })
   .refine(
     (data) =>
@@ -93,12 +102,28 @@ export async function PUT(
     clientApproved: parsed.data.clientApproved ?? false,
     decidedBy: user.email,
     decidedAt: new Date(),
+    // Phase 13: V2 fields
+    priority: parsed.data.priority ?? null,
+    oneTimeCost: parsed.data.oneTimeCost ?? null,
+    recurringCost: parsed.data.recurringCost ?? null,
+    costCurrency: parsed.data.costCurrency ?? null,
+    implementationDays: parsed.data.implementationDays ?? null,
+    riskCategory: parsed.data.riskCategory ?? null,
+    upgradeStrategy: parsed.data.upgradeStrategy ?? null,
   };
   if (parsed.data.gapDescription !== undefined) {
     updateData.gapDescription = parsed.data.gapDescription;
   }
   if (parsed.data.costEstimate !== undefined) {
     updateData.costEstimate = parsed.data.costEstimate as Prisma.InputJsonValue;
+  }
+  // Handle client approval with timestamp
+  if (parsed.data.clientApproved) {
+    updateData.clientApprovedBy = user.email;
+    updateData.clientApprovedAt = new Date();
+    if (parsed.data.clientApprovalNote !== undefined) {
+      updateData.clientApprovalNote = parsed.data.clientApprovalNote;
+    }
   }
 
   const updated = await prisma.gapResolution.update({

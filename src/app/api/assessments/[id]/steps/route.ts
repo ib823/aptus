@@ -16,6 +16,7 @@ const querySchema = z.object({
     "LOGON", "ACCESS_APP", "INFORMATION", "DATA_ENTRY",
     "ACTION", "VERIFICATION", "NAVIGATION", "PROCESS_STEP",
   ]).optional(),
+  grouped: z.string().optional(),
 });
 
 export async function GET(
@@ -75,6 +76,10 @@ export async function GET(
       respondedAt: true,
       createdAt: true,
       updatedAt: true,
+      confidence: true,
+      evidenceUrls: true,
+      reviewedBy: true,
+      reviewedAt: true,
       processStep: {
         select: {
           id: true,
@@ -83,6 +88,11 @@ export async function GET(
           actionTitle: true,
           stepType: true,
           processFlowGroup: true,
+          stepCategory: true,
+          isClassifiable: true,
+          groupKey: true,
+          groupLabel: true,
+          parsedContent: true,
         },
       },
     },
@@ -91,8 +101,40 @@ export async function GET(
   const hasMore = entries.length > limit;
   if (hasMore) entries.pop();
 
+  // Compute classifiable step counts
+  const totalSteps = entries.length;
+  const classifiableSteps = entries.filter((e) => e.processStep?.isClassifiable !== false).length;
+  const reviewedClassifiable = entries.filter(
+    (e) => e.processStep?.isClassifiable !== false && e.fitStatus !== "PENDING",
+  ).length;
+
+  // Optional grouped response
+  if (parsed.data.grouped === "true") {
+    const groups = new Map<string, typeof entries>();
+    for (const entry of entries) {
+      const key = entry.processStep?.groupKey ?? "ungrouped";
+      const existing = groups.get(key);
+      if (existing) {
+        existing.push(entry);
+      } else {
+        groups.set(key, [entry]);
+      }
+    }
+    return NextResponse.json({
+      data: Object.fromEntries(groups),
+      totalSteps,
+      classifiableSteps,
+      reviewedClassifiable,
+      nextCursor: hasMore ? entries[entries.length - 1]?.id ?? null : null,
+      hasMore,
+    });
+  }
+
   return NextResponse.json({
     data: entries,
+    totalSteps,
+    classifiableSteps,
+    reviewedClassifiable,
     nextCursor: hasMore ? entries[entries.length - 1]?.id ?? null : null,
     hasMore,
   });

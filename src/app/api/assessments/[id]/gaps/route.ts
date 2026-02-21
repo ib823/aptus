@@ -29,10 +29,12 @@ export async function GET(
 
   const scopeItemId = request.nextUrl.searchParams.get("scopeItemId") ?? undefined;
   const resolutionType = request.nextUrl.searchParams.get("resolutionType") ?? undefined;
+  const priority = request.nextUrl.searchParams.get("priority") ?? undefined;
+  const riskCategory = request.nextUrl.searchParams.get("riskCategory") ?? undefined;
   const cursor = request.nextUrl.searchParams.get("cursor") ?? undefined;
 
   const [result, summary] = await Promise.all([
-    getGapsForAssessment(assessmentId, { scopeItemId, resolutionType, cursor }),
+    getGapsForAssessment(assessmentId, { scopeItemId, resolutionType, priority, riskCategory, cursor }),
     getGapSummaryStats(assessmentId),
   ]);
 

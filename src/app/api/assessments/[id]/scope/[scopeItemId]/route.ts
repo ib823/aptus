@@ -13,6 +13,10 @@ const selectionSchema = z.object({
   relevance: z.enum(["YES", "NO", "MAYBE"]),
   currentState: z.enum(["MANUAL", "SYSTEM", "OUTSOURCED", "NA"]).nullable().optional(),
   notes: z.string().nullable().optional(),
+  priority: z.enum(["critical", "high", "medium", "low"]).nullable().optional(),
+  businessJustification: z.string().max(5000).nullable().optional(),
+  estimatedComplexity: z.enum(["low", "medium", "high"]).nullable().optional(),
+  dependsOnScopeItems: z.array(z.string()).optional(),
 });
 
 export async function PUT(
@@ -76,27 +80,28 @@ export async function PUT(
   });
 
   // Upsert the selection
+  const selectionData = {
+    selected: parsed.data.selected,
+    relevance: parsed.data.relevance,
+    currentState: parsed.data.currentState ?? null,
+    notes: parsed.data.notes ?? null,
+    respondent: user.email,
+    respondedAt: new Date(),
+    priority: parsed.data.priority ?? null,
+    businessJustification: parsed.data.businessJustification ?? null,
+    estimatedComplexity: parsed.data.estimatedComplexity ?? null,
+    dependsOnScopeItems: parsed.data.dependsOnScopeItems ?? [],
+  };
+
   const selection = await prisma.scopeSelection.upsert({
     where: {
       assessmentId_scopeItemId: { assessmentId, scopeItemId },
     },
-    update: {
-      selected: parsed.data.selected,
-      relevance: parsed.data.relevance,
-      currentState: parsed.data.currentState ?? null,
-      notes: parsed.data.notes ?? null,
-      respondent: user.email,
-      respondedAt: new Date(),
-    },
+    update: selectionData,
     create: {
       assessmentId,
       scopeItemId,
-      selected: parsed.data.selected,
-      relevance: parsed.data.relevance,
-      currentState: parsed.data.currentState ?? null,
-      notes: parsed.data.notes ?? null,
-      respondent: user.email,
-      respondedAt: new Date(),
+      ...selectionData,
     },
   });
 

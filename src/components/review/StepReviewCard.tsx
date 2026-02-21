@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, ChevronDown, ChevronRight } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { sanitizeHtmlContent } from "@/lib/security/sanitize";
 
 interface ConfigItem {
@@ -26,6 +27,10 @@ interface StepData {
   fitStatus: string;
   clientNote: string | null;
   currentProcess: string | null;
+  confidence?: string | null;
+  evidenceUrls?: string[];
+  parsedContent?: Record<string, unknown> | null;
+  isClassifiable?: boolean;
 }
 
 interface StepReviewCardProps {
@@ -35,6 +40,8 @@ interface StepReviewCardProps {
     fitStatus: string;
     clientNote?: string | undefined;
     currentProcess?: string | undefined;
+    confidence?: string | undefined;
+    evidenceUrls?: string[] | undefined;
   }) => void;
   isReadOnly: boolean;
   isItLead: boolean;
@@ -99,6 +106,7 @@ export function StepReviewCard({
     stepId: step.id,
     value: step.clientNote ?? "",
   });
+  const [sapContentOverride, setSapContentOverride] = useState<{ stepId: string; fitStatus: string; expanded: boolean } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Derive client note — reset when step changes
@@ -107,11 +115,30 @@ export function StepReviewCard({
     setLocalNote({ stepId: step.id, value });
   };
 
+  // Derive SAP content expanded state — collapsed after a decision is made
+  const sapContentExpanded =
+    sapContentOverride?.stepId === step.id && sapContentOverride?.fitStatus === step.fitStatus
+      ? sapContentOverride.expanded
+      : step.fitStatus === "PENDING";
+  const setSapContentExpanded = (expanded: boolean) => {
+    setSapContentOverride({ stepId: step.id, fitStatus: step.fitStatus, expanded });
+  };
+
   const handleFitStatusChange = (fitStatus: string) => {
     if (isReadOnly || isItLead) return;
     onResponseChange(step.id, {
       fitStatus,
       clientNote: clientNote || undefined,
+      confidence: step.confidence ?? undefined,
+    });
+  };
+
+  const handleConfidenceChange = (confidence: string) => {
+    if (isReadOnly) return;
+    onResponseChange(step.id, {
+      fitStatus: step.fitStatus,
+      clientNote: clientNote || undefined,
+      confidence: confidence || undefined,
     });
   };
 
@@ -151,53 +178,7 @@ export function StepReviewCard({
         </Badge>
       </div>
 
-      {/* SAP Content Section */}
-      <div className="px-5 py-4 bg-muted/40">
-        <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
-          What SAP Best Practice Says
-        </span>
-        <div
-          className="prose prose-sm max-w-none text-foreground mt-2"
-          dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(step.actionInstructionsHtml) }}
-        />
-        {step.actionExpectedResult && (
-          <div className="mt-3">
-            <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
-              Expected Result
-            </span>
-            <div
-              className="prose prose-sm max-w-none text-muted-foreground italic mt-1"
-              dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(step.actionExpectedResult) }}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Related Configs */}
-      {configs.length > 0 && (
-        <div className="px-5 py-3 bg-blue-50/30 border-t border-blue-100">
-          <span className="text-xs font-medium text-blue-600 uppercase tracking-wider">
-            Related Configuration Activities
-          </span>
-          <div className="mt-2 flex flex-col gap-2">
-            {configs.map((config) => (
-              <div key={config.id} className="flex items-center gap-2">
-                <Badge className={`text-xs ${CATEGORY_STYLES[config.category] ?? "bg-gray-100 text-gray-600"}`}>
-                  {config.category}
-                </Badge>
-                <span className="text-sm">{config.configItemName}</span>
-                {config.selfService && (
-                  <Badge variant="outline" className="text-xs text-green-600 border-green-300">
-                    Self-Service
-                  </Badge>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Client Response Section */}
+      {/* Decision-First: Client Response Section — ABOVE SAP content */}
       <div className="px-5 py-4">
         <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
           How Does Your Company Do This?
@@ -210,6 +191,9 @@ export function StepReviewCard({
                 ? "No response yet"
                 : `Marked as ${step.fitStatus}`}
             </p>
+            {step.confidence && (
+              <p className="text-xs text-muted-foreground mt-1">Confidence: {step.confidence}</p>
+            )}
             {step.clientNote && (
               <p className="mt-2 text-sm text-muted-foreground bg-muted/40 p-3 rounded">
                 {step.clientNote}
@@ -244,6 +228,21 @@ export function StepReviewCard({
                 </button>
               ))}
             </div>
+
+            {/* Confidence dropdown — shown after a decision */}
+            {step.fitStatus !== "PENDING" && (
+              <div className="mt-3 flex items-center gap-3">
+                <span className="text-xs font-medium text-muted-foreground">Confidence:</span>
+                <Select value={step.confidence ?? ""} onValueChange={handleConfidenceChange}>
+                  <SelectTrigger className="w-32 h-8 text-xs"><SelectValue placeholder="Set level" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Gap Detail */}
             {step.fitStatus === "GAP" && (
@@ -296,6 +295,66 @@ export function StepReviewCard({
           </>
         )}
       </div>
+
+      {/* Collapsible SAP Content Section */}
+      <div className="border-t">
+        <button
+          onClick={() => setSapContentExpanded(!sapContentExpanded)}
+          className="w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-muted/40 transition-colors"
+        >
+          {sapContentExpanded ? (
+            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          )}
+          <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
+            What SAP Best Practice Says
+          </span>
+        </button>
+        {sapContentExpanded && (
+          <div className="px-5 pb-4 bg-muted/40">
+            <div
+              className="prose prose-sm max-w-none text-foreground"
+              dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(step.actionInstructionsHtml) }}
+            />
+            {step.actionExpectedResult && (
+              <div className="mt-3">
+                <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
+                  Expected Result
+                </span>
+                <div
+                  className="prose prose-sm max-w-none text-muted-foreground italic mt-1"
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(step.actionExpectedResult) }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Related Configs */}
+      {configs.length > 0 && (
+        <div className="px-5 py-3 bg-blue-50/30 border-t border-blue-100">
+          <span className="text-xs font-medium text-blue-600 uppercase tracking-wider">
+            Related Configuration Activities
+          </span>
+          <div className="mt-2 flex flex-col gap-2">
+            {configs.map((config) => (
+              <div key={config.id} className="flex items-center gap-2">
+                <Badge className={`text-xs ${CATEGORY_STYLES[config.category] ?? "bg-gray-100 text-gray-600"}`}>
+                  {config.category}
+                </Badge>
+                <span className="text-sm">{config.configItemName}</span>
+                {config.selfService && (
+                  <Badge variant="outline" className="text-xs text-green-600 border-green-300">
+                    Self-Service
+                  </Badge>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Activity Context */}
       {step.activityTitle && (

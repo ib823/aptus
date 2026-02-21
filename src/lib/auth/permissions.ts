@@ -2,6 +2,8 @@
 
 import { prisma } from "@/lib/db/prisma";
 import type { SessionUser, UserRole } from "@/types/assessment";
+import { PROFILE_COMPLETENESS_GATE } from "@/types/assessment";
+import { calculateProfileCompleteness } from "@/lib/assessment/profile-completeness";
 import { ERROR_CODES } from "@/types/api";
 
 export interface PermissionResult {
@@ -166,12 +168,15 @@ export function canManageStakeholders(user: SessionUser): PermissionResult {
 
 /**
  * Check if a user can transition an assessment to a new status.
+ * Phase 10: draft→in_progress requires profile completeness >= 60%
+ * Phase 13: in_progress→completed requires all gaps to have clientApproved = true
  */
-export function canTransitionStatus(
+export async function canTransitionStatus(
   user: SessionUser,
   fromStatus: string,
   toStatus: string,
-): PermissionResult {
+  assessmentId?: string,
+): Promise<PermissionResult> {
   const transitionKey = `${fromStatus}->${toStatus}`;
   const allowedRoles: UserRole[] | undefined = {
     "draft->in_progress": ["consultant", "admin"] as UserRole[],
@@ -194,6 +199,58 @@ export function canTransitionStatus(
       code: ERROR_CODES.FORBIDDEN,
       message: `Role ${user.role} cannot perform this transition`,
     };
+  }
+
+  // Phase 10: Profile completeness gate for draft → in_progress
+  if (transitionKey === "draft->in_progress" && assessmentId) {
+    const assessment = await prisma.assessment.findUnique({
+      where: { id: assessmentId },
+      select: {
+        companyName: true,
+        industry: true,
+        country: true,
+        companySize: true,
+        employeeCount: true,
+        annualRevenue: true,
+        deploymentModel: true,
+        sapModules: true,
+        migrationApproach: true,
+        targetGoLiveDate: true,
+        keyProcesses: true,
+        operatingCountries: true,
+        currentErpVersion: true,
+        itLandscapeSummary: true,
+      },
+    });
+
+    if (assessment) {
+      const { score } = calculateProfileCompleteness(assessment);
+      if (score < PROFILE_COMPLETENESS_GATE) {
+        return {
+          allowed: false,
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: `Profile completeness is ${score}% — minimum ${PROFILE_COMPLETENESS_GATE}% required to proceed`,
+        };
+      }
+    }
+  }
+
+  // Phase 13: All gaps must be approved for in_progress → completed
+  if (transitionKey === "in_progress->completed" && assessmentId) {
+    const unapprovedGaps = await prisma.gapResolution.count({
+      where: {
+        assessmentId,
+        clientApproved: false,
+      },
+    });
+
+    if (unapprovedGaps > 0) {
+      return {
+        allowed: false,
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: `${unapprovedGaps} gap resolution(s) still need client approval`,
+      };
+    }
   }
 
   return { allowed: true };

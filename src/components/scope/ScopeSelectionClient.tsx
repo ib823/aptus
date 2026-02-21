@@ -68,6 +68,8 @@ export function ScopeSelectionClient({
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [areaFilter, setAreaFilter] = useState<string>("all");
+  const [subAreaFilter, setSubAreaFilter] = useState<string>("all");
+  const [applyingTemplate, setApplyingTemplate] = useState(false);
   const pendingSaves = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   // Group items by functional area
@@ -78,6 +80,16 @@ export function ScopeSelectionClient({
     }
     return Array.from(areas).sort();
   }, [items]);
+
+  // Sub-areas for the selected area
+  const subAreas = useMemo(() => {
+    const subs = new Set<string>();
+    const source = areaFilter !== "all" ? items.filter((i) => i.functionalArea === areaFilter) : items;
+    for (const item of source) {
+      subs.add(item.subArea);
+    }
+    return Array.from(subs).sort();
+  }, [items, areaFilter]);
 
   // Apply filters
   const filteredItems = useMemo(() => {
@@ -109,8 +121,13 @@ export function ScopeSelectionClient({
       result = result.filter((item) => item.functionalArea === areaFilter);
     }
 
+    // Sub-area filter
+    if (subAreaFilter !== "all") {
+      result = result.filter((item) => item.subArea === subAreaFilter);
+    }
+
     return result;
-  }, [items, searchQuery, filterMode, areaFilter]);
+  }, [items, searchQuery, filterMode, areaFilter, subAreaFilter]);
 
   // Group filtered items by area
   const groupedItems = useMemo(() => {
@@ -230,6 +247,35 @@ export function ScopeSelectionClient({
     [assessmentId, items],
   );
 
+  // Apply Industry Template
+  const handleApplyTemplate = useCallback(async () => {
+    if (applyingTemplate) return;
+    setApplyingTemplate(true);
+    try {
+      const res = await fetch(`/api/assessments/${assessmentId}/scope/pre-select`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ industryCode: industry, mode: "merge" }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const applied = json.data?.applied ?? 0;
+        // Optimistic update — mark pre-selected items as selected
+        if (applied > 0) {
+          setItems((prev) =>
+            prev.map((item) =>
+              industryPreSelections.includes(item.id) && !item.selected
+                ? { ...item, selected: true, relevance: "YES" }
+                : item,
+            ),
+          );
+        }
+      }
+    } finally {
+      setApplyingTemplate(false);
+    }
+  }, [assessmentId, industry, industryPreSelections, applyingTemplate]);
+
   const isReadOnly = assessmentStatus === "signed_off" || assessmentStatus === "reviewed";
   const industryPreSelectSet = useMemo(() => new Set(industryPreSelections), [industryPreSelections]);
 
@@ -286,7 +332,7 @@ export function ScopeSelectionClient({
 
         <select
           value={areaFilter}
-          onChange={(e) => setAreaFilter(e.target.value)}
+          onChange={(e) => { setAreaFilter(e.target.value); setSubAreaFilter("all"); }}
           className="h-9 px-3 text-xs border rounded-md bg-card text-foreground"
         >
           <option value="all">All Areas</option>
@@ -296,6 +342,30 @@ export function ScopeSelectionClient({
             </option>
           ))}
         </select>
+
+        <select
+          value={subAreaFilter}
+          onChange={(e) => setSubAreaFilter(e.target.value)}
+          className="h-9 px-3 text-xs border rounded-md bg-card text-foreground"
+        >
+          <option value="all">All Sub-Areas</option>
+          {subAreas.map((sub) => (
+            <option key={sub} value={sub}>
+              {sub}
+            </option>
+          ))}
+        </select>
+
+        {industryPreSelections.length > 0 && !isReadOnly && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleApplyTemplate}
+            disabled={applyingTemplate}
+          >
+            {applyingTemplate ? "Applying..." : "Apply Industry Template"}
+          </Button>
+        )}
       </div>
 
       {/* Scope items grouped by area */}

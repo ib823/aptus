@@ -22,17 +22,37 @@ interface ScopeItemData {
   relevance: string | null;
   currentState: string | null;
   notes: string | null;
+  priority?: string | null;
+  businessJustification?: string | null;
+  estimatedComplexity?: string | null;
+  dependsOnScopeItems?: string[];
 }
 
 interface ScopeItemCardProps {
   item: ScopeItemData;
+  assessmentId?: string;
   onSelectionChange: (itemId: string, data: {
     selected: boolean;
     relevance: string;
     currentState?: string | null;
     notes?: string | null;
+    priority?: string | null;
+    businessJustification?: string | null;
+    estimatedComplexity?: string | null;
   }) => void;
   isPreSelected?: boolean;
+}
+
+interface ImpactData {
+  totalSteps: number;
+  classifiableSteps: number;
+  configCount: number;
+  effortBaseline: {
+    complexity: string;
+    implementationDays: number;
+    configDays: number;
+    testDays: number;
+  } | null;
 }
 
 const RELEVANCE_OPTIONS = [
@@ -48,8 +68,24 @@ const CURRENT_STATE_OPTIONS = [
   { value: "NA", label: "Not Applicable" },
 ] as const;
 
-export function ScopeItemCard({ item, onSelectionChange, isPreSelected }: ScopeItemCardProps) {
+const PRIORITY_OPTIONS = [
+  { value: "critical", label: "Critical" },
+  { value: "high", label: "High" },
+  { value: "medium", label: "Medium" },
+  { value: "low", label: "Low" },
+] as const;
+
+const COMPLEXITY_OPTIONS = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+] as const;
+
+export function ScopeItemCard({ item, assessmentId, onSelectionChange, isPreSelected }: ScopeItemCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [showEnrichment, setShowEnrichment] = useState(false);
+  const [impact, setImpact] = useState<ImpactData | null>(null);
+  const [loadingImpact, setLoadingImpact] = useState(false);
   const relevance = item.relevance ?? "YES";
 
   const handleToggle = useCallback(() => {
@@ -98,6 +134,53 @@ export function ScopeItemCard({ item, onSelectionChange, isPreSelected }: ScopeI
     },
     [item, relevance, onSelectionChange],
   );
+
+  const handlePriorityChange = useCallback(
+    (value: string) => {
+      onSelectionChange(item.id, {
+        selected: item.selected,
+        relevance,
+        priority: value || null,
+      });
+    },
+    [item, relevance, onSelectionChange],
+  );
+
+  const handleComplexityChange = useCallback(
+    (value: string) => {
+      onSelectionChange(item.id, {
+        selected: item.selected,
+        relevance,
+        estimatedComplexity: value || null,
+      });
+    },
+    [item, relevance, onSelectionChange],
+  );
+
+  const handleJustificationChange = useCallback(
+    (value: string) => {
+      onSelectionChange(item.id, {
+        selected: item.selected,
+        relevance,
+        businessJustification: value || null,
+      });
+    },
+    [item, relevance, onSelectionChange],
+  );
+
+  const fetchImpact = useCallback(async () => {
+    if (impact || loadingImpact || !assessmentId) return;
+    setLoadingImpact(true);
+    try {
+      const res = await fetch(`/api/assessments/${assessmentId}/scope/impact?scopeItemId=${item.id}`);
+      if (res.ok) {
+        const json = await res.json();
+        setImpact(json.data);
+      }
+    } finally {
+      setLoadingImpact(false);
+    }
+  }, [assessmentId, item.id, impact, loadingImpact]);
 
   return (
     <div className={`border-b border last:border-b-0 ${!item.selected && !isPreSelected ? "opacity-60" : ""}`}>
@@ -207,6 +290,76 @@ export function ScopeItemCard({ item, onSelectionChange, isPreSelected }: ScopeI
               </TabsContent>
             )}
           </Tabs>
+
+          {/* Enrichment section */}
+          {item.selected && (
+            <div className="mt-4 border-t pt-4">
+              <button
+                onClick={() => { setShowEnrichment(!showEnrichment); if (!showEnrichment) fetchImpact(); }}
+                className="text-xs font-medium text-blue-600 hover:text-blue-700"
+              >
+                {showEnrichment ? "Hide Details" : "Show Priority & Impact"}
+              </button>
+              {showEnrichment && (
+                <div className="mt-3 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Priority</label>
+                      <Select value={item.priority ?? ""} onValueChange={handlePriorityChange}>
+                        <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Set priority" /></SelectTrigger>
+                        <SelectContent>
+                          {PRIORITY_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Complexity</label>
+                      <Select value={item.estimatedComplexity ?? ""} onValueChange={handleComplexityChange}>
+                        <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Estimate" /></SelectTrigger>
+                        <SelectContent>
+                          {COMPLEXITY_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Business Justification</label>
+                    <Textarea
+                      value={item.businessJustification ?? ""}
+                      onChange={(e) => handleJustificationChange(e.target.value)}
+                      placeholder="Why is this scope item needed?"
+                      className="mt-1 text-sm"
+                      rows={2}
+                    />
+                  </div>
+                  {/* Impact Preview */}
+                  {loadingImpact && <p className="text-xs text-muted-foreground">Loading impact data...</p>}
+                  {impact && (
+                    <div className="grid grid-cols-3 gap-2 p-3 bg-blue-50/50 rounded-md border border-blue-100">
+                      <div className="text-center">
+                        <p className="text-lg font-bold text-foreground">{impact.classifiableSteps}</p>
+                        <p className="text-xs text-muted-foreground">Review Steps</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-lg font-bold text-foreground">{impact.configCount}</p>
+                        <p className="text-xs text-muted-foreground">Config Items</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-lg font-bold text-foreground">
+                          {impact.effortBaseline?.implementationDays ?? "—"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Est. Days</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="mt-4">
             <label htmlFor={`notes-${item.id}`} className="block text-xs font-medium text-muted-foreground mb-1">

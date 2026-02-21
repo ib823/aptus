@@ -7,6 +7,8 @@ export async function getGapsForAssessment(
   opts?: {
     scopeItemId?: string | undefined;
     resolutionType?: string | undefined;
+    priority?: string | undefined;
+    riskCategory?: string | undefined;
     cursor?: string | undefined;
     limit?: number | undefined;
   },
@@ -15,12 +17,19 @@ export async function getGapsForAssessment(
   const where: Record<string, unknown> = { assessmentId };
   if (opts?.scopeItemId) where.scopeItemId = opts.scopeItemId;
   if (opts?.resolutionType) where.resolutionType = opts.resolutionType;
+  if (opts?.priority) where.priority = opts.priority;
+  if (opts?.riskCategory) where.riskCategory = opts.riskCategory;
 
   const gaps = await prisma.gapResolution.findMany({
     where,
     orderBy: { createdAt: "asc" },
     take: limit + 1,
     ...(opts?.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
+    include: {
+      alternativeResolutions: {
+        orderBy: { createdAt: "asc" },
+      },
+    },
   });
 
   const hasMore = gaps.length > limit;
@@ -76,6 +85,7 @@ export async function getGapsForAssessment(
         processStep: step ?? null,
         scopeItem: scopeItem ?? null,
         clientNote: noteMap.get(gap.processStepId) ?? null,
+        alternativeCount: gap.alternativeResolutions?.length ?? 0,
       };
     }),
     nextCursor: hasMore ? gaps[gaps.length - 1]?.id ?? null : null,
@@ -90,6 +100,11 @@ export async function getGapSummaryStats(assessmentId: string) {
       resolutionType: true,
       effortDays: true,
       clientApproved: true,
+      priority: true,
+      oneTimeCost: true,
+      recurringCost: true,
+      implementationDays: true,
+      riskCategory: true,
     },
   });
 
@@ -97,10 +112,27 @@ export async function getGapSummaryStats(assessmentId: string) {
   const resolved = gaps.filter((g) => g.resolutionType !== "PENDING").length;
   const approved = gaps.filter((g) => g.clientApproved).length;
   const totalEffort = gaps.reduce((sum, g) => sum + (g.effortDays ?? 0), 0);
+  const totalOneTimeCost = gaps.reduce((sum, g) => sum + (g.oneTimeCost ?? 0), 0);
+  const totalRecurringCost = gaps.reduce((sum, g) => sum + (g.recurringCost ?? 0), 0);
+  const totalImplementationDays = gaps.reduce((sum, g) => sum + (g.implementationDays ?? 0), 0);
 
   const byType = new Map<string, number>();
   for (const gap of gaps) {
     byType.set(gap.resolutionType, (byType.get(gap.resolutionType) ?? 0) + 1);
+  }
+
+  const byPriority = new Map<string, number>();
+  for (const gap of gaps) {
+    if (gap.priority) {
+      byPriority.set(gap.priority, (byPriority.get(gap.priority) ?? 0) + 1);
+    }
+  }
+
+  const byRiskCategory = new Map<string, number>();
+  for (const gap of gaps) {
+    if (gap.riskCategory) {
+      byRiskCategory.set(gap.riskCategory, (byRiskCategory.get(gap.riskCategory) ?? 0) + 1);
+    }
   }
 
   return {
@@ -109,6 +141,11 @@ export async function getGapSummaryStats(assessmentId: string) {
     approved,
     pending: total - resolved,
     totalEffort,
+    totalOneTimeCost,
+    totalRecurringCost,
+    totalImplementationDays,
     byType: Object.fromEntries(byType),
+    byPriority: Object.fromEntries(byPriority),
+    byRiskCategory: Object.fromEntries(byRiskCategory),
   };
 }

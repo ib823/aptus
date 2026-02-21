@@ -84,7 +84,7 @@ export async function PATCH(
   }
 
   if (parsed.data.status) {
-    const permCheck = canTransitionStatus(user, assessment.status, parsed.data.status);
+    const permCheck = await canTransitionStatus(user, assessment.status, parsed.data.status, id);
     if (!permCheck.allowed) {
       return NextResponse.json(
         { error: { code: permCheck.code ?? ERROR_CODES.FORBIDDEN, message: permCheck.message ?? "Forbidden" } },

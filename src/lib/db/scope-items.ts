@@ -31,6 +31,10 @@ export async function getScopeItemsWithSelections(assessmentId: string) {
       notes: true,
       respondent: true,
       respondedAt: true,
+      priority: true,
+      businessJustification: true,
+      estimatedComplexity: true,
+      dependsOnScopeItems: true,
     },
   });
 
@@ -58,6 +62,10 @@ export async function getScopeItemsWithSelections(assessmentId: string) {
       notes: selection?.notes ?? null,
       respondent: selection?.respondent ?? null,
       respondedAt: selection?.respondedAt?.toISOString() ?? null,
+      priority: selection?.priority ?? null,
+      businessJustification: selection?.businessJustification ?? null,
+      estimatedComplexity: selection?.estimatedComplexity ?? null,
+      dependsOnScopeItems: selection?.dependsOnScopeItems ?? [],
     };
   });
 }
@@ -69,6 +77,36 @@ export async function getFunctionalAreas(): Promise<string[]> {
     orderBy: { functionalArea: "asc" },
   });
   return areas.map((a) => a.functionalArea);
+}
+
+export async function getScopeItemImpact(scopeItemId: string) {
+  const NON_CLASSIFIABLE_TYPES = ["LOGON", "ACCESS_APP", "INFORMATION"];
+
+  const [totalSteps, classifiableSteps, configCount, effortBaseline] = await Promise.all([
+    prisma.processStep.count({ where: { scopeItemId } }),
+    prisma.processStep.count({
+      where: { scopeItemId, stepType: { notIn: NON_CLASSIFIABLE_TYPES } },
+    }),
+    prisma.configActivity.count({ where: { scopeItemId } }),
+    prisma.effortBaseline.findFirst({
+      where: { scopeItemId },
+      select: {
+        complexity: true,
+        implementationDays: true,
+        configDays: true,
+        testDays: true,
+        dataMigrationDays: true,
+        trainingDays: true,
+      },
+    }),
+  ]);
+
+  return {
+    totalSteps,
+    classifiableSteps,
+    configCount,
+    effortBaseline,
+  };
 }
 
 export async function getIndustryPreSelections(industryCode: string): Promise<string[]> {

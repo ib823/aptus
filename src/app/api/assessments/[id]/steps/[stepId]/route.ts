@@ -15,6 +15,8 @@ const responseSchema = z
     clientNote: z.string().max(5000).optional(),
     currentProcess: z.string().max(5000).optional(),
     overrideReason: z.string().optional(),
+    confidence: z.enum(["high", "medium", "low"]).optional(),
+    evidenceUrls: z.array(z.string().url()).optional(),
   })
   .refine(
     (data) => data.fitStatus !== "GAP" || (data.clientNote && data.clientNote.length >= 10),
@@ -105,25 +107,27 @@ export async function PUT(
   });
 
   // Upsert the response
+  const responseData = {
+    fitStatus: parsed.data.fitStatus,
+    clientNote: parsed.data.clientNote ?? null,
+    currentProcess: parsed.data.currentProcess ?? null,
+    respondent: user.email,
+    respondedAt: new Date(),
+    confidence: parsed.data.confidence ?? null,
+    evidenceUrls: parsed.data.evidenceUrls ?? [],
+    reviewedBy: user.email,
+    reviewedAt: new Date(),
+  };
+
   const response = await prisma.stepResponse.upsert({
     where: {
       assessmentId_processStepId: { assessmentId, processStepId: stepId },
     },
-    update: {
-      fitStatus: parsed.data.fitStatus,
-      clientNote: parsed.data.clientNote ?? null,
-      currentProcess: parsed.data.currentProcess ?? null,
-      respondent: user.email,
-      respondedAt: new Date(),
-    },
+    update: responseData,
     create: {
       assessmentId,
       processStepId: stepId,
-      fitStatus: parsed.data.fitStatus,
-      clientNote: parsed.data.clientNote ?? null,
-      currentProcess: parsed.data.currentProcess ?? null,
-      respondent: user.email,
-      respondedAt: new Date(),
+      ...responseData,
     },
   });
 

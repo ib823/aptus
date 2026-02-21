@@ -139,6 +139,11 @@ export async function getStepsForScopeItem(
       activityTitle: true,
       activityTargetUrl: true,
       solutionProcessFlowName: true,
+      stepCategory: true,
+      isClassifiable: true,
+      groupKey: true,
+      groupLabel: true,
+      parsedContent: true,
     },
   });
 
@@ -159,6 +164,10 @@ export async function getStepsForScopeItem(
       currentProcess: true,
       respondent: true,
       respondedAt: true,
+      confidence: true,
+      evidenceUrls: true,
+      reviewedBy: true,
+      reviewedAt: true,
     },
   });
 
@@ -176,6 +185,10 @@ export async function getStepsForScopeItem(
         currentProcess: response?.currentProcess ?? null,
         respondent: response?.respondent ?? null,
         respondedAt: response?.respondedAt?.toISOString() ?? null,
+        confidence: response?.confidence ?? null,
+        evidenceUrls: response?.evidenceUrls ?? [],
+        reviewedBy: response?.reviewedBy ?? null,
+        reviewedAt: response?.reviewedAt?.toISOString() ?? null,
       };
     }),
     nextCursor: hasMore ? steps[steps.length - 1]?.id ?? null : null,
@@ -206,9 +219,14 @@ export async function getOverallReviewProgress(assessmentId: string) {
 
   const scopeItemIds = selectedItems.map((s) => s.scopeItemId);
 
-  const totalSteps = await prisma.processStep.count({
-    where: { scopeItemId: { in: scopeItemIds } },
-  });
+  const [totalSteps, classifiableSteps] = await Promise.all([
+    prisma.processStep.count({
+      where: { scopeItemId: { in: scopeItemIds } },
+    }),
+    prisma.processStep.count({
+      where: { scopeItemId: { in: scopeItemIds }, isClassifiable: true },
+    }),
+  ]);
 
   const reviewedSteps = await prisma.stepResponse.count({
     where: {
@@ -251,6 +269,7 @@ export async function getOverallReviewProgress(assessmentId: string) {
 
   return {
     totalSteps,
+    classifiableSteps,
     reviewedSteps,
     ...counts,
   };

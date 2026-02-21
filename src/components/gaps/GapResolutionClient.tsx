@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { GapCard } from "@/components/gaps/GapCard";
 import { GapSummary } from "@/components/gaps/GapSummary";
+import { GapCostSummary } from "@/components/gaps/GapCostSummary";
 import { EmptyState } from "@/components/shared/EmptyState";
 
 interface GapData {
@@ -20,6 +21,15 @@ interface GapData {
   upgradeImpact: string | null;
   rationale: string | null;
   clientApproved: boolean;
+  priority?: string | null;
+  oneTimeCost?: number | null;
+  recurringCost?: number | null;
+  implementationDays?: number | null;
+  riskCategory?: string | null;
+  upgradeStrategy?: string | null;
+  clientApprovalNote?: string | null;
+  clientApprovedBy?: string | null;
+  clientApprovedAt?: string | null;
   processStep: {
     id: string;
     actionTitle: string;
@@ -48,6 +58,8 @@ export function GapResolutionClient({
   const [gaps, setGaps] = useState(initialGaps);
   const [scopeFilter, setScopeFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [approvalFilter, setApprovalFilter] = useState<string>("all");
 
   const isReadOnly = assessmentStatus === "signed_off" || assessmentStatus === "reviewed";
 
@@ -71,8 +83,16 @@ export function GapResolutionClient({
     if (typeFilter !== "all") {
       result = result.filter((g) => g.resolutionType === typeFilter);
     }
+    if (priorityFilter !== "all") {
+      result = result.filter((g) => g.priority === priorityFilter);
+    }
+    if (approvalFilter === "pending") {
+      result = result.filter((g) => !g.clientApproved && g.resolutionType !== "PENDING");
+    } else if (approvalFilter === "approved") {
+      result = result.filter((g) => g.clientApproved);
+    }
     return result;
-  }, [gaps, scopeFilter, typeFilter]);
+  }, [gaps, scopeFilter, typeFilter, priorityFilter, approvalFilter]);
 
   // Derive summary from gaps
   const summary = useMemo(() => {
@@ -86,13 +106,28 @@ export function GapResolutionClient({
       byType.set(gap.resolutionType, (byType.get(gap.resolutionType) ?? 0) + 1);
     }
 
+    const totalOneTimeCost = gaps.reduce((sum, g) => sum + (g.oneTimeCost ?? 0), 0);
+    const totalRecurringCost = gaps.reduce((sum, g) => sum + (g.recurringCost ?? 0), 0);
+    const totalImplementationDays = gaps.reduce((sum, g) => sum + (g.implementationDays ?? 0), 0);
+
+    const byRiskCategory = new Map<string, number>();
+    for (const gap of gaps) {
+      if (gap.riskCategory) {
+        byRiskCategory.set(gap.riskCategory, (byRiskCategory.get(gap.riskCategory) ?? 0) + 1);
+      }
+    }
+
     return {
       total,
       resolved,
       approved,
       pending: total - resolved,
       totalEffort,
+      totalOneTimeCost,
+      totalRecurringCost,
+      totalImplementationDays,
       byType: Object.fromEntries(byType) as Record<string, number>,
+      byRiskCategory: Object.fromEntries(byRiskCategory) as Record<string, number>,
     };
   }, [gaps]);
 
@@ -103,21 +138,37 @@ export function GapResolutionClient({
       effortDays?: number | undefined;
       riskLevel?: string | undefined;
       rationale?: string | undefined;
+      priority?: string | null | undefined;
+      oneTimeCost?: number | null | undefined;
+      recurringCost?: number | null | undefined;
+      implementationDays?: number | null | undefined;
+      riskCategory?: string | null | undefined;
+      upgradeStrategy?: string | null | undefined;
+      clientApproved?: boolean | undefined;
+      clientApprovalNote?: string | null | undefined;
     }) => {
       // Optimistic update
       setGaps((prev) =>
-        prev.map((g) =>
-          g.id === gapId
-            ? {
-                ...g,
-                resolutionType: data.resolutionType,
-                resolutionDescription: data.resolutionDescription ?? g.resolutionDescription,
-                effortDays: data.effortDays ?? g.effortDays,
-                riskLevel: data.riskLevel ?? g.riskLevel,
-                rationale: data.rationale ?? g.rationale,
-              }
-            : g,
-        ),
+        prev.map((g) => {
+          if (g.id !== gapId) return g;
+          const updated = {
+            ...g,
+            resolutionType: data.resolutionType,
+            resolutionDescription: data.resolutionDescription ?? g.resolutionDescription,
+            effortDays: data.effortDays ?? g.effortDays,
+            riskLevel: data.riskLevel ?? g.riskLevel,
+            rationale: data.rationale ?? g.rationale,
+          };
+          if (data.priority !== undefined) updated.priority = data.priority;
+          if (data.oneTimeCost !== undefined) updated.oneTimeCost = data.oneTimeCost;
+          if (data.recurringCost !== undefined) updated.recurringCost = data.recurringCost;
+          if (data.implementationDays !== undefined) updated.implementationDays = data.implementationDays;
+          if (data.riskCategory !== undefined) updated.riskCategory = data.riskCategory;
+          if (data.upgradeStrategy !== undefined) updated.upgradeStrategy = data.upgradeStrategy;
+          if (data.clientApproved !== undefined) updated.clientApproved = data.clientApproved;
+          if (data.clientApprovalNote !== undefined) updated.clientApprovalNote = data.clientApprovalNote;
+          return updated;
+        }),
       );
 
       // Persist
@@ -156,8 +207,19 @@ export function GapResolutionClient({
           description={`${summary.total} gaps identified — resolve each one with a recommended approach.`}
         />
 
+        {/* Cost Summary */}
+        <div className="mb-6">
+          <GapCostSummary
+            totalOneTimeCost={summary.totalOneTimeCost}
+            totalRecurringCost={summary.totalRecurringCost}
+            totalImplementationDays={summary.totalImplementationDays}
+            byType={summary.byType}
+            byRiskCategory={summary.byRiskCategory}
+          />
+        </div>
+
         {/* Filters */}
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex flex-wrap items-center gap-3 mb-6">
           <select
             value={scopeFilter}
             onChange={(e) => setScopeFilter(e.target.value)}
@@ -187,6 +249,28 @@ export function GapResolutionClient({
             <option value="ADAPT_PROCESS">Adapt Process</option>
             <option value="OUT_OF_SCOPE">Out of Scope</option>
           </select>
+
+          <select
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value)}
+            className="h-9 px-3 text-xs border border-gray-200 rounded-md bg-white text-gray-700"
+          >
+            <option value="all">All Priorities</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+
+          <select
+            value={approvalFilter}
+            onChange={(e) => setApprovalFilter(e.target.value)}
+            className="h-9 px-3 text-xs border border-gray-200 rounded-md bg-white text-gray-700"
+          >
+            <option value="all">All Statuses</option>
+            <option value="pending">Pending Approval</option>
+            <option value="approved">Approved</option>
+          </select>
         </div>
 
         {/* Gap cards */}
@@ -204,6 +288,7 @@ export function GapResolutionClient({
               <GapCard
                 key={gap.id}
                 gap={gap}
+                assessmentId={assessmentId}
                 onUpdate={handleUpdate}
                 isReadOnly={isReadOnly}
               />

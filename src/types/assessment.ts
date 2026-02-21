@@ -34,6 +34,44 @@ export type ResolutionType =
 
 export type MfaMethod = "none" | "totp" | "webauthn";
 
+// Phase 10: Company Profile
+export type DeploymentModel = "public_cloud" | "private_cloud" | "hybrid";
+export type MigrationApproach = "greenfield" | "brownfield" | "selective";
+
+export interface ProfileCompletenessBreakdown {
+  basic: boolean;
+  financial: boolean;
+  sapStrategy: boolean;
+  operational: boolean;
+  itLandscape: boolean;
+}
+
+export const PROFILE_COMPLETENESS_GATE = 60;
+
+// Phase 12: Step Classification
+export type StepCategory =
+  | "BUSINESS_PROCESS"
+  | "CONFIGURATION"
+  | "REPORTING"
+  | "MASTER_DATA"
+  | "REFERENCE"
+  | "SYSTEM_ACCESS"
+  | "TEST_INFO";
+
+// Phase 13: Gap Resolution V2
+export type GapPriority = "critical" | "high" | "medium" | "low";
+export type RiskCategory = "technical" | "business" | "compliance" | "integration";
+export type UpgradeStrategy = "standard_upgrade" | "needs_revalidation" | "custom_maintenance";
+
+export interface CostRollup {
+  totalOneTimeCost: number;
+  totalRecurringCost: number;
+  totalImplementationDays: number;
+  byResolutionType: Record<string, { oneTime: number; recurring: number; days: number }>;
+  byRiskCategory: Record<string, { oneTime: number; recurring: number; count: number }>;
+  byPriority: Record<string, { oneTime: number; recurring: number; count: number }>;
+}
+
 export type DecisionAction =
   | "MARKED_FIT"
   | "MARKED_GAP"
@@ -52,7 +90,10 @@ export type DecisionAction =
   | "REMAINING_ITEM_ADDED"
   | "FLOW_DIAGRAM_GENERATED"
   | "CONFIG_INCLUDED"
-  | "CONFIG_EXCLUDED";
+  | "CONFIG_EXCLUDED"
+  | "GAP_APPROVAL_ADDED"
+  | "GAP_ALTERNATIVE_ADDED"
+  | "PROFILE_UPDATED";
 
 export interface AssessmentSummary {
   id: string;

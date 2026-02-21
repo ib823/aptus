@@ -2,7 +2,11 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { GapSuggestionPanel } from "@/components/gaps/GapSuggestionPanel";
 
 interface GapData {
   id: string;
@@ -14,6 +18,15 @@ interface GapData {
   upgradeImpact: string | null;
   rationale: string | null;
   clientApproved: boolean;
+  priority?: string | null;
+  oneTimeCost?: number | null;
+  recurringCost?: number | null;
+  implementationDays?: number | null;
+  riskCategory?: string | null;
+  upgradeStrategy?: string | null;
+  clientApprovalNote?: string | null;
+  clientApprovedBy?: string | null;
+  clientApprovedAt?: string | null;
   processStep: {
     id: string;
     actionTitle: string;
@@ -30,12 +43,21 @@ interface GapData {
 
 interface GapCardProps {
   gap: GapData;
+  assessmentId?: string;
   onUpdate: (gapId: string, data: {
     resolutionType: string;
     resolutionDescription?: string | undefined;
     effortDays?: number | undefined;
     riskLevel?: string | undefined;
     rationale?: string | undefined;
+    priority?: string | null | undefined;
+    oneTimeCost?: number | null | undefined;
+    recurringCost?: number | null | undefined;
+    implementationDays?: number | null | undefined;
+    riskCategory?: string | null | undefined;
+    upgradeStrategy?: string | null | undefined;
+    clientApproved?: boolean | undefined;
+    clientApprovalNote?: string | null | undefined;
   }) => void;
   isReadOnly: boolean;
 }
@@ -57,7 +79,7 @@ const RISK_COLORS: Record<string, string> = {
   HIGH: "bg-red-100 text-red-700",
 };
 
-export function GapCard({ gap, onUpdate, isReadOnly }: GapCardProps) {
+export function GapCard({ gap, assessmentId, onUpdate, isReadOnly }: GapCardProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [localRationale, setLocalRationale] = useState<{ gapId: string; value: string }>({
@@ -196,19 +218,151 @@ export function GapCard({ gap, onUpdate, isReadOnly }: GapCardProps) {
               </div>
             )}
 
-            {/* Effort/cost display */}
-            {gap.effortDays !== null && gap.effortDays > 0 && (
-              <div className="mt-3 flex items-center gap-4 text-sm">
-                <div>
-                  <span className="text-muted-foreground/60">Effort:</span>{" "}
-                  <span className="font-medium">{gap.effortDays} days</span>
-                </div>
-                {gap.upgradeImpact && (
+            {/* Cost & Effort Section */}
+            {gap.resolutionType !== "PENDING" && gap.resolutionType !== "FIT" && (
+              <div className="mt-4 p-4 bg-muted/40 rounded-md border space-y-3">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Cost & Effort Estimate
+                </p>
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <span className="text-muted-foreground/60">Upgrade Impact:</span>{" "}
-                    <span className="font-medium text-amber-600">{gap.upgradeImpact}</span>
+                    <label className="text-xs text-muted-foreground">Priority</label>
+                    <Select
+                      value={gap.priority ?? ""}
+                      onValueChange={(v) => onUpdate(gap.id, { resolutionType: gap.resolutionType, priority: v || null })}
+                    >
+                      <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Set priority" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="critical">Critical</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="low">Low</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Risk Category</label>
+                    <Select
+                      value={gap.riskCategory ?? ""}
+                      onValueChange={(v) => onUpdate(gap.id, { resolutionType: gap.resolutionType, riskCategory: v || null })}
+                    >
+                      <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Category" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="technical">Technical</SelectItem>
+                        <SelectItem value="business">Business</SelectItem>
+                        <SelectItem value="compliance">Compliance</SelectItem>
+                        <SelectItem value="integration">Integration</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">One-Time Cost</label>
+                    <Input
+                      type="number"
+                      value={gap.oneTimeCost ?? ""}
+                      onChange={(e) => onUpdate(gap.id, {
+                        resolutionType: gap.resolutionType,
+                        oneTimeCost: e.target.value ? Number(e.target.value) : null,
+                      })}
+                      className="mt-1 h-8 text-xs"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Recurring Cost/yr</label>
+                    <Input
+                      type="number"
+                      value={gap.recurringCost ?? ""}
+                      onChange={(e) => onUpdate(gap.id, {
+                        resolutionType: gap.resolutionType,
+                        recurringCost: e.target.value ? Number(e.target.value) : null,
+                      })}
+                      className="mt-1 h-8 text-xs"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Implementation Days</label>
+                    <Input
+                      type="number"
+                      value={gap.implementationDays ?? ""}
+                      onChange={(e) => onUpdate(gap.id, {
+                        resolutionType: gap.resolutionType,
+                        implementationDays: e.target.value ? Number(e.target.value) : null,
+                      })}
+                      className="mt-1 h-8 text-xs"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Upgrade Strategy</label>
+                    <Select
+                      value={gap.upgradeStrategy ?? ""}
+                      onValueChange={(v) => onUpdate(gap.id, { resolutionType: gap.resolutionType, upgradeStrategy: v || null })}
+                    >
+                      <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Strategy" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="standard_upgrade">Standard Upgrade</SelectItem>
+                        <SelectItem value="needs_revalidation">Needs Revalidation</SelectItem>
+                        <SelectItem value="custom_maintenance">Custom Maintenance</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Client Approval Section */}
+            {gap.resolutionType !== "PENDING" && (
+              <div className="mt-4 p-4 border rounded-md">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                  Client Approval
+                </p>
+                {gap.clientApproved ? (
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-green-100 text-green-700">Approved</Badge>
+                    {gap.clientApprovedBy && (
+                      <span className="text-xs text-muted-foreground">by {gap.clientApprovedBy}</span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Textarea
+                      value={gap.clientApprovalNote ?? ""}
+                      onChange={(e) => onUpdate(gap.id, {
+                        resolutionType: gap.resolutionType,
+                        clientApprovalNote: e.target.value || null,
+                      })}
+                      placeholder="Approval note (optional)..."
+                      className="min-h-[48px] text-sm"
+                      rows={2}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => onUpdate(gap.id, {
+                        resolutionType: gap.resolutionType,
+                        clientApproved: true,
+                        clientApprovalNote: gap.clientApprovalNote ?? null,
+                      })}
+                    >
+                      Approve Resolution
+                    </Button>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Suggestions */}
+            {assessmentId && gap.resolutionType === "PENDING" && (
+              <div className="mt-4">
+                <GapSuggestionPanel
+                  assessmentId={assessmentId}
+                  gapId={gap.id}
+                  onApply={(suggestion) => onUpdate(gap.id, {
+                    resolutionType: suggestion.resolutionType,
+                    rationale: `Auto-suggested from pattern: ${suggestion.description.slice(0, 100)}`,
+                  })}
+                />
               </div>
             )}
           </>

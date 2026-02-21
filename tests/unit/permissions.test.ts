@@ -57,8 +57,8 @@ describe("Permission Utilities", () => {
   });
 
   describe("canTransitionStatus", () => {
-    it("should allow consultant to transition draft -> in_progress", () => {
-      const result = canTransitionStatus(
+    it("should allow consultant to transition draft -> in_progress", async () => {
+      const result = await canTransitionStatus(
         makeUser({ role: "consultant" }),
         "draft",
         "in_progress",
@@ -66,8 +66,8 @@ describe("Permission Utilities", () => {
       expect(result.allowed).toBe(true);
     });
 
-    it("should allow executive to transition reviewed -> signed_off", () => {
-      const result = canTransitionStatus(
+    it("should allow executive to transition reviewed -> signed_off", async () => {
+      const result = await canTransitionStatus(
         makeUser({ role: "executive" }),
         "reviewed",
         "signed_off",
@@ -75,8 +75,8 @@ describe("Permission Utilities", () => {
       expect(result.allowed).toBe(true);
     });
 
-    it("should deny process_owner from any transition", () => {
-      const result = canTransitionStatus(
+    it("should deny process_owner from any transition", async () => {
+      const result = await canTransitionStatus(
         makeUser({ role: "process_owner" }),
         "draft",
         "in_progress",
@@ -84,8 +84,8 @@ describe("Permission Utilities", () => {
       expect(result.allowed).toBe(false);
     });
 
-    it("should deny invalid transitions", () => {
-      const result = canTransitionStatus(
+    it("should deny invalid transitions", async () => {
+      const result = await canTransitionStatus(
         makeUser({ role: "admin" }),
         "draft",
         "completed",
@@ -93,8 +93,8 @@ describe("Permission Utilities", () => {
       expect(result.allowed).toBe(false);
     });
 
-    it("should deny backward transitions", () => {
-      const result = canTransitionStatus(
+    it("should deny backward transitions", async () => {
+      const result = await canTransitionStatus(
         makeUser({ role: "admin" }),
         "completed",
         "in_progress",

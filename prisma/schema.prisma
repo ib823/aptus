@@ -70,6 +70,13 @@ model ProcessStep {
   stepType         String
   processFlowGroup String?
 
+  // Phase 12: Step Classification
+  stepCategory     String?
+  parsedContent    Json?
+  isClassifiable   Boolean    @default(true)
+  groupKey         String?
+  groupLabel       String?
+
   createdAt DateTime @default(now())
 
   scopeItem     ScopeItem      @relation(fields: [scopeItemId], references: [id])
@@ -79,6 +86,9 @@ model ProcessStep {
   @@index([scopeItemId, sequence])
   @@index([stepType])
   @@index([solutionProcessName])
+  @@index([stepCategory])
+  @@index([groupKey])
+  @@index([scopeItemId, stepCategory])
 }
 
 model ConfigActivity {
@@ -292,6 +302,22 @@ model Assessment {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
+  // Phase 10: Company Profile Enrichment
+  employeeCount        Int?
+  annualRevenue        Float?
+  currencyCode         String?    @default("USD")
+  targetGoLiveDate     DateTime?
+  deploymentModel      String?
+  sapModules           String[]   @default([])
+  keyProcesses         String[]   @default([])
+  languageRequirements String[]   @default([])
+  regulatoryFrameworks String[]   @default([])
+  itLandscapeSummary   String?    @db.Text
+  currentErpVersion    String?
+  migrationApproach    String?
+  profileCompletedAt   DateTime?
+  profileCompletedBy   String?
+
   organization   Organization           @relation(fields: [organizationId], references: [id])
   stakeholders   AssessmentStakeholder[]
   scopeSelections  ScopeSelection[]
@@ -345,6 +371,12 @@ model ScopeSelection {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  // Phase 11: Scope Selection Enhancement
+  priority              String?
+  businessJustification String?    @db.Text
+  estimatedComplexity   String?
+  dependsOnScopeItems   String[]   @default([])
+
   assessment Assessment @relation(fields: [assessmentId], references: [id])
 
   @@unique([assessmentId, scopeItemId])
@@ -382,6 +414,12 @@ model StepResponse {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
+  // Phase 12: Step Response Enrichment
+  confidence     String?
+  evidenceUrls   String[]   @default([])
+  reviewedBy     String?
+  reviewedAt     DateTime?
+
   assessment  Assessment  @relation(fields: [assessmentId], references: [id])
   processStep ProcessStep @relation(fields: [processStepId], references: [id])
 
@@ -409,11 +447,53 @@ model GapResolution {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  assessment Assessment @relation(fields: [assessmentId], references: [id])
+  // Phase 13: Gap Resolution V2
+  priority               String?
+  oneTimeCost            Float?
+  recurringCost          Float?
+  costCurrency           String?    @default("USD")
+  implementationDays     Float?
+  riskCategory           String?
+  upgradeStrategy        String?
+  clientApprovalNote     String?    @db.Text
+  clientApprovedBy       String?
+  clientApprovedAt       DateTime?
+  extensibilityPatternId String?
+  adaptationPatternId    String?
+
+  assessment             Assessment       @relation(fields: [assessmentId], references: [id])
+  alternativeResolutions GapAlternative[]
 
   @@index([assessmentId])
   @@index([assessmentId, resolutionType])
   @@index([scopeItemId])
+  @@index([assessmentId, priority])
+  @@index([assessmentId, riskCategory])
+}
+
+model GapAlternative {
+  id                    String    @id @default(cuid())
+  gapResolutionId       String
+  label                 String
+  resolutionType        String
+  resolutionDescription String    @db.Text
+  oneTimeCost           Float?
+  recurringCost         Float?
+  costCurrency          String?   @default("USD")
+  implementationDays    Float?
+  riskLevel             String?
+  riskCategory          String?
+  upgradeStrategy       String?
+  rationale             String?   @db.Text
+  pros                  String[]  @default([])
+  cons                  String[]  @default([])
+  createdBy             String
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  gapResolution GapResolution @relation(fields: [gapResolutionId], references: [id], onDelete: Cascade)
+
+  @@index([gapResolutionId])
 }
 
 model DecisionLogEntry {

@@ -23,11 +23,17 @@ export default async function GapsPage({ params }: GapsPageProps) {
 
   const result = await getGapsForAssessment(assessmentId, { limit: 200 });
 
+  // Serialize Date fields to strings for client component
+  const serializedGaps = result.gaps.map((g) => ({
+    ...g,
+    clientApprovedAt: g.clientApprovedAt?.toISOString() ?? null,
+  }));
+
   return (
     <GapResolutionClient
       assessmentId={assessment.id}
       assessmentStatus={assessment.status}
-      initialGaps={result.gaps}
+      initialGaps={serializedGaps}
     />
   );
 }

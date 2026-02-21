@@ -11,6 +11,7 @@ import { z } from "zod";
 const bulkSchema = z.object({
   action: z.enum(["select_all", "deselect_all"]),
   functionalArea: z.string().optional(),
+  subArea: z.string().optional(),
   scopeItemIds: z.array(z.string()).optional(),
 });
 
@@ -55,6 +56,9 @@ export async function POST(
   const where: Record<string, unknown> = {};
   if (parsed.data.functionalArea) {
     where.functionalArea = parsed.data.functionalArea;
+  }
+  if (parsed.data.subArea) {
+    where.subArea = parsed.data.subArea;
   }
   if (parsed.data.scopeItemIds) {
     where.id = { in: parsed.data.scopeItemIds };
