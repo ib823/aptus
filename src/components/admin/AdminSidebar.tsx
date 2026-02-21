@@ -44,9 +44,9 @@ export function AdminSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 bg-gray-950 text-white shrink-0">
-      <div className="p-4 border-b border-gray-800">
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+    <aside className="w-64 bg-sidebar text-sidebar-foreground shrink-0">
+      <div className="p-4 border-b border-sidebar-border">
+        <h2 className="text-sm font-semibold text-sidebar-foreground/60 uppercase tracking-wider">
           Admin Panel
         </h2>
       </div>
@@ -54,7 +54,7 @@ export function AdminSidebar() {
         {NAV_SECTIONS.map((section, idx) => (
           <div key={idx}>
             {section.label && (
-              <p className="px-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">
+              <p className="px-3 text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider mb-1">
                 {section.label}
               </p>
             )}
@@ -67,8 +67,8 @@ export function AdminSidebar() {
                   href={item.href}
                   className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
                     isActive
-                      ? "bg-white/10 text-white font-medium"
-                      : "text-gray-400 hover:text-white hover:bg-white/5"
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                      : "text-sidebar-foreground/60 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent/50"
                   }`}
                 >
                   <Icon className="w-4 h-4" />

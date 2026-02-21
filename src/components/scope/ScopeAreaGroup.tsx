@@ -72,12 +72,12 @@ export function ScopeAreaGroup({
 
   return (
     <Accordion type="multiple" defaultValue={[area]}>
-      <AccordionItem value={area} className="border border-gray-200 rounded-lg bg-white">
+      <AccordionItem value={area} className="border rounded-lg bg-card">
         <AccordionTrigger className="px-5 hover:no-underline">
           <div className="flex items-center gap-4 flex-1 min-w-0">
             <div className="flex-1 min-w-0 text-left">
-              <span className="text-lg font-semibold text-gray-950">{area}</span>
-              <span className="ml-3 text-xs text-gray-500">
+              <span className="text-lg font-semibold text-foreground">{area}</span>
+              <span className="ml-3 text-xs text-muted-foreground">
                 {selectedCount} / {totalCount} selected
               </span>
             </div>
@@ -94,7 +94,7 @@ export function ScopeAreaGroup({
                 </button>
                 <button
                   onClick={handleDeselectAll}
-                  className="px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded transition-colors"
+                  className="px-2 py-1 text-xs text-muted-foreground hover:bg-accent rounded transition-colors"
                 >
                   Deselect All
                 </button>

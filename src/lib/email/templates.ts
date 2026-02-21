@@ -1,7 +1,7 @@
 /** Email templates for all automated notifications */
 
 const BRAND_COLOR = "#000000";
-const BRAND_NAME = "Aptus";
+const BRAND_NAME = "aptus";
 
 function baseLayout(content: string): string {
   return `<!DOCTYPE html>

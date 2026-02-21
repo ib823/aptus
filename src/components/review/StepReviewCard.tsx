@@ -136,15 +136,15 @@ export function StepReviewCard({
   const gapNoteValid = step.fitStatus !== "GAP" || clientNote.length >= 10;
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div className="bg-card rounded-lg border overflow-hidden">
       {/* Header */}
-      <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-start">
+      <div className="px-5 py-4 border-b border flex justify-between items-start">
         <div>
-          <span className="text-xs font-medium text-gray-400">
+          <span className="text-xs font-medium text-muted-foreground/60">
             Step {step.sequence + 1}
             {step.processFlowGroup ? ` · ${step.processFlowGroup}` : ""}
           </span>
-          <h3 className="text-lg font-semibold text-gray-950 mt-1">{step.actionTitle}</h3>
+          <h3 className="text-lg font-semibold text-foreground mt-1">{step.actionTitle}</h3>
         </div>
         <Badge variant="outline" className="text-xs shrink-0">
           {STEP_TYPE_LABELS[step.stepType] ?? step.stepType}
@@ -152,21 +152,21 @@ export function StepReviewCard({
       </div>
 
       {/* SAP Content Section */}
-      <div className="px-5 py-4 bg-gray-50">
-        <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+      <div className="px-5 py-4 bg-muted/40">
+        <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
           What SAP Best Practice Says
         </span>
         <div
-          className="prose prose-sm max-w-none text-gray-950 mt-2"
+          className="prose prose-sm max-w-none text-foreground mt-2"
           dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(step.actionInstructionsHtml) }}
         />
         {step.actionExpectedResult && (
           <div className="mt-3">
-            <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+            <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
               Expected Result
             </span>
             <div
-              className="prose prose-sm max-w-none text-gray-600 italic mt-1"
+              className="prose prose-sm max-w-none text-muted-foreground italic mt-1"
               dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(step.actionExpectedResult) }}
             />
           </div>
@@ -199,19 +199,19 @@ export function StepReviewCard({
 
       {/* Client Response Section */}
       <div className="px-5 py-4">
-        <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+        <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
           How Does Your Company Do This?
         </span>
 
         {isReadOnly ? (
           <div className="mt-3">
-            <p className="text-sm text-gray-500 italic">
+            <p className="text-sm text-muted-foreground italic">
               {step.fitStatus === "PENDING"
                 ? "No response yet"
                 : `Marked as ${step.fitStatus}`}
             </p>
             {step.clientNote && (
-              <p className="mt-2 text-sm text-gray-700 bg-gray-50 p-3 rounded">
+              <p className="mt-2 text-sm text-muted-foreground bg-muted/40 p-3 rounded">
                 {step.clientNote}
               </p>
             )}
@@ -227,11 +227,11 @@ export function StepReviewCard({
                   className={`flex items-start gap-3 p-3 rounded-lg border text-left transition-all ${
                     step.fitStatus === opt.value
                       ? opt.color
-                      : "bg-white border-gray-200 hover:bg-gray-50"
+                      : "bg-card border hover:bg-accent"
                   } ${isItLead ? "cursor-not-allowed opacity-70" : ""}`}
                 >
                   <div className={`w-4 h-4 rounded-full border-2 mt-0.5 shrink-0 flex items-center justify-center ${
-                    step.fitStatus === opt.value ? "border-current" : "border-gray-300"
+                    step.fitStatus === opt.value ? "border-current" : "border-muted-foreground/60"
                   }`}>
                     {step.fitStatus === opt.value && (
                       <div className={`w-2 h-2 rounded-full ${opt.dotColor}`} />
@@ -239,7 +239,7 @@ export function StepReviewCard({
                   </div>
                   <div>
                     <p className="text-sm font-medium">{opt.label}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{opt.description}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
                   </div>
                 </button>
               ))}
@@ -258,7 +258,7 @@ export function StepReviewCard({
                   className="mt-2 min-h-[96px]"
                   required
                 />
-                <p className={`text-xs mt-1 ${gapNoteValid ? "text-gray-400" : "text-red-500"}`}>
+                <p className={`text-xs mt-1 ${gapNoteValid ? "text-muted-foreground/60" : "text-red-500"}`}>
                   {clientNote.length} / 10 minimum characters
                 </p>
               </div>
@@ -281,8 +281,8 @@ export function StepReviewCard({
 
             {/* IT Lead notes-only mode */}
             {isItLead && (
-              <div className="mt-4 p-4 bg-gray-50 rounded-md border border-gray-200">
-                <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <div className="mt-4 p-4 bg-muted/40 rounded-md border">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Technical Notes (IT Lead)
                 </label>
                 <Textarea
@@ -299,10 +299,10 @@ export function StepReviewCard({
 
       {/* Activity Context */}
       {step.activityTitle && (
-        <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center gap-3">
+        <div className="px-5 py-3 bg-muted/40 border-t border flex items-center gap-3">
           <div>
-            <span className="text-xs text-gray-400">Activity</span>
-            <p className="text-sm text-gray-600">{step.activityTitle}</p>
+            <span className="text-xs text-muted-foreground/60">Activity</span>
+            <p className="text-sm text-muted-foreground">{step.activityTitle}</p>
           </div>
           {step.activityTargetUrl && (
             <a

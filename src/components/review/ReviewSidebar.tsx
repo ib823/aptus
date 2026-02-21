@@ -43,18 +43,18 @@ export function ReviewSidebar({
   onToggleRepetitive,
 }: ReviewSidebarProps) {
   return (
-    <div className="hidden sm:flex sm:w-[280px] bg-gray-50 border-r border-gray-200 flex-col h-screen fixed left-0 top-0 overflow-hidden">
+    <div className="hidden sm:flex sm:w-[280px] bg-muted/40 border-r border flex-col h-screen fixed left-0 top-0 overflow-hidden">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-4 border-b border">
         <Link
           href={`/assessment/${assessmentId}/scope`}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-3"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-3"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           Back to Scope
         </Link>
         <ProgressBar value={overallProgress.reviewedSteps} max={overallProgress.totalSteps} />
-        <p className="text-xs text-gray-600 mt-1.5">
+        <p className="text-xs text-muted-foreground mt-1.5">
           {overallProgress.reviewedSteps} / {overallProgress.totalSteps} steps
         </p>
       </div>
@@ -72,21 +72,21 @@ export function ReviewSidebar({
               onClick={() => onSelectScopeItem(item.id)}
               className={`w-full text-left px-4 py-3 transition-colors ${
                 currentScopeItemId === item.id
-                  ? "bg-white border-l-2 border-blue-500"
-                  : "hover:bg-gray-100 border-l-2 border-transparent"
+                  ? "bg-card border-l-2 border-blue-500"
+                  : "hover:bg-accent border-l-2 border-transparent"
               }`}
             >
-              <p className="text-sm font-medium text-gray-950 truncate">{item.nameClean}</p>
+              <p className="text-sm font-medium text-foreground truncate">{item.nameClean}</p>
               <div className="flex items-center gap-2 mt-1">
                 <div className="flex-1">
-                  <div className="h-1 rounded-full bg-gray-200">
+                  <div className="h-1 rounded-full bg-muted">
                     <div
                       className="h-1 rounded-full bg-blue-500 transition-all"
                       style={{ width: `${percent}%` }}
                     />
                   </div>
                 </div>
-                <span className="text-xs text-gray-400 shrink-0">
+                <span className="text-xs text-muted-foreground/60 shrink-0">
                   {item.reviewedSteps}/{item.totalSteps}
                 </span>
               </div>
@@ -111,8 +111,8 @@ export function ReviewSidebar({
                   </span>
                 )}
                 {item.pending > 0 && (
-                  <span className="flex items-center gap-0.5 text-xs text-gray-400">
-                    <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                  <span className="flex items-center gap-0.5 text-xs text-muted-foreground/60">
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60" />
                     {item.pending}
                   </span>
                 )}
@@ -123,13 +123,13 @@ export function ReviewSidebar({
       </div>
 
       {/* Footer */}
-      <div className="p-4 border-t border-gray-200">
-        <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+      <div className="p-4 border-t border">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
           <input
             type="checkbox"
             checked={hideRepetitive}
             onChange={onToggleRepetitive}
-            className="rounded border-gray-300"
+            className="rounded border"
           />
           Hide login/access steps
         </label>
@@ -137,8 +137,8 @@ export function ReviewSidebar({
           <StatRow label="FIT" count={overallProgress.fit} color="bg-green-500" />
           <StatRow label="CONFIGURE" count={overallProgress.configure} color="bg-blue-500" />
           <StatRow label="GAP" count={overallProgress.gap} color="bg-amber-500" />
-          <StatRow label="N/A" count={overallProgress.na} color="bg-gray-300" />
-          <StatRow label="PENDING" count={overallProgress.pending} color="bg-gray-200" />
+          <StatRow label="N/A" count={overallProgress.na} color="bg-muted-foreground/60" />
+          <StatRow label="PENDING" count={overallProgress.pending} color="bg-muted" />
         </div>
       </div>
     </div>
@@ -150,9 +150,9 @@ function StatRow({ label, count, color }: { label: string; count: number; color:
     <div className="flex items-center justify-between text-xs">
       <div className="flex items-center gap-1.5">
         <span className={`w-2 h-2 rounded-full ${color}`} />
-        <span className="text-gray-600">{label}</span>
+        <span className="text-muted-foreground">{label}</span>
       </div>
-      <span className="font-medium text-gray-950">{count}</span>
+      <span className="font-medium text-foreground">{count}</span>
     </div>
   );
 }

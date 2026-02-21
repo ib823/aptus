@@ -15,13 +15,13 @@ export default function MfaVerifyPage() {
   }, [router]);
 
   return (
-    <Card className="shadow-md border-gray-200">
+    <Card className="shadow-md">
       <CardHeader className="text-center pb-2">
-        <BoundLogo size="lg" className="mb-6" />
-        <h1 className="text-2xl font-bold text-gray-950">
+        <BoundLogo size="lg" className="mb-6 justify-center" />
+        <h1 className="text-2xl font-bold">
           {UI_TEXT.auth.mfaVerifyTitle}
         </h1>
-        <p className="text-base text-gray-600 mt-1">
+        <p className="text-base text-muted-foreground mt-1">
           {UI_TEXT.auth.mfaVerifyDescription}
         </p>
       </CardHeader>

@@ -18,9 +18,9 @@ export function ProgressBar({
   return (
     <div className={className}>
       {showPercentage && (
-        <p className="text-sm text-gray-600 text-right mb-1">{percentage}%</p>
+        <p className="text-sm text-muted-foreground text-right mb-1">{percentage}%</p>
       )}
-      <div className="h-2 rounded-full bg-gray-200">
+      <div className="h-2 rounded-full bg-muted">
         <div
           className="h-2 rounded-full bg-blue-500 transition-all duration-500 ease-out"
           style={{ width: `${percentage}%` }}

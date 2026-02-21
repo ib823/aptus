@@ -6,30 +6,37 @@ interface BoundLogoProps {
 }
 
 const sizeMap = {
-  sm: { height: 24 },
-  md: { height: 36 },
-  lg: { height: 48 },
+  sm: { icon: 20, text: 22 },
+  md: { icon: 30, text: 34 },
+  lg: { icon: 40, text: 46 },
 } as const;
 
-/**
- * Aptus logo — wordmark only (SF Pro Display).
- * The triple-bar mark is reserved for the favicon.
- */
 export function BoundLogo({ size = "md", className = "" }: BoundLogoProps) {
-  const { height } = sizeMap[size];
+  const { icon, text } = sizeMap[size];
 
   return (
     <span
-      className={`inline-flex items-center ${className}`}
-      aria-label="Aptus"
+      className={`inline-flex items-center gap-2 ${className}`}
+      aria-label="aptus"
     >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 100 100"
+        width={icon}
+        height={icon}
+        className="text-foreground shrink-0"
+        aria-hidden="true"
+      >
+        <g fill="none" stroke="currentColor" strokeWidth="8.333" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M66.667 83.6A37.5 37.5 0 1 1 87.5 50v6.25a10.417 10.417 0 0 1-20.833 0V33.333m0 16.667a16.667 16.667 0 1 1-33.333 0 16.667 16.667 0 0 1 33.333 0Z" />
+        </g>
+      </svg>
       <span
-        className="text-gray-950"
+        className="text-foreground"
         style={{
-          fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif",
           fontWeight: 500,
           letterSpacing: "-0.04em",
-          fontSize: height * 0.95,
+          fontSize: text * 0.95,
           lineHeight: 1,
         }}
       >

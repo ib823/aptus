@@ -88,10 +88,10 @@ export default async function DashboardPage() {
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-950">
+                      <h3 className="text-lg font-semibold text-foreground">
                         {assessment.companyName}
                       </h3>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-muted-foreground">
                         {assessment.industry} &middot; {assessment.country}
                       </p>
                     </div>
@@ -101,8 +101,8 @@ export default async function DashboardPage() {
                   <div className="space-y-3">
                     <div>
                       <div className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-600">Scope Selection</span>
-                        <span className="text-gray-500">
+                        <span className="text-muted-foreground">Scope Selection</span>
+                        <span className="text-muted-foreground">
                           {selectedCount} / {totalScopeItems}
                         </span>
                       </div>
@@ -111,25 +111,25 @@ export default async function DashboardPage() {
 
                     <div>
                       <div className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-600">Steps Reviewed</span>
-                        <span className="text-gray-500">{reviewedCount}</span>
+                        <span className="text-muted-foreground">Steps Reviewed</span>
+                        <span className="text-muted-foreground">{reviewedCount}</span>
                       </div>
                       <ProgressBar value={reviewedCount} max={Math.max(reviewedCount, 1)} />
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 mt-4 pt-3 border-t border-gray-100">
+                  <div className="flex items-center gap-2 mt-4 pt-3 border-t">
                     {assessment.stakeholders.slice(0, 5).map((s) => (
                       <div
                         key={s.id}
-                        className="w-7 h-7 rounded-full bg-blue-50 flex items-center justify-center text-xs font-medium text-blue-600"
+                        className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary"
                         title={s.name}
                       >
                         {s.name.charAt(0).toUpperCase()}
                       </div>
                     ))}
                     {assessment.stakeholders.length > 5 && (
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-muted-foreground">
                         +{assessment.stakeholders.length - 5} more
                       </span>
                     )}
@@ -148,19 +148,19 @@ export default async function DashboardPage() {
             </CardHeader>
             <CardContent>
               {recentActivity.length === 0 ? (
-                <p className="text-sm text-gray-500">No activity yet</p>
+                <p className="text-sm text-muted-foreground">No activity yet</p>
               ) : (
                 <div className="space-y-3">
                   {recentActivity.map((entry) => (
                     <div key={entry.id} className="flex items-start gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 shrink-0" />
                       <div>
-                        <p className="text-sm text-gray-700">
+                        <p className="text-sm text-foreground">
                           <span className="font-medium">{entry.actor}</span>
                           {" "}
                           {entry.action.toLowerCase().replace(/_/g, " ")}
                         </p>
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-muted-foreground/60">
                           {formatDistanceToNow(entry.timestamp, { addSuffix: true })}
                         </p>
                       </div>

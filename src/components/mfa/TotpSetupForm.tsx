@@ -59,22 +59,22 @@ export function TotpSetupForm({ qrUri, secret, onVerified }: TotpSetupFormProps)
           alt="Scan this QR code with your authenticator app"
           width={200}
           height={200}
-          className="rounded-lg border border-gray-200"
+          className="rounded-lg border"
         />
       </div>
 
-      <div className="bg-gray-50 rounded-lg p-4">
-        <p className="text-sm text-gray-600 mb-1">
+      <div className="bg-muted/40 rounded-lg p-4">
+        <p className="text-sm text-muted-foreground mb-1">
           {UI_TEXT.auth.mfaManualEntry}
         </p>
-        <code className="text-sm font-mono text-gray-950 break-all select-all">
+        <code className="text-sm font-mono text-foreground break-all select-all">
           {secret}
         </code>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="totp-code" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="totp-code" className="block text-sm font-medium text-foreground mb-1">
             {UI_TEXT.auth.mfaVerifyDescription}
           </label>
           <Input
@@ -90,7 +90,7 @@ export function TotpSetupForm({ qrUri, secret, onVerified }: TotpSetupFormProps)
             aria-describedby={error ? "totp-error" : undefined}
           />
           {error && (
-            <p id="totp-error" className="text-sm text-red-500 mt-1">
+            <p id="totp-error" className="text-sm text-destructive mt-1">
               {error}
             </p>
           )}

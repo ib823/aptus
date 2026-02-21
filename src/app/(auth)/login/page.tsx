@@ -36,13 +36,13 @@ function LoginForm() {
   );
 
   return (
-    <Card className="shadow-md border-gray-200">
+    <Card className="shadow-md">
       <CardHeader className="text-center pb-2">
-        <BoundLogo size="lg" className="mb-6" />
-        <h1 className="text-2xl font-bold text-gray-950">
+        <BoundLogo size="lg" className="mb-6 justify-center" />
+        <h1 className="text-2xl font-bold">
           {sent ? UI_TEXT.auth.magicLinkSent : UI_TEXT.auth.loginTitle}
         </h1>
-        <p className="text-base text-gray-600 mt-1">
+        <p className="text-base text-muted-foreground mt-1">
           {sent ? UI_TEXT.auth.magicLinkDescription : UI_TEXT.auth.loginSubtitle}
         </p>
       </CardHeader>
@@ -50,7 +50,7 @@ function LoginForm() {
         {sent ? (
           <div className="flex flex-col items-center py-6">
             <CheckCircle className="w-12 h-12 text-green-500 mb-4" />
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               {UI_TEXT.auth.magicLinkDescription}
             </p>
           </div>
@@ -61,7 +61,7 @@ function LoginForm() {
                 Email address
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
                   id="login-email"
                   type="email"

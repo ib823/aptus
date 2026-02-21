@@ -235,7 +235,7 @@ export function ConfigMatrixClient({
         <select
           value={scopeItemFilter}
           onChange={(e) => setScopeItemFilter(e.target.value)}
-          className="text-sm border border-gray-200 rounded-md px-2 py-1.5 bg-white text-gray-700"
+          className="text-sm border rounded-md px-2 py-1.5 bg-card text-foreground"
         >
           <option value="">All Scope Items ({scopeItems.length})</option>
           {scopeItems.map(([id, name]) => (
@@ -246,7 +246,7 @@ export function ConfigMatrixClient({
         </select>
 
         <div className="relative flex-1 max-w-sm ml-auto">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -257,22 +257,22 @@ export function ConfigMatrixClient({
       </div>
 
       {/* Config table */}
-      <div className="border border-gray-200 rounded-lg overflow-x-auto">
+      <div className="border rounded-lg overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
-              <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3">Scope Item</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3">Activity</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-28">Category</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-28">Self-Service</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-20">Include</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-4 py-3 w-16" />
+            <tr className="bg-muted/40 border-b border">
+              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">Scope Item</th>
+              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">Activity</th>
+              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3 w-28">Category</th>
+              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3 w-28">Self-Service</th>
+              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3 w-20">Include</th>
+              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3 w-16" />
             </tr>
           </thead>
           <tbody>
             {filteredConfigs.length === 0 ? (
               <tr>
-                <td colSpan={6} className="text-center py-12 text-sm text-gray-500">
+                <td colSpan={6} className="text-center py-12 text-sm text-muted-foreground">
                   No configurations match your filters
                 </td>
               </tr>
@@ -293,12 +293,12 @@ export function ConfigMatrixClient({
         </table>
       </div>
 
-      <p className="text-xs text-gray-400 mt-2">
+      <p className="text-xs text-muted-foreground/60 mt-2">
         Showing {filteredConfigs.length} of {configs.length} configurations
       </p>
 
       {/* Action bar */}
-      <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200">
+      <div className="flex items-center justify-between mt-8 pt-6 border-t border">
         <Link href={`/assessment/${assessmentId}/gaps`}>
           <Button variant="outline">
             <ArrowLeft className="w-4 h-4 mr-1.5" />
@@ -307,7 +307,7 @@ export function ConfigMatrixClient({
         </Link>
 
         <div className="text-center">
-          <p className="text-base font-semibold text-gray-950">
+          <p className="text-base font-semibold text-foreground">
             {summary.includedCount} configurations included
           </p>
           {summary.excludedRecommended > 0 && (
@@ -335,13 +335,13 @@ function SummaryCard({ label, count, color, description }: {
   description: string;
 }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
+    <div className="bg-card rounded-lg border p-4">
       <div className="flex items-center gap-2">
         <span className={`w-2.5 h-2.5 rounded-full ${color}`} />
-        <span className="text-xs text-gray-400 uppercase tracking-wider">{label}</span>
+        <span className="text-xs text-muted-foreground/60 uppercase tracking-wider">{label}</span>
       </div>
-      <p className="text-2xl font-bold text-gray-950 mt-1">{count}</p>
-      <p className="text-xs text-gray-500">{description}</p>
+      <p className="text-2xl font-bold text-foreground mt-1">{count}</p>
+      <p className="text-xs text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -360,14 +360,14 @@ function ConfigRow({ config, expanded, onToggle, onToggleInclusion, saving, read
 
   return (
     <>
-      <tr className={`border-b border-gray-100 hover:bg-gray-50 ${config.category === "Mandatory" ? "bg-red-50/30" : ""}`}>
+      <tr className={`border-b border hover:bg-accent ${config.category === "Mandatory" ? "bg-red-50/30" : ""}`}>
         <td className="px-4 py-3">
-          <span className="text-xs text-gray-400">{config.scopeItemId}</span>
+          <span className="text-xs text-muted-foreground/60">{config.scopeItemId}</span>
           <p className="text-sm">{config.scopeItemName}</p>
         </td>
         <td className="px-4 py-3">
           <p className="text-sm font-medium">{config.configItemName}</p>
-          <p className="text-xs text-gray-500 line-clamp-1">{config.activityDescription}</p>
+          <p className="text-xs text-muted-foreground line-clamp-1">{config.activityDescription}</p>
         </td>
         <td className="px-4 py-3">
           <Badge className={CATEGORY_STYLES[config.category] ?? "bg-gray-100 text-gray-600"}>
@@ -378,12 +378,12 @@ function ConfigRow({ config, expanded, onToggle, onToggleInclusion, saving, read
           {config.selfService ? (
             <Badge className="bg-green-100 text-green-700">Self-Service</Badge>
           ) : (
-            <Badge variant="outline" className="text-gray-500">SAP Support</Badge>
+            <Badge variant="outline" className="text-muted-foreground">SAP Support</Badge>
           )}
         </td>
         <td className="px-4 py-3">
           {isMandatory ? (
-            <div className="flex items-center gap-1 text-gray-400" title="Mandatory — always included">
+            <div className="flex items-center gap-1 text-muted-foreground/60" title="Mandatory — always included">
               <Lock className="w-3.5 h-3.5" />
               <span className="text-xs">Required</span>
             </div>
@@ -417,7 +417,7 @@ function ConfigRow({ config, expanded, onToggle, onToggleInclusion, saving, read
             )}
             <button
               onClick={onToggle}
-              className="p-1 text-gray-400 hover:text-gray-600"
+              className="p-1 text-muted-foreground/60 hover:text-muted-foreground"
             >
               {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </button>
@@ -426,7 +426,7 @@ function ConfigRow({ config, expanded, onToggle, onToggleInclusion, saving, read
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={6} className="bg-gray-50 border-b border-gray-200">
+          <td colSpan={6} className="bg-muted/40 border-b border">
             <div className="px-6 py-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <Field label="Config Item ID" value={config.configItemId} />
@@ -440,20 +440,20 @@ function ConfigRow({ config, expanded, onToggle, onToggleInclusion, saving, read
               </div>
               {config.configApproach && (
                 <div className="mt-4">
-                  <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Configuration Approach</span>
-                  <p className="text-sm text-gray-600 mt-1">{config.configApproach}</p>
+                  <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">Configuration Approach</span>
+                  <p className="text-sm text-muted-foreground mt-1">{config.configApproach}</p>
                 </div>
               )}
               {config.additionalInfo && (
                 <div className="mt-3">
-                  <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Additional Information</span>
-                  <p className="text-sm text-gray-600 mt-1">{config.additionalInfo}</p>
+                  <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">Additional Information</span>
+                  <p className="text-sm text-muted-foreground mt-1">{config.additionalInfo}</p>
                 </div>
               )}
 
               {/* Exclusion reason for Recommended configs being excluded */}
               {!isMandatory && config.included && !readOnly && (
-                <div className="mt-4 pt-3 border-t border-gray-200">
+                <div className="mt-4 pt-3 border-t border">
                   <button
                     onClick={() => onToggleInclusion(config.id, config.included)}
                     className="text-sm text-red-600 hover:text-red-700"
@@ -463,17 +463,17 @@ function ConfigRow({ config, expanded, onToggle, onToggleInclusion, saving, read
                 </div>
               )}
               {!isMandatory && !config.included && (
-                <div className="mt-4 pt-3 border-t border-gray-200">
+                <div className="mt-4 pt-3 border-t border">
                   {config.category === "Recommended" && (
                     <div className="mb-3">
-                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wider block mb-1">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider block mb-1">
                         Reason for Excluding (Required)
                       </label>
                       <textarea
                         value={excludeReason}
                         onChange={(e) => setExcludeReason(e.target.value)}
                         placeholder="Why is this recommended configuration being excluded? (min 10 chars)"
-                        className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm resize-none h-20"
+                        className="w-full border rounded-md px-3 py-2 text-sm resize-none h-20"
                         disabled={readOnly}
                       />
                     </div>
@@ -511,8 +511,8 @@ function ConfigRow({ config, expanded, onToggle, onToggleInclusion, saving, read
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <span className="text-xs text-gray-400">{label}</span>
-      <p className="text-sm text-gray-700">{value}</p>
+      <span className="text-xs text-muted-foreground/60">{label}</span>
+      <p className="text-sm text-muted-foreground">{value}</p>
     </div>
   );
 }

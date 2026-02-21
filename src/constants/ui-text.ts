@@ -2,15 +2,15 @@
 
 export const UI_TEXT = {
   app: {
-    name: "Aptus",
+    name: "aptus",
     tagline: "SAP S/4HANA Cloud Fit-Gap Assessment",
     sapVersion: "SAP Best Practices 2508",
   },
   auth: {
-    loginTitle: "Sign in to Aptus",
-    loginSubtitle: "Enter your email to receive a magic link",
+    loginTitle: "Sign in",
+    loginSubtitle: "Enter your email to receive a sign-in link",
     emailPlaceholder: "you@company.com",
-    sendMagicLink: "Send Magic Link",
+    sendMagicLink: "Continue",
     magicLinkSent: "Check your email",
     magicLinkDescription: "We sent a sign-in link to your email. Click the link to continue.",
     mfaSetupTitle: "Set Up Two-Factor Authentication",

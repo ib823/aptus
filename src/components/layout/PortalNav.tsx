@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, FileText, Settings, LogOut } from "lucide-react";
 import { BoundLogo } from "@/components/shared/BoundLogo";
+import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { UI_TEXT } from "@/constants/ui-text";
 import type { SessionUser } from "@/types/assessment";
 
@@ -36,7 +37,7 @@ export function PortalNav({ user }: PortalNavProps) {
   ];
 
   return (
-    <header className="border-b border-gray-200 bg-white">
+    <header className="border-b bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex h-14 items-center justify-between">
           <div className="flex items-center gap-3 sm:gap-8 min-w-0">
@@ -57,11 +58,11 @@ export function PortalNav({ user }: PortalNavProps) {
                       href={item.href}
                       className={`flex items-center gap-2 h-10 px-3 rounded-md text-sm sm:text-base transition-all duration-200 ${
                         isActive
-                          ? "bg-blue-50 text-blue-600 font-medium"
-                          : "text-gray-600 hover:bg-gray-100 hover:text-gray-950"
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground"
                       }`}
                     >
-                      <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${isActive ? "text-blue-500" : "text-gray-400"}`} />
+                      <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
                       <span className="hidden md:inline">{item.label}</span>
                     </Link>
                   );
@@ -82,8 +83,8 @@ export function PortalNav({ user }: PortalNavProps) {
                       href={item.href}
                       className={`flex items-center justify-center h-9 w-9 rounded-md transition-all ${
                         isActive
-                          ? "bg-blue-50 text-blue-600"
-                          : "text-gray-500 hover:bg-gray-100"
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-accent"
                       }`}
                       aria-label={item.label}
                     >
@@ -93,13 +94,14 @@ export function PortalNav({ user }: PortalNavProps) {
                 })}
             </nav>
           </div>
-          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-            <span className="hidden sm:inline text-sm text-gray-600">{user.name}</span>
+          <div className="flex items-center gap-1 sm:gap-3 shrink-0">
+            <span className="hidden sm:inline text-sm text-muted-foreground">{user.name}</span>
+            <ThemeToggle />
             <button
               onClick={() => {
                 window.location.href = "/api/auth/logout";
               }}
-              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
               aria-label={UI_TEXT.auth.signOut}
             >
               <LogOut className="w-4 h-4" />

@@ -163,7 +163,7 @@ export function FlowViewerClient({ assessmentId, diagrams: initialDiagrams }: Fl
               <select
                 value={scopeFilter}
                 onChange={(e) => setScopeFilter(e.target.value)}
-                className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-sm"
+                className="w-full border rounded-md px-2 py-1.5 text-sm"
               >
                 <option value="all">All Scope Items ({diagrams.length})</option>
                 {scopeItems.map((s) => (
@@ -177,7 +177,7 @@ export function FlowViewerClient({ assessmentId, diagrams: initialDiagrams }: Fl
             <div className="space-y-1 max-h-[calc(100vh-280px)] overflow-y-auto">
               {filteredScopeItems.map((scope) => (
                 <div key={scope.id}>
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wider px-2 py-1.5 bg-gray-50 rounded">
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-2 py-1.5 bg-muted/40 rounded">
                     {scope.name}
                   </div>
                   {scope.diagrams.map((d) => (
@@ -187,13 +187,13 @@ export function FlowViewerClient({ assessmentId, diagrams: initialDiagrams }: Fl
                       className={`w-full text-left px-2 py-2 rounded text-sm flex items-center gap-2 ${
                         selectedId === d.id
                           ? "bg-gray-950 text-white"
-                          : "hover:bg-gray-100 text-gray-700"
+                          : "hover:bg-accent text-muted-foreground"
                       }`}
                     >
                       <ChevronRight className="w-3 h-3 shrink-0" />
                       <div className="min-w-0">
                         <p className="truncate font-medium">{d.processFlowName}</p>
-                        <p className={`text-xs ${selectedId === d.id ? "text-gray-400" : "text-gray-500"}`}>
+                        <p className={`text-xs ${selectedId === d.id ? "text-gray-400" : "text-muted-foreground"}`}>
                           {d.stepCount} steps
                         </p>
                       </div>
@@ -211,10 +211,10 @@ export function FlowViewerClient({ assessmentId, diagrams: initialDiagrams }: Fl
                 {/* Diagram header */}
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-950">
+                    <h3 className="text-lg font-semibold text-foreground">
                       {selectedDiagram.processFlowName}
                     </h3>
-                    <p className="text-sm text-gray-500">{selectedDiagram.scopeItemName}</p>
+                    <p className="text-sm text-muted-foreground">{selectedDiagram.scopeItemName}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
@@ -250,9 +250,9 @@ export function FlowViewerClient({ assessmentId, diagrams: initialDiagrams }: Fl
                 </div>
 
                 {/* SVG viewer */}
-                <div className="border border-gray-200 rounded-lg bg-white overflow-auto max-h-[calc(100vh-380px)]">
+                <div className="border rounded-lg bg-card overflow-auto max-h-[calc(100vh-380px)]">
                   {loadingSvg ? (
-                    <div className="flex items-center justify-center h-64 text-gray-400">
+                    <div className="flex items-center justify-center h-64 text-muted-foreground/60">
                       <BarChart3 className="w-6 h-6 animate-pulse mr-2" />
                       Loading diagram...
                     </div>
@@ -262,13 +262,13 @@ export function FlowViewerClient({ assessmentId, diagrams: initialDiagrams }: Fl
                       dangerouslySetInnerHTML={{ __html: sanitizeSvgContent(svgContent) }}
                     />
                   ) : (
-                    <div className="flex items-center justify-center h-64 text-gray-400 text-sm">
+                    <div className="flex items-center justify-center h-64 text-muted-foreground/60 text-sm">
                       Select a flow to view its diagram
                     </div>
                   )}
                 </div>
 
-                <p className="text-xs text-gray-400 mt-2">
+                <p className="text-xs text-muted-foreground/60 mt-2">
                   Generated: {new Date(selectedDiagram.generatedAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                 </p>
               </>
@@ -278,7 +278,7 @@ export function FlowViewerClient({ assessmentId, diagrams: initialDiagrams }: Fl
       )}
 
       {/* Navigation */}
-      <div className="flex items-center justify-between pt-6 mt-8 border-t border-gray-200">
+      <div className="flex items-center justify-between pt-6 mt-8 border-t border">
         <Link href={`/assessment/${assessmentId}/config`}>
           <Button variant="outline">
             <ArrowLeft className="w-4 h-4 mr-1.5" />

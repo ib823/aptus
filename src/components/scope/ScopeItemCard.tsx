@@ -100,7 +100,7 @@ export function ScopeItemCard({ item, onSelectionChange, isPreSelected }: ScopeI
   );
 
   return (
-    <div className={`border-b border-gray-100 last:border-b-0 ${!item.selected && !isPreSelected ? "opacity-60" : ""}`}>
+    <div className={`border-b border last:border-b-0 ${!item.selected && !isPreSelected ? "opacity-60" : ""}`}>
       <div className="flex items-center gap-3 py-4 px-1">
         <Checkbox
           checked={item.selected}
@@ -110,12 +110,12 @@ export function ScopeItemCard({ item, onSelectionChange, isPreSelected }: ScopeI
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-gray-400">{item.id}</span>
-            <span className="text-base font-semibold text-gray-950 truncate">
+            <span className="text-xs font-medium text-muted-foreground/60">{item.id}</span>
+            <span className="text-base font-semibold text-foreground truncate">
               {item.nameClean}
             </span>
           </div>
-          <div className="flex items-center gap-4 mt-0.5 text-xs text-gray-500">
+          <div className="flex items-center gap-4 mt-0.5 text-xs text-muted-foreground">
             <span>{item.totalSteps} process steps</span>
             <span>{item.subArea}</span>
             <span>{item.configCount} configurations</span>
@@ -130,7 +130,7 @@ export function ScopeItemCard({ item, onSelectionChange, isPreSelected }: ScopeI
               className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-all ${
                 relevance === opt.value
                   ? opt.style
-                  : "bg-white text-gray-400 border-gray-200 hover:bg-gray-50"
+                  : "bg-card text-muted-foreground/60 border hover:bg-accent"
               }`}
             >
               {opt.label}
@@ -155,7 +155,7 @@ export function ScopeItemCard({ item, onSelectionChange, isPreSelected }: ScopeI
 
         <button
           onClick={() => setExpanded(!expanded)}
-          className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+          className="p-1 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
           aria-label={expanded ? "Collapse details" : "Expand details"}
         >
           {expanded ? (
@@ -167,7 +167,7 @@ export function ScopeItemCard({ item, onSelectionChange, isPreSelected }: ScopeI
       </div>
 
       {expanded && (
-        <div className="bg-gray-50 p-5 rounded-md mb-3 mx-1 border-t border-gray-100">
+        <div className="bg-muted/40 p-5 rounded-md mb-3 mx-1 border-t border">
           <Tabs defaultValue="purpose">
             <TabsList>
               <TabsTrigger value="purpose">Purpose</TabsTrigger>
@@ -177,19 +177,19 @@ export function ScopeItemCard({ item, onSelectionChange, isPreSelected }: ScopeI
             </TabsList>
             <TabsContent value="purpose" className="mt-3">
               <div
-                className="prose prose-sm max-w-none text-gray-700"
+                className="prose prose-sm max-w-none text-muted-foreground"
                 dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(item.purposeHtml) }}
               />
             </TabsContent>
             <TabsContent value="overview" className="mt-3">
               <div
-                className="prose prose-sm max-w-none text-gray-700"
+                className="prose prose-sm max-w-none text-muted-foreground"
                 dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(item.overviewHtml) }}
               />
             </TabsContent>
             <TabsContent value="prerequisites" className="mt-3">
               <div
-                className="prose prose-sm max-w-none text-gray-700"
+                className="prose prose-sm max-w-none text-muted-foreground"
                 dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(item.prerequisitesHtml) }}
               />
             </TabsContent>
@@ -209,7 +209,7 @@ export function ScopeItemCard({ item, onSelectionChange, isPreSelected }: ScopeI
           </Tabs>
 
           <div className="mt-4">
-            <label htmlFor={`notes-${item.id}`} className="block text-xs font-medium text-gray-500 mb-1">
+            <label htmlFor={`notes-${item.id}`} className="block text-xs font-medium text-muted-foreground mb-1">
               Notes about this scope item
             </label>
             <Textarea

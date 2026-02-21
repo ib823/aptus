@@ -77,36 +77,36 @@ export default async function VerifyPage() {
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-3xl font-bold text-gray-950 tracking-tight mb-1">Data Verification</h1>
-      <p className="text-base text-gray-600 mb-8">
+      <h1 className="text-3xl font-bold text-foreground tracking-tight mb-1">Data Verification</h1>
+      <p className="text-base text-muted-foreground mb-8">
         {passed}/{checks.length} checks passed
       </p>
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-card rounded-lg border overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
-              <th className="px-4 py-2 text-left font-medium text-gray-500 w-8">#</th>
-              <th className="px-4 py-2 text-left font-medium text-gray-500">Check</th>
-              <th className="px-4 py-2 text-left font-medium text-gray-500">Status</th>
-              <th className="px-4 py-2 text-left font-medium text-gray-500">Detail</th>
+            <tr className="bg-muted/40 border-b">
+              <th className="px-4 py-2 text-left font-medium text-muted-foreground w-8">#</th>
+              <th className="px-4 py-2 text-left font-medium text-muted-foreground">Check</th>
+              <th className="px-4 py-2 text-left font-medium text-muted-foreground">Status</th>
+              <th className="px-4 py-2 text-left font-medium text-muted-foreground">Detail</th>
             </tr>
           </thead>
           <tbody>
             {checks.map((check, idx) => (
-              <tr key={check.name} className="border-b border-gray-100">
-                <td className="px-4 py-2.5 text-gray-400">{idx + 1}</td>
-                <td className="px-4 py-2.5 font-medium text-gray-900">{check.name}</td>
+              <tr key={check.name} className="border-b border-border/50">
+                <td className="px-4 py-2.5 text-muted-foreground/60">{idx + 1}</td>
+                <td className="px-4 py-2.5 font-medium text-foreground">{check.name}</td>
                 <td className="px-4 py-2.5">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                     check.status === "pass"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-red-100 text-red-700"
+                      ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
+                      : "bg-destructive/10 text-destructive"
                   }`}>
                     {check.status === "pass" ? "PASS" : "FAIL"}
                   </span>
                 </td>
-                <td className="px-4 py-2.5 text-gray-500">{check.detail}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{check.detail}</td>
               </tr>
             ))}
           </tbody>

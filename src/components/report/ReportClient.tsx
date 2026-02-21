@@ -124,9 +124,9 @@ export function ReportClient({
       </div>
 
       {/* Fit breakdown */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
-        <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">Fit Distribution</h3>
-        <div className="flex gap-1 h-6 rounded-full overflow-hidden bg-gray-100">
+      <div className="bg-card rounded-lg border p-6 mb-8">
+        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">Fit Distribution</h3>
+        <div className="flex gap-1 h-6 rounded-full overflow-hidden bg-muted">
           {summary.steps.total > 0 && (
             <>
               <div className="bg-green-500" style={{ width: `${(summary.steps.fit / summary.steps.total) * 100}%` }} title={`FIT: ${summary.steps.fit}`} />
@@ -136,7 +136,7 @@ export function ReportClient({
             </>
           )}
         </div>
-        <div className="flex gap-6 mt-3 text-xs text-gray-500">
+        <div className="flex gap-6 mt-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> FIT: {summary.steps.fit}</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" /> CONFIGURE: {summary.steps.configure}</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> GAP: {summary.steps.gap}</span>
@@ -146,7 +146,7 @@ export function ReportClient({
 
       {/* Downloads */}
       <div className="mb-8">
-        <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">Report Downloads</h3>
+        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">Report Downloads</h3>
         {!canGenerate && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4 text-sm text-amber-700">
             Reports are available when the assessment is completed, reviewed, or signed off.
@@ -160,13 +160,13 @@ export function ReportClient({
             return (
               <div
                 key={report.key}
-                className={`flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-3 ${enabled ? "" : "opacity-50"}`}
+                className={`flex items-center justify-between bg-card border rounded-lg px-4 py-3 ${enabled ? "" : "opacity-50"}`}
               >
                 <div className="flex items-center gap-3">
-                  <Icon className="w-5 h-5 text-gray-400" />
+                  <Icon className="w-5 h-5 text-muted-foreground/60" />
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{report.label}</p>
-                    <p className="text-xs text-gray-500">{report.description}</p>
+                    <p className="text-sm font-medium text-foreground">{report.label}</p>
+                    <p className="text-xs text-muted-foreground">{report.description}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -216,26 +216,26 @@ export function ReportClient({
 
       {/* Sign-off section */}
       <div className="mb-8">
-        <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">Digital Sign-Off</h3>
+        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">Digital Sign-Off</h3>
         <div className="grid grid-cols-3 gap-4">
           {SIGNOFF_ROLES.map(({ role, label }) => {
             const signOff = signOffs.find((s) => s.signatoryRole === role);
             const isSigning = signingRole === role;
 
             return (
-              <div key={role} className="bg-white border border-gray-200 rounded-lg p-4">
+              <div key={role} className="bg-card border rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-3">
                   {signOff ? (
                     <CheckCircle className="w-5 h-5 text-green-500" />
                   ) : (
-                    <Clock className="w-5 h-5 text-gray-300" />
+                    <Clock className="w-5 h-5 text-muted-foreground/60" />
                   )}
                   <span className="text-sm font-medium">{label}</span>
                 </div>
 
                 {signOff ? (
-                  <div className="text-xs text-gray-500">
-                    <p className="font-medium text-gray-700">{signOff.signatoryName}</p>
+                  <div className="text-xs text-muted-foreground">
+                    <p className="font-medium text-foreground">{signOff.signatoryName}</p>
                     <p>{signOff.signatoryEmail}</p>
                     <p className="mt-1">{new Date(signOff.signedAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</p>
                   </div>
@@ -246,14 +246,14 @@ export function ReportClient({
                       placeholder="Full name"
                       value={signForm.name}
                       onChange={(e) => setSignForm((prev) => ({ ...prev, name: e.target.value }))}
-                      className="w-full border border-gray-200 rounded px-2 py-1 text-sm"
+                      className="w-full border rounded px-2 py-1 text-sm"
                     />
                     <input
                       type="email"
                       placeholder="Email"
                       value={signForm.email}
                       onChange={(e) => setSignForm((prev) => ({ ...prev, email: e.target.value }))}
-                      className="w-full border border-gray-200 rounded px-2 py-1 text-sm"
+                      className="w-full border rounded px-2 py-1 text-sm"
                     />
                     <div className="flex gap-2">
                       <Button size="sm" onClick={() => handleSignOff(role)} disabled={!signForm.name || !signForm.email}>
@@ -281,7 +281,7 @@ export function ReportClient({
       </div>
 
       {/* Navigation */}
-      <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+      <div className="flex items-center justify-between pt-6 border-t border">
         <Link href={`/assessment/${assessmentId}/config`}>
           <Button variant="outline">
             <ArrowLeft className="w-4 h-4 mr-1.5" />
@@ -303,9 +303,9 @@ export function ReportClient({
 
 function StatCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean | undefined }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
-      <p className="text-xs text-gray-400 uppercase tracking-wider">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${highlight ? "text-green-600" : "text-gray-950"}`}>{value}</p>
+    <div className="bg-card rounded-lg border p-4 text-center">
+      <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">{label}</p>
+      <p className={`text-2xl font-bold mt-1 ${highlight ? "text-green-600" : "text-foreground"}`}>{value}</p>
     </div>
   );
 }

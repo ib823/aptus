@@ -82,7 +82,7 @@ export function StakeholderManager({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-950">
+        <h3 className="text-lg font-semibold text-foreground">
           {UI_TEXT.stakeholder.title}
         </h3>
         {canManage && (
@@ -99,7 +99,7 @@ export function StakeholderManager({
               </DialogHeader>
               <form onSubmit={handleAdd} className="space-y-4 mt-4">
                 <div>
-                  <label htmlFor="stakeholder-name" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="stakeholder-name" className="block text-sm font-medium text-foreground mb-1">
                     {UI_TEXT.stakeholder.name}
                   </label>
                   <Input
@@ -110,7 +110,7 @@ export function StakeholderManager({
                   />
                 </div>
                 <div>
-                  <label htmlFor="stakeholder-email" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="stakeholder-email" className="block text-sm font-medium text-foreground mb-1">
                     {UI_TEXT.stakeholder.email}
                   </label>
                   <Input
@@ -122,7 +122,7 @@ export function StakeholderManager({
                   />
                 </div>
                 <div>
-                  <label htmlFor="stakeholder-role" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="stakeholder-role" className="block text-sm font-medium text-foreground mb-1">
                     {UI_TEXT.stakeholder.role}
                   </label>
                   <Select
@@ -155,21 +155,21 @@ export function StakeholderManager({
         {stakeholders.map((stakeholder) => (
           <div
             key={stakeholder.id}
-            className="flex items-center justify-between p-3 rounded-lg border border-gray-200 bg-white"
+            className="flex items-center justify-between p-3 rounded-lg border bg-card"
           >
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-sm font-medium text-blue-600">
                 {stakeholder.name.charAt(0).toUpperCase()}
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-950">
+                <p className="text-sm font-medium text-foreground">
                   {stakeholder.name}
                 </p>
-                <p className="text-xs text-gray-500">{stakeholder.email}</p>
+                <p className="text-xs text-muted-foreground">{stakeholder.email}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-xs font-medium text-gray-500">
+              <span className="text-xs font-medium text-muted-foreground">
                 {(UI_TEXT.roles as Record<string, string>)[stakeholder.role] ?? stakeholder.role}
               </span>
               <span
@@ -185,7 +185,7 @@ export function StakeholderManager({
               </span>
               {canManage && (
                 <button
-                  className="text-gray-400 hover:text-red-500 transition-colors"
+                  className="text-muted-foreground/60 hover:text-red-500 transition-colors"
                   aria-label={UI_TEXT.stakeholder.removeButton}
                 >
                   <Trash2 className="w-4 h-4" />

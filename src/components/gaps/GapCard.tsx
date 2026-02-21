@@ -95,24 +95,24 @@ export function GapCard({ gap, onUpdate, isReadOnly }: GapCardProps) {
   const rationaleValid = !needsRationale || displayRationale.length >= 20;
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div className="bg-card rounded-lg border overflow-hidden">
       {/* Header */}
-      <div className="px-5 py-4 border-b border-gray-100">
+      <div className="px-5 py-4 border-b border">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-gray-400">
+              <span className="text-xs font-medium text-muted-foreground/60">
                 {gap.scopeItem?.id}
               </span>
-              <span className="text-sm font-semibold text-gray-950">
+              <span className="text-sm font-semibold text-foreground">
                 {gap.scopeItem?.nameClean}
               </span>
             </div>
-            <p className="text-base font-semibold text-gray-950 mt-1">
+            <p className="text-base font-semibold text-foreground mt-1">
               {gap.processStep?.actionTitle ?? "Gap"}
             </p>
             {gap.processStep?.processFlowGroup && (
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-muted-foreground/60">
                 Step {(gap.processStep.sequence ?? 0) + 1} · {gap.processStep.processFlowGroup}
               </span>
             )}
@@ -131,21 +131,21 @@ export function GapCard({ gap, onUpdate, isReadOnly }: GapCardProps) {
           <span className="text-xs font-medium text-amber-600 uppercase tracking-wider">
             What the Client Needs
           </span>
-          <p className="text-sm text-gray-700 mt-1">{gap.clientNote ?? gap.gapDescription}</p>
+          <p className="text-sm text-muted-foreground mt-1">{gap.clientNote ?? gap.gapDescription}</p>
         </div>
         {gap.gapDescription && gap.clientNote && gap.gapDescription !== gap.clientNote && (
           <div className="mt-3">
-            <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+            <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
               Gap Description
             </span>
-            <p className="text-sm text-gray-600 mt-1">{gap.gapDescription}</p>
+            <p className="text-sm text-muted-foreground mt-1">{gap.gapDescription}</p>
           </div>
         )}
       </div>
 
       {/* Resolution options */}
       <div className="px-5 py-4">
-        <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+        <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
           Resolution Approach
         </span>
 
@@ -155,7 +155,7 @@ export function GapCard({ gap, onUpdate, isReadOnly }: GapCardProps) {
               {RESOLUTION_OPTIONS.find((o) => o.value === gap.resolutionType)?.label ?? gap.resolutionType}
             </p>
             {gap.rationale && (
-              <p className="mt-2 text-sm text-gray-600 bg-gray-50 p-3 rounded">{gap.rationale}</p>
+              <p className="mt-2 text-sm text-muted-foreground bg-muted/40 p-3 rounded">{gap.rationale}</p>
             )}
           </div>
         ) : (
@@ -168,11 +168,11 @@ export function GapCard({ gap, onUpdate, isReadOnly }: GapCardProps) {
                   className={`p-3 rounded-lg border text-left transition-all ${
                     gap.resolutionType === opt.value
                       ? opt.color
-                      : "bg-white border-gray-200 hover:bg-gray-50"
+                      : "bg-card border hover:bg-accent"
                   }`}
                 >
                   <p className="text-sm font-medium">{opt.label}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{opt.description}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
                 </button>
               ))}
             </div>
@@ -180,7 +180,7 @@ export function GapCard({ gap, onUpdate, isReadOnly }: GapCardProps) {
             {/* Rationale */}
             {needsRationale && (
               <div className="mt-4">
-                <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Rationale (Required)
                 </label>
                 <Textarea
@@ -190,7 +190,7 @@ export function GapCard({ gap, onUpdate, isReadOnly }: GapCardProps) {
                   className="mt-2 min-h-[72px]"
                   required
                 />
-                <p className={`text-xs mt-1 ${rationaleValid ? "text-gray-400" : "text-red-500"}`}>
+                <p className={`text-xs mt-1 ${rationaleValid ? "text-muted-foreground/60" : "text-red-500"}`}>
                   {displayRationale.length} / 20 minimum characters
                 </p>
               </div>
@@ -200,12 +200,12 @@ export function GapCard({ gap, onUpdate, isReadOnly }: GapCardProps) {
             {gap.effortDays !== null && gap.effortDays > 0 && (
               <div className="mt-3 flex items-center gap-4 text-sm">
                 <div>
-                  <span className="text-gray-400">Effort:</span>{" "}
+                  <span className="text-muted-foreground/60">Effort:</span>{" "}
                   <span className="font-medium">{gap.effortDays} days</span>
                 </div>
                 {gap.upgradeImpact && (
                   <div>
-                    <span className="text-gray-400">Upgrade Impact:</span>{" "}
+                    <span className="text-muted-foreground/60">Upgrade Impact:</span>{" "}
                     <span className="font-medium text-amber-600">{gap.upgradeImpact}</span>
                   </div>
                 )}

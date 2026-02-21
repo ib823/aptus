@@ -37,29 +37,29 @@ export function GapSummary({ total, resolved, pending, totalEffort, byType }: Ga
     <div className="space-y-6">
       {/* Overview stats */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <p className="text-xs text-gray-400 uppercase tracking-wider">Total Gaps</p>
-          <p className="text-2xl font-bold text-gray-950 mt-1">{total}</p>
+        <div className="bg-card rounded-lg border p-4">
+          <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">Total Gaps</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{total}</p>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <p className="text-xs text-gray-400 uppercase tracking-wider">Resolved</p>
+        <div className="bg-card rounded-lg border p-4">
+          <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">Resolved</p>
           <p className="text-2xl font-bold text-green-600 mt-1">{resolved}</p>
-          <p className="text-xs text-gray-500">{resolvedPercent}%</p>
+          <p className="text-xs text-muted-foreground">{resolvedPercent}%</p>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <p className="text-xs text-gray-400 uppercase tracking-wider">Pending</p>
+        <div className="bg-card rounded-lg border p-4">
+          <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">Pending</p>
           <p className="text-2xl font-bold text-amber-600 mt-1">{pending}</p>
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <p className="text-xs text-gray-400 uppercase tracking-wider">Total Effort</p>
-          <p className="text-2xl font-bold text-gray-950 mt-1">{totalEffort}</p>
-          <p className="text-xs text-gray-500">days</p>
+        <div className="bg-card rounded-lg border p-4">
+          <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">Total Effort</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{totalEffort}</p>
+          <p className="text-xs text-muted-foreground">days</p>
         </div>
       </div>
 
       {/* Resolution breakdown */}
       <div>
-        <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
+        <h3 className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider mb-3">
           By Resolution Type
         </h3>
         <div className="space-y-2">
@@ -69,9 +69,9 @@ export function GapSummary({ total, resolved, pending, totalEffort, byType }: Ga
               <div key={type} className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
                   <span className={`w-2.5 h-2.5 rounded-full ${TYPE_COLORS[type] ?? "bg-gray-300"}`} />
-                  <span className="text-gray-700">{TYPE_LABELS[type] ?? type}</span>
+                  <span className="text-muted-foreground">{TYPE_LABELS[type] ?? type}</span>
                 </div>
-                <span className="font-medium text-gray-950">{count}</span>
+                <span className="font-medium text-foreground">{count}</span>
               </div>
             ))}
         </div>

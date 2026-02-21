@@ -326,16 +326,16 @@ export function ReviewClient({
           {loading ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-48 bg-gray-100 rounded-lg animate-pulse" />
+                <div key={i} className="h-48 bg-muted rounded-lg animate-pulse" />
               ))}
             </div>
           ) : !currentStep ? (
             <div className="text-center py-16">
-              <CheckCircle2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-950">
+              <CheckCircle2 className="w-12 h-12 text-muted-foreground/60 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-foreground">
                 {visibleSteps.length === 0 ? "No steps to review" : "Select a scope item"}
               </h3>
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="text-sm text-muted-foreground mt-1">
                 {visibleSteps.length === 0
                   ? "Select a scope item from the sidebar to begin reviewing."
                   : "Choose a scope item from the sidebar to start."}
@@ -346,10 +346,10 @@ export function ReviewClient({
               {/* Step navigation header */}
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-xl font-bold text-gray-950">
+                  <h2 className="text-xl font-bold text-foreground">
                     {scopeItems.find((i) => i.id === currentScopeItemId)?.nameClean}
                   </h2>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     Step {currentStepIndex + 1} of {visibleSteps.length}
                   </p>
                 </div>
@@ -373,8 +373,8 @@ export function ReviewClient({
                   const color = step.fitStatus === "FIT" ? "bg-green-500"
                     : step.fitStatus === "CONFIGURE" ? "bg-blue-500"
                     : step.fitStatus === "GAP" ? "bg-amber-500"
-                    : step.fitStatus === "NA" ? "bg-gray-300"
-                    : "bg-gray-200";
+                    : step.fitStatus === "NA" ? "bg-muted-foreground/60"
+                    : "bg-muted";
 
                   return (
                     <button
@@ -408,7 +408,7 @@ export function ReviewClient({
                   <ChevronLeft className="w-4 h-4 mr-1" />
                   Previous
                 </Button>
-                <span className="hidden sm:inline text-sm text-gray-500">
+                <span className="hidden sm:inline text-sm text-muted-foreground">
                   Use ← → keys to navigate
                 </span>
                 <Button

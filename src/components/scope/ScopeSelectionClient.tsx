@@ -259,7 +259,7 @@ export function ScopeSelectionClient({
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -276,7 +276,7 @@ export function ScopeSelectionClient({
               className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-all ${
                 filterMode === opt.value
                   ? "bg-gray-900 text-white border-gray-900"
-                  : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                  : "bg-card text-muted-foreground border hover:bg-accent"
               }`}
             >
               {opt.label}
@@ -287,7 +287,7 @@ export function ScopeSelectionClient({
         <select
           value={areaFilter}
           onChange={(e) => setAreaFilter(e.target.value)}
-          className="h-9 px-3 text-xs border border-gray-200 rounded-md bg-white text-gray-700"
+          className="h-9 px-3 text-xs border rounded-md bg-card text-foreground"
         >
           <option value="all">All Areas</option>
           {functionalAreas.map((area) => (
@@ -327,7 +327,7 @@ export function ScopeSelectionClient({
       )}
 
       {/* Action bar */}
-      <div className="sticky bottom-0 bg-white border-t border-gray-200 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-4 mt-8">
+      <div className="sticky bottom-0 bg-background border-t border -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-4 mt-8">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <Link href={`/assessments`}>
             <Button variant="outline">
@@ -337,10 +337,10 @@ export function ScopeSelectionClient({
           </Link>
 
           <div className="text-center">
-            <p className="text-base font-semibold text-gray-950">
+            <p className="text-base font-semibold text-foreground">
               {stats.selectedCount} scope items selected
             </p>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-muted-foreground">
               {stats.totalStepsInScope} process steps to review
             </p>
           </div>

@@ -211,7 +211,7 @@ export function RemainingItemsClient({
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="border border-gray-200 rounded-md px-2 py-1.5 text-sm"
+          className="border rounded-md px-2 py-1.5 text-sm"
         >
           <option value="all">All Categories</option>
           {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
@@ -221,7 +221,7 @@ export function RemainingItemsClient({
         <select
           value={severityFilter}
           onChange={(e) => setSeverityFilter(e.target.value)}
-          className="border border-gray-200 rounded-md px-2 py-1.5 text-sm"
+          className="border rounded-md px-2 py-1.5 text-sm"
         >
           <option value="all">All Severities</option>
           <option value="critical">Critical</option>
@@ -232,7 +232,7 @@ export function RemainingItemsClient({
         <select
           value={resolvedFilter}
           onChange={(e) => setResolvedFilter(e.target.value)}
-          className="border border-gray-200 rounded-md px-2 py-1.5 text-sm"
+          className="border rounded-md px-2 py-1.5 text-sm"
         >
           <option value="all">All Status</option>
           <option value="unresolved">Unresolved</option>
@@ -243,21 +243,21 @@ export function RemainingItemsClient({
           placeholder="Search items..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="border border-gray-200 rounded-md px-3 py-1.5 text-sm flex-1 min-w-[200px]"
+          className="border rounded-md px-3 py-1.5 text-sm flex-1 min-w-[200px]"
         />
       </div>
 
       {/* Add item form */}
       {showAddForm && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4">
-          <h3 className="text-sm font-medium text-gray-900 mb-3">Add Remaining Item</h3>
+        <div className="bg-card border rounded-lg p-4 mb-4">
+          <h3 className="text-sm font-medium text-foreground mb-3">Add Remaining Item</h3>
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Category</label>
+              <label className="block text-xs text-muted-foreground mb-1">Category</label>
               <select
                 value={addForm.category}
                 onChange={(e) => setAddForm((prev) => ({ ...prev, category: e.target.value }))}
-                className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm"
+                className="w-full border rounded px-2 py-1.5 text-sm"
               >
                 <option value="integration_point">Integration Point</option>
                 <option value="data_migration">Data Migration</option>
@@ -265,11 +265,11 @@ export function RemainingItemsClient({
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Severity</label>
+              <label className="block text-xs text-muted-foreground mb-1">Severity</label>
               <select
                 value={addForm.severity}
                 onChange={(e) => setAddForm((prev) => ({ ...prev, severity: e.target.value }))}
-                className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm"
+                className="w-full border rounded px-2 py-1.5 text-sm"
               >
                 <option value="critical">Critical</option>
                 <option value="high">High</option>
@@ -279,42 +279,42 @@ export function RemainingItemsClient({
             </div>
           </div>
           <div className="mb-3">
-            <label className="block text-xs text-gray-500 mb-1">Title</label>
+            <label className="block text-xs text-muted-foreground mb-1">Title</label>
             <input
               type="text"
               value={addForm.title}
               onChange={(e) => setAddForm((prev) => ({ ...prev, title: e.target.value }))}
               placeholder="Brief title (min 5 characters)"
-              className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm"
+              className="w-full border rounded px-2 py-1.5 text-sm"
             />
           </div>
           <div className="mb-3">
-            <label className="block text-xs text-gray-500 mb-1">Description</label>
+            <label className="block text-xs text-muted-foreground mb-1">Description</label>
             <textarea
               value={addForm.description}
               onChange={(e) => setAddForm((prev) => ({ ...prev, description: e.target.value }))}
               placeholder="Detailed description (min 10 characters)"
               rows={3}
-              className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm"
+              className="w-full border rounded px-2 py-1.5 text-sm"
             />
           </div>
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Functional Area (optional)</label>
+              <label className="block text-xs text-muted-foreground mb-1">Functional Area (optional)</label>
               <input
                 type="text"
                 value={addForm.functionalArea}
                 onChange={(e) => setAddForm((prev) => ({ ...prev, functionalArea: e.target.value }))}
-                className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm"
+                className="w-full border rounded px-2 py-1.5 text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Assigned To (optional email)</label>
+              <label className="block text-xs text-muted-foreground mb-1">Assigned To (optional email)</label>
               <input
                 type="email"
                 value={addForm.assignedTo}
                 onChange={(e) => setAddForm((prev) => ({ ...prev, assignedTo: e.target.value }))}
-                className="w-full border border-gray-200 rounded px-2 py-1.5 text-sm"
+                className="w-full border rounded px-2 py-1.5 text-sm"
               />
             </div>
           </div>
@@ -338,17 +338,17 @@ export function RemainingItemsClient({
             : "No items match the current filters."}
         />
       ) : (
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-card border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-left">
-                <th className="px-4 py-2 font-medium text-gray-500 w-8">#</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Category</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Title</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Severity</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Area</th>
-                <th className="px-4 py-2 font-medium text-gray-500">Status</th>
-                <th className="px-4 py-2 font-medium text-gray-500 w-8" />
+              <tr className="bg-muted/40 border-b border text-left">
+                <th className="px-4 py-2 font-medium text-muted-foreground w-8">#</th>
+                <th className="px-4 py-2 font-medium text-muted-foreground">Category</th>
+                <th className="px-4 py-2 font-medium text-muted-foreground">Title</th>
+                <th className="px-4 py-2 font-medium text-muted-foreground">Severity</th>
+                <th className="px-4 py-2 font-medium text-muted-foreground">Area</th>
+                <th className="px-4 py-2 font-medium text-muted-foreground">Status</th>
+                <th className="px-4 py-2 font-medium text-muted-foreground w-8" />
               </tr>
             </thead>
             <tbody>
@@ -359,22 +359,22 @@ export function RemainingItemsClient({
                   <>
                     <tr
                       key={item.id}
-                      className={`border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${isExpanded ? "bg-gray-50" : ""}`}
+                      className={`border-b border hover:bg-accent cursor-pointer ${isExpanded ? "bg-muted/40" : ""}`}
                       onClick={() => setExpandedId(isExpanded ? null : item.id)}
                     >
-                      <td className="px-4 py-2.5 text-gray-400">{idx + 1}</td>
+                      <td className="px-4 py-2.5 text-muted-foreground/60">{idx + 1}</td>
                       <td className="px-4 py-2.5">
                         <Badge variant="outline" className="text-xs">
                           {CATEGORY_LABELS[item.category] ?? item.category}
                         </Badge>
                       </td>
-                      <td className="px-4 py-2.5 font-medium text-gray-900">{item.title}</td>
+                      <td className="px-4 py-2.5 font-medium text-foreground">{item.title}</td>
                       <td className="px-4 py-2.5">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${severity.bg} ${severity.color} ${severity.border} border`}>
                           {item.severity}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-gray-500">{item.functionalArea ?? "—"}</td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{item.functionalArea ?? "—"}</td>
                       <td className="px-4 py-2.5">
                         {item.resolvedAt ? (
                           <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">
@@ -388,18 +388,18 @@ export function RemainingItemsClient({
                       </td>
                       <td className="px-4 py-2.5">
                         {isExpanded ? (
-                          <ChevronUp className="w-4 h-4 text-gray-400" />
+                          <ChevronUp className="w-4 h-4 text-muted-foreground/60" />
                         ) : (
-                          <ChevronDown className="w-4 h-4 text-gray-400" />
+                          <ChevronDown className="w-4 h-4 text-muted-foreground/60" />
                         )}
                       </td>
                     </tr>
                     {isExpanded && (
-                      <tr key={`${item.id}-detail`} className="bg-gray-50">
+                      <tr key={`${item.id}-detail`} className="bg-muted/40">
                         <td colSpan={7} className="px-4 py-3">
-                          <div className="text-sm text-gray-700 space-y-2">
+                          <div className="text-sm text-muted-foreground space-y-2">
                             <p>{item.description}</p>
-                            <div className="flex gap-6 text-xs text-gray-500">
+                            <div className="flex gap-6 text-xs text-muted-foreground">
                               {item.assignedTo && <span>Assigned: {item.assignedTo}</span>}
                               {item.autoGenerated && <span>Auto-generated</span>}
                               <span>Created: {new Date(item.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</span>
@@ -420,12 +420,12 @@ export function RemainingItemsClient({
         </div>
       )}
 
-      <p className="text-xs text-gray-400 mt-2">
+      <p className="text-xs text-muted-foreground/60 mt-2">
         Showing {filteredItems.length} of {items.length} items
       </p>
 
       {/* Navigation */}
-      <div className="flex items-center justify-between pt-6 mt-8 border-t border-gray-200">
+      <div className="flex items-center justify-between pt-6 mt-8 border-t border">
         <Link href={`/assessment/${assessmentId}/flows`}>
           <Button variant="outline">
             <ArrowLeft className="w-4 h-4 mr-1.5" />
@@ -458,11 +458,11 @@ function SummaryCard({
         ? "text-orange-600"
         : variant === "resolved"
           ? "text-green-600"
-          : "text-gray-950";
+          : "text-foreground";
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
-      <p className="text-xs text-gray-400 uppercase tracking-wider">{label}</p>
+    <div className="bg-card rounded-lg border p-4 text-center">
+      <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">{label}</p>
       <p className={`text-2xl font-bold mt-1 ${colorClass}`}>{value}</p>
     </div>
   );
