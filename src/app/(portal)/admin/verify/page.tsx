@@ -1,77 +1,38 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { getCatalogStats } from "@/lib/db/cached-queries";
 
 export default async function VerifyPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/dashboard");
+  // Run all verification queries in parallel (first 3 from cache)
+  const [
+    catalog,
+    noAreaCount,
+    allStepScopeIds,
+    allConfigScopeIds,
+    scopeIds,
+  ] = await Promise.all([
+    getCatalogStats(),
+    prisma.scopeItem.count({ where: { functionalArea: "" } }),
+    prisma.processStep.findMany({ select: { scopeItemId: true }, distinct: ["scopeItemId"] }),
+    prisma.configActivity.findMany({ select: { scopeItemId: true }, distinct: ["scopeItemId"] }),
+    prisma.scopeItem.findMany({ select: { id: true } }),
+  ]);
+  const { scopeItems: scopeItemCount, processSteps: processStepCount, configActivities: configActivityCount } = catalog;
 
-  // Run verification checks
-  const checks: Array<{ name: string; status: "pass" | "fail"; detail: string }> = [];
-
-  const scopeItemCount = await prisma.scopeItem.count();
-  checks.push({
-    name: "Scope items loaded",
-    status: scopeItemCount > 0 ? "pass" : "fail",
-    detail: `${scopeItemCount} scope items`,
-  });
-
-  const processStepCount = await prisma.processStep.count();
-  checks.push({
-    name: "Process steps loaded",
-    status: processStepCount > 0 ? "pass" : "fail",
-    detail: `${processStepCount.toLocaleString()} steps`,
-  });
-
-  const configActivityCount = await prisma.configActivity.count();
-  checks.push({
-    name: "Config activities loaded",
-    status: configActivityCount > 0 ? "pass" : "fail",
-    detail: `${configActivityCount.toLocaleString()} activities`,
-  });
-
-  // Check scope items have functional areas
-  const noAreaCount = await prisma.scopeItem.count({ where: { functionalArea: "" } });
-  checks.push({
-    name: "Scope items have functional areas",
-    status: noAreaCount === 0 ? "pass" : "fail",
-    detail: noAreaCount === 0 ? "All have areas" : `${noAreaCount} missing`,
-  });
-
-  // Check process steps have valid scope items
-  const allStepScopeIds = await prisma.processStep.findMany({
-    select: { scopeItemId: true },
-    distinct: ["scopeItemId"],
-  });
-  const validScopeIds = new Set((await prisma.scopeItem.findMany({ select: { id: true } })).map((s) => s.id));
+  // Compute orphan checks in-memory (no extra DB calls)
+  const validScopeIds = new Set(scopeIds.map((s) => s.id));
   const orphanStepScopes = allStepScopeIds.filter((s) => !validScopeIds.has(s.scopeItemId)).length;
-  checks.push({
-    name: "Process steps linked to scope items",
-    status: orphanStepScopes === 0 ? "pass" : "fail",
-    detail: orphanStepScopes === 0 ? "All linked" : `${orphanStepScopes} orphan scope IDs`,
-  });
-
-  // Check config activities have valid scope items
-  const allConfigScopeIds = await prisma.configActivity.findMany({
-    select: { scopeItemId: true },
-    distinct: ["scopeItemId"],
-  });
   const orphanConfigScopes = allConfigScopeIds.filter((s) => !validScopeIds.has(s.scopeItemId)).length;
-  checks.push({
-    name: "Config activities linked to scope items",
-    status: orphanConfigScopes === 0 ? "pass" : "fail",
-    detail: orphanConfigScopes === 0 ? "All linked" : `${orphanConfigScopes} orphan scope IDs`,
-  });
-
-  // Check for duplicate scope items
-  const scopeIds = await prisma.scopeItem.findMany({ select: { id: true } });
   const uniqueIds = new Set(scopeIds.map((s) => s.id));
-  checks.push({
-    name: "No duplicate scope item IDs",
-    status: uniqueIds.size === scopeIds.length ? "pass" : "fail",
-    detail: `${uniqueIds.size} unique of ${scopeIds.length}`,
-  });
+
+  const checks: Array<{ name: string; status: "pass" | "fail"; detail: string }> = [
+    { name: "Scope items loaded", status: scopeItemCount > 0 ? "pass" : "fail", detail: `${scopeItemCount} scope items` },
+    { name: "Process steps loaded", status: processStepCount > 0 ? "pass" : "fail", detail: `${processStepCount.toLocaleString()} steps` },
+    { name: "Config activities loaded", status: configActivityCount > 0 ? "pass" : "fail", detail: `${configActivityCount.toLocaleString()} activities` },
+    { name: "Scope items have functional areas", status: noAreaCount === 0 ? "pass" : "fail", detail: noAreaCount === 0 ? "All have areas" : `${noAreaCount} missing` },
+    { name: "Process steps linked to scope items", status: orphanStepScopes === 0 ? "pass" : "fail", detail: orphanStepScopes === 0 ? "All linked" : `${orphanStepScopes} orphan scope IDs` },
+    { name: "Config activities linked to scope items", status: orphanConfigScopes === 0 ? "pass" : "fail", detail: orphanConfigScopes === 0 ? "All linked" : `${orphanConfigScopes} orphan scope IDs` },
+    { name: "No duplicate scope item IDs", status: uniqueIds.size === scopeIds.length ? "pass" : "fail", detail: `${uniqueIds.size} unique of ${scopeIds.length}` },
+  ];
 
   const passed = checks.filter((c) => c.status === "pass").length;
 

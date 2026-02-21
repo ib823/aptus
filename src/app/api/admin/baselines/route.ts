@@ -1,6 +1,7 @@
 /** GET: List effort baselines. POST: Create effort baseline */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
 import { requireAdmin, isAdminError } from "@/lib/auth/admin-guard";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
@@ -79,5 +80,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     },
   });
 
+  revalidateTag("intelligence", { expire: 0 });
   return NextResponse.json({ data: baseline }, { status: 201 });
 }

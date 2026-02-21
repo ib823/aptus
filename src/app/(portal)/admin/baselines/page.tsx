@@ -1,13 +1,7 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { AdminCrudTable } from "@/components/admin/AdminCrudTable";
 
 export default async function BaselinesPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/dashboard");
-
   const baselines = await prisma.effortBaseline.findMany({
     orderBy: [{ scopeItemId: "asc" }, { complexity: "asc" }],
   });

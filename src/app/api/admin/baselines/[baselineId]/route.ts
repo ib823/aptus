@@ -1,6 +1,7 @@
 /** GET: Single baseline. PUT: Update. DELETE: Remove */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
 import { requireAdmin, isAdminError } from "@/lib/auth/admin-guard";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
@@ -81,6 +82,7 @@ export async function PUT(
     data: updateData,
   });
 
+  revalidateTag("intelligence", { expire: 0 });
   return NextResponse.json({ data: baseline });
 }
 
@@ -104,5 +106,6 @@ export async function DELETE(
 
   await prisma.effortBaseline.delete({ where: { id: baselineId } });
 
+  revalidateTag("intelligence", { expire: 0 });
   return NextResponse.json({ success: true });
 }

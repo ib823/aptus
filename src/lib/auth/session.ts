@@ -1,5 +1,6 @@
 /** Session management utilities */
 
+import { cache } from "react";
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/db/prisma";
 import { APP_CONFIG } from "@/constants/config";
@@ -62,7 +63,12 @@ export async function validateSession(
 ): Promise<SessionUser | null> {
   const session = await prisma.session.findUnique({
     where: { token },
-    include: {
+    select: {
+      id: true,
+      isRevoked: true,
+      expiresAt: true,
+      lastActiveAt: true,
+      mfaVerified: true,
       user: {
         select: {
           id: true,
@@ -83,11 +89,14 @@ export async function validateSession(
   if (session.expiresAt < new Date()) return null;
   if (!session.user.isActive) return null;
 
-  // Update last active timestamp
-  await prisma.session.update({
-    where: { id: session.id },
-    data: { lastActiveAt: new Date() },
-  });
+  // Update last active timestamp (debounce: only if >5 min since last update)
+  const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+  if (!session.lastActiveAt || session.lastActiveAt < fiveMinAgo) {
+    prisma.session.update({
+      where: { id: session.id },
+      data: { lastActiveAt: new Date() },
+    }).catch(() => {/* fire-and-forget */});
+  }
 
   return {
     id: session.user.id,
@@ -143,9 +152,12 @@ export async function getSessionToken(): Promise<string | null> {
  * Get the current authenticated user from the session cookie.
  * The magic link flow routes through /api/auth/bridge which creates
  * the custom session and sets this cookie before redirecting to the portal.
+ * Wrapped with React cache() to deduplicate within a single RSC render pass.
  */
-export async function getCurrentUser(): Promise<SessionUser | null> {
+async function _getCurrentUser(): Promise<SessionUser | null> {
   const token = await getSessionToken();
   if (!token) return null;
   return validateSession(token);
 }
+
+export const getCurrentUser = cache(_getCurrentUser);

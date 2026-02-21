@@ -1,6 +1,7 @@
 /** GET: List extensibility patterns. POST: Create pattern */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
 import { requireAdmin, isAdminError } from "@/lib/auth/admin-guard";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
@@ -51,5 +52,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     data: parsed.data,
   });
 
+  revalidateTag("intelligence", { expire: 0 });
   return NextResponse.json({ data: pattern }, { status: 201 });
 }

@@ -1,13 +1,7 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { AdminAssessmentsClient } from "@/components/admin/AdminAssessmentsClient";
 
 export default async function AdminAssessmentsPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/dashboard");
-
   const assessments = await prisma.assessment.findMany({
     where: { deletedAt: null },
     select: {

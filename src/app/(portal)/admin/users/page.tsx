@@ -1,12 +1,6 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 
 export default async function UsersPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/dashboard");
-
   const users = await prisma.user.findMany({
     select: {
       id: true,

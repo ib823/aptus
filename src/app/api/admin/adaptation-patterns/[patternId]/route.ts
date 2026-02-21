@@ -1,6 +1,7 @@
 /** GET: Single adaptation pattern. PUT: Update. DELETE: Remove */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
 import { requireAdmin, isAdminError } from "@/lib/auth/admin-guard";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
@@ -77,6 +78,7 @@ export async function PUT(
     data: updateData,
   });
 
+  revalidateTag("intelligence", { expire: 0 });
   return NextResponse.json({ data: pattern });
 }
 
@@ -100,5 +102,6 @@ export async function DELETE(
 
   await prisma.adaptationPattern.delete({ where: { id: patternId } });
 
+  revalidateTag("intelligence", { expire: 0 });
   return NextResponse.json({ success: true });
 }

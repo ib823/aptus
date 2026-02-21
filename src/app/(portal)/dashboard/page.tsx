@@ -1,13 +1,16 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getScopeItemCount } from "@/lib/db/cached-queries";
+import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { ProgressBar } from "@/components/shared/ProgressBar";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { CardSkeleton } from "@/components/shared/LoadingSkeleton";
+import { RecentActivityPanel } from "@/components/dashboard/RecentActivityPanel";
 import { UI_TEXT } from "@/constants/ui-text";
-import { formatDistanceToNow } from "date-fns";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
@@ -17,47 +20,27 @@ export default async function DashboardPage() {
     ? { organizationId: user.organizationId, deletedAt: null }
     : { deletedAt: null };
 
-  const assessments = await prisma.assessment.findMany({
-    where: whereClause,
-    orderBy: { updatedAt: "desc" },
-    include: {
-      stakeholders: {
-        select: {
-          id: true,
-          name: true,
-          role: true,
-          assignedAreas: true,
-          lastActiveAt: true,
+  const [assessments, totalScopeItems] = await Promise.all([
+    prisma.assessment.findMany({
+      where: whereClause,
+      orderBy: { updatedAt: "desc" },
+      include: {
+        stakeholders: {
+          select: { id: true, name: true, role: true },
+          take: 5,
+        },
+        _count: {
+          select: {
+            scopeSelections: { where: { selected: true } },
+            stepResponses: true,
+            gapResolutions: true,
+            stakeholders: true,
+          },
         },
       },
-      _count: {
-        select: {
-          scopeSelections: { where: { selected: true } },
-          stepResponses: true,
-          gapResolutions: true,
-        },
-      },
-    },
-  });
-
-  // Get recent activity
-  const assessmentIds = assessments.map((a) => a.id);
-  const recentActivity = assessmentIds.length > 0
-    ? await prisma.decisionLogEntry.findMany({
-        where: { assessmentId: { in: assessmentIds } },
-        orderBy: { timestamp: "desc" },
-        take: 15,
-        select: {
-          id: true,
-          action: true,
-          actor: true,
-          actorRole: true,
-          timestamp: true,
-          entityType: true,
-          assessment: { select: { companyName: true } },
-        },
-      })
-    : [];
+    }),
+    getScopeItemCount(),
+  ]);
 
   if (assessments.length === 0) {
     return (
@@ -71,6 +54,8 @@ export default async function DashboardPage() {
     );
   }
 
+  const assessmentIds = assessments.map((a) => a.id);
+
   return (
     <>
       <PageHeader title={UI_TEXT.nav.dashboard} />
@@ -79,7 +64,6 @@ export default async function DashboardPage() {
         {/* Assessment Cards */}
         <div className="lg:col-span-2 space-y-4">
           {assessments.map((assessment) => {
-            const totalScopeItems = 560; // from ingested data
             const selectedCount = assessment._count.scopeSelections;
             const reviewedCount = assessment._count.stepResponses;
 
@@ -128,9 +112,9 @@ export default async function DashboardPage() {
                         {s.name.charAt(0).toUpperCase()}
                       </div>
                     ))}
-                    {assessment.stakeholders.length > 5 && (
+                    {assessment._count.stakeholders > 5 && (
                       <span className="text-xs text-muted-foreground">
-                        +{assessment.stakeholders.length - 5} more
+                        +{assessment._count.stakeholders - 5} more
                       </span>
                     )}
                   </div>
@@ -140,36 +124,11 @@ export default async function DashboardPage() {
           })}
         </div>
 
-        {/* Recent Activity */}
+        {/* Recent Activity — streams independently */}
         <div>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Recent Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {recentActivity.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No activity yet</p>
-              ) : (
-                <div className="space-y-3">
-                  {recentActivity.map((entry) => (
-                    <div key={entry.id} className="flex items-start gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 shrink-0" />
-                      <div>
-                        <p className="text-sm text-foreground">
-                          <span className="font-medium">{entry.actor}</span>
-                          {" "}
-                          {entry.action.toLowerCase().replace(/_/g, " ")}
-                        </p>
-                        <p className="text-xs text-muted-foreground/60">
-                          {formatDistanceToNow(entry.timestamp, { addSuffix: true })}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <Suspense fallback={<CardSkeleton />}>
+            <RecentActivityPanel assessmentIds={assessmentIds} />
+          </Suspense>
         </div>
       </div>
     </>
