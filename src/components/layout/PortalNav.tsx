@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { LayoutDashboard, FileText, Settings, LogOut } from "lucide-react";
 import { BoundLogo } from "@/components/shared/BoundLogo";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { UI_TEXT } from "@/constants/ui-text";
 import type { SessionUser } from "@/types/assessment";
 
@@ -96,6 +97,7 @@ export function PortalNav({ user }: PortalNavProps) {
           </div>
           <div className="flex items-center gap-1 sm:gap-3 shrink-0">
             <span className="hidden sm:inline text-sm text-muted-foreground">{user.name}</span>
+            <NotificationBell />
             <ThemeToggle />
             <button
               onClick={() => {

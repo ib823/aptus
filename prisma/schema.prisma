@@ -337,6 +337,11 @@ model Assessment {
   workshopSessions   WorkshopSession[]
   statusTransitions  StatusTransitionLog[]
 
+  // Phase 19+28: Collaboration
+  comments             Comment[]
+  conflicts            Conflict[]
+  activityFeedEntries  ActivityFeedEntry[]
+
   @@index([status])
   @@index([createdBy])
   @@index([organizationId])
@@ -734,6 +739,13 @@ model User {
   stakeholderEntries AssessmentStakeholder[]
   accounts          Account[]
 
+  // Phase 19+28: Collaboration
+  notifications           Notification[]          @relation("userNotifications")
+  notificationPreferences NotificationPreference[] @relation("userNotificationPrefs")
+  authoredComments        Comment[]               @relation("commentAuthor")
+  resolvedComments        Comment[]               @relation("commentResolver")
+  resolvedConflicts       Conflict[]              @relation("conflictResolver")
+
   @@index([role])
   @@index([organizationId])
   @@index([email])
@@ -970,4 +982,121 @@ model StatusTransitionLog {
 
   @@index([assessmentId])
   @@index([assessmentId, createdAt])
+}
+
+// =============================================================
+// Layer 7: Phase 19+28 — Collaboration & Notifications
+// =============================================================
+
+model Notification {
+  id              String    @id @default(cuid())
+  userId          String
+  assessmentId    String?
+  type            String
+  title           String
+  body            String    @db.Text
+  channel         String    @default("in_app")
+  status          String    @default("unread")
+  deepLink        String?
+  metadata        Json?
+  sentAt          DateTime  @default(now())
+  readAt          DateTime?
+  dismissedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  user User @relation("userNotifications", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([userId, sentAt])
+  @@index([assessmentId])
+}
+
+model NotificationPreference {
+  id                String  @id @default(cuid())
+  userId            String
+  notificationType  String
+  channelEmail      Boolean @default(true)
+  channelInApp      Boolean @default(true)
+  channelPush       Boolean @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation("userNotificationPrefs", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, notificationType])
+  @@index([userId])
+}
+
+model Comment {
+  id              String   @id @default(cuid())
+  assessmentId    String
+  targetType      String
+  targetId        String
+  authorId        String
+  content         String   @db.Text
+  contentHtml     String?  @db.Text
+  mentions        String[] @default([])
+  parentCommentId String?
+  status          String   @default("OPEN")
+  resolvedById    String?
+  resolvedAt      DateTime?
+  editedAt        DateTime?
+  isEdited        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  author     User       @relation("commentAuthor", fields: [authorId], references: [id])
+  resolvedBy User?      @relation("commentResolver", fields: [resolvedById], references: [id])
+  parent     Comment?   @relation("commentReplies", fields: [parentCommentId], references: [id])
+  replies    Comment[]  @relation("commentReplies")
+
+  @@index([assessmentId, targetType, targetId])
+  @@index([assessmentId, authorId])
+  @@index([assessmentId, status])
+  @@index([parentCommentId])
+}
+
+model Conflict {
+  id                     String    @id @default(cuid())
+  assessmentId           String
+  entityType             String
+  entityId               String
+  classifications        Json
+  status                 String    @default("OPEN")
+  resolvedById           String?
+  resolvedClassification String?
+  resolutionNotes        String?   @db.Text
+  escalatedToId          String?
+  escalatedAt            DateTime?
+  createdAt              DateTime  @default(now())
+  resolvedAt             DateTime?
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  resolvedBy User?      @relation("conflictResolver", fields: [resolvedById], references: [id])
+
+  @@index([assessmentId, status])
+  @@index([assessmentId, entityType, entityId])
+}
+
+model ActivityFeedEntry {
+  id           String   @id @default(cuid())
+  assessmentId String
+  actorId      String
+  actorName    String
+  actorRole    String
+  actionType   String
+  summary      String
+  entityType   String?
+  entityId     String?
+  metadata     Json?
+  areaCode     String?
+  createdAt    DateTime @default(now())
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId, createdAt])
+  @@index([assessmentId, actorId])
+  @@index([assessmentId, actionType])
+  @@index([assessmentId, areaCode, createdAt])
 }
