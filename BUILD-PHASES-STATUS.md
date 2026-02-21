@@ -164,3 +164,309 @@
 | 1.12 | Normalize step types | [x] |
 | 1.13 | Derive process flow groups | [x] |
 | 1.14 | Create verification script | [x] |
+
+---
+
+# V2 Enhancement Phases (10–31)
+
+> **Source**: `enhancement210226/V2-MASTER-BRIEF (1).md` (Parts A–D + Addendums 1–3)
+> **Specs**: `specs/v2/PHASE-10.md` through `specs/v2/PHASE-31.md`
+> **Index**: `specs/V2-SPEC-INDEX.md`
+
+## Wave 1: Foundation Enrichments
+
+### Phase 10: Company Profile Enrichment — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 10.1 | Extend Assessment model (operating model, regulatory, SAP landscape) | [ ] |
+| 10.2 | Company profile form with multi-step wizard | [ ] |
+| 10.3 | Country-specific regulatory field rendering | [ ] |
+| 10.4 | SAP landscape capture (current ERP, target version, deployment) | [ ] |
+| 10.5 | Validation rules and Zod schemas | [ ] |
+| 10.6 | Migration for existing assessments | [ ] |
+| 10.7 | Unit and integration tests | [ ] |
+
+### Phase 11: Scope Selection Enhancement — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 11.1 | Industry-guided scope pre-selection | [ ] |
+| 11.2 | Scope item dependency warnings | [ ] |
+| 11.3 | Bulk operations (select/deselect by area) | [ ] |
+| 11.4 | Current state capture per scope item | [ ] |
+| 11.5 | Relevance rationale (why selected/excluded) | [ ] |
+| 11.6 | Scope summary dashboard | [ ] |
+| 11.7 | Unit and integration tests | [ ] |
+
+### Phase 12: Step Response Enrichment & Content Presentation — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 12.1 | Step type classification engine (tag → StepCategory) | [ ] |
+| 12.2 | Content parser (SAP description → structured sections) | [ ] |
+| 12.3 | Decision-first card layout (classification above content) | [ ] |
+| 12.4 | Step grouping by activity + tag | [ ] |
+| 12.5 | Segmented progress indicator (classifiable-only counts) | [ ] |
+| 12.6 | Reference step compact rendering | [ ] |
+| 12.7 | Configuration activity contextualization | [ ] |
+| 12.8 | Backfill migration for existing steps | [ ] |
+| 12.9 | Unit and integration tests | [ ] |
+
+### Phase 13: Gap Resolution Enhancement — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 13.1 | Enhanced cost model (one-time + recurring) | [ ] |
+| 13.2 | Risk scoring matrix | [ ] |
+| 13.3 | "What-if" scenario calculator | [ ] |
+| 13.4 | Resolution tracking workflow | [ ] |
+| 13.5 | Client approval capture | [ ] |
+| 13.6 | Upgrade impact assessment | [ ] |
+| 13.7 | Unit and integration tests | [ ] |
+
+## Wave 2: New Registers
+
+### Phase 14: Integration Register — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 14.1 | IntegrationPoint Prisma model | [ ] |
+| 14.2 | CRUD API routes | [ ] |
+| 14.3 | Integration register UI (table + form) | [ ] |
+| 14.4 | Middleware categorization (CPI, RFC, API) | [ ] |
+| 14.5 | Link to scope items and process steps | [ ] |
+| 14.6 | Comment support integration | [ ] |
+| 14.7 | Unit and integration tests | [ ] |
+
+### Phase 15: Data Migration Register — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 15.1 | DataMigrationObject Prisma model | [ ] |
+| 15.2 | CRUD API routes | [ ] |
+| 15.3 | DM register UI (table + form) | [ ] |
+| 15.4 | Volume and effort estimation | [ ] |
+| 15.5 | Source system mapping | [ ] |
+| 15.6 | Comment support integration | [ ] |
+| 15.7 | Unit and integration tests | [ ] |
+
+### Phase 16: OCM Impact Register — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 16.1 | OcmImpact Prisma model | [ ] |
+| 16.2 | CRUD API routes | [ ] |
+| 16.3 | OCM register UI (table + form) | [ ] |
+| 16.4 | Training needs assessment | [ ] |
+| 16.5 | Change readiness tracking | [ ] |
+| 16.6 | Comment support integration | [ ] |
+| 16.7 | Unit and integration tests | [ ] |
+
+## Wave 3: Roles & Lifecycle
+
+### Phase 17: Role System & Organization Model — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 17.1 | Extend Organization model (slug, type, plan, SSO, limits) | [ ] |
+| 17.2 | 11-role enum and permission policies | [ ] |
+| 17.3 | Role assignment UI | [ ] |
+| 17.4 | SSO/SCIM configuration (SAML, OIDC) | [ ] |
+| 17.5 | RBAC middleware update | [ ] |
+| 17.6 | Migration from 5-role to 11-role system | [ ] |
+| 17.7 | Multi-assessment context switching | [ ] |
+| 17.8 | Unit and integration tests | [ ] |
+
+### Phase 18: Assessment Lifecycle — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 18.1 | Extended status machine (DRAFT → … → SIGNED_OFF → ARCHIVED) | [ ] |
+| 18.2 | Parallel workstream support | [ ] |
+| 18.3 | Workshop session states | [ ] |
+| 18.4 | Status transition guards per role | [ ] |
+| 18.5 | Lifecycle event logging | [ ] |
+| 18.6 | Unit and integration tests | [ ] |
+
+## Wave 4: Real-Time Infrastructure
+
+### Phase 19: Notifications & Real-Time Infrastructure — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 19.1 | Notification model and preference system | [ ] |
+| 19.2 | In-app notification bell + dropdown | [ ] |
+| 19.3 | Email notification service (digest mode) | [ ] |
+| 19.4 | WebSocket server setup | [ ] |
+| 19.5 | Presence tracking (who is online, what they're viewing) | [ ] |
+| 19.6 | Web Push for PWA | [ ] |
+| 19.7 | Unit and integration tests | [ ] |
+
+### Phase 28: Real-Time Collaboration — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 28.1 | Comment model + threading + @mentions | [ ] |
+| 28.2 | Field-level editing locks (WebSocket) | [ ] |
+| 28.3 | Conflict detection and resolution workflow | [ ] |
+| 28.4 | Activity feed (real-time assessment stream) | [ ] |
+| 28.5 | Collaboration feature matrix by role | [ ] |
+| 28.6 | Graceful degradation (polling fallback) | [ ] |
+| 28.7 | Unit and integration tests | [ ] |
+
+## Wave 5: Visualization & Workshops
+
+### Phase 20: Process Visualization — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 20.1 | Interactive flow diagrams (clickable nodes) | [ ] |
+| 20.2 | Status heatmap across scope items | [ ] |
+| 20.3 | BPMN-style rendering | [ ] |
+| 20.4 | Mobile-optimized map renderings | [ ] |
+| 20.5 | Unit and integration tests | [ ] |
+
+### Phase 21: Workshop Management — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 21.1 | Workshop session model and scheduling | [ ] |
+| 21.2 | Workshop Mode UI (projector-friendly) | [ ] |
+| 21.3 | QR code / code join for attendees | [ ] |
+| 21.4 | Synchronized navigation (follow presenter) | [ ] |
+| 21.5 | Live classification polling / tally | [ ] |
+| 21.6 | Workshop minutes auto-generation | [ ] |
+| 21.7 | Remote/hybrid support (follow toggle) | [ ] |
+| 21.8 | Unit and integration tests | [ ] |
+
+## Wave 6: UX Innovation
+
+### Phase 22: Conversation Mode — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 22.1 | ConversationTemplate model and decision tree | [ ] |
+| 22.2 | Chat-like classification UI | [ ] |
+| 22.3 | Classification derivation from answers | [ ] |
+| 22.4 | Mode toggle (traditional ↔ conversation) | [ ] |
+| 22.5 | Session resumption | [ ] |
+| 22.6 | Template editor (admin) | [ ] |
+| 22.7 | Unit and integration tests | [ ] |
+
+### Phase 23: Intelligent Dashboard — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 23.1 | Role-aware dashboard variants | [ ] |
+| 23.2 | "What Needs Attention" engine | [ ] |
+| 23.3 | Progress heatmap by area | [ ] |
+| 23.4 | KPI panel (FIT rate, cost, risk) | [ ] |
+| 23.5 | Activity feed widget | [ ] |
+| 23.6 | Widget customization | [ ] |
+| 23.7 | Mobile dashboard layout | [ ] |
+| 23.8 | Unit and integration tests | [ ] |
+
+### Phase 24: Onboarding System — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 24.1 | Per-role onboarding wizard flows | [ ] |
+| 24.2 | Contextual tooltips (first-time hints) | [ ] |
+| 24.3 | Sample assessment with demo data | [ ] |
+| 24.4 | Onboarding progress tracking | [ ] |
+| 24.5 | SSO-aware onboarding | [ ] |
+| 24.6 | Backfill for existing users | [ ] |
+| 24.7 | Unit and integration tests | [ ] |
+
+## Wave 7: Reports & Commercial
+
+### Phase 25: Report Generation V2 — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 25.1 | Integration Register XLSX report | [ ] |
+| 25.2 | Data Migration Register XLSX report | [ ] |
+| 25.3 | OCM Impact XLSX report | [ ] |
+| 25.4 | Enhanced Executive Summary PDF | [ ] |
+| 25.5 | Readiness Scorecard PDF | [ ] |
+| 25.6 | Report branding (partner logo/colors) | [ ] |
+| 25.7 | Complete package ZIP (all reports) | [ ] |
+| 25.8 | Unit and integration tests | [ ] |
+
+### Phase 29: Platform Commercial & Self-Service — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 29.1 | Self-service signup flow (partner) | [ ] |
+| 29.2 | 14-day trial with sample assessment | [ ] |
+| 29.3 | Stripe Billing integration (subscription + metered) | [ ] |
+| 29.4 | Partner admin dashboard (team, branding, auth, billing) | [ ] |
+| 29.5 | Plan tier enforcement (Starter/Professional/Enterprise) | [ ] |
+| 29.6 | Usage metering | [ ] |
+| 29.7 | Subscription lifecycle management | [ ] |
+| 29.8 | Demo/sandbox mode | [ ] |
+| 29.9 | Unit and integration tests | [ ] |
+
+## Wave 8: Sign-Off & Continuity
+
+### Phase 30: Assessment Handoff, Sign-Off & ALM Integration — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 30.1 | Multi-layer validation workflow (5 layers) | [ ] |
+| 30.2 | SignatureRecord with cryptographic hash | [ ] |
+| 30.3 | AssessmentSnapshot model (immutable versioning) | [ ] |
+| 30.4 | Sign-off certificate PDF generation | [ ] |
+| 30.5 | Universal Assessment Package (JSON export) | [ ] |
+| 30.6 | SAP Cloud ALM export adapter | [ ] |
+| 30.7 | Jira Cloud export adapter | [ ] |
+| 30.8 | Azure DevOps export adapter | [ ] |
+| 30.9 | Handoff configuration UI | [ ] |
+| 30.10 | Transition briefing auto-generation | [ ] |
+| 30.11 | Archival and retention policy | [ ] |
+| 30.12 | Unit and integration tests | [ ] |
+
+### Phase 31: Assessment Lifecycle Continuity — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 31.1 | Assessment versioning (immutable snapshots) | [ ] |
+| 31.2 | Version comparison / delta report | [ ] |
+| 31.3 | Assessment cloning for Phase 2 carry-forward | [ ] |
+| 31.4 | Cross-phase dependency detection | [ ] |
+| 31.5 | Change control workflow (post-sign-off) | [ ] |
+| 31.6 | Partial entity unlock during change request | [ ] |
+| 31.7 | Reassessment triggers | [ ] |
+| 31.8 | Re-baseline against new SAP version | [ ] |
+| 31.9 | Unit and integration tests | [ ] |
+
+## Wave 9: Analytics
+
+### Phase 26: Analytics, Benchmarking & Templates — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 26.1 | Assessment template creation (anonymized) | [ ] |
+| 26.2 | Template marketplace within organization | [ ] |
+| 26.3 | Cross-phase analytics (multi-phase clients) | [ ] |
+| 26.4 | Partner portfolio dashboard | [ ] |
+| 26.5 | Benchmarking against anonymized aggregates | [ ] |
+| 26.6 | Return client analytics | [ ] |
+| 26.7 | Unit and integration tests | [ ] |
+
+## Wave 10: Hardening
+
+### Phase 27: Production Hardening & PWA — PENDING
+
+| # | Task | Done |
+|---|------|------|
+| 27.1 | PWA manifest and service worker | [ ] |
+| 27.2 | Offline read capability | [ ] |
+| 27.3 | Offline sync with conflict resolution | [ ] |
+| 27.4 | Mobile responsive audit (per Addendum 2) | [ ] |
+| 27.5 | WebSocket infrastructure hardening | [ ] |
+| 27.6 | Performance optimization pass | [ ] |
+| 27.7 | Security audit (OWASP, CSP, rate limiting) | [ ] |
+| 27.8 | Accessibility audit (WCAG 2.1 AA) | [ ] |
+| 27.9 | Unit, integration, and E2E tests | [ ] |

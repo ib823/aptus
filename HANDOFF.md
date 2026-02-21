@@ -211,3 +211,102 @@ None.
 
 ### Known Issues
 None.
+
+---
+
+## V2 Enhancement Specifications
+
+> **Date**: 2026-02-21
+> **Source**: `enhancement210226/V2-MASTER-BRIEF (1).md`
+> **Specs Directory**: `specs/v2/`
+> **Master Index**: `specs/V2-SPEC-INDEX.md`
+> **Cross-Verification**: `specs/V2-CROSS-VERIFICATION-REPORT.md`
+
+### V2 Scope Summary
+
+22 phases (10–31) expanding Aptus from a core FIT-to-Standard assessment tool into a full enterprise platform with:
+- Enriched assessment workflow (company profile, scope selection, step presentation, gap resolution)
+- New registers (integration, data migration, OCM)
+- 11-role system with SSO/SCIM (up from 5 roles)
+- Real-time collaboration (WebSocket, comments, field locks, conflict detection)
+- Workshop management with synchronized navigation
+- Conversation mode for business-friendly classification
+- Intelligent role-aware dashboards
+- Per-role onboarding wizards
+- Enhanced reporting with branding
+- Platform commercial layer (Stripe billing, self-service signup, partner admin)
+- Multi-layer sign-off with cryptographic verification + ALM export
+- Assessment lifecycle continuity (versioning, cloning, change control)
+- Analytics, benchmarking, and templates
+- PWA with offline capability
+
+### Implementation Waves
+
+#### Wave 1: Foundation Enrichments (4–6 weeks)
+- **Phase 10**: Company Profile Enrichment (M) — operating model, regulatory, SAP landscape
+- **Phase 11**: Scope Selection Enhancement (M) — industry-guided, dependencies, bulk ops
+- **Phase 12**: Step Response & Content Presentation (L) — step classification, content parsing, decision-first layout
+- **Phase 13**: Gap Resolution Enhancement (L) — cost model, risk scoring, what-if scenarios
+
+#### Wave 2: New Registers (4–6 weeks)
+- **Phase 14**: Integration Register (M) — IntegrationPoint model, middleware categorization
+- **Phase 15**: Data Migration Register (M) — DataMigrationObject, volume/effort estimation
+- **Phase 16**: OCM Impact Register (M) — OcmImpact, training needs, readiness tracking
+
+#### Wave 3: Roles & Lifecycle (3–4 weeks)
+- **Phase 17**: Role System & Organization Model (XL) — 11 roles, Organization, SSO/SCIM, RBAC
+- **Phase 18**: Assessment Lifecycle (M) — extended status machine, workshop sessions
+
+#### Wave 4: Real-Time Infrastructure (4–6 weeks)
+- **Phase 19**: Notifications & Real-Time (L) — WebSocket, in-app/email/push notifications, presence
+- **Phase 28**: Real-Time Collaboration (XL) — comments, @mentions, field locks, conflicts, activity feed
+
+#### Wave 5: Visualization & Workshops (4–6 weeks)
+- **Phase 20**: Process Visualization (M) — interactive flow diagrams, heatmaps, BPMN
+- **Phase 21**: Workshop Management (L) — Workshop Mode, QR join, live polling, minutes
+
+#### Wave 6: UX Innovation (6–8 weeks)
+- **Phase 22**: Conversation Mode (L) — chat-like classification, decision trees
+- **Phase 23**: Intelligent Dashboard (L) — role-aware widgets, attention engine, KPIs
+- **Phase 24**: Onboarding System (M) — per-role wizards, contextual tooltips, sample data
+
+#### Wave 7: Reports & Commercial (4–6 weeks)
+- **Phase 25**: Report Generation V2 (M) — new reports, readiness scorecard, branding
+- **Phase 29**: Platform Commercial (XL) — self-service signup, Stripe, partner admin, trials
+
+#### Wave 8: Sign-Off & Continuity (4–6 weeks)
+- **Phase 30**: Handoff & Sign-Off (XL) — multi-layer validation, crypto sign-off, ALM adapters
+- **Phase 31**: Lifecycle Continuity (L) — versioning, cloning, change control, re-baseline
+
+#### Wave 9: Analytics (3–4 weeks)
+- **Phase 26**: Analytics & Benchmarking (XL) — portfolio dashboard, templates, benchmarking
+
+#### Wave 10: Hardening (4–6 weeks)
+- **Phase 27**: Production Hardening & PWA (L) — PWA, offline sync, mobile responsive, security
+
+### Key Architectural Decisions
+
+- **Role evolution**: 5 roles → 11 roles with migration path (Phase 17)
+- **Organization model**: Extended with plan tiers, SSO, SCIM, billing (Phase 17 + 29)
+- **Real-time**: WebSocket infrastructure built in Phase 19, used by Phases 21, 23, 28
+- **Data model growth**: ~20 models → ~45+ models across all phases
+- **Shared infrastructure**: Comment model (Phase 28), Notification system (Phase 19), Organization model (Phase 17)
+
+### Open Questions (Consolidated)
+
+1. Should client organizations support SSO in V2 or defer to V3? (Phase 17)
+2. How are conversation templates authored — manually or AI-generated? (Phase 22)
+3. Does benchmarking require cross-partner data? (Phase 26)
+4. Is the marketing site part of V2 scope? (Phase 29)
+5. Should Type B (direct enterprise client) be fully supported in V2? (Phase 29)
+6. Can SAP Cloud ALM scope item ID mapping be automated? (Phase 30)
+7. How to handle delta when SAP removes scope items in new version? (Phase 31)
+
+### V2 Quality Gate
+
+Before starting implementation:
+1. All 22 spec files reviewed and approved
+2. Open questions resolved with stakeholder input
+3. Prisma schema migration plan finalized
+4. Design system tokens verified for dark mode
+5. Role migration script tested against production data snapshot
