@@ -116,43 +116,51 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Ensure organization exists or create one
-  let organizationId = user.organizationId;
-  if (!organizationId) {
-    const org = await prisma.organization.create({
+  try {
+    // Ensure organization exists or create one
+    let organizationId = user.organizationId;
+    if (!organizationId) {
+      const org = await prisma.organization.create({
+        data: {
+          name: parsed.data.companyName,
+          type: "client",
+        },
+      });
+      organizationId = org.id;
+
+      // Link user to org
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { organizationId },
+      });
+    }
+
+    const assessment = await createAssessment({
+      ...parsed.data,
+      createdBy: user.id,
+      organizationId,
+    });
+
+    // Add the creating user as a consultant stakeholder
+    await prisma.assessmentStakeholder.create({
       data: {
-        name: parsed.data.companyName,
-        type: "client",
+        assessmentId: assessment.id,
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        assignedAreas: [],
+        canEdit: true,
+        invitedBy: user.id,
       },
     });
-    organizationId = org.id;
 
-    // Link user to org
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { organizationId },
-    });
+    return NextResponse.json({ data: assessment }, { status: 201 });
+  } catch (err) {
+    console.error("[API] Failed to create assessment:", err);
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.INTERNAL_ERROR, message: "Failed to create assessment. Please try again." } },
+      { status: 500 },
+    );
   }
-
-  const assessment = await createAssessment({
-    ...parsed.data,
-    createdBy: user.id,
-    organizationId,
-  });
-
-  // Add the creating user as a consultant stakeholder
-  await prisma.assessmentStakeholder.create({
-    data: {
-      assessmentId: assessment.id,
-      userId: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      assignedAreas: [],
-      canEdit: true,
-      invitedBy: user.id,
-    },
-  });
-
-  return NextResponse.json({ data: assessment }, { status: 201 });
 }

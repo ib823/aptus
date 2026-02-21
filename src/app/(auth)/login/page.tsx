@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Mail, CheckCircle } from "lucide-react";
+import { Mail, CheckCircle, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -13,24 +13,40 @@ import { signIn } from "next-auth/react";
 function LoginForm() {
   const searchParams = useSearchParams();
   const isVerify = searchParams.get("verify") === "true";
+  const isError = searchParams.get("error") === "true";
 
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(isVerify);
+  const [error, setError] = useState(
+    isError ? "Sign-in failed. Please try again." : "",
+  );
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
       setLoading(true);
+      setError("");
 
-      await signIn("email", {
-        email,
-        redirect: false,
-        callbackUrl: "/api/auth/bridge?callbackUrl=/assessments",
-      });
+      try {
+        const result = await signIn("email", {
+          email,
+          redirect: false,
+          callbackUrl: "/api/auth/bridge?callbackUrl=/assessments",
+        });
 
-      setSent(true);
-      setLoading(false);
+        if (result?.error) {
+          setError("Failed to send magic link. Please try again.");
+          setLoading(false);
+          return;
+        }
+
+        setSent(true);
+      } catch {
+        setError("Something went wrong. Please try again.");
+      } finally {
+        setLoading(false);
+      }
     },
     [email],
   );
@@ -56,6 +72,12 @@ function LoginForm() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
             <div>
               <label htmlFor="login-email" className="sr-only">
                 Email address

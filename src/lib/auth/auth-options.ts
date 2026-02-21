@@ -46,21 +46,26 @@ export const authOptions: NextAuthOptions = {
       },
       from: process.env.EMAIL_FROM ?? "no-reply@brevo.com",
       sendVerificationRequest: async ({ identifier: email, url }) => {
-        // In development without SMTP credentials, log to console
-        if (process.env.NODE_ENV === "development" && !process.env.SMTP_USER) {
+        // Without SMTP credentials, log to console
+        if (!process.env.SMTP_USER) {
           console.log(`\n[MAGIC LINK] For ${email}:\n${url}\n`);
           return;
         }
 
         // Send via Brevo
-        const template = magicLinkEmail(url, email);
-        await sendEmail({
-          to: { email },
-          subject: template.subject,
-          htmlContent: template.html,
-          textContent: template.text,
-          tags: ["magic-link", "auth"],
-        });
+        try {
+          const template = magicLinkEmail(url, email);
+          await sendEmail({
+            to: { email },
+            subject: template.subject,
+            htmlContent: template.html,
+            textContent: template.text,
+            tags: ["magic-link", "auth"],
+          });
+        } catch (err) {
+          console.error("[AUTH] Failed to send magic link email:", err);
+          throw new Error("Failed to send verification email");
+        }
       },
     }),
   ],
