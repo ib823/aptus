@@ -10,7 +10,6 @@ import { ERROR_CODES } from "@/types/api";
 import { canTransition, getAvailableTransitions } from "@/lib/assessment/status-machine";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const transitionSchema = z.object({
   toStatus: z.string().min(1),

@@ -4,7 +4,6 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { ERROR_CODES } from "@/types/api";
 
-export const preferredRegion = "sin1";
 
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();

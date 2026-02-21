@@ -6,7 +6,6 @@ import { getReportSummary } from "@/lib/report/report-data";
 import { generateEffortEstimatePdf } from "@/lib/report/pdf-generator";
 import { prisma } from "@/lib/db/prisma";
 
-export const preferredRegion = "sin1";
 
 export async function GET(
   _request: NextRequest,

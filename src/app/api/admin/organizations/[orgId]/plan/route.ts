@@ -7,7 +7,6 @@ import { logDecision } from "@/lib/db/decision-log";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const planOverrideSchema = z.object({
   plan: z.enum(["TRIAL", "STARTER", "PROFESSIONAL", "ENTERPRISE"]).optional(),

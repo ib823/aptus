@@ -7,7 +7,6 @@ import { prisma } from "@/lib/db/prisma";
 import { suggestResolutions } from "@/lib/assessment/gap-suggest";
 import { ERROR_CODES } from "@/types/api";
 
-export const preferredRegion = "sin1";
 
 export async function GET(
   _request: NextRequest,

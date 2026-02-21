@@ -10,7 +10,6 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const updateUserSchema = z.object({
   role: z.string().optional(),

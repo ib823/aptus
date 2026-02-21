@@ -8,7 +8,6 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { parseMentions } from "@/lib/collaboration/mention-parser";
 
-export const preferredRegion = "sin1";
 
 const UpdateCommentSchema = z.object({
   content: z.string().min(1).max(10000),

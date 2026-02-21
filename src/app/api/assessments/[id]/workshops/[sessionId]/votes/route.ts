@@ -7,7 +7,6 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 
-export const preferredRegion = "sin1";
 
 const VoteSchema = z.object({
   processStepId: z.string().min(1),

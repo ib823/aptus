@@ -5,7 +5,6 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const reportSchema = z.object({
   route: z.string().min(1),

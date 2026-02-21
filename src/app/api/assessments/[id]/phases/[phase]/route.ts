@@ -10,7 +10,6 @@ import { ERROR_CODES } from "@/types/api";
 import type { UserRole } from "@/types/assessment";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const phaseUpdateSchema = z.object({
   status: z.enum(["not_started", "in_progress", "completed", "blocked"]).optional(),

@@ -10,7 +10,6 @@ import { canTransitionSignOff } from "@/lib/signoff/state-machine";
 import type { SignOffStatus } from "@/types/signoff";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const crossFunctionalSchema = z.object({
   status: z.enum(["APPROVED", "REJECTED"]),

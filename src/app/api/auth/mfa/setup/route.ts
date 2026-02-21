@@ -9,7 +9,6 @@ import { logDecision } from "@/lib/audit/decision-logger";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const verifySchema = z.object({
   code: z.string().length(6).regex(/^\d{6}$/),

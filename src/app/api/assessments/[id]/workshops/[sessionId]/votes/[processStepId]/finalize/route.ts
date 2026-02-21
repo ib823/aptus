@@ -7,7 +7,6 @@ import { prisma } from "@/lib/db/prisma";
 import { computeVoteTally } from "@/lib/workshop/vote-tally";
 import { ERROR_CODES } from "@/types/api";
 
-export const preferredRegion = "sin1";
 
 export async function POST(
   _request: NextRequest,

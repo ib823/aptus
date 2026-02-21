@@ -9,7 +9,6 @@ import { computeFitRate } from "@/lib/analytics/benchmark-engine";
 import { generateTrendInsights } from "@/lib/analytics/scope-delta";
 import type { ScopeDelta, ClassificationDelta } from "@/types/analytics";
 
-export const preferredRegion = "sin1";
 
 export async function GET(
   _request: NextRequest,

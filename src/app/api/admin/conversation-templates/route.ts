@@ -9,7 +9,6 @@ import type { QuestionFlow } from "@/types/conversation";
 import type { InputJsonValue } from "@prisma/client/runtime/library";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const createSchema = z.object({
   scopeItemId: z.string().min(1),

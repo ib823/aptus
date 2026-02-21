@@ -5,7 +5,6 @@ import { requireAdmin, isAdminError } from "@/lib/auth/admin-guard";
 import { prisma } from "@/lib/db/prisma";
 import type { HealthCheck, HealthStatus, ServiceStatus } from "@/types/pwa";
 
-export const preferredRegion = "sin1";
 
 export async function GET(): Promise<NextResponse> {
   const auth = await requireAdmin();

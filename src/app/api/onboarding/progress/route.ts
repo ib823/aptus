@@ -8,7 +8,6 @@ import { getOnboardingFlow, canSkipStep, getNextStep } from "@/lib/onboarding/fl
 import type { UserRole } from "@/types/assessment";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const progressSchema = z.object({
   stepIndex: z.number().int().min(0),

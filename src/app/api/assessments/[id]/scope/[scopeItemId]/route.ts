@@ -8,7 +8,6 @@ import { logDecision } from "@/lib/audit/decision-logger";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const selectionSchema = z.object({
   selected: z.boolean(),

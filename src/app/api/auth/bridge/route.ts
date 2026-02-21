@@ -7,7 +7,6 @@ import { createSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { APP_CONFIG } from "@/constants/config";
 
-export const preferredRegion = "sin1";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rawCallback = request.nextUrl.searchParams.get("callbackUrl") ?? "/assessments";

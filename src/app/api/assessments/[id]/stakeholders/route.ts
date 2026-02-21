@@ -10,7 +10,6 @@ import { logDecision } from "@/lib/audit/decision-logger";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const addStakeholderSchema = z.object({
   name: z.string().min(1).max(200),

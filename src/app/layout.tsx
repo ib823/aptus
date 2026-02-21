@@ -6,7 +6,6 @@ import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/components/shared/Providers";
 import "./globals.css";
 
-export const preferredRegion = "sin1";
 
 export const metadata: Metadata = {
   title: "aptus",

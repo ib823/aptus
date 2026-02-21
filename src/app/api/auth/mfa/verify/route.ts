@@ -9,7 +9,6 @@ import { APP_CONFIG } from "@/constants/config";
 import { checkRateLimit, RATE_LIMITS, getClientIp } from "@/lib/security/rate-limit";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const verifySchema = z.object({
   code: z.string().length(6).regex(/^\d{6}$/),

@@ -7,7 +7,6 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 
-export const preferredRegion = "sin1";
 
 const UpdateActionItemSchema = z.object({
   title: z.string().min(1).max(500).optional(),

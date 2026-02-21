@@ -4,7 +4,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin, isAdminError } from "@/lib/auth/admin-guard";
 import { prisma } from "@/lib/db/prisma";
 
-export const preferredRegion = "sin1";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAdmin();

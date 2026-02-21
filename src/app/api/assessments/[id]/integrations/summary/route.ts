@@ -6,7 +6,6 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { getIntegrationSummary } from "@/lib/db/registers";
 import { ERROR_CODES } from "@/types/api";
 
-export const preferredRegion = "sin1";
 
 export async function GET(
   _request: Request,

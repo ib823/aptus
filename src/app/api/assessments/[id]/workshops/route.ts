@@ -12,7 +12,6 @@ import { ERROR_CODES } from "@/types/api";
 import type { UserRole } from "@/types/assessment";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const createWorkshopSchema = z.object({
   title: z.string().min(1).max(200),

@@ -5,7 +5,6 @@ import { authenticateForReport, isErrorResponse } from "@/lib/report/report-auth
 import { prisma } from "@/lib/db/prisma";
 import { generateXlsx, remainingItemsSheet } from "@/lib/report/xlsx-generator";
 
-export const preferredRegion = "sin1";
 
 export async function GET(
   _request: NextRequest,

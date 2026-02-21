@@ -10,7 +10,6 @@ import { DEFAULT_CARRY_FORWARD_CONFIG } from "@/types/lifecycle";
 import type { SnapshotData } from "@/types/signoff";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const cloneSchema = z.object({
   snapshotVersion: z.number().int().min(1),

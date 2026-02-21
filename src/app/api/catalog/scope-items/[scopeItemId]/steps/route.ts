@@ -7,7 +7,6 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const querySchema = z.object({
   cursor: z.string().optional(),

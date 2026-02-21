@@ -7,7 +7,6 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { jsPDF } from "jspdf";
 
-export const preferredRegion = "sin1";
 
 export async function GET(
   _request: NextRequest,

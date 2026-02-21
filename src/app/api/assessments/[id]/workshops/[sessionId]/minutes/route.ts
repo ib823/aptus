@@ -10,7 +10,6 @@ import { ERROR_CODES } from "@/types/api";
 import type { WorkshopMinutesData, AgendaItem } from "@/types/workshop";
 import type { InputJsonValue } from "@prisma/client/runtime/library";
 
-export const preferredRegion = "sin1";
 
 export async function GET(
   _request: NextRequest,

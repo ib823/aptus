@@ -7,7 +7,6 @@ import { logDecision } from "@/lib/audit/decision-logger";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const createSchema = z.object({
   assessmentId: z.string().min(1),

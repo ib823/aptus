@@ -9,7 +9,6 @@ import { ERROR_CODES } from "@/types/api";
 import type { DecisionAction } from "@/types/assessment";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const responseSchema = z
   .object({

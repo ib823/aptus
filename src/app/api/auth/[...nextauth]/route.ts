@@ -1,7 +1,6 @@
 import NextAuth from "next-auth";
 import { authOptions } from "@/lib/auth/auth-options";
 
-export const preferredRegion = "sin1";
 
 const handler = NextAuth(authOptions);
 

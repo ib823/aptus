@@ -10,7 +10,6 @@ import { ERROR_CODES } from "@/types/api";
 import { computeCanonicalHash } from "@/lib/signoff/hash-engine";
 import { z } from "zod";
 
-export const preferredRegion = "sin1";
 
 const createSnapshotSchema = z.object({
   label: z.string().optional(),

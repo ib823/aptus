@@ -10,7 +10,6 @@ import { logDecision } from "@/lib/db/decision-log";
 import { ERROR_CODES } from "@/types/api";
 import type { DecisionAction, UserRole } from "@/types/assessment";
 
-export const preferredRegion = "sin1";
 
 const CreateOcmSchema = z.object({
   impactedRole: z.string().min(1).max(200),
