@@ -18,7 +18,7 @@ export default async function AdaptationPatternsPage() {
       description="Common adaptation vs extension decision patterns with recommendations"
       apiPath="/api/admin/adaptation-patterns"
       columns={[
-        { key: "commonGap", header: "Common Gap", render: (v) => <span className="text-xs line-clamp-2">{String(v ?? "")}</span> },
+        { key: "commonGap", header: "Common Gap", format: "truncate" },
         { key: "recommendation", header: "Recommendation", width: "130px" },
         { key: "adaptEffort", header: "Adapt Effort", width: "120px" },
         { key: "extendEffort", header: "Extend Effort", width: "120px" },

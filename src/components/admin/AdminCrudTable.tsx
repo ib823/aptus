@@ -18,7 +18,8 @@ interface Column {
   key: string;
   header: string;
   width?: string | undefined;
-  render?: ((value: unknown, row: Record<string, unknown>) => React.ReactNode) | undefined;
+  /** Declarative format hint (serializable across Server→Client boundary) */
+  format?: "truncate" | "percentage" | undefined;
 }
 
 interface AdminCrudTableProps {
@@ -147,7 +148,7 @@ export function AdminCrudTable({
       ),
       cell: ({ row }) => {
         const value = row.getValue(col.key);
-        if (col.render) return col.render(value, row.original);
+        if (col.format) return renderFormatted(value, col.format);
         return renderDefault(value);
       },
       ...(col.width ? { size: parseInt(col.width) } : {}),
@@ -314,6 +315,14 @@ function renderFormField(
         />
       );
   }
+}
+
+function renderFormatted(value: unknown, format: "truncate" | "percentage"): React.ReactNode {
+  if (format === "percentage") {
+    return <span>{typeof value === "number" ? `${Math.round(value * 100)}%` : "—"}</span>;
+  }
+  // truncate
+  return <span className="text-muted-foreground text-xs line-clamp-2">{String(value ?? "")}</span>;
 }
 
 function renderDefault(value: unknown): React.ReactNode {

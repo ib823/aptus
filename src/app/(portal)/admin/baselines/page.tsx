@@ -23,7 +23,7 @@ export default async function BaselinesPage() {
         { key: "implementationDays", header: "Impl. Days", width: "90px" },
         { key: "configDays", header: "Config Days", width: "90px" },
         { key: "testDays", header: "Test Days", width: "80px" },
-        { key: "confidence", header: "Confidence", width: "90px", render: (v) => <span>{typeof v === "number" ? `${Math.round(v * 100)}%` : "—"}</span> },
+        { key: "confidence", header: "Confidence", width: "90px", format: "percentage" },
       ]}
       initialData={baselines as unknown as Array<Record<string, unknown>>}
       formFields={[

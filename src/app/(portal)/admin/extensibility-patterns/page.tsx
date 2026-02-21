@@ -19,7 +19,7 @@ export default async function ExtensibilityPatternsPage() {
       apiPath="/api/admin/extensibility-patterns"
       columns={[
         { key: "resolutionType", header: "Type", width: "130px" },
-        { key: "gapPattern", header: "Gap Pattern", render: (v) => <span className="text-xs line-clamp-2">{String(v ?? "")}</span> },
+        { key: "gapPattern", header: "Gap Pattern", format: "truncate" },
         { key: "effortDays", header: "Effort", width: "80px" },
         { key: "riskLevel", header: "Risk", width: "80px" },
         { key: "sapSupported", header: "SAP", width: "60px" },

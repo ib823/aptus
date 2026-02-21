@@ -20,7 +20,7 @@ export default async function IndustriesPage() {
       columns={[
         { key: "code", header: "Code", width: "120px" },
         { key: "name", header: "Name" },
-        { key: "description", header: "Description", render: (v) => <span className="text-gray-600 text-xs line-clamp-2">{String(v ?? "")}</span> },
+        { key: "description", header: "Description", format: "truncate" },
         { key: "applicableScopeItems", header: "Scope Items", width: "100px" },
         { key: "typicalScopeCount", header: "Typical Count", width: "100px" },
       ]}
