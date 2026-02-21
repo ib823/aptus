@@ -15,6 +15,7 @@ export function getNextQuestion(
   flow: QuestionFlow,
   currentQuestionId: string,
   selectedAnswerId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _processStepId: string, // reserved for future step-specific logic
 ): NextQuestionResult {
   const currentQuestion = flow.questions.find((q) => q.id === currentQuestionId);
