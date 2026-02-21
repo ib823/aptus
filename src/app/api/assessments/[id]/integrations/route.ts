@@ -10,6 +10,9 @@ import { logDecision } from "@/lib/db/decision-log";
 import { ERROR_CODES } from "@/types/api";
 import type { DecisionAction, UserRole } from "@/types/assessment";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const CreateIntegrationSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().min(1).max(5000),

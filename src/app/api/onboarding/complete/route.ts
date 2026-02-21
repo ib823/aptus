@@ -8,6 +8,9 @@ import { ERROR_CODES } from "@/types/api";
 import { getOnboardingFlow, getPostOnboardingRedirect } from "@/lib/onboarding/flow-engine";
 import type { UserRole } from "@/types/assessment";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 export async function POST(): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

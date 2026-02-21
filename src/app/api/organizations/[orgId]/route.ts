@@ -10,6 +10,9 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const updateOrgSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   slug: z.string().min(2).max(50).regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens").optional(),

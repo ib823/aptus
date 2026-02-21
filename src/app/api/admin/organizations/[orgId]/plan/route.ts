@@ -7,6 +7,9 @@ import { logDecision } from "@/lib/db/decision-log";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const planOverrideSchema = z.object({
   plan: z.enum(["TRIAL", "STARTER", "PROFESSIONAL", "ENTERPRISE"]).optional(),
   subscriptionStatus: z.enum(["TRIALING", "ACTIVE", "PAST_DUE", "CANCELED", "TRIAL_EXPIRED"]).optional(),

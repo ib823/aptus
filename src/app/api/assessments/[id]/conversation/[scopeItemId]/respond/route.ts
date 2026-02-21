@@ -9,6 +9,9 @@ import type { QuestionFlow, ConversationResponse } from "@/types/conversation";
 import type { InputJsonValue } from "@prisma/client/runtime/library";
 import { z } from "zod";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const respondSchema = z.object({
   sessionId: z.string().min(1),
   questionId: z.string().min(1),

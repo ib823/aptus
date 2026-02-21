@@ -9,6 +9,9 @@ import { ERROR_CODES } from "@/types/api";
 import { anonymizeScopeSelections, anonymizeGapPatterns } from "@/lib/analytics/anonymization-engine";
 import { z } from "zod";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const createTemplateSchema = z.object({
   assessmentId: z.string().min(1),
   name: z.string().min(1, "Template name is required"),

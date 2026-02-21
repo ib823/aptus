@@ -8,6 +8,9 @@ import { logDecision } from "@/lib/audit/decision-logger";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const CATEGORIES = [
   "unreviewed_step", "maybe_scope", "excluded_recommended_config",
   "out_of_scope_gap", "integration_point", "data_migration", "custom_requirement",

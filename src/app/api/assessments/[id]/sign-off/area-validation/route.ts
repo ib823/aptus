@@ -10,6 +10,9 @@ import { canTransitionSignOff } from "@/lib/signoff/state-machine";
 import type { SignOffStatus } from "@/types/signoff";
 import { z } from "zod";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const areaValidationSchema = z.object({
   functionalArea: z.string().min(1),
   status: z.enum(["APPROVED", "REJECTED"]),

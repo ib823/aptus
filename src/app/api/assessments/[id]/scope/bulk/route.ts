@@ -8,6 +8,9 @@ import { logDecision } from "@/lib/audit/decision-logger";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const bulkSchema = z.object({
   action: z.enum(["select_all", "deselect_all"]),
   functionalArea: z.string().optional(),

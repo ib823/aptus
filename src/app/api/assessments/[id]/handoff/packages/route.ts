@@ -8,6 +8,9 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const createPackageSchema = z.object({
   snapshotVersion: z.number().int().min(1),
   packageType: z.enum(["FULL", "SCOPE_ONLY", "TECHNICAL", "EXECUTIVE_SUMMARY"]).optional(),

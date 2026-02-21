@@ -8,6 +8,9 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { ALL_NOTIFICATION_TYPES } from "@/types/notification";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const UpdatePreferenceSchema = z.object({
   notificationType: z.string().min(1),
   channelEmail: z.boolean().optional(),

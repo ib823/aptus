@@ -9,6 +9,9 @@ import { ERROR_CODES } from "@/types/api";
 import type { DecisionAction } from "@/types/assessment";
 import { z } from "zod";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const responseSchema = z
   .object({
     fitStatus: z.enum(["FIT", "CONFIGURE", "GAP", "NA", "PENDING"]),

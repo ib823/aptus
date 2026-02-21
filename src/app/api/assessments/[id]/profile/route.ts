@@ -10,6 +10,9 @@ import { calculateProfileCompleteness } from "@/lib/assessment/profile-completen
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const profileSchema = z.object({
   companyName: z.string().min(1).max(200).optional(),
   industry: z.string().min(1).max(100).optional(),

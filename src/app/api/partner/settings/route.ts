@@ -9,6 +9,9 @@ import { getPlanLimits } from "@/lib/commercial/plan-engine";
 import type { PlanTier } from "@/types/commercial";
 import type { UserRole } from "@/types/assessment";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const ALLOWED_ROLES: UserRole[] = ["partner_lead", "client_admin"];
 
 export async function GET(): Promise<NextResponse> {

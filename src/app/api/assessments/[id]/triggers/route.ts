@@ -9,6 +9,9 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const createTriggerSchema = z.object({
   triggerType: z.enum(["SAP_UPDATE", "REGULATORY_CHANGE", "ORG_CHANGE", "SCOPE_DRIFT", "MANUAL"]),
   title: z.string().min(1, "Title is required"),

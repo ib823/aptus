@@ -9,6 +9,9 @@ import { ERROR_CODES } from "@/types/api";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const createExportSchema = z.object({
   targetSystem: z.enum(["JIRA", "AZURE_DEVOPS", "SAP_SOLMAN", "CSV"]),
   exportConfig: z.record(z.string(), z.unknown()),

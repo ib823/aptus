@@ -6,6 +6,9 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { calculateKpiMetrics } from "@/lib/dashboard/kpi-calculator";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 /** Map OCM severity to a numeric impact score for KPI calculation */
 function severityToScore(severity: string): number {
   switch (severity) {

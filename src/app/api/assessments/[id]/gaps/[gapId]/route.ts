@@ -9,6 +9,9 @@ import { logDecision } from "@/lib/audit/decision-logger";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const gapUpdateSchema = z
   .object({
     gapDescription: z.string().min(10).max(5000).optional(),

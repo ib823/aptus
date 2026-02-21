@@ -8,6 +8,9 @@ import { ERROR_CODES } from "@/types/api";
 import type { DerivedClassification } from "@/types/conversation";
 import { z } from "zod";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const completeSchema = z.object({
   sessionId: z.string().min(1),
 });

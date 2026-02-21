@@ -7,6 +7,9 @@ import { ERROR_CODES } from "@/types/api";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

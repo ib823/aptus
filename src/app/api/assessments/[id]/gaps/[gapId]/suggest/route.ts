@@ -7,6 +7,9 @@ import { prisma } from "@/lib/db/prisma";
 import { suggestResolutions } from "@/lib/assessment/gap-suggest";
 import { ERROR_CODES } from "@/types/api";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; gapId: string }> },

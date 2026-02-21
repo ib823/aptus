@@ -5,6 +5,9 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

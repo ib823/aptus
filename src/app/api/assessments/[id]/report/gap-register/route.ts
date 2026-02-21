@@ -5,6 +5,9 @@ import { authenticateForReport, isErrorResponse } from "@/lib/report/report-auth
 import { getGapDataForReport } from "@/lib/report/report-data";
 import { generateXlsx, gapRegisterSheet } from "@/lib/report/xlsx-generator";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

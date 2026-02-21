@@ -8,6 +8,9 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { dispatchNotification } from "@/lib/notifications/dispatcher";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const ResolveConflictSchema = z.object({
   resolvedClassification: z.string().min(1),
   resolutionNotes: z.string().max(5000).optional(),

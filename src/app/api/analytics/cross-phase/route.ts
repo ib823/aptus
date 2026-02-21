@@ -9,6 +9,9 @@ import { ERROR_CODES } from "@/types/api";
 import { computeScopeDelta, computeClassificationDelta } from "@/lib/analytics/scope-delta";
 import { z } from "zod";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const linkAssessmentsSchema = z.object({
   phase1AssessmentId: z.string().min(1),
   phase2AssessmentId: z.string().min(1),

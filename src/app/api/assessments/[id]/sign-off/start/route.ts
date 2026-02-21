@@ -9,6 +9,9 @@ import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 import { randomBytes } from "crypto";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const startSchema = z.object({
   snapshotId: z.string().min(1, "Snapshot ID is required"),
 });

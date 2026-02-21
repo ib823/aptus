@@ -7,6 +7,9 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const EscalateConflictSchema = z.object({
   escalatedToId: z.string().min(1),
 });

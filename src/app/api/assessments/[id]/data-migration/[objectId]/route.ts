@@ -10,6 +10,9 @@ import { detectCircularDependency } from "@/lib/assessment/dependency-graph";
 import { ERROR_CODES } from "@/types/api";
 import type { DecisionAction, UserRole } from "@/types/assessment";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const UpdateDataMigrationSchema = z.object({
   objectName: z.string().min(1).max(200).optional(),
   description: z.string().min(1).max(5000).optional(),

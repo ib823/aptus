@@ -6,6 +6,9 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { getDataMigrationSummary } from "@/lib/db/registers";
 import { ERROR_CODES } from "@/types/api";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },

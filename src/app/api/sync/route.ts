@@ -8,6 +8,9 @@ import { ERROR_CODES } from "@/types/api";
 import { validateSyncItem, detectConflict, categorizeSyncResults } from "@/lib/pwa/sync-engine";
 import { z } from "zod";
 
+export const preferredRegion = "sin1";
+export const maxDuration = 30;
+
 const syncSchema = z.object({
   items: z
     .array(
