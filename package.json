@@ -23,7 +23,6 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
-    "@getbrevo/brevo": "^4.0.1",
     "@prisma/client": "^6.19.2",
     "@simplewebauthn/browser": "^13.2.2",
     "@simplewebauthn/server": "^13.2.2",

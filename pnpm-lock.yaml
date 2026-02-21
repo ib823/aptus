@@ -11,9 +11,6 @@ importers:
       '@auth/prisma-adapter':
         specifier: ^2.11.1
         version: 2.11.1(@prisma/client@6.19.2(prisma@6.19.2(typescript@5.9.3))(typescript@5.9.3))(@simplewebauthn/browser@13.2.2)(@simplewebauthn/server@13.2.2)(nodemailer@8.0.1)
-      '@getbrevo/brevo':
-        specifier: ^4.0.1
-        version: 4.0.1
       '@prisma/client':
         specifier: ^6.19.2
         version: 6.19.2(prisma@6.19.2(typescript@5.9.3))(typescript@5.9.3)
@@ -644,10 +641,6 @@ packages:
 
   '@floating-ui/utils@0.2.10':
     resolution: {integrity: sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ==}
-
-  '@getbrevo/brevo@4.0.1':
-    resolution: {integrity: sha512-U1xOsr5e7pfRTdngrt9VWmPV8SQD/LayTOp55/Wnb4aW33IkBWypDJ8jOpQtxn6xL4t8aBw1thRisvQY4+/Edw==}
-    engines: {node: '>=18.0.0'}
 
   '@hexagon/base64@1.1.28':
     resolution: {integrity: sha512-lhqDEAvWixy3bZ+UOYbPwUbBkwBq5C1LAJ/xPC8Oi+lL54oyakv/npbA0aU2hgCsx/1NUd4IBvV03+aUBWxerw==}
@@ -5932,8 +5925,6 @@ snapshots:
       react-dom: 19.2.3(react@19.2.3)
 
   '@floating-ui/utils@0.2.10': {}
-
-  '@getbrevo/brevo@4.0.1': {}
 
   '@hexagon/base64@1.1.28': {}
 

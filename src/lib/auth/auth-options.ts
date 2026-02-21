@@ -31,8 +31,8 @@ export const authOptions: NextAuthOptions = {
       },
       from: process.env.EMAIL_FROM ?? "no-reply@brevo.com",
       sendVerificationRequest: async ({ identifier: email, url }) => {
-        // In development without Brevo key, log to console
-        if (process.env.NODE_ENV === "development" && !process.env.BREVO_API_KEY) {
+        // In development without SMTP credentials, log to console
+        if (process.env.NODE_ENV === "development" && !process.env.SMTP_USER) {
           console.log(`\n[MAGIC LINK] For ${email}:\n${url}\n`);
           return;
         }
