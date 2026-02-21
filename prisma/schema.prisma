@@ -565,11 +565,37 @@ model ProcessFlowDiagram {
   generatedAt     DateTime @default(now())
   generatedBy     String
 
+  // Phase 20: Process Visualization
+  interactiveData   Json?
+  thumbnailSvg      String?   @db.Text
+  riskOverlayData   Json?
+  layoutVersion     Int       @default(1)
+
   assessment Assessment @relation(fields: [assessmentId], references: [id])
 
   @@unique([assessmentId, scopeItemId, processFlowName])
   @@index([assessmentId])
   @@index([assessmentId, scopeItemId])
+}
+
+// Phase 20: Functional Area Overview
+model FunctionalAreaOverview {
+  id              String   @id @default(cuid())
+  assessmentId    String
+  functionalArea  String
+  totalScopeItems Int      @default(0)
+  selectedCount   Int      @default(0)
+  fitCount        Int      @default(0)
+  configureCount  Int      @default(0)
+  gapCount        Int      @default(0)
+  pendingCount    Int      @default(0)
+  riskScore       Float    @default(0)
+  completionPct   Float    @default(0)
+  crossAreaDeps   String[] @default([])
+  generatedAt     DateTime @default(now())
+
+  @@unique([assessmentId, functionalArea])
+  @@index([assessmentId])
 }
 
 model RemainingItem {
@@ -745,6 +771,9 @@ model User {
   authoredComments        Comment[]               @relation("commentAuthor")
   resolvedComments        Comment[]               @relation("commentResolver")
   resolvedConflicts       Conflict[]              @relation("conflictResolver")
+
+  // Phase 21: Workshop Management
+  workshopAttendances WorkshopAttendee[]
 
   @@index([role])
   @@index([organizationId])
@@ -960,11 +989,108 @@ model WorkshopSession {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  // Phase 21: Workshop Management
+  qrCodeUrl         String?   @db.Text
+  facilitatorNotes  String?   @db.Text
+  agenda            Json?
+  currentStepId     String?
+  currentScopeItemId String?
+  duration          Int?
+  recordingUrl      String?
+
   assessment Assessment @relation(fields: [assessmentId], references: [id])
+  attendees  WorkshopAttendee[]
+  votes      WorkshopVote[]
+  actionItems WorkshopActionItem[]
+  minutes    WorkshopMinutes?
 
   @@index([assessmentId])
   @@index([sessionCode])
   @@index([assessmentId, status])
+}
+
+// Phase 21: Workshop Attendees
+model WorkshopAttendee {
+  id              String    @id @default(cuid())
+  sessionId       String
+  userId          String
+  role            String    @default("attendee")
+  joinedAt        DateTime  @default(now())
+  leftAt          DateTime?
+  deviceType      String?
+  isFollowing     Boolean   @default(true)
+  isPresenter     Boolean   @default(false)
+  connectionStatus String   @default("connected")
+  lastPingAt      DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+
+  session WorkshopSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User            @relation(fields: [userId], references: [id])
+
+  @@unique([sessionId, userId])
+  @@index([sessionId])
+  @@index([userId])
+}
+
+// Phase 21: Workshop Votes
+model WorkshopVote {
+  id              String   @id @default(cuid())
+  sessionId       String
+  processStepId   String
+  userId          String
+  classification  String
+  confidence      String?
+  notes           String?  @db.Text
+  votedAt         DateTime @default(now())
+
+  session WorkshopSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, processStepId, userId])
+  @@index([sessionId])
+  @@index([sessionId, processStepId])
+}
+
+// Phase 21: Workshop Action Items
+model WorkshopActionItem {
+  id              String    @id @default(cuid())
+  sessionId       String
+  title           String
+  description     String?   @db.Text
+  assignedTo      String?
+  assignedToName  String?
+  dueDate         DateTime?
+  status          String    @default("open")
+  priority        String    @default("medium")
+  relatedStepId   String?
+  relatedScopeItemId String?
+  completedAt     DateTime?
+  completedBy     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  session WorkshopSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([sessionId, status])
+  @@index([assignedTo])
+}
+
+// Phase 21: Workshop Minutes
+model WorkshopMinutes {
+  id                  String   @id @default(cuid())
+  sessionId           String   @unique
+  content             String   @db.Text
+  attendeesSummary    Json
+  decisionsSummary    Json
+  actionItemsSummary  Json
+  agendaSummary       Json
+  statisticsSummary   Json
+  generatedAt         DateTime @default(now())
+  regeneratedAt       DateTime?
+  exportedAt          DateTime?
+  exportFormat        String?
+
+  session WorkshopSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model StatusTransitionLog {
