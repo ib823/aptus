@@ -342,6 +342,9 @@ model Assessment {
   conflicts            Conflict[]
   activityFeedEntries  ActivityFeedEntry[]
 
+  // Phase 25: Report Generation
+  reportGenerations  ReportGeneration[]
+
   @@index([status])
   @@index([createdBy])
   @@index([organizationId])
@@ -841,14 +844,43 @@ model Organization {
   brandPrimaryColor String?
   brandLogoUrl      String?
 
+  // Phase 29: Commercial / Multi-Tenant
+  plan                  String   @default("TRIAL")
+  subscriptionStatus    String   @default("TRIALING")
+  trialEndsAt           DateTime?
+  stripeCustomerId      String?  @unique
+  stripeSubscriptionId  String?  @unique
+  billingEmail          String?
+  ssoMetadataUrl        String?
+  ssoClientId           String?
+  ssoClientSecret       String?
+  scimBearerToken       String?
+  maxActiveAssessments  Int      @default(1)
+  maxPartnerUsers       Int      @default(5)
+  primaryColor          String?  @default("#1e40af")
+  reportFooterText      String?
+  industryFocus         String[] @default([])
+  contactEmail          String?
+  websiteUrl            String?
+  hasDemoAssessment     Boolean  @default(false)
+  demoAssessmentId      String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   users       User[]
   assessments Assessment[]
+  // Phase 25
+  reportBranding ReportBranding?
+  // Phase 29
+  templates      AssessmentTemplate[]
+  usageEvents    UsageEvent[]
   invitations OrgInvitation[]
 
   @@index([slug])
+  @@index([plan])
+  @@index([subscriptionStatus])
+  @@index([stripeCustomerId])
 }
 
 model Session {
@@ -1335,4 +1367,80 @@ model OnboardingTooltip {
   user User @relation(fields: [userId], references: [id])
   @@unique([userId, tooltipKey])
   @@index([userId])
+}
+
+// =============================================================
+// Layer 7: Phase 25 — Report Generation & Branding
+// =============================================================
+
+model ReportGeneration {
+  id           String    @id @default(cuid())
+  assessmentId String
+  reportType   String
+  status       String    @default("generating")
+  fileUrl      String?
+  fileSize     Int?
+  fileName     String?
+  generatedBy  String
+  errorMessage String?   @db.Text
+  generatedAt  DateTime  @default(now())
+  expiresAt    DateTime?
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+  @@index([assessmentId])
+  @@index([assessmentId, reportType])
+  @@index([expiresAt])
+}
+
+model ReportBranding {
+  id              String  @id @default(cuid())
+  organizationId  String  @unique
+  logoUrl         String?
+  primaryColor    String  @default("#1a1a2e")
+  secondaryColor  String  @default("#16213e")
+  footerText      String? @db.Text
+  companyName     String?
+  isActive        Boolean @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+}
+
+// =============================================================
+// Layer 7: Phase 29 — Assessment Templates & Usage Events
+// =============================================================
+
+model AssessmentTemplate {
+  id              String   @id @default(cuid())
+  organizationId  String
+  name            String
+  description     String?  @db.Text
+  industry        String?
+  country         String?
+  scopeItemIds    String[] @default([])
+  isDemo          Boolean  @default(false)
+  isPublic        Boolean  @default(false)
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  @@index([organizationId])
+  @@index([isDemo])
+}
+
+model UsageEvent {
+  id              String   @id @default(cuid())
+  organizationId  String
+  eventType       String
+  entityId        String?
+  metadata        Json?
+  stripeSent      Boolean  @default(false)
+  stripeError     String?
+  createdAt       DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  @@index([organizationId])
+  @@index([organizationId, eventType])
+  @@index([createdAt])
+  @@index([stripeSent])
 }
