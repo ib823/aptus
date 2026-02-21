@@ -26,7 +26,7 @@ function LoginForm() {
       await signIn("email", {
         email,
         redirect: false,
-        callbackUrl: "/assessments",
+        callbackUrl: "/api/auth/bridge?callbackUrl=/assessments",
       });
 
       setSent(true);

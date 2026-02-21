@@ -6,7 +6,7 @@ import { APP_CONFIG } from "@/constants/config";
 import type { SessionUser } from "@/types/assessment";
 import { cookies } from "next/headers";
 
-const SESSION_COOKIE_NAME = "fit-portal-session";
+export const SESSION_COOKIE_NAME = "fit-portal-session";
 
 /**
  * Generate a cryptographically secure session token.
@@ -141,11 +141,11 @@ export async function getSessionToken(): Promise<string | null> {
 
 /**
  * Get the current authenticated user from the session cookie.
+ * The magic link flow routes through /api/auth/bridge which creates
+ * the custom session and sets this cookie before redirecting to the portal.
  */
 export async function getCurrentUser(): Promise<SessionUser | null> {
   const token = await getSessionToken();
   if (!token) return null;
   return validateSession(token);
 }
-
-export { SESSION_COOKIE_NAME };

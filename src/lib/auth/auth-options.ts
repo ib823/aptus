@@ -4,19 +4,34 @@ import type { NextAuthOptions } from "next-auth";
 import EmailProvider from "next-auth/providers/email";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/db/prisma";
-import { createSession, SESSION_COOKIE_NAME } from "./session";
+// createSession and SESSION_COOKIE_NAME are used by the bridge route (src/app/api/auth/bridge/route.ts),
+// not here. This file only exports authOptions for NextAuth.
 import { sendEmail } from "@/lib/email/brevo";
 import { magicLinkEmail } from "@/lib/email/templates";
 import type { Adapter } from "next-auth/adapters";
 
 /**
  * Custom adapter that wraps Prisma for NextAuth compatibility.
- * We use our own session management on top of NextAuth's magic link flow.
+ * Overrides createUser because our User model requires `role` (no default)
+ * and `name` (non-nullable) which PrismaAdapter doesn't provide.
  */
 function getAdapter(): Adapter {
   const baseAdapter = PrismaAdapter(prisma);
   return {
     ...baseAdapter,
+    createUser: async (data: { email: string; emailVerified?: Date | null; name?: string | null; image?: string | null }) => {
+      const userCount = await prisma.user.count();
+      const role = userCount === 0 ? "admin" : "consultant";
+      return prisma.user.create({
+        data: {
+          email: data.email,
+          emailVerified: data.emailVerified ?? null,
+          name: data.name || data.email.split("@")[0] || "User",
+          image: data.image ?? null,
+          role,
+        },
+      });
+    },
   } as Adapter;
 }
 
@@ -62,26 +77,14 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user }) {
       if (!user.email) return false;
 
-      // Find or create the user in our User table
+      // User is created by the adapter's createUser override above.
+      // Here we only need to block deactivated users.
       const existingUser = await prisma.user.findUnique({
         where: { email: user.email },
       });
 
-      if (!existingUser) {
-        // Auto-create user on first magic link sign-in
-        // First user ever gets admin role; subsequent users default to consultant
-        const userCount = await prisma.user.count();
-        const role = userCount === 0 ? "admin" : "consultant";
-
-        await prisma.user.create({
-          data: {
-            email: user.email,
-            name: user.name ?? user.email.split("@")[0] ?? "User",
-            role,
-          },
-        });
-      } else if (!existingUser.isActive) {
-        return false; // Deactivated users cannot sign in
+      if (existingUser && !existingUser.isActive) {
+        return false;
       }
 
       return true;
@@ -122,4 +125,3 @@ export const authOptions: NextAuthOptions = {
   },
 };
 
-export { createSession, SESSION_COOKIE_NAME };
