@@ -775,6 +775,11 @@ model User {
   // Phase 21: Workshop Management
   workshopAttendances WorkshopAttendee[]
 
+  // Phase 23+24: Dashboard & Onboarding
+  dashboardWidgets   DashboardWidget[]
+  onboardingProgress OnboardingProgress?
+  onboardingTooltips OnboardingTooltip[]
+
   @@index([role])
   @@index([organizationId])
   @@index([email])
@@ -1225,4 +1230,109 @@ model ActivityFeedEntry {
   @@index([assessmentId, actorId])
   @@index([assessmentId, actionType])
   @@index([assessmentId, areaCode, createdAt])
+}
+
+// =============================================================
+// Phase 22: Conversation Mode
+// =============================================================
+
+model ConversationTemplate {
+  id              String   @id @default(cuid())
+  scopeItemId     String
+  processStepId   String
+  questionFlow    Json
+  language        String   @default("en")
+  version         Int      @default(1)
+  createdBy       String
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([scopeItemId, processStepId, language])
+  @@index([scopeItemId])
+  @@index([isActive])
+}
+
+model ConversationSession {
+  id                     String    @id @default(cuid())
+  assessmentId           String
+  userId                 String
+  scopeItemId            String
+  currentQuestionId      String?
+  responses              Json      @default("[]")
+  derivedClassifications Json?
+  status                 String    @default("in_progress")
+  startedAt              DateTime  @default(now())
+  completedAt            DateTime?
+
+  @@index([assessmentId, userId])
+  @@index([assessmentId, scopeItemId])
+  @@index([status])
+}
+
+// =============================================================
+// Phase 23: Intelligent Dashboard
+// =============================================================
+
+model DashboardWidget {
+  id         String  @id @default(cuid())
+  userId     String
+  widgetType String
+  position   Int
+  settings   Json?
+  isVisible  Boolean @default(true)
+
+  user User @relation(fields: [userId], references: [id])
+  @@index([userId])
+  @@index([userId, isVisible])
+}
+
+model DashboardDeadline {
+  id           String   @id @default(cuid())
+  assessmentId String
+  title        String
+  description  String?  @db.Text
+  dueDate      DateTime
+  assignedRole String?
+  assignedUser String?
+  status       String   @default("pending")
+  completedAt  DateTime?
+  createdBy    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([assessmentId])
+  @@index([dueDate])
+  @@index([assignedRole])
+  @@index([status])
+}
+
+// =============================================================
+// Phase 24: Onboarding System
+// =============================================================
+
+model OnboardingProgress {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  role           String
+  currentStep    Int       @default(0)
+  completedSteps Int[]     @default([])
+  skippedSteps   Int[]     @default([])
+  isComplete     Boolean   @default(false)
+  metadata       Json?
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model OnboardingTooltip {
+  id          String   @id @default(cuid())
+  userId      String
+  tooltipKey  String
+  dismissedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  @@unique([userId, tooltipKey])
+  @@index([userId])
 }
