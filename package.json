@@ -100,7 +100,8 @@
       "core-js",
       "sharp",
       "esbuild",
-      "@esbuild/linux-x64"
+      "@esbuild/linux-x64",
+      "msw"
     ]
   }
 }
