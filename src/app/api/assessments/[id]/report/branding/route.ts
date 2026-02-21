@@ -9,7 +9,6 @@ import { ERROR_CODES } from "@/types/api";
 import type { UserRole } from "@/types/assessment";
 import { z } from "zod";
 
-
 const READ_ROLES: UserRole[] = [
   "partner_lead", "platform_admin", "client_admin",
   "consultant", "project_manager", "executive_sponsor",

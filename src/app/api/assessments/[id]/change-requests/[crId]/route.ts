@@ -9,7 +9,6 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
-
 const updateChangeRequestSchema = z.object({
   status: z.enum(["APPROVED", "REJECTED"]),
   rejectedReason: z.string().optional(),

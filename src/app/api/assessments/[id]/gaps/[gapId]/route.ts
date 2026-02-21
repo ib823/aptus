@@ -9,7 +9,6 @@ import { logDecision } from "@/lib/audit/decision-logger";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
-
 const gapUpdateSchema = z
   .object({
     gapDescription: z.string().min(10).max(5000).optional(),

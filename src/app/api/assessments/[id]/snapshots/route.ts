@@ -10,7 +10,6 @@ import { ERROR_CODES } from "@/types/api";
 import { computeCanonicalHash } from "@/lib/signoff/hash-engine";
 import { z } from "zod";
 
-
 const createSnapshotSchema = z.object({
   label: z.string().optional(),
   reason: z.string().min(1, "Reason is required"),

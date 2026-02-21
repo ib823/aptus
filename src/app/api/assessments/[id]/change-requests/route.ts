@@ -12,7 +12,6 @@ import type { UnlockedEntity } from "@/types/lifecycle";
 import type { SnapshotData } from "@/types/signoff";
 import { z } from "zod";
 
-
 const unlockedEntitySchema = z.object({
   entityType: z.enum(["scope_selection", "step_response", "gap_resolution", "integration", "data_migration", "ocm"]),
   entityId: z.string().min(1),

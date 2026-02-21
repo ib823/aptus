@@ -8,7 +8,6 @@ import { logDecision } from "@/lib/audit/decision-logger";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
-
 const selectionSchema = z.object({
   selected: z.boolean(),
   relevance: z.enum(["YES", "NO", "MAYBE"]),

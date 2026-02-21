@@ -7,7 +7,6 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import type { UserRole } from "@/types/assessment";
 
-
 const ALLOWED_ROLES: UserRole[] = ["partner_lead", "client_admin", "platform_admin"];
 
 export async function GET(): Promise<NextResponse> {

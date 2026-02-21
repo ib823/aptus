@@ -13,7 +13,6 @@ import { ERROR_CODES } from "@/types/api";
 import type { AssessmentStatus } from "@/types/assessment";
 import { z } from "zod";
 
-
 const updateSchema = z.object({
   status: z.string().optional(),
 });

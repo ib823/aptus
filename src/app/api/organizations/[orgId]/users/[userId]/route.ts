@@ -10,7 +10,6 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
-
 const updateUserSchema = z.object({
   role: z.string().optional(),
   isActive: z.boolean().optional(),

@@ -6,7 +6,6 @@ import { getReportSummary } from "@/lib/report/report-data";
 import { generateEffortEstimatePdf } from "@/lib/report/pdf-generator";
 import { prisma } from "@/lib/db/prisma";
 
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

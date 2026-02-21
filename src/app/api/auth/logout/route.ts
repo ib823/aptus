@@ -3,7 +3,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { revokeSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
-
 export async function GET(request: NextRequest): Promise<NextResponse> {
   // Revoke the custom session in the database
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;

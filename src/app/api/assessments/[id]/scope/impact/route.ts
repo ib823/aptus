@@ -6,7 +6,6 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { getScopeItemImpact } from "@/lib/db/scope-items";
 import { ERROR_CODES } from "@/types/api";
 
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

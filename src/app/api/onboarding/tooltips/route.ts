@@ -6,7 +6,6 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { TOOLTIP_REGISTRY } from "@/types/onboarding";
 
-
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

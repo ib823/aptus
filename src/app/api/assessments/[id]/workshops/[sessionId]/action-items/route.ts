@@ -7,7 +7,6 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 
-
 const CreateActionItemSchema = z.object({
   title: z.string().min(1).max(500),
   description: z.string().max(5000).optional(),

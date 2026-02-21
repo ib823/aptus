@@ -12,7 +12,6 @@ import { ERROR_CODES } from "@/types/api";
 import type { UserRole } from "@/types/assessment";
 import { z } from "zod";
 
-
 const createWorkshopSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),

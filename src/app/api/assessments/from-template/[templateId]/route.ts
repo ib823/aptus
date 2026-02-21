@@ -8,7 +8,6 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
-
 const createFromTemplateSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
   industry: z.string().optional(),

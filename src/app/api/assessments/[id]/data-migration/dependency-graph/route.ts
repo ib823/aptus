@@ -6,7 +6,6 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 
-
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },

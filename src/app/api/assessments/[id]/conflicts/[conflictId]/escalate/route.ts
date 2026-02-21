@@ -7,7 +7,6 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 
-
 const EscalateConflictSchema = z.object({
   escalatedToId: z.string().min(1),
 });

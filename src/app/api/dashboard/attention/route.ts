@@ -6,7 +6,6 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { computeAttentionItems } from "@/lib/dashboard/attention-engine";
 
-
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

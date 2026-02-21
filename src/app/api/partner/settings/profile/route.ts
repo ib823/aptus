@@ -9,7 +9,6 @@ import { ERROR_CODES } from "@/types/api";
 import type { UserRole } from "@/types/assessment";
 import { z } from "zod";
 
-
 const ALLOWED_ROLES: UserRole[] = ["partner_lead", "client_admin"];
 
 const profileSchema = z.object({

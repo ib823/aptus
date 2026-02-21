@@ -7,7 +7,6 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { ASSESSMENT_PHASES } from "@/types/assessment";
 
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

@@ -8,7 +8,6 @@ import { getOnboardingFlow, canSkipStep, getNextStep } from "@/lib/onboarding/fl
 import type { UserRole } from "@/types/assessment";
 import { z } from "zod";
 
-
 const progressSchema = z.object({
   stepIndex: z.number().int().min(0),
   action: z.enum(["complete", "skip"]),

@@ -3,6 +3,7 @@
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const preferredRegion = "sin1";
 
 export function GET() {
   return NextResponse.json({

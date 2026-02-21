@@ -9,7 +9,6 @@ import type { QuestionFlow } from "@/types/conversation";
 import type { InputJsonValue } from "@prisma/client/runtime/library";
 import { z } from "zod";
 
-
 const createSchema = z.object({
   scopeItemId: z.string().min(1),
   processStepId: z.string().min(1),

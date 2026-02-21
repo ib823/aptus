@@ -10,7 +10,6 @@ import { canTransitionSignOff } from "@/lib/signoff/state-machine";
 import type { SignOffStatus } from "@/types/signoff";
 import { z } from "zod";
 
-
 const technicalValidationSchema = z.object({
   validatorType: z.enum(["it_lead", "dm_lead"]),
   status: z.enum(["APPROVED", "REJECTED"]),

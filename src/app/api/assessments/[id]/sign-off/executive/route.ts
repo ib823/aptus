@@ -11,7 +11,6 @@ import { computeCanonicalHash } from "@/lib/signoff/hash-engine";
 import type { SignOffStatus } from "@/types/signoff";
 import { z } from "zod";
 
-
 const executiveSignSchema = z.object({
   authorityStatement: z.string().min(10, "Authority statement must be at least 10 characters"),
   signerTitle: z.string().optional(),

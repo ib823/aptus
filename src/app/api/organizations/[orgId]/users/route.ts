@@ -13,7 +13,6 @@ import { ERROR_CODES } from "@/types/api";
 import type { UserRole } from "@/types/assessment";
 import { z } from "zod";
 
-
 const inviteSchema = z.object({
   email: z.string().email(),
   role: z.string().min(1),

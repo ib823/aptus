@@ -9,7 +9,6 @@ import { ERROR_CODES } from "@/types/api";
 import type { InputJsonValue } from "@prisma/client/runtime/library";
 import { z } from "zod";
 
-
 const widgetSchema = z.object({
   widgets: z.array(
     z.object({

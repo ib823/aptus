@@ -10,7 +10,6 @@ import type { InteractiveFlowData } from "@/types/flow";
 import type { LayoutStep } from "@/lib/assessment/flow-layout";
 import type { InputJsonValue } from "@prisma/client/runtime/library";
 
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; flowId: string }> },

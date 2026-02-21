@@ -6,7 +6,6 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
-
 const dismissSchema = z.object({
   tooltipKey: z.string().min(1),
 });

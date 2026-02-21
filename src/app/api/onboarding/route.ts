@@ -7,7 +7,6 @@ import { ERROR_CODES } from "@/types/api";
 import { getOnboardingFlow } from "@/lib/onboarding/flow-engine";
 import type { UserRole } from "@/types/assessment";
 
-
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

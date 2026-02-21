@@ -6,7 +6,6 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { calculateKpiMetrics } from "@/lib/dashboard/kpi-calculator";
 
-
 /** Map OCM severity to a numeric impact score for KPI calculation */
 function severityToScore(severity: string): number {
   switch (severity) {

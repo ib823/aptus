@@ -7,7 +7,6 @@ import { ERROR_CODES } from "@/types/api";
 import { getHeatmapColor } from "@/lib/dashboard/widgets";
 import type { HeatmapCell } from "@/types/dashboard";
 
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ assessmentId: string }> },

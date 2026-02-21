@@ -8,7 +8,6 @@ import { ERROR_CODES } from "@/types/api";
 import { calculateReadinessScorecard } from "@/lib/report/readiness-calculator";
 import type { UserRole } from "@/types/assessment";
 
-
 const ALLOWED_ROLES: UserRole[] = [
   "consultant",
   "project_manager",

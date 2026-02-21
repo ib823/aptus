@@ -9,7 +9,6 @@ import type { QuestionFlow } from "@/types/conversation";
 import type { InputJsonValue } from "@prisma/client/runtime/library";
 import { z } from "zod";
 
-
 const updateSchema = z.object({
   questionFlow: z.object({
     rootQuestionId: z.string(),

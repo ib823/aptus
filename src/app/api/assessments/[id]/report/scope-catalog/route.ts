@@ -5,7 +5,6 @@ import { authenticateForReport, isErrorResponse } from "@/lib/report/report-auth
 import { getScopeDataForReport } from "@/lib/report/report-data";
 import { generateXlsx, scopeCatalogSheet } from "@/lib/report/xlsx-generator";
 
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

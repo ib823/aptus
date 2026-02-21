@@ -7,7 +7,6 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { computeFitRate, computeBenchmarkComparison, generateInsights } from "@/lib/analytics/benchmark-engine";
 
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ assessmentId: string }> },

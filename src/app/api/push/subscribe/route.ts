@@ -6,7 +6,6 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
-
 const subscribeSchema = z.object({
   endpoint: z.string().url(),
   keys: z.object({
