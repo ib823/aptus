@@ -21,7 +21,7 @@ function getAdapter(): Adapter {
     ...baseAdapter,
     createUser: async (data: { email: string; emailVerified?: Date | null; name?: string | null; image?: string | null }) => {
       const userCount = await prisma.user.count();
-      const role = userCount === 0 ? "admin" : "consultant";
+      const role = userCount === 0 ? "platform_admin" : "consultant";
       return prisma.user.create({
         data: {
           email: data.email,

@@ -4,6 +4,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
+import { mapLegacyRole } from "@/lib/auth/role-migration";
+import { getCapabilities } from "@/lib/auth/role-permissions";
 import { createAssessment, listAssessments } from "@/lib/db/assessments";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
@@ -35,8 +37,10 @@ export async function GET(): Promise<NextResponse> {
     );
   }
 
-  // Admins and consultants without org see all assessments
-  if (!user.organizationId && (user.role === "admin" || user.role === "consultant")) {
+  // Platform admins, partner leads, and consultants without org see all assessments
+  const role = mapLegacyRole(user.role);
+  const caps = getCapabilities(role);
+  if (!user.organizationId && (caps.canViewAllAssessments || role === "consultant")) {
     const assessments = await prisma.assessment.findMany({
       where: { deletedAt: null },
       orderBy: { updatedAt: "desc" },
@@ -88,9 +92,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  if (user.role !== "consultant" && user.role !== "admin") {
+  const createRole = mapLegacyRole(user.role);
+  const createCaps = getCapabilities(createRole);
+  if (!createCaps.canCreateAssessment) {
     return NextResponse.json(
-      { error: { code: ERROR_CODES.FORBIDDEN, message: "Only consultants and admins can create assessments" } },
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "Your role does not have permission to create assessments" } },
       { status: 403 },
     );
   }

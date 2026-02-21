@@ -40,7 +40,7 @@ export default async function UsersPage() {
                 <td className="px-4 py-2.5 text-muted-foreground">{u.email}</td>
                 <td className="px-4 py-2.5">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                    u.role === "admin"
+                    u.role === "admin" || u.role === "platform_admin"
                       ? "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
                       : u.role === "consultant"
                         ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"

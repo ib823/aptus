@@ -328,6 +328,14 @@ model Assessment {
   signOffs       AssessmentSignOff[]
   flowDiagrams   ProcessFlowDiagram[]
   remainingItems RemainingItem[]
+  integrationPoints    IntegrationPoint[]
+  dataMigrationObjects DataMigrationObject[]
+  ocmImpacts           OcmImpact[]
+
+  // Phase 18: Assessment Lifecycle
+  phaseProgress      AssessmentPhaseProgress[]
+  workshopSessions   WorkshopSession[]
+  statusTransitions  StatusTransitionLog[]
 
   @@index([status])
   @@index([createdBy])
@@ -587,6 +595,102 @@ model RemainingItem {
 }
 
 // =============================================================
+// Layer 3b: Register Data
+// =============================================================
+
+model IntegrationPoint {
+  id               String    @id @default(cuid())
+  assessmentId     String
+  scopeItemId      String?
+  name             String
+  description      String    @db.Text
+  direction        String    // INBOUND, OUTBOUND, BIDIRECTIONAL
+  sourceSystem     String
+  targetSystem     String
+  interfaceType    String    // API, IDOC, FILE, RFC, ODATA, EVENT
+  frequency        String    // REAL_TIME, NEAR_REAL_TIME, BATCH_DAILY, BATCH_WEEKLY, ON_DEMAND
+  middleware       String?   // SAP_CPI, SAP_PO, MULESOFT, BOOMI, AZURE_INTEGRATION, OTHER
+  dataVolume       String?
+  complexity       String?   // LOW, MEDIUM, HIGH, VERY_HIGH
+  priority         String?   // critical, high, medium, low
+  status           String    @default("identified") // identified, analyzed, designed, approved
+  technicalNotes   String?   @db.Text
+  createdBy        String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@index([assessmentId])
+  @@index([assessmentId, status])
+  @@index([assessmentId, direction])
+}
+
+model DataMigrationObject {
+  id                String    @id @default(cuid())
+  assessmentId      String
+  scopeItemId       String?
+  objectName        String
+  description       String    @db.Text
+  objectType        String    // MASTER_DATA, TRANSACTION_DATA, CONFIG_DATA, HISTORICAL, REFERENCE
+  sourceSystem      String
+  sourceFormat      String?   // SAP_TABLE, CSV, EXCEL, XML, DATABASE, API
+  volumeEstimate    String?   // SMALL, MEDIUM, LARGE, VERY_LARGE
+  recordCount       Int?
+  cleansingRequired Boolean   @default(false)
+  cleansingNotes    String?   @db.Text
+  mappingComplexity String?   // SIMPLE, MODERATE, COMPLEX, VERY_COMPLEX
+  migrationApproach String?   // AUTOMATED, SEMI_AUTOMATED, MANUAL, HYBRID
+  migrationTool     String?   // LTMC, LSMW, BODS, CPI, CUSTOM
+  validationRules   String?   @db.Text
+  priority          String?   // critical, high, medium, low
+  status            String    @default("identified") // identified, mapped, cleansed, validated, approved
+  dependsOn         String[]  @default([])   // IDs of other DataMigrationObjects
+  technicalNotes    String?   @db.Text
+  createdBy         String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@index([assessmentId])
+  @@index([assessmentId, status])
+  @@index([assessmentId, objectType])
+}
+
+model OcmImpact {
+  id                 String    @id @default(cuid())
+  assessmentId       String
+  scopeItemId        String?
+  functionalArea     String?
+  impactedRole       String
+  impactedDepartment String?
+  changeType         String    // PROCESS_CHANGE, ROLE_CHANGE, TECHNOLOGY_CHANGE, ORGANIZATIONAL, BEHAVIORAL
+  severity           String    // LOW, MEDIUM, HIGH, TRANSFORMATIONAL
+  description        String    @db.Text
+  trainingRequired   Boolean   @default(false)
+  trainingType       String?   // INSTRUCTOR_LED, E_LEARNING, ON_THE_JOB, WORKSHOP
+  trainingDuration   Float?    // days
+  communicationPlan  String?   @db.Text
+  resistanceRisk     String?   // LOW, MEDIUM, HIGH
+  readinessScore     Float?    // 0.0 to 1.0
+  mitigationStrategy String?   @db.Text
+  priority           String?   // critical, high, medium, low
+  status             String    @default("identified") // identified, assessed, planned, approved
+  technicalNotes     String?   @db.Text
+  createdBy          String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@index([assessmentId])
+  @@index([assessmentId, status])
+  @@index([assessmentId, changeType])
+  @@index([assessmentId, severity])
+}
+
+// =============================================================
 // Layer 4: Authentication & Authorization
 // =============================================================
 
@@ -615,6 +719,12 @@ model User {
   invitedBy   String?
   invitedAt   DateTime?
 
+  // Phase 17: Role System Enrichment
+  displayRole        String?
+  deactivatedAt      DateTime?
+  deactivatedBy      String?
+  deactivationReason String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -627,6 +737,8 @@ model User {
   @@index([role])
   @@index([organizationId])
   @@index([email])
+  @@index([organizationId, role])
+  @@index([organizationId, isActive])
 }
 
 /// NextAuth Account model — required by PrismaAdapter for provider linking
@@ -661,15 +773,36 @@ model VerificationToken {
 model Organization {
   id        String   @id @default(cuid())
   name      String
+  slug      String?  @unique
   type      String
+  orgType   String   @default("client") // partner, client, platform
   domain    String?
   logoUrl   String?
   isActive  Boolean  @default(true)
+
+  // SSO Configuration (structure only; actual SSO in Phase 29)
+  ssoEnabled   Boolean  @default(false)
+  ssoProvider  String?
+  ssoDomain    String?
+  scimEnabled  Boolean  @default(false)
+  scimEndpoint String?
+
+  // Policies
+  mfaPolicy             String  @default("optional") // disabled, optional, required
+  maxConcurrentSessions Int     @default(3)
+
+  // Branding
+  brandPrimaryColor String?
+  brandLogoUrl      String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   users       User[]
   assessments Assessment[]
+  invitations OrgInvitation[]
+
+  @@index([slug])
 }
 
 model Session {
@@ -749,4 +882,92 @@ model MagicLinkToken {
   @@index([email])
   @@index([token])
   @@index([expiresAt])
+}
+
+// =============================================================
+// Layer 5: Phase 17 — Organization Invitations
+// =============================================================
+
+model OrgInvitation {
+  id             String    @id @default(cuid())
+  organizationId String
+  email          String
+  role           String
+  invitedBy      String
+  token          String    @unique
+  status         String    @default("pending") // pending, accepted, expired, revoked
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, email, status])
+  @@index([organizationId])
+  @@index([token])
+  @@index([email])
+}
+
+// =============================================================
+// Layer 6: Phase 18 — Assessment Lifecycle
+// =============================================================
+
+model AssessmentPhaseProgress {
+  id             String    @id @default(cuid())
+  assessmentId   String
+  phase          String // scoping, process_review, gap_resolution, integration, data_migration, ocm, validation, sign_off
+  status         String    @default("not_started") // not_started, in_progress, completed, blocked
+  completionPct  Int       @default(0) // 0-100
+  blockedReason  String?   @db.Text
+  startedAt      DateTime?
+  completedAt    DateTime?
+  completedBy    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@unique([assessmentId, phase])
+  @@index([assessmentId])
+}
+
+model WorkshopSession {
+  id              String    @id @default(cuid())
+  assessmentId    String
+  sessionCode     String    @unique // 6-char alphanumeric
+  title           String
+  description     String?   @db.Text
+  status          String    @default("scheduled") // scheduled, in_progress, completed, cancelled
+  facilitatorId   String
+  facilitatorName String
+  scheduledAt     DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  attendeeCount   Int       @default(0)
+  notes           String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@index([assessmentId])
+  @@index([sessionCode])
+  @@index([assessmentId, status])
+}
+
+model StatusTransitionLog {
+  id              String   @id @default(cuid())
+  assessmentId    String
+  fromStatus      String
+  toStatus        String
+  triggeredBy     String
+  triggeredByRole String
+  reason          String?  @db.Text
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+
+  @@index([assessmentId])
+  @@index([assessmentId, createdAt])
 }

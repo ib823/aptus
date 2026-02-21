@@ -33,7 +33,7 @@ export async function POST(
     );
   }
 
-  if (user.role !== "consultant" && user.role !== "admin") {
+  if (!["consultant", "admin", "platform_admin"].includes(user.role)) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Only consultants and admins can apply industry templates" } },
       { status: 403 },

@@ -32,7 +32,7 @@ export function PortalNav({ user }: PortalNavProps) {
       label: UI_TEXT.nav.admin,
       href: "/admin",
       icon: Settings,
-      show: user.role === "admin",
+      show: ["platform_admin", "admin"].includes(user.role),
     },
   ];
 

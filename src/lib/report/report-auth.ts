@@ -49,7 +49,7 @@ export async function authenticateForReport(
   }
 
   // Verify user has access to this assessment
-  if (user.role !== "admin") {
+  if (!["admin", "platform_admin"].includes(user.role)) {
     // Check org membership or stakeholder association
     const isStakeholder = await prisma.assessmentStakeholder.findFirst({
       where: { assessmentId, userId: user.id },
@@ -65,7 +65,7 @@ export async function authenticateForReport(
   }
 
   if (requireCompleted) {
-    const allowedStatuses = ["completed", "reviewed", "signed_off"];
+    const allowedStatuses = ["completed", "reviewed", "signed_off", "pending_validation", "validated", "pending_sign_off", "handed_off", "archived"];
     if (!allowedStatuses.includes(assessment.status)) {
       return NextResponse.json(
         { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Assessment must be completed before generating reports" } },

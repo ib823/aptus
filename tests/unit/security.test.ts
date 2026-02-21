@@ -1,6 +1,7 @@
 /** Security unit tests — sanitization, rate limiting, input validation */
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
+import type { UserRole } from "@/types/assessment";
 
 // ── HTML Sanitization ─────────────────────────────────────────────────────
 describe("HTML Sanitization", () => {
@@ -393,7 +394,7 @@ describe("Permission Boundaries", () => {
 
     const verifiedUser = {
       id: "1", email: "test@test.com", name: "Test",
-      role: "executive" as const,
+      role: "executive" as unknown as UserRole,
       organizationId: null, mfaEnabled: true, mfaVerified: true, totpVerified: true,
     };
     expect(isMfaRequired(verifiedUser)).toBe(false);
@@ -404,14 +405,14 @@ describe("Permission Boundaries", () => {
 
     const adminNoMfa = {
       id: "1", email: "admin@test.com", name: "Admin",
-      role: "admin" as const,
+      role: "admin" as unknown as UserRole,
       organizationId: null, mfaEnabled: false, mfaVerified: false, totpVerified: false,
     };
     expect(isMfaRequired(adminNoMfa)).toBe(false);
 
     const adminWithMfa = {
       id: "1", email: "admin@test.com", name: "Admin",
-      role: "admin" as const,
+      role: "admin" as unknown as UserRole,
       organizationId: null, mfaEnabled: true, mfaVerified: false, totpVerified: true,
     };
     expect(isMfaRequired(adminWithMfa)).toBe(true);
@@ -422,7 +423,7 @@ describe("Permission Boundaries", () => {
 
     const executive = {
       id: "1", email: "exec@test.com", name: "Exec",
-      role: "executive" as const,
+      role: "executive" as unknown as UserRole,
       organizationId: null, mfaEnabled: true, mfaVerified: true, totpVerified: true,
     };
     const result = await canEditStepResponse(executive, "assessment-1", "Finance");
@@ -434,7 +435,7 @@ describe("Permission Boundaries", () => {
 
     const executive = {
       id: "1", email: "exec@test.com", name: "Exec",
-      role: "executive" as const,
+      role: "executive" as unknown as UserRole,
       organizationId: null, mfaEnabled: true, mfaVerified: true, totpVerified: true,
     };
     expect(canManageStakeholders(executive).allowed).toBe(false);

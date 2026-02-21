@@ -114,7 +114,7 @@ export async function addStakeholder(input: {
       email: input.email,
       role: input.role,
       assignedAreas: input.assignedAreas,
-      canEdit: input.role !== "executive" && input.role !== "it_lead",
+      canEdit: input.role !== "executive" && input.role !== "executive_sponsor" && input.role !== "viewer" && input.role !== "client_admin",
       invitedBy: input.invitedBy,
     },
   });

@@ -18,7 +18,7 @@ export default async function AssessmentsPage() {
   // Fetch assessments based on user role
   const whereClause = user.organizationId
     ? { organizationId: user.organizationId, deletedAt: null }
-    : (user.role === "admin" || user.role === "consultant")
+    : (["platform_admin", "admin", "consultant", "partner_lead"].includes(user.role))
       ? { deletedAt: null }
       : { deletedAt: null, stakeholders: { some: { userId: user.id } } };
 
@@ -42,7 +42,7 @@ export default async function AssessmentsPage() {
     },
   });
 
-  const canCreate = user.role === "consultant" || user.role === "admin";
+  const canCreate = ["consultant", "platform_admin", "admin", "partner_lead"].includes(user.role);
 
   return (
     <>

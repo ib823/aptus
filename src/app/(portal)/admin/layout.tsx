@@ -9,7 +9,7 @@ export default async function AdminLayout({
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role !== "admin") redirect("/dashboard");
+  if (!["platform_admin", "admin"].includes(user.role)) redirect("/dashboard");
 
   return (
     <div className="flex min-h-[calc(100vh-64px)]">

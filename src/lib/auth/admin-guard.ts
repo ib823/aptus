@@ -2,7 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
+import { isMfaRequired, isAdminRole } from "@/lib/auth/permissions";
 import { ERROR_CODES } from "@/types/api";
 import type { SessionUser } from "@/types/assessment";
 
@@ -12,6 +12,7 @@ interface AdminAuthResult {
 
 /**
  * Authenticate user and verify admin role.
+ * Supports both legacy "admin" and new "platform_admin" role.
  * Returns error NextResponse if validation fails, or the user on success.
  */
 export async function requireAdmin(): Promise<AdminAuthResult | NextResponse> {
@@ -30,7 +31,7 @@ export async function requireAdmin(): Promise<AdminAuthResult | NextResponse> {
     );
   }
 
-  if (user.role !== "admin") {
+  if (!isAdminRole(user.role)) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Admin access required" } },
       { status: 403 },

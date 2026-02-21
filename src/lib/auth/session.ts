@@ -5,6 +5,7 @@ import { randomBytes } from "crypto";
 import { prisma } from "@/lib/db/prisma";
 import { APP_CONFIG } from "@/constants/config";
 import type { SessionUser } from "@/types/assessment";
+import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { cookies } from "next/headers";
 
 export const SESSION_COOKIE_NAME = "fit-portal-session";
@@ -102,7 +103,7 @@ export async function validateSession(
     id: session.user.id,
     email: session.user.email,
     name: session.user.name,
-    role: session.user.role as SessionUser["role"],
+    role: mapLegacyRole(session.user.role),
     organizationId: session.user.organizationId,
     mfaEnabled: session.user.mfaEnabled,
     mfaVerified: session.mfaVerified,

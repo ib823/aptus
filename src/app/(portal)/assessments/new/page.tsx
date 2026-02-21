@@ -8,7 +8,7 @@ export default async function NewAssessmentPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  if (user.role !== "consultant" && user.role !== "admin") {
+  if (!["consultant", "platform_admin", "admin", "partner_lead"].includes(user.role)) {
     redirect("/assessments");
   }
 

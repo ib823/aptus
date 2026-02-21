@@ -5,14 +5,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired, canTransitionStatus } from "@/lib/auth/permissions";
+import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { getAssessment, updateAssessmentStatus, softDeleteAssessment } from "@/lib/db/assessments";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import type { AssessmentStatus } from "@/types/assessment";
 import { z } from "zod";
 
 const updateSchema = z.object({
-  status: z.enum(["draft", "in_progress", "completed", "reviewed", "signed_off"]).optional(),
+  status: z.string().optional(),
 });
 
 export async function GET(
@@ -95,11 +97,22 @@ export async function PATCH(
     const oldStatus = assessment.status;
     const updated = await updateAssessmentStatus(id, parsed.data.status as AssessmentStatus);
 
+    // Log to StatusTransitionLog (Phase 18)
+    await prisma.statusTransitionLog.create({
+      data: {
+        assessmentId: id,
+        fromStatus: oldStatus,
+        toStatus: parsed.data.status,
+        triggeredBy: user.id,
+        triggeredByRole: user.role,
+      },
+    });
+
     await logDecision({
       assessmentId: id,
       entityType: "assessment",
       entityId: id,
-      action: "APPROVED",
+      action: "STATUS_TRANSITIONED",
       oldValue: { status: oldStatus },
       newValue: { status: parsed.data.status },
       actor: user.email,
@@ -124,9 +137,10 @@ export async function DELETE(
     );
   }
 
-  if (user.role !== "admin" && user.role !== "consultant") {
+  const role = mapLegacyRole(user.role);
+  if (role !== "platform_admin" && role !== "consultant" && role !== "partner_lead") {
     return NextResponse.json(
-      { error: { code: ERROR_CODES.FORBIDDEN, message: "Only admins and consultants can delete assessments" } },
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "Only admins, partner leads, and consultants can delete assessments" } },
       { status: 403 },
     );
   }

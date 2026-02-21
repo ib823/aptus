@@ -1,5 +1,6 @@
 /** Assessment data types */
 
+/** V1 status type -- kept for backward compatibility */
 export type AssessmentStatus =
   | "draft"
   | "in_progress"
@@ -7,12 +8,95 @@ export type AssessmentStatus =
   | "reviewed"
   | "signed_off";
 
+/** V2 expanded 10-status lifecycle (Phase 18) */
+export type AssessmentStatusV2 =
+  | "draft"
+  | "scoping"
+  | "in_progress"
+  | "workshop_active"
+  | "review_cycle"
+  | "gap_resolution"
+  | "pending_validation"
+  | "validated"
+  | "pending_sign_off"
+  | "signed_off"
+  | "handed_off"
+  | "archived";
+
+/** Phase 18: Assessment phases for progress tracking */
+export type AssessmentPhase =
+  | "scoping"
+  | "process_review"
+  | "gap_resolution"
+  | "integration"
+  | "data_migration"
+  | "ocm"
+  | "validation"
+  | "sign_off";
+
+/** Phase 18: Phase progress status */
+export type PhaseStatus = "not_started" | "in_progress" | "completed" | "blocked";
+
+/** Phase 18: Workshop session status */
+export type WorkshopSessionStatus = "scheduled" | "in_progress" | "completed" | "cancelled";
+
+/** Phase 17: Organization type */
+export type OrgType = "partner" | "client" | "platform";
+
+/** Phase 17: 11-role system (replaces the old 5-role model) */
 export type UserRole =
+  | "platform_admin"
+  | "partner_lead"
+  | "consultant"
+  | "project_manager"
+  | "solution_architect"
   | "process_owner"
   | "it_lead"
-  | "executive"
-  | "consultant"
-  | "admin";
+  | "data_migration_lead"
+  | "executive_sponsor"
+  | "viewer"
+  | "client_admin";
+
+/**
+ * Legacy role type -- for backward compatibility references.
+ * The old 5 roles mapped to new ones:
+ *   admin -> platform_admin
+ *   executive -> executive_sponsor
+ *   consultant -> consultant (unchanged)
+ *   process_owner -> process_owner (unchanged)
+ *   it_lead -> it_lead (unchanged)
+ */
+export type LegacyUserRole = "admin" | "executive" | "consultant" | "process_owner" | "it_lead";
+
+/** Phase 17: Human-readable role labels */
+export const ROLE_LABELS: Record<UserRole, string> = {
+  platform_admin: "Platform Admin",
+  partner_lead: "Partner Lead",
+  consultant: "Consultant",
+  project_manager: "Project Manager",
+  solution_architect: "Solution Architect",
+  process_owner: "Process Owner",
+  it_lead: "IT Lead",
+  data_migration_lead: "Data Migration Lead",
+  executive_sponsor: "Executive Sponsor",
+  viewer: "Viewer",
+  client_admin: "Client Admin",
+};
+
+/** Phase 17: Role hierarchy -- higher number = higher authority */
+export const ROLE_HIERARCHY: Record<UserRole, number> = {
+  platform_admin: 100,
+  partner_lead: 90,
+  consultant: 80,
+  solution_architect: 75,
+  project_manager: 70,
+  client_admin: 65,
+  process_owner: 60,
+  it_lead: 55,
+  data_migration_lead: 50,
+  executive_sponsor: 45,
+  viewer: 10,
+};
 
 export type FitStatus = "FIT" | "CONFIGURE" | "GAP" | "NA" | "PENDING";
 
@@ -72,6 +156,30 @@ export interface CostRollup {
   byPriority: Record<string, { oneTime: number; recurring: number; count: number }>;
 }
 
+// Phase 14: Integration Register
+export type IntegrationDirection = "INBOUND" | "OUTBOUND" | "BIDIRECTIONAL";
+export type InterfaceType = "API" | "IDOC" | "FILE" | "RFC" | "ODATA" | "EVENT";
+export type IntegrationFrequency = "REAL_TIME" | "NEAR_REAL_TIME" | "BATCH_DAILY" | "BATCH_WEEKLY" | "ON_DEMAND";
+export type IntegrationMiddleware = "SAP_CPI" | "SAP_PO" | "MULESOFT" | "BOOMI" | "AZURE_INTEGRATION" | "OTHER";
+export type IntegrationComplexity = "LOW" | "MEDIUM" | "HIGH" | "VERY_HIGH";
+export type IntegrationStatus = "identified" | "analyzed" | "designed" | "approved";
+
+// Phase 15: Data Migration Register
+export type DataMigrationObjectType = "MASTER_DATA" | "TRANSACTION_DATA" | "CONFIG_DATA" | "HISTORICAL" | "REFERENCE";
+export type SourceFormat = "SAP_TABLE" | "CSV" | "EXCEL" | "XML" | "DATABASE" | "API";
+export type VolumeEstimate = "SMALL" | "MEDIUM" | "LARGE" | "VERY_LARGE";
+export type MappingComplexity = "SIMPLE" | "MODERATE" | "COMPLEX" | "VERY_COMPLEX";
+export type DataMigrationApproach = "AUTOMATED" | "SEMI_AUTOMATED" | "MANUAL" | "HYBRID";
+export type DataMigrationTool = "LTMC" | "LSMW" | "BODS" | "CPI" | "CUSTOM";
+export type DataMigrationStatus = "identified" | "mapped" | "cleansed" | "validated" | "approved";
+
+// Phase 16: OCM Impact Register
+export type OcmChangeType = "PROCESS_CHANGE" | "ROLE_CHANGE" | "TECHNOLOGY_CHANGE" | "ORGANIZATIONAL" | "BEHAVIORAL";
+export type OcmSeverity = "LOW" | "MEDIUM" | "HIGH" | "TRANSFORMATIONAL";
+export type TrainingType = "INSTRUCTOR_LED" | "E_LEARNING" | "ON_THE_JOB" | "WORKSHOP";
+export type ResistanceRisk = "LOW" | "MEDIUM" | "HIGH";
+export type OcmStatus = "identified" | "assessed" | "planned" | "approved";
+
 export type DecisionAction =
   | "MARKED_FIT"
   | "MARKED_GAP"
@@ -93,7 +201,25 @@ export type DecisionAction =
   | "CONFIG_EXCLUDED"
   | "GAP_APPROVAL_ADDED"
   | "GAP_ALTERNATIVE_ADDED"
-  | "PROFILE_UPDATED";
+  | "PROFILE_UPDATED"
+  | "INTEGRATION_CREATED"
+  | "INTEGRATION_UPDATED"
+  | "INTEGRATION_DELETED"
+  | "DATA_MIGRATION_CREATED"
+  | "DATA_MIGRATION_UPDATED"
+  | "DATA_MIGRATION_DELETED"
+  | "OCM_CREATED"
+  | "OCM_UPDATED"
+  | "OCM_DELETED"
+  | "ROLE_CHANGED"
+  | "USER_INVITED"
+  | "USER_DEACTIVATED"
+  | "ORG_UPDATED"
+  | "STATUS_TRANSITIONED"
+  | "PHASE_UPDATED"
+  | "WORKSHOP_CREATED"
+  | "WORKSHOP_STARTED"
+  | "WORKSHOP_COMPLETED";
 
 export interface AssessmentSummary {
   id: string;
@@ -133,7 +259,7 @@ export interface SessionUser {
   totpVerified: boolean;
 }
 
-/** Status transition rules */
+/** V1 status transition rules -- kept for backward compatibility */
 export const VALID_STATUS_TRANSITIONS: Record<AssessmentStatus, AssessmentStatus[]> = {
   draft: ["in_progress"],
   in_progress: ["completed"],
@@ -142,10 +268,22 @@ export const VALID_STATUS_TRANSITIONS: Record<AssessmentStatus, AssessmentStatus
   signed_off: [],
 };
 
-/** Role-based transition permissions */
+/** V1 role-based transition permissions -- kept for backward compatibility */
 export const STATUS_TRANSITION_ROLES: Record<string, UserRole[]> = {
-  "draft->in_progress": ["consultant", "admin"],
-  "in_progress->completed": ["consultant", "admin"],
-  "completed->reviewed": ["consultant", "admin"],
-  "reviewed->signed_off": ["consultant", "admin", "executive"],
+  "draft->in_progress": ["consultant", "platform_admin"],
+  "in_progress->completed": ["consultant", "platform_admin"],
+  "completed->reviewed": ["consultant", "platform_admin"],
+  "reviewed->signed_off": ["consultant", "platform_admin", "executive_sponsor"],
 };
+
+/** All 8 assessment phases (Phase 18) */
+export const ASSESSMENT_PHASES: AssessmentPhase[] = [
+  "scoping",
+  "process_review",
+  "gap_resolution",
+  "integration",
+  "data_migration",
+  "ocm",
+  "validation",
+  "sign_off",
+];
