@@ -895,6 +895,8 @@ model Organization {
   templates      AssessmentTemplate[]
   usageEvents    UsageEvent[]
   invitations OrgInvitation[]
+  // Phase 26
+  portfolioMetrics PortfolioMetric[]
 
   @@index([slug])
   @@index([plan])
@@ -1442,9 +1444,25 @@ model AssessmentTemplate {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  // Phase 26: Analytics, Benchmarking & Templates
+  companySize         String?
+  modules             String[]   @default([])
+  geography           String?
+  scopeSelections     Json?
+  commonGapPatterns   Json?
+  integrationPatterns Json?
+  dmPatterns          Json?
+  workshopTemplate    Json?
+  roleTemplate        Json?
+  sourceAssessmentId  String?
+  isPublished         Boolean    @default(false)
+  timesUsed           Int        @default(0)
+
   organization Organization @relation(fields: [organizationId], references: [id])
   @@index([organizationId])
   @@index([isDemo])
+  @@index([organizationId, industry])
+  @@index([organizationId, isPublished])
 }
 
 model UsageEvent {
@@ -1698,4 +1716,61 @@ model SnapshotComparison {
 
   @@unique([baseSnapshotId, compareSnapshotId])
   @@index([assessmentId])
+}
+
+// =============================================================
+// Phase 26: Analytics, Benchmarking & Templates
+// =============================================================
+
+model BenchmarkSnapshot {
+  id                 String   @id @default(cuid())
+  industry           String
+  companySize        String?
+  sampleSize         Int
+  avgFitRate         Float
+  avgGapRate         Float
+  avgConfigRate      Float
+  avgNaRate          Float
+  medianFitRate      Float?
+  p25FitRate         Float?
+  p75FitRate         Float?
+  commonGaps         Json
+  commonIntegrations Json
+  avgAssessmentDays  Float?
+  avgScopeItemCount  Float?
+  computedAt         DateTime @default(now())
+
+  @@unique([industry, companySize])
+  @@index([industry])
+}
+
+model PortfolioMetric {
+  id             String   @id @default(cuid())
+  organizationId String
+  metricType     String
+  metricValue    Json
+  period         String
+  computedAt     DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, metricType, period])
+  @@index([organizationId, metricType])
+  @@index([organizationId, period])
+}
+
+model AssessmentPhaseLink {
+  id                  String   @id @default(cuid())
+  clientIdentifier    String
+  phase1AssessmentId  String
+  phase2AssessmentId  String
+  linkedById          String
+  scopeDelta          Json?
+  classificationDelta Json?
+  linkedAt            DateTime @default(now())
+
+  @@unique([phase1AssessmentId, phase2AssessmentId])
+  @@index([clientIdentifier])
+  @@index([phase1AssessmentId])
+  @@index([phase2AssessmentId])
 }

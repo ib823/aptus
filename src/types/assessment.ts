@@ -244,7 +244,12 @@ export type DecisionAction =
   | "CHANGE_REQUEST_CREATED"
   | "CHANGE_REQUEST_APPROVED"
   | "TRIGGER_CREATED"
-  | "ASSESSMENT_CLONED";
+  | "ASSESSMENT_CLONED"
+  | "TEMPLATE_CREATED"
+  | "ASSESSMENT_FROM_TEMPLATE"
+  | "CROSS_PHASE_LINKED"
+  | "PUSH_SUBSCRIBED"
+  | "OFFLINE_SYNCED";
 
 export interface AssessmentSummary {
   id: string;
