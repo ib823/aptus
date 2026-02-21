@@ -8,7 +8,6 @@ import { ERROR_CODES } from "@/types/api";
 import type { UserRole } from "@/types/assessment";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 const ALLOWED_ROLES: UserRole[] = ["partner_lead", "client_admin", "platform_admin"];
 

@@ -10,7 +10,6 @@ import type { InputJsonValue } from "@prisma/client/runtime/library";
 import { z } from "zod";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 const createSchema = z.object({
   scopeItemId: z.string().min(1),

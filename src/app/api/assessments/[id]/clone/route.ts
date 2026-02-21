@@ -11,7 +11,6 @@ import type { SnapshotData } from "@/types/signoff";
 import { z } from "zod";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 const cloneSchema = z.object({
   snapshotVersion: z.number().int().min(1),

@@ -8,7 +8,6 @@ import { getHeatmapColor } from "@/lib/dashboard/widgets";
 import type { HeatmapCell } from "@/types/dashboard";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 export async function GET(
   _request: NextRequest,

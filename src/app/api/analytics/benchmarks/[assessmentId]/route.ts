@@ -8,7 +8,6 @@ import { ERROR_CODES } from "@/types/api";
 import { computeFitRate, computeBenchmarkComparison, generateInsights } from "@/lib/analytics/benchmark-engine";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 export async function GET(
   _request: NextRequest,

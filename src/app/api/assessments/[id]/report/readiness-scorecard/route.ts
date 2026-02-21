@@ -9,7 +9,6 @@ import { calculateReadinessScorecard } from "@/lib/report/readiness-calculator";
 import type { UserRole } from "@/types/assessment";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 const ALLOWED_ROLES: UserRole[] = [
   "consultant",

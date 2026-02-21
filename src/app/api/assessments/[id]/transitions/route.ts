@@ -11,7 +11,6 @@ import { canTransition, getAvailableTransitions } from "@/lib/assessment/status-
 import { z } from "zod";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 const transitionSchema = z.object({
   toStatus: z.string().min(1),

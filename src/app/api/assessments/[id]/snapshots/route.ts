@@ -11,7 +11,6 @@ import { computeCanonicalHash } from "@/lib/signoff/hash-engine";
 import { z } from "zod";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 const createSnapshotSchema = z.object({
   label: z.string().optional(),

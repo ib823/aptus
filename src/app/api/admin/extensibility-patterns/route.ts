@@ -8,7 +8,6 @@ import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAdmin();

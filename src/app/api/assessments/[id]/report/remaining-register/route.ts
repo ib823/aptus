@@ -6,7 +6,6 @@ import { prisma } from "@/lib/db/prisma";
 import { generateXlsx, remainingItemsSheet } from "@/lib/report/xlsx-generator";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 export async function GET(
   _request: NextRequest,

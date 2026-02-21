@@ -6,7 +6,6 @@ import { getScopeDataForReport } from "@/lib/report/report-data";
 import { generateXlsx, scopeCatalogSheet } from "@/lib/report/xlsx-generator";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 export async function GET(
   _request: NextRequest,

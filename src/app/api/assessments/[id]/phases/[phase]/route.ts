@@ -11,7 +11,6 @@ import type { UserRole } from "@/types/assessment";
 import { z } from "zod";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 const phaseUpdateSchema = z.object({
   status: z.enum(["not_started", "in_progress", "completed", "blocked"]).optional(),

@@ -9,7 +9,6 @@ import { validateSyncItem, detectConflict, categorizeSyncResults } from "@/lib/p
 import { z } from "zod";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 const syncSchema = z.object({
   items: z

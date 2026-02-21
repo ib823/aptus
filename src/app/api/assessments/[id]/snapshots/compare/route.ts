@@ -9,7 +9,6 @@ import { computeDeltaReport, computeDeltaSummary } from "@/lib/lifecycle/delta-e
 import type { SnapshotData } from "@/types/signoff";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 export async function GET(
   request: NextRequest,

@@ -12,7 +12,6 @@ import type { SignOffStatus } from "@/types/signoff";
 import { z } from "zod";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 const partnerSignSchema = z.object({
   authorityStatement: z.string().min(10, "Authority statement must be at least 10 characters"),

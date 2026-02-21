@@ -9,7 +9,6 @@ import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 const createFromTemplateSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),

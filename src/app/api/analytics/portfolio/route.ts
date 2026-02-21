@@ -8,7 +8,6 @@ import { ERROR_CODES } from "@/types/api";
 import { computePortfolioSummary, computeFitRateByIndustry, computeTopGaps } from "@/lib/analytics/portfolio-engine";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function GET(_request: NextRequest): Promise<NextResponse> {

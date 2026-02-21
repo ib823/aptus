@@ -8,7 +8,6 @@ import { prisma } from "@/lib/db/prisma";
 import { APP_CONFIG } from "@/constants/config";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rawCallback = request.nextUrl.searchParams.get("callbackUrl") ?? "/assessments";

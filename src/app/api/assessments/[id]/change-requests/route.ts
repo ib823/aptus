@@ -13,7 +13,6 @@ import type { SnapshotData } from "@/types/signoff";
 import { z } from "zod";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 const unlockedEntitySchema = z.object({
   entityType: z.enum(["scope_selection", "step_response", "gap_resolution", "integration", "data_migration", "ocm"]),

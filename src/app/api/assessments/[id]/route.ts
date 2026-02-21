@@ -14,7 +14,6 @@ import type { AssessmentStatus } from "@/types/assessment";
 import { z } from "zod";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 const updateSchema = z.object({
   status: z.string().optional(),

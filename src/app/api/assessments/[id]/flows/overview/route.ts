@@ -9,7 +9,6 @@ import { ERROR_CODES } from "@/types/api";
 import type { FunctionalAreaOverviewData } from "@/types/flow";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 export async function GET(
   _request: NextRequest,

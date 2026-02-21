@@ -8,7 +8,6 @@ import { getOnboardingFlow } from "@/lib/onboarding/flow-engine";
 import type { UserRole } from "@/types/assessment";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();

@@ -6,7 +6,6 @@ import { getReportSummary } from "@/lib/report/report-data";
 import { generateExecutiveSummaryPdf } from "@/lib/report/pdf-generator";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 export async function GET(
   _request: NextRequest,

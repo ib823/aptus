@@ -10,7 +10,6 @@ import { parseMentions } from "@/lib/collaboration/mention-parser";
 import { dispatchNotification } from "@/lib/notifications/dispatcher";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 const CreateCommentSchema = z.object({
   targetType: z.enum(["STEP", "GAP", "SCOPE_ITEM", "INTEGRATION", "DATA_MIGRATION", "OCM"]),

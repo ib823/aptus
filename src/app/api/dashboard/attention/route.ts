@@ -7,7 +7,6 @@ import { ERROR_CODES } from "@/types/api";
 import { computeAttentionItems } from "@/lib/dashboard/attention-engine";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();

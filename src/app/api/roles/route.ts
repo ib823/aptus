@@ -7,7 +7,6 @@ import { ROLE_LABELS, ROLE_HIERARCHY } from "@/types/assessment";
 import { ROLE_CAPABILITIES, ALL_ROLES } from "@/lib/auth/role-permissions";
 
 export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();
