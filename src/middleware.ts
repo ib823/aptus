@@ -1,4 +1,4 @@
-/** Proxy: Bridge NextAuth JWT sessions to custom session cookies */
+/** Middleware: Bridge NextAuth JWT sessions to custom session cookies */
 
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -6,7 +6,7 @@ const SESSION_COOKIE = "fit-portal-session";
 const NEXTAUTH_COOKIE = "next-auth.session-token";
 const BRIDGE_PATH = "/api/auth/bridge";
 
-export function proxy(request: NextRequest): NextResponse | undefined {
+export function middleware(request: NextRequest): NextResponse | undefined {
   const { pathname } = request.nextUrl;
 
   // Skip for static assets, API routes, and auth pages

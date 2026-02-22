@@ -2,4 +2,12 @@ ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
 
-onlyBuiltDependencies: '["prisma", "@prisma/engines", "core-js", "sharp"]'
+onlyBuiltDependencies:
+  - prisma
+  - "@prisma/client"
+  - "@prisma/engines"
+  - core-js
+  - sharp
+  - esbuild
+  - "@esbuild/linux-x64"
+  - msw

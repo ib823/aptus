@@ -32,6 +32,14 @@ function getAdapter(): Adapter {
         },
       });
     },
+    // Override session methods to no-ops: we use JWT strategy with a custom
+    // Session model (token/expiresAt) that doesn't match PrismaAdapter's
+    // expected schema (sessionToken/expires). Without these overrides, the
+    // adapter may attempt CRUD on Session with wrong field names.
+    createSession: () => Promise.resolve(null!),
+    getSessionAndUser: () => Promise.resolve(null),
+    updateSession: () => Promise.resolve(null),
+    deleteSession: () => Promise.resolve(null),
   } as Adapter;
 }
 
