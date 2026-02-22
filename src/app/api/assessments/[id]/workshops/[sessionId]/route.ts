@@ -17,7 +17,7 @@ const updateWorkshopSchema = z.object({
 });
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; workshopId: string }> },
+  { params }: { params: Promise<{ id: string; sessionId: string }> },
 ): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {
@@ -34,7 +34,7 @@ export async function PUT(
     );
   }
 
-  const { id: assessmentId, workshopId } = await params;
+  const { id: assessmentId, sessionId } = await params;
 
   const body: unknown = await request.json();
   const parsed = updateWorkshopSchema.safeParse(body);
@@ -46,7 +46,7 @@ export async function PUT(
   }
 
   const workshop = await prisma.workshopSession.findUnique({
-    where: { id: workshopId },
+    where: { id: sessionId },
   });
 
   if (!workshop || workshop.assessmentId !== assessmentId) {
@@ -77,14 +77,14 @@ export async function PUT(
   }
 
   const updated = await prisma.workshopSession.update({
-    where: { id: workshopId },
+    where: { id: sessionId },
     data: updateData,
   });
 
   await logDecision({
     assessmentId,
     entityType: "workshop_session",
-    entityId: workshopId,
+    entityId: sessionId,
     action,
     oldValue: { status: workshop.status },
     newValue: { status: updated.status, title: updated.title },
