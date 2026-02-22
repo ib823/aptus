@@ -53,6 +53,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     data: parsed.data,
   });
 
-  revalidateTag("intelligence", { expire: 0 });
+  revalidateTag("intelligence");
   return NextResponse.json({ data: profile }, { status: 201 });
 }

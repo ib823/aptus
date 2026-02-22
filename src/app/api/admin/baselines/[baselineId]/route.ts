@@ -81,7 +81,7 @@ export async function PUT(
     data: updateData,
   });
 
-  revalidateTag("intelligence", { expire: 0 });
+  revalidateTag("intelligence");
   return NextResponse.json({ data: baseline });
 }
 
@@ -105,6 +105,6 @@ export async function DELETE(
 
   await prisma.effortBaseline.delete({ where: { id: baselineId } });
 
-  revalidateTag("intelligence", { expire: 0 });
+  revalidateTag("intelligence");
   return NextResponse.json({ success: true });
 }

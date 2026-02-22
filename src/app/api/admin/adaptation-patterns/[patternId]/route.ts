@@ -77,7 +77,7 @@ export async function PUT(
     data: updateData,
   });
 
-  revalidateTag("intelligence", { expire: 0 });
+  revalidateTag("intelligence");
   return NextResponse.json({ data: pattern });
 }
 
@@ -101,6 +101,6 @@ export async function DELETE(
 
   await prisma.adaptationPattern.delete({ where: { id: patternId } });
 
-  revalidateTag("intelligence", { expire: 0 });
+  revalidateTag("intelligence");
   return NextResponse.json({ success: true });
 }

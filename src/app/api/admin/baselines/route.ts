@@ -79,6 +79,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     },
   });
 
-  revalidateTag("intelligence", { expire: 0 });
+  revalidateTag("intelligence");
   return NextResponse.json({ data: baseline }, { status: 201 });
 }

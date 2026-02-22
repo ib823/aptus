@@ -73,7 +73,7 @@ export async function PUT(
     data: updateData,
   });
 
-  revalidateTag("intelligence", { expire: 0 });
+  revalidateTag("intelligence");
   return NextResponse.json({ data: profile });
 }
 
@@ -97,6 +97,6 @@ export async function DELETE(
 
   await prisma.industryProfile.delete({ where: { id: industryId } });
 
-  revalidateTag("intelligence", { expire: 0 });
+  revalidateTag("intelligence");
   return NextResponse.json({ success: true });
 }
