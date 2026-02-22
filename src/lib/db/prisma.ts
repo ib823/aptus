@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaNeonHttp } from "@prisma/adapter-neon";
+import { PrismaNeonHTTP } from "@prisma/adapter-neon";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -10,7 +10,7 @@ function createPrismaClient(): PrismaClient {
   // HTTP connections avoid TCP/TLS handshake overhead, critical for
   // cross-region (iad1 → Singapore) serverless function invocations
   if (process.env.VERCEL && process.env.DATABASE_URL) {
-    const adapter = new PrismaNeonHttp(process.env.DATABASE_URL, { arrayMode: false, fullResults: true });
+    const adapter = new PrismaNeonHTTP(process.env.DATABASE_URL, { arrayMode: false, fullResults: true });
     return new PrismaClient({
       adapter,
       log: ["error"],
