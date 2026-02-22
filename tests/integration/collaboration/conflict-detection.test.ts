@@ -1,4 +1,8 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/app/api/ routes
+ * WIRING BLOCKED BY: Need database layer
+ *
  * Integration tests: Conflict Detection (T-CONF-001 through T-CONF-005)
  *
  * Validates detection, tracking, and resolution of classification

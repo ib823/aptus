@@ -1,4 +1,8 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/lib/auth/, src/lib/commercial/
+ * WIRING BLOCKED BY: Need database layer
+ *
  * Integration tests: Multi-Tenant Isolation (T-ISO-001 through T-ISO-015)
  *
  * Verifies that data, authentication, and feature boundaries are strictly

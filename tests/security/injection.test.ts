@@ -1,4 +1,8 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/app/api/ routes
+ * WIRING BLOCKED BY: Simulate middleware
+ *
  * Security Tests — Injection Prevention (T-SEC-030 through T-SEC-035)
  *
  * Validates that the application is protected against common injection attacks:

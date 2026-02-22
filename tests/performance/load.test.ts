@@ -1,4 +1,8 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: None — synthetic benchmarks
+ * WIRING BLOCKED BY: Synthetic benchmarks
+ *
  * Performance Tests — Load (T-PERF-001 through T-PERF-010)
  *
  * Validates response time and throughput under load:

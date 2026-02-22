@@ -1,4 +1,8 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: None — synthetic benchmarks
+ * WIRING BLOCKED BY: Synthetic benchmarks
+ *
  * Performance Tests — Database (T-PERF-030 through T-PERF-034)
  *
  * Validates database query performance and prevents N+1 query patterns:

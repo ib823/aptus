@@ -1,4 +1,8 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/lib/auth/, src/app/api/
+ * WIRING BLOCKED BY: Simulate middleware
+ *
  * Security Tests — Data Protection (T-SEC-040 through T-SEC-049)
  *
  * Validates GDPR compliance, data leakage prevention, rate limiting,

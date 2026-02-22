@@ -1,4 +1,8 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/lib/signoff/ (ALM exports)
+ * WIRING BLOCKED BY: Need database layer
+ *
  * Integration tests: Jira Export (T-JIRA-001 through T-JIRA-008)
  *
  * Validates the Jira export pipeline: mapping assessment data to Jira

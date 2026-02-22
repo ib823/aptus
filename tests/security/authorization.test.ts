@@ -1,4 +1,8 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/lib/auth/
+ * WIRING BLOCKED BY: Simulate middleware
+ *
  * Security Tests — Authorization (T-SEC-020 through T-SEC-025)
  *
  * Validates that role-based access control (RBAC) is properly enforced:

@@ -1,4 +1,8 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/app/api/ routes, src/lib/assessment/
+ * WIRING BLOCKED BY: Need database layer
+ *
  * Integration tests: Assessment CRUD & Full Lifecycle (T-CRUD-001 through T-CRUD-015)
  *
  * Validates the complete assessment lifecycle: create, update, classify, gap

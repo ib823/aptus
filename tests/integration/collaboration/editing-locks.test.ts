@@ -1,4 +1,8 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/app/api/ routes
+ * WIRING BLOCKED BY: Need database layer
+ *
  * Integration tests: Editing Locks (T-LOCK-001 through T-LOCK-010)
  *
  * Verifies optimistic locking, lock acquisition, release, expiry, and

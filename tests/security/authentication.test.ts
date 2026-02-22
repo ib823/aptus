@@ -1,4 +1,8 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/lib/auth/
+ * WIRING BLOCKED BY: Simulate middleware
+ *
  * Security Tests — Authentication (T-SEC-001 through T-SEC-011)
  *
  * Validates that all authentication boundaries are properly enforced:

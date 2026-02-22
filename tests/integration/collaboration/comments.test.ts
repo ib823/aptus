@@ -1,4 +1,8 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/app/api/ routes
+ * WIRING BLOCKED BY: Need database layer
+ *
  * Integration tests: Comments (T-CMT-001 through T-CMT-010)
  *
  * Validates comment creation, threading, mentions, resolution,

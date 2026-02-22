@@ -1,4 +1,8 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/app/api/ routes
+ * WIRING BLOCKED BY: Need database layer
+ *
  * Integration tests: Presence (T-PRES-001 through T-PRES-007)
  *
  * Validates real-time presence tracking within assessment collaboration

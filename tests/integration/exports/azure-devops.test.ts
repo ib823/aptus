@@ -1,4 +1,8 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/lib/signoff/ (ALM exports)
+ * WIRING BLOCKED BY: Need database layer
+ *
  * Integration tests: Azure DevOps Export (T-ADO-001 through T-ADO-003)
  *
  * Validates the Azure DevOps export pipeline: mapping assessment data

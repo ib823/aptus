@@ -1,4 +1,8 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/lib/signoff/ (ALM exports)
+ * WIRING BLOCKED BY: Need database layer
+ *
  * Integration tests: Confluence Export (T-CONF-EXP-001 through T-CONF-EXP-002)
  *
  * Validates the Confluence export pipeline: mapping assessment data

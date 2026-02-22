@@ -1,4 +1,8 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/lib/signoff/ (ALM exports)
+ * WIRING BLOCKED BY: Need database layer
+ *
  * Integration tests: Cloud ALM Export (T-ALM-001 through T-ALM-010)
  *
  * Validates the SAP Cloud ALM export pipeline: mapping assessment data

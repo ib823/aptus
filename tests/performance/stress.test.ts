@@ -1,4 +1,8 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: None — synthetic benchmarks
+ * WIRING BLOCKED BY: Synthetic benchmarks
+ *
  * Performance Tests — Stress (T-PERF-020 through T-PERF-024)
  *
  * Validates system stability under extreme conditions:
