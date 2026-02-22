@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import { getSecurityHeaders } from "./src/lib/pwa/security-headers";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   serverExternalPackages: [
     "pdf-parse",
     "exceljs",
