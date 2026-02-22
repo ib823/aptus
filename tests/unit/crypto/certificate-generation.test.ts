@@ -1,3 +1,9 @@
+/**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: None — future implementation
+ * PRE-EXISTING COVERAGE: None
+ * WIRING BLOCKED BY: No real certificate generation module exists yet
+ */
 import { describe, it, expect, beforeEach } from "vitest";
 import { createHash } from "crypto";
 

@@ -1,7 +1,22 @@
+/**
+ * STATUS: Wired (adapter)
+ * REAL MODULE: src/lib/signoff/state-machine.ts
+ * PRE-EXISTING COVERAGE: tests/unit/signoff-state-machine.test.ts
+ * WIRING NOTES: All 12 states map 1:1 to real code via name mapping.
+ *   6 V2 state names differ from real names (see V2_TO_REAL constant).
+ *   Core functions (validateTransition, getNextStates, isTerminalState)
+ *   delegate entirely to real production code.
+ */
 import { describe, it, expect } from "vitest";
+import {
+  canTransitionSignOff,
+  getAvailableTransitions,
+  isTerminalState as realIsTerminalState,
+} from "@/lib/signoff/state-machine";
+import type { SignOffStatus } from "@/types/signoff";
 
 // ---------------------------------------------------------------------------
-// Inline types
+// Inline types (test-only constructs)
 // ---------------------------------------------------------------------------
 
 type SignOffState =
@@ -23,54 +38,43 @@ interface TransitionResult {
   reason?: string;
 }
 
-interface RejectionContext {
-  rejectedBy: "executive" | "partner";
-  comments: string;
-  preserveExecutiveSignature?: boolean;
-}
-
-interface ValidationContext {
-  dataHash?: string;
-  currentDataHash?: string;
-  processOwnerIds?: string[];
-  validatedByOwnerIds?: string[];
-  replacementOwnerMap?: Record<string, string>;
-  sessionExpired?: boolean;
-  isMobileDevice?: boolean;
-  touchSignatureProvided?: boolean;
-  checkboxConfirmed?: boolean;
-}
-
-interface SnapshotContext {
-  snapshotCreated: boolean;
-  transactionCommitted: boolean;
-}
-
-interface CertificateContext {
-  pdfGenerated: boolean;
-  signOffAdvanced: boolean;
-}
-
 // ---------------------------------------------------------------------------
-// State machine definition
+// Name mapping: V2 test names ↔ real production code names
 // ---------------------------------------------------------------------------
 
-const VALID_TRANSITIONS: Record<SignOffState, SignOffState[]> = {
-  NOT_STARTED: ["AREA_VALIDATION_IN_PROGRESS"],
-  AREA_VALIDATION_IN_PROGRESS: ["AREA_VALIDATION_COMPLETE", "REJECTED"],
-  AREA_VALIDATION_COMPLETE: ["TECHNICAL_VALIDATION_IN_PROGRESS"],
-  TECHNICAL_VALIDATION_IN_PROGRESS: ["TECHNICAL_VALIDATION_COMPLETE", "REJECTED"],
-  TECHNICAL_VALIDATION_COMPLETE: ["CROSS_FUNCTIONAL_IN_PROGRESS"],
-  CROSS_FUNCTIONAL_IN_PROGRESS: ["CROSS_FUNCTIONAL_COMPLETE", "REJECTED"],
-  CROSS_FUNCTIONAL_COMPLETE: ["PENDING_EXECUTIVE"],
-  PENDING_EXECUTIVE: ["EXECUTIVE_SIGNED", "REJECTED"],
-  EXECUTIVE_SIGNED: ["PENDING_PARTNER"],
-  PENDING_PARTNER: ["FULLY_SIGNED_OFF", "REJECTED"],
-  FULLY_SIGNED_OFF: [], // terminal
-  REJECTED: ["NOT_STARTED"], // restart from beginning
+const V2_TO_REAL: Record<SignOffState, SignOffStatus> = {
+  NOT_STARTED: "VALIDATION_NOT_STARTED",
+  AREA_VALIDATION_IN_PROGRESS: "AREA_VALIDATION_IN_PROGRESS",
+  AREA_VALIDATION_COMPLETE: "AREA_VALIDATION_COMPLETE",
+  TECHNICAL_VALIDATION_IN_PROGRESS: "TECHNICAL_VALIDATION_IN_PROGRESS",
+  TECHNICAL_VALIDATION_COMPLETE: "TECHNICAL_VALIDATION_COMPLETE",
+  CROSS_FUNCTIONAL_IN_PROGRESS: "CROSS_FUNCTIONAL_VALIDATION_IN_PROGRESS",
+  CROSS_FUNCTIONAL_COMPLETE: "CROSS_FUNCTIONAL_VALIDATION_COMPLETE",
+  PENDING_EXECUTIVE: "EXECUTIVE_SIGN_OFF_PENDING",
+  EXECUTIVE_SIGNED: "EXECUTIVE_SIGNED",
+  PENDING_PARTNER: "PARTNER_COUNTERSIGN_PENDING",
+  FULLY_SIGNED_OFF: "COMPLETED",
+  REJECTED: "REJECTED",
 };
 
-const ALL_STATES: SignOffState[] = Object.keys(VALID_TRANSITIONS) as SignOffState[];
+const REAL_TO_V2: Record<SignOffStatus, SignOffState> = Object.fromEntries(
+  Object.entries(V2_TO_REAL).map(([k, v]) => [v, k]),
+) as Record<SignOffStatus, SignOffState>;
+
+// ---------------------------------------------------------------------------
+// Adapter: delegates to real production code via name mapping
+// ---------------------------------------------------------------------------
+
+const VALID_TRANSITIONS: Record<SignOffState, SignOffState[]> = Object.fromEntries(
+  (Object.keys(V2_TO_REAL) as SignOffState[]).map((v2State) => {
+    const realState = V2_TO_REAL[v2State];
+    const realTargets = getAvailableTransitions(realState);
+    const v2Targets = realTargets.map((r) => REAL_TO_V2[r]);
+    return [v2State, v2Targets];
+  }),
+) as Record<SignOffState, SignOffState[]>;
+
+const ALL_STATES: SignOffState[] = Object.keys(V2_TO_REAL) as SignOffState[];
 
 // Ordered layers — sign-off must proceed through these in sequence
 const ORDERED_LAYERS: SignOffState[] = [
@@ -88,15 +92,17 @@ const ORDERED_LAYERS: SignOffState[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Functions under test
+// Functions under test — adapter wrappers around real production code
 // ---------------------------------------------------------------------------
 
 function validateTransition(
   from: SignOffState,
   to: SignOffState,
 ): TransitionResult {
-  const validTargets = VALID_TRANSITIONS[from];
-  if (!validTargets || !validTargets.includes(to)) {
+  const realFrom = V2_TO_REAL[from];
+  const realTo = V2_TO_REAL[to];
+  const allowed = canTransitionSignOff(realFrom, realTo);
+  if (!allowed) {
     return {
       allowed: false,
       reason: `Invalid transition from ${from} to ${to}`,
@@ -106,11 +112,14 @@ function validateTransition(
 }
 
 function getNextStates(from: SignOffState): SignOffState[] {
-  return VALID_TRANSITIONS[from] ?? [];
+  const realFrom = V2_TO_REAL[from];
+  const realTargets = getAvailableTransitions(realFrom);
+  return realTargets.map((r) => REAL_TO_V2[r]);
 }
 
 function isTerminalState(state: SignOffState): boolean {
-  return VALID_TRANSITIONS[state]?.length === 0;
+  const realState = V2_TO_REAL[state];
+  return realIsTerminalState(realState);
 }
 
 /**
@@ -1003,6 +1012,52 @@ describe("Sign-Off Lifecycle State Machine", () => {
       }
       // NOT_STARTED has incoming from REJECTED
       expect(hasIncoming.has("NOT_STARTED")).toBe(true);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Name mapping & topology verification
+  // Ensures the V2→Real mapping produces the expected transition topology.
+  // If the real module changes, this test will catch the mismatch.
+  // -----------------------------------------------------------------------
+  describe("V2-to-real name mapping verification", () => {
+    it("V2_TO_REAL should map all 12 V2 states to 12 unique real states", () => {
+      const v2States = Object.keys(V2_TO_REAL);
+      const realStates = Object.values(V2_TO_REAL);
+      expect(v2States).toHaveLength(12);
+      expect(new Set(realStates).size).toBe(12);
+    });
+
+    it("REAL_TO_V2 should be the exact inverse of V2_TO_REAL", () => {
+      for (const [v2, real] of Object.entries(V2_TO_REAL)) {
+        expect(REAL_TO_V2[real as SignOffStatus]).toBe(v2);
+      }
+    });
+
+    it("derived VALID_TRANSITIONS should match expected topology", () => {
+      // Freeze the expected topology so changes to the real module are caught
+      expect(VALID_TRANSITIONS.NOT_STARTED).toEqual(["AREA_VALIDATION_IN_PROGRESS"]);
+      expect(VALID_TRANSITIONS.AREA_VALIDATION_IN_PROGRESS).toEqual(["AREA_VALIDATION_COMPLETE", "REJECTED"]);
+      expect(VALID_TRANSITIONS.AREA_VALIDATION_COMPLETE).toEqual(["TECHNICAL_VALIDATION_IN_PROGRESS"]);
+      expect(VALID_TRANSITIONS.TECHNICAL_VALIDATION_IN_PROGRESS).toEqual(["TECHNICAL_VALIDATION_COMPLETE", "REJECTED"]);
+      expect(VALID_TRANSITIONS.TECHNICAL_VALIDATION_COMPLETE).toEqual(["CROSS_FUNCTIONAL_IN_PROGRESS"]);
+      expect(VALID_TRANSITIONS.CROSS_FUNCTIONAL_IN_PROGRESS).toEqual(["CROSS_FUNCTIONAL_COMPLETE", "REJECTED"]);
+      expect(VALID_TRANSITIONS.CROSS_FUNCTIONAL_COMPLETE).toEqual(["PENDING_EXECUTIVE"]);
+      expect(VALID_TRANSITIONS.PENDING_EXECUTIVE).toEqual(["EXECUTIVE_SIGNED", "REJECTED"]);
+      expect(VALID_TRANSITIONS.EXECUTIVE_SIGNED).toEqual(["PENDING_PARTNER"]);
+      expect(VALID_TRANSITIONS.PENDING_PARTNER).toEqual(["FULLY_SIGNED_OFF", "REJECTED"]);
+      expect(VALID_TRANSITIONS.FULLY_SIGNED_OFF).toEqual([]);
+      expect(VALID_TRANSITIONS.REJECTED).toEqual(["NOT_STARTED"]);
+    });
+
+    it("renamed states should map correctly", () => {
+      // These 6 states have different names between V2 spec and real code
+      expect(V2_TO_REAL.NOT_STARTED).toBe("VALIDATION_NOT_STARTED");
+      expect(V2_TO_REAL.CROSS_FUNCTIONAL_IN_PROGRESS).toBe("CROSS_FUNCTIONAL_VALIDATION_IN_PROGRESS");
+      expect(V2_TO_REAL.CROSS_FUNCTIONAL_COMPLETE).toBe("CROSS_FUNCTIONAL_VALIDATION_COMPLETE");
+      expect(V2_TO_REAL.PENDING_EXECUTIVE).toBe("EXECUTIVE_SIGN_OFF_PENDING");
+      expect(V2_TO_REAL.PENDING_PARTNER).toBe("PARTNER_COUNTERSIGN_PENDING");
+      expect(V2_TO_REAL.FULLY_SIGNED_OFF).toBe("COMPLETED");
     });
   });
 });

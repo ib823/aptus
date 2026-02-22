@@ -1,17 +1,17 @@
+/**
+ * STATUS: Partial wire
+ * REAL MODULE: src/lib/assessment/step-classifier.ts
+ * PRE-EXISTING COVERAGE: tests/unit/step-classifier.test.ts
+ * WIRING NOTES: isClassifiable wired to real isStepClassifiable.
+ *   groupSteps kept inline — no real equivalent exists.
+ */
 import { describe, it, expect } from "vitest";
+import { isStepClassifiable } from "@/lib/assessment/step-classifier";
+import type { StepCategory } from "@/types/assessment";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-type StepCategory =
-  | "REFERENCE"
-  | "SYSTEM_ACCESS"
-  | "TEST_INFO"
-  | "BUSINESS_PROCESS"
-  | "CONFIGURATION"
-  | "REPORTING"
-  | "MASTER_DATA";
 
 interface Step {
   id: string;
@@ -29,7 +29,7 @@ interface StepGroup {
 }
 
 // ---------------------------------------------------------------------------
-// Classification (minimal, mirroring step-type-classifier)
+// Classification — uses real isStepClassifiable from production code
 // ---------------------------------------------------------------------------
 
 const TAG_TO_CATEGORY: Record<string, StepCategory> = {
@@ -48,16 +48,8 @@ function classifyTag(tag: string | null): StepCategory {
   return TAG_TO_CATEGORY[tag.toLowerCase().trim()] ?? "BUSINESS_PROCESS";
 }
 
-const CLASSIFIABLE_CATEGORIES = new Set<StepCategory>([
-  "BUSINESS_PROCESS",
-  "CONFIGURATION",
-  "REPORTING",
-  "MASTER_DATA",
-]);
-
-function isClassifiable(category: StepCategory): boolean {
-  return CLASSIFIABLE_CATEGORIES.has(category);
-}
+// Alias: wire to real production code
+const isClassifiable = isStepClassifiable;
 
 // ---------------------------------------------------------------------------
 // groupSteps

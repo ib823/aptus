@@ -1,44 +1,19 @@
+/**
+ * STATUS: Wired
+ * REAL MODULE: src/lib/signoff/hash-engine.ts
+ * PRE-EXISTING COVERAGE: tests/unit/hash-engine.test.ts
+ * WIRING NOTES: Inline computeSnapshotHash/verifySnapshotHash replaced with
+ *   real computeCanonicalHash/verifyHash — algorithmically identical.
+ */
 import { describe, it, expect } from "vitest";
-import { createHash } from "crypto";
+import { computeCanonicalHash, verifyHash } from "@/lib/signoff/hash-engine";
 
 // ---------------------------------------------------------------------------
-// Canonical hashing utility
+// Aliases — preserve test call sites while using real production code
 // ---------------------------------------------------------------------------
 
-/**
- * Recursively sorts object keys so that key order does not affect the hash.
- * Arrays are preserved in order; primitives pass through unchanged.
- */
-function canonicalize(data: unknown): unknown {
-  if (data === null || data === undefined) return data;
-  if (Array.isArray(data)) return data.map(canonicalize);
-  if (typeof data === "object") {
-    const sorted: Record<string, unknown> = {};
-    for (const key of Object.keys(data as Record<string, unknown>).sort()) {
-      sorted[key] = canonicalize((data as Record<string, unknown>)[key]);
-    }
-    return sorted;
-  }
-  return data;
-}
-
-/**
- * Computes a deterministic SHA-256 hex digest for any JSON-serialisable value.
- * - Object keys are sorted (canonical form) so key order is irrelevant.
- * - Whitespace differences in the serialised form are eliminated.
- */
-function computeSnapshotHash(data: unknown): string {
-  const canonical = canonicalize(data);
-  const json = JSON.stringify(canonical);
-  return createHash("sha256").update(json, "utf8").digest("hex");
-}
-
-/**
- * Verifies that a previously recorded hash still matches the data.
- */
-function verifySnapshotHash(data: unknown, expectedHash: string): boolean {
-  return computeSnapshotHash(data) === expectedHash;
-}
+const computeSnapshotHash = computeCanonicalHash;
+const verifySnapshotHash = verifyHash;
 
 // ---------------------------------------------------------------------------
 // SignatureRecord helper

@@ -1,3 +1,10 @@
+/**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/lib/assessment/step-classifier.ts
+ * PRE-EXISTING COVERAGE: tests/unit/step-classifier.test.ts
+ * WIRING BLOCKED BY: Different input format — real module uses stepType strings
+ *   (LOGON, DATA_ENTRY, etc.) while V2 spec uses tag strings (Information, LogOn, etc.)
+ */
 import { describe, it, expect } from "vitest";
 
 // ---------------------------------------------------------------------------

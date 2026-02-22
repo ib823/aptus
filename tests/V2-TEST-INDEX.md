@@ -15,6 +15,26 @@ Generated from V2-TEST-SPECIFICATION.md. All test case IDs from the spec are map
 | **Seed scenarios** | 12 |
 | **Page objects (POM)** | 7 |
 
+## Wiring Status — V2 Tests to Real Application Code
+
+| File | Status | Real Module | Notes |
+|---|---|---|---|
+| `crypto/snapshot-hashing.test.ts` | **WIRED** | `src/lib/signoff/hash-engine.ts` | Identical functions — `computeCanonicalHash`, `verifyHash` |
+| `state-machines/sign-off-lifecycle.test.ts` | **WIRED (adapter)** | `src/lib/signoff/state-machine.ts` | Name mapping layer (V2 → real state names) |
+| `state-machines/subscription-lifecycle.test.ts` | **WIRED (hybrid)** | `src/lib/commercial/plan-engine.ts` | 5/6 states overlap; SUSPENDED kept inline |
+| `state-machines/assessment-lifecycle.test.ts` | **WIRED (partial)** | `src/lib/assessment/status-machine.ts` | Different topology — real module imported for cross-reference tests |
+| `parsers/step-grouping.test.ts` | **PARTIAL WIRE** | `src/lib/assessment/step-classifier.ts` | `isStepClassifiable` wired; `groupSteps` kept inline |
+| `billing/plan-enforcement.test.ts` | **Already typed** | `src/lib/commercial/plan-engine.ts` | Imports types from `@/types/commercial` |
+| `billing/stripe-webhooks.test.ts` | **Already typed** | `src/app/api/webhooks/stripe/` | Imports types from `@/types/commercial` |
+| `permissions/permission-matrix.test.ts` | **Self-contained** | `src/lib/auth/role-permissions.ts` | Incompatible granularity (14 vs 25 operations) |
+| `parsers/step-type-classifier.test.ts` | **Self-contained** | `src/lib/assessment/step-classifier.ts` | Different input format |
+| `parsers/content-section-parser.test.ts` | **Self-contained** | `src/lib/assessment/step-classifier.ts` | Different output structure |
+| `crypto/certificate-generation.test.ts` | **Self-contained** | None | No real module exists yet |
+| `validation/api-schema-validation.test.ts` | **Self-contained** | `src/app/api/` routes | Schemas not exported from handlers |
+| All integration tests (10 files) | **Self-contained** | — | Need database layer |
+| All security tests (4 files) | **Self-contained** | — | Simulate middleware |
+| All performance tests (3 files) | **Self-contained** | — | Synthetic benchmarks |
+
 ## Test Cases by Category
 
 | Category | Files | Test Cases | Test IDs |

@@ -1,7 +1,20 @@
+/**
+ * STATUS: Wired (partial — cross-reference only)
+ * REAL MODULE: src/lib/assessment/status-machine.ts
+ * PRE-EXISTING COVERAGE: tests/unit/status-machine.test.ts
+ * WIRING NOTES: V2 spec has 13 SCREAMING_CASE states vs real module's 12
+ *   lowercase states with fundamentally different topology. Inline spec logic
+ *   preserved. Real module imported for cross-reference verification tests.
+ */
 import { describe, it, expect } from "vitest";
+import {
+  canTransition as realCanTransition,
+  VALID_TRANSITIONS_V2 as REAL_TRANSITIONS,
+  ASSESSMENT_STATUSES_V2 as REAL_STATUSES,
+} from "@/lib/assessment/status-machine";
 
 // ---------------------------------------------------------------------------
-// Inline types
+// Inline types (V2 spec — different topology from real module)
 // ---------------------------------------------------------------------------
 
 type AssessmentState =
@@ -759,6 +772,36 @@ describe("Assessment Lifecycle State Machine", () => {
         const result = validateTransition(state, state);
         expect(result.allowed).toBe(false);
       }
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Cross-reference: verify real production module is importable and consistent
+  // -----------------------------------------------------------------------
+  describe("real module cross-reference", () => {
+    it("real module should have 12 statuses", () => {
+      expect(REAL_STATUSES).toHaveLength(12);
+    });
+
+    it("real module transition map should have entries for all real statuses", () => {
+      for (const status of REAL_STATUSES) {
+        expect(REAL_TRANSITIONS[status]).toBeDefined();
+        expect(Array.isArray(REAL_TRANSITIONS[status])).toBe(true);
+      }
+    });
+
+    it("real canTransition should validate draft->scoping", () => {
+      const result = realCanTransition("draft", "scoping", "platform_admin");
+      expect(result.allowed).toBe(true);
+    });
+
+    it("real canTransition should reject draft->signed_off", () => {
+      const result = realCanTransition("draft", "signed_off", "platform_admin");
+      expect(result.allowed).toBe(false);
+    });
+
+    it("real module archived should be terminal (no outbound transitions)", () => {
+      expect(REAL_TRANSITIONS["archived"]).toEqual([]);
     });
   });
 });

@@ -1,4 +1,19 @@
+/**
+ * STATUS: Wired (hybrid adapter)
+ * REAL MODULE: src/lib/commercial/plan-engine.ts
+ * PRE-EXISTING COVERAGE: tests/unit/plan-engine.test.ts
+ * WIRING NOTES: 5/6 states overlap with real code. SUSPENDED state and
+ *   V2-only edges (TRIALING→CANCELED, CANCELED→ACTIVE) kept inline.
+ *   See "V2 spec divergence from real code" test section for details.
+ */
 import { describe, it, expect } from "vitest";
+import {
+  canTransitionSubscription,
+} from "@/lib/commercial/plan-engine";
+import {
+  SUBSCRIPTION_TRANSITIONS,
+  type SubscriptionStatus,
+} from "@/types/commercial";
 
 // ---------------------------------------------------------------------------
 // Inline types
@@ -17,31 +32,6 @@ interface TransitionResult {
   reason?: string;
 }
 
-interface SubscriptionContext {
-  trialEndDate?: Date;
-  currentDate?: Date;
-  billingCycleDay?: number;
-  currentPlan?: string;
-  targetPlan?: string;
-  activeAssessmentCount?: number;
-  targetPlanAssessmentLimit?: number;
-  hasActiveWorkshopSession?: boolean;
-  daysSinceCancellation?: number;
-  reactivationWindowDays?: number;
-  stripeEventId?: string;
-  processedEventIds?: Set<string>;
-  webhookType?: string;
-  subscriptionCreated?: boolean;
-  currentCurrency?: string;
-  targetCurrency?: string;
-  meteredUsage?: {
-    assessmentsCreated: number;
-    assessmentsArchived: number;
-    billingPeriodStart: Date;
-    billingPeriodEnd: Date;
-  };
-}
-
 interface PlanChangeResult {
   allowed: boolean;
   readOnlyAssessmentIds?: string[];
@@ -56,9 +46,13 @@ interface WebhookProcessResult {
 }
 
 // ---------------------------------------------------------------------------
-// State machine definition
+// Hybrid state machine: real code for 5 overlapping states, inline for SUSPENDED
 // ---------------------------------------------------------------------------
 
+// States that exist in the real production code
+const REAL_STATES = new Set<SubscriptionState>(["TRIALING", "ACTIVE", "PAST_DUE", "CANCELED", "TRIAL_EXPIRED"]);
+
+// V2 spec extends the real transitions with SUSPENDED and additional edges
 const VALID_TRANSITIONS: Record<SubscriptionState, SubscriptionState[]> = {
   TRIALING: ["ACTIVE", "TRIAL_EXPIRED", "CANCELED"],
   ACTIVE: ["PAST_DUE", "CANCELED", "SUSPENDED"],
@@ -78,6 +72,16 @@ function validateTransition(
   from: SubscriptionState,
   to: SubscriptionState,
 ): TransitionResult {
+  // For transitions between two real states that the real module covers, delegate
+  if (REAL_STATES.has(from) && REAL_STATES.has(to)) {
+    const realAllowed = canTransitionSubscription(
+      from as SubscriptionStatus,
+      to as SubscriptionStatus,
+    );
+    if (realAllowed) return { allowed: true };
+  }
+
+  // Fall back to V2 spec transition map (covers SUSPENDED + V2-only edges)
   const validTargets = VALID_TRANSITIONS[from];
   if (!validTargets || !validTargets.includes(to)) {
     return {
@@ -849,6 +853,51 @@ describe("Subscription Lifecycle State Machine", () => {
     it("SUSPENDED should be reachable from ACTIVE and PAST_DUE", () => {
       expect(VALID_TRANSITIONS.ACTIVE).toContain("SUSPENDED");
       expect(VALID_TRANSITIONS.PAST_DUE).toContain("SUSPENDED");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // V2 spec divergence from real code
+  // Documents transitions the V2 spec allows but real code does not.
+  // These pass via the inline fallback in the hybrid adapter.
+  // -----------------------------------------------------------------------
+  describe("V2 spec divergence from real code", () => {
+    it("V2 allows TRIALING → CANCELED (real code does not)", () => {
+      // Real code: TRIALING → [ACTIVE, TRIAL_EXPIRED] only
+      const realAllowed = canTransitionSubscription("TRIALING", "CANCELED");
+      expect(realAllowed).toBe(false);
+
+      // V2 spec allows it (handled by inline fallback)
+      const v2Result = validateTransition("TRIALING", "CANCELED");
+      expect(v2Result.allowed).toBe(true);
+    });
+
+    it("V2 allows CANCELED → ACTIVE (real code treats CANCELED as terminal)", () => {
+      // Real code: CANCELED → [] (terminal)
+      const realAllowed = canTransitionSubscription("CANCELED", "ACTIVE");
+      expect(realAllowed).toBe(false);
+
+      // V2 spec allows reactivation within window
+      const v2Result = validateTransition("CANCELED", "ACTIVE");
+      expect(v2Result.allowed).toBe(true);
+    });
+
+    it("V2 has SUSPENDED state (real code does not)", () => {
+      expect(ALL_STATES).toContain("SUSPENDED");
+      expect(SUBSCRIPTION_TRANSITIONS).not.toHaveProperty("SUSPENDED");
+    });
+
+    it("real code transitions are a subset of V2 spec for overlapping states", () => {
+      // For every transition the real code allows, V2 must also allow it
+      for (const [from, targets] of Object.entries(SUBSCRIPTION_TRANSITIONS)) {
+        for (const to of targets) {
+          const v2Result = validateTransition(
+            from as SubscriptionState,
+            to as SubscriptionState,
+          );
+          expect(v2Result.allowed).toBe(true);
+        }
+      }
     });
   });
 });

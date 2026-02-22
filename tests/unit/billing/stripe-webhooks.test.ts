@@ -1,4 +1,8 @@
 /**
+ * STATUS: Already typed — imports types from @/types/commercial
+ * REAL MODULE: src/app/api/webhooks/stripe/ (future implementation)
+ * PRE-EXISTING COVERAGE: None
+ *
  * Stripe webhook handling unit tests (T-STRIPE-001 through T-STRIPE-013)
  *
  * Tests cover subscription lifecycle, invoice events, idempotency,

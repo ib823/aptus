@@ -1,3 +1,11 @@
+/**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/lib/auth/role-permissions.ts
+ * PRE-EXISTING COVERAGE: tests/unit/role-permissions.test.ts
+ * WIRING BLOCKED BY: Incompatible granularity — real code has 14 boolean capabilities
+ *   vs V2 spec's 25 fine-grained operations, and different role names
+ *   (executive vs executive_sponsor, functional_head vs no equivalent)
+ */
 import { describe, it, expect, test } from "vitest";
 
 // ---------------------------------------------------------------------------

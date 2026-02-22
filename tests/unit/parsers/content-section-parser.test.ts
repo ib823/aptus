@@ -1,3 +1,10 @@
+/**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/lib/assessment/step-classifier.ts (partial overlap)
+ * PRE-EXISTING COVERAGE: tests/unit/content-parser.test.ts
+ * WIRING BLOCKED BY: Different output structure — real module returns StepCategory
+ *   while V2 spec returns parsed ContentSection objects with nested structure
+ */
 import { describe, it, expect } from "vitest";
 
 // ---------------------------------------------------------------------------

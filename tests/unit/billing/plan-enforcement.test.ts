@@ -1,4 +1,8 @@
 /**
+ * STATUS: Already typed — imports types from @/types/commercial
+ * REAL MODULE: src/lib/commercial/plan-engine.ts
+ * PRE-EXISTING COVERAGE: tests/unit/plan-engine.test.ts
+ *
  * Plan enforcement unit tests (T-PLAN-001 through T-PLAN-009)
  *
  * Tests cover plan-based limits on assessments and seats, trial lifecycle,

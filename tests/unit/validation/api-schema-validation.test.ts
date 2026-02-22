@@ -1,4 +1,9 @@
 /**
+ * STATUS: Self-contained specification test
+ * REAL MODULE: src/app/api/ (various route handlers)
+ * PRE-EXISTING COVERAGE: None (schemas defined in route handlers, not exported)
+ * WIRING BLOCKED BY: Zod schemas are not exported from route handlers
+ *
  * Zod schema validation unit tests (T-ZOD-001 through T-ZOD-015)
  * applied to 10 API endpoint schemas = 150 test cases.
  *
