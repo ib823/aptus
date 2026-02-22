@@ -77,6 +77,33 @@ export default defineConfig({
         storageState: statePath("executive"),
       },
     },
+    {
+      name: "journeys",
+      testMatch: /journeys\/.*\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: statePath("admin"),
+      },
+      timeout: 60_000,
+    },
+    {
+      name: "edge-cases",
+      testMatch: /edge-cases\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: statePath("admin"),
+      },
+      timeout: 60_000,
+    },
+    {
+      name: "responsive-views",
+      testMatch: /responsive\/.*\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: statePath("admin"),
+      },
+      timeout: 30_000,
+    },
   ],
   webServer: {
     command: process.env.CI ? "pnpm start" : "pnpm dev",
