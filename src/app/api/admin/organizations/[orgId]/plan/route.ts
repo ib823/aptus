@@ -14,9 +14,6 @@ const planOverrideSchema = z.object({
   maxPartnerUsers: z.number().int().min(1).optional(),
   trialEndsAt: z.string().datetime().nullable().optional(),
 });
-
-export const preferredRegion = "sin1";
-
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string }> },

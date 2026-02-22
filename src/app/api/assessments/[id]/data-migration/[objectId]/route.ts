@@ -32,9 +32,6 @@ const UpdateDataMigrationSchema = z.object({
 });
 
 type RouteParams = { params: Promise<{ id: string; objectId: string }> };
-
-export const preferredRegion = "sin1";
-
 export async function PUT(
   request: NextRequest,
   { params }: RouteParams,

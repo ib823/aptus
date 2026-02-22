@@ -54,9 +54,6 @@ const PROFILE_SELECT = {
   profileCompletedAt: true,
   profileCompletedBy: true,
 } as const;
-
-export const preferredRegion = "sin1";
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

@@ -11,9 +11,6 @@ const NavigateSchema = z.object({
   currentStepId: z.string().min(1).nullable(),
   currentScopeItemId: z.string().min(1).nullable().optional(),
 });
-
-export const preferredRegion = "sin1";
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; sessionId: string }> },

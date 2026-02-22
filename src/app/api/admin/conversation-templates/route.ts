@@ -18,9 +18,6 @@ const createSchema = z.object({
   }),
   language: z.string().default("en"),
 });
-
-export const preferredRegion = "sin1";
-
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAdmin();
   if (isAdminError(auth)) return auth;

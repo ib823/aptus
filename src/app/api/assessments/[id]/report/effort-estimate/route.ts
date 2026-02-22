@@ -5,9 +5,6 @@ import { authenticateForReport, isErrorResponse } from "@/lib/report/report-auth
 import { getReportSummary } from "@/lib/report/report-data";
 import { generateEffortEstimatePdf } from "@/lib/report/pdf-generator";
 import { prisma } from "@/lib/db/prisma";
-
-export const preferredRegion = "sin1";
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

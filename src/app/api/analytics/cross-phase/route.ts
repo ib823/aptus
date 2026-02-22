@@ -14,9 +14,6 @@ const linkAssessmentsSchema = z.object({
   phase2AssessmentId: z.string().min(1),
   clientIdentifier: z.string().min(1, "Client identifier is required"),
 });
-
-export const preferredRegion = "sin1";
-
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

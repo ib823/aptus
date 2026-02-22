@@ -19,9 +19,6 @@ const createTemplateSchema = z.object({
   includeWorkshopTemplate: z.boolean().optional(),
   includeRoleTemplate: z.boolean().optional(),
 });
-
-export const preferredRegion = "sin1";
-
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

@@ -11,9 +11,6 @@ import { z } from "zod";
 const completeSchema = z.object({
   sessionId: z.string().min(1),
 });
-
-export const preferredRegion = "sin1";
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; scopeItemId: string }> },

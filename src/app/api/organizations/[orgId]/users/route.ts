@@ -18,9 +18,6 @@ const inviteSchema = z.object({
   role: z.string().min(1),
   name: z.string().min(1).max(200).optional(),
 });
-
-export const preferredRegion = "sin1";
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string }> },

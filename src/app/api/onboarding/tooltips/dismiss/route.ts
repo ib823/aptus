@@ -9,9 +9,6 @@ import { z } from "zod";
 const dismissSchema = z.object({
   tooltipKey: z.string().min(1),
 });
-
-export const preferredRegion = "sin1";
-
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

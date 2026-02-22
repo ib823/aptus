@@ -23,9 +23,6 @@ const updateOrgSchema = z.object({
   brandPrimaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   brandLogoUrl: z.string().url().optional(),
 }).partial();
-
-export const preferredRegion = "sin1";
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ orgId: string }> },

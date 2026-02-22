@@ -16,9 +16,6 @@ const areaValidationSchema = z.object({
   comments: z.string().optional(),
   rejectionReason: z.string().optional(),
 });
-
-export const preferredRegion = "sin1";
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

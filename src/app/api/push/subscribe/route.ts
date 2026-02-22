@@ -17,9 +17,6 @@ const subscribeSchema = z.object({
 const unsubscribeSchema = z.object({
   endpoint: z.string().url(),
 });
-
-export const preferredRegion = "sin1";
-
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

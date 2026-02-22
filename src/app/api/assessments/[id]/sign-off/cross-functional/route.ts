@@ -17,9 +17,6 @@ const crossFunctionalSchema = z.object({
   conflictCount: z.number().int().min(0).optional(),
   conflictsResolved: z.number().int().min(0).optional(),
 });
-
-export const preferredRegion = "sin1";
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

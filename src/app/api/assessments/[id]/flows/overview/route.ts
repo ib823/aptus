@@ -7,9 +7,6 @@ import { prisma } from "@/lib/db/prisma";
 import { computeRiskScore } from "@/lib/assessment/risk-score";
 import { ERROR_CODES } from "@/types/api";
 import type { FunctionalAreaOverviewData } from "@/types/flow";
-
-export const preferredRegion = "sin1";
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

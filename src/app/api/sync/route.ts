@@ -153,9 +153,6 @@ async function processSyncItem(
       return { clientId: item.clientId, status: "failed" };
   }
 }
-
-export const preferredRegion = "sin1";
-
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

@@ -10,9 +10,6 @@ import type { PlanTier } from "@/types/commercial";
 import type { UserRole } from "@/types/assessment";
 
 const ALLOWED_ROLES: UserRole[] = ["partner_lead", "client_admin"];
-
-export const preferredRegion = "sin1";
-
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

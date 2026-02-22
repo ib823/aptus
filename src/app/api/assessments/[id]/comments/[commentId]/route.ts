@@ -11,9 +11,6 @@ import { parseMentions } from "@/lib/collaboration/mention-parser";
 const UpdateCommentSchema = z.object({
   content: z.string().min(1).max(10000),
 });
-
-export const preferredRegion = "sin1";
-
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; commentId: string }> },

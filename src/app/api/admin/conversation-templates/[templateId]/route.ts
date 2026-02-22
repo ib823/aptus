@@ -16,9 +16,6 @@ const updateSchema = z.object({
   }).optional(),
   isActive: z.boolean().optional(),
 });
-
-export const preferredRegion = "sin1";
-
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ templateId: string }> },

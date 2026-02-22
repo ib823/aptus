@@ -12,9 +12,6 @@ const ResolveConflictSchema = z.object({
   resolvedClassification: z.string().min(1),
   resolutionNotes: z.string().max(5000).optional(),
 });
-
-export const preferredRegion = "sin1";
-
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; conflictId: string }> },

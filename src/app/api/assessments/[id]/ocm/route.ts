@@ -31,9 +31,6 @@ const CreateOcmSchema = z.object({
   (data) => !data.trainingRequired || data.trainingType !== undefined,
   { message: "Training type is required when training is marked as required", path: ["trainingType"] },
 );
-
-export const preferredRegion = "sin1";
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

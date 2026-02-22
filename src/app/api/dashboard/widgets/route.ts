@@ -19,9 +19,6 @@ const widgetSchema = z.object({
     }),
   ),
 });
-
-export const preferredRegion = "sin1";
-
 export async function PUT(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

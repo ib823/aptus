@@ -15,9 +15,6 @@ const updateUserSchema = z.object({
   isActive: z.boolean().optional(),
   deactivationReason: z.string().max(500).optional(),
 });
-
-export const preferredRegion = "sin1";
-
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string; userId: string }> },

@@ -14,9 +14,6 @@ const createExportSchema = z.object({
   exportConfig: z.record(z.string(), z.unknown()),
   exportMapping: z.record(z.string(), z.unknown()).optional(),
 });
-
-export const preferredRegion = "sin1";
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

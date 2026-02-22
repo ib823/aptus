@@ -15,9 +15,6 @@ const createTriggerSchema = z.object({
   description: z.string().min(1, "Description is required"),
   sourceReference: z.string().optional(),
 });
-
-export const preferredRegion = "sin1";
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

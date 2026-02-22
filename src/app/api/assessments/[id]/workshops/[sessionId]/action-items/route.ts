@@ -17,9 +17,6 @@ const CreateActionItemSchema = z.object({
   relatedStepId: z.string().optional(),
   relatedScopeItemId: z.string().optional(),
 });
-
-export const preferredRegion = "sin1";
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; sessionId: string }> },

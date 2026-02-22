@@ -14,9 +14,6 @@ const bodySchema = z.object({
   signatoryRole: z.enum(["client_representative", "bound_consultant", "bound_pm"]),
   acknowledgement: z.literal(true),
 });
-
-export const preferredRegion = "sin1";
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

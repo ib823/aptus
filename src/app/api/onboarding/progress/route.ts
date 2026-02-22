@@ -12,9 +12,6 @@ const progressSchema = z.object({
   stepIndex: z.number().int().min(0),
   action: z.enum(["complete", "skip"]),
 });
-
-export const preferredRegion = "sin1";
-
 export async function PUT(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

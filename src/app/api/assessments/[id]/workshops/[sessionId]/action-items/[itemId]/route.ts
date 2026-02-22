@@ -16,9 +16,6 @@ const UpdateActionItemSchema = z.object({
   status: z.enum(["open", "in_progress", "completed", "cancelled"]).optional(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
 });
-
-export const preferredRegion = "sin1";
-
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; sessionId: string; itemId: string }> },

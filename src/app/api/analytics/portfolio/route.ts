@@ -1,17 +1,12 @@
 /** GET: Portfolio analytics dashboard data */
 
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { computePortfolioSummary, computeFitRateByIndustry, computeTopGaps } from "@/lib/analytics/portfolio-engine";
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-
-export const preferredRegion = "sin1";
-
-export async function GET(_request: NextRequest): Promise<NextResponse> {
+export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json(

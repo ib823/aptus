@@ -6,9 +6,6 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { computeVoteTally } from "@/lib/workshop/vote-tally";
 import { ERROR_CODES } from "@/types/api";
-
-export const preferredRegion = "sin1";
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; sessionId: string; processStepId: string }> },

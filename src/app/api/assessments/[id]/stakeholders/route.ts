@@ -16,9 +16,6 @@ const addStakeholderSchema = z.object({
   role: z.enum(["process_owner", "it_lead", "executive", "consultant"]),
   assignedAreas: z.array(z.string()).default([]),
 });
-
-export const preferredRegion = "sin1";
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

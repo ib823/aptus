@@ -17,9 +17,6 @@ const querySchema = z.object({
   scopeItemId: z.string().optional(),
   search: z.string().optional(),
 });
-
-export const preferredRegion = "sin1";
-
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

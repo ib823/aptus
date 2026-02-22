@@ -15,9 +15,6 @@ const ALLOWED_ROLES: UserRole[] = [
   "platform_admin",
   "executive_sponsor",
 ];
-
-export const preferredRegion = "sin1";
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

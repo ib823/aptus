@@ -14,9 +14,6 @@ const createSnapshotSchema = z.object({
   label: z.string().optional(),
   reason: z.string().min(1, "Reason is required"),
 });
-
-export const preferredRegion = "sin1";
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

@@ -13,9 +13,6 @@ const verifySchema = z.object({
   code: z.string().length(6).regex(/^\d{6}$/),
   secret: z.string().min(1),
 });
-
-export const preferredRegion = "sin1";
-
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

@@ -15,9 +15,6 @@ const CreateCommentSchema = z.object({
   content: z.string().min(1).max(10000),
   parentCommentId: z.string().optional(),
 });
-
-export const preferredRegion = "sin1";
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

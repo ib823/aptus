@@ -13,9 +13,6 @@ const createPackageSchema = z.object({
   packageType: z.enum(["FULL", "SCOPE_ONLY", "TECHNICAL", "EXECUTIVE_SUMMARY"]).optional(),
   contents: z.array(z.string()).min(1, "At least one content item is required"),
 });
-
-export const preferredRegion = "sin1";
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

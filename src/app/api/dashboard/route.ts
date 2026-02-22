@@ -6,9 +6,6 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { getDefaultWidgets } from "@/lib/dashboard/widgets";
 import type { UserRole } from "@/types/assessment";
-
-export const preferredRegion = "sin1";
-
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

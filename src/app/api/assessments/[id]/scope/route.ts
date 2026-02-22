@@ -5,9 +5,6 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
 import { getScopeItemsWithSelections } from "@/lib/db/scope-items";
 import { ERROR_CODES } from "@/types/api";
-
-export const preferredRegion = "sin1";
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

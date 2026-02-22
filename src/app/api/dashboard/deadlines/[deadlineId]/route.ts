@@ -15,9 +15,6 @@ const updateSchema = z.object({
   assignedUser: z.string().optional(),
   status: z.enum(["pending", "at_risk", "overdue", "completed"]).optional(),
 });
-
-export const preferredRegion = "sin1";
-
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ deadlineId: string }> },

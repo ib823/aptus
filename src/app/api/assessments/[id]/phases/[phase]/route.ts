@@ -17,9 +17,6 @@ const phaseUpdateSchema = z.object({
 });
 
 const PHASE_UPDATE_ROLES: UserRole[] = ["platform_admin", "partner_lead", "consultant"];
-
-export const preferredRegion = "sin1";
-
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; phase: string }> },

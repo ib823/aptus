@@ -8,9 +8,6 @@ import { ERROR_CODES } from "@/types/api";
 import type { UserRole } from "@/types/assessment";
 
 const ALLOWED_ROLES: UserRole[] = ["partner_lead", "client_admin", "platform_admin"];
-
-export const preferredRegion = "sin1";
-
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {
