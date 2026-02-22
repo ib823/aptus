@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { sanitizeHtmlContent } from "@/lib/security/sanitize";
+import { extractScopeSummary } from "@/lib/assessment/scope-summary";
 
 interface ScopeItemData {
   id: string;
@@ -26,6 +27,8 @@ interface ScopeItemData {
   businessJustification?: string | null;
   estimatedComplexity?: string | null;
   dependsOnScopeItems?: string[];
+  classifiableSteps?: number;
+  effortDays?: number;
 }
 
 interface ScopeItemCardProps {
@@ -199,9 +202,12 @@ export function ScopeItemCard({ item, assessmentId, onSelectionChange, isPreSele
             </span>
           </div>
           <div className="flex items-center gap-4 mt-0.5 text-xs text-muted-foreground">
-            <span>{item.totalSteps} process steps</span>
+            <span>{item.totalSteps} steps{item.classifiableSteps != null ? ` (${item.classifiableSteps} classifiable)` : ""}</span>
             <span>{item.subArea}</span>
-            <span>{item.configCount} configurations</span>
+            <span>{item.configCount} configs</span>
+            {item.effortDays != null && item.effortDays > 0 && (
+              <span>~{item.effortDays}d effort</span>
+            )}
           </div>
         </div>
 
@@ -259,6 +265,12 @@ export function ScopeItemCard({ item, assessmentId, onSelectionChange, isPreSele
               {item.tutorialUrl && <TabsTrigger value="tutorial">Tutorial</TabsTrigger>}
             </TabsList>
             <TabsContent value="purpose" className="mt-3">
+              {(() => {
+                const summary = extractScopeSummary(item.purposeHtml);
+                return summary ? (
+                  <p className="text-sm text-muted-foreground mb-3">{summary}</p>
+                ) : null;
+              })()}
               <div
                 className="prose prose-sm max-w-none text-muted-foreground"
                 dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(item.purposeHtml) }}

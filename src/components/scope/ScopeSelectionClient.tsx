@@ -31,6 +31,8 @@ interface ScopeItemData {
   notes: string | null;
   respondent: string | null;
   respondedAt: string | null;
+  classifiableSteps?: number;
+  effortDays?: number;
 }
 
 interface SelectionPayload {
@@ -147,11 +149,15 @@ export function ScopeSelectionClient({
   const stats = useMemo(() => {
     const selected = items.filter((i) => i.selected);
     const totalStepsInScope = selected.reduce((sum, i) => sum + i.totalSteps, 0);
+    const totalClassifiable = selected.reduce((sum, i) => sum + (i.classifiableSteps ?? 0), 0);
+    const totalEffortDays = selected.reduce((sum, i) => sum + (i.effortDays ?? 0), 0);
     const responded = items.filter((i) => i.relevance !== null).length;
     return {
       selectedCount: selected.length,
       totalCount: items.length,
       totalStepsInScope,
+      totalClassifiable,
+      totalEffortDays,
       respondedCount: responded,
     };
   }, [items]);
@@ -367,6 +373,48 @@ export function ScopeSelectionClient({
           </Button>
         )}
       </div>
+
+      {/* Impact summary bar */}
+      {stats.selectedCount > 0 && (
+        <div className="mb-6 grid grid-cols-4 gap-3">
+          <div className="bg-card border rounded-lg p-3 text-center">
+            <p className="text-lg font-bold text-foreground">{stats.selectedCount}</p>
+            <p className="text-xs text-muted-foreground">Scope Items</p>
+          </div>
+          <div className="bg-card border rounded-lg p-3 text-center">
+            <p className="text-lg font-bold text-foreground">{stats.totalStepsInScope}</p>
+            <p className="text-xs text-muted-foreground">Total Steps</p>
+          </div>
+          <div className="bg-card border rounded-lg p-3 text-center">
+            <p className="text-lg font-bold text-foreground">{stats.totalClassifiable}</p>
+            <p className="text-xs text-muted-foreground">Classifiable</p>
+          </div>
+          <div className="bg-card border rounded-lg p-3 text-center">
+            <p className="text-lg font-bold text-foreground">{stats.totalEffortDays > 0 ? `~${stats.totalEffortDays}d` : "—"}</p>
+            <p className="text-xs text-muted-foreground">Est. Effort</p>
+          </div>
+        </div>
+      )}
+
+      {/* Hero banner when nothing selected but industry templates available */}
+      {stats.selectedCount === 0 && industryPreSelections.length > 0 && !isReadOnly && (
+        <div className="mb-6 p-6 bg-blue-50 border border-blue-200 rounded-lg text-center">
+          <h3 className="text-base font-semibold text-blue-800 mb-1">
+            Get started with {industry} best practices
+          </h3>
+          <p className="text-sm text-blue-600 mb-3">
+            We have {industryPreSelections.length} pre-selected scope items for the {industry} industry.
+            Apply the template to get a head start.
+          </p>
+          <Button
+            variant="default"
+            onClick={handleApplyTemplate}
+            disabled={applyingTemplate}
+          >
+            {applyingTemplate ? "Applying..." : "Apply Industry Template"}
+          </Button>
+        </div>
+      )}
 
       {/* Scope items grouped by area */}
       {groupedItems.size === 0 ? (

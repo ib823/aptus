@@ -6,6 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { sanitizeHtmlContent } from "@/lib/security/sanitize";
+import { parseStepContent } from "@/lib/assessment/content-parser";
+import { ParsedContentView } from "@/components/review/ParsedContentView";
 
 interface ConfigItem {
   id: string;
@@ -30,7 +32,7 @@ interface StepData {
   confidence?: string | null;
   evidenceUrls?: string[];
   parsedContent?: Record<string, unknown> | null;
-  isClassifiable?: boolean;
+  isClassifiable?: boolean | null;
 }
 
 interface StepReviewCardProps {
@@ -313,9 +315,11 @@ export function StepReviewCard({
         </button>
         {sapContentExpanded && (
           <div className="px-5 pb-4 bg-muted/40">
-            <div
-              className="prose prose-sm max-w-none text-foreground"
-              dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(step.actionInstructionsHtml) }}
+            <ParsedContentView
+              content={step.parsedContent
+                ? step.parsedContent as unknown as import("@/lib/assessment/content-parser").ParsedStepContent
+                : parseStepContent(step.actionInstructionsHtml)}
+              fallbackHtml={step.actionInstructionsHtml}
             />
             {step.actionExpectedResult && (
               <div className="mt-3">

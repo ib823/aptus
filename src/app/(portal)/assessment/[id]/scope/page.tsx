@@ -1,5 +1,4 @@
 import { redirect, notFound } from "next/navigation";
-import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getScopeItemsWithSelections, getIndustryPreSelections } from "@/lib/db/scope-items";
 import { prisma } from "@/lib/db/prisma";
@@ -43,6 +42,11 @@ export default async function ScopePage({ params }: ScopePageProps) {
 
   const { score } = calculateProfileCompleteness(assessment);
 
+  // Block access if profile is incomplete
+  if (score < PROFILE_COMPLETENESS_GATE) {
+    redirect(`/assessment/${assessmentId}/profile?from=scope`);
+  }
+
   const [scopeItems, industryPreSelections] = await Promise.all([
     getScopeItemsWithSelections(assessmentId),
     getIndustryPreSelections(assessment.industry),
@@ -50,14 +54,6 @@ export default async function ScopePage({ params }: ScopePageProps) {
 
   return (
     <>
-      {score < PROFILE_COMPLETENESS_GATE && (
-        <div className="max-w-5xl mx-auto mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-          Profile completeness is {score}% — {PROFILE_COMPLETENESS_GATE}% required before starting the assessment.{" "}
-          <Link href={`/assessment/${assessmentId}/profile`} className="underline font-medium">
-            Complete your profile
-          </Link>
-        </div>
-      )}
       <ScopeSelectionClient
         assessmentId={assessment.id}
         industry={assessment.industry}

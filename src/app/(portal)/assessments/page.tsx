@@ -80,7 +80,7 @@ export default async function AssessmentsPage() {
           {assessments.map((assessment) => (
             <Link
               key={assessment.id}
-              href={`/assessment/${assessment.id}/scope`}
+              href={assessment.status === "draft" ? `/assessment/${assessment.id}/profile` : `/assessment/${assessment.id}/scope`}
             >
               <Card className="hover:shadow-md hover:border-blue-200 transition-all duration-200 cursor-pointer">
                 <CardContent className="p-5">

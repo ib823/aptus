@@ -51,11 +51,35 @@ export async function getScopeItemsWithSelections(assessmentId: string) {
     configCounts.map((c) => [c.scopeItemId, c._count.id]),
   );
 
+  // Count classifiable steps per scope item (non-system-access, non-reference)
+  const NON_CLASSIFIABLE_TYPES = ["LOGON", "LOGOFF", "ACCESS_APP", "INFORMATION"];
+  const classifiableCounts = await prisma.processStep.groupBy({
+    by: ["scopeItemId"],
+    where: { stepType: { notIn: NON_CLASSIFIABLE_TYPES } },
+    _count: { id: true },
+  });
+  const classifiableMap = new Map(
+    classifiableCounts.map((c) => [c.scopeItemId, c._count.id]),
+  );
+
+  // Get effort baselines per scope item
+  const effortBaselines = await prisma.effortBaseline.findMany({
+    select: {
+      scopeItemId: true,
+      implementationDays: true,
+    },
+  });
+  const effortMap = new Map(
+    effortBaselines.map((e) => [e.scopeItemId, e.implementationDays]),
+  );
+
   return scopeItems.map((item) => {
     const selection = selectionMap.get(item.id);
     return {
       ...item,
       configCount: configCountMap.get(item.id) ?? 0,
+      classifiableSteps: classifiableMap.get(item.id) ?? 0,
+      effortDays: effortMap.get(item.id) ?? 0,
       selected: selection?.selected ?? false,
       relevance: selection?.relevance ?? null,
       currentState: selection?.currentState ?? null,

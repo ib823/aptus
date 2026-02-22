@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CompanyProfileForm } from "@/components/assessment/CompanyProfileForm";
 import { UI_TEXT } from "@/constants/ui-text";
+import { NewAssessmentForm } from "@/components/assessment/NewAssessmentForm";
 
 export default async function NewAssessmentPage() {
   const user = await getCurrentUser();
@@ -21,7 +21,7 @@ export default async function NewAssessmentPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <CompanyProfileForm />
+          <NewAssessmentForm />
         </CardContent>
       </Card>
     </div>

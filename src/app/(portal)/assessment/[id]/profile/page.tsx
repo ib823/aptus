@@ -1,7 +1,9 @@
 import { redirect, notFound } from "next/navigation";
+import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { calculateProfileCompleteness } from "@/lib/assessment/profile-completeness";
+import { PROFILE_COMPLETENESS_GATE } from "@/types/assessment";
 import { CompanyProfileForm } from "@/components/profile/CompanyProfileForm";
 
 interface ProfilePageProps {
@@ -68,8 +70,10 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     completenessBreakdown: breakdown,
   };
 
+  const canContinue = score >= PROFILE_COMPLETENESS_GATE;
+
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto pb-24">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-foreground">Company Profile</h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -81,6 +85,38 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
         initialProfile={profileData}
         isReadOnly={isReadOnly}
       />
+
+      {/* Sticky bottom bar */}
+      <div className="fixed bottom-0 left-0 right-0 bg-background border-t border z-10">
+        <div className="max-w-3xl mx-auto flex items-center justify-between px-4 sm:px-6 py-3">
+          <Link
+            href="/assessments"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            &larr; Back to Assessments
+          </Link>
+
+          <div className="text-center">
+            <p className="text-sm font-medium text-foreground">{score}% complete</p>
+            <p className="text-xs text-muted-foreground">
+              {canContinue ? "Ready for scope selection" : `${PROFILE_COMPLETENESS_GATE}% required to continue`}
+            </p>
+          </div>
+
+          {canContinue ? (
+            <Link
+              href={`/assessment/${assessmentId}/scope`}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+            >
+              Continue to Scope Selection &rarr;
+            </Link>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-muted-foreground bg-muted rounded-md cursor-not-allowed">
+              Continue to Scope Selection &rarr;
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
