@@ -4,8 +4,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 
 export const dynamic = "force-dynamic";
-export const preferredRegion = "sin1";
-export const maxDuration = 30;
 
 export async function GET() {
   const start = Date.now();
