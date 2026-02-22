@@ -15,6 +15,8 @@ const CATEGORIES = [
 
 const SEVERITIES = ["critical", "high", "medium", "low"] as const;
 
+export const preferredRegion = "sin1";
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

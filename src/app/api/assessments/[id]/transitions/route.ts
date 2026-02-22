@@ -15,6 +15,8 @@ const transitionSchema = z.object({
   reason: z.string().max(1000).optional(),
 });
 
+export const preferredRegion = "sin1";
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

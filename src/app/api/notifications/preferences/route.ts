@@ -15,6 +15,8 @@ const UpdatePreferenceSchema = z.object({
   channelPush: z.boolean().optional(),
 });
 
+export const preferredRegion = "sin1";
+
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

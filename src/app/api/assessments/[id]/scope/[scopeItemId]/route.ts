@@ -19,6 +19,8 @@ const selectionSchema = z.object({
   dependsOnScopeItems: z.array(z.string()).optional(),
 });
 
+export const preferredRegion = "sin1";
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; scopeItemId: string }> },

@@ -30,6 +30,8 @@ const CreateDataMigrationSchema = z.object({
   technicalNotes: z.string().max(5000).optional(),
 });
 
+export const preferredRegion = "sin1";
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

@@ -16,6 +16,8 @@ const updateWorkshopSchema = z.object({
   attendeeCount: z.number().int().min(0).optional(),
 });
 
+export const preferredRegion = "sin1";
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; workshopId: string }> },

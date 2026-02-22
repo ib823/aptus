@@ -21,6 +21,8 @@ const createSchema = z.object({
   currentErp: z.string().optional(),
 });
 
+export const preferredRegion = "sin1";
+
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

@@ -11,6 +11,8 @@ const JoinSchema = z.object({
   sessionCode: z.string().min(1).max(10).toUpperCase(),
 });
 
+export const preferredRegion = "sin1";
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

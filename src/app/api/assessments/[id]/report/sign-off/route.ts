@@ -15,6 +15,8 @@ const bodySchema = z.object({
   acknowledgement: z.literal(true),
 });
 
+export const preferredRegion = "sin1";
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

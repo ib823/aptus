@@ -13,6 +13,8 @@ const verifySchema = z.object({
   code: z.string().length(6).regex(/^\d{6}$/),
 });
 
+export const preferredRegion = "sin1";
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // IP-based rate limiting
   const clientIp = getClientIp(request.headers);

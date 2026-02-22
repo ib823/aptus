@@ -14,6 +14,8 @@ const updateChangeRequestSchema = z.object({
   rejectedReason: z.string().optional(),
 });
 
+export const preferredRegion = "sin1";
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; crId: string }> },

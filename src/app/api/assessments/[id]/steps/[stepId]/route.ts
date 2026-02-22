@@ -23,6 +23,8 @@ const responseSchema = z
     { message: "Gap note is required (min 10 characters) when status is GAP", path: ["clientNote"] },
   );
 
+export const preferredRegion = "sin1";
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; stepId: string }> },

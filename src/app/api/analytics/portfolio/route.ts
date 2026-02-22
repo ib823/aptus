@@ -8,6 +8,9 @@ import { ERROR_CODES } from "@/types/api";
 import { computePortfolioSummary, computeFitRateByIndustry, computeTopGaps } from "@/lib/analytics/portfolio-engine";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
+export const preferredRegion = "sin1";
+
 export async function GET(_request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

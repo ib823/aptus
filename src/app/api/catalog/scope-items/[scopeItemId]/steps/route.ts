@@ -13,6 +13,8 @@ const querySchema = z.object({
   hideRepetitive: z.enum(["true", "false"]).optional(),
 });
 
+export const preferredRegion = "sin1";
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ scopeItemId: string }> },

@@ -15,6 +15,8 @@ const createFromTemplateSchema = z.object({
   companySize: z.string().optional(),
 });
 
+export const preferredRegion = "sin1";
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ templateId: string }> },

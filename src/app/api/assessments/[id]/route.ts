@@ -17,6 +17,8 @@ const updateSchema = z.object({
   status: z.string().optional(),
 });
 
+export const preferredRegion = "sin1";
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

@@ -28,6 +28,8 @@ const UpdateIntegrationSchema = z.object({
 
 type RouteParams = { params: Promise<{ id: string; integrationId: string }> };
 
+export const preferredRegion = "sin1";
+
 export async function PUT(
   request: NextRequest,
   { params }: RouteParams,

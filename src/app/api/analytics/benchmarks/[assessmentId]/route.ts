@@ -7,6 +7,8 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { computeFitRate, computeBenchmarkComparison, generateInsights } from "@/lib/analytics/benchmark-engine";
 
+export const preferredRegion = "sin1";
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ assessmentId: string }> },

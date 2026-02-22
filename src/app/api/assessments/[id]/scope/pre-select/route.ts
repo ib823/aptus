@@ -14,6 +14,8 @@ const preSelectSchema = z.object({
   mode: z.enum(["replace", "merge"]),
 });
 
+export const preferredRegion = "sin1";
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

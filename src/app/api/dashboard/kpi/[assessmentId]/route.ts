@@ -22,6 +22,8 @@ function severityToScore(severity: string): number {
   }
 }
 
+export const preferredRegion = "sin1";
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ assessmentId: string }> },

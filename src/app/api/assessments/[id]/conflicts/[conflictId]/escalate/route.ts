@@ -11,6 +11,8 @@ const EscalateConflictSchema = z.object({
   escalatedToId: z.string().min(1),
 });
 
+export const preferredRegion = "sin1";
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; conflictId: string }> },

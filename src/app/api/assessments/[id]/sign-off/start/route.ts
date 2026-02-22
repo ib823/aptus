@@ -13,6 +13,8 @@ const startSchema = z.object({
   snapshotId: z.string().min(1, "Snapshot ID is required"),
 });
 
+export const preferredRegion = "sin1";
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

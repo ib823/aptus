@@ -16,6 +16,8 @@ const createSchema = z.object({
   assignedUser: z.string().optional(),
 });
 
+export const preferredRegion = "sin1";
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

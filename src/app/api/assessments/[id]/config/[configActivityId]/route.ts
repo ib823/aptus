@@ -16,6 +16,8 @@ const bodySchema = z.object({
   { message: "Reason required (min 10 chars) when excluding a recommended config", path: ["excludeReason"] },
 );
 
+export const preferredRegion = "sin1";
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; configActivityId: string }> },

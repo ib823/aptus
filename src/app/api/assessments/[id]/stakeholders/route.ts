@@ -17,6 +17,8 @@ const addStakeholderSchema = z.object({
   assignedAreas: z.array(z.string()).default([]),
 });
 
+export const preferredRegion = "sin1";
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

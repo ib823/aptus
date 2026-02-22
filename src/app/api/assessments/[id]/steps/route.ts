@@ -19,6 +19,8 @@ const querySchema = z.object({
   grouped: z.string().optional(),
 });
 
+export const preferredRegion = "sin1";
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

@@ -16,6 +16,8 @@ const respondSchema = z.object({
   processStepId: z.string().min(1),
 });
 
+export const preferredRegion = "sin1";
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; scopeItemId: string }> },

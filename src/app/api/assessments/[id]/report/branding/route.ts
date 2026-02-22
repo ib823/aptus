@@ -26,6 +26,8 @@ const brandingSchema = z.object({
   companyName: z.string().nullable().optional(),
 });
 
+export const preferredRegion = "sin1";
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

@@ -26,6 +26,8 @@ const cloneSchema = z.object({
   }).optional(),
 });
 
+export const preferredRegion = "sin1";
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

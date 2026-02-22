@@ -22,6 +22,8 @@ const WORKSHOP_CREATE_ROLES: UserRole[] = [
   "platform_admin", "consultant", "partner_lead", "solution_architect",
 ];
 
+export const preferredRegion = "sin1";
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

@@ -28,6 +28,8 @@ const alternativeSchema = z.object({
   cons: z.array(z.string()).optional(),
 });
 
+export const preferredRegion = "sin1";
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; gapId: string }> },

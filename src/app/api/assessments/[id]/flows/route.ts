@@ -9,6 +9,8 @@ import { generateFlowSvg } from "@/lib/report/flow-diagram";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
+export const preferredRegion = "sin1";
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

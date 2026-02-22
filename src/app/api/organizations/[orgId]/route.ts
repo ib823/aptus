@@ -24,6 +24,8 @@ const updateOrgSchema = z.object({
   brandLogoUrl: z.string().url().optional(),
 }).partial();
 
+export const preferredRegion = "sin1";
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ orgId: string }> },
