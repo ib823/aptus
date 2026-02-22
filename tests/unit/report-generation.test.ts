@@ -583,7 +583,7 @@ describe("Category Labels", () => {
 // Sign-Off Logic Tests
 // ===========================================================================
 
-const SIGNOFF_ROLES = ["client_representative", "bound_consultant", "bound_pm"] as const;
+const SIGNOFF_ROLES = ["client_representative", "aptus_consultant", "aptus_pm"] as const;
 
 function isAllSignedOff(signOffs: Array<{ signatoryRole: string }>): boolean {
   const signedRoles = new Set(signOffs.map((s) => s.signatoryRole));
@@ -594,7 +594,7 @@ describe("Sign-Off Logic", () => {
   it("should require all three roles for complete sign-off", () => {
     const partial = [
       { signatoryRole: "client_representative" },
-      { signatoryRole: "bound_consultant" },
+      { signatoryRole: "aptus_consultant" },
     ];
     expect(isAllSignedOff(partial)).toBe(false);
   });
@@ -602,8 +602,8 @@ describe("Sign-Off Logic", () => {
   it("should detect complete sign-off", () => {
     const complete = [
       { signatoryRole: "client_representative" },
-      { signatoryRole: "bound_consultant" },
-      { signatoryRole: "bound_pm" },
+      { signatoryRole: "aptus_consultant" },
+      { signatoryRole: "aptus_pm" },
     ];
     expect(isAllSignedOff(complete)).toBe(true);
   });
@@ -616,7 +616,7 @@ describe("Sign-Off Logic", () => {
     const withDupe = [
       { signatoryRole: "client_representative" },
       { signatoryRole: "client_representative" },
-      { signatoryRole: "bound_consultant" },
+      { signatoryRole: "aptus_consultant" },
     ];
     expect(isAllSignedOff(withDupe)).toBe(false);
   });

@@ -2,7 +2,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
-const SESSION_COOKIE = "fit-portal-session";
+const SESSION_COOKIE = "aptus-session";
 const NEXTAUTH_COOKIE = "next-auth.session-token";
 const BRIDGE_PATH = "/api/auth/bridge";
 

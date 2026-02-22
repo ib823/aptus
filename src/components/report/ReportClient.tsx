@@ -56,8 +56,8 @@ const REPORTS = [
 
 const SIGNOFF_ROLES = [
   { role: "client_representative", label: "Client Representative" },
-  { role: "bound_consultant", label: "Aptus Consultant" },
-  { role: "bound_pm", label: "Aptus PM" },
+  { role: "aptus_consultant", label: "Aptus Consultant" },
+  { role: "aptus_pm", label: "Aptus PM" },
 ] as const;
 
 export function ReportClient({

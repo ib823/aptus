@@ -59,9 +59,9 @@ export const ONBOARDING_FLOWS: Record<UserRole, OnboardingFlow> = {
   platform_admin: {
     role: "platform_admin",
     title: "Platform Admin Setup",
-    description: "Set up and manage the FIT portal platform.",
+    description: "Set up and manage the Aptus platform.",
     steps: [
-      { index: 0, title: "Welcome", description: "Welcome to the FIT Portal administration.", isRequired: true, action: { type: "none" } },
+      { index: 0, title: "Welcome", description: "Welcome to the Aptus administration.", isRequired: true, action: { type: "none" } },
       { index: 1, title: "Review Organization", description: "Review and configure your organization settings.", isRequired: true, action: { type: "navigate", url: "/admin/organizations" } },
       { index: 2, title: "Invite Team", description: "Invite team members and assign roles.", isRequired: true, action: { type: "invite_team" } },
       { index: 3, title: "Explore Dashboard", description: "Explore the admin dashboard and monitoring tools.", isRequired: false, action: { type: "navigate", url: "/admin" } },
@@ -72,7 +72,7 @@ export const ONBOARDING_FLOWS: Record<UserRole, OnboardingFlow> = {
     title: "Partner Lead Onboarding",
     description: "Get started managing SAP implementation assessments.",
     steps: [
-      { index: 0, title: "Welcome", description: "Welcome to the FIT Portal as a Partner Lead.", isRequired: true, action: { type: "none" } },
+      { index: 0, title: "Welcome", description: "Welcome to the Aptus as a Partner Lead.", isRequired: true, action: { type: "none" } },
       { index: 1, title: "Create Assessment", description: "Create your first assessment for a client.", isRequired: true, action: { type: "create_assessment" } },
       { index: 2, title: "Invite Team", description: "Invite consultants and stakeholders.", isRequired: true, action: { type: "invite_team" } },
       { index: 3, title: "Review Dashboard", description: "Explore your role-specific dashboard.", isRequired: false, action: { type: "navigate", url: "/dashboard" } },
@@ -83,7 +83,7 @@ export const ONBOARDING_FLOWS: Record<UserRole, OnboardingFlow> = {
     title: "Consultant Onboarding",
     description: "Learn how to guide clients through fit-gap analysis.",
     steps: [
-      { index: 0, title: "Welcome", description: "Welcome to the FIT Portal as a Consultant.", isRequired: true, action: { type: "none" } },
+      { index: 0, title: "Welcome", description: "Welcome to the Aptus as a Consultant.", isRequired: true, action: { type: "none" } },
       { index: 1, title: "Complete Profile", description: "Fill in your profile and expertise areas.", isRequired: true, action: { type: "complete_profile" } },
       { index: 2, title: "Understand Scope", description: "Learn how scope items and process steps work.", isRequired: true, action: { type: "highlight", selector: "[data-tour='scope-items']" } },
       { index: 3, title: "Classification Guide", description: "Understand FIT, CONFIGURE, GAP, and N/A classifications.", isRequired: true, action: { type: "highlight", selector: "[data-tour='classification']" } },
@@ -95,7 +95,7 @@ export const ONBOARDING_FLOWS: Record<UserRole, OnboardingFlow> = {
     title: "Project Manager Onboarding",
     description: "Track progress and manage assessment timelines.",
     steps: [
-      { index: 0, title: "Welcome", description: "Welcome to the FIT Portal as a Project Manager.", isRequired: true, action: { type: "none" } },
+      { index: 0, title: "Welcome", description: "Welcome to the Aptus as a Project Manager.", isRequired: true, action: { type: "none" } },
       { index: 1, title: "Dashboard Overview", description: "Learn to use your dashboard for project tracking.", isRequired: true, action: { type: "navigate", url: "/dashboard" } },
       { index: 2, title: "Set Deadlines", description: "Set up milestones and deadlines.", isRequired: true, action: { type: "navigate", url: "/dashboard" } },
       { index: 3, title: "Team Management", description: "Review team assignments and workload.", isRequired: false, action: { type: "invite_team" } },
@@ -106,7 +106,7 @@ export const ONBOARDING_FLOWS: Record<UserRole, OnboardingFlow> = {
     title: "Solution Architect Onboarding",
     description: "Review technical gaps and integration points.",
     steps: [
-      { index: 0, title: "Welcome", description: "Welcome to the FIT Portal as a Solution Architect.", isRequired: true, action: { type: "none" } },
+      { index: 0, title: "Welcome", description: "Welcome to the Aptus as a Solution Architect.", isRequired: true, action: { type: "none" } },
       { index: 1, title: "Gap Analysis", description: "Learn how to review and resolve gaps.", isRequired: true, action: { type: "highlight", selector: "[data-tour='gaps']" } },
       { index: 2, title: "Integration Review", description: "Review integration requirements and patterns.", isRequired: true, action: { type: "navigate", url: "/dashboard" } },
       { index: 3, title: "Conflict Resolution", description: "Handle classification conflicts.", isRequired: false, action: { type: "navigate", url: "/dashboard" } },
@@ -117,7 +117,7 @@ export const ONBOARDING_FLOWS: Record<UserRole, OnboardingFlow> = {
     title: "Process Owner Onboarding",
     description: "Classify process steps for your functional area.",
     steps: [
-      { index: 0, title: "Welcome", description: "Welcome to the FIT Portal as a Process Owner.", isRequired: true, action: { type: "none" } },
+      { index: 0, title: "Welcome", description: "Welcome to the Aptus as a Process Owner.", isRequired: true, action: { type: "none" } },
       { index: 1, title: "Your Scope", description: "Review the scope items assigned to your area.", isRequired: true, action: { type: "review_scope" } },
       { index: 2, title: "Classification", description: "Learn how to classify each process step.", isRequired: true, action: { type: "highlight", selector: "[data-tour='classification']" } },
       { index: 3, title: "Notes & Comments", description: "Add notes and collaborate with the team.", isRequired: false, action: { type: "highlight", selector: "[data-tour='comments']" } },
@@ -128,7 +128,7 @@ export const ONBOARDING_FLOWS: Record<UserRole, OnboardingFlow> = {
     title: "IT Lead Onboarding",
     description: "Provide technical notes and review data migration.",
     steps: [
-      { index: 0, title: "Welcome", description: "Welcome to the FIT Portal as an IT Lead.", isRequired: true, action: { type: "none" } },
+      { index: 0, title: "Welcome", description: "Welcome to the Aptus as an IT Lead.", isRequired: true, action: { type: "none" } },
       { index: 1, title: "Technical Notes", description: "Learn how to add technical notes to process steps.", isRequired: true, action: { type: "highlight", selector: "[data-tour='notes']" } },
       { index: 2, title: "Data Migration", description: "Review data migration requirements.", isRequired: true, action: { type: "navigate", url: "/dashboard" } },
       { index: 3, title: "Integration Points", description: "Review integration requirements.", isRequired: false, action: { type: "navigate", url: "/dashboard" } },
@@ -139,7 +139,7 @@ export const ONBOARDING_FLOWS: Record<UserRole, OnboardingFlow> = {
     title: "Data Migration Lead Onboarding",
     description: "Manage data migration planning and tracking.",
     steps: [
-      { index: 0, title: "Welcome", description: "Welcome to the FIT Portal as a Data Migration Lead.", isRequired: true, action: { type: "none" } },
+      { index: 0, title: "Welcome", description: "Welcome to the Aptus as a Data Migration Lead.", isRequired: true, action: { type: "none" } },
       { index: 1, title: "Migration Objects", description: "Review and manage data migration objects.", isRequired: true, action: { type: "navigate", url: "/dashboard" } },
       { index: 2, title: "Deadlines", description: "Set up migration milestones.", isRequired: true, action: { type: "navigate", url: "/dashboard" } },
     ],
@@ -149,7 +149,7 @@ export const ONBOARDING_FLOWS: Record<UserRole, OnboardingFlow> = {
     title: "Executive Sponsor Onboarding",
     description: "Monitor assessment progress and KPIs.",
     steps: [
-      { index: 0, title: "Welcome", description: "Welcome to the FIT Portal as an Executive Sponsor.", isRequired: true, action: { type: "none" } },
+      { index: 0, title: "Welcome", description: "Welcome to the Aptus as an Executive Sponsor.", isRequired: true, action: { type: "none" } },
       { index: 1, title: "KPI Dashboard", description: "View key performance indicators for your assessment.", isRequired: true, action: { type: "navigate", url: "/dashboard" } },
       { index: 2, title: "Reports", description: "Access executive summary reports.", isRequired: false, action: { type: "navigate", url: "/dashboard" } },
     ],
@@ -159,7 +159,7 @@ export const ONBOARDING_FLOWS: Record<UserRole, OnboardingFlow> = {
     title: "Viewer Onboarding",
     description: "View assessment progress and reports.",
     steps: [
-      { index: 0, title: "Welcome", description: "Welcome to the FIT Portal.", isRequired: true, action: { type: "none" } },
+      { index: 0, title: "Welcome", description: "Welcome to the Aptus.", isRequired: true, action: { type: "none" } },
       { index: 1, title: "Navigation", description: "Learn how to navigate the portal and view assessments.", isRequired: true, action: { type: "navigate", url: "/dashboard" } },
     ],
   },
@@ -168,7 +168,7 @@ export const ONBOARDING_FLOWS: Record<UserRole, OnboardingFlow> = {
     title: "Client Admin Onboarding",
     description: "Manage your organization's assessment team.",
     steps: [
-      { index: 0, title: "Welcome", description: "Welcome to the FIT Portal as a Client Admin.", isRequired: true, action: { type: "none" } },
+      { index: 0, title: "Welcome", description: "Welcome to the Aptus as a Client Admin.", isRequired: true, action: { type: "none" } },
       { index: 1, title: "Team Setup", description: "Review and manage your team members.", isRequired: true, action: { type: "invite_team" } },
       { index: 2, title: "Dashboard", description: "Explore your dashboard and KPIs.", isRequired: true, action: { type: "navigate", url: "/dashboard" } },
       { index: 3, title: "Deadlines", description: "Set up important deadlines and milestones.", isRequired: false, action: { type: "navigate", url: "/dashboard" } },

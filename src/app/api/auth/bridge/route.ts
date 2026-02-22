@@ -1,4 +1,4 @@
-/** GET: Bridge NextAuth JWT session to custom fit-portal-session cookie */
+/** GET: Bridge NextAuth JWT session to custom aptus-session cookie */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { getServerSession } from "next-auth";

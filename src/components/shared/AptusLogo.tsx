@@ -1,6 +1,6 @@
 "use client";
 
-interface BoundLogoProps {
+interface AptusLogoProps {
   size?: "sm" | "md" | "lg";
   className?: string;
 }
@@ -11,7 +11,7 @@ const sizeMap = {
   lg: { height: 46 },
 } as const;
 
-export function BoundLogo({ size = "md", className = "" }: BoundLogoProps) {
+export function AptusLogo({ size = "md", className = "" }: AptusLogoProps) {
   const { height } = sizeMap[size];
 
   return (

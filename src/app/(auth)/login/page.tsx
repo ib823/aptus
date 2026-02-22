@@ -6,7 +6,7 @@ import { Mail, CheckCircle, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { BoundLogo } from "@/components/shared/BoundLogo";
+import { AptusLogo } from "@/components/shared/AptusLogo";
 import { UI_TEXT } from "@/constants/ui-text";
 import { signIn } from "next-auth/react";
 
@@ -54,7 +54,7 @@ function LoginForm() {
   return (
     <Card className="shadow-md">
       <CardHeader className="text-center pb-2">
-        <BoundLogo size="lg" className="mb-6 justify-center" />
+        <AptusLogo size="lg" className="mb-6 justify-center" />
         <h1 className="text-2xl font-bold">
           {sent ? UI_TEXT.auth.magicLinkSent : UI_TEXT.auth.loginTitle}
         </h1>

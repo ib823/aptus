@@ -77,7 +77,7 @@ function writeStorageState(filePath: string, token: string): void {
   const state = {
     cookies: [
       {
-        name: "fit-portal-session",
+        name: "aptus-session",
         value: token,
         domain: "localhost",
         path: "/",

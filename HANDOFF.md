@@ -202,7 +202,7 @@ None.
 - ProcessStep uses `sequence` (not `sequenceNumber`)
 - StepResponse needs `include` (not `select`) for `processStep` relation access
 - jspdf-autotable y-position tracking via `getFinalY()` helper with unknown cast
-- Sign-off auto-transitions assessment status to `signed_off` when all 3 roles (client_representative, bound_consultant, bound_pm) have signed
+- Sign-off auto-transitions assessment status to `signed_off` when all 3 roles (client_representative, aptus_consultant, aptus_pm) have signed
 - Audit trail report is available at any assessment status (not gated behind completion)
 - Flow diagrams use upsert with `assessmentId_scopeItemId_processFlowName` unique constraint
 

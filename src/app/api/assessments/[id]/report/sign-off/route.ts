@@ -11,7 +11,7 @@ import { z } from "zod";
 const bodySchema = z.object({
   signatoryName: z.string().min(1).max(255),
   signatoryEmail: z.string().email(),
-  signatoryRole: z.enum(["client_representative", "bound_consultant", "bound_pm"]),
+  signatoryRole: z.enum(["client_representative", "aptus_consultant", "aptus_pm"]),
   acknowledgement: z.literal(true),
 });
 export async function POST(
@@ -105,7 +105,7 @@ export async function POST(
     select: { signatoryRole: true },
   });
   const roles = new Set(allSignOffs.map((s) => s.signatoryRole));
-  const allSigned = roles.has("client_representative") && roles.has("bound_consultant") && roles.has("bound_pm");
+  const allSigned = roles.has("client_representative") && roles.has("aptus_consultant") && roles.has("aptus_pm");
 
   let assessmentStatus: string = assessment.status;
   if (allSigned) {
