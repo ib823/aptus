@@ -371,9 +371,9 @@ export function ReviewClient({
   }, [assessmentId, currentScopeItemId, steps, bulkLoading]);
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex">
       {/* Sidebar — scope item picker + step group navigation */}
-      <div className="hidden sm:flex sm:w-[300px] bg-muted/40 border-r border flex-col h-screen fixed left-0 top-0 overflow-hidden">
+      <div className="hidden sm:flex sm:w-[300px] shrink-0 bg-muted/40 border-r border flex-col h-screen sticky top-0 overflow-hidden">
         {/* Header */}
         <div className="p-4 border-b border">
           <Link
@@ -465,7 +465,7 @@ export function ReviewClient({
       </div>
 
       {/* Main content */}
-      <div className="sm:ml-[300px] flex-1 p-8">
+      <div className="flex-1 min-w-0 p-8">
         <div className="max-w-3xl mx-auto">
           {loading ? (
             <div className="space-y-4">
