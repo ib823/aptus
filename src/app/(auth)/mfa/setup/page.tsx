@@ -23,6 +23,10 @@ export default function MfaSetupPage() {
     async function fetchSetup() {
       try {
         const response = await fetch("/api/auth/mfa/setup");
+        if (response.status === 401) {
+          router.replace("/login");
+          return;
+        }
         const data: { data?: MfaSetupData } = await response.json();
         if (data.data) {
           if (data.data.alreadySetup) {
