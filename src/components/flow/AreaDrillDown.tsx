@@ -35,7 +35,6 @@ export function AreaDrillDown({ area, assessmentId, onBack }: AreaDrillDownProps
           </thead>
           <tbody>
             {area.scopeItems.map((si) => {
-              const gapPct = si.totalSteps > 0 ? Math.round((si.gapCount / si.totalSteps) * 100) : 0;
               return (
                 <tr key={si.scopeItemId} className="border-t hover:bg-muted/20">
                   <td className="px-4 py-3">

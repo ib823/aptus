@@ -9,7 +9,7 @@
  * signature verification, meter events, retry logic, and proration.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import type { SubscriptionStatus, PlanTier } from "@/types/commercial";
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,6 @@
-import { test, expect, Browser, BrowserContext, Page } from "@playwright/test";
+import { test, expect, BrowserContext, Page } from "@playwright/test";
 import { WorkshopPage } from "../pages/workshop.page";
 import { AssessmentPage } from "../pages/assessment.page";
-import { DashboardPage } from "../pages/dashboard.page";
 import path from "path";
 
 /**

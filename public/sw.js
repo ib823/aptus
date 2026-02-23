@@ -1,4 +1,3 @@
-/* eslint-disable no-restricted-globals */
 // Aptus Service Worker — Push notifications + offline caching
 
 const CACHE_VERSION = "aptus-v1";

@@ -9,13 +9,12 @@
  * enforced between organizations (tenants).
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
-import { createMockSession, createMockUser, createCrossTenantUser } from "../helpers/auth";
+import { describe, it, expect } from "vitest";
+import { createMockSession, createMockUser } from "../helpers/auth";
 import { createMockWebSocketClient, createPresenceMessage, createActivityMessage } from "../helpers/websocket";
 import * as OrgFactory from "../factories/organization.factory";
 import * as UserFactory from "../factories/user.factory";
 import * as AssessmentFactory from "../factories/assessment.factory";
-import * as GapFactory from "../factories/gap.factory";
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -10,8 +10,6 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { createMockUser } from "../../helpers/auth";
-import { createMockWebSocketClient, WS_MESSAGE_TYPES } from "../../helpers/websocket";
 import * as StepFactory from "../../factories/step.factory";
 
 // ---------------------------------------------------------------------------
@@ -250,7 +248,7 @@ describe("Conflict Detection (T-CONF)", () => {
   });
 
   it("T-CONF-005: Additional classification adds to existing open conflict", () => {
-    const conflict = createConflict(assessmentId, "step_response", step.id, [
+    createConflict(assessmentId, "step_response", step.id, [
       { userId: "user-1", userRole: "consultant", fitStatus: "FIT", confidence: "high", timestamp: Date.now() },
       { userId: "user-2", userRole: "process_owner", fitStatus: "GAP", confidence: "high", timestamp: Date.now() },
     ]);

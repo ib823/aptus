@@ -10,13 +10,11 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { createMockSession, createMockUser } from "../../helpers/auth";
 import {
   createMockWebSocketClient,
   createLockMessage,
   WS_MESSAGE_TYPES,
 } from "../../helpers/websocket";
-import * as AssessmentFactory from "../../factories/assessment.factory";
 import * as StepFactory from "../../factories/step.factory";
 
 // ---------------------------------------------------------------------------

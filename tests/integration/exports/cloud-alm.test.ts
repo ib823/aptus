@@ -11,10 +11,7 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { createMockSession, createMockUser } from "../../helpers/auth";
-import * as AssessmentFactory from "../../factories/assessment.factory";
 import * as GapFactory from "../../factories/gap.factory";
-import * as StepFactory from "../../factories/step.factory";
 
 // ---------------------------------------------------------------------------
 // Cloud ALM export simulation

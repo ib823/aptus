@@ -17,11 +17,22 @@ const eslintConfig = [
       "coverage/**",
       "playwright-report/**",
       "test-results/**",
+      "next-env.d.ts",
     ],
   },
   {
     rules: {
       "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", destructuredArrayIgnorePattern: "^_" },
+      ],
+    },
+  },
+  {
+    files: ["tests/**/*.ts", "tests/**/*.spec.ts"],
+    rules: {
+      "@typescript-eslint/no-unused-vars": "off",
     },
   },
 ];

@@ -124,7 +124,6 @@ test.describe("T-E2E-J04 — Trial to Paid Conversion", () => {
 
   // Step 10: User accesses post-upgrade features
   test("Step 10 — User accesses features available after upgrade", async ({ page }) => {
-    const assessment = new AssessmentPage(page);
 
     // Should be able to access analytics, templates, etc.
     await page.goto("/analytics");

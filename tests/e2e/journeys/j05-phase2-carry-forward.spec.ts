@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
 import { AssessmentPage } from "../pages/assessment.page";
-import { SignOffPage } from "../pages/sign-off.page";
 
 /**
  * T-E2E-J05 — Phase 2 Carry-Forward / Cloning
@@ -187,7 +186,6 @@ test.describe("T-E2E-J05 — Phase 2 Carry-Forward Cloning", () => {
     expect(response.status()).toBeLessThan(500);
 
     // Also verify through UI
-    const assessment = new AssessmentPage(page);
     await page.goto(`/analytics/cross-phase/${clonedAssessmentId}`);
     await page.waitForLoadState("networkidle");
     // Page should load without a 500 error

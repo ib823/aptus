@@ -10,7 +10,7 @@
  * snapshot serialization, and N+1 detection.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import * as AssessmentFactory from "../factories/assessment.factory";
 import * as StepFactory from "../factories/step.factory";
 import * as GapFactory from "../factories/gap.factory";

@@ -27,6 +27,7 @@ export function WorkshopQRCode({ qrCodeUrl, sessionCode }: WorkshopQRCodeProps) 
   return (
     <div className="flex flex-col items-center gap-3 p-4">
       {qrCodeUrl ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
         <img
           src={qrCodeUrl}
           alt={`QR code for session ${sessionCode}`}

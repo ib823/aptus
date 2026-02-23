@@ -1,7 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { AuthPage } from "../pages/auth.page";
 import { SettingsPage } from "../pages/settings.page";
-import { DashboardPage } from "../pages/dashboard.page";
 
 /**
  * T-E2E-J07 — Enterprise SSO + SCIM Provisioning

@@ -78,7 +78,7 @@ export function createAllRoleSessions(orgId = DEFAULT_ORG_ID): Record<PlatformRo
   return Object.fromEntries(
     roles.map((role) => [
       role,
-      createMockSession(role, { user: createMockUser(role, { organizationId: orgId }) as any }),
+      createMockSession(role, { user: createMockUser(role, { organizationId: orgId }) }),
     ])
   ) as Record<PlatformRole, MockSession>;
 }

@@ -1,8 +1,5 @@
 import { test, expect, Page } from "@playwright/test";
 import { AssessmentPage } from "./pages/assessment.page";
-import { AuthPage } from "./pages/auth.page";
-import { DashboardPage } from "./pages/dashboard.page";
-import { SignOffPage } from "./pages/sign-off.page";
 import { SettingsPage } from "./pages/settings.page";
 
 /**
@@ -63,7 +60,7 @@ test.describe("T-EDGE — Destructive & Edge Case Tests", () => {
     // Attempt to load the page under poor conditions
     const startTime = Date.now();
     await page.goto("/organization", { timeout: 30_000 }).catch(() => {});
-    const elapsed = Date.now() - startTime;
+    void (Date.now() - startTime);
 
     // Page should either load (slowly) or show a meaningful timeout
     const body = await page.textContent("body").catch(() => "");

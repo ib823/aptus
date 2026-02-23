@@ -573,8 +573,8 @@ test.describe("T-A11Y-013: No auto-play animations / respects prefers-reduced-mo
       return animated
         .filter((a) => a.playState === "running")
         .map((a) => ({
-          element: (a as any).effect?.target?.tagName ?? "unknown",
-          name: (a as any).animationName ?? "unnamed",
+          element: (a.effect as KeyframeEffect | null)?.target instanceof Element ? (a.effect as KeyframeEffect).target!.tagName : "unknown",
+          name: (a as CSSAnimation).animationName ?? "unnamed",
         }));
     });
 

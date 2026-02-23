@@ -106,7 +106,7 @@ export async function finalizeVote(
   if (!step) throw new Error("Process step not found");
 
   // Get vote tally for the decision log
-  const tally = await getVoteTally(sessionId, processStepId);
+  await getVoteTally(sessionId, processStepId);
 
   // Upsert StepResponse
   const response = await prisma.stepResponse.upsert({

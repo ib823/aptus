@@ -9,13 +9,6 @@ import type {
 } from "./adapter-interface";
 import type { SnapshotData } from "@/types/signoff";
 
-const DEFAULT_PRIORITY_MAP: Record<string, string> = {
-  critical: "Highest",
-  high: "High",
-  medium: "Medium",
-  low: "Low",
-};
-
 const DEFAULT_RESOLUTION_TYPE_MAP: Record<string, string> = {
   workaround: "Story",
   customization: "Story",

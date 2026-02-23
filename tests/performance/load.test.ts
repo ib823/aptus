@@ -10,7 +10,7 @@
  * large assessments, report generation, and content parsing.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import * as AssessmentFactory from "../factories/assessment.factory";
 import * as StepFactory from "../factories/step.factory";
 import * as GapFactory from "../factories/gap.factory";
@@ -55,7 +55,7 @@ async function simulateConcurrent(
 
 /** Simulate loading an assessment with step operations */
 async function simulateAssessmentLoad(stepCount: number): Promise<void> {
-  const assessment = AssessmentFactory.createFullyPopulated();
+  AssessmentFactory.createFullyPopulated();
   const steps = StepFactory.createMany(stepCount);
   // Simulate processing all steps (serialization + validation)
   const processed = steps.map((s) => ({

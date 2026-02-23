@@ -4,7 +4,6 @@ import { prisma } from "@/lib/db/prisma";
 import { computeRiskScore } from "@/lib/assessment/risk-score";
 import type {
   FunctionalAreaOverviewData,
-  AreaScopeItemSummary,
   CrossAreaDep,
 } from "@/types/flow";
 import type { InputJsonValue } from "@prisma/client/runtime/library";

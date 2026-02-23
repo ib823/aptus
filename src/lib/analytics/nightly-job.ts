@@ -1,7 +1,7 @@
 /** Phase 26: Nightly analytics computation job */
 
 import { prisma } from "@/lib/db/prisma";
-import { computeFitRate, mean, median, percentile } from "./benchmark-engine";
+import { mean, median, percentile } from "./benchmark-engine";
 import { computePortfolioSummary, computeFitRateByIndustry, computeTopGaps } from "./portfolio-engine";
 import { anonymizeGapPatterns } from "./anonymization-engine";
 

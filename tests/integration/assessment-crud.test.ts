@@ -10,7 +10,6 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { createMockSession, createMockUser } from "../helpers/auth";
 import { createMockMeterEvent } from "../helpers/stripe";
 import * as OrgFactory from "../factories/organization.factory";
 import * as UserFactory from "../factories/user.factory";
@@ -431,7 +430,7 @@ describe("Assessment CRUD & Lifecycle (T-CRUD)", () => {
         createdBy: user.id!,
       });
 
-      const items = addScopeItems(assessment.id, [
+      addScopeItems(assessment.id, [
         { scopeItemId: "J60", selected: true, dependsOnScopeItems: [] },
         { scopeItemId: "J14", selected: true, dependsOnScopeItems: ["J60"] },
         { scopeItemId: "J13", selected: false },

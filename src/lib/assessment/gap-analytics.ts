@@ -6,7 +6,6 @@ const RISK_LEVELS = ["LOW", "MEDIUM", "HIGH"] as const;
 // Resolution types that produce upgrade-unsafe code
 const UPGRADE_UNSAFE_TYPES = new Set(["CUSTOM_ABAP", "ISV"]);
 const UPGRADE_REVALIDATION_TYPES = new Set(["BTP_EXT", "KEY_USER_EXT"]);
-const UPGRADE_SAFE_TYPES = new Set(["FIT", "CONFIGURE", "ADAPT_PROCESS", "OUT_OF_SCOPE", "PENDING"]);
 
 // --- Interfaces ---
 

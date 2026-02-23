@@ -171,7 +171,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   return NextResponse.json({ data: template }, { status: 201 });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function GET(_request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

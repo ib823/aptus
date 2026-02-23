@@ -1,8 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { AuthPage } from "../pages/auth.page";
 import { AssessmentPage } from "../pages/assessment.page";
-import { DashboardPage } from "../pages/dashboard.page";
-import { SettingsPage } from "../pages/settings.page";
 
 /**
  * T-E2E-J03 — Client Stakeholder Invited to Assessment
@@ -87,11 +85,11 @@ test.describe("T-E2E-J03 — Client Stakeholder Invitation", () => {
         if (response.ok()) {
           const body = await response.json();
           const stakeholders = body.data ?? body.stakeholders ?? body;
-          const found = Array.isArray(stakeholders)
+          void (Array.isArray(stakeholders)
             ? stakeholders.some(
                 (s: { email?: string }) => s.email === inviteeEmail
               )
-            : false;
+            : false);
           // Either found the stakeholder or the endpoint structure differs
           expect(response.status()).toBeLessThan(500);
         }

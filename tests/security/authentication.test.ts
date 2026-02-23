@@ -10,13 +10,12 @@
  * viewer link expiry, TOTP enforcement, and SCIM bearer tokens.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   createMockSession,
   createExpiredSession,
   createForgedToken,
   createUnauthenticatedContext,
-  createMockUser,
 } from "../helpers/auth";
 import * as UserFactory from "../factories/user.factory";
 import * as OrgFactory from "../factories/organization.factory";
@@ -153,7 +152,7 @@ describe("Authentication Security", () => {
   describe("T-SEC-001: Access any API route without auth token returns 401", () => {
     it.each(API_ROUTES)(
       "returns 401 for unauthenticated request to %s",
-      (route) => {
+      (_route) => {
         const result = verifyAuth({});
         expect(result.authenticated).toBe(false);
         expect(result.status).toBe(401);

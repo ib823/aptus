@@ -9,19 +9,11 @@
  * error message safety, and WebSocket authentication.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  createMockSession,
-  createMockUser,
-  createUnauthenticatedContext,
-  ALL_ROLES,
-} from "../helpers/auth";
+import { describe, it, expect, beforeEach } from "vitest";
 import * as UserFactory from "../factories/user.factory";
-import * as OrgFactory from "../factories/organization.factory";
 import * as AssessmentFactory from "../factories/assessment.factory";
 import {
   createMockWebSocketClient,
-  createConcurrentClients,
 } from "../helpers/websocket";
 
 // ── GDPR Deletion Engine ────────────────────────────────────────────────
@@ -125,7 +117,7 @@ interface ApiErrorResponse {
 }
 
 /** Create a production-safe error response */
-function createSafeError(code: string, internalError: Error): ApiErrorResponse {
+function createSafeError(code: string, _internalError: Error): ApiErrorResponse {
   // Never expose stack traces or internal details
   const safeMessages: Record<string, string> = {
     UNAUTHORIZED: "Authentication required.",

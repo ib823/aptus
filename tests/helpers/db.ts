@@ -49,7 +49,9 @@ export async function cleanupTestData() {
 
   for (const table of tablesToClean) {
     try {
-      await (prisma as any)[table[0]!.toLowerCase() + table.slice(1)].deleteMany({});
+      const modelName = table[0]!.toLowerCase() + table.slice(1);
+      const model = (prisma as unknown as Record<string, { deleteMany: (args: Record<string, unknown>) => Promise<unknown> }>)[modelName];
+      if (model) await model.deleteMany({});
     } catch {
       // Table may not exist or may have FK constraints
     }

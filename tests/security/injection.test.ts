@@ -9,7 +9,7 @@
  * SQL injection, XSS, SSRF, path traversal, and CSV injection.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 
 // ── SQL Injection Prevention ─────────────────────────────────────────────
 

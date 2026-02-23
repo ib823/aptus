@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
 import { AssessmentPage } from "../pages/assessment.page";
-import { SignOffPage } from "../pages/sign-off.page";
 
 /**
  * T-E2E-J06 — Post Sign-Off Change Control

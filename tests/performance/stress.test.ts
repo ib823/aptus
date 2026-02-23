@@ -10,23 +10,21 @@
  * rapid-fire operations, concurrent sign-off attempts, and memory leaks.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import * as AssessmentFactory from "../factories/assessment.factory";
 import * as StepFactory from "../factories/step.factory";
 import * as GapFactory from "../factories/gap.factory";
 import {
   createConcurrentClients,
-  createMockWebSocketClient,
   createActivityMessage,
-  createLockMessage,
 } from "../helpers/websocket";
 
 // ── Stress test helpers ─────────────────────────────────────────────────
 
 /** Simulate an API request with response code */
 async function simulateApiRequest(
-  endpoint: string,
-  index: number,
+  _endpoint: string,
+  _index: number,
 ): Promise<{ status: number; latencyMs: number }> {
   const start = performance.now();
 

@@ -98,7 +98,6 @@ describe("CreateIntegrationSchema", () => {
   });
 
   it("rejects missing required name", () => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { name: _name, ...input } = validInput;
     const result = CreateIntegrationSchema.safeParse(input);
     expect(result.success).toBe(false);
@@ -194,7 +193,6 @@ describe("CreateDataMigrationSchema", () => {
   });
 
   it("rejects missing required sourceSystem", () => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { sourceSystem: _sourceSystem, ...input } = validInput;
     const result = CreateDataMigrationSchema.safeParse(input);
     expect(result.success).toBe(false);

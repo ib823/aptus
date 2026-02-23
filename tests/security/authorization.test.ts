@@ -10,19 +10,13 @@
  * expired trial bypass, and sign-off endpoint restrictions.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
-  createMockSession,
   createMockUser,
   createCrossTenantUser,
   ALL_ROLES,
-  WRITE_ROLES,
-  SIGNOFF_ROLES,
-  type PlatformRole,
 } from "../helpers/auth";
-import * as UserFactory from "../factories/user.factory";
 import * as OrgFactory from "../factories/organization.factory";
-import * as AssessmentFactory from "../factories/assessment.factory";
 
 // ── Authorization engine simulation ─────────────────────────────────────
 

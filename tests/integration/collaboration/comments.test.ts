@@ -10,9 +10,6 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { createMockUser, createMockSession } from "../../helpers/auth";
-import { createMockWebSocketClient, WS_MESSAGE_TYPES } from "../../helpers/websocket";
-import * as AssessmentFactory from "../../factories/assessment.factory";
 import * as StepFactory from "../../factories/step.factory";
 
 // ---------------------------------------------------------------------------
@@ -208,7 +205,7 @@ describe("Comments (T-CMT)", () => {
       content: "What is the current manual process?",
     });
 
-    const reply1 = createComment({
+    createComment({
       assessmentId: assessmentA,
       targetType: "step_response",
       targetId: step1.id,
@@ -217,7 +214,7 @@ describe("Comments (T-CMT)", () => {
       parentCommentId: parent.id,
     });
 
-    const reply2 = createComment({
+    createComment({
       assessmentId: assessmentA,
       targetType: "step_response",
       targetId: step1.id,

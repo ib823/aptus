@@ -6,7 +6,7 @@ export function seedProcessReview() {
   const orgId = "seed-org-004";
   const assessmentId = "seed-assessment-004";
 
-  const fitStatuses = ["FIT", "CONFIGURE", "GAP", "NA", "PENDING"] as const;
+  type FitStatus = "FIT" | "CONFIGURE" | "GAP" | "NA" | "PENDING";
   const fitDistribution = {
     FIT: 0.40,
     CONFIGURE: 0.25,
@@ -35,12 +35,12 @@ export function seedProcessReview() {
       stepIndex++;
       const rand = Math.random();
       let cumulative = 0;
-      let status: (typeof fitStatuses)[number] = "PENDING";
+      let status: FitStatus = "PENDING";
 
       for (const [key, weight] of Object.entries(fitDistribution)) {
         cumulative += weight;
         if (rand <= cumulative) {
-          status = key as (typeof fitStatuses)[number];
+          status = key as FitStatus;
           break;
         }
       }
