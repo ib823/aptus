@@ -76,7 +76,9 @@ export function middleware(request: NextRequest): NextResponse | undefined {
   }
 
   // ----- Session bridge for portal routes -----
+  // Skip bridge for API routes, static assets, auth pages, and files with extensions
   if (
+    pathname.startsWith("/api/") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/mfa/") ||
