@@ -83,11 +83,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  if (user.organizationId && (phase1.organizationId !== user.organizationId || phase2.organizationId !== user.organizationId)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.FORBIDDEN, message: "Both assessments must belong to your organization" } },
-      { status: 403 },
-    );
+  // Platform admins can link cross-org; all others must match org
+  if (user.role !== "platform_admin") {
+    if (!user.organizationId || phase1.organizationId !== user.organizationId || phase2.organizationId !== user.organizationId) {
+      return NextResponse.json(
+        { error: { code: ERROR_CODES.FORBIDDEN, message: "Both assessments must belong to your organization" } },
+        { status: 403 },
+      );
+    }
   }
 
   // Compute deltas

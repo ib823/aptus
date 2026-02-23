@@ -11,20 +11,21 @@ export function middleware(request: NextRequest): NextResponse | undefined {
   const { pathname } = request.nextUrl;
 
   // ----- API rate limiting -----
-  if (pathname.startsWith("/api/") && !pathname.startsWith("/api/auth")) {
+  if (pathname.startsWith("/api/")) {
     const clientIp = getClientIp(request.headers);
-    const method = request.method;
+    const isAuthEndpoint = pathname.startsWith("/api/auth");
 
-    // Pick rate limit config based on method
-    const config =
-      method === "GET" || method === "HEAD"
+    // Auth endpoints get tighter limits (5 req/15 min)
+    // Other endpoints use method-based limits
+    const config = isAuthEndpoint
+      ? RATE_LIMITS.auth
+      : request.method === "GET" || request.method === "HEAD"
         ? RATE_LIMITS.apiRead
         : RATE_LIMITS.apiMutation;
 
-    // Auth endpoints get tighter limits
-    const key = pathname.startsWith("/api/auth")
+    const key = isAuthEndpoint
       ? `auth:${clientIp}`
-      : `api:${method}:${clientIp}`;
+      : `api:${request.method}:${clientIp}`;
 
     const result = checkRateLimit(key, config);
 
@@ -47,13 +48,16 @@ export function middleware(request: NextRequest): NextResponse | undefined {
       );
     }
 
-    // For API routes, add rate limit headers but don't proceed with session bridge
-    const response = NextResponse.next();
-    response.headers.set(
-      "X-RateLimit-Remaining",
-      String(result.remaining),
-    );
-    return response;
+    // Auth endpoints: apply rate limit but don't return early — allow
+    // session bridge logic below to run for /api/auth/bridge
+    if (!isAuthEndpoint) {
+      const response = NextResponse.next();
+      response.headers.set(
+        "X-RateLimit-Remaining",
+        String(result.remaining),
+      );
+      return response;
+    }
   }
 
   // ----- Session bridge for portal routes -----
