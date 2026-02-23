@@ -36,14 +36,19 @@ function LoginForm() {
         });
 
         if (result?.error) {
-          setError("Failed to send magic link. Please try again.");
+          // Map specific error codes to user-friendly messages
+          if (result.status === 429) {
+            setError("Too many login attempts. Please wait a minute and try again.");
+          } else {
+            setError("Failed to send magic link. Please try again.");
+          }
           setLoading(false);
           return;
         }
 
         setSent(true);
       } catch {
-        setError("Something went wrong. Please try again.");
+        setError("Something went wrong. Please check your connection and try again.");
       } finally {
         setLoading(false);
       }

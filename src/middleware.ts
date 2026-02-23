@@ -7,56 +7,71 @@ const SESSION_COOKIE = "aptus-session";
 const NEXTAUTH_COOKIE = "next-auth.session-token";
 const BRIDGE_PATH = "/api/auth/bridge";
 
+/** Paths exempt from rate limiting — called automatically on every page load */
+const RATE_LIMIT_EXEMPT = [
+  "/api/auth/session",     // NextAuth fires this on every navigation
+  "/api/auth/csrf",        // CSRF token fetch
+  "/api/auth/providers",   // Provider list
+  "/api/health",           // Monitoring / load balancer probes
+  "/api/cron/",            // Cron jobs (protected by CRON_SECRET)
+];
+
 export function middleware(request: NextRequest): NextResponse | undefined {
   const { pathname } = request.nextUrl;
 
   // ----- API rate limiting -----
   if (pathname.startsWith("/api/")) {
-    const clientIp = getClientIp(request.headers);
-    const isAuthEndpoint = pathname.startsWith("/api/auth");
+    // Skip rate limiting for passive endpoints that fire automatically
+    const isExempt = RATE_LIMIT_EXEMPT.some(
+      (p) => pathname === p || pathname.startsWith(p),
+    );
 
-    // Auth endpoints get tighter limits (5 req/15 min)
-    // Other endpoints use method-based limits
-    const config = isAuthEndpoint
-      ? RATE_LIMITS.auth
-      : request.method === "GET" || request.method === "HEAD"
-        ? RATE_LIMITS.apiRead
-        : RATE_LIMITS.apiMutation;
+    if (!isExempt) {
+      const clientIp = getClientIp(request.headers);
+      const isAuthMutation = pathname.startsWith("/api/auth");
 
-    const key = isAuthEndpoint
-      ? `auth:${clientIp}`
-      : `api:${request.method}:${clientIp}`;
+      // Auth mutations (signin, callback, signout) get tighter limits
+      // Other endpoints use method-based limits
+      const config = isAuthMutation
+        ? RATE_LIMITS.auth
+        : request.method === "GET" || request.method === "HEAD"
+          ? RATE_LIMITS.apiRead
+          : RATE_LIMITS.apiMutation;
 
-    const result = checkRateLimit(key, config);
+      const key = isAuthMutation
+        ? `auth:${clientIp}`
+        : `api:${request.method}:${clientIp}`;
 
-    if (!result.allowed) {
-      return new NextResponse(
-        JSON.stringify({
-          error: {
-            code: "RATE_LIMIT_EXCEEDED",
-            message: "Too many requests. Please try again later.",
+      const result = checkRateLimit(key, config);
+
+      if (!result.allowed) {
+        return new NextResponse(
+          JSON.stringify({
+            error: {
+              code: "RATE_LIMIT_EXCEEDED",
+              message: "Too many requests. Please try again later.",
+            },
+          }),
+          {
+            status: 429,
+            headers: {
+              "Content-Type": "application/json",
+              "Retry-After": String(Math.ceil(result.resetMs / 1000)),
+              "X-RateLimit-Remaining": "0",
+            },
           },
-        }),
-        {
-          status: 429,
-          headers: {
-            "Content-Type": "application/json",
-            "Retry-After": String(Math.ceil(result.resetMs / 1000)),
-            "X-RateLimit-Remaining": "0",
-          },
-        },
-      );
-    }
+        );
+      }
 
-    // Auth endpoints: apply rate limit but don't return early — allow
-    // session bridge logic below to run for /api/auth/bridge
-    if (!isAuthEndpoint) {
-      const response = NextResponse.next();
-      response.headers.set(
-        "X-RateLimit-Remaining",
-        String(result.remaining),
-      );
-      return response;
+      // Non-auth API routes: return immediately with rate limit headers
+      if (!isAuthMutation) {
+        const response = NextResponse.next();
+        response.headers.set(
+          "X-RateLimit-Remaining",
+          String(result.remaining),
+        );
+        return response;
+      }
     }
   }
 

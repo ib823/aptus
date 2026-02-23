@@ -66,14 +66,14 @@ export function checkRateLimit(
 
 /** Pre-configured rate limits */
 export const RATE_LIMITS = {
-  /** Login/magic link: 5 requests per 15 minutes */
-  auth: { limit: 5, windowMs: 15 * 60 * 1000 },
+  /** Auth mutations (signin, callback, signout): 30 per minute */
+  auth: { limit: 30, windowMs: 60 * 1000 },
   /** MFA verification: 10 attempts per 5 minutes */
   mfa: { limit: 10, windowMs: 5 * 60 * 1000 },
-  /** API mutations (POST/PUT/DELETE): 60 per minute */
-  apiMutation: { limit: 60, windowMs: 60 * 1000 },
-  /** API reads: 120 per minute */
-  apiRead: { limit: 120, windowMs: 60 * 1000 },
+  /** API mutations (POST/PUT/DELETE): 120 per minute */
+  apiMutation: { limit: 120, windowMs: 60 * 1000 },
+  /** API reads: 300 per minute */
+  apiRead: { limit: 300, windowMs: 60 * 1000 },
   /** Report generation: 10 per minute */
   report: { limit: 10, windowMs: 60 * 1000 },
 } as const;

@@ -1,16 +1,10 @@
-/** GET: Health check endpoint (Phase 27) */
+/** GET: Public health check endpoint */
 
 import { NextResponse } from "next/server";
-import { requireAdmin, isAdminError } from "@/lib/auth/admin-guard";
 import { prisma } from "@/lib/db/prisma";
-import type { HealthCheck, HealthStatus, ServiceStatus } from "@/types/pwa";
-export async function GET(): Promise<NextResponse> {
-  const auth = await requireAdmin();
-  if (isAdminError(auth)) {
-    return auth;
-  }
 
-  let dbStatus: ServiceStatus = "down";
+export async function GET(): Promise<NextResponse> {
+  let dbStatus: "up" | "down" = "down";
   let dbLatencyMs = 0;
 
   try {
@@ -22,26 +16,18 @@ export async function GET(): Promise<NextResponse> {
     dbStatus = "down";
   }
 
-  let overallStatus: HealthStatus = "healthy";
-  if (dbStatus === "down") {
-    overallStatus = "unhealthy";
-  } else if (dbLatencyMs > 1000) {
-    overallStatus = "degraded";
-  }
+  const status = dbStatus === "down" ? "unhealthy" : dbLatencyMs > 1000 ? "degraded" : "healthy";
+  const statusCode = status === "unhealthy" ? 503 : 200;
 
-  const health: HealthCheck = {
-    status: overallStatus,
-    timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version ?? "0.1.0",
-    checks: {
-      database: {
-        status: dbStatus,
-        latencyMs: dbLatencyMs,
+  return NextResponse.json(
+    {
+      status,
+      timestamp: new Date().toISOString(),
+      checks: {
+        database: { status: dbStatus, latencyMs: dbLatencyMs },
       },
+      version: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.npm_package_version ?? "dev",
     },
-  };
-
-  const statusCode = overallStatus === "unhealthy" ? 503 : 200;
-
-  return NextResponse.json({ data: health }, { status: statusCode });
+    { status: statusCode },
+  );
 }
