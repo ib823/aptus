@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import type { WidgetConfig, WidgetType } from "@/types/dashboard";
+import { WidgetLoader } from "@/components/dashboard/WidgetLoader";
+import type { WidgetConfig } from "@/types/dashboard";
 
 interface DashboardShellProps {
   initialWidgets: WidgetConfig[];
-  children: (widgetType: WidgetType, index: number) => React.ReactNode;
+  assessmentId: string | null;
 }
 
-export function DashboardShell({ initialWidgets, children }: DashboardShellProps) {
+export function DashboardShell({ initialWidgets, assessmentId }: DashboardShellProps) {
   const [widgets] = useState<WidgetConfig[]>(initialWidgets);
   const visibleWidgets = widgets
     .filter((w) => w.isVisible)
@@ -25,7 +26,7 @@ export function DashboardShell({ initialWidgets, children }: DashboardShellProps
               : ""
           }
         >
-          {children(widget.widgetType, index)}
+          <WidgetLoader widgetType={widget.widgetType} assessmentId={assessmentId} />
         </div>
       ))}
     </div>

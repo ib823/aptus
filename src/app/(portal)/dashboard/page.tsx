@@ -4,7 +4,6 @@ import { prisma } from "@/lib/db/prisma";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
-import { WidgetLoader } from "@/components/dashboard/WidgetLoader";
 import { getDefaultWidgets } from "@/lib/dashboard/widgets";
 import { UI_TEXT } from "@/constants/ui-text";
 import type { UserRole } from "@/types/assessment";
@@ -74,11 +73,7 @@ export default async function DashboardPage() {
   return (
     <>
       <PageHeader title={UI_TEXT.nav.dashboard} />
-      <DashboardShell initialWidgets={widgets}>
-        {(widgetType: WidgetType) => (
-          <WidgetLoader widgetType={widgetType} assessmentId={primaryAssessmentId} />
-        )}
-      </DashboardShell>
+      <DashboardShell initialWidgets={widgets} assessmentId={primaryAssessmentId} />
     </>
   );
 }

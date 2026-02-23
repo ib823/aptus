@@ -28,9 +28,33 @@ export async function OnboardingGuard({ children }: OnboardingGuardProps) {
     where: { userId: user.id },
   });
 
-  // If no progress record, user hasn't started onboarding
+  if (!progress) {
+    // Check if this is an established user (has assessments or stakeholder records)
+    const activity = await prisma.assessmentStakeholder.count({
+      where: { userId: user.id },
+    });
+
+    if (activity > 0) {
+      // Auto-complete onboarding for existing users
+      await prisma.onboardingProgress.create({
+        data: {
+          userId: user.id,
+          role: user.role,
+          currentStep: 0,
+          completedSteps: [],
+          skippedSteps: [],
+          isComplete: true,
+        },
+      });
+      return <>{children}</>;
+    }
+
+    // New user with no activity — redirect to onboarding
+    redirect("/onboarding");
+  }
+
   // If progress exists but isComplete is false, resume onboarding
-  if (!progress || !progress.isComplete) {
+  if (!progress.isComplete) {
     redirect("/onboarding");
   }
 

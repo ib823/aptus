@@ -11,11 +11,13 @@ export const metadata: Metadata = {
   title: "aptus",
   description: "SAP S/4HANA Cloud best practices process validation portal",
   manifest: "/manifest.json",
-  themeColor: "#09090b",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Aptus",
+  },
+  other: {
+    "theme-color": "#09090b",
   },
 };
 
