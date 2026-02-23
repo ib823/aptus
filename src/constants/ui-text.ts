@@ -102,6 +102,9 @@ export const UI_TEXT = {
   nav: {
     assessments: "Assessments",
     dashboard: "Dashboard",
+    templates: "Templates",
+    analytics: "Analytics",
+    organization: "Organization",
     admin: "Admin",
     intelligence: "Intelligence",
   },

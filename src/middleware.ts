@@ -76,7 +76,10 @@ export function middleware(request: NextRequest): NextResponse | undefined {
     return NextResponse.redirect(bridgeUrl);
   }
 
-  return undefined;
+  // Set pathname header for server components (used by OnboardingGuard)
+  const response = NextResponse.next();
+  response.headers.set("x-pathname", pathname);
+  return response;
 }
 
 export const config = {

@@ -22,12 +22,16 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentT
     { label: "Profile", href: `${base}/profile`, segment: "profile" },
     { label: "Scope", href: `${base}/scope`, segment: "scope" },
     { label: "Review", href: `${base}/review`, segment: "review" },
+    { label: "Config", href: `${base}/config`, segment: "config" },
     { label: "Process Map", href: `${base}/process-map`, segment: "process-map" },
+    { label: "Flows", href: `${base}/flows`, segment: "flows" },
     { label: "Gaps", href: `${base}/gaps`, segment: "gaps" },
+    { label: "Remaining", href: `${base}/remaining`, segment: "remaining" },
     { label: "Integrations", href: `${base}/integrations`, segment: "integrations" },
     { label: "Data Migration", href: `${base}/data-migration`, segment: "data-migration" },
     { label: "OCM", href: `${base}/ocm`, segment: "ocm" },
     { label: "Workshops", href: `${base}/workshops`, segment: "workshops" },
+    { label: "Conversation", href: `${base}/conversation`, segment: "conversation" },
     { label: "Activity", href: `${base}/activity`, segment: "activity" },
   ];
 
