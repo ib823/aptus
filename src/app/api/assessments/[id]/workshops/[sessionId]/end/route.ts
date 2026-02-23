@@ -1,10 +1,12 @@
-/** POST: End a workshop session. Facilitator only. */
+/** POST: End a workshop session. Facilitator or platform_admin only. */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
+import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
+
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; sessionId: string }> },
@@ -70,6 +72,17 @@ export async function POST(
       completedAt: now,
       duration,
     },
+  });
+
+  await logDecision({
+    assessmentId,
+    entityType: "workshop_session",
+    entityId: session.id,
+    action: "WORKSHOP_COMPLETED",
+    oldValue: { status: "in_progress" },
+    newValue: { status: "completed", completedAt: updated.completedAt, duration: updated.duration },
+    actor: user.email,
+    actorRole: user.role,
   });
 
   return NextResponse.json({

@@ -3,14 +3,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { logDecision } from "@/lib/audit/decision-logger";
+import { applyClassifications } from "@/lib/conversation/classification-applier";
 import { ERROR_CODES } from "@/types/api";
 import type { DerivedClassification } from "@/types/conversation";
+import type { UserRole } from "@/types/assessment";
 import { z } from "zod";
 
 const completeSchema = z.object({
   sessionId: z.string().min(1),
 });
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; scopeItemId: string }> },
@@ -56,55 +58,28 @@ export async function POST(
 
   const classifications = (session.derivedClassifications ?? []) as unknown as DerivedClassification[];
 
-  // Apply each classification to the step response
-  for (const dc of classifications) {
-    const existing = await prisma.stepResponse.findUnique({
-      where: {
-        assessmentId_processStepId: { assessmentId, processStepId: dc.processStepId },
-      },
-      select: { fitStatus: true },
-    });
+  const result = await applyClassifications(
+    assessmentId,
+    user.id,
+    user.name ?? user.email,
+    user.role as UserRole,
+    sessionId,
+    classifications,
+  );
 
-    await prisma.stepResponse.upsert({
-      where: {
-        assessmentId_processStepId: { assessmentId, processStepId: dc.processStepId },
-      },
-      update: {
-        fitStatus: dc.classification,
-        respondent: user.email,
-        respondedAt: new Date(),
-        confidence: dc.confidence,
-        reviewedBy: user.email,
-        reviewedAt: new Date(),
-      },
-      create: {
-        assessmentId,
-        processStepId: dc.processStepId,
-        fitStatus: dc.classification,
-        respondent: user.email,
-        respondedAt: new Date(),
-        confidence: dc.confidence,
-        reviewedBy: user.email,
-        reviewedAt: new Date(),
-      },
-    });
-
-    await logDecision({
-      assessmentId,
-      entityType: "process_step",
-      entityId: dc.processStepId,
-      action: "CONVERSATION_CLASSIFICATION_APPLIED",
-      oldValue: existing ? { fitStatus: existing.fitStatus } : { fitStatus: "PENDING" },
-      newValue: { fitStatus: dc.classification, derivedFrom: "conversation", sessionId },
-      actor: user.email,
-      actorRole: user.role,
-      reason: `Classification derived from conversation session ${sessionId}`,
-    });
-  }
+  // Update session with apply counts
+  await prisma.conversationSession.update({
+    where: { id: sessionId },
+    data: {
+      completedAt: new Date(),
+    },
+  });
 
   return NextResponse.json({
     data: {
-      applied: classifications.length,
+      applied: result.applied,
+      skipped: result.skipped,
+      gapsCreated: result.gapsCreated,
       classifications,
     },
   });

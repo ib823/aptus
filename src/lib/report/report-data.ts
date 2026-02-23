@@ -292,6 +292,142 @@ export async function getConfigDataForReport(assessmentId: string) {
   });
 }
 
+export async function getIntegrationDataForReport(assessmentId: string) {
+  const items = await prisma.integrationPoint.findMany({
+    where: { assessmentId },
+    orderBy: [{ direction: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      direction: true,
+      sourceSystem: true,
+      targetSystem: true,
+      interfaceType: true,
+      frequency: true,
+      middleware: true,
+      dataVolume: true,
+      complexity: true,
+      priority: true,
+      status: true,
+      estimatedEffortDays: true,
+      functionalArea: true,
+      technicalNotes: true,
+    },
+  });
+
+  return items.map((i) => ({
+    integrationId: i.id,
+    name: i.name,
+    description: i.description,
+    direction: i.direction,
+    sourceSystem: i.sourceSystem,
+    targetSystem: i.targetSystem,
+    interfaceType: i.interfaceType,
+    frequency: i.frequency,
+    middleware: i.middleware ?? "",
+    dataVolume: i.dataVolume ?? "",
+    complexity: i.complexity ?? "",
+    priority: i.priority ?? "",
+    status: i.status,
+    effortDays: i.estimatedEffortDays ?? 0,
+    functionalArea: i.functionalArea ?? "",
+    technicalNotes: i.technicalNotes ?? "",
+  }));
+}
+
+export async function getDataMigrationDataForReport(assessmentId: string) {
+  const items = await prisma.dataMigrationObject.findMany({
+    where: { assessmentId },
+    orderBy: [{ objectType: "asc" }, { objectName: "asc" }],
+    select: {
+      id: true,
+      objectName: true,
+      description: true,
+      objectType: true,
+      sourceSystem: true,
+      sourceFormat: true,
+      volumeEstimate: true,
+      recordCount: true,
+      cleansingRequired: true,
+      cleansingNotes: true,
+      mappingComplexity: true,
+      migrationApproach: true,
+      migrationTool: true,
+      priority: true,
+      status: true,
+      estimatedEffortDays: true,
+      functionalArea: true,
+    },
+  });
+
+  return items.map((i) => ({
+    objectId: i.id,
+    objectName: i.objectName,
+    description: i.description,
+    objectType: i.objectType,
+    sourceSystem: i.sourceSystem,
+    sourceFormat: i.sourceFormat ?? "",
+    volumeEstimate: i.volumeEstimate ?? "",
+    recordCount: i.recordCount ?? 0,
+    cleansingRequired: i.cleansingRequired ? "Yes" : "No",
+    cleansingNotes: i.cleansingNotes ?? "",
+    mappingComplexity: i.mappingComplexity ?? "",
+    migrationApproach: i.migrationApproach ?? "",
+    migrationTool: i.migrationTool ?? "",
+    priority: i.priority ?? "",
+    status: i.status,
+    effortDays: i.estimatedEffortDays ?? 0,
+    functionalArea: i.functionalArea ?? "",
+  }));
+}
+
+export async function getOcmDataForReport(assessmentId: string) {
+  const items = await prisma.ocmImpact.findMany({
+    where: { assessmentId },
+    orderBy: [{ severity: "asc" }, { changeType: "asc" }],
+    select: {
+      id: true,
+      impactTitle: true,
+      impactedRole: true,
+      impactedDepartment: true,
+      functionalArea: true,
+      changeType: true,
+      severity: true,
+      description: true,
+      trainingRequired: true,
+      trainingType: true,
+      trainingDuration: true,
+      resistanceRisk: true,
+      readinessScore: true,
+      mitigationStrategy: true,
+      affectedUserCount: true,
+      priority: true,
+      status: true,
+    },
+  });
+
+  return items.map((i) => ({
+    impactId: i.id,
+    title: i.impactTitle ?? "",
+    impactedRole: i.impactedRole,
+    department: i.impactedDepartment ?? "",
+    functionalArea: i.functionalArea ?? "",
+    changeType: i.changeType,
+    severity: i.severity,
+    description: i.description,
+    trainingRequired: i.trainingRequired ? "Yes" : "No",
+    trainingType: i.trainingType ?? "",
+    trainingDuration: i.trainingDuration ?? 0,
+    resistanceRisk: i.resistanceRisk ?? "",
+    readinessScore: i.readinessScore != null ? `${Math.round(i.readinessScore * 100)}%` : "",
+    mitigationStrategy: i.mitigationStrategy ?? "",
+    affectedUsers: i.affectedUserCount ?? 0,
+    priority: i.priority ?? "",
+    status: i.status,
+  }));
+}
+
 export async function getAuditTrailForReport(assessmentId: string) {
   const entries = await prisma.decisionLogEntry.findMany({
     where: { assessmentId },

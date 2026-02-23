@@ -1,6 +1,6 @@
 /** Phase 13: Gap resolution auto-suggest engine — pure function */
 
-interface Pattern {
+export interface Pattern {
   id: string;
   description: string;
   resolutionType: string;

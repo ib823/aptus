@@ -47,6 +47,13 @@ export async function GET(
     );
   }
 
+  if (user.organizationId && assessment.organizationId !== user.organizationId) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "Access denied" } },
+      { status: 403 },
+    );
+  }
+
   const [steps, gaps, integrations, migrations, ocmImpacts] = await Promise.all([
     prisma.stepResponse.findMany({
       where: { assessmentId },

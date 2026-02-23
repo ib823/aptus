@@ -164,13 +164,14 @@ function processPartnerDecline(
   }
 
   // Partner decline invalidates the executive signature — entire flow restarts
-  return {
+  const result: { newState: SignOffState; executiveSignaturePreserved: boolean; reason?: string } = {
     newState: "REJECTED",
     executiveSignaturePreserved: false,
-    reason: preserveExecutiveSignature
-      ? "Executive signature cannot be preserved after partner rejection per policy"
-      : undefined,
   };
+  if (preserveExecutiveSignature) {
+    result.reason = "Executive signature cannot be preserved after partner rejection per policy";
+  }
+  return result;
 }
 
 /**
@@ -994,8 +995,8 @@ describe("Sign-Off Lifecycle State Machine", () => {
 
     it("ordered layers should follow the expected sequence", () => {
       for (let i = 0; i < ORDERED_LAYERS.length - 1; i++) {
-        const from = ORDERED_LAYERS[i];
-        const to = ORDERED_LAYERS[i + 1];
+        const from = ORDERED_LAYERS[i]!;
+        const to = ORDERED_LAYERS[i + 1]!;
         // Each consecutive pair should be a valid transition
         // (except _COMPLETE -> _IN_PROGRESS which is the next step)
         const result = validateTransition(from, to);

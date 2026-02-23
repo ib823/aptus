@@ -9,7 +9,7 @@ import type { SessionUser } from "@/types/assessment";
 
 interface AuthResult {
   user: SessionUser;
-  assessment: { id: string; companyName: string; status: string };
+  assessment: { id: string; companyName: string; status: string; organizationId: string };
 }
 
 /**

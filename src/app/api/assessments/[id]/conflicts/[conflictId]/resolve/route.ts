@@ -7,6 +7,7 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { dispatchNotification } from "@/lib/notifications/dispatcher";
+import { logActivity } from "@/lib/collaboration/activity-logger";
 
 const ResolveConflictSchema = z.object({
   resolvedClassification: z.string().min(1),
@@ -94,6 +95,18 @@ export async function PUT(
       recipientUserIds: recipientIds,
     }).catch(() => { /* fire-and-forget */ });
   }
+
+  // Log activity (fire-and-forget)
+  logActivity({
+    assessmentId,
+    actorId: user.id,
+    actorName: user.name ?? user.email,
+    actorRole: user.role,
+    actionType: "conflict_resolved",
+    summary: `resolved conflict on ${conflict.entityType}`,
+    entityType: conflict.entityType,
+    entityId: conflict.entityId,
+  }).catch(() => { /* fire-and-forget */ });
 
   return NextResponse.json({ data: updated });
 }

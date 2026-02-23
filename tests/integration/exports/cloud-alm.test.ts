@@ -92,7 +92,7 @@ function mapGapToAlmTask(
     priority: gap.priority ?? "medium",
     status: "open",
     scopeItemId: gap.scopeItemId,
-    assignee: config.taskAssignee,
+    ...(config.taskAssignee != null ? { assignee: config.taskAssignee } : {}),
   };
 }
 

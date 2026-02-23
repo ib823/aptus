@@ -5,6 +5,8 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired, canEditStepResponse } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { detectConflict } from "@/lib/collaboration/conflict-detector";
+import { logActivity } from "@/lib/collaboration/activity-logger";
 import { ERROR_CODES } from "@/types/api";
 import type { DecisionAction } from "@/types/assessment";
 import { z } from "zod";
@@ -151,6 +153,28 @@ export async function PUT(
     actorRole: user.role,
     reason: parsed.data.overrideReason,
   });
+
+  // Fire-and-forget: conflict detection + activity logging
+  detectConflict({
+    assessmentId,
+    entityType: "process_step",
+    entityId: stepId,
+    userId: user.id,
+    userName: user.name ?? user.email,
+    classification: parsed.data.fitStatus,
+  }).catch(() => { /* fire-and-forget */ });
+
+  logActivity({
+    assessmentId,
+    actorId: user.id,
+    actorName: user.name ?? user.email,
+    actorRole: user.role,
+    actionType: "classified_steps",
+    summary: `classified step as ${parsed.data.fitStatus}`,
+    entityType: "process_step",
+    entityId: stepId,
+    areaCode: step.scopeItem.functionalArea,
+  }).catch(() => { /* fire-and-forget */ });
 
   // If GAP, auto-create GapResolution if not exists
   if (parsed.data.fitStatus === "GAP") {

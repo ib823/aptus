@@ -37,8 +37,8 @@ export function seedGapResolution() {
   const gapResolutions: Array<Record<string, unknown>> = [];
 
   for (let i = 0; i < 30; i++) {
-    const template = gapTemplates[i % gapTemplates.length];
-    const resType = resolutionTypes[i % resolutionTypes.length];
+    const template = gapTemplates[i % gapTemplates.length]!;
+    const resType = resolutionTypes[i % resolutionTypes.length]!;
     const isResolved = i < 18; // 18 resolved, 12 pending
     const isApproved = i < 12; // 12 client-approved
     const riskLevel = i % 5 === 0 ? "HIGH" : i % 3 === 0 ? "MEDIUM" : "LOW";

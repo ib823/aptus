@@ -25,7 +25,7 @@ const VIEWS = [
 ];
 
 /** Helper to run axe scan on a page and return violations */
-async function runAxeScan(page: Parameters<Parameters<typeof test>[1]>[0]["page"]) {
+async function runAxeScan(page: import("@playwright/test").Page) {
   return new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
     .analyze();
@@ -33,7 +33,7 @@ async function runAxeScan(page: Parameters<Parameters<typeof test>[1]>[0]["page"
 
 /** Helper to navigate and wait for page to settle */
 async function navigateAndWait(
-  page: Parameters<Parameters<typeof test>[1]>[0]["page"],
+  page: import("@playwright/test").Page,
   path: string,
 ) {
   await page.goto(path);

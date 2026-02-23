@@ -25,6 +25,8 @@ function createBase(overrides: CommentOverrides = {}): Comment {
     isEdited: overrides.isEdited ?? false,
     createdAt: overrides.createdAt ?? now,
     updatedAt: overrides.updatedAt ?? now,
+    isDeleted: overrides.isDeleted ?? false,
+    deletedAt: overrides.deletedAt ?? null,
   };
 }
 

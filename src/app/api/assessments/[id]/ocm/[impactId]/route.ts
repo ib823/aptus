@@ -160,6 +160,18 @@ export async function DELETE(
 
   const { id: assessmentId, impactId } = await params;
 
+  const assessment = await prisma.assessment.findUnique({
+    where: { id: assessmentId },
+    select: { status: true },
+  });
+
+  if (assessment?.status === "signed_off") {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "Cannot delete records after sign-off" } },
+      { status: 403 },
+    );
+  }
+
   const existing = await prisma.ocmImpact.findUnique({
     where: { id: impactId },
   });

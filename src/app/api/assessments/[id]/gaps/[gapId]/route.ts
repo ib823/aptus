@@ -80,6 +80,7 @@ export async function PUT(
       assessmentId: true,
       resolutionType: true,
       effortDays: true,
+      clientApproved: true,
     },
   });
 
@@ -116,8 +117,22 @@ export async function PUT(
   if (parsed.data.costEstimate !== undefined) {
     updateData.costEstimate = parsed.data.costEstimate as Prisma.InputJsonValue;
   }
-  // Handle client approval with timestamp
-  if (parsed.data.clientApproved) {
+  // Detect resolution type change — reset client approval
+  const resolutionTypeChanged =
+    existing.resolutionType !== "PENDING" &&
+    parsed.data.resolutionType !== existing.resolutionType;
+  const approvalWasSet = existing.clientApproved;
+
+  if (resolutionTypeChanged && approvalWasSet) {
+    // Approval reset: clear approval fields when resolution type changes
+    updateData.clientApproved = false;
+    updateData.clientApprovedBy = null;
+    updateData.clientApprovedAt = null;
+    updateData.clientApprovalNote = null;
+  }
+
+  // Handle explicit client approval with timestamp
+  if (!resolutionTypeChanged && parsed.data.clientApproved) {
     updateData.clientApprovedBy = user.email;
     updateData.clientApprovedAt = new Date();
     if (parsed.data.clientApprovalNote !== undefined) {
@@ -130,7 +145,7 @@ export async function PUT(
     data: updateData,
   });
 
-  // Log decision
+  // Log decision — resolution change
   const isChange = existing.resolutionType !== "PENDING";
   await logDecision({
     assessmentId,
@@ -146,6 +161,21 @@ export async function PUT(
     actorRole: user.role,
     reason: parsed.data.rationale,
   });
+
+  // Log separate approval reset if it happened
+  if (resolutionTypeChanged && approvalWasSet) {
+    await logDecision({
+      assessmentId,
+      entityType: "gap_resolution",
+      entityId: gapId,
+      action: "GAP_APPROVAL_REVOKED",
+      oldValue: { clientApproved: true, resolutionType: existing.resolutionType },
+      newValue: { clientApproved: false, resolutionType: parsed.data.resolutionType },
+      actor: user.email,
+      actorRole: user.role,
+      reason: "Approval automatically revoked due to resolution type change",
+    });
+  }
 
   return NextResponse.json({ data: updated });
 }

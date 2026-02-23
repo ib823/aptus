@@ -1,10 +1,13 @@
-/** POST: Start a workshop session. Facilitator only. */
+/** POST: Start a workshop session. Facilitator or platform_admin only. */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
+import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
+import { generateWorkshopQR } from "@/lib/workshop/qr-code";
+
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; sessionId: string }> },
@@ -28,7 +31,7 @@ export async function POST(
 
   const session = await prisma.workshopSession.findFirst({
     where: { id: sessionId, assessmentId },
-    select: { id: true, status: true, facilitatorId: true },
+    select: { id: true, status: true, facilitatorId: true, sessionCode: true },
   });
 
   if (!session) {
@@ -53,13 +56,28 @@ export async function POST(
     );
   }
 
+  // Generate QR code for the join link
+  const qrCodeUrl = await generateWorkshopQR(session.sessionCode);
+
   const updated = await prisma.workshopSession.update({
     where: { id: session.id },
     data: {
       status: "in_progress",
       startedAt: new Date(),
+      qrCodeUrl,
     },
   });
 
-  return NextResponse.json({ data: { id: updated.id, status: updated.status, startedAt: updated.startedAt } });
+  await logDecision({
+    assessmentId,
+    entityType: "workshop_session",
+    entityId: session.id,
+    action: "WORKSHOP_STARTED",
+    oldValue: { status: "scheduled" },
+    newValue: { status: "in_progress", startedAt: updated.startedAt },
+    actor: user.email,
+    actorRole: user.role,
+  });
+
+  return NextResponse.json({ data: { id: updated.id, status: updated.status, startedAt: updated.startedAt, qrCodeUrl } });
 }

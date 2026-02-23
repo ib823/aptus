@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DATA_MIGRATION_OBJECT_TYPE_OPTIONS,
   SOURCE_FORMAT_OPTIONS,
@@ -30,7 +31,6 @@ interface DataMigrationFormDialogProps {
 export function DataMigrationFormDialog({
   assessmentId,
   object,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   allObjects,
   open,
   onClose,
@@ -54,6 +54,10 @@ export function DataMigrationFormDialog({
   const [technicalNotes, setTechnicalNotes] = useState(object?.technicalNotes ?? "");
   const [cleansingRequired, setCleansingRequired] = useState(object?.cleansingRequired ?? false);
   const [cleansingNotes, setCleansingNotes] = useState(object?.cleansingNotes ?? "");
+  const [dependsOn, setDependsOn] = useState<string[]>(object?.dependsOn ?? []);
+
+  // Filter out the current object from dependency candidates
+  const dependencyCandidates = allObjects.filter((o) => o.id !== object?.id);
 
   const handleSubmit = async () => {
     if (!objectName || !description || !objectType || !sourceSystem) {
@@ -80,6 +84,7 @@ export function DataMigrationFormDialog({
     if (priority) body.priority = priority;
     if (technicalNotes) body.technicalNotes = technicalNotes;
     if (cleansingRequired && cleansingNotes) body.cleansingNotes = cleansingNotes;
+    if (dependsOn.length > 0) body.dependsOn = dependsOn;
     if (isEdit) body.status = status;
 
     try {
@@ -225,6 +230,31 @@ export function DataMigrationFormDialog({
             <div>
               <Label>Cleansing Notes</Label>
               <Textarea value={cleansingNotes} onChange={(e) => setCleansingNotes(e.target.value)} placeholder="Describe cleansing requirements..." className="mt-1" />
+            </div>
+          )}
+
+          {dependencyCandidates.length > 0 && (
+            <div>
+              <Label>Depends On</Label>
+              <p className="text-xs text-muted-foreground mb-2">Select objects that must be migrated before this one</p>
+              <div className="border rounded-md p-3 max-h-[160px] overflow-y-auto space-y-2">
+                {dependencyCandidates.map((candidate) => (
+                  <div key={candidate.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`dep-${candidate.id}`}
+                      checked={dependsOn.includes(candidate.id)}
+                      onCheckedChange={(checked) => {
+                        setDependsOn((prev) =>
+                          checked ? [...prev, candidate.id] : prev.filter((id) => id !== candidate.id),
+                        );
+                      }}
+                    />
+                    <label htmlFor={`dep-${candidate.id}`} className="text-sm cursor-pointer">
+                      {candidate.objectName}
+                    </label>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

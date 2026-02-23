@@ -205,43 +205,43 @@ function resolveGap(
   return gaps[idx]!;
 }
 
-function addIntegrationPoint(assessmentId: string, data: Record<string, unknown>) {
-  const points = store.integrationPoints.get(assessmentId) ?? [];
-  const point = {
+function addIntegrationPoint(assessmentId: string, data: Record<string, unknown>): Record<string, unknown> {
+  const point: Record<string, unknown> = {
     id: `ip-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     assessmentId,
     ...data,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
+  const points = store.integrationPoints.get(assessmentId) ?? [];
   points.push(point);
   store.integrationPoints.set(assessmentId, points);
   return point;
 }
 
-function addDataMigrationObject(assessmentId: string, data: Record<string, unknown>) {
-  const objects = store.dataMigrationObjects.get(assessmentId) ?? [];
-  const obj = {
+function addDataMigrationObject(assessmentId: string, data: Record<string, unknown>): Record<string, unknown> {
+  const obj: Record<string, unknown> = {
     id: `dmo-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     assessmentId,
     ...data,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
+  const objects = store.dataMigrationObjects.get(assessmentId) ?? [];
   objects.push(obj);
   store.dataMigrationObjects.set(assessmentId, objects);
   return obj;
 }
 
-function addOcmImpact(assessmentId: string, data: Record<string, unknown>) {
-  const impacts = store.ocmImpacts.get(assessmentId) ?? [];
-  const impact = {
+function addOcmImpact(assessmentId: string, data: Record<string, unknown>): Record<string, unknown> {
+  const impact: Record<string, unknown> = {
     id: `ocm-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     assessmentId,
     ...data,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
+  const impacts = store.ocmImpacts.get(assessmentId) ?? [];
   impacts.push(impact);
   store.ocmImpacts.set(assessmentId, impacts);
   return impact;

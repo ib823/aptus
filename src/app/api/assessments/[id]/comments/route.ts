@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { parseMentions } from "@/lib/collaboration/mention-parser";
 import { dispatchNotification } from "@/lib/notifications/dispatcher";
+import { logActivity } from "@/lib/collaboration/activity-logger";
 
 const CreateCommentSchema = z.object({
   targetType: z.enum(["STEP", "GAP", "SCOPE_ITEM", "INTEGRATION", "DATA_MIGRATION", "OCM"]),
@@ -65,8 +66,24 @@ export async function GET(
   });
 
   const hasMore = comments.length > limit;
-  const data = hasMore ? comments.slice(0, limit) : comments;
-  const nextCursor = hasMore ? data[data.length - 1]?.id ?? null : null;
+  const sliced = hasMore ? comments.slice(0, limit) : comments;
+  const nextCursor = hasMore ? sliced[sliced.length - 1]?.id ?? null : null;
+
+  // Mask deleted comments but keep them for thread context
+  function maskDeleted<T extends { isDeleted: boolean; content: string; contentHtml: string | null; author: { id: string; name: string | null; email: string; avatarUrl?: string | null; role: string } }>(c: T): T {
+    if (!c.isDeleted) return c;
+    return {
+      ...c,
+      content: "[deleted]",
+      contentHtml: null,
+      author: { ...c.author, name: "[deleted]", email: "" },
+    };
+  }
+
+  const data = sliced.map((c) => ({
+    ...maskDeleted(c),
+    replies: c.replies.map((r) => maskDeleted(r)),
+  }));
 
   return NextResponse.json({ data, nextCursor, hasMore });
 }
@@ -144,6 +161,18 @@ export async function POST(
       author: { select: { id: true, name: true, email: true, avatarUrl: true, role: true } },
     },
   });
+
+  // Log activity (fire-and-forget)
+  logActivity({
+    assessmentId,
+    actorId: user.id,
+    actorName: user.name ?? user.email,
+    actorRole: user.role,
+    actionType: mentionIds.length > 0 ? "mentioned" : "commented",
+    summary: parentCommentId ? "replied to a comment" : `commented on ${targetType.toLowerCase()}`,
+    entityType: targetType,
+    entityId: targetId,
+  }).catch(() => { /* fire-and-forget */ });
 
   // Notify mentioned users
   if (mentionIds.length > 0) {

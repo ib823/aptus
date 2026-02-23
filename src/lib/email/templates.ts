@@ -3,7 +3,7 @@
 const BRAND_COLOR = "#000000";
 const BRAND_NAME = "aptus";
 
-function baseLayout(content: string): string {
+export function baseLayout(content: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -49,7 +49,7 @@ function baseLayout(content: string): string {
 </html>`;
 }
 
-function button(url: string, label: string): string {
+export function button(url: string, label: string): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
     <tr>
       <td style="background:${BRAND_COLOR};border-radius:8px;">

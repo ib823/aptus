@@ -9,6 +9,7 @@ import { getCapabilities } from "@/lib/auth/role-permissions";
 import { createAssessment, listAssessments } from "@/lib/db/assessments";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
+import { checkAssessmentLimit, recordUsageEvent } from "@/lib/commercial/usage-metering";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -134,11 +135,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       });
     }
 
+    // Check assessment limit before creating
+    const limitCheck = await checkAssessmentLimit(organizationId);
+    if (!limitCheck.allowed) {
+      return NextResponse.json(
+        { error: { code: ERROR_CODES.VALIDATION_ERROR, message: `Assessment limit reached (${limitCheck.current}/${limitCheck.limit}). Upgrade your plan.` } },
+        { status: 400 },
+      );
+    }
+
     const assessment = await createAssessment({
       ...parsed.data,
       createdBy: user.id,
       organizationId,
     });
+
+    // Record usage event (fire-and-forget)
+    recordUsageEvent(organizationId, "assessment_created", assessment.id).catch(() => {});
 
     // Add the creating user as a consultant stakeholder
     await prisma.assessmentStakeholder.create({

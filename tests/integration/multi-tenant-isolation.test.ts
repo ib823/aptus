@@ -105,7 +105,7 @@ function getAnalytics(
   const orgAssessments = allAssessments.filter((a) => a.organizationId === callerOrgId);
   return {
     totalAssessments: orgAssessments.length,
-    byStatus: Object.groupBy
+    byStatus: typeof Object.groupBy === "function"
       ? Object.fromEntries(
           orgAssessments.reduce((map, a) => {
             map.set(a.status, (map.get(a.status) ?? 0) + 1);

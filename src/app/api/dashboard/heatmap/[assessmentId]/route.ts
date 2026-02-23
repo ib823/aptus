@@ -22,7 +22,7 @@ export async function GET(
 
   const assessment = await prisma.assessment.findUnique({
     where: { id: assessmentId },
-    select: { id: true },
+    select: { id: true, organizationId: true },
   });
 
   if (!assessment) {
@@ -32,8 +32,36 @@ export async function GET(
     );
   }
 
-  // Get all scope items with their steps and responses
+  if (user.organizationId && assessment.organizationId !== user.organizationId) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "Access denied" } },
+      { status: 403 },
+    );
+  }
+
+  // For process_owner role, restrict to their assigned functional areas
+  let areaFilter: string[] | null = null;
+  if (user.role === "process_owner") {
+    const stakeholder = await prisma.assessmentStakeholder.findFirst({
+      where: { assessmentId, userId: user.id },
+      select: { assignedAreas: true },
+    });
+    areaFilter = stakeholder?.assignedAreas ?? [];
+  }
+
+  // Get selected scope items for this assessment
+  const selections = await prisma.scopeSelection.findMany({
+    where: { assessmentId, selected: true },
+    select: { scopeItemId: true },
+  });
+  const selectedScopeIds = selections.map((s) => s.scopeItemId);
+
+  // Get scope items filtered to selected ones (and area-scoped for process owners)
   const scopeItems = await prisma.scopeItem.findMany({
+    where: {
+      id: { in: selectedScopeIds },
+      ...(areaFilter ? { functionalArea: { in: areaFilter } } : {}),
+    },
     select: {
       id: true,
       nameClean: true,
@@ -49,9 +77,11 @@ export async function GET(
     },
   });
 
-  // Get processStepId -> scopeItemId mapping
+  // Get processStepId -> scopeItemId mapping (only for visible scope items)
+  const visibleScopeIds = scopeItems.map((si) => si.id);
   const stepToScope = new Map<string, string>();
   const steps = await prisma.processStep.findMany({
+    where: { scopeItemId: { in: visibleScopeIds } },
     select: { id: true, scopeItemId: true },
   });
   for (const step of steps) {

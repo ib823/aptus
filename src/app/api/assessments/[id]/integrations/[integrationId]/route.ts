@@ -22,6 +22,9 @@ const UpdateIntegrationSchema = z.object({
   complexity: z.enum(["LOW", "MEDIUM", "HIGH", "VERY_HIGH"]).nullable().optional(),
   priority: z.enum(["critical", "high", "medium", "low"]).nullable().optional(),
   status: z.enum(["identified", "analyzed", "designed", "approved"]).optional(),
+  estimatedEffortDays: z.number().min(0).max(999).nullable().optional(),
+  dataObjects: z.array(z.string().max(200)).max(50).optional(),
+  functionalArea: z.string().max(200).nullable().optional(),
   scopeItemId: z.string().nullable().optional(),
   technicalNotes: z.string().max(5000).nullable().optional(),
 });
@@ -101,6 +104,9 @@ export async function PUT(
   if (parsed.data.complexity !== undefined) updateData.complexity = parsed.data.complexity;
   if (parsed.data.priority !== undefined) updateData.priority = parsed.data.priority;
   if (parsed.data.status !== undefined) updateData.status = parsed.data.status;
+  if (parsed.data.estimatedEffortDays !== undefined) updateData.estimatedEffortDays = parsed.data.estimatedEffortDays;
+  if (parsed.data.dataObjects !== undefined) updateData.dataObjects = parsed.data.dataObjects;
+  if (parsed.data.functionalArea !== undefined) updateData.functionalArea = parsed.data.functionalArea;
   if (parsed.data.scopeItemId !== undefined) updateData.scopeItemId = parsed.data.scopeItemId;
   if (parsed.data.technicalNotes !== undefined) updateData.technicalNotes = parsed.data.technicalNotes;
 
@@ -143,6 +149,18 @@ export async function DELETE(
   }
 
   const { id: assessmentId, integrationId } = await params;
+
+  const assessment = await prisma.assessment.findUnique({
+    where: { id: assessmentId },
+    select: { status: true },
+  });
+
+  if (assessment?.status === "signed_off") {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "Cannot delete records after sign-off" } },
+      { status: 403 },
+    );
+  }
 
   const existing = await prisma.integrationPoint.findUnique({
     where: { id: integrationId },

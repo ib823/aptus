@@ -31,6 +31,9 @@ interface IntegrationData {
   technicalNotes: string | null;
   scopeItemId: string | null;
   dataVolume: string | null;
+  estimatedEffortDays: number | null;
+  dataObjects: string[];
+  functionalArea: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

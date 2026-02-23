@@ -6,9 +6,9 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { GapCard } from "@/components/gaps/GapCard";
-import { GapSummary } from "@/components/gaps/GapSummary";
-import { GapCostSummary } from "@/components/gaps/GapCostSummary";
+import { GapRollupDashboard } from "@/components/gaps/GapRollupDashboard";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { computeCostRollup, computeRiskHeatMap, analyzeUpgradeImpact } from "@/lib/assessment/gap-analytics";
 
 interface GapData {
   id: string;
@@ -131,6 +131,17 @@ export function GapResolutionClient({
     };
   }, [gaps]);
 
+  // Compute analytics for rollup dashboard
+  const costRollup = useMemo(() => computeCostRollup(gaps), [gaps]);
+  const riskHeatMap = useMemo(() => computeRiskHeatMap(gaps), [gaps]);
+  const upgradeImpact = useMemo(() => analyzeUpgradeImpact(gaps), [gaps]);
+  const approvalStatus = useMemo(() => ({
+    total: gaps.length,
+    approved: gaps.filter((g) => g.clientApproved).length,
+    pending: gaps.filter((g) => !g.clientApproved && g.resolutionType !== "PENDING").length,
+    unresolvedCount: gaps.filter((g) => g.resolutionType === "PENDING").length,
+  }), [gaps]);
+
   const handleUpdate = useCallback(
     async (gapId: string, data: {
       resolutionType: string;
@@ -187,15 +198,14 @@ export function GapResolutionClient({
 
   return (
     <div className="flex gap-8">
-      {/* Sidebar summary */}
+      {/* Sidebar rollup dashboard */}
       <div className="hidden sm:block w-[280px] shrink-0">
         <div className="sticky top-8">
-          <GapSummary
-            total={summary.total}
-            resolved={summary.resolved}
-            pending={summary.pending}
-            totalEffort={summary.totalEffort}
-            byType={summary.byType}
+          <GapRollupDashboard
+            costRollup={costRollup}
+            riskHeatMap={riskHeatMap}
+            upgradeImpact={upgradeImpact}
+            approvalStatus={approvalStatus}
           />
         </div>
       </div>
@@ -206,17 +216,6 @@ export function GapResolutionClient({
           title="Gap Resolution"
           description={`${summary.total} gaps identified — resolve each one with a recommended approach.`}
         />
-
-        {/* Cost Summary */}
-        <div className="mb-6">
-          <GapCostSummary
-            totalOneTimeCost={summary.totalOneTimeCost}
-            totalRecurringCost={summary.totalRecurringCost}
-            totalImplementationDays={summary.totalImplementationDays}
-            byType={summary.byType}
-            byRiskCategory={summary.byRiskCategory}
-          />
-        </div>
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3 mb-6">
@@ -310,7 +309,7 @@ export function GapResolutionClient({
               {summary.resolved} of {summary.total} gaps resolved
             </p>
             <p className="text-sm text-gray-600">
-              {summary.totalEffort} total effort days
+              {approvalStatus.approved} approved · {costRollup.totalImplementationDays} effort days
             </p>
           </div>
 

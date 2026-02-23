@@ -36,6 +36,12 @@ export interface InteractiveFlowData {
   layoutVersion: number;
 }
 
+/** Risk overlay entry for a single node */
+export interface RiskOverlayEntry {
+  nodeId: string;
+  riskScore: number;
+}
+
 /** Summary of scope items in a functional area */
 export interface AreaScopeItemSummary {
   scopeItemId: string;
@@ -67,6 +73,6 @@ export interface FunctionalAreaOverviewData {
   pendingCount: number;
   riskScore: number;
   completionPct: number;
-  crossAreaDeps: string[];
+  crossAreaDeps: CrossAreaDep[];
   scopeItems: AreaScopeItemSummary[];
 }

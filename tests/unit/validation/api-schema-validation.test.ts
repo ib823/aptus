@@ -190,7 +190,7 @@ const schemas = {
     plan: strictEnum(["STARTER", "PROFESSIONAL", "ENTERPRISE"] as const),
     country: sanitizedString(2, 100),
     acceptedTerms: z.literal(true, {
-      errorMap: () => ({ message: "Terms must be accepted" }),
+      error: "Terms must be accepted",
     }),
     referralCode: sanitizedString(0, 50).optional(),
     employeeCount: positiveInt.optional(),

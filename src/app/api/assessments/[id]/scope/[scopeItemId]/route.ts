@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired, canEditScopeSelection } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { logActivity } from "@/lib/collaboration/activity-logger";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
@@ -116,6 +117,19 @@ export async function PUT(
     actor: user.email,
     actorRole: user.role,
   });
+
+  // Log activity (fire-and-forget)
+  logActivity({
+    assessmentId,
+    actorId: user.id,
+    actorName: user.name ?? user.email,
+    actorRole: user.role,
+    actionType: "scope_changed",
+    summary: parsed.data.selected ? "included scope item" : "excluded scope item",
+    entityType: "scope_item",
+    entityId: scopeItemId,
+    areaCode: scopeItem.functionalArea,
+  }).catch(() => { /* fire-and-forget */ });
 
   return NextResponse.json({ data: selection });
 }

@@ -1,4 +1,5 @@
-/** PUT: Update workshop (start, complete, cancel, update notes) */
+/** GET: Get workshop session detail */
+/** PUT: Update workshop session (title, description, scheduledAt, notes, attendeeCount) */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -11,10 +12,46 @@ import { z } from "zod";
 const updateWorkshopSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).optional(),
-  status: z.enum(["scheduled", "in_progress", "completed", "cancelled"]).optional(),
+  scheduledAt: z.string().datetime().optional(),
   notes: z.string().max(5000).optional(),
   attendeeCount: z.number().int().min(0).optional(),
 });
+
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string; sessionId: string }> },
+): Promise<NextResponse> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
+      { status: 401 },
+    );
+  }
+
+  if (isMfaRequired(user)) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
+      { status: 403 },
+    );
+  }
+
+  const { id: assessmentId, sessionId } = await params;
+
+  const workshop = await prisma.workshopSession.findFirst({
+    where: { id: sessionId, assessmentId },
+  });
+
+  if (!workshop) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.NOT_FOUND, message: "Workshop session not found" } },
+      { status: 404 },
+    );
+  }
+
+  return NextResponse.json({ data: workshop });
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; sessionId: string }> },
@@ -45,39 +82,35 @@ export async function PUT(
     );
   }
 
-  const workshop = await prisma.workshopSession.findUnique({
-    where: { id: sessionId },
+  const workshop = await prisma.workshopSession.findFirst({
+    where: { id: sessionId, assessmentId },
+    select: { id: true, status: true, facilitatorId: true, title: true },
   });
 
-  if (!workshop || workshop.assessmentId !== assessmentId) {
+  if (!workshop) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.NOT_FOUND, message: "Workshop session not found" } },
       { status: 404 },
     );
   }
 
+  // Only facilitator or platform_admin can update
+  if (workshop.facilitatorId !== user.id && user.role !== "platform_admin") {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "Only the facilitator or platform admin can update the workshop" } },
+      { status: 403 },
+    );
+  }
+
   const updateData: Record<string, unknown> = {};
   if (parsed.data.title !== undefined) updateData.title = parsed.data.title;
   if (parsed.data.description !== undefined) updateData.description = parsed.data.description;
+  if (parsed.data.scheduledAt !== undefined) updateData.scheduledAt = new Date(parsed.data.scheduledAt);
   if (parsed.data.notes !== undefined) updateData.notes = parsed.data.notes;
   if (parsed.data.attendeeCount !== undefined) updateData.attendeeCount = parsed.data.attendeeCount;
 
-  let action: "WORKSHOP_STARTED" | "WORKSHOP_COMPLETED" | "PHASE_UPDATED" = "PHASE_UPDATED";
-
-  if (parsed.data.status !== undefined) {
-    updateData.status = parsed.data.status;
-    if (parsed.data.status === "in_progress") {
-      updateData.startedAt = new Date();
-      action = "WORKSHOP_STARTED";
-    }
-    if (parsed.data.status === "completed") {
-      updateData.completedAt = new Date();
-      action = "WORKSHOP_COMPLETED";
-    }
-  }
-
   const updated = await prisma.workshopSession.update({
-    where: { id: sessionId },
+    where: { id: workshop.id },
     data: updateData,
   });
 
@@ -85,9 +118,9 @@ export async function PUT(
     assessmentId,
     entityType: "workshop_session",
     entityId: sessionId,
-    action,
-    oldValue: { status: workshop.status },
-    newValue: { status: updated.status, title: updated.title },
+    action: "PHASE_UPDATED",
+    oldValue: { title: workshop.title, status: workshop.status },
+    newValue: { title: updated.title, status: updated.status },
     actor: user.email,
     actorRole: user.role,
   });

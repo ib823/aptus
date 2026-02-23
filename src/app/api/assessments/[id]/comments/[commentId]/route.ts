@@ -119,7 +119,13 @@ export async function DELETE(
     );
   }
 
-  await prisma.comment.delete({ where: { id: commentId } });
+  await prisma.comment.update({
+    where: { id: commentId },
+    data: {
+      isDeleted: true,
+      deletedAt: new Date(),
+    },
+  });
 
   return NextResponse.json({ data: { deleted: true } });
 }

@@ -101,7 +101,7 @@ export async function GET(
         pendingCount: 0,
         riskScore: 0,
         completionPct: 0,
-        crossAreaDeps: [],
+        crossAreaDeps: [] as import("@/types/flow").CrossAreaDep[],
         scopeItems: [],
       });
     }

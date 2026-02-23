@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { GapSuggestionPanel } from "@/components/gaps/GapSuggestionPanel";
+import { CommentIndicator } from "@/components/comments/CommentIndicator";
 
 interface GapData {
   id: string;
@@ -44,6 +45,8 @@ interface GapData {
 interface GapCardProps {
   gap: GapData;
   assessmentId?: string;
+  onCommentClick?: ((gapId: string) => void) | undefined;
+  commentCount?: number;
   onUpdate: (gapId: string, data: {
     resolutionType: string;
     resolutionDescription?: string | undefined;
@@ -79,7 +82,7 @@ const RISK_COLORS: Record<string, string> = {
   HIGH: "bg-red-100 text-red-700",
 };
 
-export function GapCard({ gap, assessmentId, onUpdate, isReadOnly }: GapCardProps) {
+export function GapCard({ gap, assessmentId, onCommentClick, commentCount, onUpdate, isReadOnly }: GapCardProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [localRationale, setLocalRationale] = useState<{ gapId: string; value: string }>({
@@ -139,11 +142,19 @@ export function GapCard({ gap, assessmentId, onUpdate, isReadOnly }: GapCardProp
               </span>
             )}
           </div>
-          {gap.riskLevel && (
-            <Badge className={RISK_COLORS[gap.riskLevel] ?? "bg-gray-100 text-gray-600"}>
-              {gap.riskLevel} Risk
-            </Badge>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {onCommentClick && (
+              <CommentIndicator
+                count={commentCount ?? 0}
+                onClick={() => onCommentClick(gap.id)}
+              />
+            )}
+            {gap.riskLevel && (
+              <Badge className={RISK_COLORS[gap.riskLevel] ?? "bg-gray-100 text-gray-600"}>
+                {gap.riskLevel} Risk
+              </Badge>
+            )}
+          </div>
         </div>
       </div>
 

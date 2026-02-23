@@ -29,8 +29,11 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json({ data: [] });
   }
 
+  const staleThreshold = new Date();
+  staleThreshold.setDate(staleThreshold.getDate() - 14);
+
   // Fetch data in parallel for attention engine
-  const [overdueDeadlines, conflicts, unresolvedGaps] = await Promise.all([
+  const [overdueDeadlines, conflicts, unresolvedGaps, staleAssessments] = await Promise.all([
     prisma.dashboardDeadline.findMany({
       where: {
         assessmentId: { in: assessmentIds },
@@ -52,6 +55,14 @@ export async function GET(): Promise<NextResponse> {
         resolutionType: "PENDING",
       },
       select: { id: true, scopeItemId: true, gapDescription: true, createdAt: true },
+    }),
+    prisma.assessment.findMany({
+      where: {
+        id: { in: assessmentIds },
+        updatedAt: { lt: staleThreshold },
+        status: { notIn: ["archived", "handed_off", "signed_off"] },
+      },
+      select: { id: true, companyName: true, updatedAt: true },
     }),
   ]);
 
@@ -76,7 +87,12 @@ export async function GET(): Promise<NextResponse> {
       assessmentId: c.assessmentId,
       createdAt: c.createdAt.toISOString(),
     })),
-    [],
+    staleAssessments.map((a) => ({
+      id: a.id,
+      companyName: a.companyName,
+      lastActivityAt: a.updatedAt.toISOString(),
+      staleDays: Math.floor((Date.now() - a.updatedAt.getTime()) / (1000 * 60 * 60 * 24)),
+    })),
   );
 
   return NextResponse.json({ data: items });

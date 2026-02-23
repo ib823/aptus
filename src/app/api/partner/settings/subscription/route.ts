@@ -85,6 +85,14 @@ export async function GET(): Promise<NextResponse> {
       billingEmail: org.billingEmail,
       limits,
       usage: {
+        assessments: {
+          current: activeAssessments,
+          limit: Math.min(org.maxActiveAssessments, limits.maxActiveAssessments),
+        },
+        users: {
+          current: userCount,
+          limit: Math.min(org.maxPartnerUsers, limits.maxPartnerUsers),
+        },
         activeAssessments,
         maxActiveAssessments: org.maxActiveAssessments,
         activeUsers: userCount,

@@ -26,12 +26,54 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const prevOpenRef = useRef(open);
 
-  // Poll for unread count on an interval. The setInterval callback
-  // (not invoked synchronously inside the effect) satisfies the lint rule.
+  // SSE enhancement: connect to stream for real-time updates
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    function connect() {
+      try {
+        eventSource = new EventSource("/api/notifications/stream");
+
+        eventSource.addEventListener("unread_count", (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (typeof data.count === "number") {
+              setUnreadCount(data.count);
+            }
+          } catch {
+            // Invalid data
+          }
+        });
+
+        eventSource.addEventListener("reconnect", () => {
+          eventSource?.close();
+          // Reconnect after a short delay
+          reconnectTimeout = setTimeout(connect, 1000);
+        });
+
+        eventSource.onerror = () => {
+          eventSource?.close();
+          // Reconnect after a delay — SSE is additive, polling is fallback
+          reconnectTimeout = setTimeout(connect, 5000);
+        };
+      } catch {
+        // EventSource not available — polling fallback will cover it
+      }
+    }
+
+    connect();
+
+    return () => {
+      eventSource?.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    };
+  }, []);
+
+  // Polling fallback — always runs regardless of SSE
   useEffect(() => {
     let cancelled = false;
 
-    // Initial fetch via microtask to avoid synchronous setState in effect
     void fetchCount().then((count) => {
       if (!cancelled) setUnreadCount(count);
     });

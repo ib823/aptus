@@ -2,6 +2,9 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { NotificationType } from "@/types/notification";
 import { FORCED_IN_APP_TYPES } from "@/types/notification";
+import { sendEmail } from "@/lib/email/brevo";
+import { notificationEmail } from "@/lib/notifications/email-templates";
+import { sendPushNotification } from "@/lib/notifications/push-service";
 
 export interface DispatchPayload {
   type: NotificationType;
@@ -94,6 +97,67 @@ export async function dispatchNotification(payload: DispatchPayload): Promise<Di
 
   if (notificationsToCreate.length > 0) {
     await prisma.notification.createMany({ data: notificationsToCreate });
+  }
+
+  // ── Email channel (fire-and-forget) ──────────────────────────────
+  const emailRecipientIds = recipientUserIds.filter((userId) => {
+    const pref = prefMap.get(userId);
+    return pref ? pref.channelEmail : true; // default: email enabled
+  });
+
+  if (emailRecipientIds.length > 0) {
+    void (async () => {
+      try {
+        const users = await prisma.user.findMany({
+          where: { id: { in: emailRecipientIds } },
+          select: { id: true, email: true, name: true },
+        });
+
+        for (const user of users) {
+          const { subject, html, text } = notificationEmail(
+            title,
+            body,
+            deepLink,
+            user.name ?? "there",
+          );
+
+          sendEmail({
+            to: { email: user.email, name: user.name ?? undefined },
+            subject,
+            htmlContent: html,
+            textContent: text,
+            tags: ["notification", type],
+          }).catch(() => { /* fire-and-forget */ });
+        }
+      } catch {
+        // Silently fail — email is best-effort
+      }
+    })();
+  }
+
+  // ── Push channel (fire-and-forget) ───────────────────────────────
+  const pushRecipientIds = recipientUserIds.filter((userId) => {
+    const pref = prefMap.get(userId);
+    return pref?.channelPush === true;
+  });
+
+  if (pushRecipientIds.length > 0) {
+    void (async () => {
+      try {
+        const subscriptions = await prisma.pushSubscription.findMany({
+          where: { userId: { in: pushRecipientIds } },
+        });
+
+        for (const sub of subscriptions) {
+          sendPushNotification(
+            { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
+            { title, body, deepLink: deepLink ?? undefined },
+          ).catch(() => { /* fire-and-forget */ });
+        }
+      } catch {
+        // Silently fail — push is best-effort
+      }
+    })();
   }
 
   return { sent, skipped, errors };

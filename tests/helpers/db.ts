@@ -11,8 +11,9 @@ let testPrisma: PrismaClient | null = null;
 /** Get or create test Prisma client */
 export function getTestPrisma(): PrismaClient {
   if (!testPrisma) {
+    const url = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
     testPrisma = new PrismaClient({
-      datasourceUrl: process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL,
+      ...(url ? { datasourceUrl: url } : {}),
     });
   }
   return testPrisma;

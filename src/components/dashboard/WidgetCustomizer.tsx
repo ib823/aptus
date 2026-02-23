@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { GripVertical, Settings } from "lucide-react";
+import { ChevronUp, ChevronDown, Settings } from "lucide-react";
 import type { WidgetConfig, WidgetType } from "@/types/dashboard";
 
 interface WidgetCustomizerProps {
@@ -50,6 +50,20 @@ export function WidgetCustomizer({ widgets, onSave, isSaving }: WidgetCustomizer
     });
   };
 
+  const moveDown = (index: number) => {
+    if (index >= localWidgets.length - 1) return;
+    setLocalWidgets((prev) => {
+      const next = [...prev];
+      const swapA = next[index];
+      const swapB = next[index + 1];
+      if (swapA && swapB) {
+        next[index] = { ...swapB, position: index };
+        next[index + 1] = { ...swapA, position: index + 1 };
+      }
+      return next;
+    });
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -65,14 +79,24 @@ export function WidgetCustomizer({ widgets, onSave, isSaving }: WidgetCustomizer
               key={`${widget.widgetType}-${index}`}
               className="flex items-center gap-3 p-2 rounded-lg border"
             >
-              <button
-                onClick={() => moveUp(index)}
-                disabled={index === 0}
-                className="text-muted-foreground hover:text-foreground disabled:opacity-30"
-                aria-label="Move up"
-              >
-                <GripVertical className="h-4 w-4" />
-              </button>
+              <div className="flex flex-col">
+                <button
+                  onClick={() => moveUp(index)}
+                  disabled={index === 0}
+                  className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+                  aria-label="Move up"
+                >
+                  <ChevronUp className="h-3 w-3" />
+                </button>
+                <button
+                  onClick={() => moveDown(index)}
+                  disabled={index >= localWidgets.length - 1}
+                  className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+                  aria-label="Move down"
+                >
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+              </div>
               <span className="text-sm flex-1">
                 {WIDGET_LABELS[widget.widgetType] ?? widget.widgetType}
               </span>

@@ -1,10 +1,12 @@
-/** GET: Data migration dependency graph */
+/** GET: Data migration dependency graph with critical path */
 
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
+import { topologicalSort, getCriticalPath } from "@/lib/assessment/dependency-graph";
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -34,6 +36,7 @@ export async function GET(
       objectType: true,
       status: true,
       dependsOn: true,
+      estimatedEffortDays: true,
     },
   });
 
@@ -42,6 +45,7 @@ export async function GET(
     objectName: o.objectName,
     objectType: o.objectType,
     status: o.status,
+    dependsOn: o.dependsOn,
   }));
 
   const edges: { from: string; to: string }[] = [];
@@ -51,5 +55,17 @@ export async function GET(
     }
   }
 
-  return NextResponse.json({ data: { nodes, edges } });
+  const sortedOrder = topologicalSort(
+    objects.map((o) => ({ id: o.id, dependsOn: o.dependsOn })),
+  );
+
+  const criticalPath = getCriticalPath(
+    objects.map((o) => ({
+      id: o.id,
+      dependsOn: o.dependsOn,
+      estimatedDays: o.estimatedEffortDays ?? 0,
+    })),
+  );
+
+  return NextResponse.json({ data: { nodes, edges, sortedOrder, criticalPath } });
 }

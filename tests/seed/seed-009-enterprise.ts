@@ -37,7 +37,7 @@ export function seedEnterprise() {
   let userIndex = 0;
 
   for (const role of allRoles) {
-    const count = roleDistribution[role];
+    const count = roleDistribution[role] ?? 0;
     for (let i = 0; i < count; i++) {
       userIndex++;
       const paddedIndex = String(userIndex).padStart(3, "0");

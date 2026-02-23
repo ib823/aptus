@@ -7,13 +7,14 @@ import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
+import { ASSESSMENT_PHASES } from "@/types/assessment";
 import type { UserRole } from "@/types/assessment";
 import { z } from "zod";
 
 const phaseUpdateSchema = z.object({
   status: z.enum(["not_started", "in_progress", "completed", "blocked"]).optional(),
   completionPct: z.number().int().min(0).max(100).optional(),
-  blockedReason: z.string().max(2000).optional(),
+  blockedReason: z.string().max(2000).nullable().optional(),
 });
 
 const PHASE_UPDATE_ROLES: UserRole[] = ["platform_admin", "partner_lead", "consultant"];
@@ -45,6 +46,14 @@ export async function PUT(
   }
 
   const { id: assessmentId, phase } = await params;
+
+  // Validate phase is one of the 8 valid phases
+  if (!ASSESSMENT_PHASES.includes(phase as typeof ASSESSMENT_PHASES[number])) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: `Invalid phase: ${phase}. Must be one of: ${ASSESSMENT_PHASES.join(", ")}` } },
+      { status: 400 },
+    );
+  }
 
   const body: unknown = await request.json();
   const parsed = phaseUpdateSchema.safeParse(body);

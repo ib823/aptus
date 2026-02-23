@@ -3,16 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { sanitizeHtmlContent } from "@/lib/security/sanitize";
-
-interface ParsedStepContent {
-  purpose: string | null;
-  prerequisites: string | null;
-  systemAccess: string | null;
-  roles: string | null;
-  masterData: string | null;
-  mainInstructions: string;
-  rawHtml: string;
-}
+import type { ParsedStepContent } from "@/lib/assessment/content-parser";
 
 interface ParsedContentViewProps {
   content: ParsedStepContent | null;
@@ -65,7 +56,7 @@ export function ParsedContentView({ content, fallbackHtml }: ParsedContentViewPr
     );
   }
 
-  const hasSections = content.purpose || content.prerequisites || content.systemAccess || content.roles || content.masterData;
+  const hasSections = content.purpose || content.prerequisites || content.systemAccess || content.roles || content.masterData || content.expectedResult || content.procedure;
 
   if (!hasSections) {
     return (
@@ -92,6 +83,12 @@ export function ParsedContentView({ content, fallbackHtml }: ParsedContentViewPr
       )}
       {content.masterData && (
         <ContentSection title="Master Data" html={content.masterData} />
+      )}
+      {content.expectedResult && (
+        <ContentSection title="Expected Result" html={content.expectedResult} />
+      )}
+      {content.procedure && (
+        <ContentSection title="Procedure" html={content.procedure} />
       )}
       {content.mainInstructions && content.mainInstructions.trim() !== content.rawHtml.trim() && (
         <ContentSection title="Instructions" html={content.mainInstructions} defaultOpen />

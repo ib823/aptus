@@ -6,7 +6,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
-import { ALL_NOTIFICATION_TYPES } from "@/types/notification";
+import { ALL_NOTIFICATION_TYPES, FORCED_IN_APP_TYPES, type NotificationType } from "@/types/notification";
 
 const UpdatePreferenceSchema = z.object({
   notificationType: z.string().min(1),
@@ -77,7 +77,13 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const { notificationType, channelEmail, channelInApp, channelPush } = parsed.data;
+  const { notificationType, channelEmail, channelPush } = parsed.data;
+  let { channelInApp } = parsed.data;
+
+  // Server-side enforcement: forced types cannot have in_app disabled
+  if (FORCED_IN_APP_TYPES.includes(notificationType as NotificationType) && channelInApp === false) {
+    channelInApp = true;
+  }
 
   const updated = await prisma.notificationPreference.upsert({
     where: {

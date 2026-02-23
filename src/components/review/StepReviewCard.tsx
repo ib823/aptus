@@ -8,6 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { sanitizeHtmlContent } from "@/lib/security/sanitize";
 import { parseStepContent } from "@/lib/assessment/content-parser";
 import { ParsedContentView } from "@/components/review/ParsedContentView";
+import { ActiveEditors } from "@/components/collaboration/ActiveEditors";
+import { StepConflictBanner } from "@/components/collaboration/StepConflictBanner";
+import { CommentIndicator } from "@/components/comments/CommentIndicator";
+import { CommentPanel } from "@/components/comments/CommentPanel";
 
 interface ConfigItem {
   id: string;
@@ -47,6 +51,9 @@ interface StepReviewCardProps {
   }) => void;
   isReadOnly: boolean;
   isItLead: boolean;
+  assessmentId?: string;
+  currentUserId?: string;
+  commentCount?: number | undefined;
 }
 
 const FIT_OPTIONS = [
@@ -103,7 +110,11 @@ export function StepReviewCard({
   onResponseChange,
   isReadOnly,
   isItLead,
+  assessmentId,
+  currentUserId,
+  commentCount,
 }: StepReviewCardProps) {
+  const [commentPanelOpen, setCommentPanelOpen] = useState(false);
   const [localNote, setLocalNote] = useState<{ stepId: string; value: string }>({
     stepId: step.id,
     value: step.clientNote ?? "",
@@ -175,10 +186,35 @@ export function StepReviewCard({
           </span>
           <h3 className="text-lg font-semibold text-foreground mt-1">{step.actionTitle}</h3>
         </div>
-        <Badge variant="outline" className="text-xs shrink-0">
-          {STEP_TYPE_LABELS[step.stepType] ?? step.stepType}
-        </Badge>
+        <div className="flex items-center gap-2 shrink-0">
+          {assessmentId && (
+            <CommentIndicator
+              count={commentCount ?? 0}
+              onClick={() => setCommentPanelOpen(true)}
+            />
+          )}
+          <Badge variant="outline" className="text-xs">
+            {STEP_TYPE_LABELS[step.stepType] ?? step.stepType}
+          </Badge>
+        </div>
       </div>
+
+      {/* Collaboration: Conflict Banner + Active Editors */}
+      {assessmentId && (
+        <div className="px-5 py-2 space-y-2 border-b">
+          <StepConflictBanner
+            assessmentId={assessmentId}
+            entityType="process_step"
+            entityId={step.id}
+          />
+          <ActiveEditors
+            assessmentId={assessmentId}
+            entityType="process_step"
+            entityId={step.id}
+            currentUserId={currentUserId}
+          />
+        </div>
+      )}
 
       {/* Decision-First: Client Response Section — ABOVE SAP content */}
       <div className="px-5 py-4">
@@ -379,6 +415,19 @@ export function StepReviewCard({
             </a>
           )}
         </div>
+      )}
+
+      {/* Comment Panel */}
+      {assessmentId && currentUserId && (
+        <CommentPanel
+          open={commentPanelOpen}
+          onOpenChange={setCommentPanelOpen}
+          assessmentId={assessmentId}
+          targetType="STEP"
+          targetId={step.id}
+          targetLabel={step.actionTitle}
+          currentUserId={currentUserId}
+        />
       )}
     </div>
   );

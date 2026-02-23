@@ -131,6 +131,29 @@ export async function PUT(
     }
   }
 
+  // Status transition validation
+  if (parsed.data.status !== undefined && parsed.data.status !== existing.status) {
+    const VALID_DM_TRANSITIONS: Record<string, string[]> = {
+      identified: ["mapped"],
+      mapped: ["identified", "cleansed"],
+      cleansed: ["mapped", "validated"],
+      validated: ["cleansed", "approved"],
+      approved: ["identified"],
+    };
+    const allowedNext = VALID_DM_TRANSITIONS[existing.status] ?? [];
+    if (!allowedNext.includes(parsed.data.status)) {
+      return NextResponse.json(
+        {
+          error: {
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: `Cannot transition from "${existing.status}" to "${parsed.data.status}". Allowed: ${allowedNext.join(", ")}`,
+          },
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   // Build update data, converting undefined to absent keys
   const updateData: Record<string, unknown> = {};
   if (parsed.data.objectName !== undefined) updateData.objectName = parsed.data.objectName;
@@ -192,6 +215,18 @@ export async function DELETE(
 
   const { id: assessmentId, objectId } = await params;
 
+  const assessment = await prisma.assessment.findUnique({
+    where: { id: assessmentId },
+    select: { status: true },
+  });
+
+  if (assessment?.status === "signed_off") {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "Cannot delete records after sign-off" } },
+      { status: 403 },
+    );
+  }
+
   const existing = await prisma.dataMigrationObject.findUnique({
     where: { id: objectId },
   });
@@ -203,7 +238,26 @@ export async function DELETE(
     );
   }
 
-  await prisma.dataMigrationObject.delete({ where: { id: objectId } });
+  // Find sibling objects that reference the deleted object in their dependsOn
+  const dependents = await prisma.dataMigrationObject.findMany({
+    where: {
+      assessmentId,
+      dependsOn: { has: objectId },
+    },
+    select: { id: true, dependsOn: true },
+  });
+
+  // Use a transaction: cascade-remove from dependsOn arrays, then delete
+  await prisma.$transaction(async (tx) => {
+    for (const dep of dependents) {
+      const updatedDeps = dep.dependsOn.filter((id: string) => id !== objectId);
+      await tx.dataMigrationObject.update({
+        where: { id: dep.id },
+        data: { dependsOn: updatedDeps },
+      });
+    }
+    await tx.dataMigrationObject.delete({ where: { id: objectId } });
+  });
 
   await logDecision({
     assessmentId,
@@ -215,6 +269,20 @@ export async function DELETE(
     actor: user.id,
     actorRole: user.role as UserRole,
   });
+
+  // Log cascade updates for each affected dependent
+  for (const dep of dependents) {
+    await logDecision({
+      assessmentId,
+      entityType: "data_migration_object",
+      entityId: dep.id,
+      action: "DATA_MIGRATION_UPDATED" as DecisionAction,
+      oldValue: { dependsOn: dep.dependsOn } as unknown as Record<string, string>,
+      newValue: { dependsOn: dep.dependsOn.filter((id: string) => id !== objectId) } as unknown as Record<string, string>,
+      actor: user.id,
+      actorRole: user.role as UserRole,
+    });
+  }
 
   return NextResponse.json({ data: { deleted: true, id: objectId } });
 }

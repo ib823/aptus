@@ -77,6 +77,8 @@ export function OcmRegisterClient({
   const [changeTypeFilter, setChangeTypeFilter] = useState("all");
   const [severityFilter, setSeverityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [areaFilter, setAreaFilter] = useState("all");
   const [formOpen, setFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<OcmData | undefined>(undefined);
   const [activeTab, setActiveTab] = useState("table");
@@ -88,8 +90,10 @@ export function OcmRegisterClient({
     if (changeTypeFilter !== "all") result = result.filter((i) => i.changeType === changeTypeFilter);
     if (severityFilter !== "all") result = result.filter((i) => i.severity === severityFilter);
     if (statusFilter !== "all") result = result.filter((i) => i.status === statusFilter);
+    if (roleFilter !== "all") result = result.filter((i) => i.impactedRole === roleFilter);
+    if (areaFilter !== "all") result = result.filter((i) => (i.functionalArea ?? "Unassigned") === areaFilter);
     return result;
-  }, [items, changeTypeFilter, severityFilter, statusFilter]);
+  }, [items, changeTypeFilter, severityFilter, statusFilter, roleFilter, areaFilter]);
 
   const refreshData = useCallback(async () => {
     try {
@@ -172,6 +176,29 @@ export function OcmRegisterClient({
             <option value="all">All Statuses</option>
             {OCM_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
+          {(roleFilter !== "all" || areaFilter !== "all") && (
+            <>
+              {roleFilter !== "all" && (
+                <Badge variant="secondary" className="gap-1">
+                  Role: {roleFilter}
+                  <button type="button" onClick={() => setRoleFilter("all")} className="ml-1 hover:text-red-600">&times;</button>
+                </Badge>
+              )}
+              {areaFilter !== "all" && (
+                <Badge variant="secondary" className="gap-1">
+                  Area: {areaFilter}
+                  <button type="button" onClick={() => setAreaFilter("all")} className="ml-1 hover:text-red-600">&times;</button>
+                </Badge>
+              )}
+              <button
+                type="button"
+                onClick={() => { setRoleFilter("all"); setAreaFilter("all"); }}
+                className="text-xs text-muted-foreground underline hover:text-foreground"
+              >
+                Clear heatmap filters
+              </button>
+            </>
+          )}
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -244,10 +271,12 @@ export function OcmRegisterClient({
           </TabsContent>
 
           <TabsContent value="heatmap" className="mt-4">
-            <OcmHeatmap data={heatmap} onCellClick={() => {
+            <OcmHeatmap data={heatmap} onCellClick={(role, area) => {
               setChangeTypeFilter("all");
               setSeverityFilter("all");
               setStatusFilter("all");
+              setRoleFilter(role);
+              setAreaFilter(area);
               setActiveTab("table");
             }} />
           </TabsContent>

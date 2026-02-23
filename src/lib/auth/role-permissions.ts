@@ -4,6 +4,14 @@ import type { UserRole } from "@/types/assessment";
 import { ROLE_HIERARCHY } from "@/types/assessment";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
 
+// Re-export fine-grained permission system from permission-matrix
+export { hasPermission, requirePermission, getPermissions, PERMISSION_MATRIX, PermissionError } from "@/lib/auth/permission-matrix";
+export type { PermissionAction } from "@/lib/auth/permission-matrix";
+
+// Re-export role metadata
+export { ROLE_METADATA, getRoleMetadata, getRolesForOrgType, isRoleValidForOrgType } from "@/lib/auth/role-metadata";
+export type { RoleMetadata } from "@/lib/auth/role-metadata";
+
 export interface RoleCapabilities {
   canCreateAssessment: boolean;
   canEditAssessment: boolean;

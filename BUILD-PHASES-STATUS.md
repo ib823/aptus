@@ -175,238 +175,245 @@
 
 ## Wave 1: Foundation Enrichments
 
-### Phase 10: Company Profile Enrichment — PENDING
+### Phase 10: Company Profile Enrichment — COMPLETE
 
 | # | Task | Done |
 |---|------|------|
-| 10.1 | Extend Assessment model (operating model, regulatory, SAP landscape) | [ ] |
-| 10.2 | Company profile form with multi-step wizard | [ ] |
-| 10.3 | Country-specific regulatory field rendering | [ ] |
-| 10.4 | SAP landscape capture (current ERP, target version, deployment) | [ ] |
-| 10.5 | Validation rules and Zod schemas | [ ] |
-| 10.6 | Migration for existing assessments | [ ] |
-| 10.7 | Unit and integration tests | [ ] |
+| 10.1 | Extend Assessment model (operating model, regulatory, SAP landscape) | [x] |
+| 10.2 | Company profile form with multi-step wizard | [x] |
+| 10.3 | Country-specific regulatory field rendering | [x] |
+| 10.4 | SAP landscape capture (current ERP, target version, deployment) | [x] |
+| 10.5 | Validation rules and Zod schemas | [x] |
+| 10.6 | Migration for existing assessments | [x] |
+| 10.7 | Unit and integration tests | [x] |
 
-### Phase 11: Scope Selection Enhancement — PENDING
-
-| # | Task | Done |
-|---|------|------|
-| 11.1 | Industry-guided scope pre-selection | [ ] |
-| 11.2 | Scope item dependency warnings | [ ] |
-| 11.3 | Bulk operations (select/deselect by area) | [ ] |
-| 11.4 | Current state capture per scope item | [ ] |
-| 11.5 | Relevance rationale (why selected/excluded) | [ ] |
-| 11.6 | Scope summary dashboard | [ ] |
-| 11.7 | Unit and integration tests | [ ] |
-
-### Phase 12: Step Response Enrichment & Content Presentation — PENDING
+### Phase 11: Scope Selection Enhancement — COMPLETE
 
 | # | Task | Done |
 |---|------|------|
-| 12.1 | Step type classification engine (tag → StepCategory) | [ ] |
-| 12.2 | Content parser (SAP description → structured sections) | [ ] |
-| 12.3 | Decision-first card layout (classification above content) | [ ] |
-| 12.4 | Step grouping by activity + tag | [ ] |
-| 12.5 | Segmented progress indicator (classifiable-only counts) | [ ] |
-| 12.6 | Reference step compact rendering | [ ] |
-| 12.7 | Configuration activity contextualization | [ ] |
-| 12.8 | Backfill migration for existing steps | [ ] |
-| 12.9 | Unit and integration tests | [ ] |
+| 11.1 | Industry-guided scope pre-selection | [x] |
+| 11.2 | Scope item dependency warnings | [x] |
+| 11.3 | Bulk operations (select/deselect by area) | [x] |
+| 11.4 | Current state capture per scope item | [x] |
+| 11.5 | Relevance rationale (why selected/excluded) | [x] |
+| 11.6 | Scope summary dashboard | [x] |
+| 11.7 | Unit and integration tests | [x] |
 
-### Phase 13: Gap Resolution Enhancement — PENDING
+### Phase 12: Step Response Enrichment & Content Presentation — COMPLETE
 
 | # | Task | Done |
 |---|------|------|
-| 13.1 | Enhanced cost model (one-time + recurring) | [ ] |
-| 13.2 | Risk scoring matrix | [ ] |
-| 13.3 | "What-if" scenario calculator | [ ] |
-| 13.4 | Resolution tracking workflow | [ ] |
-| 13.5 | Client approval capture | [ ] |
-| 13.6 | Upgrade impact assessment | [ ] |
-| 13.7 | Unit and integration tests | [ ] |
+| 12.1 | Step type classification engine (tag → StepCategory) | [x] |
+| 12.2 | Content parser (SAP description → structured sections) | [x] |
+| 12.3 | Decision-first card layout (classification above content) | [x] |
+| 12.4 | Step grouping by activity + tag | [x] |
+| 12.5 | Segmented progress indicator (classifiable-only counts) | [x] |
+| 12.6 | Reference step compact rendering | [x] |
+| 12.7 | Configuration activity contextualization | [x] |
+| 12.8 | Backfill migration for existing steps | [x] |
+| 12.9 | Unit and integration tests | [x] |
+
+### Phase 13: Gap Resolution Enhancement — COMPLETE
+
+| # | Task | Done |
+|---|------|------|
+| 13.1 | Enhanced cost model (one-time + recurring + multi-currency) | [x] |
+| 13.2 | Risk scoring matrix (4×3 heatmap) | [x] |
+| 13.3 | "What-if" scenario calculator (alternative resolutions + comparison) | [x] |
+| 13.4 | Resolution tracking workflow (approval reset on type change) | [x] |
+| 13.5 | Client approval capture (approve/revoke API + gate) | [x] |
+| 13.6 | Upgrade impact assessment (infer strategy from type) | [x] |
+| 13.7 | Unit and integration tests | [x] |
 
 ## Wave 2: New Registers
 
-### Phase 14: Integration Register — PENDING
+### Phase 14: Integration Register — COMPLETE
 
 | # | Task | Done |
 |---|------|------|
-| 14.1 | IntegrationPoint Prisma model | [ ] |
-| 14.2 | CRUD API routes | [ ] |
-| 14.3 | Integration register UI (table + form) | [ ] |
-| 14.4 | Middleware categorization (CPI, RFC, API) | [ ] |
-| 14.5 | Link to scope items and process steps | [ ] |
-| 14.6 | Comment support integration | [ ] |
-| 14.7 | Unit and integration tests | [ ] |
+| 14.1 | IntegrationPoint Prisma model (+ estimatedEffortDays, dataObjects, functionalArea, updatedBy) | [x] |
+| 14.2 | CRUD API routes (GET/POST list + PUT/DELETE individual + summary) | [x] |
+| 14.3 | Integration register UI (table + form + filters + summary sidebar) | [x] |
+| 14.4 | Middleware categorization (CPI, PO, MuleSoft, Boomi, Azure, Other) | [x] |
+| 14.5 | Link to scope items via scopeItemId | [x] |
+| 14.6 | Decision audit logging on create/update/delete | [x] |
+| 14.7 | Unit and integration tests (register-validation + register-helpers + factories) | [x] |
 
-### Phase 15: Data Migration Register — PENDING
-
-| # | Task | Done |
-|---|------|------|
-| 15.1 | DataMigrationObject Prisma model | [ ] |
-| 15.2 | CRUD API routes | [ ] |
-| 15.3 | DM register UI (table + form) | [ ] |
-| 15.4 | Volume and effort estimation | [ ] |
-| 15.5 | Source system mapping | [ ] |
-| 15.6 | Comment support integration | [ ] |
-| 15.7 | Unit and integration tests | [ ] |
-
-### Phase 16: OCM Impact Register — PENDING
+### Phase 15: Data Migration Register — COMPLETE
 
 | # | Task | Done |
 |---|------|------|
-| 16.1 | OcmImpact Prisma model | [ ] |
-| 16.2 | CRUD API routes | [ ] |
-| 16.3 | OCM register UI (table + form) | [ ] |
-| 16.4 | Training needs assessment | [ ] |
-| 16.5 | Change readiness tracking | [ ] |
-| 16.6 | Comment support integration | [ ] |
-| 16.7 | Unit and integration tests | [ ] |
+| 15.1 | DataMigrationObject Prisma model (+ estimatedEffortDays, functionalArea, updatedBy) | [x] |
+| 15.2 | CRUD API routes (GET/POST list + PUT/DELETE individual + summary + dependency-graph) | [x] |
+| 15.3 | DM register UI (table + form + filters + summary sidebar) | [x] |
+| 15.4 | Volume and effort estimation (volumeEstimate, recordCount, estimatedEffortDays) | [x] |
+| 15.5 | Source system mapping + dependency graph (circular detection, topological sort, critical path) | [x] |
+| 15.6 | Decision audit logging on create/update/delete | [x] |
+| 15.7 | Unit and integration tests (dependency-graph + register-validation + factories) | [x] |
+
+### Phase 16: OCM Impact Register — COMPLETE
+
+| # | Task | Done |
+|---|------|------|
+| 16.1 | OcmImpact Prisma model (+ impactTitle, affectedUserCount, relatedGapId, updatedBy) | [x] |
+| 16.2 | CRUD API routes (GET/POST list + PUT/DELETE individual + summary + heatmap) | [x] |
+| 16.3 | OCM register UI (table + heatmap tab + form + filters + summary sidebar) | [x] |
+| 16.4 | Training needs assessment (trainingRequired, trainingType, trainingDuration) | [x] |
+| 16.5 | Change readiness tracking (severity-weighted scoring + resistance risk + readiness score) | [x] |
+| 16.6 | Decision audit logging on create/update/delete | [x] |
+| 16.7 | Unit and integration tests (ocm-scoring + register-validation + factories) | [x] |
 
 ## Wave 3: Roles & Lifecycle
 
-### Phase 17: Role System & Organization Model — PENDING
+### Phase 17: Role System & Organization Model — COMPLETE
 
 | # | Task | Done |
 |---|------|------|
-| 17.1 | Extend Organization model (slug, type, plan, SSO, limits) | [ ] |
-| 17.2 | 11-role enum and permission policies | [ ] |
-| 17.3 | Role assignment UI | [ ] |
-| 17.4 | SSO/SCIM configuration (SAML, OIDC) | [ ] |
-| 17.5 | RBAC middleware update | [ ] |
-| 17.6 | Migration from 5-role to 11-role system | [ ] |
-| 17.7 | Multi-assessment context switching | [ ] |
-| 17.8 | Unit and integration tests | [ ] |
+| 17.1 | Extend Organization model (slug, type, SSO, ssoExclusive, ssoEntityId, dataRetentionDays, viewerCanExport, reportLogoUrl) | [x] |
+| 17.2 | 11-role enum with RoleMetadata + 37-action PermissionMatrix | [x] |
+| 17.3 | Role assignment UI (UserManagementTable with role change dialog) | [x] |
+| 17.4 | SSO configuration API (GET/PUT /organizations/[orgId]/sso) | [x] |
+| 17.5 | RBAC middleware update (permission-matrix.ts, hasPermission, requirePermission) | [x] |
+| 17.6 | Migration script (scripts/migrate-roles.ts — admin→platform_admin, executive→executive_sponsor) | [x] |
+| 17.7 | Organization management UI (admin org list + detail + InviteUserDialog) | [x] |
+| 17.8 | Invitation accept API (/invitations/[token]/accept) | [x] |
+| 17.9 | User model extensions (jobTitle, department, phone, lastActiveAt) | [x] |
 
-### Phase 18: Assessment Lifecycle — PENDING
+### Phase 18: Assessment Lifecycle — COMPLETE
 
 | # | Task | Done |
 |---|------|------|
-| 18.1 | Extended status machine (DRAFT → … → SIGNED_OFF → ARCHIVED) | [ ] |
-| 18.2 | Parallel workstream support | [ ] |
-| 18.3 | Workshop session states | [ ] |
-| 18.4 | Status transition guards per role | [ ] |
-| 18.5 | Lifecycle event logging | [ ] |
-| 18.6 | Unit and integration tests | [ ] |
+| 18.1 | Extended 10-state status machine (draft → scoping → … → signed_off → handed_off → archived) | [x] |
+| 18.2 | Phase progress tracking (8 phases with completion %, recalculate API) | [x] |
+| 18.3 | Workshop session management (create/start/end with session codes + audit logging) | [x] |
+| 18.4 | Status transition guards per role (TRANSITION_ROLES_V2 in status-machine.ts) | [x] |
+| 18.5 | Lifecycle event logging (StatusTransitionLog + DecisionLogEntry on every transition) | [x] |
+| 18.6 | Migration script (scripts/migrate-statuses.ts — V1→V2 status mapping + phase records) | [x] |
+| 18.7 | StatusTransitionBar component (integrated in assessment layout) | [x] |
+| 18.8 | PhaseProgressPanel component (progress bars + recalculate button) | [x] |
 
 ## Wave 4: Real-Time Infrastructure
 
-### Phase 19: Notifications & Real-Time Infrastructure — PENDING
+### Phase 19: Notifications & Real-Time Infrastructure — COMPLETE
 
 | # | Task | Done |
 |---|------|------|
-| 19.1 | Notification model and preference system | [ ] |
-| 19.2 | In-app notification bell + dropdown | [ ] |
-| 19.3 | Email notification service (digest mode) | [ ] |
-| 19.4 | WebSocket server setup | [ ] |
-| 19.5 | Presence tracking (who is online, what they're viewing) | [ ] |
-| 19.6 | Web Push for PWA | [ ] |
-| 19.7 | Unit and integration tests | [ ] |
+| 19.1 | Notification model and preference system | [x] |
+| 19.2 | In-app notification bell + dropdown | [x] |
+| 19.3 | Email notification service (Brevo SMTP integration) | [x] |
+| 19.4 | SSE real-time stream (Vercel-compatible, replaces WebSocket) | [x] |
+| 19.5 | Presence tracking (who is online, what they're viewing) | [x] |
+| 19.6 | Web Push for PWA (VAPID, service worker) | [x] |
+| 19.7 | Notification preferences grid (types x channels) | [x] |
 
-### Phase 28: Real-Time Collaboration — PENDING
+### Phase 28: Real-Time Collaboration — COMPLETE
 
 | # | Task | Done |
 |---|------|------|
-| 28.1 | Comment model + threading + @mentions | [ ] |
-| 28.2 | Field-level editing locks (WebSocket) | [ ] |
-| 28.3 | Conflict detection and resolution workflow | [ ] |
-| 28.4 | Activity feed (real-time assessment stream) | [ ] |
-| 28.5 | Collaboration feature matrix by role | [ ] |
-| 28.6 | Graceful degradation (polling fallback) | [ ] |
-| 28.7 | Unit and integration tests | [ ] |
+| 28.1 | Comment model + threading + @mentions | [x] |
+| 28.2 | Field-level editing locks (SSE/polling, 5-min expiry) | [x] |
+| 28.3 | Conflict detection and resolution workflow | [x] |
+| 28.4 | Activity feed (real-time assessment stream) | [x] |
+| 28.5 | Collaboration feature matrix by role (recipient resolver) | [x] |
+| 28.6 | Graceful degradation (polling fallback everywhere) | [x] |
+| 28.7 | Integration hooks (steps, comments, transitions, scope, conflicts) | [x] |
 
 ## Wave 5: Visualization & Workshops
 
-### Phase 20: Process Visualization — PENDING
+### Phase 20: Process Visualization — COMPLETE
 
 | # | Task | Done |
 |---|------|------|
-| 20.1 | Interactive flow diagrams (clickable nodes) | [ ] |
-| 20.2 | Status heatmap across scope items | [ ] |
-| 20.3 | BPMN-style rendering | [ ] |
-| 20.4 | Mobile-optimized map renderings | [ ] |
-| 20.5 | Unit and integration tests | [ ] |
+| 20.1 | FunctionalAreaOverview schema + types (crossAreaDeps→Json, scopeItems, updatedAt, assessment FK) | [x] |
+| 20.2 | Flow lib files (interactive-flow, thumbnail-generator, risk-overlay, area-overview) | [x] |
+| 20.3 | Flow API routes (scope GET, scope regenerate, overview regenerate, SVG/PNG/PDF export) | [x] |
+| 20.4 | Interactive flow viewer (zoom/pan SVG, risk overlay toggle, node popover) | [x] |
+| 20.5 | Functional area map + drill-down + Process Map page + tab | [x] |
 
-### Phase 21: Workshop Management — PENDING
+### Phase 21: Workshop Management — COMPLETE
 
 | # | Task | Done |
 |---|------|------|
-| 21.1 | Workshop session model and scheduling | [ ] |
-| 21.2 | Workshop Mode UI (projector-friendly) | [ ] |
-| 21.3 | QR code / code join for attendees | [ ] |
-| 21.4 | Synchronized navigation (follow presenter) | [ ] |
-| 21.5 | Live classification polling / tally | [ ] |
-| 21.6 | Workshop minutes auto-generation | [ ] |
-| 21.7 | Remote/hybrid support (follow toggle) | [ ] |
-| 21.8 | Unit and integration tests | [ ] |
+| 21.1 | Workshop session model (already existed) + scheduling (WorkshopScheduleDialog) | [x] |
+| 21.2 | Workshop Mode UI (WorkshopModeLayout + timer + QR code component) | [x] |
+| 21.3 | QR code generation (qrcode lib) + join link + session code display | [x] |
+| 21.4 | Synchronized navigation (follow presenter toggle + SSE stream events) | [x] |
+| 21.5 | Live classification voting (submitVote, getVoteTally, finalizeVote + vote API) | [x] |
+| 21.6 | Workshop minutes auto-generation (generateMinutes + renderMinutesMarkdown) | [x] |
+| 21.7 | Workshop lifecycle (create, start, end, cancel) + attendee heartbeat + presence | [x] |
+| 21.8 | Workshop list page + session detail page + API routes (cancel, stream, heartbeat, follow) | [x] |
 
 ## Wave 6: UX Innovation
 
-### Phase 22: Conversation Mode — PENDING
+### Phase 22: Conversation Mode — COMPLETE
 
 | # | Task | Done |
 |---|------|------|
-| 22.1 | ConversationTemplate model and decision tree | [ ] |
-| 22.2 | Chat-like classification UI | [ ] |
-| 22.3 | Classification derivation from answers | [ ] |
-| 22.4 | Mode toggle (traditional ↔ conversation) | [ ] |
-| 22.5 | Session resumption | [ ] |
-| 22.6 | Template editor (admin) | [ ] |
-| 22.7 | Unit and integration tests | [ ] |
+| 22.1 | ConversationTemplate model and decision tree | [x] |
+| 22.2 | Chat-like classification UI (ConversationCard, ConversationProgress) | [x] |
+| 22.3 | Classification derivation from answers (tree-engine + classification-applier) | [x] |
+| 22.4 | Mode toggle (traditional ↔ conversation) | [x] |
+| 22.5 | Session resumption (ConversationSession CRUD) | [x] |
+| 22.6 | Template editor (admin) — ConversationTemplateEditor | [x] |
+| 22.7 | Unit and integration tests | [x] |
 
-### Phase 23: Intelligent Dashboard — PENDING
-
-| # | Task | Done |
-|---|------|------|
-| 23.1 | Role-aware dashboard variants | [ ] |
-| 23.2 | "What Needs Attention" engine | [ ] |
-| 23.3 | Progress heatmap by area | [ ] |
-| 23.4 | KPI panel (FIT rate, cost, risk) | [ ] |
-| 23.5 | Activity feed widget | [ ] |
-| 23.6 | Widget customization | [ ] |
-| 23.7 | Mobile dashboard layout | [ ] |
-| 23.8 | Unit and integration tests | [ ] |
-
-### Phase 24: Onboarding System — PENDING
+### Phase 23: Intelligent Dashboard — COMPLETE
 
 | # | Task | Done |
 |---|------|------|
-| 24.1 | Per-role onboarding wizard flows | [ ] |
-| 24.2 | Contextual tooltips (first-time hints) | [ ] |
-| 24.3 | Sample assessment with demo data | [ ] |
-| 24.4 | Onboarding progress tracking | [ ] |
-| 24.5 | SSO-aware onboarding | [ ] |
-| 24.6 | Backfill for existing users | [ ] |
-| 24.7 | Unit and integration tests | [ ] |
+| 23.1 | Role-aware dashboard variants (DashboardShell + WidgetLoader + 11 role defaults) | [x] |
+| 23.2 | "What Needs Attention" engine (attention-engine + stale assessments + API) | [x] |
+| 23.3 | Progress heatmap by area (scoped to selected scope items, org-isolated) | [x] |
+| 23.4 | KPI panel (FIT rate, cost, risk — org-isolated) | [x] |
+| 23.5 | Activity feed widget (DashboardActivityFeed) | [x] |
+| 23.6 | Widget customization (WidgetCustomizer with moveUp/moveDown + auto-create defaults) | [x] |
+| 23.7 | Mobile dashboard layout (responsive grid) | [x] |
+| 23.8 | Unit and integration tests | [x] |
+
+### Phase 24: Onboarding System — COMPLETE
+
+| # | Task | Done |
+|---|------|------|
+| 24.1 | Per-role onboarding wizard flows (11 roles, OnboardingWizard + flow-engine) | [x] |
+| 24.2 | Contextual tooltips (ContextualTooltip + Provider + 11 tooltip registry) | [x] |
+| 24.3 | Sample assessment with demo data (POST /onboarding/sample-assessment) | [x] |
+| 24.4 | Onboarding progress tracking (start, progress, complete APIs + OnboardingGuard) | [x] |
+| 24.5 | SSO-aware onboarding (SampleAssessmentBanner + org-scoped) | [x] |
+| 24.6 | Backfill for existing users (scripts/backfill-onboarding.ts) | [x] |
+| 24.7 | Unit and integration tests | [x] |
 
 ## Wave 7: Reports & Commercial
 
-### Phase 25: Report Generation V2 — PENDING
+### Phase 25: Report Generation V2 — COMPLETE
 
 | # | Task | Done |
 |---|------|------|
-| 25.1 | Integration Register XLSX report | [ ] |
-| 25.2 | Data Migration Register XLSX report | [ ] |
-| 25.3 | OCM Impact XLSX report | [ ] |
-| 25.4 | Enhanced Executive Summary PDF | [ ] |
-| 25.5 | Readiness Scorecard PDF | [ ] |
-| 25.6 | Report branding (partner logo/colors) | [ ] |
-| 25.7 | Complete package ZIP (all reports) | [ ] |
-| 25.8 | Unit and integration tests | [ ] |
+| 25.1 | Integration Register XLSX report (3 sheets: Summary, Detail, By Source System) | [x] |
+| 25.2 | Data Migration Register XLSX report (4 sheets: Summary, Detail, By Source, Effort Breakdown) | [x] |
+| 25.3 | OCM Impact XLSX report (4 sheets: Summary, Detail, Training Plan, Communications Plan) | [x] |
+| 25.4 | Enhanced Executive Summary PDF (already existed) | [x] |
+| 25.5 | Readiness Scorecard PDF (generateReadinessScorecardPdf + ?format=pdf on API) | [x] |
+| 25.6 | Report branding (branding.ts + loadBranding + hexToRgb, wired into all 4 PDF generators) | [x] |
+| 25.7 | Complete package ZIP (13 numbered files + README.txt — includes Flow Atlas + Remaining Items) | [x] |
+| 25.8 | ReportClient updated with 3 new report types + ZIP download | [x] |
+| 25.9 | Logo upload endpoint (POST /report/branding/logo — PNG/JPEG/SVG, 500KB max, base64 data URI) | [x] |
+| 25.10 | Flow Atlas PDF generator (generateFlowAtlasPdf in pdf-generator.ts) | [x] |
+| 25.11 | Wave 7 migration SQL (ReportGeneration, ReportBranding, commercial fields, templates, usage events) | [x] |
 
-### Phase 29: Platform Commercial & Self-Service — PENDING
+### Phase 29: Platform Commercial & Self-Service — COMPLETE
 
 | # | Task | Done |
 |---|------|------|
-| 29.1 | Self-service signup flow (partner) | [ ] |
-| 29.2 | 14-day trial with sample assessment | [ ] |
-| 29.3 | Stripe Billing integration (subscription + metered) | [ ] |
-| 29.4 | Partner admin dashboard (team, branding, auth, billing) | [ ] |
-| 29.5 | Plan tier enforcement (Starter/Professional/Enterprise) | [ ] |
-| 29.6 | Usage metering | [ ] |
-| 29.7 | Subscription lifecycle management | [ ] |
-| 29.8 | Demo/sandbox mode | [ ] |
-| 29.9 | Unit and integration tests | [ ] |
+| 29.1 | Self-service signup flow (/signup page + /api/auth/signup route) | [x] |
+| 29.2 | 14-day trial (trial-manager.ts + createTrial + checkAndExpireTrials) | [x] |
+| 29.3 | Stripe Billing (stripe-client.ts + webhook handler + checkout + portal) | [x] |
+| 29.4 | Partner admin (subscription page + partner settings routes) | [x] |
+| 29.5 | Plan tier enforcement (feature-gate.ts + checkFeatureAccess + isOrgReadOnly) | [x] |
+| 29.6 | Usage metering (usage-metering.ts + recordUsageEvent + limit checks) | [x] |
+| 29.7 | Subscription lifecycle (trial-manager + Stripe webhooks + status transitions) | [x] |
+| 29.8 | Demo/sandbox mode (sample assessment via onboarding — already exists) | [x] |
+| 29.9 | Pricing page (/pricing — public) | [x] |
+| 29.10 | Stripe webhook idempotency (all 5 handlers check current state before updating) | [x] |
 
 ## Wave 8: Sign-Off & Continuity
 

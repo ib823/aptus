@@ -327,6 +327,7 @@ model Assessment {
   decisionLog    DecisionLogEntry[]
   signOffs       AssessmentSignOff[]
   flowDiagrams   ProcessFlowDiagram[]
+  functionalAreaOverviews FunctionalAreaOverview[]
   remainingItems RemainingItem[]
   integrationPoints    IntegrationPoint[]
   dataMigrationObjects DataMigrationObject[]
@@ -341,6 +342,8 @@ model Assessment {
   comments             Comment[]
   conflicts            Conflict[]
   activityFeedEntries  ActivityFeedEntry[]
+  editingLocks         EditingLock[]
+  presenceRecords      PresenceRecord[]
 
   // Phase 25: Report Generation
   reportGenerations  ReportGeneration[]
@@ -613,8 +616,11 @@ model FunctionalAreaOverview {
   pendingCount    Int      @default(0)
   riskScore       Float    @default(0)
   completionPct   Float    @default(0)
-  crossAreaDeps   String[] @default([])
-  generatedAt     DateTime @default(now())
+  crossAreaDeps   Json?    @db.JsonB
+  scopeItems      Json?    @db.JsonB
+  updatedAt       DateTime @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
 
   @@unique([assessmentId, functionalArea])
   @@index([assessmentId])
@@ -665,14 +671,18 @@ model IntegrationPoint {
   middleware       String?   // SAP_CPI, SAP_PO, MULESOFT, BOOMI, AZURE_INTEGRATION, OTHER
   dataVolume       String?
   complexity       String?   // LOW, MEDIUM, HIGH, VERY_HIGH
-  priority         String?   // critical, high, medium, low
-  status           String    @default("identified") // identified, analyzed, designed, approved
-  technicalNotes   String?   @db.Text
-  createdBy        String
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  priority            String?   // critical, high, medium, low
+  status              String    @default("identified") // identified, analyzed, designed, approved
+  estimatedEffortDays Float?
+  dataObjects         String[]  @default([])
+  functionalArea      String?
+  technicalNotes      String?   @db.Text
+  createdBy           String
+  updatedBy           String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  assessment Assessment @relation(fields: [assessmentId], references: [id])
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
 
   @@index([assessmentId])
   @@index([assessmentId, status])
@@ -698,13 +708,16 @@ model DataMigrationObject {
   validationRules   String?   @db.Text
   priority          String?   // critical, high, medium, low
   status            String    @default("identified") // identified, mapped, cleansed, validated, approved
-  dependsOn         String[]  @default([])   // IDs of other DataMigrationObjects
-  technicalNotes    String?   @db.Text
-  createdBy         String
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  dependsOn            String[]  @default([])   // IDs of other DataMigrationObjects
+  estimatedEffortDays  Float?
+  functionalArea       String?
+  technicalNotes       String?   @db.Text
+  createdBy            String
+  updatedBy            String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  assessment Assessment @relation(fields: [assessmentId], references: [id])
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
 
   @@index([assessmentId])
   @@index([assessmentId, status])
@@ -730,12 +743,16 @@ model OcmImpact {
   mitigationStrategy String?   @db.Text
   priority           String?   // critical, high, medium, low
   status             String    @default("identified") // identified, assessed, planned, approved
+  impactTitle        String?
+  affectedUserCount  Int?
+  relatedGapId       String?
   technicalNotes     String?   @db.Text
   createdBy          String
+  updatedBy          String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  assessment Assessment @relation(fields: [assessmentId], references: [id])
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
 
   @@index([assessmentId])
   @@index([assessmentId, status])
@@ -774,6 +791,10 @@ model User {
 
   // Phase 17: Role System Enrichment
   displayRole        String?
+  jobTitle           String?
+  department         String?
+  phone              String?
+  lastActiveAt       DateTime?
   deactivatedAt      DateTime?
   deactivatedBy      String?
   deactivationReason String?
@@ -793,6 +814,9 @@ model User {
   authoredComments        Comment[]               @relation("commentAuthor")
   resolvedComments        Comment[]               @relation("commentResolver")
   resolvedConflicts       Conflict[]              @relation("conflictResolver")
+  pushSubscriptions       PushSubscription[]
+  editingLocks            EditingLock[]
+  presenceRecords         PresenceRecord[]
 
   // Phase 21: Workshop Management
   workshopAttendances WorkshopAttendee[]
@@ -858,10 +882,17 @@ model Organization {
   // Policies
   mfaPolicy             String  @default("optional") // disabled, optional, required
   maxConcurrentSessions Int     @default(3)
+  viewerCanExport       Boolean @default(false)
+  dataRetentionDays     Int?
+
+  // SSO extended
+  ssoExclusive     Boolean @default(false)  // When true, only SSO login allowed
+  ssoEntityId      String?
 
   // Branding
   brandPrimaryColor String?
   brandLogoUrl      String?
+  reportLogoUrl     String?
 
   // Phase 29: Commercial / Multi-Tenant
   plan                  String   @default("TRIAL")
@@ -1226,6 +1257,8 @@ model Comment {
   resolvedAt      DateTime?
   editedAt        DateTime?
   isEdited        Boolean  @default(false)
+  isDeleted       Boolean  @default(false)
+  deletedAt       DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1773,4 +1806,58 @@ model AssessmentPhaseLink {
   @@index([clientIdentifier])
   @@index([phase1AssessmentId])
   @@index([phase2AssessmentId])
+}
+
+// =============================================================
+// Phase 19+28: Push Subscriptions, Editing Locks, Presence
+// =============================================================
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @db.Text
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, endpoint])
+  @@index([userId])
+}
+
+model EditingLock {
+  id           String   @id @default(cuid())
+  assessmentId String
+  entityType   String
+  entityId     String
+  lockedById   String
+  lockedByName String
+  acquiredAt   DateTime @default(now())
+  expiresAt    DateTime
+  isActive     Boolean  @default(true)
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  lockedBy   User       @relation(fields: [lockedById], references: [id], onDelete: Cascade)
+
+  @@unique([assessmentId, entityType, entityId])
+  @@index([assessmentId, isActive])
+  @@index([expiresAt])
+}
+
+model PresenceRecord {
+  id           String   @id @default(cuid())
+  assessmentId String
+  userId       String
+  userName     String
+  userRole     String
+  currentPage  String?
+  lastSeenAt   DateTime @default(now())
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([assessmentId, userId])
+  @@index([assessmentId, lastSeenAt])
 }

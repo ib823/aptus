@@ -52,6 +52,9 @@ const REPORTS = [
   { key: "audit-trail", label: "Decision Audit Trail", format: "XLSX", icon: FileSpreadsheet, description: "Complete chronological decision log" },
   { key: "flow-atlas", label: "Process Flow Atlas", format: "PDF", icon: FileText, description: "All flow diagrams compiled in a single PDF" },
   { key: "remaining-register", label: "Remaining Items Register", format: "XLSX", icon: FileSpreadsheet, description: "Unresolved items requiring post-assessment action" },
+  { key: "integration-register", label: "Integration Register", format: "XLSX", icon: FileSpreadsheet, description: "All integration points with direction, type, and effort" },
+  { key: "dm-register", label: "Data Migration Register", format: "XLSX", icon: FileSpreadsheet, description: "Migration objects with approach, complexity, and status" },
+  { key: "ocm-report", label: "OCM Impact Report", format: "XLSX", icon: FileSpreadsheet, description: "Change impacts with severity, training, and mitigation" },
 ] as const;
 
 const SIGNOFF_ROLES = [
@@ -200,14 +203,7 @@ export function ReportClient({
           variant="outline"
           className="border-gray-600 text-white hover:bg-gray-800"
           disabled={!canGenerate}
-          onClick={() => {
-            // Download all reports individually (ZIP generation would require server-side packaging)
-            for (const report of REPORTS) {
-              if (report.key !== "audit-trail") {
-                handleDownload(report.key);
-              }
-            }
-          }}
+          onClick={() => handleDownload("complete-package")}
         >
           <Download className="w-4 h-4 mr-1.5" />
           Download All

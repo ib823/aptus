@@ -6,6 +6,7 @@ import { isMfaRequired, hasRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { calculateReadinessScorecard } from "@/lib/report/readiness-calculator";
+import { generateReadinessScorecardPdf } from "@/lib/report/pdf-generator";
 import type { UserRole } from "@/types/assessment";
 
 const ALLOWED_ROLES: UserRole[] = [
@@ -45,7 +46,7 @@ export async function GET(
 
   const assessment = await prisma.assessment.findUnique({
     where: { id, deletedAt: null },
-    select: { id: true },
+    select: { id: true, companyName: true },
   });
 
   if (!assessment) {
@@ -109,6 +110,18 @@ export async function GET(
     totalSignOffs,
     completedSignOffs,
   });
+
+  // Return PDF if requested via ?format=pdf
+  const format = _request.nextUrl.searchParams.get("format");
+  if (format === "pdf") {
+    const pdf = generateReadinessScorecardPdf(assessment.companyName, scorecard);
+    return new NextResponse(pdf as unknown as BodyInit, {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${assessment.companyName}_Readiness_Scorecard.pdf"`,
+      },
+    });
+  }
 
   return NextResponse.json({ data: scorecard });
 }

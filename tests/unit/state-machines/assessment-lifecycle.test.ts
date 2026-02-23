@@ -499,10 +499,9 @@ describe("Assessment Lifecycle State Machine", () => {
       expect(result.reason).toContain("SIGNED_OFF");
     });
 
-    it("should reject with undefined change request id", () => {
-      const result = validateTransition("SIGNED_OFF", "REASSESSMENT_NEEDED", {
-        changeRequestId: undefined,
-      });
+    it("should reject with missing change request id", () => {
+      const ctx: TransitionContext = {};
+      const result = validateTransition("SIGNED_OFF", "REASSESSMENT_NEEDED", ctx);
       expect(result.allowed).toBe(false);
     });
 
@@ -532,10 +531,9 @@ describe("Assessment Lifecycle State Machine", () => {
       expect(result.reason).toContain("HANDED_OFF");
     });
 
-    it("should reject with undefined change request id", () => {
-      const result = validateTransition("HANDED_OFF", "REASSESSMENT_NEEDED", {
-        changeRequestId: undefined,
-      });
+    it("should reject with missing change request id", () => {
+      const ctx: TransitionContext = {};
+      const result = validateTransition("HANDED_OFF", "REASSESSMENT_NEEDED", ctx);
       expect(result.allowed).toBe(false);
     });
 
@@ -622,9 +620,9 @@ describe("Assessment Lifecycle State Machine", () => {
     it("should queue a transition while offline", () => {
       const queue = queueOfflineTransition([], "SETUP", "SCOPE_IN_PROGRESS");
       expect(queue).toHaveLength(1);
-      expect(queue[0].from).toBe("SETUP");
-      expect(queue[0].to).toBe("SCOPE_IN_PROGRESS");
-      expect(queue[0].timestamp).toBeGreaterThan(0);
+      expect(queue[0]!.from).toBe("SETUP");
+      expect(queue[0]!.to).toBe("SCOPE_IN_PROGRESS");
+      expect(queue[0]!.timestamp).toBeGreaterThan(0);
     });
 
     it("should queue multiple transitions", () => {

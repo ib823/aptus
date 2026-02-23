@@ -66,7 +66,7 @@ export function WorkshopVotingPanel({
         {VOTE_OPTIONS.map((opt) => (
           <Button
             key={opt.value}
-            className={`${opt.color} text-white ${selectedVote === opt.value ? "ring-2 ring-offset-2 ring-blue-500" : ""}`}
+            className={`h-16 text-lg ${opt.color} text-white ${selectedVote === opt.value ? "ring-2 ring-offset-2 ring-blue-500" : ""}`}
             disabled={submitting}
             onClick={() => void submitVote(opt.value)}
           >

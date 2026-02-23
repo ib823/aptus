@@ -84,12 +84,14 @@ function mapGapToJiraIssue(
     issuetype: { name: config.issueType },
     priority: { name: jiraPriority },
     labels: config.labels ?? ["s4hana-assessment"],
-    customFields: config.customFieldMappings
+    ...(config.customFieldMappings
       ? {
-          [config.customFieldMappings.scopeItem ?? "customfield_10001"]: gap.scopeItemId,
-          [config.customFieldMappings.resolutionType ?? "customfield_10002"]: gap.resolutionType,
+          customFields: {
+            [config.customFieldMappings.scopeItem ?? "customfield_10001"]: gap.scopeItemId,
+            [config.customFieldMappings.resolutionType ?? "customfield_10002"]: gap.resolutionType,
+          },
         }
-      : undefined,
+      : {}),
   };
 }
 
@@ -234,7 +236,7 @@ describe("Jira Export (T-JIRA)", () => {
       const gap = GapFactory.create({
         assessmentId,
         scopeItemId: "J60",
-        priority: priorities[i],
+        priority: priorities[i]!,
       });
 
       const issue = mapGapToJiraIssue(gap, defaultConfig);

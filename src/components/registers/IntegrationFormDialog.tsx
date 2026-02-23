@@ -33,6 +33,9 @@ interface IntegrationData {
   technicalNotes: string | null;
   scopeItemId: string | null;
   dataVolume: string | null;
+  estimatedEffortDays: number | null;
+  dataObjects: string[];
+  functionalArea: string | null;
 }
 
 interface IntegrationFormDialogProps {
@@ -66,6 +69,10 @@ export function IntegrationFormDialog({
   const [priority, setPriority] = useState(integration?.priority ?? "");
   const [status, setStatus] = useState(integration?.status ?? "identified");
   const [technicalNotes, setTechnicalNotes] = useState(integration?.technicalNotes ?? "");
+  const [estimatedEffortDays, setEstimatedEffortDays] = useState(integration?.estimatedEffortDays?.toString() ?? "");
+  const [dataObjects, setDataObjects] = useState((integration?.dataObjects ?? []).join(", "));
+  const [functionalArea, setFunctionalArea] = useState(integration?.functionalArea ?? "");
+  const [scopeItemId, setScopeItemId] = useState(integration?.scopeItemId ?? "");
 
   // Reset form when integration changes
   const handleOpenChange = (isOpen: boolean) => {
@@ -98,6 +105,10 @@ export function IntegrationFormDialog({
     if (complexity) body.complexity = complexity;
     if (priority) body.priority = priority;
     if (technicalNotes) body.technicalNotes = technicalNotes;
+    if (estimatedEffortDays) body.estimatedEffortDays = parseFloat(estimatedEffortDays);
+    if (dataObjects.trim()) body.dataObjects = dataObjects.split(",").map((s) => s.trim()).filter(Boolean);
+    if (functionalArea) body.functionalArea = functionalArea;
+    if (scopeItemId) body.scopeItemId = scopeItemId;
     if (isEdit) body.status = status;
 
     try {
@@ -229,6 +240,28 @@ export function IntegrationFormDialog({
                 </Select>
               </div>
             )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Estimated Effort (days)</Label>
+              <Input type="number" min="0" step="0.5" value={estimatedEffortDays} onChange={(e) => setEstimatedEffortDays(e.target.value)} placeholder="e.g., 5" className="mt-1" />
+            </div>
+            <div>
+              <Label>Functional Area</Label>
+              <Input value={functionalArea} onChange={(e) => setFunctionalArea(e.target.value)} placeholder="e.g., Finance, Logistics" className="mt-1" />
+            </div>
+          </div>
+
+          <div>
+            <Label>Data Objects</Label>
+            <Input value={dataObjects} onChange={(e) => setDataObjects(e.target.value)} placeholder="Comma-separated, e.g., SalesOrder, Material, BPPartner" className="mt-1" />
+            <p className="text-xs text-muted-foreground mt-1">Comma-separated list of data objects involved in this integration</p>
+          </div>
+
+          <div>
+            <Label>Scope Item ID</Label>
+            <Input value={scopeItemId} onChange={(e) => setScopeItemId(e.target.value)} placeholder="e.g., 1YB" className="mt-1" />
           </div>
 
           <div>

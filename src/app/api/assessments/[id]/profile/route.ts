@@ -129,13 +129,20 @@ export async function PUT(
 
   const existing = await prisma.assessment.findUnique({
     where: { id, deletedAt: null },
-    select: { id: true },
+    select: { id: true, status: true },
   });
 
   if (!existing) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.NOT_FOUND, message: "Assessment not found" } },
       { status: 404 },
+    );
+  }
+
+  if (existing.status === "signed_off") {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "Cannot modify profile after sign-off" } },
+      { status: 403 },
     );
   }
 

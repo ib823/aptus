@@ -151,6 +151,318 @@ export function auditTrailSheet(data: Array<Record<string, unknown>>): SheetConf
   };
 }
 
+export function integrationRegisterSheets(data: Array<Record<string, unknown>>): SheetConfig[] {
+  // Sheet 1: Summary — grouped by direction with counts and total effort
+  const byDirection: Record<string, { count: number; effort: number }> = {};
+  for (const row of data) {
+    const dir = String(row.direction ?? "Unknown");
+    const entry = byDirection[dir] ?? { count: 0, effort: 0 };
+    entry.count++;
+    entry.effort += Number(row.effortDays ?? 0);
+    byDirection[dir] = entry;
+  }
+  const summaryRows = Object.entries(byDirection).map(([direction, v]) => ({
+    direction,
+    count: v.count,
+    totalEffortDays: v.effort,
+  }));
+  summaryRows.push({ direction: "TOTAL", count: data.length, totalEffortDays: data.reduce((s, r) => s + Number(r.effortDays ?? 0), 0) });
+
+  // Sheet 2: Detail — full listing (existing content)
+  // Sheet 3: By Source System — pivot by sourceSystem
+  const bySource: Record<string, { count: number; effort: number; directions: Set<string> }> = {};
+  for (const row of data) {
+    const src = String(row.sourceSystem ?? "Unknown");
+    const entry = bySource[src] ?? { count: 0, effort: 0, directions: new Set<string>() };
+    entry.count++;
+    entry.effort += Number(row.effortDays ?? 0);
+    entry.directions.add(String(row.direction ?? ""));
+    bySource[src] = entry;
+  }
+  const bySourceRows = Object.entries(bySource).map(([sourceSystem, v]) => ({
+    sourceSystem,
+    integrationCount: v.count,
+    totalEffortDays: v.effort,
+    directions: [...v.directions].join(", "),
+  }));
+
+  return [
+    {
+      name: "Summary",
+      columns: [
+        { header: "Direction", key: "direction", width: 20 },
+        { header: "Integration Count", key: "count", width: 18 },
+        { header: "Total Effort Days", key: "totalEffortDays", width: 18 },
+      ],
+      rows: summaryRows,
+    },
+    {
+      name: "Detail",
+      columns: [
+        { header: "Integration ID", key: "integrationId", width: 25 },
+        { header: "Name", key: "name", width: 30 },
+        { header: "Description", key: "description", width: 40 },
+        { header: "Direction", key: "direction", width: 15 },
+        { header: "Source System", key: "sourceSystem", width: 20 },
+        { header: "Target System", key: "targetSystem", width: 20 },
+        { header: "Interface Type", key: "interfaceType", width: 14 },
+        { header: "Frequency", key: "frequency", width: 16 },
+        { header: "Middleware", key: "middleware", width: 18 },
+        { header: "Complexity", key: "complexity", width: 12 },
+        { header: "Priority", key: "priority", width: 10 },
+        { header: "Status", key: "status", width: 12 },
+        { header: "Effort Days", key: "effortDays", width: 12 },
+        { header: "Functional Area", key: "functionalArea", width: 18 },
+        { header: "Technical Notes", key: "technicalNotes", width: 40 },
+      ],
+      rows: data,
+    },
+    {
+      name: "By Source System",
+      columns: [
+        { header: "Source System", key: "sourceSystem", width: 25 },
+        { header: "Integration Count", key: "integrationCount", width: 18 },
+        { header: "Total Effort Days", key: "totalEffortDays", width: 18 },
+        { header: "Directions", key: "directions", width: 30 },
+      ],
+      rows: bySourceRows,
+    },
+  ];
+}
+
+export function dataMigrationRegisterSheets(data: Array<Record<string, unknown>>): SheetConfig[] {
+  // Sheet 1: Summary — by object type
+  const byType: Record<string, { count: number; effort: number; records: number }> = {};
+  for (const row of data) {
+    const t = String(row.objectType ?? "Unknown");
+    const entry = byType[t] ?? { count: 0, effort: 0, records: 0 };
+    entry.count++;
+    entry.effort += Number(row.effortDays ?? 0);
+    entry.records += Number(row.recordCount ?? 0);
+    byType[t] = entry;
+  }
+  const summaryRows = Object.entries(byType).map(([objectType, v]) => ({
+    objectType,
+    objectCount: v.count,
+    totalRecords: v.records,
+    totalEffortDays: v.effort,
+  }));
+  summaryRows.push({
+    objectType: "TOTAL",
+    objectCount: data.length,
+    totalRecords: data.reduce((s, r) => s + Number(r.recordCount ?? 0), 0),
+    totalEffortDays: data.reduce((s, r) => s + Number(r.effortDays ?? 0), 0),
+  });
+
+  // Sheet 3: By Source — pivot by sourceSystem
+  const bySource: Record<string, { count: number; effort: number; records: number }> = {};
+  for (const row of data) {
+    const src = String(row.sourceSystem ?? "Unknown");
+    const entry = bySource[src] ?? { count: 0, effort: 0, records: 0 };
+    entry.count++;
+    entry.effort += Number(row.effortDays ?? 0);
+    entry.records += Number(row.recordCount ?? 0);
+    bySource[src] = entry;
+  }
+  const bySourceRows = Object.entries(bySource).map(([sourceSystem, v]) => ({
+    sourceSystem,
+    objectCount: v.count,
+    totalRecords: v.records,
+    totalEffortDays: v.effort,
+  }));
+
+  // Sheet 4: Effort Breakdown — by mapping complexity and cleansing
+  const byComplexity: Record<string, { count: number; effort: number; cleansingCount: number }> = {};
+  for (const row of data) {
+    const c = String(row.mappingComplexity || "Unclassified");
+    const entry = byComplexity[c] ?? { count: 0, effort: 0, cleansingCount: 0 };
+    entry.count++;
+    entry.effort += Number(row.effortDays ?? 0);
+    if (row.cleansingRequired === "Yes") entry.cleansingCount++;
+    byComplexity[c] = entry;
+  }
+  const effortRows = Object.entries(byComplexity).map(([complexity, v]) => ({
+    mappingComplexity: complexity,
+    objectCount: v.count,
+    cleansingRequired: v.cleansingCount,
+    totalEffortDays: v.effort,
+    avgEffortDays: v.count > 0 ? Math.round((v.effort / v.count) * 10) / 10 : 0,
+  }));
+
+  return [
+    {
+      name: "Summary",
+      columns: [
+        { header: "Object Type", key: "objectType", width: 22 },
+        { header: "Object Count", key: "objectCount", width: 14 },
+        { header: "Total Records", key: "totalRecords", width: 14 },
+        { header: "Total Effort Days", key: "totalEffortDays", width: 18 },
+      ],
+      rows: summaryRows,
+    },
+    {
+      name: "Detail",
+      columns: [
+        { header: "Object ID", key: "objectId", width: 25 },
+        { header: "Object Name", key: "objectName", width: 30 },
+        { header: "Description", key: "description", width: 40 },
+        { header: "Object Type", key: "objectType", width: 18 },
+        { header: "Source System", key: "sourceSystem", width: 20 },
+        { header: "Source Format", key: "sourceFormat", width: 14 },
+        { header: "Volume", key: "volumeEstimate", width: 12 },
+        { header: "Record Count", key: "recordCount", width: 12 },
+        { header: "Cleansing Required", key: "cleansingRequired", width: 16 },
+        { header: "Mapping Complexity", key: "mappingComplexity", width: 16 },
+        { header: "Migration Approach", key: "migrationApproach", width: 18 },
+        { header: "Migration Tool", key: "migrationTool", width: 14 },
+        { header: "Priority", key: "priority", width: 10 },
+        { header: "Status", key: "status", width: 12 },
+        { header: "Effort Days", key: "effortDays", width: 12 },
+        { header: "Functional Area", key: "functionalArea", width: 18 },
+      ],
+      rows: data,
+    },
+    {
+      name: "By Source System",
+      columns: [
+        { header: "Source System", key: "sourceSystem", width: 25 },
+        { header: "Object Count", key: "objectCount", width: 14 },
+        { header: "Total Records", key: "totalRecords", width: 14 },
+        { header: "Total Effort Days", key: "totalEffortDays", width: 18 },
+      ],
+      rows: bySourceRows,
+    },
+    {
+      name: "Effort Breakdown",
+      columns: [
+        { header: "Mapping Complexity", key: "mappingComplexity", width: 22 },
+        { header: "Object Count", key: "objectCount", width: 14 },
+        { header: "Cleansing Required", key: "cleansingRequired", width: 18 },
+        { header: "Total Effort Days", key: "totalEffortDays", width: 18 },
+        { header: "Avg Effort Days", key: "avgEffortDays", width: 16 },
+      ],
+      rows: effortRows,
+    },
+  ];
+}
+
+export function ocmReportSheets(data: Array<Record<string, unknown>>): SheetConfig[] {
+  // Sheet 1: Summary — by severity
+  const bySeverity: Record<string, { count: number; affectedUsers: number; trainingRequired: number }> = {};
+  for (const row of data) {
+    const sev = String(row.severity ?? "Unknown");
+    const entry = bySeverity[sev] ?? { count: 0, affectedUsers: 0, trainingRequired: 0 };
+    entry.count++;
+    entry.affectedUsers += Number(row.affectedUsers ?? 0);
+    if (row.trainingRequired === "Yes") entry.trainingRequired++;
+    bySeverity[sev] = entry;
+  }
+  const summaryRows = Object.entries(bySeverity).map(([severity, v]) => ({
+    severity,
+    impactCount: v.count,
+    totalAffectedUsers: v.affectedUsers,
+    trainingRequired: v.trainingRequired,
+  }));
+  summaryRows.push({
+    severity: "TOTAL",
+    impactCount: data.length,
+    totalAffectedUsers: data.reduce((s, r) => s + Number(r.affectedUsers ?? 0), 0),
+    trainingRequired: data.filter((r) => r.trainingRequired === "Yes").length,
+  });
+
+  // Sheet 3: Training Plan — items requiring training
+  const trainingRows = data
+    .filter((r) => r.trainingRequired === "Yes")
+    .map((r) => ({
+      title: r.title,
+      impactedRole: r.impactedRole,
+      department: r.department,
+      trainingType: r.trainingType,
+      trainingDuration: r.trainingDuration,
+      affectedUsers: r.affectedUsers,
+      severity: r.severity,
+      status: r.status,
+    }));
+
+  // Sheet 4: Communications Plan — mitigation strategies
+  const commsRows = data
+    .filter((r) => r.mitigationStrategy)
+    .map((r) => ({
+      title: r.title,
+      impactedRole: r.impactedRole,
+      department: r.department,
+      changeType: r.changeType,
+      resistanceRisk: r.resistanceRisk,
+      mitigationStrategy: r.mitigationStrategy,
+      affectedUsers: r.affectedUsers,
+      priority: r.priority,
+    }));
+
+  return [
+    {
+      name: "Summary",
+      columns: [
+        { header: "Severity", key: "severity", width: 18 },
+        { header: "Impact Count", key: "impactCount", width: 14 },
+        { header: "Total Affected Users", key: "totalAffectedUsers", width: 20 },
+        { header: "Training Required", key: "trainingRequired", width: 18 },
+      ],
+      rows: summaryRows,
+    },
+    {
+      name: "Detail",
+      columns: [
+        { header: "Impact ID", key: "impactId", width: 25 },
+        { header: "Title", key: "title", width: 30 },
+        { header: "Impacted Role", key: "impactedRole", width: 20 },
+        { header: "Department", key: "department", width: 18 },
+        { header: "Functional Area", key: "functionalArea", width: 18 },
+        { header: "Change Type", key: "changeType", width: 18 },
+        { header: "Severity", key: "severity", width: 14 },
+        { header: "Description", key: "description", width: 40 },
+        { header: "Training Required", key: "trainingRequired", width: 14 },
+        { header: "Training Type", key: "trainingType", width: 16 },
+        { header: "Training Duration", key: "trainingDuration", width: 14 },
+        { header: "Resistance Risk", key: "resistanceRisk", width: 14 },
+        { header: "Readiness", key: "readinessScore", width: 10 },
+        { header: "Mitigation Strategy", key: "mitigationStrategy", width: 40 },
+        { header: "Affected Users", key: "affectedUsers", width: 14 },
+        { header: "Priority", key: "priority", width: 10 },
+        { header: "Status", key: "status", width: 12 },
+      ],
+      rows: data,
+    },
+    {
+      name: "Training Plan",
+      columns: [
+        { header: "Title", key: "title", width: 30 },
+        { header: "Impacted Role", key: "impactedRole", width: 20 },
+        { header: "Department", key: "department", width: 18 },
+        { header: "Training Type", key: "trainingType", width: 16 },
+        { header: "Training Duration", key: "trainingDuration", width: 14 },
+        { header: "Affected Users", key: "affectedUsers", width: 14 },
+        { header: "Severity", key: "severity", width: 14 },
+        { header: "Status", key: "status", width: 12 },
+      ],
+      rows: trainingRows,
+    },
+    {
+      name: "Communications Plan",
+      columns: [
+        { header: "Title", key: "title", width: 30 },
+        { header: "Impacted Role", key: "impactedRole", width: 20 },
+        { header: "Department", key: "department", width: 18 },
+        { header: "Change Type", key: "changeType", width: 18 },
+        { header: "Resistance Risk", key: "resistanceRisk", width: 14 },
+        { header: "Mitigation Strategy", key: "mitigationStrategy", width: 40 },
+        { header: "Affected Users", key: "affectedUsers", width: 14 },
+        { header: "Priority", key: "priority", width: 10 },
+      ],
+      rows: commsRows,
+    },
+  ];
+}
+
 export function remainingItemsSheet(data: Array<Record<string, unknown>>): SheetConfig {
   return {
     name: "Remaining Items",
