@@ -16,6 +16,7 @@ const nextConfig: NextConfig = {
     "sharp",
     "@prisma/client",
     "prisma",
+    "@sentry/nextjs",
   ],
   async headers() {
     return [

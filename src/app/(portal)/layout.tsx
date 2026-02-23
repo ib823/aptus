@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { PortalNav } from "@/components/layout/PortalNav";
 import { MFA_REQUIRED_ROLES } from "@/constants/config";
+import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
+import { MobileBottomTabBar } from "@/components/pwa/MobileBottomTabBar";
 import type { ReactNode } from "react";
 
 export default async function PortalLayout({
@@ -33,10 +35,12 @@ export default async function PortalLayout({
 
   return (
     <div className="min-h-screen bg-muted/40">
+      <OfflineIndicator />
       <PortalNav user={user} />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8">
         {children}
       </main>
+      <MobileBottomTabBar />
     </div>
   );
 }

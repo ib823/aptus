@@ -345,6 +345,9 @@ model Assessment {
   editingLocks         EditingLock[]
   presenceRecords      PresenceRecord[]
 
+  // Phase 27: PWA & Production Hardening
+  offlineSyncQueue     OfflineSyncQueue[]
+
   // Phase 25: Report Generation
   reportGenerations  ReportGeneration[]
 
@@ -817,6 +820,9 @@ model User {
   pushSubscriptions       PushSubscription[]
   editingLocks            EditingLock[]
   presenceRecords         PresenceRecord[]
+
+  // Phase 27: PWA & Production Hardening
+  offlineSyncQueue        OfflineSyncQueue[]
 
   // Phase 21: Workshop Management
   workshopAttendances WorkshopAttendee[]
@@ -1860,4 +1866,44 @@ model PresenceRecord {
 
   @@unique([assessmentId, userId])
   @@index([assessmentId, lastSeenAt])
+}
+
+// ============================================================
+// Phase 27: Production Hardening & PWA
+// ============================================================
+
+model OfflineSyncQueue {
+  id           String   @id @default(cuid())
+  userId       String
+  assessmentId String
+  action       String
+  payload      Json
+  clientId     String   @unique
+  status       String   @default("pending")
+  attempts     Int      @default(0)
+  lastError    String?
+  queuedAt     DateTime @default(now())
+  processedAt  DateTime?
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([assessmentId])
+  @@index([status, queuedAt])
+}
+
+model PerformanceBaseline {
+  id        String   @id @default(cuid())
+  route     String
+  metric    String
+  p50       Float
+  p75       Float
+  p95       Float
+  sampleSize Int
+  period    String
+  computedAt DateTime @default(now())
+
+  @@unique([route, metric, period])
+  @@index([route, metric])
 }

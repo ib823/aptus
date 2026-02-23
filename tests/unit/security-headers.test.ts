@@ -11,8 +11,8 @@ describe("getSecurityHeaders", () => {
     expect(headers.length).toBeGreaterThan(0);
   });
 
-  it("includes Content-Security-Policy", () => {
-    const csp = headers.find((h) => h.key === "Content-Security-Policy");
+  it("includes Content-Security-Policy-Report-Only", () => {
+    const csp = headers.find((h) => h.key === "Content-Security-Policy-Report-Only");
     expect(csp).toBeDefined();
     expect(csp!.value.length).toBeGreaterThan(0);
   });

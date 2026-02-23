@@ -472,7 +472,7 @@ describe("Security Headers Configuration", () => {
     expect(allValues).toContain("X-Frame-Options");
     expect(allValues).toContain("DENY");
     expect(allValues).toContain("Strict-Transport-Security");
-    expect(allValues).toContain("Content-Security-Policy");
+    expect(allValues).toContain("Content-Security-Policy-Report-Only");
     expect(allValues).toContain("Referrer-Policy");
     expect(allValues).toContain("Permissions-Policy");
     expect(allValues).toContain("frame-ancestors 'none'");

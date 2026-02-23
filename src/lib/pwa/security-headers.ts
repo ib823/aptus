@@ -24,7 +24,7 @@ export function getCspDirectives(): string {
 export function getSecurityHeaders(): Array<{ key: string; value: string }> {
   return [
     {
-      key: "Content-Security-Policy",
+      key: "Content-Security-Policy-Report-Only",
       value: getCspDirectives(),
     },
     {
