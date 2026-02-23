@@ -4,11 +4,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { runNightlyAnalytics } from "@/lib/analytics/nightly-job";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  // Protect with CRON_SECRET or internal auth
+  // Protect with CRON_SECRET — always required in production
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json(
       { error: "Unauthorized" },
       { status: 401 },

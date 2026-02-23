@@ -13,17 +13,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ? rawCallback
     : "/assessments";
 
-  // Get the NextAuth session
+  // Get the NextAuth session (server-side only — uses JWT, not the public endpoint)
   const session = await getServerSession(authOptions);
+  const userId = (session?.user as Record<string, unknown> | undefined)?.id as string | undefined;
 
-  if (!session?.user?.email) {
+  if (!userId) {
     // No NextAuth session — send to login
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Look up the user in our User table
+  // Verify the user is still active
   const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
+    where: { id: userId },
     select: { id: true, isActive: true },
   });
 

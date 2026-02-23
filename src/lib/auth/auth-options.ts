@@ -108,30 +108,31 @@ export const authOptions: NextAuthOptions = {
           where: { email: user.email },
           select: {
             id: true,
-            email: true,
-            name: true,
             role: true,
-            organizationId: true,
-            mfaEnabled: true,
-            totpVerified: true,
           },
         });
 
         if (dbUser) {
           token.userId = dbUser.id;
           token.role = dbUser.role;
-          token.organizationId = dbUser.organizationId;
-          token.mfaEnabled = dbUser.mfaEnabled;
-          token.totpVerified = dbUser.totpVerified;
         }
       }
       return token;
     },
     async session({ session, token }) {
-      if (session.user && token.userId) {
-        (session.user as Record<string, unknown>).id = token.userId;
-        (session.user as Record<string, unknown>).role = token.role;
-        (session.user as Record<string, unknown>).organizationId = token.organizationId;
+      // Minimize PII in the NextAuth session response.
+      // The app uses a custom session system (aptus-session cookie) for all
+      // authenticated operations. The NextAuth session only facilitates the
+      // bridge flow, so we strip unnecessary fields from the response.
+      if (session.user) {
+        // Remove PII — email/name/image not needed in client-visible response
+        delete (session.user as Record<string, unknown>).email;
+        delete (session.user as Record<string, unknown>).image;
+        // Only expose the user ID (needed by bridge) and role
+        if (token.userId) {
+          (session.user as Record<string, unknown>).id = token.userId;
+          (session.user as Record<string, unknown>).role = token.role;
+        }
       }
       return session;
     },

@@ -1,4 +1,4 @@
-/** Security headers configuration (Phase 27) */
+/** Security headers configuration (Phase 27 + Security Audit hardening) */
 
 /**
  * Build the Content-Security-Policy directive string.
@@ -15,6 +15,7 @@ export function getCspDirectives(): string {
     "base-uri 'self'",
     "form-action 'self'",
     "object-src 'none'",
+    "upgrade-insecure-requests",
   ].join("; ");
 }
 
@@ -24,7 +25,7 @@ export function getCspDirectives(): string {
 export function getSecurityHeaders(): Array<{ key: string; value: string }> {
   return [
     {
-      key: "Content-Security-Policy-Report-Only",
+      key: "Content-Security-Policy",
       value: getCspDirectives(),
     },
     {
@@ -50,6 +51,18 @@ export function getSecurityHeaders(): Array<{ key: string; value: string }> {
     {
       key: "X-XSS-Protection",
       value: "1; mode=block",
+    },
+    {
+      key: "X-DNS-Prefetch-Control",
+      value: "off",
+    },
+    {
+      key: "Cross-Origin-Opener-Policy",
+      value: "same-origin",
+    },
+    {
+      key: "Cross-Origin-Resource-Policy",
+      value: "same-origin",
     },
   ];
 }
