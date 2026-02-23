@@ -92,6 +92,22 @@ export async function POST(
     );
   }
 
+  // Prevent concurrent change requests — only one active CR allowed per assessment
+  const existingActiveCR = await prisma.changeRequest.findFirst({
+    where: {
+      assessmentId: id,
+      status: { in: ["REQUESTED", "APPROVED", "IN_PROGRESS"] },
+    },
+    select: { id: true, status: true, title: true },
+  });
+
+  if (existingActiveCR) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: `An active change request already exists: "${existingActiveCR.title}" (status: ${existingActiveCR.status}). Complete or cancel it before creating a new one.` } },
+      { status: 409 },
+    );
+  }
+
   // Verify snapshot exists
   const snapshot = await prisma.assessmentSnapshot.findUnique({
     where: { id: parsed.data.previousSnapshotId },

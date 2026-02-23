@@ -37,6 +37,27 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentT
     tabs.push({ label: "Report", href: `${base}/report`, segment: "report" });
   }
 
+  // Show sign-off & lifecycle tabs for late-stage assessments
+  const signOffStatuses = ["reviewed", "validated", "pending_sign_off", "signed_off", "handed_off", "archived"];
+  if (signOffStatuses.includes(assessmentStatus)) {
+    tabs.push({ label: "Sign-Off", href: `${base}/sign-off`, segment: "sign-off" });
+    tabs.push({ label: "Snapshots", href: `${base}/snapshots`, segment: "snapshots" });
+  }
+
+  // Change requests and triggers available for any active or completed assessment
+  const lifecycleStatuses = ["reviewed", "validated", "pending_sign_off", "signed_off", "handed_off", "archived"];
+  if (lifecycleStatuses.includes(assessmentStatus)) {
+    tabs.push({ label: "Changes", href: `${base}/change-requests`, segment: "change-requests" });
+    tabs.push({ label: "Triggers", href: `${base}/triggers`, segment: "triggers" });
+  }
+
+  // Benchmarks and cross-phase available for assessments with data
+  const analyticsStatuses = ["in_progress", "workshop_active", "review_cycle", "gap_resolution", "pending_validation", "reviewed", "validated", "pending_sign_off", "signed_off", "handed_off", "completed", "archived"];
+  if (analyticsStatuses.includes(assessmentStatus)) {
+    tabs.push({ label: "Benchmarks", href: `${base}/benchmarks`, segment: "benchmarks" });
+    tabs.push({ label: "Cross-Phase", href: `${base}/cross-phase`, segment: "cross-phase" });
+  }
+
   const activeSegment = pathname.replace(base, "").split("/").filter(Boolean)[0] ?? "profile";
 
   return (

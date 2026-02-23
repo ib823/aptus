@@ -2,10 +2,12 @@
 /** POST: Generate a handoff package */
 
 import { NextResponse, type NextRequest } from "next/server";
+import archiver from "archiver";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
+import type { SnapshotData } from "@/types/signoff";
 import { z } from "zod";
 
 const createPackageSchema = z.object({
@@ -103,6 +105,94 @@ export async function POST(
       generatedById: user.id,
     },
   });
+
+  // Generate ZIP in background (fire-and-forget)
+  void (async () => {
+    try {
+      const assessment = await prisma.assessment.findUnique({
+        where: { id },
+        select: { companyName: true },
+      });
+      const snapshotData = snapshot.snapshotData as unknown as SnapshotData;
+
+      const archive = archiver("zip", { zlib: { level: 6 } });
+      const chunks: Uint8Array[] = [];
+      archive.on("data", (chunk: Buffer) => chunks.push(new Uint8Array(chunk)));
+
+      // Add snapshot data as JSON
+      archive.append(JSON.stringify(snapshotData, null, 2), {
+        name: "snapshot-data.json",
+      });
+
+      // Add a summary README
+      const readme = [
+        `Handoff Package — ${assessment?.companyName ?? "Assessment"}`,
+        `Snapshot Version: ${parsed.data.snapshotVersion}`,
+        `Package Type: ${parsed.data.packageType ?? "FULL"}`,
+        `Generated: ${new Date().toISOString()}`,
+        "",
+        "Contents:",
+        ...parsed.data.contents.map((c, i) => `  ${i + 1}. ${c}`),
+        "",
+        `Statistics:`,
+        `  Scope Items: ${snapshotData.statistics.selectedScopeItems} / ${snapshotData.statistics.totalScopeItems}`,
+        `  Steps: ${snapshotData.statistics.totalSteps} (FIT: ${snapshotData.statistics.fitCount}, GAP: ${snapshotData.statistics.gapCount})`,
+        `  Gap Resolutions: ${snapshotData.statistics.totalGapResolutions}`,
+        `  Integrations: ${snapshotData.statistics.integrationPointCount}`,
+        `  Data Migration Objects: ${snapshotData.statistics.dataMigrationObjectCount}`,
+      ].join("\n");
+      archive.append(readme, { name: "README.txt" });
+
+      // Add gap resolutions as CSV
+      if (snapshotData.gapResolutions.length > 0) {
+        const gapCsv = [
+          "ID,Scope Item,Process Step,Type,Description,Priority,Risk,Approved",
+          ...snapshotData.gapResolutions.map(g =>
+            [g.id, g.scopeItemId, g.processStepId, g.resolutionType,
+             `"${g.resolutionDescription.replace(/"/g, '""')}"`,
+             g.priority ?? "", g.riskCategory ?? "", g.clientApproved].join(","),
+          ),
+        ].join("\n");
+        archive.append(gapCsv, { name: "gap-resolutions.csv" });
+      }
+
+      // Add integration points as CSV
+      if (snapshotData.integrationPoints.length > 0) {
+        const intCsv = [
+          "ID,Name,Direction,Source,Target,Type,Status",
+          ...snapshotData.integrationPoints.map(i =>
+            [i.id, `"${i.name}"`, i.direction, i.sourceSystem, i.targetSystem, i.interfaceType, i.status].join(","),
+          ),
+        ].join("\n");
+        archive.append(intCsv, { name: "integration-points.csv" });
+      }
+
+      // Add data migration objects as CSV
+      if (snapshotData.dataMigrationObjects.length > 0) {
+        const dmCsv = [
+          "ID,Name,Type,Source,Status",
+          ...snapshotData.dataMigrationObjects.map(d =>
+            [d.id, `"${d.objectName}"`, d.objectType, d.sourceSystem, d.status].join(","),
+          ),
+        ].join("\n");
+        archive.append(dmCsv, { name: "data-migration-objects.csv" });
+      }
+
+      await archive.finalize();
+      const zipBuffer = Buffer.concat(chunks.map(c => Buffer.from(c)));
+      const base64Zip = zipBuffer.toString("base64");
+
+      await prisma.handoffPackage.update({
+        where: { id: handoffPackage.id },
+        data: {
+          blobUrl: `data:application/zip;base64,${base64Zip}`,
+          fileSize: zipBuffer.length,
+        },
+      });
+    } catch {
+      // ZIP generation is non-blocking
+    }
+  })();
 
   return NextResponse.json({ data: handoffPackage }, { status: 201 });
 }

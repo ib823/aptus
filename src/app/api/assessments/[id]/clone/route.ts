@@ -73,6 +73,15 @@ export async function POST(
     );
   }
 
+  // Source assessment must be in a terminal/completed status to clone
+  const allowedCloneStatuses = ["signed_off", "handed_off", "completed", "archived"];
+  if (!allowedCloneStatuses.includes(sourceAssessment.status)) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: `Assessment must be signed off before cloning. Current status: "${sourceAssessment.status}".` } },
+      { status: 400 },
+    );
+  }
+
   // Get snapshot
   const snapshot = await prisma.assessmentSnapshot.findUnique({
     where: {
@@ -160,6 +169,75 @@ export async function POST(
         confidence: s.confidence,
       })),
     });
+  }
+
+  // Clone gap resolutions if configured
+  if (config.includeGapResolutions && snapshotData.gapResolutions) {
+    await prisma.gapResolution.createMany({
+      data: snapshotData.gapResolutions.map(g => ({
+        assessmentId: cloned.id,
+        processStepId: g.processStepId,
+        scopeItemId: g.scopeItemId,
+        gapDescription: g.resolutionDescription,
+        resolutionType: g.resolutionType,
+        resolutionDescription: g.resolutionDescription,
+        priority: g.priority,
+        riskCategory: g.riskCategory,
+        clientApproved: g.clientApproved,
+      })),
+    });
+  }
+
+  // Clone integration points if configured
+  if (config.includeIntegrations && snapshotData.integrationPoints) {
+    await prisma.integrationPoint.createMany({
+      data: snapshotData.integrationPoints.map(i => ({
+        assessmentId: cloned.id,
+        name: i.name,
+        description: i.name,
+        direction: i.direction,
+        sourceSystem: i.sourceSystem,
+        targetSystem: i.targetSystem,
+        interfaceType: i.interfaceType,
+        frequency: "ON_DEMAND",
+        status: config.resetStatus ? "identified" : i.status,
+        createdBy: user.id,
+      })),
+    });
+  }
+
+  // Clone data migration objects if configured
+  if (config.includeDataMigration && snapshotData.dataMigrationObjects) {
+    await prisma.dataMigrationObject.createMany({
+      data: snapshotData.dataMigrationObjects.map(d => ({
+        assessmentId: cloned.id,
+        objectName: d.objectName,
+        description: d.objectName,
+        objectType: d.objectType,
+        sourceSystem: d.sourceSystem,
+        status: config.resetStatus ? "identified" : d.status,
+        createdBy: user.id,
+      })),
+    });
+  }
+
+  // Clone stakeholders if configured
+  if (config.includeStakeholders) {
+    const stakeholders = await prisma.assessmentStakeholder.findMany({
+      where: { assessmentId: id },
+    });
+    if (stakeholders.length > 0) {
+      await prisma.assessmentStakeholder.createMany({
+        data: stakeholders.map(s => ({
+          assessmentId: cloned.id,
+          userId: s.userId,
+          name: s.name,
+          email: s.email,
+          role: s.role,
+          invitedBy: user.id,
+        })),
+      });
+    }
   }
 
   await logDecision({

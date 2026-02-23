@@ -22,6 +22,14 @@ export async function GET(): Promise<NextResponse> {
     );
   }
 
+  const portfolioRoles = ["platform_admin", "partner_lead"];
+  if (!portfolioRoles.includes(user.role)) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "Only partner leads and admins can view portfolio analytics" } },
+      { status: 403 },
+    );
+  }
+
   if (!user.organizationId) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "No organization associated" } },

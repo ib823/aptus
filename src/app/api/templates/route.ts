@@ -59,7 +59,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Load the source assessment
+  // Load the source assessment (must not be draft, must have scope)
   const assessment = await prisma.assessment.findUnique({
     where: { id: parsed.data.assessmentId },
     include: {
@@ -82,6 +82,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Assessment does not belong to your organization" } },
       { status: 403 },
+    );
+  }
+
+  // Assessment must not be in draft status
+  if (assessment.status === "draft") {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Assessment must be beyond draft status to create a template" } },
+      { status: 400 },
+    );
+  }
+
+  // Must have at least 1 scope selection
+  if (assessment.scopeSelections.length === 0) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Assessment must have at least one scope selection" } },
+      { status: 400 },
     );
   }
 
@@ -110,6 +126,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         volume: dm.volumeEstimate,
       }))
     : undefined;
+
+  // Final safety scan: verify no email addresses remain in the output
+  const EMAIL_SAFETY_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  const templatePayload = JSON.stringify({ scopeSelections, commonGapPatterns, integrationPatterns, dmPatterns });
+  if (EMAIL_SAFETY_REGEX.test(templatePayload)) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Anonymization failed: PII detected in template data. Please contact support." } },
+      { status: 500 },
+    );
+  }
 
   const template = await prisma.assessmentTemplate.create({
     data: {

@@ -7,6 +7,8 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { Prisma } from "@prisma/client";
+import { getAlmAdapter } from "@/lib/alm/adapter-interface";
+import type { AlmTarget, SnapshotData } from "@/types/signoff";
 import { z } from "zod";
 
 const createExportSchema = z.object({
@@ -79,6 +81,12 @@ export async function POST(
     );
   }
 
+  // Get latest snapshot for export data
+  const latestSnapshot = await prisma.assessmentSnapshot.findFirst({
+    where: { assessmentId: id },
+    orderBy: { version: "desc" },
+  });
+
   const exportRecord = await prisma.almExportRecord.create({
     data: {
       assessmentId: id,
@@ -89,6 +97,43 @@ export async function POST(
       exportMapping: parsed.data.exportMapping ? (parsed.data.exportMapping as Prisma.InputJsonValue) : Prisma.JsonNull,
     },
   });
+
+  // Process export asynchronously (fire-and-forget)
+  if (latestSnapshot) {
+    void (async () => {
+      try {
+        await prisma.almExportRecord.update({
+          where: { id: exportRecord.id },
+          data: { status: "IN_PROGRESS" },
+        });
+
+        const adapter = await getAlmAdapter(parsed.data.targetSystem as AlmTarget);
+        const snapshotData = latestSnapshot.snapshotData as unknown as SnapshotData;
+        const config = parsed.data.exportConfig as Record<string, string>;
+        const mapping = parsed.data.exportMapping as Record<string, Record<string, string>> | undefined;
+
+        const workItems = adapter.transformToWorkItems(snapshotData, config, mapping);
+        const result = await adapter.exportWorkItems(workItems, config);
+
+        await prisma.almExportRecord.update({
+          where: { id: exportRecord.id },
+          data: {
+            status: result.success ? "COMPLETED" : "FAILED",
+            resultSummary: result.resultSummary as Prisma.InputJsonValue,
+            errorMessage: result.errors.length > 0 ? result.errors.map(e => e.error).join("; ") : null,
+          },
+        });
+      } catch (err) {
+        await prisma.almExportRecord.update({
+          where: { id: exportRecord.id },
+          data: {
+            status: "FAILED",
+            errorMessage: err instanceof Error ? err.message : "Unknown error",
+          },
+        }).catch(() => {});
+      }
+    })();
+  }
 
   return NextResponse.json({ data: exportRecord }, { status: 201 });
 }

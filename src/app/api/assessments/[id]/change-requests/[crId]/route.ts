@@ -102,6 +102,14 @@ export async function PUT(
     );
   }
 
+  // Four-eyes principle: approver must be different from requester
+  if (changeRequest.requestedById === user.id) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "You cannot approve your own change request. A different authorized user must approve." } },
+      { status: 403 },
+    );
+  }
+
   const updated = await prisma.changeRequest.update({
     where: { id: crId },
     data: {

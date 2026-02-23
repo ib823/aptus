@@ -8,7 +8,9 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { canTransitionSignOff } from "@/lib/signoff/state-machine";
 import { computeCanonicalHash } from "@/lib/signoff/hash-engine";
-import type { SignOffStatus } from "@/types/signoff";
+import { generateSignOffCertificatePdf } from "@/lib/signoff/certificate-generator";
+import { loadBranding } from "@/lib/report/branding";
+import type { SignOffStatus, SnapshotData } from "@/types/signoff";
 import { z } from "zod";
 
 const partnerSignSchema = z.object({
@@ -106,14 +108,73 @@ export async function POST(
   });
 
   if (canTransitionSignOff("PARTNER_COUNTERSIGN_PENDING", "COMPLETED")) {
+    const completedAt = new Date();
     await prisma.signOffProcess.update({
       where: { id: signOff.id },
       data: {
         status: "COMPLETED",
-        completedAt: new Date(),
+        completedAt,
         certificateHash: documentHash,
       },
     });
+
+    // Transition assessment to signed_off status
+    await prisma.assessment.update({
+      where: { id },
+      data: { status: "signed_off" },
+    });
+
+    // Generate certificate PDF (fire-and-forget)
+    void (async () => {
+      try {
+        const assessment = await prisma.assessment.findUnique({
+          where: { id },
+          select: { companyName: true, industry: true, country: true, organizationId: true },
+        });
+        if (!assessment) return;
+
+        const allSignatures = await prisma.signatureRecord.findMany({
+          where: { signOffId: signOff.id, status: "COMPLETED" },
+          orderBy: { signedAt: "asc" },
+        });
+
+        const snapshotData = signOff.snapshot.snapshotData as unknown as SnapshotData;
+        const branding = await loadBranding(assessment.organizationId);
+
+        const certPdf = generateSignOffCertificatePdf({
+          assessmentId: id,
+          companyName: assessment.companyName,
+          industry: assessment.industry ?? "",
+          country: assessment.country ?? "",
+          snapshotVersion: signOff.snapshot.version,
+          snapshotHash: signOff.snapshot.dataHash,
+          certificateHash: documentHash,
+          verificationToken: signOff.verificationToken ?? "",
+          completedAt,
+          signatures: allSignatures.map(s => ({
+            signatureType: s.signatureType as "EXECUTIVE" | "PARTNER",
+            signerName: s.signerName,
+            signerEmail: s.signerEmail,
+            signerRole: s.signerRole,
+            signerOrganization: s.signerOrganization,
+            signerTitle: s.signerTitle,
+            documentHash: s.documentHash,
+            signedAt: s.signedAt,
+          })),
+          statistics: snapshotData.statistics,
+        }, branding);
+
+        // Store as base64 data URI
+        const base64 = Buffer.from(certPdf).toString("base64");
+        const pdfUri = `data:application/pdf;base64,${base64}`;
+        await prisma.signOffProcess.update({
+          where: { id: signOff.id },
+          data: { certificatePdfUrl: pdfUri },
+        });
+      } catch {
+        // Certificate generation is non-blocking
+      }
+    })();
   }
 
   await logDecision({

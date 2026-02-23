@@ -84,6 +84,14 @@ export async function POST(
   const userAgentHeader = request.headers.get("user-agent") ?? "unknown";
   const documentHash = computeCanonicalHash(signOff.snapshot.snapshotData);
 
+  // Verify snapshot integrity — the computed hash MUST match the stored hash
+  if (documentHash !== signOff.snapshot.dataHash) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Snapshot integrity check failed. The assessment data may have been tampered with. Sign-off cannot proceed." } },
+      { status: 409 },
+    );
+  }
+
   const signature = await prisma.signatureRecord.create({
     data: {
       signOffId: signOff.id,
