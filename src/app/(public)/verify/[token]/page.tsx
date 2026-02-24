@@ -132,7 +132,7 @@ export default async function VerifyPage({ params }: VerifyPageProps) {
       </div>
 
       <p className="text-center text-xs text-muted-foreground mt-6">
-        This verification is provided by the Aptus Assessment Platform.
+        This verification is provided by the aptus Assessment Platform.
         The hashes above can be independently verified against the assessment data.
       </p>
     </div>

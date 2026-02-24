@@ -156,7 +156,7 @@ self.addEventListener("push", (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(payload.title || "Aptus", options),
+    self.registration.showNotification(payload.title || "aptus", options),
   );
 });
 
