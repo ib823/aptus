@@ -15,7 +15,9 @@ interface WidgetLoaderProps {
   assessmentId: string | null;
 }
 
-/** Generic hook to fetch JSON from an API endpoint with retry */
+const FETCH_TIMEOUT_MS = 15_000;
+
+/** Generic hook to fetch JSON from an API endpoint with retry + timeout */
 function useApiFetch<T>(url: string | null) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,9 +34,19 @@ function useApiFetch<T>(url: string | null) {
     let cancelled = false;
     setLoading(true);
     setError(null);
+
+    const timeout = setTimeout(() => {
+      if (!cancelled) {
+        cancelled = true;
+        setError("Request timed out");
+        setLoading(false);
+      }
+    }, FETCH_TIMEOUT_MS);
+
     async function load() {
       try {
         const res = await fetch(url!);
+        if (cancelled) return;
         if (!res.ok) {
           if (!cancelled) setError("Unable to load this section");
           return;
@@ -44,12 +56,14 @@ function useApiFetch<T>(url: string | null) {
       } catch {
         if (!cancelled) setError("Unable to load this section");
       } finally {
+        clearTimeout(timeout);
         if (!cancelled) setLoading(false);
       }
     }
     load();
     return () => {
       cancelled = true;
+      clearTimeout(timeout);
     };
   }, [url, retryCount]);
 

@@ -35,12 +35,21 @@ function KpiCard({
 }
 
 export function KpiPanel({ metrics }: KpiPanelProps) {
+  const hasData = metrics.totalSteps > 0;
+
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Key Performance Indicators</CardTitle>
       </CardHeader>
       <CardContent>
+        {!hasData ? (
+          <div className="py-6 text-center">
+            <p className="text-sm text-muted-foreground">No assessment data yet.</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">KPIs will appear once scope items are selected and review begins.</p>
+          </div>
+        ) : (
+          <>
         <div className="grid grid-cols-2 gap-3">
           <KpiCard
             label="Overall Progress"
@@ -93,6 +102,8 @@ export function KpiPanel({ metrics }: KpiPanelProps) {
             <p className="text-xs" style={{ color: "var(--status-pending-fg)" }}>Pending</p>
           </div>
         </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );

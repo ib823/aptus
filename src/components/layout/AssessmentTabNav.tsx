@@ -63,7 +63,7 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentT
     {
       label: "Wrap-up",
       tabs: [
-        { label: "Activity", href: `${base}/activity`, segment: "activity" },
+        { label: "Activity Log", href: `${base}/activity`, segment: "activity" },
       ],
     },
   ];

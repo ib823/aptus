@@ -24,7 +24,7 @@ const tabs: Tab[] = [
   { href: "/assessments", label: "Assessments", icon: ClipboardListIcon, matchPrefix: "/assessments" },
   { href: "/analytics", label: "Analytics", icon: BarChart3Icon, matchPrefix: "/analytics" },
   { href: "/organization", label: "Organization", icon: Building2Icon, matchPrefix: "/organization" },
-  { href: "/settings", label: "More", icon: MoreHorizontalIcon, matchPrefix: "/settings" },
+  { href: "/admin", label: "More", icon: MoreHorizontalIcon, matchPrefix: "/admin" },
 ];
 
 export function MobileBottomTabBar() {

@@ -55,7 +55,7 @@ export function PresenceAvatars({ assessmentId }: { assessmentId: string }) {
 
   return (
     <div className="flex items-center gap-1">
-      <span className="text-xs text-muted-foreground mr-1">Online:</span>
+      <span className="text-xs text-muted-foreground mr-1" title={`${users.length} ${users.length === 1 ? "collaborator" : "collaborators"} currently active`}>Online:</span>
       <div className="flex -space-x-2">
         {displayed.map((u) => {
           const initials = u.userName

@@ -320,10 +320,12 @@ export function ScopeSelectionClient({
           />
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1" role="radiogroup" aria-label="Filter by selection status">
           {FILTER_OPTIONS.map((opt) => (
             <button
               key={opt.value}
+              role="radio"
+              aria-checked={filterMode === opt.value}
               onClick={() => setFilterMode(opt.value)}
               className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-all ${
                 filterMode === opt.value
@@ -337,6 +339,8 @@ export function ScopeSelectionClient({
         </div>
 
         <select
+          id="scope-area-filter"
+          aria-label="Filter by functional area"
           value={areaFilter}
           onChange={(e) => { setAreaFilter(e.target.value); setSubAreaFilter("all"); }}
           className="h-9 px-3 text-xs border rounded-md bg-card text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
@@ -350,6 +354,8 @@ export function ScopeSelectionClient({
         </select>
 
         <select
+          id="scope-sub-area-filter"
+          aria-label="Filter by sub-area"
           value={subAreaFilter}
           onChange={(e) => setSubAreaFilter(e.target.value)}
           className="h-9 px-3 text-xs border rounded-md bg-card text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"

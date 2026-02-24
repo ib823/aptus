@@ -95,7 +95,7 @@ const ScopeItemButton = memo(function ScopeItemButton({
           : "hover:bg-accent border-l-2 border-transparent"
       }`}
     >
-      <p className="text-xs font-medium text-foreground truncate">{item.nameClean}</p>
+      <p className="text-xs font-medium text-foreground truncate" title={item.nameClean}>{item.nameClean}</p>
       <div className="flex items-center gap-2 mt-0.5">
         <div className="flex-1">
           <div className="h-1 rounded-full bg-muted">
@@ -587,26 +587,22 @@ export function ReviewClient({
                 />
               </div>
 
-              {/* Step picker dots */}
-              <div className="flex items-center gap-1 mb-4 overflow-x-auto pb-2">
-                {visibleSteps.map((step, i) => {
-                  const color = step.fitStatus === "FIT" ? "bg-green-500"
-                    : step.fitStatus === "CONFIGURE" ? "bg-blue-500"
-                    : step.fitStatus === "GAP" ? "bg-amber-500"
-                    : step.fitStatus === "NA" ? "bg-muted-foreground/60"
-                    : "bg-muted";
-
-                  return (
-                    <button
-                      key={step.id}
-                      onClick={() => setCurrentStepIndex(i)}
-                      className={`w-3 h-3 rounded-full shrink-0 transition-all ${color} ${
-                        i === currentStepIndex ? "ring-2 ring-offset-1 ring-blue-500" : ""
-                      }`}
-                      aria-label={`Step ${i + 1}: ${step.actionTitle}`}
-                    />
-                  );
-                })}
+              {/* Step counter + mini navigation */}
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-sm font-medium text-foreground">
+                  Step {currentStepIndex + 1} of {visibleSteps.length}
+                </span>
+                {currentStep && (
+                  <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
+                    currentStep.fitStatus === "FIT" ? "bg-green-100 text-green-700"
+                    : currentStep.fitStatus === "CONFIGURE" ? "bg-blue-100 text-blue-700"
+                    : currentStep.fitStatus === "GAP" ? "bg-amber-100 text-amber-700"
+                    : currentStep.fitStatus === "NA" ? "bg-gray-100 text-gray-600"
+                    : "bg-muted text-muted-foreground"
+                  }`}>
+                    {currentStep.fitStatus === "PENDING" ? "Unreviewed" : currentStep.fitStatus}
+                  </span>
+                )}
               </div>
 
               {/* Current step — classifiable or reference */}
