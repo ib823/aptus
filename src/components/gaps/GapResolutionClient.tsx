@@ -222,7 +222,7 @@ export function GapResolutionClient({
           <select
             value={scopeFilter}
             onChange={(e) => setScopeFilter(e.target.value)}
-            className="h-9 px-3 text-xs border rounded-md bg-background text-foreground"
+            className="h-9 px-3 text-xs border rounded-md bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           >
             <option value="all">All Scope Items</option>
             {scopeItems.map(([id, name]) => (
@@ -235,7 +235,7 @@ export function GapResolutionClient({
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="h-9 px-3 text-xs border rounded-md bg-background text-foreground"
+            className="h-9 px-3 text-xs border rounded-md bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           >
             <option value="all">All Types</option>
             <option value="PENDING">Pending</option>
@@ -252,7 +252,7 @@ export function GapResolutionClient({
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
-            className="h-9 px-3 text-xs border rounded-md bg-background text-foreground"
+            className="h-9 px-3 text-xs border rounded-md bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           >
             <option value="all">All Priorities</option>
             <option value="critical">Critical</option>
@@ -264,7 +264,7 @@ export function GapResolutionClient({
           <select
             value={approvalFilter}
             onChange={(e) => setApprovalFilter(e.target.value)}
-            className="h-9 px-3 text-xs border rounded-md bg-background text-foreground"
+            className="h-9 px-3 text-xs border rounded-md bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           >
             <option value="all">All Statuses</option>
             <option value="pending">Pending Approval</option>

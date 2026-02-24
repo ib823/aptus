@@ -18,7 +18,7 @@ interface PhaseProgressPanelProps {
 }
 
 const PHASE_LABELS: Record<string, string> = {
-  scoping: "Scoping",
+  scoping: "Scope Selection",
   process_review: "Process Review",
   gap_resolution: "Gap Resolution",
   integration: "Integration",

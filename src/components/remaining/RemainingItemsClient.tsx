@@ -211,7 +211,7 @@ export function RemainingItemsClient({
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="border rounded-md px-2 py-1.5 text-sm"
+          className="border rounded-md px-2 py-1.5 text-sm bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
         >
           <option value="all">All Categories</option>
           {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
@@ -221,7 +221,7 @@ export function RemainingItemsClient({
         <select
           value={severityFilter}
           onChange={(e) => setSeverityFilter(e.target.value)}
-          className="border rounded-md px-2 py-1.5 text-sm"
+          className="border rounded-md px-2 py-1.5 text-sm bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
         >
           <option value="all">All Severities</option>
           <option value="critical">Critical</option>
@@ -232,7 +232,7 @@ export function RemainingItemsClient({
         <select
           value={resolvedFilter}
           onChange={(e) => setResolvedFilter(e.target.value)}
-          className="border rounded-md px-2 py-1.5 text-sm"
+          className="border rounded-md px-2 py-1.5 text-sm bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
         >
           <option value="all">All Status</option>
           <option value="unresolved">Unresolved</option>
@@ -257,7 +257,7 @@ export function RemainingItemsClient({
               <select
                 value={addForm.category}
                 onChange={(e) => setAddForm((prev) => ({ ...prev, category: e.target.value }))}
-                className="w-full border rounded px-2 py-1.5 text-sm"
+                className="w-full border rounded px-2 py-1.5 text-sm bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               >
                 <option value="integration_point">Integration Point</option>
                 <option value="data_migration">Data Migration</option>
@@ -269,7 +269,7 @@ export function RemainingItemsClient({
               <select
                 value={addForm.severity}
                 onChange={(e) => setAddForm((prev) => ({ ...prev, severity: e.target.value }))}
-                className="w-full border rounded px-2 py-1.5 text-sm"
+                className="w-full border rounded px-2 py-1.5 text-sm bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               >
                 <option value="critical">Critical</option>
                 <option value="high">High</option>
@@ -285,7 +285,7 @@ export function RemainingItemsClient({
               value={addForm.title}
               onChange={(e) => setAddForm((prev) => ({ ...prev, title: e.target.value }))}
               placeholder="Brief title (min 5 characters)"
-              className="w-full border rounded px-2 py-1.5 text-sm"
+              className="w-full border rounded px-2 py-1.5 text-sm bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
             />
           </div>
           <div className="mb-3">
@@ -295,7 +295,7 @@ export function RemainingItemsClient({
               onChange={(e) => setAddForm((prev) => ({ ...prev, description: e.target.value }))}
               placeholder="Detailed description (min 10 characters)"
               rows={3}
-              className="w-full border rounded px-2 py-1.5 text-sm"
+              className="w-full border rounded px-2 py-1.5 text-sm bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
             />
           </div>
           <div className="grid grid-cols-2 gap-3 mb-3">
@@ -305,7 +305,7 @@ export function RemainingItemsClient({
                 type="text"
                 value={addForm.functionalArea}
                 onChange={(e) => setAddForm((prev) => ({ ...prev, functionalArea: e.target.value }))}
-                className="w-full border rounded px-2 py-1.5 text-sm"
+                className="w-full border rounded px-2 py-1.5 text-sm bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               />
             </div>
             <div>
@@ -314,7 +314,7 @@ export function RemainingItemsClient({
                 type="email"
                 value={addForm.assignedTo}
                 onChange={(e) => setAddForm((prev) => ({ ...prev, assignedTo: e.target.value }))}
-                className="w-full border rounded px-2 py-1.5 text-sm"
+                className="w-full border rounded px-2 py-1.5 text-sm bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               />
             </div>
           </div>

@@ -418,6 +418,11 @@ export function ReviewClient({
     const pendingSteps = stepsRef.current.filter((s) => s.fitStatus === "PENDING");
     if (pendingSteps.length === 0) return;
 
+    const confirmed = window.confirm(
+      `Mark ${pendingSteps.length} remaining ${pendingSteps.length === 1 ? "step" : "steps"} as FIT? This will classify all unreviewed steps in this scope item.`,
+    );
+    if (!confirmed) return;
+
     setBulkLoading(true);
 
     try {

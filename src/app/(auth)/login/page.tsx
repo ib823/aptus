@@ -19,9 +19,14 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(isVerify);
   const [sentEmail, setSentEmail] = useState("");
-  const [error, setError] = useState(
-    isError ? "Sign-in failed. Please try again." : "",
-  );
+  const errorParam = searchParams.get("error");
+  const [error, setError] = useState(() => {
+    if (!isError && !errorParam) return "";
+    if (errorParam === "Verification") return "This sign-in link has expired or already been used. Enter your email to receive a new one.";
+    if (errorParam === "AccessDenied") return "Access denied. Your account may not have permission to sign in.";
+    if (errorParam === "Configuration") return "There is a configuration issue. Please contact support.";
+    return "Sign-in failed. Please check your email and try again.";
+  });
   const [resendCooldown, setResendCooldown] = useState(0);
 
   // Countdown timer for resend cooldown

@@ -37,6 +37,39 @@ const ACTION_ICONS: Record<string, typeof Activity> = {
   phase_updated: ArrowRight,
 };
 
+/** Map raw role slugs to human-readable labels */
+const ROLE_LABELS: Record<string, string> = {
+  platform_admin: "Admin",
+  partner_lead: "Partner Lead",
+  consultant: "Consultant",
+  project_manager: "Project Manager",
+  solution_architect: "Solution Architect",
+  process_owner: "Process Owner",
+  it_lead: "IT Lead",
+  data_migration_lead: "Data Migration Lead",
+  executive_sponsor: "Executive Sponsor",
+  viewer: "Viewer",
+  client_admin: "Client Admin",
+  admin: "Admin",
+};
+
+/** Map raw entity types to human-readable labels */
+const ENTITY_LABELS: Record<string, string> = {
+  process_step: "Process Step",
+  scope_item: "Scope Item",
+  gap_resolution: "Gap Resolution",
+  config_activity: "Config Activity",
+  integration: "Integration",
+  data_migration: "Data Migration",
+  ocm_impact: "Change Impact",
+  workshop: "Workshop",
+  assessment: "Assessment",
+};
+
+function humanizeLabel(value: string, labelMap: Record<string, string>): string {
+  return labelMap[value] ?? value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function ActivityEntry({
   actorName,
   actorRole,
@@ -47,6 +80,8 @@ export function ActivityEntry({
   createdAt,
 }: ActivityEntryProps) {
   const Icon = ACTION_ICONS[actionType] ?? Activity;
+  const displayRole = humanizeLabel(actorRole, ROLE_LABELS);
+  const displayEntity = entityType ? humanizeLabel(entityType, ENTITY_LABELS) : null;
 
   return (
     <div className="flex items-start gap-3 py-2">
@@ -64,12 +99,12 @@ export function ActivityEntry({
           </span>
           {actorRole && (
             <Badge variant="outline" className="text-xs h-5">
-              {actorRole}
+              {displayRole}
             </Badge>
           )}
-          {entityType && (
+          {displayEntity && (
             <Badge variant="secondary" className="text-xs h-5">
-              {entityType}
+              {displayEntity}
             </Badge>
           )}
           {areaCode && (

@@ -15,7 +15,7 @@ interface StatusTransitionBarProps {
 
 const STATUS_DISPLAY: Record<string, { label: string; color: string }> = {
   draft: { label: "Draft", color: "bg-gray-100 text-gray-700" },
-  scoping: { label: "Scoping", color: "bg-blue-100 text-blue-700" },
+  scoping: { label: "Scope Selection", color: "bg-blue-100 text-blue-700" },
   in_progress: { label: "In Progress", color: "bg-indigo-100 text-indigo-700" },
   workshop_active: { label: "Workshop Active", color: "bg-purple-100 text-purple-700" },
   review_cycle: { label: "Review Cycle", color: "bg-amber-100 text-amber-700" },

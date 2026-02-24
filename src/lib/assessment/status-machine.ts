@@ -140,7 +140,7 @@ export function getAvailableTransitions(
 /** Status display labels */
 export const STATUS_LABELS: Record<AssessmentStatusV2, string> = {
   draft: "Draft",
-  scoping: "Scoping",
+  scoping: "Scope Selection",
   in_progress: "In Progress",
   workshop_active: "Workshop Active",
   review_cycle: "Review Cycle",

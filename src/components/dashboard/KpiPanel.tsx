@@ -23,7 +23,7 @@ function KpiCard({
 }) {
   return (
     <div className="p-3 rounded-lg border bg-card">
-      <p className="text-xs text-muted-foreground uppercase tracking-wider">{label}</p>
+      <p className="text-xs text-muted-foreground tracking-wide">{label}</p>
       <div className="flex items-baseline gap-1 mt-1">
         <span className="text-2xl font-bold">{value}</span>
         <span className="text-sm text-muted-foreground">/ {total}</span>
@@ -72,25 +72,25 @@ export function KpiPanel({ metrics }: KpiPanelProps) {
           />
         </div>
         <div className="mt-4 grid grid-cols-5 gap-2 text-center">
-          <div className="p-2 rounded bg-green-50">
-            <span className="text-lg font-bold text-green-700">{metrics.fitCount}</span>
-            <p className="text-xs text-green-600">FIT</p>
+          <div className="p-2 rounded" style={{ backgroundColor: "var(--status-fit-bg)" }}>
+            <span className="text-lg font-bold" style={{ color: "var(--status-fit-fg)" }}>{metrics.fitCount}</span>
+            <p className="text-xs" style={{ color: "var(--status-fit-fg)" }}>Fit</p>
           </div>
-          <div className="p-2 rounded bg-blue-50">
-            <span className="text-lg font-bold text-blue-700">{metrics.configureCount}</span>
-            <p className="text-xs text-blue-600">CONFIG</p>
+          <div className="p-2 rounded" style={{ backgroundColor: "var(--status-configure-bg)" }}>
+            <span className="text-lg font-bold" style={{ color: "var(--status-configure-fg)" }}>{metrics.configureCount}</span>
+            <p className="text-xs" style={{ color: "var(--status-configure-fg)" }}>Config</p>
           </div>
-          <div className="p-2 rounded bg-amber-50">
-            <span className="text-lg font-bold text-amber-700">{metrics.gapCount}</span>
-            <p className="text-xs text-amber-600">GAP</p>
+          <div className="p-2 rounded" style={{ backgroundColor: "var(--status-extend-bg)" }}>
+            <span className="text-lg font-bold" style={{ color: "var(--status-extend-fg)" }}>{metrics.gapCount}</span>
+            <p className="text-xs" style={{ color: "var(--status-extend-fg)" }}>Gap</p>
           </div>
-          <div className="p-2 rounded bg-gray-50">
-            <span className="text-lg font-bold text-gray-700">{metrics.naCount}</span>
-            <p className="text-xs text-gray-600">N/A</p>
+          <div className="p-2 rounded" style={{ backgroundColor: "var(--status-na-bg)" }}>
+            <span className="text-lg font-bold" style={{ color: "var(--status-na-fg)" }}>{metrics.naCount}</span>
+            <p className="text-xs" style={{ color: "var(--status-na-fg)" }}>N/A</p>
           </div>
-          <div className="p-2 rounded bg-muted">
-            <span className="text-lg font-bold text-muted-foreground">{metrics.pendingCount}</span>
-            <p className="text-xs text-muted-foreground">PENDING</p>
+          <div className="p-2 rounded" style={{ backgroundColor: "var(--status-pending-bg)" }}>
+            <span className="text-lg font-bold" style={{ color: "var(--status-pending-fg)" }}>{metrics.pendingCount}</span>
+            <p className="text-xs" style={{ color: "var(--status-pending-fg)" }}>Pending</p>
           </div>
         </div>
       </CardContent>

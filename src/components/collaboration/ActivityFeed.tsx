@@ -99,8 +99,16 @@ export function ActivityFeed({ assessmentId }: ActivityFeedProps) {
 
       <ScrollArea className="flex-1">
         {loading && entries.length === 0 ? (
-          <div className="p-4 text-center text-sm text-muted-foreground">
-            Loading activity...
+          <div className="p-4 space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-start gap-3">
+                <div className="w-4 h-4 rounded-full bg-muted animate-pulse mt-0.5" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
+                  <div className="h-3 bg-muted rounded animate-pulse w-1/3" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : entries.length === 0 ? (
           <div className="p-4 text-center text-sm text-muted-foreground">

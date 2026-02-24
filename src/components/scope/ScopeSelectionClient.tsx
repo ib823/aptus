@@ -339,7 +339,7 @@ export function ScopeSelectionClient({
         <select
           value={areaFilter}
           onChange={(e) => { setAreaFilter(e.target.value); setSubAreaFilter("all"); }}
-          className="h-9 px-3 text-xs border rounded-md bg-card text-foreground"
+          className="h-9 px-3 text-xs border rounded-md bg-card text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
         >
           <option value="all">All Areas</option>
           {functionalAreas.map((area) => (
@@ -352,7 +352,7 @@ export function ScopeSelectionClient({
         <select
           value={subAreaFilter}
           onChange={(e) => setSubAreaFilter(e.target.value)}
-          className="h-9 px-3 text-xs border rounded-md bg-card text-foreground"
+          className="h-9 px-3 text-xs border rounded-md bg-card text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
         >
           <option value="all">All Sub-Areas</option>
           {subAreas.map((sub) => (

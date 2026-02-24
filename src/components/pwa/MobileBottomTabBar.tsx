@@ -6,7 +6,8 @@ import {
   LayoutDashboardIcon,
   ClipboardListIcon,
   BarChart3Icon,
-  SettingsIcon,
+  Building2Icon,
+  MoreHorizontalIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TOUCH_TARGETS } from "@/types/pwa";
@@ -22,7 +23,8 @@ const tabs: Tab[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboardIcon, matchPrefix: "/dashboard" },
   { href: "/assessments", label: "Assessments", icon: ClipboardListIcon, matchPrefix: "/assessments" },
   { href: "/analytics", label: "Analytics", icon: BarChart3Icon, matchPrefix: "/analytics" },
-  { href: "/settings", label: "Settings", icon: SettingsIcon, matchPrefix: "/settings" },
+  { href: "/organization", label: "Organization", icon: Building2Icon, matchPrefix: "/organization" },
+  { href: "/settings", label: "More", icon: MoreHorizontalIcon, matchPrefix: "/settings" },
 ];
 
 export function MobileBottomTabBar() {
