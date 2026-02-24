@@ -1,85 +1,41 @@
 /** ScopeItem queries */
 
 import { prisma } from "@/lib/db/prisma";
+import { getCatalogScopeData } from "@/lib/db/cached-queries";
 
 export async function getScopeItemsWithSelections(assessmentId: string) {
-  const scopeItems = await prisma.scopeItem.findMany({
-    orderBy: [{ functionalArea: "asc" }, { nameClean: "asc" }],
-    select: {
-      id: true,
-      name: true,
-      nameClean: true,
-      country: true,
-      totalSteps: true,
-      functionalArea: true,
-      subArea: true,
-      tutorialUrl: true,
-      purposeHtml: true,
-      overviewHtml: true,
-      prerequisitesHtml: true,
-      setupPdfStored: true,
-    },
-  });
-
-  const selections = await prisma.scopeSelection.findMany({
-    where: { assessmentId },
-    select: {
-      scopeItemId: true,
-      selected: true,
-      relevance: true,
-      currentState: true,
-      notes: true,
-      respondent: true,
-      respondedAt: true,
-      priority: true,
-      businessJustification: true,
-      estimatedComplexity: true,
-      dependsOnScopeItems: true,
-    },
-  });
+  // Cached catalog data (1hr) + fresh selections query
+  const [catalog, selections] = await Promise.all([
+    getCatalogScopeData(),
+    prisma.scopeSelection.findMany({
+      where: { assessmentId },
+      select: {
+        scopeItemId: true,
+        selected: true,
+        relevance: true,
+        currentState: true,
+        notes: true,
+        respondent: true,
+        respondedAt: true,
+        priority: true,
+        businessJustification: true,
+        estimatedComplexity: true,
+        dependsOnScopeItems: true,
+      },
+    }),
+  ]);
 
   const selectionMap = new Map(
     selections.map((s) => [s.scopeItemId, s]),
   );
 
-  // Count configs per scope item
-  const configCounts = await prisma.configActivity.groupBy({
-    by: ["scopeItemId"],
-    _count: { id: true },
-  });
-  const configCountMap = new Map(
-    configCounts.map((c) => [c.scopeItemId, c._count.id]),
-  );
-
-  // Count classifiable steps per scope item (non-system-access, non-reference)
-  const NON_CLASSIFIABLE_TYPES = ["LOGON", "LOGOFF", "ACCESS_APP", "INFORMATION"];
-  const classifiableCounts = await prisma.processStep.groupBy({
-    by: ["scopeItemId"],
-    where: { stepType: { notIn: NON_CLASSIFIABLE_TYPES } },
-    _count: { id: true },
-  });
-  const classifiableMap = new Map(
-    classifiableCounts.map((c) => [c.scopeItemId, c._count.id]),
-  );
-
-  // Get effort baselines per scope item
-  const effortBaselines = await prisma.effortBaseline.findMany({
-    select: {
-      scopeItemId: true,
-      implementationDays: true,
-    },
-  });
-  const effortMap = new Map(
-    effortBaselines.map((e) => [e.scopeItemId, e.implementationDays]),
-  );
-
-  return scopeItems.map((item) => {
+  return catalog.scopeItems.map((item) => {
     const selection = selectionMap.get(item.id);
     return {
       ...item,
-      configCount: configCountMap.get(item.id) ?? 0,
-      classifiableSteps: classifiableMap.get(item.id) ?? 0,
-      effortDays: effortMap.get(item.id) ?? 0,
+      configCount: catalog.configCountMap[item.id] ?? 0,
+      classifiableSteps: catalog.classifiableMap[item.id] ?? 0,
+      effortDays: catalog.effortMap[item.id] ?? 0,
       selected: selection?.selected ?? false,
       relevance: selection?.relevance ?? null,
       currentState: selection?.currentState ?? null,

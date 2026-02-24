@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, memo } from "react";
 import {
   Accordion,
   AccordionContent,
@@ -17,9 +17,9 @@ interface ScopeItemData {
   subArea: string;
   configCount: number;
   tutorialUrl: string | null;
-  purposeHtml: string;
-  overviewHtml: string;
-  prerequisitesHtml: string;
+  purposeHtml?: string;
+  overviewHtml?: string;
+  prerequisitesHtml?: string;
   selected: boolean;
   relevance: string | null;
   currentState: string | null;
@@ -44,7 +44,7 @@ interface ScopeAreaGroupProps {
   isReadOnly: boolean;
 }
 
-export function ScopeAreaGroup({
+export const ScopeAreaGroup = memo(function ScopeAreaGroup({
   area,
   items,
   selectedCount,
@@ -115,4 +115,4 @@ export function ScopeAreaGroup({
       </AccordionItem>
     </Accordion>
   );
-}
+});
