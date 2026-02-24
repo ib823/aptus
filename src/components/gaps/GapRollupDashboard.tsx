@@ -103,7 +103,7 @@ export function GapRollupDashboard({
           {/* Data rows */}
           {["technical", "business", "compliance", "integration"].map((category) => (
             <>
-              <div key={category} className="capitalize text-muted-foreground py-1 pr-2 truncate">
+              <div key={category} className="capitalize text-muted-foreground py-1 pr-2 truncate" title={category}>
                 {category}
               </div>
               {["LOW", "MEDIUM", "HIGH"].map((level) => {
@@ -117,6 +117,7 @@ export function GapRollupDashboard({
                     className={`text-center py-1 rounded ${
                       count > 0 ? RISK_LEVEL_COLORS[level] ?? "" : "bg-muted/30 text-muted-foreground/40"
                     }`}
+                    title={`${count} ${category} risk${count !== 1 ? "s" : ""} at ${level} level`}
                   >
                     {count}
                   </div>

@@ -68,7 +68,7 @@ export function OcmHeatmap({ data, onCellClick }: OcmHeatmapProps) {
                 Role / Area
               </th>
               {areas.map((area) => (
-                <th key={area} className="px-4 py-3 text-center font-medium text-muted-foreground min-w-[120px]">
+                <th key={area} className="px-4 py-3 text-center font-medium text-muted-foreground min-w-[120px]" title={area}>
                   {area}
                 </th>
               ))}
@@ -77,7 +77,7 @@ export function OcmHeatmap({ data, onCellClick }: OcmHeatmapProps) {
           <tbody className="divide-y">
             {roles.map((role) => (
               <tr key={role} className="hover:bg-muted/20">
-                <td className="px-4 py-3 font-medium sticky left-0 bg-white">
+                <td className="px-4 py-3 font-medium sticky left-0 bg-white" title={role}>
                   {role}
                 </td>
                 {areas.map((area) => {
@@ -98,6 +98,7 @@ export function OcmHeatmap({ data, onCellClick }: OcmHeatmapProps) {
                         type="button"
                         onClick={() => onCellClick(role, area)}
                         className={`inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium border transition-colors hover:opacity-80 ${colors.bg} ${colors.text} ${colors.border}`}
+                        aria-label={`${cell.count} ${cell.severity.toLowerCase()} impact${cell.count !== 1 ? "s" : ""} for ${role} in ${area}`}
                       >
                         {cell.count} impact{cell.count !== 1 ? "s" : ""}
                       </button>

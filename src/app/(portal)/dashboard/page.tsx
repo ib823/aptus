@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { Plus } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth/session";
 
 export const metadata: Metadata = { title: "Dashboard" };
 import { prisma } from "@/lib/db/prisma";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { getDefaultWidgets } from "@/lib/dashboard/widgets";
@@ -61,6 +64,8 @@ export default async function DashboardPage() {
 
   const primaryAssessmentId = assessments[0]?.id ?? null;
 
+  const canCreate = ["consultant", "platform_admin", "admin", "partner_lead"].includes(role);
+
   if (assessments.length === 0) {
     return (
       <>
@@ -68,6 +73,16 @@ export default async function DashboardPage() {
         <EmptyState
           title={UI_TEXT.assessment.noAssessments}
           description={UI_TEXT.assessment.noAssessmentsDescription}
+          action={
+            canCreate ? (
+              <Link href="/assessments/new">
+                <Button>
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  Create your first assessment
+                </Button>
+              </Link>
+            ) : undefined
+          }
         />
       </>
     );

@@ -157,16 +157,25 @@ export function NewAssessmentForm() {
       </div>
 
       {error && (
-        <p className="text-sm text-red-500">{error}</p>
+        <p className="text-sm text-red-500" role="alert">{error}</p>
       )}
 
-      <Button
-        type="submit"
-        className="w-full h-11"
-        disabled={!isValid || loading}
-      >
-        {loading ? "Creating..." : UI_TEXT.assessment.createButton}
-      </Button>
+      <div>
+        <Button
+          type="submit"
+          className="w-full h-11"
+          disabled={!isValid || loading}
+          aria-disabled={!isValid || loading}
+          aria-describedby={!isValid ? "create-hint" : undefined}
+        >
+          {loading ? "Creating..." : UI_TEXT.assessment.createButton}
+        </Button>
+        {!isValid && (
+          <p id="create-hint" className="text-xs text-muted-foreground mt-2 text-center">
+            Complete all fields above to create an assessment.
+          </p>
+        )}
+      </div>
     </form>
   );
 }
