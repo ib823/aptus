@@ -240,10 +240,12 @@ export function StepReviewCard({
           </div>
         ) : (
           <>
-            <div className="mt-3 flex flex-col gap-3">
+            <div className="mt-3 flex flex-col gap-3" role="radiogroup" aria-label="Fit classification">
               {FIT_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
+                  role="radio"
+                  aria-checked={step.fitStatus === opt.value}
                   onClick={() => handleFitStatusChange(opt.value)}
                   disabled={isItLead}
                   className={`flex items-start gap-3 p-3 rounded-lg border text-left transition-all ${
@@ -270,7 +272,7 @@ export function StepReviewCard({
             {/* Confidence dropdown — shown after a decision */}
             {step.fitStatus !== "PENDING" && (
               <div className="mt-3 flex items-center gap-3">
-                <label htmlFor={`confidence-${step.id}`} className="text-xs font-medium text-muted-foreground">Confidence:</label>
+                <label htmlFor={`confidence-${step.id}`} className="text-xs font-medium text-muted-foreground" title="How confident are you in this classification? High = certain, Medium = likely, Low = best guess">Confidence:</label>
                 <Select value={step.confidence ?? ""} onValueChange={handleConfidenceChange}>
                   <SelectTrigger id={`confidence-${step.id}`} className="w-36 h-8 text-xs"><SelectValue placeholder="Confidence level" /></SelectTrigger>
                   <SelectContent>

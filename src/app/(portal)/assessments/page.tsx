@@ -98,7 +98,7 @@ export default async function AssessmentsPage() {
                     </div>
                     <StatusBadge status={assessment.status} />
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 text-sm text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-sm text-muted-foreground">
                     <span>
                       {assessment._count.scopeSelections} {assessment._count.scopeSelections === 1 ? "scope item" : "scope items"}
                     </span>
@@ -112,6 +112,16 @@ export default async function AssessmentsPage() {
                       {formatDistanceToNow(assessment.updatedAt, { addSuffix: true })}
                     </span>
                   </div>
+                  {assessment._count.scopeSelections > 0 && (
+                    <div className="mt-3">
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-primary transition-all"
+                          style={{ width: `${Math.min(100, assessment._count.stepResponses > 0 ? Math.round((assessment._count.stepResponses / (assessment._count.scopeSelections * 15)) * 100) : 0)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </Link>

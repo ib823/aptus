@@ -112,6 +112,8 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
             </Link>
           ) : (
             <span
+              role="link"
+              aria-disabled="true"
               className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-muted-foreground bg-muted rounded-md cursor-not-allowed"
               title={`${score}% complete — reach ${PROFILE_COMPLETENESS_GATE}% to continue`}
             >

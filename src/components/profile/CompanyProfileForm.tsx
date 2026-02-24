@@ -78,17 +78,21 @@ function CollapsibleSection({ title, complete, defaultOpen = false, children }: 
 
 export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }: CompanyProfileFormProps) {
   const [profile, setProfile] = useState<ProfileData>(initialProfile);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const pendingSave = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
       if (pendingSave.current) clearTimeout(pendingSave.current);
+      if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current);
     };
   }, []);
 
   const saveProfile = useCallback(
     (data: Record<string, unknown>) => {
       if (pendingSave.current) clearTimeout(pendingSave.current);
+      setSaveStatus("saving");
       pendingSave.current = setTimeout(async () => {
         try {
           const res = await fetch(`/api/assessments/${assessmentId}/profile`, {
@@ -103,9 +107,12 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
               completenessScore: json.data.completenessScore,
               completenessBreakdown: json.data.completenessBreakdown,
             }));
+            setSaveStatus("saved");
+            if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current);
+            saveStatusTimer.current = setTimeout(() => setSaveStatus("idle"), 2000);
           }
         } catch {
-          // Silently fail — user can retry
+          setSaveStatus("idle");
         }
       }, 500);
     },
@@ -138,15 +145,21 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
 
   return (
     <div className="space-y-6">
-      <ProfileCompletenessBar score={profile.completenessScore} breakdown={bd} />
+      <div className="flex items-center justify-between">
+        <ProfileCompletenessBar score={profile.completenessScore} breakdown={bd} />
+        <span className={`text-xs transition-opacity ${saveStatus === "idle" ? "opacity-0" : "opacity-100"} ${saveStatus === "saving" ? "text-muted-foreground" : "text-green-600"}`}>
+          {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : ""}
+        </span>
+      </div>
 
       <div className="space-y-3">
         {/* Section 1: Basic Info */}
         <CollapsibleSection title="Basic Information" complete={bd.basic} defaultOpen>
           <div className="grid grid-cols-2 gap-4 pt-3">
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Company Name</label>
+              <label htmlFor="profile-company-name" className="text-xs font-medium text-muted-foreground">Company Name</label>
               <Input
+                id="profile-company-name"
                 value={profile.companyName}
                 onChange={(e) => updateField("companyName", e.target.value)}
                 disabled={isReadOnly ?? false}
@@ -154,8 +167,9 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Industry</label>
+              <label htmlFor="profile-industry" className="text-xs font-medium text-muted-foreground">Industry</label>
               <Input
+                id="profile-industry"
                 value={profile.industry}
                 onChange={(e) => updateField("industry", e.target.value)}
                 disabled={isReadOnly ?? false}
@@ -163,8 +177,9 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Country</label>
+              <label htmlFor="profile-country" className="text-xs font-medium text-muted-foreground">Country</label>
               <Input
+                id="profile-country"
                 value={profile.country}
                 onChange={(e) => updateField("country", e.target.value)}
                 disabled={isReadOnly ?? false}
@@ -172,9 +187,9 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Company Size</label>
+              <label htmlFor="profile-company-size" className="text-xs font-medium text-muted-foreground">Company Size</label>
               <Select value={profile.companySize} onValueChange={(v) => updateField("companySize", v)} disabled={isReadOnly ?? false}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select size" /></SelectTrigger>
+                <SelectTrigger id="profile-company-size" className="mt-1"><SelectValue placeholder="Select size" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="small">Small</SelectItem>
                   <SelectItem value="midsize">Midsize</SelectItem>
@@ -190,8 +205,9 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
         <CollapsibleSection title="Financial & Scale" complete={bd.financial}>
           <div className="grid grid-cols-2 gap-4 pt-3">
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Employee Count</label>
+              <label htmlFor="profile-employee-count" className="text-xs font-medium text-muted-foreground">Employee Count</label>
               <Input
+                id="profile-employee-count"
                 type="number"
                 value={profile.employeeCount ?? ""}
                 onChange={(e) => updateField("employeeCount", e.target.value ? Number(e.target.value) : null)}
@@ -200,9 +216,10 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Annual Revenue</label>
+              <label htmlFor="profile-annual-revenue" className="text-xs font-medium text-muted-foreground">Annual Revenue</label>
               <div className="flex gap-2 mt-1">
                 <Input
+                  id="profile-annual-revenue"
                   type="number"
                   value={profile.annualRevenue ?? ""}
                   onChange={(e) => updateField("annualRevenue", e.target.value ? Number(e.target.value) : null)}
@@ -227,9 +244,9 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
           <div className="space-y-4 pt-3">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Deployment Model</label>
+                <label htmlFor="profile-deployment-model" className="text-xs font-medium text-muted-foreground">Deployment Model</label>
                 <Select value={profile.deploymentModel ?? ""} onValueChange={(v) => updateField("deploymentModel", v)} disabled={isReadOnly ?? false}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select model" /></SelectTrigger>
+                  <SelectTrigger id="profile-deployment-model" className="mt-1"><SelectValue placeholder="Select model" /></SelectTrigger>
                   <SelectContent>
                     {DEPLOYMENT_MODELS.map((d) => (
                       <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
@@ -238,9 +255,9 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
                 </Select>
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Migration Approach</label>
+                <label htmlFor="profile-migration-approach" className="text-xs font-medium text-muted-foreground">Migration Approach</label>
                 <Select value={profile.migrationApproach ?? ""} onValueChange={(v) => updateField("migrationApproach", v)} disabled={isReadOnly ?? false}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select approach" /></SelectTrigger>
+                  <SelectTrigger id="profile-migration-approach" className="mt-1"><SelectValue placeholder="Select approach" /></SelectTrigger>
                   <SelectContent>
                     {MIGRATION_APPROACHES.map((m) => (
                       <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
@@ -250,8 +267,9 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
               </div>
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Target Go-Live Date</label>
+              <label htmlFor="profile-go-live-date" className="text-xs font-medium text-muted-foreground">Target Go-Live Date</label>
               <Input
+                id="profile-go-live-date"
                 type="date"
                 value={profile.targetGoLiveDate ? profile.targetGoLiveDate.split("T")[0] : ""}
                 onChange={(e) => updateField("targetGoLiveDate", e.target.value ? new Date(e.target.value).toISOString() : null)}
@@ -360,8 +378,9 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
         <CollapsibleSection title="IT Landscape" complete={bd.itLandscape}>
           <div className="space-y-4 pt-3">
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Current ERP Version</label>
+              <label htmlFor="profile-erp-version" className="text-xs font-medium text-muted-foreground">Current ERP Version</label>
               <Input
+                id="profile-erp-version"
                 value={profile.currentErpVersion ?? ""}
                 onChange={(e) => updateField("currentErpVersion", e.target.value || null)}
                 placeholder="e.g., SAP ECC 6.0 EHP8, Oracle E-Business Suite"
@@ -370,8 +389,9 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">IT Landscape Summary</label>
+              <label htmlFor="profile-it-landscape" className="text-xs font-medium text-muted-foreground">IT Landscape Summary</label>
               <Textarea
+                id="profile-it-landscape"
                 value={profile.itLandscapeSummary ?? ""}
                 onChange={(e) => updateField("itLandscapeSummary", e.target.value || null)}
                 placeholder="Describe key systems, integrations, and infrastructure..."

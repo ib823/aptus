@@ -47,11 +47,11 @@ export function AdminSidebar() {
   return (
     <aside className="w-64 bg-sidebar text-sidebar-foreground shrink-0">
       <div className="p-4 border-b border-sidebar-border">
-        <h2 className="text-sm font-semibold text-sidebar-foreground/60 uppercase tracking-wider">
+        <p className="text-sm font-semibold text-sidebar-foreground/60 uppercase tracking-wider" aria-hidden="true">
           Admin Panel
-        </h2>
+        </p>
       </div>
-      <nav className="p-3 space-y-4">
+      <nav aria-label="Admin Panel" className="p-3 space-y-4">
         {NAV_SECTIONS.map((section, idx) => (
           <div key={idx}>
             {section.label && (

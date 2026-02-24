@@ -6,11 +6,23 @@ import { AssessmentTabNav } from "@/components/layout/AssessmentTabNav";
 import { StatusTransitionBar } from "@/components/assessment/StatusTransitionBar";
 import { PresenceAvatars } from "@/components/collaboration/PresenceAvatars";
 import { PresenceHeartbeat } from "@/components/collaboration/PresenceHeartbeat";
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 interface AssessmentLayoutProps {
   children: ReactNode;
   params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const assessment = await prisma.assessment.findUnique({
+    where: { id, deletedAt: null },
+    select: { companyName: true },
+  });
+  return {
+    title: assessment ? `${assessment.companyName} — Assessment` : "Assessment",
+  };
 }
 
 export default async function AssessmentLayout({
@@ -35,7 +47,7 @@ export default async function AssessmentLayout({
           Assessments
         </Link>
         <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/60" />
-        <span className="font-medium text-foreground truncate max-w-[300px]">
+        <span className="font-medium text-foreground truncate max-w-[300px]" title={assessment.companyName}>
           {assessment.companyName}
         </span>
       </nav>

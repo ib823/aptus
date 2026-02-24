@@ -238,10 +238,12 @@ export const ScopeItemCard = memo(function ScopeItemCard({ item, assessmentId, o
           </div>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1" role="radiogroup" aria-label={`Relevance for ${item.nameClean}`}>
           {RELEVANCE_OPTIONS.map((opt) => (
             <button
               key={opt.value}
+              role="radio"
+              aria-checked={relevance === opt.value}
               onClick={() => handleRelevanceChange(opt.value)}
               className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-all ${
                 relevance === opt.value

@@ -60,7 +60,7 @@ export const StepGroupSidebar = memo(function StepGroupSidebar({
               <span className={`text-xs px-1.5 py-0.5 rounded font-medium shrink-0 ${colorClass}`}>
                 {group.classifiableCount > 0 ? `${reviewed}/${group.classifiableCount}` : group.steps.length}
               </span>
-              <span className="text-sm font-medium text-foreground truncate">
+              <span className="text-sm font-medium text-foreground truncate" title={group.label}>
                 {group.label}
               </span>
             </button>
@@ -85,7 +85,10 @@ export const StepGroupSidebar = memo(function StepGroupSidebar({
                       }`}
                     >
                       <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
-                      <span className={`text-xs truncate ${step.isClassifiable ? "text-foreground" : "text-muted-foreground"}`}>
+                      <span
+                        className={`text-xs truncate ${step.isClassifiable ? "text-foreground" : "text-muted-foreground"}`}
+                        title={`${step.sequence + 1}. ${step.actionTitle}`}
+                      >
                         {step.sequence + 1}. {step.actionTitle}
                       </span>
                     </button>

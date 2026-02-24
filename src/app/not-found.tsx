@@ -12,11 +12,11 @@ export default function RootNotFound() {
           The page you&apos;re looking for doesn&apos;t exist or has been moved.
         </p>
         <div className="flex items-center justify-center gap-3">
-          <Link href="/login">
-            <Button size="lg">Go to Login</Button>
-          </Link>
           <Link href="/dashboard">
-            <Button variant="outline" size="lg">Dashboard</Button>
+            <Button size="lg">Go to Dashboard</Button>
+          </Link>
+          <Link href="/login">
+            <Button variant="outline" size="lg">Sign In</Button>
           </Link>
         </div>
         <p className="mt-8 text-sm text-muted-foreground/60">aptus</p>
