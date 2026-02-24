@@ -8,7 +8,10 @@ import { ServiceWorkerProvider } from "@/components/pwa/ServiceWorkerProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "aptus",
+  title: {
+    default: "Aptus",
+    template: "%s — Aptus",
+  },
   description: "SAP S/4HANA Cloud best practices process validation portal",
   manifest: "/manifest.json",
   icons: {

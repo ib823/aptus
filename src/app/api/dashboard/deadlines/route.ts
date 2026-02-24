@@ -1,4 +1,4 @@
-/** POST: Create a deadline */
+/** GET + POST: Dashboard deadlines */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -6,6 +6,48 @@ import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
+
+/** GET: List deadlines for the user's assessments */
+export async function GET(): Promise<NextResponse> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
+      { status: 401 },
+    );
+  }
+
+  const assessmentFilter = user.organizationId
+    ? { organizationId: user.organizationId }
+    : {};
+
+  const assessmentIds = (
+    await prisma.assessment.findMany({
+      where: { deletedAt: null, ...assessmentFilter },
+      select: { id: true },
+    })
+  ).map((a) => a.id);
+
+  if (assessmentIds.length === 0) {
+    return NextResponse.json({ data: [] });
+  }
+
+  const deadlines = await prisma.dashboardDeadline.findMany({
+    where: { assessmentId: { in: assessmentIds } },
+    orderBy: { dueDate: "asc" },
+    take: 50,
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      dueDate: true,
+      status: true,
+      assignedRole: true,
+    },
+  });
+
+  return NextResponse.json({ data: deadlines });
+}
 
 const createSchema = z.object({
   assessmentId: z.string().min(1),
@@ -15,6 +57,8 @@ const createSchema = z.object({
   assignedRole: z.string().optional(),
   assignedUser: z.string().optional(),
 });
+
+/** POST: Create a deadline */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {

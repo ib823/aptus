@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertCircle, Clock, CreditCard, XCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { AlertCircle, Clock, CreditCard, X, XCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { SubscriptionStatus } from "@/types/commercial";
@@ -26,17 +27,40 @@ const BORDER_COLORS: Record<SubscriptionStatus, string> = {
   TRIAL_EXPIRED: "border-red-300 bg-red-50",
 };
 
+const DISMISS_KEY = "aptus-banner-dismissed";
+
 export function SubscriptionStatusBanner({
   status,
   trialEndsAt,
   onUpgrade,
   onUpdatePayment,
 }: SubscriptionStatusBannerProps) {
-  if (status === "ACTIVE") return null;
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem(DISMISS_KEY);
+      if (stored === status) setDismissed(true);
+    }
+  }, [status]);
+
+  if (status === "ACTIVE" || dismissed) return null;
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    localStorage.setItem(DISMISS_KEY, status);
+  };
 
   return (
-    <Card className={`border-2 ${BORDER_COLORS[status]}`}>
-      <CardContent className="pt-4">
+    <Card className={`border-2 ${BORDER_COLORS[status]} relative`}>
+      <button
+        onClick={handleDismiss}
+        className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+        aria-label="Dismiss banner"
+      >
+        <X className="h-4 w-4" />
+      </button>
+      <CardContent className="pt-4 pr-8">
         <div className="flex items-start gap-3">
           {status === "TRIALING" ? (
             <>

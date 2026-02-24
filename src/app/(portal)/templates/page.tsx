@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { TemplatesManager } from "@/components/templates/TemplatesManager";
+
+export const metadata: Metadata = { title: "Templates" };
 
 export default async function TemplatesPage() {
   const user = await getCurrentUser();

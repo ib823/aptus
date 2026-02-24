@@ -48,7 +48,7 @@ export function AttentionWidget({ items, maxItems }: AttentionWidgetProps) {
       </CardHeader>
       <CardContent>
         {displayItems.length === 0 ? (
-          <p className="text-sm text-muted-foreground">All clear -- nothing requires attention.</p>
+          <p className="text-sm text-muted-foreground">All clear — nothing requires attention.</p>
         ) : (
           <div className="space-y-3">
             {displayItems.map((item) => {
