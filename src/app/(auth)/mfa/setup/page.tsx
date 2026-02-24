@@ -22,18 +22,38 @@ export default function MfaSetupPage() {
   useEffect(() => {
     async function fetchSetup() {
       try {
-        const response = await fetch("/api/auth/mfa/setup");
-        if (response.status === 401) {
-          router.replace("/login");
-          return;
-        }
-        const data: { data?: MfaSetupData } = await response.json();
-        if (data.data) {
-          if (data.data.alreadySetup) {
-            router.replace("/mfa/verify");
+        // Check session first — redirect unauthenticated users
+        const sessionRes = await fetch("/api/auth/session");
+        const sessionData = await sessionRes.json();
+        if (!sessionData?.user?.email && !sessionData?.user?.id) {
+          // Also check aptus-session via MFA endpoint
+          const response = await fetch("/api/auth/mfa/setup");
+          if (response.status === 401) {
+            router.replace("/login");
             return;
           }
-          setSetupData(data.data);
+          const data: { data?: MfaSetupData } = await response.json();
+          if (data.data) {
+            if (data.data.alreadySetup) {
+              router.replace("/mfa/verify");
+              return;
+            }
+            setSetupData(data.data);
+          }
+        } else {
+          const response = await fetch("/api/auth/mfa/setup");
+          if (response.status === 401) {
+            router.replace("/login");
+            return;
+          }
+          const data: { data?: MfaSetupData } = await response.json();
+          if (data.data) {
+            if (data.data.alreadySetup) {
+              router.replace("/mfa/verify");
+              return;
+            }
+            setSetupData(data.data);
+          }
         }
       } catch {
         // Error handling

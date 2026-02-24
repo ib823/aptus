@@ -1,0 +1,10 @@
+User-agent: *
+Disallow: /api/
+Disallow: /admin/
+Disallow: /assessment/
+Disallow: /mfa/
+Disallow: /onboarding/
+Disallow: /settings/
+Allow: /login
+Allow: /signup
+Allow: /pricing
