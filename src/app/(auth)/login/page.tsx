@@ -92,7 +92,10 @@ function LoginForm() {
   return (
     <Card className="shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
       <CardHeader className="text-center pb-2">
-        <AptusLogo size="lg" className="mb-6 justify-center" />
+        <AptusLogo size="lg" className="mb-2 justify-center" />
+        <p className="text-xs text-muted-foreground mb-4">
+          {UI_TEXT.app.tagline}
+        </p>
         <h1 className="text-2xl font-bold">
           {sent ? UI_TEXT.auth.magicLinkSent : UI_TEXT.auth.loginTitle}
         </h1>
@@ -140,7 +143,7 @@ function LoginForm() {
               </div>
             )}
             <div>
-              <label htmlFor="login-email" className="sr-only">
+              <label htmlFor="login-email" className="block text-sm font-medium mb-1 text-left">
                 Email address
               </label>
               <div className="relative">
