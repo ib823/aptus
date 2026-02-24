@@ -1,6 +1,6 @@
 {
-  "name": "Aptus — SAP S/4HANA Fit-to-Standard",
-  "short_name": "Aptus",
+  "name": "aptus — SAP S/4HANA Fit-to-Standard",
+  "short_name": "aptus",
   "description": "SAP S/4HANA Cloud Fit-to-Standard assessment platform",
   "start_url": "/",
   "display": "standalone",
