@@ -94,7 +94,7 @@ export function NewAssessmentForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
-        <label htmlFor="company-name" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="company-name" className="block text-sm font-medium text-foreground mb-1">
           {UI_TEXT.assessment.companyName}
         </label>
         <Input
@@ -107,7 +107,7 @@ export function NewAssessmentForm() {
       </div>
 
       <div>
-        <label htmlFor="industry" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="industry" className="block text-sm font-medium text-foreground mb-1">
           {UI_TEXT.assessment.industry}
         </label>
         <Select value={formData.industry} onValueChange={(val) => handleChange("industry", val)}>
@@ -125,7 +125,7 @@ export function NewAssessmentForm() {
       </div>
 
       <div>
-        <label htmlFor="country" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="country" className="block text-sm font-medium text-foreground mb-1">
           {UI_TEXT.assessment.country}
         </label>
         <Input
@@ -139,7 +139,7 @@ export function NewAssessmentForm() {
       </div>
 
       <div>
-        <label htmlFor="company-size" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="company-size" className="block text-sm font-medium text-foreground mb-1">
           {UI_TEXT.assessment.companySize}
         </label>
         <Select value={formData.companySize} onValueChange={(val) => handleChange("companySize", val)}>

@@ -121,7 +121,7 @@ export function IntegrationRegisterClient({
   };
 
   const statusColor: Record<string, string> = {
-    identified: "bg-gray-100 text-gray-700",
+    identified: "bg-muted text-muted-foreground",
     analyzed: "bg-blue-100 text-blue-700",
     designed: "bg-amber-100 text-amber-700",
     approved: "bg-green-100 text-green-700",
@@ -151,19 +151,19 @@ export function IntegrationRegisterClient({
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3 mb-6">
-          <select value={directionFilter} onChange={(e) => setDirectionFilter(e.target.value)} className="h-9 px-3 text-xs border border-gray-200 rounded-md bg-white text-gray-700">
+          <select value={directionFilter} onChange={(e) => setDirectionFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground">
             <option value="all">All Directions</option>
             {INTEGRATION_DIRECTION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="h-9 px-3 text-xs border border-gray-200 rounded-md bg-white text-gray-700">
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground">
             <option value="all">All Types</option>
             {INTERFACE_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-9 px-3 text-xs border border-gray-200 rounded-md bg-white text-gray-700">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground">
             <option value="all">All Statuses</option>
             {INTEGRATION_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="h-9 px-3 text-xs border border-gray-200 rounded-md bg-white text-gray-700">
+          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground">
             <option value="all">All Priorities</option>
             {PRIORITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -198,13 +198,13 @@ export function IntegrationRegisterClient({
                       <div className="text-xs text-muted-foreground">{item.sourceSystem} &rarr; {item.targetSystem}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <Badge className={directionColor[item.direction] ?? "bg-gray-100"}>{item.direction}</Badge>
+                      <Badge className={directionColor[item.direction] ?? "bg-muted"}>{item.direction}</Badge>
                     </td>
                     <td className="px-4 py-3">
                       <Badge variant="outline">{item.interfaceType}</Badge>
                     </td>
                     <td className="px-4 py-3">
-                      <Badge className={statusColor[item.status] ?? "bg-gray-100"}>{item.status}</Badge>
+                      <Badge className={statusColor[item.status] ?? "bg-muted"}>{item.status}</Badge>
                     </td>
                     <td className="px-4 py-3">
                       {item.priority && <Badge variant="outline">{item.priority}</Badge>}

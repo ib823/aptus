@@ -17,16 +17,16 @@ export function PermissionDenied({
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <ShieldAlert className="w-12 h-12 text-amber-400 mb-4" />
-      <h3 className="text-lg font-semibold text-gray-950 mb-1">{title}</h3>
-      <p className="text-base text-gray-600 mb-4 max-w-md">{message}</p>
+      <h3 className="text-lg font-semibold text-foreground mb-1">{title}</h3>
+      <p className="text-base text-muted-foreground mb-4 max-w-md">{message}</p>
       {requiredArea && (
-        <p className="text-sm text-gray-500 mb-4">
-          Required functional area: <span className="font-medium text-gray-700">{requiredArea}</span>
+        <p className="text-sm text-muted-foreground mb-4">
+          Required functional area: <span className="font-medium text-foreground">{requiredArea}</span>
         </p>
       )}
       {userRole && (
-        <p className="text-sm text-gray-500 mb-6">
-          Your role: <span className="font-medium text-gray-700">{userRole}</span>
+        <p className="text-sm text-muted-foreground mb-6">
+          Your role: <span className="font-medium text-foreground">{userRole}</span>
         </p>
       )}
       <Button variant="outline" onClick={() => window.history.back()}>

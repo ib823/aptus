@@ -78,11 +78,11 @@ export default function PricingPage() {
           <div
             key={plan.name}
             className={`bg-card border rounded-lg p-6 flex flex-col ${
-              plan.highlighted ? "border-blue-500 ring-2 ring-blue-500 relative" : ""
+              plan.highlighted ? "border-primary ring-2 ring-primary relative" : ""
             }`}
           >
             {plan.highlighted && (
-              <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-white">
+              <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground">
                 Most Popular
               </Badge>
             )}
@@ -94,7 +94,7 @@ export default function PricingPage() {
             <ul className="space-y-2 mb-6 flex-1">
               {plan.features.map((feature) => (
                 <li key={feature} className="text-sm text-muted-foreground flex items-start gap-2">
-                  <span className="text-green-500 mt-0.5">&#10003;</span>
+                  <span className="text-primary mt-0.5">&#10003;</span>
                   {feature}
                 </li>
               ))}
@@ -114,7 +114,7 @@ export default function PricingPage() {
       <div className="text-center mt-12">
         <p className="text-sm text-muted-foreground">
           Already have an account?{" "}
-          <Link href="/login" className="text-blue-600 hover:underline">
+          <Link href="/login" className="text-primary hover:underline">
             Sign in
           </Link>
         </p>

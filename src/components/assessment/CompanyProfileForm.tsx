@@ -83,7 +83,7 @@ export function CompanyProfileForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
-        <label htmlFor="company-name" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="company-name" className="block text-sm font-medium text-foreground mb-1">
           {UI_TEXT.assessment.companyName}
         </label>
         <Input
@@ -96,7 +96,7 @@ export function CompanyProfileForm() {
       </div>
 
       <div>
-        <label htmlFor="industry" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="industry" className="block text-sm font-medium text-foreground mb-1">
           {UI_TEXT.assessment.industry}
         </label>
         <Input
@@ -109,7 +109,7 @@ export function CompanyProfileForm() {
       </div>
 
       <div>
-        <label htmlFor="country" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="country" className="block text-sm font-medium text-foreground mb-1">
           {UI_TEXT.assessment.country}
         </label>
         <Input
@@ -123,7 +123,7 @@ export function CompanyProfileForm() {
       </div>
 
       <div>
-        <label htmlFor="company-size" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="company-size" className="block text-sm font-medium text-foreground mb-1">
           {UI_TEXT.assessment.companySize}
         </label>
         <Select value={formData.companySize} onValueChange={(val) => handleChange("companySize", val)}>
@@ -141,7 +141,7 @@ export function CompanyProfileForm() {
       </div>
 
       <div>
-        <label htmlFor="current-erp" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="current-erp" className="block text-sm font-medium text-foreground mb-1">
           {UI_TEXT.assessment.currentErp}
         </label>
         <Select value={formData.currentErp} onValueChange={(val) => handleChange("currentErp", val)}>

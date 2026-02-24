@@ -2,7 +2,7 @@
 
 export const UI_TEXT = {
   app: {
-    name: "aptus",
+    name: "Aptus",
     tagline: "SAP S/4HANA Cloud Fit-Gap Assessment",
     sapVersion: "SAP Best Practices 2508",
   },
