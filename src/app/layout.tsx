@@ -9,7 +9,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "Aptus",
+    default: "aptus",
     template: "%s — Aptus",
   },
   description: "SAP S/4HANA Cloud best practices process validation portal",
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Aptus",
+    title: "aptus",
   },
   other: {
     "theme-color": "#09090b",
