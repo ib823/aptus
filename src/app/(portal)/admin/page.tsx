@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { AdminStatsSection, StatsSkeleton } from "@/components/admin/AdminStatsSection";
 import { AdminActivitySection, ActivitySkeleton } from "@/components/admin/AdminActivitySection";
+
+export const metadata: Metadata = { title: "Admin" };
 
 export default function AdminPage() {
   return (

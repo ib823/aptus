@@ -65,8 +65,8 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentT
   const activeSegment = pathname.replace(base, "").split("/").filter(Boolean)[0] ?? "profile";
 
   return (
-    <nav className="border-b mb-6">
-      <div className="flex gap-0 overflow-x-auto">
+    <nav className="border-b mb-6 relative">
+      <div className="flex gap-0 overflow-x-auto scrollbar-none">
         {tabs.map((tab) => {
           const isActive = tab.segment === activeSegment;
           return (
@@ -76,7 +76,7 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentT
               className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                 isActive
                   ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"
               }`}
             >
               {tab.label}
@@ -84,6 +84,8 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentT
           );
         })}
       </div>
+      {/* Fade gradient to signal more tabs to the right */}
+      <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent pointer-events-none" />
     </nav>
   );
 }

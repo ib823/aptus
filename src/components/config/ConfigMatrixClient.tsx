@@ -338,7 +338,7 @@ function SummaryCard({ label, count, color, description }: {
     <div className="bg-card rounded-lg border p-4">
       <div className="flex items-center gap-2">
         <span className={`w-2.5 h-2.5 rounded-full ${color}`} />
-        <span className="text-xs text-muted-foreground/60 uppercase tracking-wider">{label}</span>
+        <span className="text-xs font-semibold text-muted-foreground/60 tracking-wide">{label}</span>
       </div>
       <p className="text-2xl font-bold text-foreground mt-1">{count}</p>
       <p className="text-xs text-muted-foreground">{description}</p>

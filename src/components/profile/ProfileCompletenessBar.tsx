@@ -22,7 +22,7 @@ export function ProfileCompletenessBar({ score, breakdown }: ProfileCompleteness
       ? "bg-green-500"
       : score >= 40
         ? "bg-amber-500"
-        : "bg-red-500";
+        : "bg-blue-500";
 
   return (
     <div>

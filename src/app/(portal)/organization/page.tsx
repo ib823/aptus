@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { OrgSettingsForm } from "@/components/org/OrgSettingsForm";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
+
+export const metadata: Metadata = { title: "Organization" };
 
 export default async function OrganizationPage() {
   const user = await getCurrentUser();

@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus } from "lucide-react";
+
+export const metadata: Metadata = { title: "Assessments" };
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { Button } from "@/components/ui/button";
@@ -86,16 +89,16 @@ export default async function AssessmentsPage() {
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between">
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-950">
+                      <h3 className="text-lg font-semibold text-foreground">
                         {assessment.companyName}
                       </h3>
-                      <p className="text-sm text-gray-600 mt-0.5">
+                      <p className="text-sm text-muted-foreground mt-0.5">
                         {assessment.industry} &middot; {assessment.country}
                       </p>
                     </div>
                     <StatusBadge status={assessment.status} />
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 text-sm text-gray-500">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 text-sm text-muted-foreground">
                     <span>
                       {assessment._count.scopeSelections} scope items
                     </span>
@@ -103,7 +106,7 @@ export default async function AssessmentsPage() {
                       {assessment._count.stepResponses} steps reviewed
                     </span>
                     <span>
-                      {assessment._count.stakeholders} members
+                      {assessment._count.stakeholders} {assessment._count.stakeholders === 1 ? "member" : "members"}
                     </span>
                     <span className="sm:ml-auto">
                       {formatDistanceToNow(assessment.updatedAt, { addSuffix: true })}

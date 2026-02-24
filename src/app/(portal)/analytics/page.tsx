@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { PortfolioDashboard } from "@/components/analytics/PortfolioDashboard";
+
+export const metadata: Metadata = { title: "Portfolio Analytics" };
 
 export default async function AnalyticsPage() {
   const user = await getCurrentUser();

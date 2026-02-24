@@ -4,6 +4,8 @@ import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface OrgData {
   id: string;
@@ -55,12 +57,9 @@ export function OrgSettingsForm({ organization }: OrgSettingsFormProps) {
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <div>
-        <h2 className="text-lg font-semibold">Organization Settings</h2>
-        <p className="text-sm text-muted-foreground">
-          Configure your organization preferences and policies.
-        </p>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        Configure your organization preferences and policies.
+      </p>
 
       <div className="space-y-4">
         <div>
@@ -88,17 +87,17 @@ export function OrgSettingsForm({ organization }: OrgSettingsFormProps) {
         </div>
 
         <div>
-          <Label htmlFor="mfa-policy">MFA Policy</Label>
-          <select
-            id="mfa-policy"
-            value={mfaPolicy}
-            onChange={(e) => setMfaPolicy(e.target.value)}
-            className="mt-1 w-full h-9 px-3 text-sm border border-input rounded-md bg-background"
-          >
-            <option value="disabled">Disabled</option>
-            <option value="optional">Optional</option>
-            <option value="required">Required</option>
-          </select>
+          <Label>MFA Policy</Label>
+          <Select value={mfaPolicy} onValueChange={setMfaPolicy}>
+            <SelectTrigger className="mt-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="disabled">Disabled</SelectItem>
+              <SelectItem value="optional">Optional</SelectItem>
+              <SelectItem value="required">Required</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div>
@@ -115,25 +114,31 @@ export function OrgSettingsForm({ organization }: OrgSettingsFormProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          <input
+          <Checkbox
             id="sso-enabled"
-            type="checkbox"
             checked={ssoEnabled}
-            onChange={(e) => setSsoEnabled(e.target.checked)}
-            className="h-4 w-4"
+            onCheckedChange={(checked) => setSsoEnabled(checked === true)}
           />
           <Label htmlFor="sso-enabled">SSO Enabled</Label>
         </div>
 
         <div>
           <Label htmlFor="primary-color">Brand Primary Color</Label>
-          <Input
-            id="primary-color"
-            value={primaryColor}
-            onChange={(e) => setPrimaryColor(e.target.value)}
-            placeholder="#1a73e8"
-            className="mt-1"
-          />
+          <div className="flex items-center gap-2 mt-1">
+            <Input
+              id="primary-color"
+              value={primaryColor}
+              onChange={(e) => setPrimaryColor(e.target.value)}
+              placeholder="#1a73e8"
+            />
+            {primaryColor && /^#[0-9a-fA-F]{6}$/.test(primaryColor) && (
+              <span
+                className="w-9 h-9 rounded-md border shrink-0"
+                style={{ backgroundColor: primaryColor }}
+                aria-label={`Color preview: ${primaryColor}`}
+              />
+            )}
+          </div>
         </div>
       </div>
 

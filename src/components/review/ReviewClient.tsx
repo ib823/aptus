@@ -244,21 +244,17 @@ export function ReviewClient({
     return null;
   }, [currentStep, stepGroups]);
 
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return;
-
-      if (e.key === "ArrowLeft" && currentStepIndex > 0) {
-        setCurrentStepIndex((i) => i - 1);
-      } else if (e.key === "ArrowRight" && currentStepIndex < visibleSteps.length - 1) {
-        setCurrentStepIndex((i) => i + 1);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentStepIndex, visibleSteps.length]);
+  // Auto-advance to next unclassified step after classification
+  const advanceToNextUnclassified = useCallback(() => {
+    const nextIdx = visibleSteps.findIndex(
+      (s, i) => i > currentStepIndex && s.fitStatus === "PENDING",
+    );
+    if (nextIdx >= 0) {
+      setCurrentStepIndex(nextIdx);
+    } else if (currentStepIndex < visibleSteps.length - 1) {
+      setCurrentStepIndex((i) => i + 1);
+    }
+  }, [visibleSteps, currentStepIndex]);
 
   // Handle step click from sidebar
   const handleStepClick = useCallback(
@@ -377,9 +373,43 @@ export function ReviewClient({
       } catch {
         // Retry silently
       }
+
+      // Auto-advance to next unclassified step when a status is assigned
+      const oldStep = stepsRef.current.find((s) => s.id === stepId);
+      if (oldStep?.fitStatus === "PENDING" && data.fitStatus !== "PENDING") {
+        setTimeout(advanceToNextUnclassified, 200);
+      }
     },
-    [assessmentId, currentScopeItemId],
+    [assessmentId, currentScopeItemId, advanceToNextUnclassified],
   );
+
+  // Keyboard navigation + shortcuts (F=Fit, C=Configure, G=Gap, N=N/A)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (e.key === "ArrowLeft" && currentStepIndex > 0) {
+        setCurrentStepIndex((i) => i - 1);
+      } else if (e.key === "ArrowRight" && currentStepIndex < visibleSteps.length - 1) {
+        setCurrentStepIndex((i) => i + 1);
+      }
+
+      // Classification shortcuts — only when not read-only and step is classifiable
+      if (isReadOnly || !currentStep || !currentStepIsClassifiable) return;
+      const keyMap: Record<string, string> = { f: "FIT", c: "CONFIGURE", g: "GAP", n: "NA" };
+      const status = keyMap[e.key.toLowerCase()];
+      if (status) {
+        e.preventDefault();
+        void handleResponseChange(currentStep.id, { fitStatus: status });
+        // Auto-advance after a brief delay for visual feedback
+        setTimeout(advanceToNextUnclassified, 150);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentStepIndex, visibleSteps.length, currentStep, currentStepIsClassifiable, isReadOnly, handleResponseChange, advanceToNextUnclassified]);
 
   // Bulk mark remaining as FIT
   const handleBulkFit = useCallback(async () => {
@@ -600,7 +630,7 @@ export function ReviewClient({
                   Previous
                 </Button>
                 <span className="hidden sm:inline text-sm text-muted-foreground">
-                  Step {currentStepIndex + 1} of {visibleSteps.length} · Use ← → keys
+                  Step {currentStepIndex + 1} of {visibleSteps.length} · Keys: ← → navigate · F C G N classify
                 </span>
                 <Button
                   variant="outline"
