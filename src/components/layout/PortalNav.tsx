@@ -75,6 +75,7 @@ export function PortalNav({ user }: PortalNavProps) {
                     <Link
                       key={item.href}
                       href={item.href}
+                      aria-current={isActive ? "page" : undefined}
                       className={`flex items-center gap-2 h-10 px-3 rounded-md text-sm sm:text-base transition-all duration-200 ${
                         isActive
                           ? "bg-primary/10 text-primary font-medium"

@@ -48,6 +48,8 @@ export const StepGroupSidebar = memo(function StepGroupSidebar({
           <div key={group.key}>
             <button
               onClick={() => toggleGroup(group.key)}
+              aria-expanded={isExpanded}
+              aria-label={`${group.label} — ${group.classifiableCount > 0 ? `${reviewed} of ${group.classifiableCount} reviewed` : `${group.steps.length} steps`}`}
               className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors rounded-md ${
                 activeGroupKey === group.key ? "bg-accent" : "hover:bg-accent/50"
               }`}
@@ -78,6 +80,8 @@ export const StepGroupSidebar = memo(function StepGroupSidebar({
                     <button
                       key={step.id}
                       onClick={() => onStepClick(step.id)}
+                      aria-label={`Step ${step.sequence + 1}: ${step.actionTitle} — ${step.fitStatus === "PENDING" ? "unreviewed" : step.fitStatus}`}
+                      aria-current={activeStepId === step.id ? "step" : undefined}
                       className={`w-full flex items-center gap-2 px-2 py-1.5 text-left transition-colors rounded ${
                         activeStepId === step.id
                           ? "bg-blue-50 border-l-2 border-blue-500"
