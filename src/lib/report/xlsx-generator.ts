@@ -10,7 +10,7 @@ interface SheetConfig {
 
 export async function generateXlsx(sheets: SheetConfig[]): Promise<Uint8Array> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Aptus";
+  workbook.creator = "aptus";
   workbook.created = new Date();
 
   for (const sheet of sheets) {

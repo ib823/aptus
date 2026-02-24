@@ -74,7 +74,7 @@ export function magicLinkEmail(url: string, email: string): { subject: string; h
       <p style="margin:0 0 16px;font-size:13px;color:#9ca3af;">
         This link expires in 15 minutes. If you didn't request this, you can safely ignore this email.
       </p>
-      ${button(url, "Sign in to Aptus")}
+      ${button(url, "Sign in to aptus")}
       <p style="margin:0;font-size:12px;color:#d1d5db;word-break:break-all;">
         Or copy this link: ${url}
       </p>

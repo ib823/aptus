@@ -1,61 +1,37 @@
 interface AptusLogoProps {
   size?: "sm" | "md" | "lg";
   className?: string;
-  iconOnly?: boolean;
 }
 
 const sizeMap = {
-  sm: { icon: 20, fontSize: 20 },
-  md: { icon: 28, fontSize: 30 },
-  lg: { icon: 36, fontSize: 40 },
+  sm: 24,
+  md: 32,
+  lg: 40,
 } as const;
 
-/** Aptus "a" logomark — derived from the app icon.svg */
-function AptusIcon({ size }: { size: number }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 100 100"
-      width={size}
-      height={size}
-      aria-hidden="true"
-      className="shrink-0"
-    >
-      <g
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="8.333"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M66.667 83.6A37.5 37.5 0 1 1 87.5 50v6.25a10.417 10.417 0 0 1-20.833 0V33.333m0 16.667a16.667 16.667 0 1 1-33.333 0 16.667 16.667 0 0 1 33.333 0Z" />
-      </g>
-    </svg>
-  );
-}
-
-export function AptusLogo({ size = "md", className = "", iconOnly = false }: AptusLogoProps) {
-  const { icon, fontSize } = sizeMap[size];
+/** aptus geometric "A" logomark */
+export function AptusLogo({ size = "md", className = "" }: AptusLogoProps) {
+  const px = sizeMap[size];
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 ${className}`}
+      className={`inline-flex items-center ${className}`}
       aria-label="aptus"
     >
-      <AptusIcon size={icon} />
-      {!iconOnly && (
-        <span
-          className="text-foreground"
-          style={{
-            fontWeight: 500,
-            letterSpacing: "-0.04em",
-            fontSize,
-            lineHeight: 1,
-          }}
-        >
-          aptus
-        </span>
-      )}
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 326 326"
+        width={px}
+        height={px}
+        fill="currentColor"
+        aria-hidden="true"
+        className="shrink-0"
+      >
+        <g transform="translate(0,326) scale(0.1,-0.1)">
+          <path d="M1700 3061 c0 -8 214 -404 557 -1031 123 -225 536 -990 765 -1419 l50 -94 -99 6 c-55 4 -144 18 -198 32 -54 14 -140 45 -190 69 -50 25 -120 66 -155 93 -36 26 -95 79 -133 117 -37 38 -92 106 -121 150 -30 45 -136 236 -236 426 -101 190 -243 458 -317 595 -73 138 -157 295 -185 351 l-52 101 26 59 c14 32 81 172 148 311 68 139 127 250 131 247 5 -3 9 -9 9 -13z" />
+          <path d="M1677 1757 c-6 -15 -481 -830 -642 -1102 -62 -104 -137 -216 -166 -248 -28 -32 -83 -81 -122 -108 -38 -26 -104 -62 -147 -79 -43 -16 -118 -36 -165 -45 -48 -8 -130 -15 -181 -15 -52 0 -94 2 -94 5 0 3 37 71 81 152 157 286 701 1279 742 1353 22 41 42 77 44 80 5 6 254 15 487 18 l168 2 -5 -13z" />
+        </g>
+      </svg>
     </span>
   );
 }
