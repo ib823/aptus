@@ -112,6 +112,32 @@ export async function validateSession(
 }
 
 /**
+ * Rotate a session token — issues a new token for the same session.
+ * Use after sensitive operations (MFA verify, role change) to prevent
+ * session fixation attacks.
+ */
+export async function rotateSessionToken(
+  oldToken: string,
+): Promise<string | null> {
+  const session = await prisma.session.findUnique({
+    where: { token: oldToken },
+    select: { id: true, isRevoked: true, expiresAt: true },
+  });
+
+  if (!session || session.isRevoked || session.expiresAt < new Date()) {
+    return null;
+  }
+
+  const newToken = generateSessionToken();
+  await prisma.session.update({
+    where: { id: session.id },
+    data: { token: newToken },
+  });
+
+  return newToken;
+}
+
+/**
  * Mark a session as MFA-verified.
  */
 export async function markSessionMfaVerified(token: string): Promise<void> {

@@ -48,7 +48,7 @@
   --radius-4xl: calc(var(--radius) + 16px);
 
   /* Design System: Custom Shadows (using CSS vars for dark mode) */
-  --shadow-card: 0 1px 2px var(--shadow-color, oklch(0 0 0 / 0.04));
+  --shadow-card: 0 1px 3px var(--shadow-color, oklch(0 0 0 / 0.06)), 0 1px 2px var(--shadow-color, oklch(0 0 0 / 0.04));
   --shadow-card-hover: 0 4px 12px var(--shadow-color-md, oklch(0 0 0 / 0.08));
   --shadow-modal: 0 8px 24px var(--shadow-color-lg, oklch(0 0 0 / 0.12));
   --shadow-overlay: 0 16px 48px var(--shadow-color-xl, oklch(0 0 0 / 0.16));
@@ -67,7 +67,7 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: oklch(0.506 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);

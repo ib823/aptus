@@ -4,9 +4,11 @@
  * Build the Content-Security-Policy directive string.
  */
 export function getCspDirectives(): string {
+  const isDev = process.env.NODE_ENV === "development";
   return [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    // 'unsafe-inline' needed for Next.js inline scripts; 'unsafe-eval' only in dev (HMR)
+    `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://api.qrserver.com",
     "font-src 'self' data:",

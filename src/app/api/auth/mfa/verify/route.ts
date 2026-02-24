@@ -1,7 +1,7 @@
 /** POST: Verify TOTP code for session MFA */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getSessionToken, getCurrentUser, markSessionMfaVerified } from "@/lib/auth/session";
+import { getSessionToken, getCurrentUser, markSessionMfaVerified, rotateSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { verifyTotpCode } from "@/lib/auth/mfa";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
@@ -113,10 +113,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     data: { completedAt: new Date() },
   });
 
-  // Mark session as MFA-verified
+  // Mark session as MFA-verified + rotate token to prevent session fixation
   const token = await getSessionToken();
   if (token) {
     await markSessionMfaVerified(token);
+    const newToken = await rotateSessionToken(token);
+
+    if (newToken) {
+      const response = NextResponse.json({
+        data: { success: true, mfaVerified: true },
+      });
+      response.cookies.set(SESSION_COOKIE_NAME, newToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: APP_CONFIG.sessionMaxAgeHours * 60 * 60,
+      });
+      return response;
+    }
   }
 
   return NextResponse.json({

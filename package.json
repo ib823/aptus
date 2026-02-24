@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3003",
     "build": "prisma db push --skip-generate && next build",
+    "prebuild:production": "node scripts/check-production-env.js",
     "start": "next start -p 3003",
     "lint": "eslint",
     "lint:strict": "eslint . --max-warnings 0",
