@@ -164,15 +164,15 @@ export function OcmRegisterClient({
         />
 
         <div className="flex flex-wrap items-center gap-3 mb-6">
-          <select value={changeTypeFilter} onChange={(e) => setChangeTypeFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground">
+          <select value={changeTypeFilter} onChange={(e) => setChangeTypeFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1">
             <option value="all">All Change Types</option>
             {OCM_CHANGE_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <select value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground">
+          <select value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1">
             <option value="all">All Severities</option>
             {OCM_SEVERITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1">
             <option value="all">All Statuses</option>
             {OCM_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>

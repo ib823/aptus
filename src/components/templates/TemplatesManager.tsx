@@ -175,10 +175,19 @@ export function TemplatesManager({ assessments }: TemplatesManagerProps) {
       </div>
 
       {filteredTemplates.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          {templates.length === 0
-            ? "No templates yet. Create one from an existing assessment."
-            : "No templates match your filter."}
+        <div className="text-center py-12">
+          {templates.length === 0 ? (
+            <div className="space-y-3">
+              <p className="text-muted-foreground">
+                No templates yet. Create one from an existing assessment.
+              </p>
+              <Button variant="outline" onClick={() => setCreateOpen(true)}>
+                Create Your First Template
+              </Button>
+            </div>
+          ) : (
+            <p className="text-muted-foreground">No templates match your filter.</p>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">

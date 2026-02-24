@@ -85,7 +85,7 @@ export default async function AssessmentsPage() {
               key={assessment.id}
               href={assessment.status === "draft" ? `/assessment/${assessment.id}/profile` : `/assessment/${assessment.id}/scope`}
             >
-              <Card className="hover:shadow-md hover:border-blue-200 transition-all duration-200 cursor-pointer">
+              <Card className="hover:shadow-md hover:border-primary/30 transition-all duration-200 cursor-pointer">
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between">
                     <div>
@@ -100,10 +100,10 @@ export default async function AssessmentsPage() {
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 text-sm text-muted-foreground">
                     <span>
-                      {assessment._count.scopeSelections} scope items
+                      {assessment._count.scopeSelections} {assessment._count.scopeSelections === 1 ? "scope item" : "scope items"}
                     </span>
                     <span>
-                      {assessment._count.stepResponses} steps reviewed
+                      {assessment._count.stepResponses} {assessment._count.stepResponses === 1 ? "step" : "steps"} reviewed
                     </span>
                     <span>
                       {assessment._count.stakeholders} {assessment._count.stakeholders === 1 ? "member" : "members"}

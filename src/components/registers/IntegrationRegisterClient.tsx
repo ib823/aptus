@@ -151,19 +151,19 @@ export function IntegrationRegisterClient({
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3 mb-6">
-          <select value={directionFilter} onChange={(e) => setDirectionFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground">
+          <select value={directionFilter} onChange={(e) => setDirectionFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1">
             <option value="all">All Directions</option>
             {INTEGRATION_DIRECTION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground">
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1">
             <option value="all">All Types</option>
             {INTERFACE_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1">
             <option value="all">All Statuses</option>
             {INTEGRATION_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground">
+          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1">
             <option value="all">All Priorities</option>
             {PRIORITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>

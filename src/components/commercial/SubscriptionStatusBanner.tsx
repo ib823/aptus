@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { AlertCircle, Clock, CreditCard, X, XCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ interface SubscriptionStatusBannerProps {
   trialEndsAt?: string | null | undefined;
   onUpgrade?: (() => void) | undefined;
   onUpdatePayment?: (() => void) | undefined;
+  upgradeHref?: string | undefined;
 }
 
 function daysUntil(dateStr: string): number {
@@ -34,6 +36,7 @@ export function SubscriptionStatusBanner({
   trialEndsAt,
   onUpgrade,
   onUpdatePayment,
+  upgradeHref,
 }: SubscriptionStatusBannerProps) {
   const [dismissed, setDismissed] = useState(false);
 
@@ -74,10 +77,16 @@ export function SubscriptionStatusBanner({
                   {" "}Upgrade to keep access to all features.
                 </p>
               </div>
-              {onUpgrade ? (
-                <Button size="sm" onClick={onUpgrade}>
-                  Upgrade
-                </Button>
+              {(onUpgrade || upgradeHref) ? (
+                upgradeHref ? (
+                  <Link href={upgradeHref}>
+                    <Button size="sm">Upgrade</Button>
+                  </Link>
+                ) : (
+                  <Button size="sm" onClick={onUpgrade}>
+                    Upgrade
+                  </Button>
+                )
               ) : null}
             </>
           ) : status === "PAST_DUE" ? (
@@ -104,10 +113,16 @@ export function SubscriptionStatusBanner({
                   Your trial has expired. Upgrade to a paid plan to regain full access.
                 </p>
               </div>
-              {onUpgrade ? (
-                <Button size="sm" onClick={onUpgrade}>
-                  Upgrade Now
-                </Button>
+              {(onUpgrade || upgradeHref) ? (
+                upgradeHref ? (
+                  <Link href={upgradeHref}>
+                    <Button size="sm">Upgrade Now</Button>
+                  </Link>
+                ) : (
+                  <Button size="sm" onClick={onUpgrade}>
+                    Upgrade Now
+                  </Button>
+                )
               ) : null}
             </>
           ) : (

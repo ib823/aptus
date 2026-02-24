@@ -270,9 +270,9 @@ export function StepReviewCard({
             {/* Confidence dropdown — shown after a decision */}
             {step.fitStatus !== "PENDING" && (
               <div className="mt-3 flex items-center gap-3">
-                <span className="text-xs font-medium text-muted-foreground">Confidence:</span>
+                <label htmlFor={`confidence-${step.id}`} className="text-xs font-medium text-muted-foreground">Confidence:</label>
                 <Select value={step.confidence ?? ""} onValueChange={handleConfidenceChange}>
-                  <SelectTrigger className="w-32 h-8 text-xs"><SelectValue placeholder="Set level" /></SelectTrigger>
+                  <SelectTrigger id={`confidence-${step.id}`} className="w-36 h-8 text-xs"><SelectValue placeholder="Confidence level" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="high">High</SelectItem>
                     <SelectItem value="medium">Medium</SelectItem>

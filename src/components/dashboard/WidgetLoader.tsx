@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { AttentionWidget } from "@/components/dashboard/AttentionWidget";
 import { KpiPanel } from "@/components/dashboard/KpiPanel";
 import { ProgressHeatmap } from "@/components/dashboard/ProgressHeatmap";
@@ -15,11 +15,14 @@ interface WidgetLoaderProps {
   assessmentId: string | null;
 }
 
-/** Generic hook to fetch JSON from an API endpoint */
+/** Generic hook to fetch JSON from an API endpoint with retry */
 function useApiFetch<T>(url: string | null) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  const retry = useCallback(() => setRetryCount((c) => c + 1), []);
 
   useEffect(() => {
     if (!url) {
@@ -27,17 +30,19 @@ function useApiFetch<T>(url: string | null) {
       return;
     }
     let cancelled = false;
+    setLoading(true);
+    setError(null);
     async function load() {
       try {
         const res = await fetch(url!);
         if (!res.ok) {
-          setError(`Failed to load (${res.status})`);
+          if (!cancelled) setError("Unable to load this section");
           return;
         }
         const json = await res.json();
         if (!cancelled) setData(json.data);
       } catch {
-        if (!cancelled) setError("Failed to load");
+        if (!cancelled) setError("Unable to load this section");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -46,15 +51,23 @@ function useApiFetch<T>(url: string | null) {
     return () => {
       cancelled = true;
     };
-  }, [url]);
+  }, [url, retryCount]);
 
-  return { data, loading, error };
+  return { data, loading, error, retry };
 }
 
-function WidgetError({ message }: { message: string }) {
+function WidgetError({ onRetry }: { message?: string; onRetry?: () => void }) {
   return (
-    <div className="p-4 border rounded-lg bg-destructive/10 text-sm text-destructive">
-      {message}
+    <div className="p-4 border rounded-lg bg-muted/50 text-sm text-muted-foreground">
+      <p>Unable to load this section right now.</p>
+      {onRetry && (
+        <button
+          onClick={onRetry}
+          className="mt-2 text-primary hover:underline text-sm font-medium"
+        >
+          Try again
+        </button>
+      )}
     </div>
   );
 }
@@ -68,28 +81,28 @@ function WidgetPlaceholder({ widgetType }: { widgetType: WidgetType }) {
 }
 
 function AttentionLoader() {
-  const { data, loading, error } = useApiFetch<AttentionItem[]>("/api/dashboard/attention");
+  const { data, loading, error, retry } = useApiFetch<AttentionItem[]>("/api/dashboard/attention");
   if (loading) return <CardSkeleton />;
-  if (error) return <WidgetError message={error} />;
+  if (error) return <WidgetError message={error} onRetry={retry} />;
   return <AttentionWidget items={data ?? []} />;
 }
 
 function KpiLoader({ assessmentId }: { assessmentId: string }) {
-  const { data, loading, error } = useApiFetch<KpiMetrics>(
+  const { data, loading, error, retry } = useApiFetch<KpiMetrics>(
     `/api/dashboard/kpi/${assessmentId}`,
   );
   if (loading) return <CardSkeleton />;
-  if (error) return <WidgetError message={error} />;
+  if (error) return <WidgetError message={error} onRetry={retry} />;
   if (!data) return null;
   return <KpiPanel metrics={data} />;
 }
 
 function HeatmapLoader({ assessmentId }: { assessmentId: string }) {
-  const { data, loading, error } = useApiFetch<HeatmapCell[]>(
+  const { data, loading, error, retry } = useApiFetch<HeatmapCell[]>(
     `/api/dashboard/heatmap/${assessmentId}`,
   );
   if (loading) return <CardSkeleton />;
-  if (error) return <WidgetError message={error} />;
+  if (error) return <WidgetError message={error} onRetry={retry} />;
   return <ProgressHeatmap cells={data ?? []} />;
 }
 
@@ -103,9 +116,9 @@ interface Deadline {
 }
 
 function DeadlineLoader() {
-  const { data, loading, error } = useApiFetch<Deadline[]>("/api/dashboard/deadlines");
+  const { data, loading, error, retry } = useApiFetch<Deadline[]>("/api/dashboard/deadlines");
   if (loading) return <CardSkeleton />;
-  if (error) return <WidgetError message={error} />;
+  if (error) return <WidgetError message={error} onRetry={retry} />;
   return <DeadlineTimeline deadlines={data ?? []} />;
 }
 
@@ -119,9 +132,9 @@ interface ActivityEntry {
 }
 
 function ActivityLoader() {
-  const { data, loading, error } = useApiFetch<ActivityEntry[]>("/api/dashboard/activity");
+  const { data, loading, error, retry } = useApiFetch<ActivityEntry[]>("/api/dashboard/activity");
   if (loading) return <CardSkeleton />;
-  if (error) return <WidgetError message={error} />;
+  if (error) return <WidgetError message={error} onRetry={retry} />;
   return <DashboardActivityFeed entries={data ?? []} />;
 }
 
@@ -134,9 +147,9 @@ interface ConflictData {
 }
 
 function ConflictLoader() {
-  const { data, loading, error } = useApiFetch<ConflictData[]>("/api/dashboard/conflicts");
+  const { data, loading, error, retry } = useApiFetch<ConflictData[]>("/api/dashboard/conflicts");
   if (loading) return <CardSkeleton />;
-  if (error) return <WidgetError message={error} />;
+  if (error) return <WidgetError message={error} onRetry={retry} />;
   return <ConflictSummaryWidget conflicts={data ?? []} />;
 }
 

@@ -60,6 +60,7 @@ export default async function PortalLayout({
           <SubscriptionStatusBanner
             status={subscriptionStatus}
             trialEndsAt={trialEndsAt}
+            upgradeHref="/settings/subscription"
           />
         </div>
       )}
