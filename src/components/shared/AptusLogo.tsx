@@ -39,7 +39,7 @@ export function AptusLogo({ size = "md", className = "", iconOnly = false }: Apt
 
   return (
     <span
-      className={`inline-flex items-center gap-2 ${className}`}
+      className={`inline-flex items-center gap-1.5 ${className}`}
       aria-label="aptus"
     >
       <AptusIcon size={icon} />
