@@ -6,7 +6,7 @@ import {
   LayoutDashboardIcon,
   ClipboardListIcon,
   BarChart3Icon,
-  MoreHorizontalIcon,
+  SettingsIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TOUCH_TARGETS } from "@/types/pwa";
@@ -21,8 +21,8 @@ interface Tab {
 const tabs: Tab[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboardIcon, matchPrefix: "/dashboard" },
   { href: "/assessments", label: "Assessments", icon: ClipboardListIcon, matchPrefix: "/assessments" },
-  { href: "/reports", label: "Reports", icon: BarChart3Icon, matchPrefix: "/reports" },
-  { href: "/more", label: "More", icon: MoreHorizontalIcon, matchPrefix: "/more" },
+  { href: "/analytics", label: "Analytics", icon: BarChart3Icon, matchPrefix: "/analytics" },
+  { href: "/settings", label: "Settings", icon: SettingsIcon, matchPrefix: "/settings" },
 ];
 
 export function MobileBottomTabBar() {

@@ -117,7 +117,7 @@ export function DataMigrationRegisterClient({
     TRANSACTION_DATA: "bg-green-100 text-green-700",
     CONFIG_DATA: "bg-amber-100 text-amber-700",
     HISTORICAL: "bg-purple-100 text-purple-700",
-    REFERENCE: "bg-gray-100 text-gray-700",
+    REFERENCE: "bg-muted text-muted-foreground",
   };
 
   return (
@@ -143,15 +143,15 @@ export function DataMigrationRegisterClient({
         />
 
         <div className="flex flex-wrap items-center gap-3 mb-6">
-          <select value={objectTypeFilter} onChange={(e) => setObjectTypeFilter(e.target.value)} className="h-9 px-3 text-xs border border-gray-200 rounded-md bg-white text-gray-700">
+          <select value={objectTypeFilter} onChange={(e) => setObjectTypeFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground">
             <option value="all">All Object Types</option>
             {DATA_MIGRATION_OBJECT_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-9 px-3 text-xs border border-gray-200 rounded-md bg-white text-gray-700">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground">
             <option value="all">All Statuses</option>
             {DATA_MIGRATION_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="h-9 px-3 text-xs border border-gray-200 rounded-md bg-white text-gray-700">
+          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground">
             <option value="all">All Priorities</option>
             {PRIORITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -185,7 +185,7 @@ export function DataMigrationRegisterClient({
                       {item.cleansingRequired && <span className="text-xs text-amber-600">Cleansing required</span>}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge className={objectTypeColor[item.objectType] ?? "bg-gray-100"}>{item.objectType.replace(/_/g, " ")}</Badge>
+                      <Badge className={objectTypeColor[item.objectType] ?? "bg-muted"}>{item.objectType.replace(/_/g, " ")}</Badge>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{item.sourceSystem}</td>
                     <td className="px-4 py-3">

@@ -140,7 +140,11 @@ export function CommentBubble({
             variant="ghost"
             size="sm"
             className="h-7 text-xs text-destructive hover:text-destructive"
-            onClick={() => onDelete(id)}
+            onClick={() => {
+              if (window.confirm("Delete this comment? This action cannot be undone.")) {
+                onDelete(id);
+              }
+            }}
           >
             <Trash2 className="w-3 h-3 mr-1" />
             Delete

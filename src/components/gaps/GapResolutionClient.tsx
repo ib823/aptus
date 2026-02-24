@@ -222,7 +222,7 @@ export function GapResolutionClient({
           <select
             value={scopeFilter}
             onChange={(e) => setScopeFilter(e.target.value)}
-            className="h-9 px-3 text-xs border border-gray-200 rounded-md bg-white text-gray-700"
+            className="h-9 px-3 text-xs border rounded-md bg-background text-foreground"
           >
             <option value="all">All Scope Items</option>
             {scopeItems.map(([id, name]) => (
@@ -235,7 +235,7 @@ export function GapResolutionClient({
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="h-9 px-3 text-xs border border-gray-200 rounded-md bg-white text-gray-700"
+            className="h-9 px-3 text-xs border rounded-md bg-background text-foreground"
           >
             <option value="all">All Types</option>
             <option value="PENDING">Pending</option>
@@ -252,7 +252,7 @@ export function GapResolutionClient({
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
-            className="h-9 px-3 text-xs border border-gray-200 rounded-md bg-white text-gray-700"
+            className="h-9 px-3 text-xs border rounded-md bg-background text-foreground"
           >
             <option value="all">All Priorities</option>
             <option value="critical">Critical</option>
@@ -264,7 +264,7 @@ export function GapResolutionClient({
           <select
             value={approvalFilter}
             onChange={(e) => setApprovalFilter(e.target.value)}
-            className="h-9 px-3 text-xs border border-gray-200 rounded-md bg-white text-gray-700"
+            className="h-9 px-3 text-xs border rounded-md bg-background text-foreground"
           >
             <option value="all">All Statuses</option>
             <option value="pending">Pending Approval</option>
@@ -296,7 +296,7 @@ export function GapResolutionClient({
         )}
 
         {/* Action bar */}
-        <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200">
+        <div className="flex items-center justify-between mt-8 pt-6 border-t">
           <Link href={`/assessment/${assessmentId}/review`}>
             <Button variant="outline">
               <ArrowLeft className="w-4 h-4 mr-1.5" />
@@ -305,10 +305,10 @@ export function GapResolutionClient({
           </Link>
 
           <div className="text-center">
-            <p className="text-base font-semibold text-gray-950">
+            <p className="text-base font-semibold text-foreground">
               {summary.resolved} of {summary.total} gaps resolved
             </p>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-muted-foreground">
               {approvalStatus.approved} approved · {costRollup.totalImplementationDays} effort days
             </p>
           </div>

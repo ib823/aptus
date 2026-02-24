@@ -164,15 +164,15 @@ export function OcmRegisterClient({
         />
 
         <div className="flex flex-wrap items-center gap-3 mb-6">
-          <select value={changeTypeFilter} onChange={(e) => setChangeTypeFilter(e.target.value)} className="h-9 px-3 text-xs border border-gray-200 rounded-md bg-white text-gray-700">
+          <select value={changeTypeFilter} onChange={(e) => setChangeTypeFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground">
             <option value="all">All Change Types</option>
             {OCM_CHANGE_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <select value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)} className="h-9 px-3 text-xs border border-gray-200 rounded-md bg-white text-gray-700">
+          <select value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground">
             <option value="all">All Severities</option>
             {OCM_SEVERITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-9 px-3 text-xs border border-gray-200 rounded-md bg-white text-gray-700">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-9 px-3 text-xs border rounded-md bg-background text-foreground">
             <option value="all">All Statuses</option>
             {OCM_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -239,7 +239,7 @@ export function OcmRegisterClient({
                           <Badge variant="outline">{item.changeType.replace(/_/g, " ")}</Badge>
                         </td>
                         <td className="px-4 py-3">
-                          <Badge className={severityColor[item.severity] ?? "bg-gray-100"}>{item.severity}</Badge>
+                          <Badge className={severityColor[item.severity] ?? "bg-muted"}>{item.severity}</Badge>
                         </td>
                         <td className="px-4 py-3">
                           <Badge variant="outline">{item.status}</Badge>
@@ -247,7 +247,7 @@ export function OcmRegisterClient({
                         <td className="px-4 py-3">
                           {item.readinessScore !== null ? (
                             <div className="flex items-center gap-2">
-                              <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                              <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
                                 <div className="h-full bg-blue-600 rounded-full" style={{ width: `${item.readinessScore * 100}%` }} />
                               </div>
                               <span className="text-xs text-muted-foreground">{Math.round(item.readinessScore * 100)}%</span>
