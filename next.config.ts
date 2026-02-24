@@ -18,6 +18,14 @@ const nextConfig: NextConfig = {
     "prisma",
     "@sentry/nextjs",
   ],
+  async rewrites() {
+    return [
+      {
+        source: "/favicon.ico",
+        destination: "/icon.svg",
+      },
+    ];
+  },
   async headers() {
     return [
       {
