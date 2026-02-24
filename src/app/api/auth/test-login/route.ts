@@ -17,6 +17,14 @@ const TEST_USER_NAME = "E2E Tester";
 const TEST_USER_ROLE = "platform_admin";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  // Gate 0: never available in production unless explicitly opted in
+  if (process.env.NODE_ENV === "production" && !process.env.ALLOW_TEST_LOGIN) {
+    return NextResponse.json(
+      { error: "Not available" },
+      { status: 404 },
+    );
+  }
+
   const secret = process.env.E2E_TEST_SECRET;
 
   // Gate 1: endpoint is a no-op unless E2E_TEST_SECRET is configured

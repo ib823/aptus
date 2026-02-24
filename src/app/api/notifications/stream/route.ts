@@ -4,7 +4,7 @@ import { type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 
-const POLL_INTERVAL_MS = 3_000; // Poll DB every 3 seconds
+const POLL_INTERVAL_MS = 10_000; // Poll DB every 10 seconds (reduced from 3s)
 const HEARTBEAT_INTERVAL_MS = 30_000; // Send heartbeat every 30 seconds
 const MAX_DURATION_MS = 5 * 60 * 1_000; // 5-minute max stream (Vercel-compatible)
 
@@ -17,6 +17,7 @@ export async function GET(_request: NextRequest): Promise<Response> {
   const userId = user.id;
   const startTime = Date.now();
   let lastCheckedAt = new Date();
+  let lastSentCount = -1; // Track last sent count to avoid redundant events
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -46,33 +47,38 @@ export async function GET(_request: NextRequest): Promise<Response> {
 
         heartbeatCounter++;
 
-        // Send heartbeat every ~30s (10 poll cycles)
+        // Send heartbeat every ~30s
         if (heartbeatCounter % Math.ceil(HEARTBEAT_INTERVAL_MS / POLL_INTERVAL_MS) === 0) {
           send("heartbeat", { timestamp: new Date().toISOString() });
         }
 
-        // Poll for new notifications
+        // Poll for new notifications — single query for both new items and count
         try {
-          const newNotifications = await prisma.notification.findMany({
-            where: {
-              userId,
-              status: "unread",
-              sentAt: { gt: lastCheckedAt },
-            },
-            orderBy: { sentAt: "desc" },
-            take: 10,
-          });
+          const [newNotifications, count] = await Promise.all([
+            prisma.notification.findMany({
+              where: {
+                userId,
+                status: "unread",
+                sentAt: { gt: lastCheckedAt },
+              },
+              orderBy: { sentAt: "desc" },
+              take: 10,
+            }),
+            prisma.notification.count({
+              where: { userId, status: "unread" },
+            }),
+          ]);
 
           if (newNotifications.length > 0) {
             send("notifications", newNotifications);
             lastCheckedAt = new Date();
           }
 
-          // Also send updated unread count
-          const count = await prisma.notification.count({
-            where: { userId, status: "unread" },
-          });
-          send("unread_count", { count });
+          // Only send unread_count when it changes
+          if (count !== lastSentCount) {
+            send("unread_count", { count });
+            lastSentCount = count;
+          }
         } catch {
           // DB error — skip this cycle
         }

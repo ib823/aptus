@@ -11,6 +11,9 @@ export const metadata: Metadata = {
   title: "aptus",
   description: "SAP S/4HANA Cloud best practices process validation portal",
   manifest: "/manifest.json",
+  icons: {
+    apple: "/icons/icon-192x192.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -29,9 +32,17 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <body className="antialiased">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:text-sm focus:font-medium"
+        >
+          Skip to main content
+        </a>
         <Providers>
           <ServiceWorkerProvider />
-          <TooltipProvider>{children}</TooltipProvider>
+          <TooltipProvider>
+            <div id="main-content">{children}</div>
+          </TooltipProvider>
           <Toaster />
         </Providers>
       </body>

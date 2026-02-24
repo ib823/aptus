@@ -87,31 +87,6 @@ export function PortalNav({ user }: PortalNavProps) {
                   );
                 })}
             </nav>
-            {/* Mobile nav icons */}
-            <nav className="flex sm:hidden items-center gap-1" aria-label="Mobile navigation">
-              {navItems
-                .filter((item) => item.show)
-                .map((item) => {
-                  const isActive =
-                    pathname === item.href ||
-                    pathname.startsWith(item.href + "/");
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={`flex items-center justify-center h-9 w-9 rounded-md transition-all ${
-                        isActive
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground hover:bg-accent"
-                      }`}
-                      aria-label={item.label}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </Link>
-                  );
-                })}
-            </nav>
           </div>
           <div className="flex items-center gap-1 sm:gap-3 shrink-0">
             <span className="hidden sm:inline text-sm text-muted-foreground">{user.name}</span>
