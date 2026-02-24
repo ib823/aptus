@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { useState, memo } from "react";
 import { getStepCategoryColor } from "@/lib/assessment/step-classifier";
 import type { StepGroup } from "@/lib/assessment/step-grouper";
 
@@ -13,7 +13,7 @@ interface StepGroupSidebarProps {
   onStepClick: (stepId: string) => void;
 }
 
-export function StepGroupSidebar({
+export const StepGroupSidebar = memo(function StepGroupSidebar({
   groups,
   activeGroupKey,
   activeStepId,
@@ -98,4 +98,4 @@ export function StepGroupSidebar({
       })}
     </div>
   );
-}
+});

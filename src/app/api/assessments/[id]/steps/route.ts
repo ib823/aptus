@@ -91,7 +91,6 @@ export async function GET(
           isClassifiable: true,
           groupKey: true,
           groupLabel: true,
-          parsedContent: true,
         },
       },
     },

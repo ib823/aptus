@@ -1,99 +1,50 @@
 /** ProcessStep queries */
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 
 export async function getSelectedScopeItemsWithProgress(assessmentId: string) {
-  // Get selected scope item IDs
   const selections = await prisma.scopeSelection.findMany({
     where: { assessmentId, selected: true },
     select: { scopeItemId: true },
   });
   const selectedIds = selections.map((s) => s.scopeItemId);
+  if (selectedIds.length === 0) return [];
 
-  const items = await prisma.scopeItem.findMany({
-    where: { id: { in: selectedIds } },
-    orderBy: [{ functionalArea: "asc" }, { nameClean: "asc" }],
-    select: {
-      id: true,
-      nameClean: true,
-      functionalArea: true,
-      totalSteps: true,
-    },
-  });
-
-  // Get response counts per scope item
-  const responses = await prisma.stepResponse.groupBy({
-    by: ["processStepId"],
-    where: {
-      assessmentId,
-      fitStatus: { not: "PENDING" },
-    },
-    _count: { id: true },
-  });
-
-  // Map responses to scope items
-  const steps = await prisma.processStep.findMany({
-    where: {
-      scopeItemId: { in: items.map((i) => i.id) },
-    },
-    select: {
-      id: true,
-      scopeItemId: true,
-    },
-  });
-
-  const stepToScope = new Map<string, string>();
-  for (const step of steps) {
-    stepToScope.set(step.id, step.scopeItemId);
-  }
-
-  // Count reviewed steps per scope item
-  const reviewedByScopeItem = new Map<string, number>();
-  for (const r of responses) {
-    const scopeItemId = stepToScope.get(r.processStepId);
-    if (scopeItemId) {
-      reviewedByScopeItem.set(
-        scopeItemId,
-        (reviewedByScopeItem.get(scopeItemId) ?? 0) + r._count.id,
-      );
-    }
-  }
-
-  // Get status counts per scope item
-  const allResponses = await prisma.stepResponse.findMany({
-    where: {
-      assessmentId,
-      processStep: {
-        scopeItemId: { in: items.map((i) => i.id) },
-      },
-    },
-    select: {
-      fitStatus: true,
-      processStep: {
-        select: { scopeItemId: true },
-      },
-    },
-  });
+  const [items, statusRows] = await Promise.all([
+    prisma.scopeItem.findMany({
+      where: { id: { in: selectedIds } },
+      orderBy: [{ functionalArea: "asc" }, { nameClean: "asc" }],
+      select: { id: true, nameClean: true, functionalArea: true, totalSteps: true },
+    }),
+    prisma.$queryRaw<Array<{ scopeItemId: string; fitStatus: string; count: number }>>`
+      SELECT ps."scopeItemId", sr."fitStatus", COUNT(*)::int as count
+      FROM "StepResponse" sr
+      JOIN "ProcessStep" ps ON sr."processStepId" = ps.id
+      WHERE sr."assessmentId" = ${assessmentId}
+        AND ps."scopeItemId" IN (${Prisma.join(selectedIds)})
+      GROUP BY ps."scopeItemId", sr."fitStatus"
+    `,
+  ]);
 
   const statusCounts = new Map<string, { fit: number; configure: number; gap: number; na: number; pending: number }>();
   for (const item of items) {
     statusCounts.set(item.id, { fit: 0, configure: 0, gap: 0, na: 0, pending: 0 });
   }
-
-  for (const r of allResponses) {
-    const counts = statusCounts.get(r.processStep.scopeItemId);
+  for (const row of statusRows) {
+    const counts = statusCounts.get(row.scopeItemId);
     if (!counts) continue;
-    switch (r.fitStatus) {
-      case "FIT": counts.fit++; break;
-      case "CONFIGURE": counts.configure++; break;
-      case "GAP": counts.gap++; break;
-      case "NA": counts.na++; break;
+    switch (row.fitStatus) {
+      case "FIT": counts.fit = row.count; break;
+      case "CONFIGURE": counts.configure = row.count; break;
+      case "GAP": counts.gap = row.count; break;
+      case "NA": counts.na = row.count; break;
     }
   }
 
   return items.map((item) => {
-    const counts = statusCounts.get(item.id) ?? { fit: 0, configure: 0, gap: 0, na: 0, pending: 0 };
-    const reviewed = reviewedByScopeItem.get(item.id) ?? 0;
+    const counts = statusCounts.get(item.id)!;
+    const reviewed = counts.fit + counts.configure + counts.gap + counts.na;
     counts.pending = item.totalSteps - reviewed;
     return {
       ...item,
@@ -143,7 +94,6 @@ export async function getStepsForScopeItem(
       isClassifiable: true,
       groupKey: true,
       groupLabel: true,
-      parsedContent: true,
     },
   });
 

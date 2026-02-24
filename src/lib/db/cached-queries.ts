@@ -36,3 +36,58 @@ export const getScopeItemCount = unstable_cache(
   ["scope-item-count"],
   { revalidate: 3600, tags: ["catalog"] },
 );
+
+/** Catalog scope data — cached 1 hour, invalidated by "catalog" tag.
+ *  Returns scope items (without HTML), config counts, classifiable step counts, and effort baselines.
+ */
+export const getCatalogScopeData = unstable_cache(
+  async () => {
+    const NON_CLASSIFIABLE_TYPES = ["LOGON", "LOGOFF", "ACCESS_APP", "INFORMATION"];
+
+    const [scopeItems, configCounts, classifiableCounts, effortBaselines] = await Promise.all([
+      prisma.scopeItem.findMany({
+        orderBy: [{ functionalArea: "asc" }, { nameClean: "asc" }],
+        select: {
+          id: true,
+          name: true,
+          nameClean: true,
+          country: true,
+          totalSteps: true,
+          functionalArea: true,
+          subArea: true,
+          tutorialUrl: true,
+          setupPdfStored: true,
+        },
+      }),
+      prisma.configActivity.groupBy({
+        by: ["scopeItemId"],
+        _count: { id: true },
+      }),
+      prisma.processStep.groupBy({
+        by: ["scopeItemId"],
+        where: { stepType: { notIn: NON_CLASSIFIABLE_TYPES } },
+        _count: { id: true },
+      }),
+      prisma.effortBaseline.findMany({
+        select: {
+          scopeItemId: true,
+          implementationDays: true,
+        },
+      }),
+    ]);
+
+    const configCountMap = Object.fromEntries(
+      configCounts.map((c) => [c.scopeItemId, c._count.id]),
+    );
+    const classifiableMap = Object.fromEntries(
+      classifiableCounts.map((c) => [c.scopeItemId, c._count.id]),
+    );
+    const effortMap = Object.fromEntries(
+      effortBaselines.map((e) => [e.scopeItemId, e.implementationDays]),
+    );
+
+    return { scopeItems, configCountMap, classifiableMap, effortMap };
+  },
+  ["catalog-scope-data"],
+  { revalidate: 3600, tags: ["catalog"] },
+);

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, memo } from "react";
 import { ChevronLeft, ChevronRight, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { StepReviewCard } from "@/components/review/StepReviewCard";
 import { ReferenceStepRow } from "@/components/review/ReferenceStepRow";
@@ -41,7 +42,6 @@ interface StepData {
   currentProcess: string | null;
   stepCategory?: string | null;
   isClassifiable?: boolean | null;
-  parsedContent?: Record<string, unknown> | null;
   confidence?: string | null;
   evidenceUrls?: string[];
 }
@@ -72,6 +72,52 @@ interface ReviewClientProps {
   initialProgress: OverallProgress;
 }
 
+// Memoized scope item button for sidebar
+const ScopeItemButton = memo(function ScopeItemButton({
+  item,
+  isActive,
+  onClick,
+}: {
+  item: ScopeItemNav;
+  isActive: boolean;
+  onClick: (id: string) => void;
+}) {
+  const percent = item.totalSteps > 0
+    ? Math.round((item.reviewedSteps / item.totalSteps) * 100)
+    : 0;
+
+  return (
+    <button
+      onClick={() => onClick(item.id)}
+      className={`w-full text-left px-4 py-2 transition-colors ${
+        isActive
+          ? "bg-card border-l-2 border-blue-500"
+          : "hover:bg-accent border-l-2 border-transparent"
+      }`}
+    >
+      <p className="text-xs font-medium text-foreground truncate">{item.nameClean}</p>
+      <div className="flex items-center gap-2 mt-0.5">
+        <div className="flex-1">
+          <div className="h-1 rounded-full bg-muted">
+            <div
+              className="h-1 rounded-full bg-blue-500 transition-all"
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+        </div>
+        <span className="text-[10px] text-muted-foreground/60 shrink-0">
+          {item.reviewedSteps}/{item.totalSteps}
+        </span>
+      </div>
+    </button>
+  );
+});
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  return res.json() as Promise<T>;
+}
+
 export function ReviewClient({
   assessmentId,
   assessmentStatus,
@@ -83,77 +129,88 @@ export function ReviewClient({
   const [currentScopeItemId, setCurrentScopeItemId] = useState<string | null>(
     initialScopeItems[0]?.id ?? null,
   );
-  const [steps, setSteps] = useState<StepData[]>([]);
-  const [configs, setConfigs] = useState<ConfigItem[]>([]);
+  const [localStepOverrides, setLocalStepOverrides] = useState<
+    Map<string, Partial<StepData>>
+  >(new Map());
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [showAllSteps, setShowAllSteps] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [overallProgress, setOverallProgress] = useState(initialProgress);
   const [bulkLoading, setBulkLoading] = useState(false);
 
   const isReadOnly = assessmentStatus === "signed_off" || assessmentStatus === "reviewed";
   const isItLead = userRole === "it_lead";
 
-  // Fetch steps when scope item changes
-  useEffect(() => {
-    if (!currentScopeItemId) return;
+  // React Query: fetch catalog steps (static, 5 min stale)
+  const { data: stepsData, isLoading: stepsLoading } = useQuery({
+    queryKey: ["catalog-steps", currentScopeItemId],
+    queryFn: () =>
+      fetchJson<{ data: StepData[] }>(
+        `/api/catalog/scope-items/${currentScopeItemId}/steps?limit=200`,
+      ),
+    enabled: !!currentScopeItemId,
+    staleTime: 5 * 60 * 1000,
+  });
 
-    let cancelled = false;
-    setLoading(true);
+  // React Query: fetch catalog configs (static, 5 min stale)
+  const { data: configsData, isLoading: configsLoading } = useQuery({
+    queryKey: ["catalog-configs", currentScopeItemId],
+    queryFn: () =>
+      fetchJson<{ data: ConfigItem[] }>(
+        `/api/catalog/scope-items/${currentScopeItemId}/configs`,
+      ),
+    enabled: !!currentScopeItemId,
+    staleTime: 5 * 60 * 1000,
+  });
 
-    const fetchData = async () => {
-      const [stepsRes, configsRes] = await Promise.all([
-        fetch(`/api/catalog/scope-items/${currentScopeItemId}/steps?limit=200`),
-        fetch(`/api/catalog/scope-items/${currentScopeItemId}/configs`),
-      ]);
-
-      if (cancelled) return;
-
-      const stepsData = await stepsRes.json();
-      const configsData = await configsRes.json();
-
-      // Also fetch responses for these steps
-      const responsesRes = await fetch(
+  // React Query: fetch step responses (mutable, 1 min stale)
+  const { data: responsesData, isLoading: responsesLoading } = useQuery({
+    queryKey: ["step-responses", assessmentId, currentScopeItemId],
+    queryFn: () =>
+      fetchJson<{ data: Array<{ processStepId: string; fitStatus: string; clientNote: string | null; currentProcess: string | null; confidence?: string | null }> }>(
         `/api/assessments/${assessmentId}/steps?scopeItemId=${currentScopeItemId}&limit=200`,
-      );
-      const responsesData = await responsesRes.json();
+      ),
+    enabled: !!currentScopeItemId,
+    staleTime: 60 * 1000,
+  });
 
-      if (cancelled) return;
+  const loading = stepsLoading || configsLoading || responsesLoading;
 
-      // Merge responses into steps
-      const responseMap = new Map<string, { fitStatus: string; clientNote: string | null; currentProcess: string | null; confidence?: string | null }>();
-      for (const r of responsesData.data ?? []) {
-        responseMap.set(r.processStepId, {
-          fitStatus: r.fitStatus,
-          clientNote: r.clientNote,
-          currentProcess: r.currentProcess,
-          confidence: r.confidence ?? null,
-        });
-      }
-
-      const mergedSteps = (stepsData.data as StepData[]).map((step: StepData) => {
-        const response = responseMap.get(step.id);
-        return {
-          ...step,
-          fitStatus: response?.fitStatus ?? "PENDING",
-          clientNote: response?.clientNote ?? null,
-          currentProcess: response?.currentProcess ?? null,
-          confidence: response?.confidence ?? null,
-        };
+  // Merge catalog steps + responses + local overrides
+  const steps = useMemo(() => {
+    if (!stepsData?.data) return [];
+    const responseMap = new Map<string, { fitStatus: string; clientNote: string | null; currentProcess: string | null; confidence?: string | null }>();
+    for (const r of responsesData?.data ?? []) {
+      responseMap.set(r.processStepId, {
+        fitStatus: r.fitStatus,
+        clientNote: r.clientNote,
+        currentProcess: r.currentProcess,
+        confidence: r.confidence ?? null,
       });
+    }
+    return stepsData.data.map((step) => {
+      const response = responseMap.get(step.id);
+      const override = localStepOverrides.get(step.id);
+      return {
+        ...step,
+        fitStatus: override?.fitStatus ?? response?.fitStatus ?? "PENDING",
+        clientNote: override?.clientNote ?? response?.clientNote ?? null,
+        currentProcess: override?.currentProcess ?? response?.currentProcess ?? null,
+        confidence: (override?.confidence ?? response?.confidence ?? null) as string | null,
+      };
+    });
+  }, [stepsData, responsesData, localStepOverrides]);
 
-      setSteps(mergedSteps);
-      setConfigs(configsData.data ?? []);
-      setCurrentStepIndex(0);
-      setLoading(false);
-    };
+  const configs = useMemo(() => configsData?.data ?? [], [configsData]);
 
-    void fetchData();
+  // Reset step index and local overrides when scope item changes
+  useEffect(() => {
+    setCurrentStepIndex(0);
+    setLocalStepOverrides(new Map());
+  }, [currentScopeItemId]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [currentScopeItemId, assessmentId]);
+  // Ref to current steps for use in callbacks without re-creating them
+  const stepsRef = useRef(steps);
+  stepsRef.current = steps;
 
   // Group steps using the step grouper
   const stepGroups = useMemo(() => groupSteps(steps), [steps]);
@@ -163,10 +220,8 @@ export function ReviewClient({
   const visibleSteps = useMemo(() => {
     if (showAllSteps) return steps;
     return steps.filter((s) => {
-      // Check isClassifiable from step data or infer
       if (s.isClassifiable === true) return true;
       if (s.isClassifiable === false) return false;
-      // Fallback: non-classifiable types
       const nonClassifiableTypes = ["LOGON", "LOGOFF", "ACCESS_APP", "INFORMATION", "NAVIGATION"];
       return !nonClassifiableTypes.includes(s.stepType);
     });
@@ -212,7 +267,6 @@ export function ReviewClient({
       if (idx >= 0) {
         setCurrentStepIndex(idx);
       } else if (!showAllSteps) {
-        // Step not visible — switch to show-all and find it
         setShowAllSteps(true);
         const allIdx = steps.findIndex((s) => s.id === stepId);
         if (allIdx >= 0) setCurrentStepIndex(allIdx);
@@ -232,30 +286,30 @@ export function ReviewClient({
     [stepGroups, handleStepClick],
   );
 
-  // Handle response change
+  // Stable scope item click handler
+  const handleScopeItemClick = useCallback((id: string) => setCurrentScopeItemId(id), []);
+
+  // Handle response change — uses stepsRef to avoid recreating on every steps change
   const handleResponseChange = useCallback(
     async (stepId: string, data: { fitStatus: string; clientNote?: string | undefined; currentProcess?: string | undefined; confidence?: string | undefined }) => {
-      // Optimistic update
-      setSteps((prev) =>
-        prev.map((s) =>
-          s.id === stepId
-            ? {
-                ...s,
-                fitStatus: data.fitStatus,
-                clientNote: data.clientNote ?? s.clientNote,
-                currentProcess: data.currentProcess ?? s.currentProcess,
-                confidence: (data.confidence ?? s.confidence) as string | null,
-              }
-            : s,
-        ),
-      );
+      // Optimistic update via local overrides
+      setLocalStepOverrides((prev) => {
+        const next = new Map(prev);
+        next.set(stepId, {
+          fitStatus: data.fitStatus,
+          clientNote: data.clientNote ?? stepsRef.current.find((s) => s.id === stepId)?.clientNote ?? null,
+          currentProcess: data.currentProcess ?? stepsRef.current.find((s) => s.id === stepId)?.currentProcess ?? null,
+          confidence: (data.confidence ?? stepsRef.current.find((s) => s.id === stepId)?.confidence ?? null) as string | null,
+        });
+        return next;
+      });
 
       // Update sidebar counts optimistically
       if (currentScopeItemId) {
         setScopeItems((prev) =>
           prev.map((item) => {
             if (item.id !== currentScopeItemId) return item;
-            const oldStep = steps.find((s) => s.id === stepId);
+            const oldStep = stepsRef.current.find((s) => s.id === stepId);
             const oldStatus = oldStep?.fitStatus ?? "PENDING";
             const newStatus = data.fitStatus;
 
@@ -285,7 +339,7 @@ export function ReviewClient({
         );
 
         setOverallProgress((prev) => {
-          const oldStep = steps.find((s) => s.id === stepId);
+          const oldStep = stepsRef.current.find((s) => s.id === stepId);
           const oldStatus = oldStep?.fitStatus ?? "PENDING";
           const newStatus = data.fitStatus;
           if (oldStatus === newStatus) return prev;
@@ -324,14 +378,14 @@ export function ReviewClient({
         // Retry silently
       }
     },
-    [assessmentId, currentScopeItemId, steps],
+    [assessmentId, currentScopeItemId],
   );
 
   // Bulk mark remaining as FIT
   const handleBulkFit = useCallback(async () => {
     if (!currentScopeItemId || bulkLoading) return;
 
-    const pendingSteps = steps.filter((s) => s.fitStatus === "PENDING");
+    const pendingSteps = stepsRef.current.filter((s) => s.fitStatus === "PENDING");
     if (pendingSteps.length === 0) return;
 
     setBulkLoading(true);
@@ -347,11 +401,15 @@ export function ReviewClient({
       });
 
       if (res.ok) {
-        setSteps((prev) =>
-          prev.map((s) =>
-            s.fitStatus === "PENDING" ? { ...s, fitStatus: "FIT" } : s,
-          ),
-        );
+        setLocalStepOverrides((prev) => {
+          const next = new Map(prev);
+          for (const step of stepsRef.current) {
+            if (step.fitStatus === "PENDING") {
+              next.set(step.id, { ...step, fitStatus: "FIT" });
+            }
+          }
+          return next;
+        });
 
         setScopeItems((prev) =>
           prev.map((item) => {
@@ -368,7 +426,7 @@ export function ReviewClient({
     } finally {
       setBulkLoading(false);
     }
-  }, [assessmentId, currentScopeItemId, steps, bulkLoading]);
+  }, [assessmentId, currentScopeItemId, bulkLoading]);
 
   return (
     <div className="flex">
@@ -394,38 +452,14 @@ export function ReviewClient({
 
         {/* Scope item picker */}
         <div className="border-b border max-h-[200px] overflow-y-auto">
-          {scopeItems.map((item) => {
-            const percent = item.totalSteps > 0
-              ? Math.round((item.reviewedSteps / item.totalSteps) * 100)
-              : 0;
-
-            return (
-              <button
-                key={item.id}
-                onClick={() => setCurrentScopeItemId(item.id)}
-                className={`w-full text-left px-4 py-2 transition-colors ${
-                  currentScopeItemId === item.id
-                    ? "bg-card border-l-2 border-blue-500"
-                    : "hover:bg-accent border-l-2 border-transparent"
-                }`}
-              >
-                <p className="text-xs font-medium text-foreground truncate">{item.nameClean}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <div className="flex-1">
-                    <div className="h-1 rounded-full bg-muted">
-                      <div
-                        className="h-1 rounded-full bg-blue-500 transition-all"
-                        style={{ width: `${percent}%` }}
-                      />
-                    </div>
-                  </div>
-                  <span className="text-[10px] text-muted-foreground/60 shrink-0">
-                    {item.reviewedSteps}/{item.totalSteps}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
+          {scopeItems.map((item) => (
+            <ScopeItemButton
+              key={item.id}
+              item={item}
+              isActive={currentScopeItemId === item.id}
+              onClick={handleScopeItemClick}
+            />
+          ))}
         </div>
 
         {/* Step group sidebar — grouped steps for current scope item */}

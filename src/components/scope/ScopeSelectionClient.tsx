@@ -21,9 +21,9 @@ interface ScopeItemData {
   subArea: string;
   configCount: number;
   tutorialUrl: string | null;
-  purposeHtml: string;
-  overviewHtml: string;
-  prerequisitesHtml: string;
+  purposeHtml?: string;
+  overviewHtml?: string;
+  prerequisitesHtml?: string;
   setupPdfStored: boolean;
   selected: boolean;
   relevance: string | null;

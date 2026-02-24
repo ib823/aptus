@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, memo } from "react";
 import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,9 +16,9 @@ interface ScopeItemData {
   subArea: string;
   configCount: number;
   tutorialUrl: string | null;
-  purposeHtml: string;
-  overviewHtml: string;
-  prerequisitesHtml: string;
+  purposeHtml?: string;
+  overviewHtml?: string;
+  prerequisitesHtml?: string;
   selected: boolean;
   relevance: string | null;
   currentState: string | null;
@@ -84,12 +84,39 @@ const COMPLEXITY_OPTIONS = [
   { value: "high", label: "High" },
 ] as const;
 
-export function ScopeItemCard({ item, assessmentId, onSelectionChange, isPreSelected }: ScopeItemCardProps) {
+export const ScopeItemCard = memo(function ScopeItemCard({ item, assessmentId, onSelectionChange, isPreSelected }: ScopeItemCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [showEnrichment, setShowEnrichment] = useState(false);
   const [impact, setImpact] = useState<ImpactData | null>(null);
   const [loadingImpact, setLoadingImpact] = useState(false);
+  const [htmlContent, setHtmlContent] = useState<{
+    purposeHtml: string;
+    overviewHtml: string;
+    prerequisitesHtml: string;
+  } | null>(
+    item.purposeHtml ? { purposeHtml: item.purposeHtml, overviewHtml: item.overviewHtml ?? "", prerequisitesHtml: item.prerequisitesHtml ?? "" } : null,
+  );
+  const [loadingHtml, setLoadingHtml] = useState(false);
   const relevance = item.relevance ?? "YES";
+
+  // Fetch HTML content on first expand
+  useEffect(() => {
+    if (!expanded || htmlContent || loadingHtml) return;
+    let cancelled = false;
+    setLoadingHtml(true);
+    fetch(`/api/catalog/scope-items/${item.id}/html`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (!cancelled && json.data) {
+          setHtmlContent(json.data);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingHtml(false);
+      });
+    return () => { cancelled = true; };
+  }, [expanded, htmlContent, loadingHtml, item.id]);
 
   const handleToggle = useCallback(() => {
     const newSelected = !item.selected;
@@ -257,51 +284,57 @@ export function ScopeItemCard({ item, assessmentId, onSelectionChange, isPreSele
 
       {expanded && (
         <div className="bg-muted/40 p-5 rounded-md mb-3 mx-1 border-t border">
-          <Tabs defaultValue="purpose">
-            <TabsList>
-              <TabsTrigger value="purpose">Purpose</TabsTrigger>
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="prerequisites">Prerequisites</TabsTrigger>
-              {item.tutorialUrl && <TabsTrigger value="tutorial">Tutorial</TabsTrigger>}
-            </TabsList>
-            <TabsContent value="purpose" className="mt-3">
-              {(() => {
-                const summary = extractScopeSummary(item.purposeHtml);
-                return summary ? (
-                  <p className="text-sm text-muted-foreground mb-3">{summary}</p>
-                ) : null;
-              })()}
-              <div
-                className="prose prose-sm max-w-none text-muted-foreground"
-                dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(item.purposeHtml) }}
-              />
-            </TabsContent>
-            <TabsContent value="overview" className="mt-3">
-              <div
-                className="prose prose-sm max-w-none text-muted-foreground"
-                dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(item.overviewHtml) }}
-              />
-            </TabsContent>
-            <TabsContent value="prerequisites" className="mt-3">
-              <div
-                className="prose prose-sm max-w-none text-muted-foreground"
-                dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(item.prerequisitesHtml) }}
-              />
-            </TabsContent>
-            {item.tutorialUrl && (
-              <TabsContent value="tutorial" className="mt-3">
-                <a
-                  href={item.tutorialUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-blue-500 hover:text-blue-600"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  Open Tutorial
-                </a>
+          {loadingHtml ? (
+            <div className="py-4 text-sm text-muted-foreground">Loading content...</div>
+          ) : htmlContent ? (
+            <Tabs defaultValue="purpose">
+              <TabsList>
+                <TabsTrigger value="purpose">Purpose</TabsTrigger>
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="prerequisites">Prerequisites</TabsTrigger>
+                {item.tutorialUrl && <TabsTrigger value="tutorial">Tutorial</TabsTrigger>}
+              </TabsList>
+              <TabsContent value="purpose" className="mt-3">
+                {(() => {
+                  const summary = extractScopeSummary(htmlContent.purposeHtml);
+                  return summary ? (
+                    <p className="text-sm text-muted-foreground mb-3">{summary}</p>
+                  ) : null;
+                })()}
+                <div
+                  className="prose prose-sm max-w-none text-muted-foreground"
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(htmlContent.purposeHtml) }}
+                />
               </TabsContent>
-            )}
-          </Tabs>
+              <TabsContent value="overview" className="mt-3">
+                <div
+                  className="prose prose-sm max-w-none text-muted-foreground"
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(htmlContent.overviewHtml) }}
+                />
+              </TabsContent>
+              <TabsContent value="prerequisites" className="mt-3">
+                <div
+                  className="prose prose-sm max-w-none text-muted-foreground"
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(htmlContent.prerequisitesHtml) }}
+                />
+              </TabsContent>
+              {item.tutorialUrl && (
+                <TabsContent value="tutorial" className="mt-3">
+                  <a
+                    href={item.tutorialUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-blue-500 hover:text-blue-600"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Open Tutorial
+                  </a>
+                </TabsContent>
+              )}
+            </Tabs>
+          ) : (
+            <div className="py-4 text-sm text-muted-foreground">No content available</div>
+          )}
 
           {/* Enrichment section */}
           {item.selected && (
@@ -390,4 +423,4 @@ export function ScopeItemCard({ item, assessmentId, onSelectionChange, isPreSele
       )}
     </div>
   );
-}
+});
