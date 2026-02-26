@@ -2,7 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getSelectedScopeItemsWithProgress, getOverallReviewProgress } from "@/lib/db/process-steps";
 import { prisma } from "@/lib/db/prisma";
-import { ReviewClient } from "@/components/review/ReviewClient";
+import { ReviewShell } from "@/components/review/ReviewShell";
 
 interface ReviewPageProps {
   params: Promise<{ id: string }>;
@@ -30,7 +30,7 @@ export default async function ReviewPage({ params }: ReviewPageProps) {
   ]);
 
   return (
-    <ReviewClient
+    <ReviewShell
       assessmentId={assessment.id}
       assessmentStatus={assessment.status}
       userRole={user.role}

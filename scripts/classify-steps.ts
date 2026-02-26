@@ -26,6 +26,7 @@ async function main() {
         id: true,
         stepType: true,
         activityTitle: true,
+        activityId: true,
       },
     });
 

@@ -61,6 +61,7 @@ export async function getStepsForScopeItem(
     cursor?: string;
     limit?: number;
     hideRepetitive?: boolean;
+    activityId?: string;
   },
 ) {
   const limit = opts?.limit ?? 50;
@@ -69,6 +70,9 @@ export async function getStepsForScopeItem(
   const where: Record<string, unknown> = { scopeItemId };
   if (opts?.hideRepetitive) {
     where.stepType = { notIn: repetitiveTypes };
+  }
+  if (opts?.activityId) {
+    where.activityId = opts.activityId;
   }
 
   const steps = await prisma.processStep.findMany({
@@ -89,6 +93,7 @@ export async function getStepsForScopeItem(
       processFlowGroup: true,
       activityTitle: true,
       activityTargetUrl: true,
+      activityId: true,
       solutionProcessFlowName: true,
       stepCategory: true,
       isClassifiable: true,

@@ -156,7 +156,9 @@ export async function getStepDataForReport(assessmentId: string) {
         select: {
           id: true,
           scopeItemId: true,
+          solutionProcessName: true,
           solutionProcessFlowName: true,
+          activityTitle: true,
           sequence: true,
           actionTitle: true,
           stepType: true,
@@ -176,7 +178,9 @@ export async function getStepDataForReport(assessmentId: string) {
   return responses.map((r) => ({
     scopeItemId: r.processStep.scopeItemId,
     scopeItemName: scopeMap.get(r.processStep.scopeItemId) ?? r.processStep.scopeItemId,
+    solutionProcess: r.processStep.solutionProcessName ?? "",
     processFlow: r.processStep.solutionProcessFlowName ?? "",
+    activityTitle: r.processStep.activityTitle ?? "",
     stepSequence: r.processStep.sequence,
     actionTitle: r.processStep.actionTitle,
     stepType: r.processStep.stepType,

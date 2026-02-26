@@ -1,3 +1,8 @@
+/**
+ * @deprecated Use ReviewShell instead. This component uses flat step loading
+ * and string-based grouping. Retained for rollback safety; remove after 3 months
+ * of stable production with ReviewShell (target: May 2026).
+ */
 "use client";
 
 import { useState, useCallback, useEffect, useMemo, useRef, memo } from "react";

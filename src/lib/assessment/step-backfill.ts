@@ -24,6 +24,7 @@ export async function backfillStepMetadata(): Promise<{ processed: number; batch
         id: true,
         stepType: true,
         activityTitle: true,
+        activityId: true,
         actionInstructionsHtml: true,
         actionExpectedResult: true,
       },

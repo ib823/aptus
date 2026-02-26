@@ -1,10 +1,10 @@
 /**
  * STATUS: Wired to real production code
  * REAL MODULE: src/lib/assessment/step-grouper.ts
- * Uses: groupSteps from real module, isStepClassifiable from real step-classifier
+ * Uses: groupSteps (legacy alias), groupStepsByActivity (primary) from real module
  */
 import { describe, it, expect } from "vitest";
-import { groupSteps } from "@/lib/assessment/step-grouper";
+import { groupSteps, groupStepsByActivity } from "@/lib/assessment/step-grouper";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -234,5 +234,82 @@ describe("groupSteps", () => {
     const groups = groupSteps([]);
     expect(groups).toEqual([]);
     expect(groups).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// groupStepsByActivity (primary entity-based grouper)
+// ---------------------------------------------------------------------------
+
+describe("groupStepsByActivity", () => {
+  it("T-SGR-009: groups by activityId FK, not activity title string", () => {
+    const steps = [
+      { id: "s1", sequence: 1, actionTitle: "Step A", stepType: "DATA_ENTRY", activityTitle: "Create PO", activityId: "act-1" },
+      { id: "s2", sequence: 2, actionTitle: "Step B", stepType: "DATA_ENTRY", activityTitle: "Create PO", activityId: "act-1" },
+      { id: "s3", sequence: 3, actionTitle: "Step C", stepType: "DATA_ENTRY", activityTitle: "Create PO", activityId: "act-2" },
+    ];
+
+    const groups = groupStepsByActivity(steps);
+    expect(groups).toHaveLength(2);
+    expect(groups[0]!.activityId).toBe("act-1");
+    expect(groups[0]!.steps).toHaveLength(2);
+    expect(groups[1]!.activityId).toBe("act-2");
+    expect(groups[1]!.steps).toHaveLength(1);
+  });
+
+  it("T-SGR-010: same title different IDs produce separate groups (no collision)", () => {
+    const steps = [
+      { id: "s1", sequence: 1, actionTitle: "Step A", stepType: "DATA_ENTRY", activityTitle: "Post Invoice", activityId: "act-A" },
+      { id: "s2", sequence: 2, actionTitle: "Step B", stepType: "DATA_ENTRY", activityTitle: "Post Invoice", activityId: "act-B" },
+    ];
+
+    const groups = groupStepsByActivity(steps);
+    expect(groups).toHaveLength(2);
+    expect(groups[0]!.activityId).not.toBe(groups[1]!.activityId);
+  });
+
+  it("T-SGR-011: falls back to string key when activityId is null", () => {
+    const steps = [
+      { id: "s1", sequence: 1, actionTitle: "Step A", stepType: "DATA_ENTRY", activityTitle: "Create SO", activityId: null },
+      { id: "s2", sequence: 2, actionTitle: "Step B", stepType: "DATA_ENTRY", activityTitle: "Create SO", activityId: null },
+    ];
+
+    const groups = groupStepsByActivity(steps);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.activityTitle).toBe("Create SO");
+    expect(groups[0]!.steps).toHaveLength(2);
+  });
+
+  it("T-SGR-012: empty input returns empty array", () => {
+    expect(groupStepsByActivity([])).toEqual([]);
+  });
+
+  it("T-SGR-013: classifiable count is accurate per activity group", () => {
+    const steps = [
+      { id: "s1", sequence: 1, actionTitle: "Step A", stepType: "DATA_ENTRY", activityTitle: "Create PO", activityId: "act-1" },
+      { id: "s2", sequence: 2, actionTitle: "Step B", stepType: "INFORMATION", activityTitle: "Create PO", activityId: "act-1" },
+      { id: "s3", sequence: 3, actionTitle: "Step C", stepType: "DATA_ENTRY", activityTitle: "Post Invoice", activityId: "act-2" },
+    ];
+
+    const groups = groupStepsByActivity(steps);
+    const act1 = groups.find((g) => g.activityId === "act-1");
+    expect(act1!.classifiableCount).toBe(1);
+    const act2 = groups.find((g) => g.activityId === "act-2");
+    expect(act2!.classifiableCount).toBe(1);
+  });
+
+  it("T-SGR-014: preserves process flow and solution process names", () => {
+    const steps = [
+      {
+        id: "s1", sequence: 1, actionTitle: "Step A", stepType: "DATA_ENTRY",
+        activityTitle: "Create PO", activityId: "act-1",
+        solutionProcessFlowName: "Procurement Flow",
+        solutionProcessName: "Procurement",
+      },
+    ];
+
+    const groups = groupStepsByActivity(steps);
+    expect(groups[0]!.processFlowName).toBe("Procurement Flow");
+    expect(groups[0]!.solutionProcessName).toBe("Procurement");
   });
 });
