@@ -81,6 +81,7 @@ interface ReviewShellProps {
 
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
+  if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
   return res.json() as Promise<T>;
 }
 
@@ -127,7 +128,7 @@ function ReviewShellInner({
   });
 
   useEffect(() => {
-    if (hierarchyData) setTree(hierarchyData);
+    if (hierarchyData && Array.isArray(hierarchyData.processes)) setTree(hierarchyData);
   }, [hierarchyData, setTree]);
 
   // Fetch activity progress
@@ -211,10 +212,12 @@ function ReviewShellInner({
        !["LOGON", "LOGOFF", "ACCESS_APP", "INFORMATION", "NAVIGATION"].includes(currentStep.stepType))
     : false;
 
+  const processes = tree?.processes ?? [];
+
   // Find current activity node from tree
   const currentActivityNode = useMemo((): ActivityNode | null => {
-    if (!tree || !currentActivityId) return null;
-    for (const p of tree.processes) {
+    if (!currentActivityId) return null;
+    for (const p of processes) {
       for (const f of p.flows) {
         for (const a of f.activities) {
           if (a.id === currentActivityId) return a;
@@ -222,12 +225,12 @@ function ReviewShellInner({
       }
     }
     return null;
-  }, [tree, currentActivityId]);
+  }, [processes, currentActivityId]);
 
   // Find breadcrumb context
   const breadcrumbContext = useMemo(() => {
-    if (!tree || !currentActivityId) return null;
-    for (const p of tree.processes) {
+    if (!currentActivityId) return null;
+    for (const p of processes) {
       for (const f of p.flows) {
         for (const a of f.activities) {
           if (a.id === currentActivityId) {
@@ -237,13 +240,12 @@ function ReviewShellInner({
       }
     }
     return null;
-  }, [tree, currentActivityId]);
+  }, [processes, currentActivityId]);
 
   // All activity IDs in order
   const allActivityIds = useMemo(() => {
-    if (!tree) return [];
-    return tree.processes.flatMap((p) => p.flows.flatMap((f) => f.activities.map((a) => a.id)));
-  }, [tree]);
+    return processes.flatMap((p) => p.flows.flatMap((f) => f.activities.map((a) => a.id)));
+  }, [processes]);
 
   const currentActivityIndex = currentActivityId ? allActivityIds.indexOf(currentActivityId) : -1;
   const hasNextActivity = currentActivityIndex >= 0 && currentActivityIndex < allActivityIds.length - 1;

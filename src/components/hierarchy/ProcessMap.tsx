@@ -11,7 +11,7 @@ interface ProcessMapProps {
 }
 
 export function ProcessMap({ tree, onActivitySelect }: ProcessMapProps) {
-  if (tree.processes.length === 0) {
+  if (!tree.processes || tree.processes.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
         No process hierarchy available for this scope item.
