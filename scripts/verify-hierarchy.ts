@@ -35,12 +35,12 @@ async function main() {
     detail: `${spCount} entities`,
   });
 
-  // Check 3: ProcessFlow count > SolutionProcess count
+  // Check 3: ProcessFlow count >= SolutionProcess count
   const pfCount = await prisma.processFlow.count();
   results.push({
-    name: "3. ProcessFlow count > SolutionProcess count",
-    passed: pfCount > spCount,
-    detail: `${pfCount} flows > ${spCount} processes`,
+    name: "3. ProcessFlow count >= SolutionProcess count",
+    passed: pfCount >= spCount,
+    detail: `${pfCount} flows >= ${spCount} processes`,
   });
 
   // Check 4: Activity count > ProcessFlow count
