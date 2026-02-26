@@ -1,4 +1,4 @@
-/** GET: Process steps for a scope item */
+/** GET: Process steps filtered by activity */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -10,12 +10,11 @@ import { z } from "zod";
 const querySchema = z.object({
   cursor: z.string().optional(),
   limit: z.coerce.number().min(1).max(200).default(50),
-  hideRepetitive: z.enum(["true", "false"]).optional(),
-  activityId: z.string().optional(),
 });
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ scopeItemId: string }> },
+  { params }: { params: Promise<{ scopeItemId: string; activityId: string }> },
 ): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {
@@ -32,7 +31,7 @@ export async function GET(
     );
   }
 
-  const { scopeItemId } = await params;
+  const { scopeItemId, activityId } = await params;
 
   const searchParams = Object.fromEntries(request.nextUrl.searchParams.entries());
   const parsed = querySchema.safeParse(searchParams);
@@ -44,18 +43,9 @@ export async function GET(
   }
 
   const limit = parsed.data.limit;
-  const repetitiveTypes = ["LOGON", "ACCESS_APP"];
-
-  const where: Record<string, unknown> = { scopeItemId };
-  if (parsed.data.hideRepetitive === "true") {
-    where.stepType = { notIn: repetitiveTypes };
-  }
-  if (parsed.data.activityId) {
-    where.activityId = parsed.data.activityId;
-  }
 
   const steps = await prisma.processStep.findMany({
-    where,
+    where: { scopeItemId, activityId },
     orderBy: { sequence: "asc" },
     take: limit + 1,
     ...(parsed.data.cursor ? { cursor: { id: parsed.data.cursor }, skip: 1 } : {}),
@@ -72,6 +62,8 @@ export async function GET(
       activityTargetUrl: true,
       activityId: true,
       solutionProcessFlowName: true,
+      stepCategory: true,
+      isClassifiable: true,
     },
   });
 

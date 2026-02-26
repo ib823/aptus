@@ -52,6 +52,7 @@ function createBase(overrides: StepOverrides = {}): ProcessStep {
     parsedContent: overrides.parsedContent ?? null,
     isClassifiable: overrides.isClassifiable ?? true,
     groupKey: overrides.groupKey ?? null,
+    activityId: overrides.activityId ?? null,
     groupLabel: overrides.groupLabel ?? null,
     createdAt: overrides.createdAt ?? now,
   };
@@ -109,6 +110,7 @@ export function createWithRealSAPContent(overrides: StepOverrides = {}): Process
     solutionProcessName: "Invoice Receipt",
     solutionProcessFlowName: "Accounts Payable Flow",
     activityTitle: "Post Vendor Invoice",
+    activityId: overrides.activityId ?? "real-sap-activity-1",
     actionTitle: "Create Vendor Invoice",
     actionInstructionsHtml:
       "<p>Navigate to transaction FB60. Enter the vendor number in the <b>Vendor</b> field. " +
@@ -127,6 +129,25 @@ export function createWithRealSAPContent(overrides: StepOverrides = {}): Process
     },
     groupKey: "accounts_payable",
     groupLabel: "Accounts Payable",
+    ...overrides,
+  });
+}
+
+export function createWithHierarchy(overrides: StepOverrides = {}): ProcessStep {
+  return createBase({
+    scopeItemId: "J60",
+    stepType: "BusinessProcess",
+    solutionProcessName: "Invoice Receipt",
+    solutionProcessFlowName: "Accounts Payable Flow",
+    activityTitle: "Post Vendor Invoice",
+    activityId: overrides.activityId ?? "test-activity-1",
+    actionTitle: "Create Vendor Invoice",
+    actionInstructionsHtml: "<p>Navigate to FB60. Enter vendor, amount, payment terms.</p>",
+    actionExpectedResult: "Invoice posted, document number generated.",
+    stepCategory: "BUSINESS_PROCESS",
+    isClassifiable: true,
+    groupKey: "BUSINESS_PROCESS:Post Vendor Invoice",
+    groupLabel: "Post Vendor Invoice",
     ...overrides,
   });
 }

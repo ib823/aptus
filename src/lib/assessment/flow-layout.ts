@@ -28,10 +28,13 @@ const NODES_PER_ROW = 4;
 const PADDING = 20;
 
 /**
+ * @deprecated Use computeHierarchicalLayout() instead for activity-aware layouts.
+ * Retained for existing flow diagram routes. Remove after May 2026.
+ *
  * Compute sequential layout positions for process steps.
  * Arranges nodes in rows of NODES_PER_ROW, wrapping to the next row.
  */
-export function computeSequentialLayout(steps: LayoutStep[]): LayoutResult {
+export function computeSequentialLayoutLegacy(steps: LayoutStep[]): LayoutResult {
   if (steps.length === 0) {
     return { nodes: [], edges: [], viewBox: { width: 0, height: 0 } };
   }
@@ -83,6 +86,9 @@ export function computeSequentialLayout(steps: LayoutStep[]): LayoutResult {
 
   return { nodes, edges, viewBox };
 }
+
+/** @deprecated Alias for computeSequentialLayoutLegacy. Use computeHierarchicalLayout() instead. */
+export const computeSequentialLayout = computeSequentialLayoutLegacy;
 
 /** Color map for fit status in SVG thumbnails */
 const STATUS_COLORS: Record<string, string> = {
@@ -150,6 +156,142 @@ export function generateThumbnailSvg(
 
   lines.push("</svg>");
   return lines.join("\n");
+}
+
+/** Input step with activity context for hierarchical layout */
+export interface HierarchicalLayoutStep extends LayoutStep {
+  activityId: string | null;
+  activityTitle: string | null;
+}
+
+/** Hierarchical layout result with activity sections */
+export interface HierarchicalLayoutResult extends LayoutResult {
+  activitySections: ActivitySection[];
+}
+
+export interface ActivitySection {
+  activityId: string;
+  activityTitle: string;
+  bounds: { x: number; y: number; width: number; height: number };
+  nodeIds: string[];
+}
+
+const SECTION_PADDING = 15;
+const SECTION_HEADER_HEIGHT = 28;
+
+/**
+ * Compute hierarchical layout positions grouped by activity.
+ * Each activity gets its own labeled section.
+ */
+export function computeHierarchicalLayout(steps: HierarchicalLayoutStep[]): HierarchicalLayoutResult {
+  if (steps.length === 0) {
+    return { nodes: [], edges: [], viewBox: { width: 0, height: 0 }, activitySections: [] };
+  }
+
+  const sorted = [...steps].sort((a, b) => a.sequence - b.sequence);
+
+  // Group by activity
+  const groups = new Map<string, { title: string; steps: HierarchicalLayoutStep[] }>();
+  const groupOrder: string[] = [];
+  for (const step of sorted) {
+    const key = step.activityId ?? "__ungrouped__";
+    if (!groups.has(key)) {
+      groupOrder.push(key);
+      groups.set(key, { title: step.activityTitle ?? "Process Steps", steps: [] });
+    }
+    groups.get(key)!.steps.push(step);
+  }
+
+  const nodes: FlowNode[] = [];
+  const edges: FlowEdge[] = [];
+  const activitySections: ActivitySection[] = [];
+  let currentY = PADDING;
+
+  for (const key of groupOrder) {
+    const group = groups.get(key)!;
+    const sectionStartY = currentY;
+
+    // Section header space
+    currentY += SECTION_HEADER_HEIGHT;
+
+    const sectionNodes: string[] = [];
+
+    for (let i = 0; i < group.steps.length; i++) {
+      const step = group.steps[i]!;
+      const col = i % NODES_PER_ROW;
+      const row = Math.floor(i / NODES_PER_ROW);
+      const position: FlowPosition = {
+        x: PADDING + SECTION_PADDING + col * (NODE_WIDTH + H_GAP),
+        y: currentY + row * (NODE_HEIGHT + V_GAP),
+      };
+
+      const node: FlowNode = {
+        id: `node-${step.id}`,
+        label: step.actionTitle,
+        fitStatus: step.fitStatus,
+        position,
+        width: NODE_WIDTH,
+        height: NODE_HEIGHT,
+        stepSequence: step.sequence,
+        scopeItemId: step.scopeItemId,
+        processStepId: step.processStepId,
+        actionTitle: step.actionTitle,
+        clientNote: step.clientNote,
+      };
+      nodes.push(node);
+      sectionNodes.push(node.id);
+    }
+
+    // Connect nodes within this group
+    for (let i = 0; i < sectionNodes.length - 1; i++) {
+      edges.push({
+        id: `edge-${sectionNodes[i]}-${sectionNodes[i + 1]}`,
+        sourceId: sectionNodes[i]!,
+        targetId: sectionNodes[i + 1]!,
+      });
+    }
+
+    const rows = Math.ceil(group.steps.length / NODES_PER_ROW);
+    const sectionHeight = SECTION_HEADER_HEIGHT + rows * (NODE_HEIGHT + V_GAP) + SECTION_PADDING;
+    const sectionWidth = SECTION_PADDING * 2 + Math.min(group.steps.length, NODES_PER_ROW) * NODE_WIDTH + (Math.min(group.steps.length, NODES_PER_ROW) - 1) * H_GAP;
+
+    activitySections.push({
+      activityId: key,
+      activityTitle: group.title,
+      bounds: {
+        x: PADDING,
+        y: sectionStartY,
+        width: sectionWidth,
+        height: sectionHeight,
+      },
+      nodeIds: sectionNodes,
+    });
+
+    currentY += rows * (NODE_HEIGHT + V_GAP) + SECTION_PADDING + V_GAP;
+  }
+
+  // Connect last node of each section to first node of next section
+  for (let s = 0; s < activitySections.length - 1; s++) {
+    const currentSection = activitySections[s]!;
+    const nextSection = activitySections[s + 1]!;
+    const lastNode = currentSection.nodeIds[currentSection.nodeIds.length - 1];
+    const firstNode = nextSection.nodeIds[0];
+    if (lastNode && firstNode) {
+      edges.push({
+        id: `edge-section-${lastNode}-${firstNode}`,
+        sourceId: lastNode,
+        targetId: firstNode,
+      });
+    }
+  }
+
+  const maxCol = Math.min(sorted.length, NODES_PER_ROW);
+  const viewBox = {
+    width: PADDING * 2 + SECTION_PADDING * 2 + maxCol * NODE_WIDTH + (maxCol - 1) * H_GAP,
+    height: currentY + PADDING,
+  };
+
+  return { nodes, edges, viewBox, activitySections };
 }
 
 function escapeXml(str: string): string {

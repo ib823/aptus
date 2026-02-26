@@ -32,12 +32,67 @@ model ScopeItem {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  processSteps ProcessStep[]
-  setupGuide   SetupGuide?
+  processSteps      ProcessStep[]
+  setupGuide        SetupGuide?
+  solutionProcesses SolutionProcess[]
 
   @@index([functionalArea])
   @@index([subArea])
   @@index([country])
+}
+
+// Phase M1: Hierarchy Entities — extracted from flat ProcessStep columns
+model SolutionProcess {
+  id          String   @id @default(cuid())
+  scopeItemId String
+  guid        String?  // col 4 — SAP-assigned GUID
+  name        String   // col 5 — e.g. "Invoice Processing"
+  sequence    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  scopeItem    ScopeItem     @relation(fields: [scopeItemId], references: [id])
+  processFlows ProcessFlow[]
+
+  @@unique([scopeItemId, name])
+  @@index([scopeItemId])
+  @@index([guid])
+}
+
+model ProcessFlow {
+  id                String   @id @default(cuid())
+  solutionProcessId String
+  guid              String?  // col 6
+  name              String   // col 7
+  flowDiagramGuid   String?  // col 8 (L4 folded into L3)
+  flowDiagramName   String?  // col 9
+  sequence          Int      @default(0)
+  createdAt         DateTime @default(now())
+
+  solutionProcess SolutionProcess    @relation(fields: [solutionProcessId], references: [id])
+  activities      Activity[]
+  diagrams        ProcessFlowDiagram[]
+
+  @@unique([solutionProcessId, name])
+  @@index([solutionProcessId])
+  @@index([guid])
+}
+
+model Activity {
+  id            String   @id @default(cuid())
+  processFlowId String
+  guid          String?  // col 13
+  title         String   // col 14
+  targetName    String?  // col 15
+  targetUrl     String?  // col 16
+  sequence      Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  processFlow  ProcessFlow   @relation(fields: [processFlowId], references: [id])
+  processSteps ProcessStep[]
+
+  @@unique([processFlowId, title])
+  @@index([processFlowId])
+  @@index([guid])
 }
 
 model ProcessStep {
@@ -45,21 +100,36 @@ model ProcessStep {
   scopeItemId             String
   sequence                Int
 
+  /// @deprecated Flat hierarchy column — superseded by SolutionProcess/ProcessFlow/Activity entities.
+  /// Retained for rollback safety. Planned removal: May 2026.
   testCaseGuid            String?
+  /// @deprecated See testCaseGuid note.
   testCaseName            String?
+  /// @deprecated See testCaseGuid note.
   scopeGuid               String?
+  /// @deprecated See testCaseGuid note.
   scopeName               String?
+  /// @deprecated See testCaseGuid note. Use SolutionProcess.guid via Activity FK chain.
   solutionProcessGuid     String?
+  /// @deprecated See testCaseGuid note. Use SolutionProcess.name via Activity FK chain.
   solutionProcessName     String?
+  /// @deprecated See testCaseGuid note. Use ProcessFlow.guid via Activity FK chain.
   solutionProcessFlowGuid String?
+  /// @deprecated See testCaseGuid note. Use ProcessFlow.name via Activity FK chain.
   solutionProcessFlowName String?
+  /// @deprecated See testCaseGuid note. Use ProcessFlow.flowDiagramGuid via Activity FK chain.
   flowDiagramGuid         String?
+  /// @deprecated See testCaseGuid note. Use ProcessFlow.flowDiagramName via Activity FK chain.
   flowDiagramName         String?
+  /// @deprecated See testCaseGuid note.
   testCasePriority        String?
+  /// @deprecated See testCaseGuid note.
   testCaseOwner           String?
+  /// @deprecated See testCaseGuid note.
   testCaseStatus          String?
   activityGuid            String?
   activityTitle           String?
+  /// @deprecated See testCaseGuid note. Use Activity.targetName via activityId FK.
   activityTargetName      String?
   activityTargetUrl       String?
   actionGuid              String?
@@ -68,6 +138,7 @@ model ProcessStep {
   actionExpectedResult    String?  @db.Text
 
   stepType         String
+  /// @deprecated See testCaseGuid note. Use ProcessFlow entity via Activity FK chain.
   processFlowGroup String?
 
   // Phase 12: Step Classification
@@ -77,9 +148,13 @@ model ProcessStep {
   groupKey         String?
   groupLabel       String?
 
+  // Phase M1: Hierarchy FK
+  activityId   String?
+
   createdAt DateTime @default(now())
 
   scopeItem     ScopeItem      @relation(fields: [scopeItemId], references: [id])
+  activity      Activity?      @relation(fields: [activityId], references: [id])
   stepResponses StepResponse[]
 
   @@index([scopeItemId])
@@ -89,6 +164,8 @@ model ProcessStep {
   @@index([stepCategory])
   @@index([groupKey])
   @@index([scopeItemId, stepCategory])
+  @@index([activityId])
+  @@index([activityId, sequence])
 }
 
 model ConfigActivity {
@@ -600,11 +677,16 @@ model ProcessFlowDiagram {
   riskOverlayData   Json?
   layoutVersion     Int       @default(1)
 
-  assessment Assessment @relation(fields: [assessmentId], references: [id])
+  // Phase M1: Hierarchy FK
+  processFlowId     String?
+
+  assessment  Assessment   @relation(fields: [assessmentId], references: [id])
+  processFlow ProcessFlow? @relation(fields: [processFlowId], references: [id])
 
   @@unique([assessmentId, scopeItemId, processFlowName])
   @@index([assessmentId])
   @@index([assessmentId, scopeItemId])
+  @@index([processFlowId])
 }
 
 // Phase 20: Functional Area Overview

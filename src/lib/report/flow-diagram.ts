@@ -106,6 +106,117 @@ export function generateFlowSvg(
   return parts.join("\n");
 }
 
+interface HierarchicalFlowStep extends FlowStep {
+  activityId: string | null;
+  activityTitle: string | null;
+}
+
+/**
+ * Generate a hierarchical flow SVG with activity swim lanes.
+ */
+export function generateHierarchicalFlowSvg(
+  flowName: string,
+  scopeItemName: string,
+  steps: HierarchicalFlowStep[],
+): string {
+  const nodeWidth = 180;
+  const nodeHeight = 50;
+  const gapX = 40;
+  const gapY = 20;
+  const nodesPerRow = 4;
+  const padding = 30;
+  const headerHeight = 60;
+  const laneHeaderHeight = 24;
+  const lanePadding = 10;
+
+  // Group by activity
+  const groups = new Map<string, { title: string; steps: HierarchicalFlowStep[] }>();
+  const groupOrder: string[] = [];
+  for (const step of steps) {
+    const key = step.activityId ?? "__ungrouped__";
+    if (!groups.has(key)) {
+      groupOrder.push(key);
+      groups.set(key, { title: step.activityTitle ?? "Process Steps", steps: [] });
+    }
+    groups.get(key)!.steps.push(step);
+  }
+
+  // Calculate total height
+  let totalHeight = padding + headerHeight;
+  for (const key of groupOrder) {
+    const group = groups.get(key)!;
+    const rows = Math.ceil(group.steps.length / nodesPerRow);
+    totalHeight += laneHeaderHeight + rows * (nodeHeight + gapY) + lanePadding * 2 + gapY;
+  }
+  totalHeight += padding;
+
+  const svgWidth = padding * 2 + nodesPerRow * nodeWidth + (nodesPerRow - 1) * gapX;
+  const parts: string[] = [];
+
+  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${totalHeight}" viewBox="0 0 ${svgWidth} ${totalHeight}">`);
+  parts.push(`<style>text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }</style>`);
+  parts.push(`<rect width="100%" height="100%" fill="white"/>`);
+
+  // Title
+  parts.push(`<text x="${padding}" y="${padding + 16}" font-size="14" font-weight="bold" fill="#111827">${escapeXml(scopeItemName)}</text>`);
+  parts.push(`<text x="${padding}" y="${padding + 34}" font-size="11" fill="#6b7280">${escapeXml(flowName)}</text>`);
+
+  // Arrow marker
+  parts.push(`<defs><marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M 0 0 L 8 3 L 0 6 Z" fill="#d1d5db"/></marker></defs>`);
+
+  let currentY = padding + headerHeight;
+
+  for (const key of groupOrder) {
+    const group = groups.get(key)!;
+    const rows = Math.ceil(group.steps.length / nodesPerRow);
+    const laneHeight = laneHeaderHeight + rows * (nodeHeight + gapY) + lanePadding;
+
+    // Lane background
+    parts.push(`<rect x="${padding - 5}" y="${currentY}" width="${svgWidth - padding * 2 + 10}" height="${laneHeight}" rx="4" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1"/>`);
+    parts.push(`<text x="${padding + 4}" y="${currentY + 16}" font-size="10" font-weight="bold" fill="#6b7280">${escapeXml(group.title)}</text>`);
+
+    currentY += laneHeaderHeight;
+
+    for (let i = 0; i < group.steps.length; i++) {
+      const step = group.steps[i]!;
+      const col = i % nodesPerRow;
+      const row = Math.floor(i / nodesPerRow);
+      const x = padding + col * (nodeWidth + gapX);
+      const y = currentY + row * (nodeHeight + gapY);
+
+      const colors = STATUS_COLORS[step.fitStatus] ?? STATUS_COLORS["PENDING"]!;
+
+      parts.push(`<rect x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" rx="6" fill="${colors.fill}" stroke="${colors.stroke}" stroke-width="1.5"/>`);
+      parts.push(`<text x="${x + 8}" y="${y + 16}" font-size="9" fill="${colors.text}" font-weight="bold">${step.sequence}</text>`);
+      const title = step.actionTitle.length > 22 ? step.actionTitle.slice(0, 22) + "…" : step.actionTitle;
+      parts.push(`<text x="${x + 8}" y="${y + 30}" font-size="10" fill="#111827">${escapeXml(title)}</text>`);
+      parts.push(`<text x="${x + 8}" y="${y + 42}" font-size="8" fill="${colors.text}">${step.fitStatus} · ${step.stepType}</text>`);
+
+      // Arrow
+      if (i < group.steps.length - 1) {
+        const nextCol = (i + 1) % nodesPerRow;
+        if (nextCol > 0) {
+          const arrowX1 = x + nodeWidth;
+          const arrowX2 = arrowX1 + gapX;
+          const arrowY = y + nodeHeight / 2;
+          parts.push(`<line x1="${arrowX1}" y1="${arrowY}" x2="${arrowX2 - 6}" y2="${arrowY}" stroke="#d1d5db" stroke-width="1.5" marker-end="url(#arrow)"/>`);
+        } else {
+          const arrowX1 = x + nodeWidth / 2;
+          const arrowY1 = y + nodeHeight;
+          const nextY = currentY + (row + 1) * (nodeHeight + gapY);
+          const nextX = padding;
+          parts.push(`<path d="M ${arrowX1} ${arrowY1} L ${arrowX1} ${arrowY1 + gapY / 2} L ${nextX + nodeWidth / 2} ${arrowY1 + gapY / 2} L ${nextX + nodeWidth / 2} ${nextY - 4}" stroke="#d1d5db" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>`);
+        }
+      }
+    }
+
+    currentY += rows * (nodeHeight + gapY) + lanePadding + gapY;
+  }
+
+  parts.push("</svg>");
+  return parts.join("\n");
+}
+
 function escapeXml(str: string): string {
   return str
     .replace(/&/g, "&amp;")

@@ -33,6 +33,7 @@ export interface ProcessStepSummary {
   processFlowGroup: string | null;
   solutionProcessName: string | null;
   solutionProcessFlowName: string | null;
+  activityId: string | null;
 }
 
 export interface ProcessStepDetail extends ProcessStepSummary {

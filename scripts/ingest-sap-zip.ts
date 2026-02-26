@@ -315,6 +315,135 @@ async function main(): Promise<void> {
   console.log(`  Total process steps: ${totalStepsInserted}`);
 
   // =========================================================================
+  // STEP 1b: Extract hierarchy entities from ProcessStep flat columns
+  // =========================================================================
+  console.log("\n--- Step 1b: Extracting hierarchy entities from ProcessStep data ---");
+
+  // Pass 1: SolutionProcess
+  const distinctProcesses = await prisma.$queryRaw<
+    Array<{ scopeItemId: string; solutionProcessName: string | null; solutionProcessGuid: string | null; minSeq: number }>
+  >`
+    SELECT "scopeItemId", "solutionProcessName",
+           MIN("solutionProcessGuid") AS "solutionProcessGuid",
+           MIN("sequence") AS "minSeq"
+    FROM "ProcessStep"
+    GROUP BY "scopeItemId", "solutionProcessName"
+    ORDER BY "scopeItemId", MIN("sequence")
+  `;
+  for (const row of distinctProcesses) {
+    const name = row.solutionProcessName ?? "__main_process__";
+    await prisma.solutionProcess.upsert({
+      where: { scopeItemId_name: { scopeItemId: row.scopeItemId, name } },
+      create: { scopeItemId: row.scopeItemId, name, guid: row.solutionProcessGuid, sequence: row.minSeq },
+      update: {},
+    });
+  }
+  const spCount = await prisma.solutionProcess.count();
+  console.log(`  SolutionProcess: ${spCount}`);
+
+  // Pass 2: ProcessFlow
+  const allSPs = await prisma.solutionProcess.findMany({ select: { id: true, scopeItemId: true, name: true } });
+  const spLookup = new Map(allSPs.map((sp) => [`${sp.scopeItemId}::${sp.name}`, sp.id]));
+
+  const distinctFlows = await prisma.$queryRaw<
+    Array<{ scopeItemId: string; solutionProcessName: string | null; solutionProcessFlowName: string | null; solutionProcessFlowGuid: string | null; flowDiagramGuid: string | null; flowDiagramName: string | null; minSeq: number }>
+  >`
+    SELECT "scopeItemId", "solutionProcessName", "solutionProcessFlowName",
+           MIN("solutionProcessFlowGuid") AS "solutionProcessFlowGuid",
+           MIN("flowDiagramGuid") AS "flowDiagramGuid",
+           MIN("flowDiagramName") AS "flowDiagramName",
+           MIN("sequence") AS "minSeq"
+    FROM "ProcessStep"
+    GROUP BY "scopeItemId", "solutionProcessName", "solutionProcessFlowName"
+    ORDER BY "scopeItemId", MIN("sequence")
+  `;
+  for (const row of distinctFlows) {
+    const procName = row.solutionProcessName ?? "__main_process__";
+    const flowName = row.solutionProcessFlowName ?? "__main_flow__";
+    const spId = spLookup.get(`${row.scopeItemId}::${procName}`);
+    if (!spId) continue;
+    await prisma.processFlow.upsert({
+      where: { solutionProcessId_name: { solutionProcessId: spId, name: flowName } },
+      create: { solutionProcessId: spId, name: flowName, guid: row.solutionProcessFlowGuid, flowDiagramGuid: row.flowDiagramGuid, flowDiagramName: row.flowDiagramName, sequence: row.minSeq },
+      update: {},
+    });
+  }
+  const pfCount = await prisma.processFlow.count();
+  console.log(`  ProcessFlow: ${pfCount}`);
+
+  // Pass 3: Activity
+  const allPFs = await prisma.processFlow.findMany({ select: { id: true, solutionProcessId: true, name: true } });
+  const spIdMap = new Map(allSPs.map((sp) => [sp.id, sp]));
+  const pfLookup = new Map<string, string>();
+  for (const pf of allPFs) {
+    const sp = spIdMap.get(pf.solutionProcessId);
+    if (sp) pfLookup.set(`${sp.scopeItemId}::${sp.name}::${pf.name}`, pf.id);
+  }
+
+  const distinctActivities = await prisma.$queryRaw<
+    Array<{ scopeItemId: string; solutionProcessName: string | null; solutionProcessFlowName: string | null; activityTitle: string | null; activityGuid: string | null; activityTargetName: string | null; activityTargetUrl: string | null; minSeq: number }>
+  >`
+    SELECT "scopeItemId", "solutionProcessName", "solutionProcessFlowName", "activityTitle",
+           MIN("activityGuid") AS "activityGuid",
+           MIN("activityTargetName") AS "activityTargetName",
+           MIN("activityTargetUrl") AS "activityTargetUrl",
+           MIN("sequence") AS "minSeq"
+    FROM "ProcessStep"
+    GROUP BY "scopeItemId", "solutionProcessName", "solutionProcessFlowName", "activityTitle"
+    ORDER BY "scopeItemId", MIN("sequence")
+  `;
+  for (const row of distinctActivities) {
+    const procName = row.solutionProcessName ?? "__main_process__";
+    const flowName = row.solutionProcessFlowName ?? "__main_flow__";
+    const title = row.activityTitle ?? "__main_activity__";
+    const pfId = pfLookup.get(`${row.scopeItemId}::${procName}::${flowName}`);
+    if (!pfId) continue;
+    await prisma.activity.upsert({
+      where: { processFlowId_title: { processFlowId: pfId, title } },
+      create: { processFlowId: pfId, title, guid: row.activityGuid, targetName: row.activityTargetName, targetUrl: row.activityTargetUrl, sequence: row.minSeq },
+      update: {},
+    });
+  }
+  const actCount = await prisma.activity.count();
+  console.log(`  Activity: ${actCount}`);
+
+  // Pass 4: Backfill ProcessStep.activityId
+  const allActs = await prisma.activity.findMany({ select: { id: true, processFlowId: true, title: true } });
+  const pfIdToKey = new Map<string, string>();
+  for (const pf of allPFs) {
+    const sp = spIdMap.get(pf.solutionProcessId);
+    if (sp) pfIdToKey.set(pf.id, `${sp.scopeItemId}::${sp.name}::${pf.name}`);
+  }
+  const actLookup = new Map<string, string>();
+  for (const a of allActs) {
+    const pfKey = pfIdToKey.get(a.processFlowId);
+    if (pfKey) actLookup.set(`${pfKey}::${a.title}`, a.id);
+  }
+
+  let bfCursor: string | undefined;
+  let bfCount = 0;
+  while (true) {
+    const batch = await prisma.processStep.findMany({
+      where: { activityId: null },
+      take: 500,
+      ...(bfCursor ? { cursor: { id: bfCursor }, skip: 1 } : {}),
+      orderBy: { id: "asc" },
+      select: { id: true, scopeItemId: true, solutionProcessName: true, solutionProcessFlowName: true, activityTitle: true },
+    });
+    if (batch.length === 0) break;
+    const ups = [];
+    for (const s of batch) {
+      const aId = actLookup.get(`${s.scopeItemId}::${s.solutionProcessName ?? "__main_process__"}::${s.solutionProcessFlowName ?? "__main_flow__"}::${s.activityTitle ?? "__main_activity__"}`);
+      if (aId) ups.push(prisma.processStep.update({ where: { id: s.id }, data: { activityId: aId } }));
+    }
+    if (ups.length > 0) await prisma.$transaction(ups);
+    bfCount += ups.length;
+    bfCursor = batch[batch.length - 1]?.id;
+    if (batch.length < 500) break;
+  }
+  console.log(`  ProcessStep.activityId backfilled: ${bfCount}`);
+
+  // =========================================================================
   // STEP 2: Parse BPD DOCX files → Update ScopeItem HTML fields (Task 1.3)
   // =========================================================================
   console.log("\n--- Step 2: Parsing BPD DOCX files ---");

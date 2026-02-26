@@ -182,7 +182,7 @@ export function StepReviewCard({
         <div>
           <span className="text-xs font-medium text-muted-foreground/60">
             Step {step.sequence + 1}
-            {step.processFlowGroup ? ` · ${step.processFlowGroup}` : ""}
+            {step.activityTitle ? ` · ${step.activityTitle}` : step.processFlowGroup ? ` · ${step.processFlowGroup}` : ""}
           </span>
           <h3 className="text-lg font-semibold text-foreground mt-1">{step.actionTitle}</h3>
         </div>

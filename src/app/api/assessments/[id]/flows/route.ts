@@ -155,7 +155,12 @@ export async function POST(
   const scopeItemsCovered = new Set<string>();
 
   for (const scopeItemId of targetIds) {
-    // Get process steps grouped by flow
+    // Get process steps grouped by flow — prefer ProcessFlow entities, fall back to string grouping
+    const processFlows = await prisma.processFlow.findMany({
+      where: { solutionProcess: { scopeItemId } },
+      select: { id: true, name: true },
+    });
+
     const steps = await prisma.processStep.findMany({
       where: { scopeItemId },
       select: {
@@ -164,6 +169,7 @@ export async function POST(
         actionTitle: true,
         stepType: true,
         solutionProcessFlowName: true,
+        activityId: true,
       },
       orderBy: { sequence: "asc" },
     });
@@ -176,6 +182,9 @@ export async function POST(
       group.push(step);
       flowGroups.set(flowName, group);
     }
+
+    // Build processFlow name-to-id lookup for FK linking
+    const pfNameToId = new Map(processFlows.map((pf) => [pf.name, pf.id]));
 
     // Get step responses for this assessment
     const stepIds = steps.map((s) => s.id);
@@ -219,12 +228,15 @@ export async function POST(
       const naCount = enrichedSteps.filter((s) => s.fitStatus === "NA").length;
       const pendingCount = enrichedSteps.filter((s) => s.fitStatus === "PENDING").length;
 
+      const processFlowId = pfNameToId.get(flowName) ?? null;
+
       await prisma.processFlowDiagram.upsert({
         where: { assessmentId_scopeItemId_processFlowName: { assessmentId, scopeItemId, processFlowName: flowName } },
         create: {
           assessmentId,
           scopeItemId,
           processFlowName: flowName,
+          processFlowId,
           svgContent: svg,
           diagramType: "sequential",
           stepCount: enrichedSteps.length,
@@ -237,6 +249,7 @@ export async function POST(
         },
         update: {
           svgContent: svg,
+          processFlowId,
           stepCount: enrichedSteps.length,
           fitCount,
           configureCount,
