@@ -46,7 +46,7 @@ describe("MFA Utilities", () => {
       expect(result.secret.length).toBeGreaterThan(10);
       expect(result.uri).toContain("otpauth://totp/");
       expect(result.uri).toContain("user%40example.com");
-      expect(result.uri).toContain("Aptus");
+      expect(result.uri).toContain("aptus");
     });
 
     it("should generate different secrets for different emails", () => {
