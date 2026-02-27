@@ -59,15 +59,32 @@ export async function GET(
     },
   });
 
+  // Count classifiable steps per activity — REM-30
+  const allActivityIds = processes.flatMap((p) =>
+    p.processFlows.flatMap((f) => f.activities.map((a) => a.id)),
+  );
+
+  const classifiableMap = new Map<string, number>();
+  if (allActivityIds.length > 0) {
+    const classifiableRows = await prisma.$queryRaw<
+      Array<{ activityId: string; count: number }>
+    >`
+      SELECT "activityId", COUNT(*)::int AS count
+      FROM "ProcessStep"
+      WHERE "activityId" = ANY(${allActivityIds})
+        AND "isClassifiable" = true
+      GROUP BY "activityId"
+    `;
+    for (const row of classifiableRows) {
+      classifiableMap.set(row.activityId, row.count);
+    }
+  }
+
   // If assessmentId provided, enrich with progress counts
   let progressMap: Map<string, { fit: number; configure: number; gap: number; na: number }> | null = null;
 
   if (assessmentId) {
-    const activityIds = processes.flatMap((p) =>
-      p.processFlows.flatMap((f) => f.activities.map((a) => a.id)),
-    );
-
-    if (activityIds.length > 0) {
+    if (allActivityIds.length > 0) {
       const progressRows = await prisma.$queryRaw<
         Array<{ activityId: string; fitStatus: string; count: number }>
       >`
@@ -118,6 +135,7 @@ export async function GET(
             targetUrl: a.targetUrl,
             sequence: a.sequence,
             stepCount: a._count.processSteps,
+            classifiableCount: classifiableMap.get(a.id) ?? a._count.processSteps,
             reviewedCount: reviewed,
             fitCount: progress?.fit ?? 0,
             configureCount: progress?.configure ?? 0,

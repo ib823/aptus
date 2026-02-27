@@ -9,6 +9,7 @@ import { sanitizeHtmlContent } from "@/lib/security/sanitize";
 import { parseStepContent } from "@/lib/assessment/content-parser";
 import { ParsedContentView } from "@/components/review/ParsedContentView";
 import { ActiveEditors } from "@/components/collaboration/ActiveEditors";
+import { getBusinessContextHint } from "@/lib/assessment/business-context";
 import { StepConflictBanner } from "@/components/collaboration/StepConflictBanner";
 import { CommentIndicator } from "@/components/comments/CommentIndicator";
 import { CommentPanel } from "@/components/comments/CommentPanel";
@@ -35,6 +36,7 @@ interface StepData {
   currentProcess: string | null;
   confidence?: string | null;
   evidenceUrls?: string[];
+  stepCategory?: string | null;
   parsedContent?: Record<string, unknown> | null;
   isClassifiable?: boolean | null;
 }
@@ -94,9 +96,9 @@ const CATEGORY_STYLES: Record<string, string> = {
 };
 
 const CATEGORY_TOOLTIPS: Record<string, string> = {
-  Mandatory: "This configuration is required for your SAP system. It will always be included in your implementation \u2014 you cannot skip it.",
-  Recommended: "SAP recommends this configuration. It is included by default, but you can exclude it if your business doesn't need it (a reason will be required).",
-  Optional: "This is an advanced configuration. It is NOT included by default. Include it only if your business specifically needs this capability.",
+  Mandatory: "Required: This setting must be configured for your SAP system to work correctly. Your implementation consultant will handle this during the project \u2014 no action needed from you right now.",
+  Recommended: "Recommended: SAP recommends this setting. It will be configured by your consultant unless you specifically ask to exclude it. You can review and exclude it later in the Configuration Matrix if your business doesn't need it.",
+  Optional: "Optional: This is an advanced setting, NOT included by default. If your business needs this capability, flag it for your consultant. Otherwise, ignore it.",
 };
 
 const STEP_TYPE_LABELS: Record<string, string> = {
@@ -244,6 +246,17 @@ export function StepReviewCard({
           How Does Your Company Do This?
         </span>
 
+        {/* Business context guidance — REM-26 */}
+        {(() => {
+          const hint = getBusinessContextHint(step.actionTitle, step.stepCategory);
+          if (!hint) return null;
+          return (
+            <p className="text-xs text-muted-foreground mt-1.5 mb-2 leading-relaxed bg-blue-50/50 dark:bg-blue-950/20 px-3 py-2 rounded-md border border-blue-100 dark:border-blue-900">
+              {hint}
+            </p>
+          );
+        })()}
+
         {isReadOnly ? (
           <div className="mt-3">
             <p className="text-sm text-muted-foreground italic">
@@ -304,18 +317,27 @@ export function StepReviewCard({
               <span className="text-xs text-muted-foreground mt-2">Saving...</span>
             )}
 
-            {/* Confidence dropdown — shown after a decision */}
+            {/* Confidence — REM-27: user-friendly labels + explanation */}
             {step.fitStatus !== "PENDING" && (
-              <div className="mt-3 flex items-center gap-3">
-                <label htmlFor={`confidence-${step.id}`} className="text-xs font-medium text-muted-foreground" title="How confident are you in this classification? High = certain, Medium = likely, Low = best guess">Confidence:</label>
-                <Select value={step.confidence ?? ""} onValueChange={handleConfidenceChange}>
-                  <SelectTrigger id={`confidence-${step.id}`} className="w-36 h-8 text-xs"><SelectValue placeholder="Confidence level" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="low">Low</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="mt-3 p-3 bg-muted/30 rounded-md">
+                <div className="flex items-center gap-3">
+                  <label htmlFor={`confidence-${step.id}`} className="text-xs font-medium text-muted-foreground">
+                    How sure are you?
+                  </label>
+                  <Select value={step.confidence ?? ""} onValueChange={handleConfidenceChange}>
+                    <SelectTrigger id={`confidence-${step.id}`} className="w-44 h-8 text-xs">
+                      <SelectValue placeholder="Select confidence" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="high">High &mdash; I&apos;m certain</SelectItem>
+                      <SelectItem value="medium">Medium &mdash; I think so</SelectItem>
+                      <SelectItem value="low">Low &mdash; best guess</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-[10px] text-muted-foreground/60 mt-1.5">
+                  Low-confidence answers will be flagged for consultant review during the workshop. It&apos;s OK to guess &mdash; that&apos;s what this field is for.
+                </p>
               </div>
             )}
 
@@ -371,11 +393,37 @@ export function StepReviewCard({
         )}
       </div>
 
-      {/* Collapsible SAP Content Section */}
+      {/* Business Summary — always visible — REM-28 */}
+      <div className="px-5 py-3 bg-muted/20 border-t">
+        <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
+          What This Step Does
+        </span>
+        {(() => {
+          const parsed = step.parsedContent
+            ? (step.parsedContent as unknown as import("@/lib/assessment/content-parser").ParsedStepContent)
+            : parseStepContent(step.actionInstructionsHtml);
+          const purpose = parsed?.purpose;
+          if (purpose) {
+            return (
+              <div
+                className="text-sm text-muted-foreground mt-1.5 leading-relaxed prose prose-sm max-w-none"
+                dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(purpose) }}
+              />
+            );
+          }
+          return (
+            <p className="text-sm text-muted-foreground mt-1.5">
+              {step.actionTitle}
+            </p>
+          );
+        })()}
+      </div>
+
+      {/* Technical Details — collapsed by default — REM-28 */}
       <div className="border-t">
         <button
           onClick={() => setSapContentExpanded(!sapContentExpanded)}
-          className="w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-muted/40 transition-colors"
+          className="w-full px-5 py-2 flex items-center gap-2 hover:bg-muted/30 transition-colors text-left"
         >
           {sapContentExpanded ? (
             <ChevronDown className="w-4 h-4 text-muted-foreground" />
@@ -383,8 +431,9 @@ export function StepReviewCard({
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           )}
           <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
-            What SAP Best Practice Says
+            Technical Details (SAP System Instructions)
           </span>
+          <span className="text-[10px] text-muted-foreground/40 ml-auto">for consultants</span>
         </button>
         {sapContentExpanded && (
           <div className="px-5 pb-4 bg-muted/40 overflow-x-auto max-w-full">
@@ -399,7 +448,7 @@ export function StepReviewCard({
             {step.actionExpectedResult && (
               <div className="mt-3">
                 <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
-                  Expected Result
+                  Expected Result (Test Verification)
                 </span>
                 <div className="overflow-x-auto max-w-full">
                   <div
@@ -433,7 +482,7 @@ export function StepReviewCard({
                   <Badge
                     variant="outline"
                     className="text-xs text-green-600 border-green-300 cursor-help"
-                    title="Self-Service: Your team can configure this directly in SAP without raising a support ticket."
+                    title="Self-Service: Your team can change this setting directly in SAP after go-live without raising a support ticket. Your consultant will still configure it initially."
                   >
                     Self-Service
                   </Badge>
@@ -441,6 +490,10 @@ export function StepReviewCard({
               </div>
             ))}
           </div>
+          {/* Action guidance — REM-29 */}
+          <p className="text-[10px] text-muted-foreground/50 mt-2 italic">
+            These settings will be configured by your consultant during implementation. Hover over each badge for details.
+          </p>
         </div>
       )}
 

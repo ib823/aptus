@@ -111,6 +111,50 @@ export function ProcessMapCanvas({ tree, onActivitySelect }: ProcessMapCanvasPro
           width={lane.laneWidth}
           height={lane.laneHeight}
         >
+          {/* Sequence arrows between activities — REM-20 */}
+          {lane.activities.map((pos, idx) => {
+            if (idx === 0) return null;
+            const prev = lane.activities[idx - 1]!;
+            const currCol = idx % CLUSTERS_PER_ROW;
+
+            if (currCol > 0) {
+              // Same row: horizontal arrow
+              const x1 = prev.x + prev.width + 2;
+              const y1 = prev.y + prev.height / 2;
+              const x2 = pos.x - 2;
+              const y2 = pos.y + pos.height / 2;
+              return (
+                <g key={`arrow-${idx}`}>
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#94a3b8" strokeWidth={1.5} />
+                  <polygon
+                    points={`${x2},${y2} ${x2 - 6},${y2 - 3} ${x2 - 6},${y2 + 3}`}
+                    fill="#94a3b8"
+                  />
+                </g>
+              );
+            }
+
+            // New row: vertical connector from end of previous row
+            const x1 = prev.x + prev.width / 2;
+            const y1 = prev.y + prev.height + 2;
+            const x2 = pos.x + pos.width / 2;
+            const y2 = pos.y - 2;
+            const midY = (y1 + y2) / 2;
+            return (
+              <g key={`arrow-${idx}`}>
+                <path
+                  d={`M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`}
+                  fill="none"
+                  stroke="#94a3b8"
+                  strokeWidth={1.5}
+                />
+                <polygon
+                  points={`${x2},${y2} ${x2 - 3},${y2 - 6} ${x2 + 3},${y2 - 6}`}
+                  fill="#94a3b8"
+                />
+              </g>
+            );
+          })}
           {lane.activities.map((pos) => {
             const activity = activityMap.get(pos.activityId);
             if (!activity) return null;

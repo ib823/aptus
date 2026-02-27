@@ -1,6 +1,7 @@
 "use client";
 
 import type { ActivityNode } from "@/types/hierarchy";
+import { getActivityDescription } from "@/constants/activity-descriptions";
 
 interface ActivityClusterProps {
   activity: ActivityNode;
@@ -19,13 +20,37 @@ function getStatusColor(activity: ActivityNode): { bg: string; border: string; t
   return { bg: "#f3f4f6", border: "#d1d5db", text: "#6b7280" };
 }
 
+/** REM-31: Strip verbose prefixes to show the differentiating part of activity titles */
+function smartTruncate(title: string, maxLen: number): string {
+  const prefixes = [
+    "Additional Information: ",
+    "Additional Information:",
+    "Preliminary Activities: ",
+    "General Settings: ",
+    "Company-Specific Settings: ",
+  ];
+  let cleaned = title;
+  for (const prefix of prefixes) {
+    if (cleaned.startsWith(prefix)) {
+      cleaned = cleaned.slice(prefix.length).trim();
+      cleaned = "\u2139\uFE0F " + cleaned;
+      break;
+    }
+  }
+  if (cleaned.length > maxLen) {
+    return cleaned.slice(0, maxLen - 1) + "\u2026";
+  }
+  return cleaned;
+}
+
 export function ActivityCluster({ activity, x, y, width, height, onSelect }: ActivityClusterProps) {
   const colors = getStatusColor(activity);
   const pct = activity.stepCount > 0 ? Math.round((activity.reviewedCount / activity.stepCount) * 100) : 0;
   const displayTitle = activity.title === "__main_activity__" ? "Steps" : activity.title;
-  const truncTitle = displayTitle.length > 24 ? displayTitle.slice(0, 23) + "…" : displayTitle;
+  const truncTitle = smartTruncate(displayTitle, 28);
 
-  const ariaLabel = `${displayTitle}: ${activity.reviewedCount} of ${activity.stepCount} steps reviewed, ${pct}% complete`;
+  const description = getActivityDescription(displayTitle);
+  const ariaLabel = `${displayTitle}: ${activity.classifiableCount ?? activity.stepCount} steps to review, ${activity.reviewedCount} done, ${pct}% complete${description ? `. ${description}` : ""}`;
 
   return (
     <g
@@ -37,6 +62,7 @@ export function ActivityCluster({ activity, x, y, width, height, onSelect }: Act
       className="cursor-pointer"
       style={{ outline: "none" }}
     >
+      <title>{`${displayTitle}${description ? `\n${description}` : ""}\n${activity.reviewedCount}/${activity.stepCount} steps reviewed`}</title>
       {/* Background rect */}
       <rect
         x={x}
@@ -58,14 +84,14 @@ export function ActivityCluster({ activity, x, y, width, height, onSelect }: Act
       >
         {truncTitle}
       </text>
-      {/* Step count badge */}
+      {/* Step count badge — REM-30: show classifiable count */}
       <text
         x={x + 10}
         y={y + 40}
         fontSize={9}
         fill={colors.text}
       >
-        {activity.stepCount} steps
+        {activity.classifiableCount ?? activity.stepCount} to review
       </text>
       {/* Progress */}
       <text
