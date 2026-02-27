@@ -10,7 +10,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: {
     default: "aptus",
-    template: "%s — Aptus",
+    template: "%s — aptus",
   },
   description: "SAP S/4HANA Cloud best practices process validation portal",
   manifest: "/manifest.json",
