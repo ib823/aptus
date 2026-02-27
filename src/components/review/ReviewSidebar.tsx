@@ -76,7 +76,7 @@ export function ReviewSidebar({
                   : "hover:bg-accent border-l-2 border-transparent"
               }`}
             >
-              <p className="text-sm font-medium text-foreground truncate">{item.nameClean}</p>
+              <p className="text-sm font-medium text-foreground truncate" title={item.nameClean}>{item.nameClean}</p>
               <div className="flex items-center gap-2 mt-1">
                 <div className="flex-1">
                   <div className="h-1 rounded-full bg-muted">

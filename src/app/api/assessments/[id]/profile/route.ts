@@ -29,6 +29,7 @@ const profileSchema = z.object({
   itLandscapeSummary: z.string().max(10000).nullable().optional(),
   currentErpVersion: z.string().max(100).nullable().optional(),
   migrationApproach: z.enum(["greenfield", "brownfield", "selective"]).nullable().optional(),
+  operationalSites: z.number().int().min(0).nullable().optional(),
 });
 
 const PROFILE_SELECT = {
@@ -51,6 +52,7 @@ const PROFILE_SELECT = {
   itLandscapeSummary: true,
   currentErpVersion: true,
   migrationApproach: true,
+  operationalSites: true,
   profileCompletedAt: true,
   profileCompletedBy: true,
 } as const;

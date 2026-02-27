@@ -14,6 +14,14 @@ export function ClassifiableProgressBar({
   percentage,
 }: ClassifiableProgressBarProps) {
   const label = `${totalClassified} of ${totalClassifiable} classifiable ${totalClassifiable === 1 ? "step" : "steps"} reviewed`;
+  const remainingSteps = totalClassifiable - totalClassified;
+  const estimatedMinutes = Math.ceil(remainingSteps * 1);
+  const hours = Math.floor(estimatedMinutes / 60);
+  const mins = estimatedMinutes % 60;
+  const timeLabel = hours > 0
+    ? `~${hours}h ${mins}m remaining`
+    : `~${mins} minutes remaining`;
+
   return (
     <div>
       <div className="flex items-center justify-between text-sm mb-1.5">
@@ -35,9 +43,16 @@ export function ClassifiableProgressBar({
           aria-valuemax={totalClassifiable}
         />
       </div>
-      <p className="text-xs text-muted-foreground mt-1">
-        {percentage}% complete
-      </p>
+      <div className="flex items-center justify-between mt-1">
+        <p className="text-xs text-muted-foreground">
+          {percentage}% complete
+        </p>
+        {remainingSteps > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {timeLabel} at ~1 min/step
+          </p>
+        )}
+      </div>
     </div>
   );
 }
