@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/auth-options";
 import { createSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
+import { notifyNewLogin, notifySessionDisplaced } from "@/lib/auth/login-notify";
 import { prisma } from "@/lib/db/prisma";
 import { APP_CONFIG } from "@/constants/config";
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -38,7 +39,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ? (forwardedFor.split(",")[0]?.trim() ?? null)
     : (request.headers.get("x-real-ip") ?? null);
   const userAgent = request.headers.get("user-agent") ?? null;
-  const token = await createSession(user.id, ipAddress, userAgent);
+  const { token, hadExistingSession } = await createSession(user.id, ipAddress, userAgent);
+
+  // Fire-and-forget login notifications
+  notifyNewLogin({ userId: user.id, ipAddress, userAgent, loginMethod: "magic link" });
+  if (hadExistingSession) {
+    notifySessionDisplaced({ userId: user.id, newIpAddress: ipAddress, newUserAgent: userAgent });
+  }
 
   // Set the session cookie and redirect
   const response = NextResponse.redirect(new URL(redirectTo, request.url));

@@ -15,6 +15,7 @@ import {
   markSessionMfaVerified,
   SESSION_COOKIE_NAME,
 } from "@/lib/auth/session";
+import { notifyNewLogin, notifySessionDisplaced } from "@/lib/auth/login-notify";
 import { APP_CONFIG } from "@/constants/config";
 import { ERROR_CODES } from "@/types/api";
 import { checkRateLimit, RATE_LIMITS, getClientIp } from "@/lib/security/rate-limit";
@@ -110,7 +111,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ? (forwardedFor.split(",")[0]?.trim() ?? null)
       : (request.headers.get("x-real-ip") ?? null);
     const userAgent = request.headers.get("user-agent") ?? null;
-    const token = await createSession(user.id, ipAddress, userAgent);
+    const { token, hadExistingSession } = await createSession(user.id, ipAddress, userAgent);
+
+    // Fire-and-forget login notifications
+    notifyNewLogin({ userId: user.id, ipAddress, userAgent, loginMethod: "passkey" });
+    if (hadExistingSession) {
+      notifySessionDisplaced({ userId: user.id, newIpAddress: ipAddress, newUserAgent: userAgent });
+    }
 
     // Passkey satisfies MFA — mark session as verified immediately
     await markSessionMfaVerified(token);

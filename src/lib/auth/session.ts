@@ -19,14 +19,15 @@ export function generateSessionToken(): string {
 
 /**
  * Create a new session for a user, revoking any existing sessions.
+ * Returns the token and whether an existing session was displaced.
  */
 export async function createSession(
   userId: string,
   ipAddress: string | null,
   userAgent: string | null,
-): Promise<string> {
+): Promise<{ token: string; hadExistingSession: boolean }> {
   // Revoke existing sessions (concurrent session limit = 1)
-  await prisma.session.updateMany({
+  const revoked = await prisma.session.updateMany({
     where: {
       userId,
       isRevoked: false,
@@ -43,17 +44,27 @@ export async function createSession(
     Date.now() + APP_CONFIG.sessionMaxAgeHours * 60 * 60 * 1000,
   );
 
-  await prisma.session.create({
-    data: {
-      userId,
-      token,
-      expiresAt,
-      ipAddress,
-      userAgent,
-    },
-  });
+  await prisma.$transaction([
+    prisma.session.create({
+      data: {
+        userId,
+        token,
+        expiresAt,
+        ipAddress,
+        userAgent,
+      },
+    }),
+    prisma.user.update({
+      where: { id: userId },
+      data: {
+        lastLoginAt: new Date(),
+        lastLoginIp: ipAddress,
+        loginCount: { increment: 1 },
+      },
+    }),
+  ]);
 
-  return token;
+  return { token, hadExistingSession: revoked.count > 0 };
 }
 
 /**
