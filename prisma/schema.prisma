@@ -392,6 +392,7 @@ model Assessment {
   itLandscapeSummary   String?    @db.Text
   currentErpVersion    String?
   migrationApproach    String?
+  operationalSites     Int?
   profileCompletedAt   DateTime?
   profileCompletedBy   String?
 

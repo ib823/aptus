@@ -141,6 +141,7 @@ export function ReviewClient({
   const [showAllSteps, setShowAllSteps] = useState(false);
   const [overallProgress, setOverallProgress] = useState(initialProgress);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkAllLoading, setBulkAllLoading] = useState(false);
 
   const isReadOnly = assessmentStatus === "signed_off" || assessmentStatus === "reviewed";
   const isItLead = userRole === "it_lead";
@@ -156,12 +157,12 @@ export function ReviewClient({
     staleTime: 5 * 60 * 1000,
   });
 
-  // React Query: fetch catalog configs (static, 5 min stale)
+  // React Query: fetch catalog configs (REM-03: pass assessmentId for country filtering)
   const { data: configsData, isLoading: configsLoading } = useQuery({
-    queryKey: ["catalog-configs", currentScopeItemId],
+    queryKey: ["catalog-configs", currentScopeItemId, assessmentId],
     queryFn: () =>
       fetchJson<{ data: ConfigItem[] }>(
-        `/api/catalog/scope-items/${currentScopeItemId}/configs`,
+        `/api/catalog/scope-items/${currentScopeItemId}/configs?assessmentId=${assessmentId}`,
       ),
     enabled: !!currentScopeItemId,
     staleTime: 5 * 60 * 1000,
@@ -468,6 +469,29 @@ export function ReviewClient({
     }
   }, [assessmentId, currentScopeItemId, bulkLoading]);
 
+  // Bulk mark ALL steps across ALL scope items as FIT
+  const handleAcceptAllStandard = useCallback(async () => {
+    const totalPending = overallProgress.pending;
+    const confirmed = window.confirm(
+      `Accept All SAP Standard?\n\nThis will mark ${totalPending} unreviewed steps across ALL scope items as FIT (standard).\n\nThis is the right choice if your company wants to adopt SAP best practices as-is with no customization.\n\nYou can change individual steps later if needed.`,
+    );
+    if (!confirmed) return;
+
+    setBulkAllLoading(true);
+    try {
+      const res = await fetch(`/api/assessments/${assessmentId}/steps/bulk-all`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (res.ok) {
+        window.location.reload();
+      }
+    } finally {
+      setBulkAllLoading(false);
+    }
+  }, [assessmentId, overallProgress.pending]);
+
   return (
     <div className="flex">
       {/* Sidebar — scope item picker + step group navigation */}
@@ -525,7 +549,7 @@ export function ReviewClient({
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               {showAllSteps ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-              {showAllSteps ? "Show all steps" : "Classifiable only"}
+              {showAllSteps ? "Showing all steps (incl. system)" : "Showing only steps that need your input"}
             </button>
           </div>
           <div className="space-y-1">
@@ -570,14 +594,25 @@ export function ReviewClient({
                 </div>
                 <div className="flex items-center gap-2">
                   {!isReadOnly && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleBulkFit}
-                      disabled={bulkLoading || steps.filter((s) => s.fitStatus === "PENDING").length === 0}
-                    >
-                      {bulkLoading ? "Marking..." : "Mark remaining as FIT"}
-                    </Button>
+                    <>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={handleAcceptAllStandard}
+                        disabled={bulkAllLoading || overallProgress.pending === 0}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        {bulkAllLoading ? "Marking..." : "\u2713 Accept All SAP Standard"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleBulkFit}
+                        disabled={bulkLoading || steps.filter((s) => s.fitStatus === "PENDING").length === 0}
+                      >
+                        {bulkLoading ? "Marking..." : "Mark remaining as FIT"}
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>

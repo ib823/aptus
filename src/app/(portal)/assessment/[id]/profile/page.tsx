@@ -39,6 +39,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       itLandscapeSummary: true,
       currentErpVersion: true,
       migrationApproach: true,
+      operationalSites: true,
     },
   });
 
@@ -66,6 +67,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     itLandscapeSummary: assessment.itLandscapeSummary,
     currentErpVersion: assessment.currentErpVersion,
     migrationApproach: assessment.migrationApproach,
+    operationalSites: assessment.operationalSites ?? null,
     completenessScore: score,
     completenessBreakdown: breakdown,
   };
