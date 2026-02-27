@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { sanitizeHtmlContent } from "@/lib/security/sanitize";
 import { extractScopeSummary } from "@/lib/assessment/scope-summary";
-import { getScopePlainDescription } from "@/constants/scope-descriptions";
+import { getFirstSentence } from "@/constants/scope-summaries";
 
 interface ScopeItemData {
   id: string;
@@ -229,9 +229,9 @@ export const ScopeItemCard = memo(function ScopeItemCard({ item, assessmentId, o
               {item.nameClean}
             </span>
           </div>
-          {getScopePlainDescription(item.id) && (
+          {getFirstSentence(item.id) && (
             <p className="text-xs text-muted-foreground mt-0.5">
-              {getScopePlainDescription(item.id)}
+              {getFirstSentence(item.id)}
             </p>
           )}
           <div className="flex items-center gap-4 mt-0.5 text-xs text-muted-foreground">

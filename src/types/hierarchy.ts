@@ -31,6 +31,7 @@ export interface ActivityNode {
   targetUrl: string | null;
   sequence: number;
   stepCount: number;
+  classifiableCount: number;
   reviewedCount: number;
   fitCount: number;
   configureCount: number;

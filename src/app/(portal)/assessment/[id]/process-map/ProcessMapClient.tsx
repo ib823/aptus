@@ -11,6 +11,7 @@ import type { FunctionalAreaOverviewData, InteractiveFlowData, RiskOverlayEntry 
 interface ProcessMapClientProps {
   assessmentId: string;
   initialScopeItemId: string | null;
+  initialAreas?: FunctionalAreaOverviewData[];
 }
 
 interface FlowDataResponse {
@@ -21,15 +22,16 @@ interface FlowDataResponse {
   thumbnailSvg?: string;
 }
 
-export function ProcessMapClient({ assessmentId, initialScopeItemId }: ProcessMapClientProps) {
-  const [areas, setAreas] = useState<FunctionalAreaOverviewData[]>([]);
+export function ProcessMapClient({ assessmentId, initialScopeItemId, initialAreas }: ProcessMapClientProps) {
+  const [areas, setAreas] = useState<FunctionalAreaOverviewData[]>(initialAreas ?? []);
   const [selectedScopeItemId, setSelectedScopeItemId] = useState<string | null>(initialScopeItemId);
   const [flowData, setFlowData] = useState<FlowDataResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialAreas);
   const [flowLoading, setFlowLoading] = useState(false);
 
-  // Load area overview
+  // Load area overview (skip if server-provided initial data — REM-24)
   useEffect(() => {
+    if (initialAreas) return;
     let cancelled = false;
     async function load() {
       try {
@@ -43,7 +45,7 @@ export function ProcessMapClient({ assessmentId, initialScopeItemId }: ProcessMa
     }
     load();
     return () => { cancelled = true; };
-  }, [assessmentId]);
+  }, [assessmentId, initialAreas]);
 
   // Load flow data when scope item is selected
   useEffect(() => {

@@ -9,6 +9,7 @@ function createActivityNode(overrides: Partial<ActivityNode> = {}): ActivityNode
     targetUrl: null,
     sequence: 0,
     stepCount: 10,
+    classifiableCount: 10,
     reviewedCount: 0,
     fitCount: 0,
     configureCount: 0,

@@ -18,6 +18,7 @@ import { ActivityCompletionCard } from "@/components/hierarchy/ActivityCompletio
 import { MobileHierarchySheet } from "@/components/hierarchy/MobileHierarchySheet";
 import { groupStepsByActivity, computeClassifiableProgress, type StepInGroup } from "@/lib/assessment/step-grouper";
 import { ScopeFlowOverview } from "@/components/review/ScopeFlowOverview";
+import { ScopeItemSummary } from "@/components/review/ScopeItemSummary";
 import type { HierarchyTree, ActivityProgressMap, ActivityNode } from "@/types/hierarchy";
 
 interface ScopeItemNav {
@@ -430,7 +431,7 @@ function ReviewShellInner({
     <div className="flex h-screen">
       {/* Sidebar */}
       <div className="hidden sm:flex sm:w-[280px] shrink-0 bg-muted/40 border-r flex-col h-screen sticky top-0 overflow-hidden">
-        {/* Header */}
+        {/* Header — REM-21: per-scope-item progress */}
         <div className="p-4 border-b">
           <Link
             href={`/assessment/${assessmentId}/scope`}
@@ -439,14 +440,37 @@ function ReviewShellInner({
             <ArrowLeft className="w-3.5 h-3.5" />
             Back to Scope
           </Link>
-          <ProgressBar value={overallProgress.reviewedSteps} max={overallProgress.totalSteps} />
-          <p className="text-xs text-muted-foreground mt-1.5">
-            {overallProgress.reviewedSteps} / {overallProgress.totalSteps} steps
-          </p>
+
+          {/* Current scope item progress (prominent) */}
+          {currentScopeItem && (
+            <div className="mb-2">
+              <p className="text-xs font-semibold text-foreground truncate" title={currentScopeItem.nameClean}>
+                {currentScopeItem.nameClean}
+              </p>
+              <ProgressBar value={currentScopeItem.reviewedSteps} max={currentScopeItem.totalSteps} />
+              <p className="text-xs text-muted-foreground mt-1">
+                {currentScopeItem.reviewedSteps} / {currentScopeItem.totalSteps} steps in this scope item
+              </p>
+            </div>
+          )}
+
+          {/* Global progress (secondary, smaller) */}
+          <div className="pt-2 border-t border-dashed">
+            <div className="flex justify-between text-[10px] text-muted-foreground/60">
+              <span>Overall assessment</span>
+              <span>{overallProgress.reviewedSteps}/{overallProgress.totalSteps}</span>
+            </div>
+            <div className="h-1 rounded-full bg-muted mt-1">
+              <div
+                className="h-1 rounded-full bg-muted-foreground/30 transition-all"
+                style={{ width: `${overallProgress.totalSteps > 0 ? Math.round((overallProgress.reviewedSteps / overallProgress.totalSteps) * 100) : 0}%` }}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Scope items */}
-        <div className="border-b max-h-[160px] overflow-y-auto">
+        <div className="border-b max-h-[160px] overflow-y-auto overscroll-contain">
           {scopeItems.map((item) => {
             const pct = item.totalSteps > 0 ? Math.round((item.reviewedSteps / item.totalSteps) * 100) : 0;
             return (
@@ -472,7 +496,7 @@ function ReviewShellInner({
         </div>
 
         {/* Hierarchy tree */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto overscroll-contain">
           {tree ? (
             <HierarchyTreeSidebar
               tree={tree}
@@ -487,7 +511,7 @@ function ReviewShellInner({
       </div>
 
       {/* Main content */}
-      <div className="flex-1 min-w-0 p-4 sm:p-8 overflow-y-auto">
+      <div className="flex-1 min-w-0 p-4 sm:p-8 overflow-y-auto overscroll-contain">
         <div className="max-w-3xl mx-auto">
           {/* Mobile nav */}
           <div className="sm:hidden mb-4 flex items-center gap-2">
@@ -517,9 +541,17 @@ function ReviewShellInner({
             </div>
           )}
 
-          {/* Map view */}
+          {/* Map view — REM-19: scope item summary above process map */}
           {view === "map" && tree && (
-            <ProcessMap tree={tree} onActivitySelect={selectActivity} />
+            <>
+              <ScopeItemSummary
+                scopeItemId={currentScopeItem?.id ?? ""}
+                scopeItemName={currentScopeItem?.nameClean ?? tree.scopeItemName}
+                tree={tree}
+                classifiableProgress={classifiableProgress}
+              />
+              <ProcessMap tree={tree} onActivitySelect={selectActivity} />
+            </>
           )}
 
           {/* Step review view */}
