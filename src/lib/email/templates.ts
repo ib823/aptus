@@ -202,6 +202,93 @@ export function gapResolutionEmail(params: {
   };
 }
 
+// ── New Login Notification ─────────────────────────────────────────────────
+
+export function newLoginEmail(params: {
+  recipientName: string;
+  email: string;
+  loginMethod: string;
+  ipAddress: string;
+  device: string;
+  time: string;
+  reviewUrl: string;
+}): { subject: string; html: string; text: string } {
+  return {
+    subject: `New sign-in to your ${BRAND_NAME} account`,
+    html: baseLayout(`
+      <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#111827;">New sign-in to your account</h2>
+      <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
+        Hi ${params.recipientName},
+      </p>
+      <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
+        Your account (<strong>${params.email}</strong>) was just signed into from a new device or location.
+      </p>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;width:100%;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+        <tr>
+          <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;">Login method</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${params.loginMethod}</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;">IP address</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${params.ipAddress}</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;">Device</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${params.device}</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;">Time</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;">${params.time}</td>
+        </tr>
+      </table>
+      ${button(params.reviewUrl, "Review account security")}
+      <p style="margin:0;font-size:13px;color:#dc2626;font-weight:500;">
+        If this wasn't you, secure your account immediately.
+      </p>
+    `),
+    text: `Hi ${params.recipientName},\n\nYour account (${params.email}) was just signed into from a new device or location.\n\nLogin method: ${params.loginMethod}\nIP address: ${params.ipAddress}\nDevice: ${params.device}\nTime: ${params.time}\n\nReview account security: ${params.reviewUrl}\n\nIf this wasn't you, secure your account immediately.`,
+  };
+}
+
+// ── Session Displaced Notification ────────────────────────────────────────
+
+export function sessionDisplacedEmail(params: {
+  recipientName: string;
+  email: string;
+  newIpAddress: string;
+  newDevice: string;
+  time: string;
+}): { subject: string; html: string; text: string } {
+  const reviewUrl = `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/settings/security`;
+  return {
+    subject: `Your ${BRAND_NAME} session was ended`,
+    html: baseLayout(`
+      <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#111827;">Your session was ended</h2>
+      <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
+        Hi ${params.recipientName},
+      </p>
+      <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
+        You were signed out because your account (<strong>${params.email}</strong>) was accessed from another device.
+      </p>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;width:100%;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+        <tr>
+          <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;">New login IP</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${params.newIpAddress}</td>
+        </tr>
+        <tr>
+          <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;">New login device</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;">${params.newDevice}</td>
+        </tr>
+      </table>
+      ${button(reviewUrl, "Review account security")}
+      <p style="margin:0;font-size:13px;color:#dc2626;font-weight:500;">
+        If this wasn't you, secure your account immediately.
+      </p>
+    `),
+    text: `Hi ${params.recipientName},\n\nYou were signed out because your account (${params.email}) was accessed from another device.\n\nNew login IP: ${params.newIpAddress}\nNew login device: ${params.newDevice}\n\nReview account security: ${reviewUrl}\n\nIf this wasn't you, secure your account immediately.`,
+  };
+}
+
 // ── Report Ready ───────────────────────────────────────────────────────────
 
 export function reportReadyEmail(params: {

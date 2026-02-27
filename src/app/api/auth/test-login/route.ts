@@ -121,7 +121,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // Create a real session (same path as production login)
   const ipAddress = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
   const userAgent = request.headers.get("user-agent") ?? null;
-  const token = await createSession(user.id, ipAddress, userAgent);
+  const { token } = await createSession(user.id, ipAddress, userAgent);
 
   // Set the session cookie
   const response = NextResponse.json({
