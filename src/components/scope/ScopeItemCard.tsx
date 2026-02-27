@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, memo } from "react";
-import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, Info } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -44,7 +44,8 @@ interface ScopeItemCardProps {
     businessJustification?: string | null;
     estimatedComplexity?: string | null;
   }) => void;
-  isPreSelected?: boolean;
+  isPreSelected?: boolean | undefined;
+  onOpenBriefing?: ((itemId: string) => void) | undefined;
 }
 
 interface ImpactData {
@@ -85,7 +86,7 @@ const COMPLEXITY_OPTIONS = [
   { value: "high", label: "High" },
 ] as const;
 
-export const ScopeItemCard = memo(function ScopeItemCard({ item, assessmentId, onSelectionChange, isPreSelected }: ScopeItemCardProps) {
+export const ScopeItemCard = memo(function ScopeItemCard({ item, assessmentId, onSelectionChange, isPreSelected, onOpenBriefing }: ScopeItemCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [showEnrichment, setShowEnrichment] = useState(false);
   const [impact, setImpact] = useState<ImpactData | null>(null);
@@ -288,6 +289,16 @@ export const ScopeItemCard = memo(function ScopeItemCard({ item, assessmentId, o
               </SelectContent>
             </Select>
           </div>
+        )}
+
+        {onOpenBriefing && (
+          <button
+            onClick={() => onOpenBriefing(item.id)}
+            className="p-1 text-muted-foreground/50 hover:text-blue-500 transition-colors"
+            aria-label={`View briefing for ${item.nameClean}`}
+          >
+            <Info className="w-4 h-4" />
+          </button>
         )}
 
         <button

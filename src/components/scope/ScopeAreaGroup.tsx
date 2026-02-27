@@ -42,6 +42,7 @@ interface ScopeAreaGroupProps {
   onBulkAction: (area: string, action: "select_all" | "deselect_all") => void;
   industryPreSelectSet: Set<string>;
   isReadOnly: boolean;
+  onOpenBriefing?: ((itemId: string) => void) | undefined;
 }
 
 export const ScopeAreaGroup = memo(function ScopeAreaGroup({
@@ -53,6 +54,7 @@ export const ScopeAreaGroup = memo(function ScopeAreaGroup({
   onBulkAction,
   industryPreSelectSet,
   isReadOnly,
+  onOpenBriefing,
 }: ScopeAreaGroupProps) {
   const handleSelectAll = useCallback(
     (e: React.MouseEvent) => {
@@ -109,6 +111,7 @@ export const ScopeAreaGroup = memo(function ScopeAreaGroup({
               item={item}
               onSelectionChange={onSelectionChange}
               isPreSelected={industryPreSelectSet.has(item.id)}
+              onOpenBriefing={onOpenBriefing}
             />
           ))}
         </AccordionContent>
