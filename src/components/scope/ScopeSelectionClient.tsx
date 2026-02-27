@@ -2,14 +2,24 @@
 
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { Search, ArrowLeft, ArrowRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Search, ArrowLeft, ArrowRight, Map as MapIcon, List } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ScopeAreaGroup } from "@/components/scope/ScopeAreaGroup";
 import { ScopeProgress } from "@/components/scope/ScopeProgress";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { ProcessLandscapeMap } from "@/components/scope/ProcessLandscapeMap";
+import { ScopeItemBriefing } from "@/components/scope/ScopeItemBriefing";
 import { UI_TEXT } from "@/constants/ui-text";
+import {
+  getLandscape,
+  getAreaScopeItemIds,
+  getChainScopeItemIds,
+  type ProcessChain,
+} from "@/constants/process-chains";
+import type { HierarchyTree } from "@/types/hierarchy";
 
 interface ScopeItemData {
   id: string;
@@ -51,6 +61,13 @@ interface ScopeSelectionClientProps {
 }
 
 type FilterMode = "all" | "selected" | "not_selected" | "maybe";
+type ViewMode = "landscape" | "list";
+
+interface ProcessAreaInfo {
+  name: string;
+  stepCount: number;
+  classifiableCount: number;
+}
 
 const FILTER_OPTIONS: { value: FilterMode; label: string }[] = [
   { value: "all", label: UI_TEXT.scope.filterAll },
@@ -66,12 +83,17 @@ export function ScopeSelectionClient({
   scopeItems: initialItems,
   industryPreSelections,
 }: ScopeSelectionClientProps) {
+  const router = useRouter();
   const [items, setItems] = useState<ScopeItemData[]>(initialItems);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [areaFilter, setAreaFilter] = useState<string>("all");
   const [subAreaFilter, setSubAreaFilter] = useState<string>("all");
   const [applyingTemplate, setApplyingTemplate] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("landscape");
+  const [briefingItemId, setBriefingItemId] = useState<string | null>(null);
+  const [briefingHierarchy, setBriefingHierarchy] = useState<ProcessAreaInfo[] | null>(null);
+  const [briefingLoading, setBriefingLoading] = useState(false);
   const pendingSaves = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   // Group items by functional area
@@ -144,6 +166,13 @@ export function ScopeSelectionClient({
     }
     return groups;
   }, [filteredItems]);
+
+  // Set of filtered item IDs (for landscape dimming)
+  const filteredItemIds = useMemo(() => {
+    const hasActiveFilter = searchQuery.trim() || filterMode !== "all" || subAreaFilter !== "all";
+    if (!hasActiveFilter) return new Set<string>();
+    return new Set(filteredItems.map((i) => i.id));
+  }, [filteredItems, searchQuery, filterMode, subAreaFilter]);
 
   // Progress stats
   const stats = useMemo(() => {
@@ -253,6 +282,64 @@ export function ScopeSelectionClient({
     [assessmentId, items],
   );
 
+  // REM-32: Bulk select/deselect for a process chain
+  const handleBulkSelectChain = useCallback(
+    async (chain: ProcessChain, action: "select_all" | "deselect_all") => {
+      const scopeItemIds = getChainScopeItemIds(chain);
+      const selected = action === "select_all";
+      const relevance = selected ? "YES" : "NO";
+
+      // Optimistic update
+      setItems((prev) =>
+        prev.map((item) =>
+          scopeItemIds.includes(item.id)
+            ? { ...item, selected, relevance }
+            : item,
+        ),
+      );
+
+      try {
+        await fetch(`/api/assessments/${assessmentId}/scope/bulk`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action,
+            scopeItemIds,
+          }),
+        });
+      } catch {
+        // Silently fail
+      }
+    },
+    [assessmentId],
+  );
+
+  const handleSelectChain = useCallback(
+    (chain: ProcessChain) => handleBulkSelectChain(chain, "select_all"),
+    [handleBulkSelectChain],
+  );
+
+  const handleClearChain = useCallback(
+    (chain: ProcessChain) => handleBulkSelectChain(chain, "deselect_all"),
+    [handleBulkSelectChain],
+  );
+
+  // REM-32: Toggle individual item from landscape view
+  const handleLandscapeToggle = useCallback(
+    (itemId: string) => {
+      const item = items.find((i) => i.id === itemId);
+      if (!item) return;
+      const newSelected = !item.selected;
+      handleSelectionChange(itemId, {
+        selected: newSelected,
+        relevance: newSelected ? "YES" : "NO",
+        currentState: item.currentState,
+        notes: item.notes,
+      });
+    },
+    [items, handleSelectionChange],
+  );
+
   // Apply Industry Template
   const handleApplyTemplate = useCallback(async () => {
     if (applyingTemplate) return;
@@ -282,8 +369,78 @@ export function ScopeSelectionClient({
     }
   }, [assessmentId, industry, industryPreSelections, applyingTemplate]);
 
+  // REM-33: Open briefing for a scope item
+  const handleOpenBriefing = useCallback(
+    async (itemId: string) => {
+      setBriefingItemId(itemId);
+      setBriefingHierarchy(null);
+      setBriefingLoading(true);
+
+      try {
+        const res = await fetch(`/api/catalog/scope-items/${itemId}/hierarchy`);
+        if (res.ok) {
+          const tree: HierarchyTree = await res.json();
+          const areas: ProcessAreaInfo[] = tree.processes.map((p) => ({
+            name: p.name,
+            stepCount: p.flows.reduce(
+              (sum, f) => sum + f.activities.reduce((s, a) => s + a.stepCount, 0),
+              0,
+            ),
+            classifiableCount: p.flows.reduce(
+              (sum, f) => sum + f.activities.reduce((s, a) => s + a.classifiableCount, 0),
+              0,
+            ),
+          }));
+          setBriefingHierarchy(areas);
+        }
+      } catch {
+        // Hierarchy fetch failed — briefing still shows without process areas
+      } finally {
+        setBriefingLoading(false);
+      }
+    },
+    [],
+  );
+
+  const handleCloseBriefing = useCallback(() => {
+    setBriefingItemId(null);
+    setBriefingHierarchy(null);
+  }, []);
+
   const isReadOnly = assessmentStatus === "signed_off" || assessmentStatus === "reviewed";
   const industryPreSelectSet = useMemo(() => new Set(industryPreSelections), [industryPreSelections]);
+
+  // REM-33: If briefing is open, render it as full-page replacement
+  if (briefingItemId) {
+    const briefingItem = items.find((i) => i.id === briefingItemId);
+    if (briefingItem) {
+      const totalClassifiable = briefingHierarchy
+        ? briefingHierarchy.reduce((sum, a) => sum + a.classifiableCount, 0)
+        : briefingItem.classifiableSteps ?? 0;
+
+      return (
+        <div className="max-w-5xl mx-auto">
+          <ScopeItemBriefing
+            scopeItemId={briefingItem.id}
+            scopeItemName={briefingItem.nameClean}
+            purposeHtml={briefingItem.purposeHtml}
+            processAreas={briefingHierarchy ?? []}
+            totalClassifiable={totalClassifiable}
+            totalSteps={briefingItem.totalSteps}
+            isSelected={briefingItem.selected}
+            isLoading={briefingLoading}
+            onStartReview={() => {
+              router.push(`/assessment/${assessmentId}/review?scopeItem=${briefingItem.id}`);
+            }}
+            onBack={handleCloseBriefing}
+            onToggleSelection={() => {
+              handleLandscapeToggle(briefingItem.id);
+            }}
+          />
+        </div>
+      );
+    }
+  }
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -368,6 +525,34 @@ export function ScopeSelectionClient({
           ))}
         </select>
 
+        {/* REM-32: View toggle */}
+        <div className="flex items-center gap-0.5 border rounded-md overflow-hidden">
+          <button
+            onClick={() => setViewMode("landscape")}
+            className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-all ${
+              viewMode === "landscape"
+                ? "bg-gray-900 text-white"
+                : "bg-card text-muted-foreground hover:bg-accent"
+            }`}
+            aria-label={UI_TEXT.scope.viewLandscape}
+          >
+            <MapIcon className="w-3.5 h-3.5" />
+            {UI_TEXT.scope.viewLandscape}
+          </button>
+          <button
+            onClick={() => setViewMode("list")}
+            className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-all ${
+              viewMode === "list"
+                ? "bg-gray-900 text-white"
+                : "bg-card text-muted-foreground hover:bg-accent"
+            }`}
+            aria-label={UI_TEXT.scope.viewList}
+          >
+            <List className="w-3.5 h-3.5" />
+            {UI_TEXT.scope.viewList}
+          </button>
+        </div>
+
         {industryPreSelections.length > 0 && !isReadOnly && (
           <Button
             variant="outline"
@@ -396,7 +581,7 @@ export function ScopeSelectionClient({
             <p className="text-xs text-muted-foreground">Classifiable</p>
           </div>
           <div className="bg-card border rounded-lg p-3 text-center">
-            <p className="text-lg font-bold text-foreground">{stats.totalEffortDays > 0 ? `~${stats.totalEffortDays}d` : "—"}</p>
+            <p className="text-lg font-bold text-foreground">{stats.totalEffortDays > 0 ? `~${stats.totalEffortDays}d` : "\u2014"}</p>
             <p className="text-xs text-muted-foreground">Est. Effort</p>
           </div>
         </div>
@@ -422,32 +607,102 @@ export function ScopeSelectionClient({
         </div>
       )}
 
-      {/* Scope items grouped by area */}
-      {groupedItems.size === 0 ? (
-        <EmptyState
-          title={UI_TEXT.scope.noResults}
-          description={UI_TEXT.scope.noResultsDescription}
-        />
+      {/* Scope items — landscape or list view */}
+      {viewMode === "landscape" ? (
+        // REM-32: Process Landscape Map view
+        <>
+          {functionalAreas.length === 0 ? (
+            <EmptyState
+              title={UI_TEXT.scope.noResults}
+              description={UI_TEXT.scope.noResultsDescription}
+            />
+          ) : (
+            functionalAreas.map((area) => {
+              const landscape = getLandscape(area);
+              const areaItems = items.filter((i) => i.functionalArea === area);
+
+              if (landscape) {
+                // Build item state map for this area
+                const itemStates = new Map<string, { id: string; selected: boolean; nameClean: string }>();
+                for (const item of areaItems) {
+                  itemStates.set(item.id, { id: item.id, selected: item.selected, nameClean: item.nameClean });
+                }
+
+                // Find items not in any chain
+                const chainItemIds = new Set(getAreaScopeItemIds(landscape));
+                const otherItems = areaItems
+                  .filter((i) => !chainItemIds.has(i.id))
+                  .map((i) => ({ id: i.id, selected: i.selected, nameClean: i.nameClean }));
+
+                return (
+                  <ProcessLandscapeMap
+                    key={area}
+                    landscape={landscape}
+                    itemStates={itemStates}
+                    filteredIds={filteredItemIds}
+                    otherItems={otherItems}
+                    onToggle={handleLandscapeToggle}
+                    onSelectChain={handleSelectChain}
+                    onClearChain={handleClearChain}
+                    onOpenBriefing={handleOpenBriefing}
+                    isReadOnly={isReadOnly}
+                  />
+                );
+              }
+
+              // Fallback to list-style for areas without landscape data
+              const selectedInArea = areaItems.filter((i) => i.selected).length;
+              const filteredAreaItems = filteredItems.filter((i) => i.functionalArea === area);
+              if (filteredAreaItems.length === 0 && filteredItemIds.size > 0) return null;
+
+              return (
+                <ScopeAreaGroup
+                  key={area}
+                  area={area}
+                  items={filteredAreaItems.length > 0 ? filteredAreaItems : areaItems}
+                  selectedCount={selectedInArea}
+                  totalCount={areaItems.length}
+                  onSelectionChange={handleSelectionChange}
+                  onBulkAction={handleBulkAction}
+                  industryPreSelectSet={industryPreSelectSet}
+                  isReadOnly={isReadOnly}
+                  onOpenBriefing={handleOpenBriefing}
+                />
+              );
+            })
+          )}
+        </>
       ) : (
-        <div className="space-y-2">
-          {Array.from(groupedItems.entries()).map(([area, areaItems]) => {
-            const allAreaItems = items.filter((i) => i.functionalArea === area);
-            const selectedInArea = allAreaItems.filter((i) => i.selected).length;
-            return (
-              <ScopeAreaGroup
-                key={area}
-                area={area}
-                items={areaItems}
-                selectedCount={selectedInArea}
-                totalCount={allAreaItems.length}
-                onSelectionChange={handleSelectionChange}
-                onBulkAction={handleBulkAction}
-                industryPreSelectSet={industryPreSelectSet}
-                isReadOnly={isReadOnly}
-              />
-            );
-          })}
-        </div>
+        // List view (original)
+        <>
+          {groupedItems.size === 0 ? (
+            <EmptyState
+              title={UI_TEXT.scope.noResults}
+              description={UI_TEXT.scope.noResultsDescription}
+            />
+          ) : (
+            <div className="space-y-2">
+              {[...groupedItems.entries()].map(([area, areaItems]) => {
+                const allAreaItems = items.filter((i) => i.functionalArea === area);
+                const selectedInArea = allAreaItems.filter((i) => i.selected).length;
+                return (
+                  <ScopeAreaGroup
+                    key={area}
+                    area={area}
+                    items={areaItems}
+                    selectedCount={selectedInArea}
+                    totalCount={allAreaItems.length}
+                    onSelectionChange={handleSelectionChange}
+                    onBulkAction={handleBulkAction}
+                    industryPreSelectSet={industryPreSelectSet}
+                    isReadOnly={isReadOnly}
+                    onOpenBriefing={handleOpenBriefing}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
 
       {/* Action bar */}
@@ -456,7 +711,7 @@ export function ScopeSelectionClient({
           <Link href={`/assessments`}>
             <Button variant="outline">
               <ArrowLeft className="w-4 h-4 mr-1.5" />
-              {UI_TEXT.scope.backButton.replace("← ", "")}
+              {UI_TEXT.scope.backButton.replace("\u2190 ", "")}
             </Button>
           </Link>
 
@@ -471,7 +726,7 @@ export function ScopeSelectionClient({
 
           <Link href={`/assessment/${assessmentId}/review`}>
             <Button>
-              {UI_TEXT.scope.continueButton.replace(" →", "")}
+              {UI_TEXT.scope.continueButton.replace(" \u2192", "")}
               <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
           </Link>

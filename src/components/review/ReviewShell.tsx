@@ -79,6 +79,7 @@ interface ReviewShellProps {
   userRole: string;
   scopeItems: ScopeItemNav[];
   initialProgress: OverallProgress;
+  initialScopeItemId?: string | undefined;
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -93,6 +94,7 @@ function ReviewShellInner({
   userRole,
   scopeItems: initialScopeItems,
   initialProgress,
+  initialScopeItemId,
 }: ReviewShellProps) {
   const {
     tree,
@@ -108,9 +110,11 @@ function ReviewShellInner({
   } = useHierarchy();
 
   const [scopeItems] = useState(initialScopeItems);
-  const [currentScopeItemId, setCurrentScopeItemId] = useState<string | null>(
-    initialScopeItems[0]?.id ?? null,
-  );
+  // REM-33: If initialScopeItemId is provided (from ?scopeItem= query param), use it
+  const resolvedInitialId = initialScopeItemId && initialScopeItems.some((i) => i.id === initialScopeItemId)
+    ? initialScopeItemId
+    : initialScopeItems[0]?.id ?? null;
+  const [currentScopeItemId, setCurrentScopeItemId] = useState<string | null>(resolvedInitialId);
   const [localStepOverrides, setLocalStepOverrides] = useState<Map<string, Partial<StepData>>>(new Map());
   const [overallProgress] = useState(initialProgress);
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);

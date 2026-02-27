@@ -6,13 +6,15 @@ import { ReviewShell } from "@/components/review/ReviewShell";
 
 interface ReviewPageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ scopeItem?: string }>;
 }
 
-export default async function ReviewPage({ params }: ReviewPageProps) {
+export default async function ReviewPage({ params, searchParams }: ReviewPageProps) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
   const { id: assessmentId } = await params;
+  const { scopeItem: initialScopeItemId } = await searchParams;
 
   const assessment = await prisma.assessment.findUnique({
     where: { id: assessmentId, deletedAt: null },
@@ -36,6 +38,7 @@ export default async function ReviewPage({ params }: ReviewPageProps) {
       userRole={user.role}
       scopeItems={scopeItems}
       initialProgress={overallProgress}
+      initialScopeItemId={initialScopeItemId}
     />
   );
 }
