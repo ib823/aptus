@@ -19,7 +19,7 @@ import { cookies } from "next/headers";
 // --- Config from env vars ---
 
 const rpID = process.env.WEBAUTHN_RP_ID ?? "localhost";
-const rpName = process.env.WEBAUTHN_RP_NAME ?? "Aptus";
+const rpName = process.env.WEBAUTHN_RP_NAME ?? "aptus";
 const origin = process.env.WEBAUTHN_ORIGIN ?? "http://localhost:3003";
 
 const CHALLENGE_COOKIE_NAME = "webauthn-challenge";

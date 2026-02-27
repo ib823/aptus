@@ -1,4 +1,4 @@
-// Aptus Service Worker — Push notifications + offline caching
+// aptus Service Worker — Push notifications + offline caching
 
 const CACHE_VERSION = "aptus-v1";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
