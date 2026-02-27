@@ -82,10 +82,7 @@ function CollapsibleSection({ title, complete, defaultOpen = false, children }: 
 }
 
 export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }: CompanyProfileFormProps) {
-  const [profile, setProfile] = useState<ProfileData>({
-    ...initialProfile,
-    operationalSites: (initialProfile as Record<string, unknown>).operationalSites as number | null ?? null,
-  });
+  const [profile, setProfile] = useState<ProfileData>(initialProfile);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [currencyManuallySet, setCurrencyManuallySet] = useState(false);
   const pendingSave = useRef<ReturnType<typeof setTimeout> | null>(null);

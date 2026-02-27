@@ -60,6 +60,7 @@ function createBase(overrides: AssessmentOverrides = {}): Assessment {
     currentSnapshotId: overrides.currentSnapshotId ?? null,
     clonedFromSnapshotId: overrides.clonedFromSnapshotId ?? null,
     carryForwardConfig: overrides.carryForwardConfig ?? null,
+    operationalSites: overrides.operationalSites ?? null,
   };
 }
 

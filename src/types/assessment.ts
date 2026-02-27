@@ -252,7 +252,8 @@ export type DecisionAction =
   | "ASSESSMENT_FROM_TEMPLATE"
   | "CROSS_PHASE_LINKED"
   | "PUSH_SUBSCRIBED"
-  | "OFFLINE_SYNCED";
+  | "OFFLINE_SYNCED"
+  | "BULK_MARK_ALL_FIT";
 
 export interface AssessmentSummary {
   id: string;
