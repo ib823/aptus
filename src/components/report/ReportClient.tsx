@@ -114,7 +114,7 @@ export function ReportClient({
     <div className="max-w-5xl mx-auto">
       <PageHeader
         title="Assessment Report"
-        description={`${companyName} — SAP S/4HANA Cloud Fit Assessment`}
+        description={`${companyName} — SAP Fit Assessment`}
       />
 
       {/* Summary overview */}
