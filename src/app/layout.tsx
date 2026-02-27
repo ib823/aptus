@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     default: "aptus",
     template: "%s — aptus",
   },
-  description: "SAP S/4HANA Cloud best practices process validation portal",
+  description: "SAP best practices process validation portal",
   manifest: "/manifest.json",
   icons: {
     apple: "/icons/icon-192x192.png",

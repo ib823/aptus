@@ -34,7 +34,7 @@ export function baseLayout(content: string): string {
           <tr>
             <td style="padding:24px 40px;text-align:center;">
               <p style="margin:0;font-size:12px;color:#9ca3af;">
-                ${BRAND_NAME} &mdash; SAP S/4HANA Cloud Assessment Platform
+                ${BRAND_NAME} &mdash; SAP Assessment Platform
               </p>
               <p style="margin:8px 0 0;font-size:11px;color:#d1d5db;">
                 This is an automated message. Please do not reply directly.

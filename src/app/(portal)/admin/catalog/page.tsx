@@ -16,7 +16,7 @@ export default async function CatalogPage() {
     <div className="max-w-5xl">
       <h1 className="text-3xl font-bold text-foreground tracking-tight mb-1">SAP Catalog</h1>
       <p className="text-base text-muted-foreground mb-8">
-        SAP Best Practices for S/4HANA Cloud Public Edition — Version 2508
+        SAP Best Practices Cloud Public Edition — Version 2508
       </p>
 
       <div className="grid grid-cols-3 gap-4 mb-8">
