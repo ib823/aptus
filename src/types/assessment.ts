@@ -290,6 +290,7 @@ export interface SessionUser {
   mfaEnabled: boolean;
   mfaVerified: boolean;
   totpVerified: boolean;
+  hasWebAuthn: boolean;
 }
 
 /** V1 status transition rules -- kept for backward compatibility */

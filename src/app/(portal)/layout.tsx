@@ -7,6 +7,7 @@ import { SubscriptionStatusBanner } from "@/components/commercial/SubscriptionSt
 import { MFA_REQUIRED_ROLES } from "@/constants/config";
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { MobileBottomTabBar } from "@/components/pwa/MobileBottomTabBar";
+import { PasskeyEnrollmentPrompt } from "@/components/auth/PasskeyEnrollmentPrompt";
 import type { SubscriptionStatus } from "@/types/commercial";
 import type { ReactNode } from "react";
 
@@ -24,7 +25,9 @@ export default async function PortalLayout({
   // Check MFA status for external users
   const requiresMfa = (MFA_REQUIRED_ROLES as readonly string[]).includes(user.role);
 
-  if (requiresMfa && !user.totpVerified) {
+  // Passkey login already satisfies MFA (sets mfaVerified=true on session)
+  // so we only redirect for TOTP setup/verify when user hasn't used a passkey
+  if (requiresMfa && !user.hasWebAuthn && !user.totpVerified) {
     redirect("/mfa/setup");
   }
 
@@ -65,6 +68,7 @@ export default async function PortalLayout({
         </div>
       )}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-8">
+        <PasskeyEnrollmentPrompt hasWebAuthn={user.hasWebAuthn} />
         <OnboardingGuard>
           {children}
         </OnboardingGuard>
