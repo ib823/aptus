@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { ChevronDown, ChevronRight, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,6 +14,10 @@ import {
   MIGRATION_APPROACHES,
   REGULATORY_FRAMEWORKS,
 } from "@/constants/profile-options";
+import { getCountryLabel, COUNTRY_NAMES } from "@/constants/countries";
+import { getDefaultCurrency } from "@/constants/currencies";
+import { getModuleFullName } from "@/constants/sap-modules";
+import { getRelevantFrameworks, getRelevantLanguages } from "@/constants/regulatory";
 import type { ProfileCompletenessBreakdown } from "@/types/assessment";
 
 interface ProfileData {
@@ -35,6 +39,7 @@ interface ProfileData {
   itLandscapeSummary: string | null;
   currentErpVersion: string | null;
   migrationApproach: string | null;
+  operationalSites: number | null;
   completenessScore: number;
   completenessBreakdown: ProfileCompletenessBreakdown;
 }
@@ -77,8 +82,12 @@ function CollapsibleSection({ title, complete, defaultOpen = false, children }: 
 }
 
 export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }: CompanyProfileFormProps) {
-  const [profile, setProfile] = useState<ProfileData>(initialProfile);
+  const [profile, setProfile] = useState<ProfileData>({
+    ...initialProfile,
+    operationalSites: (initialProfile as Record<string, unknown>).operationalSites as number | null ?? null,
+  });
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [currencyManuallySet, setCurrencyManuallySet] = useState(false);
   const pendingSave = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -141,6 +150,33 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
     [isReadOnly, saveProfile],
   );
 
+  // REM-08: Auto-set currency when country changes
+  const handleCountryChange = useCallback(
+    (newCountry: string) => {
+      updateField("country", newCountry);
+      if (!currencyManuallySet) {
+        const defaultCurrency = getDefaultCurrency(newCountry);
+        setProfile((prev) => ({ ...prev, currencyCode: defaultCurrency }));
+        saveProfile({ country: newCountry, currencyCode: defaultCurrency });
+      }
+    },
+    [updateField, currencyManuallySet, saveProfile],
+  );
+
+  // REM-13: Separate regulatory frameworks into suggested + other
+  const suggestedFrameworks = useMemo(() => getRelevantFrameworks(profile.country), [profile.country]);
+  const otherFrameworks = useMemo(
+    () => REGULATORY_FRAMEWORKS.filter((fw) => !suggestedFrameworks.includes(fw)),
+    [suggestedFrameworks],
+  );
+
+  // REM-14: Separate languages into suggested + other
+  const suggestedLanguages = useMemo(() => getRelevantLanguages(profile.country), [profile.country]);
+  const otherLanguages = useMemo(
+    () => LANGUAGE_CODES.filter((lang) => !suggestedLanguages.includes(lang)),
+    [suggestedLanguages],
+  );
+
   const bd = profile.completenessBreakdown;
 
   return (
@@ -177,14 +213,26 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
               />
             </div>
             <div>
+              {/* REM-07: Country name display */}
               <label htmlFor="profile-country" className="text-xs font-medium text-muted-foreground">Country</label>
-              <Input
-                id="profile-country"
+              <Select
                 value={profile.country}
-                onChange={(e) => updateField("country", e.target.value)}
+                onValueChange={handleCountryChange}
                 disabled={isReadOnly ?? false}
-                className="mt-1"
-              />
+              >
+                <SelectTrigger id="profile-country" className="mt-1">
+                  <SelectValue placeholder="Select country">
+                    {profile.country ? getCountryLabel(profile.country) : "Select country"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.keys(COUNTRY_NAMES).map((code) => (
+                    <SelectItem key={code} value={code}>
+                      {getCountryLabel(code)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label htmlFor="profile-company-size" className="text-xs font-medium text-muted-foreground">Company Size</label>
@@ -216,17 +264,26 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
               />
             </div>
             <div>
+              {/* REM-08: Revenue field guidance */}
               <label htmlFor="profile-annual-revenue" className="text-xs font-medium text-muted-foreground">Annual Revenue</label>
               <div className="flex gap-2 mt-1">
                 <Input
                   id="profile-annual-revenue"
                   type="number"
+                  placeholder="e.g., 2500000"
                   value={profile.annualRevenue ?? ""}
                   onChange={(e) => updateField("annualRevenue", e.target.value ? Number(e.target.value) : null)}
                   disabled={isReadOnly ?? false}
                   className="flex-1"
                 />
-                <Select value={profile.currencyCode ?? "USD"} onValueChange={(v) => updateField("currencyCode", v)} disabled={isReadOnly ?? false}>
+                <Select
+                  value={profile.currencyCode ?? "USD"}
+                  onValueChange={(v) => {
+                    setCurrencyManuallySet(true);
+                    updateField("currencyCode", v);
+                  }}
+                  disabled={isReadOnly ?? false}
+                >
                   <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {CURRENCY_CODES.map((c) => (
@@ -235,6 +292,28 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
                   </SelectContent>
                 </Select>
               </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Enter your annual revenue in absolute numbers (e.g., 2,500,000 for 2.5 million). Select your local currency.
+              </p>
+            </div>
+            {/* REM-16: Number of operational sites */}
+            <div>
+              <label htmlFor="profile-operational-sites" className="text-xs font-medium text-muted-foreground">
+                Number of Operational Sites
+              </label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                How many physical locations, plants, warehouses, or offices does your company operate?
+              </p>
+              <Input
+                id="profile-operational-sites"
+                type="number"
+                min={1}
+                placeholder="e.g., 2"
+                value={profile.operationalSites ?? ""}
+                onChange={(e) => updateField("operationalSites", e.target.value ? parseInt(e.target.value) : null)}
+                disabled={isReadOnly ?? false}
+                className="mt-1 w-32"
+              />
             </div>
           </div>
         </CollapsibleSection>
@@ -278,6 +357,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
               />
             </div>
             <div>
+              {/* REM-09: SAP Module full-name tooltips */}
               <label className="text-xs font-medium text-muted-foreground mb-2 block">SAP Modules</label>
               <div className="flex flex-wrap gap-1.5">
                 {SAP_MODULES.map((m) => {
@@ -287,13 +367,14 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
                       key={m.code}
                       onClick={() => toggleArrayItem("sapModules", m.code)}
                       disabled={isReadOnly ?? false}
-                      className={`px-2.5 py-1 text-xs rounded-md border transition-all ${
+                      title={getModuleFullName(m.code)}
+                      className={`px-2.5 py-1 text-xs rounded-md border transition-all cursor-help ${
                         selected
                           ? "bg-blue-50 text-blue-700 border-blue-300"
                           : "bg-card text-muted-foreground border hover:bg-accent"
                       }`}
                     >
-                      {m.code}
+                      {m.code} — {m.label}
                     </button>
                   );
                 })}
@@ -328,9 +409,35 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
               />
             </div>
             <div>
+              {/* REM-14: Language suggestion by country */}
               <label className="text-xs font-medium text-muted-foreground mb-2 block">Language Requirements</label>
+              {suggestedLanguages.length > 0 && (
+                <>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Suggested for your country:</p>
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {suggestedLanguages.map((lang) => {
+                      const selected = profile.languageRequirements.includes(lang);
+                      return (
+                        <button
+                          key={lang}
+                          onClick={() => toggleArrayItem("languageRequirements", lang)}
+                          disabled={isReadOnly ?? false}
+                          className={`px-2.5 py-1 text-xs rounded-md border transition-all ${
+                            selected
+                              ? "bg-blue-50 text-blue-700 border-blue-300"
+                              : "bg-blue-50/30 text-muted-foreground border-blue-200 hover:bg-accent"
+                          }`}
+                        >
+                          {lang}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Other languages:</p>
+                </>
+              )}
               <div className="flex flex-wrap gap-1.5">
-                {LANGUAGE_CODES.map((lang) => {
+                {(suggestedLanguages.length > 0 ? otherLanguages : LANGUAGE_CODES).map((lang) => {
                   const selected = profile.languageRequirements.includes(lang);
                   return (
                     <button
@@ -341,7 +448,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
                         selected
                           ? "bg-blue-50 text-blue-700 border-blue-300"
                           : "bg-card text-muted-foreground border hover:bg-accent"
-                      }`}
+                      } ${suggestedLanguages.length > 0 ? "opacity-60" : ""}`}
                     >
                       {lang}
                     </button>
@@ -350,9 +457,35 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
               </div>
             </div>
             <div>
+              {/* REM-13: Regulatory framework country filtering */}
               <label className="text-xs font-medium text-muted-foreground mb-2 block">Regulatory Frameworks</label>
+              {suggestedFrameworks.length > 0 && (
+                <>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Suggested for your country:</p>
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {suggestedFrameworks.map((fw) => {
+                      const selected = profile.regulatoryFrameworks.includes(fw);
+                      return (
+                        <button
+                          key={fw}
+                          onClick={() => toggleArrayItem("regulatoryFrameworks", fw)}
+                          disabled={isReadOnly ?? false}
+                          className={`px-2.5 py-1 text-xs rounded-md border transition-all ${
+                            selected
+                              ? "bg-blue-50 text-blue-700 border-blue-300"
+                              : "bg-blue-50/30 text-muted-foreground border-blue-200 hover:bg-accent"
+                          }`}
+                        >
+                          {fw}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Other frameworks:</p>
+                </>
+              )}
               <div className="flex flex-wrap gap-1.5">
-                {REGULATORY_FRAMEWORKS.map((fw) => {
+                {(suggestedFrameworks.length > 0 ? otherFrameworks : REGULATORY_FRAMEWORKS).map((fw) => {
                   const selected = profile.regulatoryFrameworks.includes(fw);
                   return (
                     <button
@@ -363,7 +496,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
                         selected
                           ? "bg-blue-50 text-blue-700 border-blue-300"
                           : "bg-card text-muted-foreground border hover:bg-accent"
-                      }`}
+                      } ${suggestedFrameworks.length > 0 ? "opacity-60" : ""}`}
                     >
                       {fw}
                     </button>

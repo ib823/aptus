@@ -17,6 +17,7 @@ import { ProcessMap } from "@/components/hierarchy/ProcessMap";
 import { ActivityCompletionCard } from "@/components/hierarchy/ActivityCompletionCard";
 import { MobileHierarchySheet } from "@/components/hierarchy/MobileHierarchySheet";
 import { groupStepsByActivity, computeClassifiableProgress, type StepInGroup } from "@/lib/assessment/step-grouper";
+import { ScopeFlowOverview } from "@/components/review/ScopeFlowOverview";
 import type { HierarchyTree, ActivityProgressMap, ActivityNode } from "@/types/hierarchy";
 
 interface ScopeItemNav {
@@ -112,6 +113,8 @@ function ReviewShellInner({
   const [localStepOverrides, setLocalStepOverrides] = useState<Map<string, Partial<StepData>>>(new Map());
   const [overallProgress] = useState(initialProgress);
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  const [bulkAllLoading, setBulkAllLoading] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   const isReadOnly = assessmentStatus === "signed_off" || assessmentStatus === "reviewed";
   const isItLead = userRole === "it_lead";
@@ -157,12 +160,12 @@ function ReviewShellInner({
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch configs
+  // Fetch configs (REM-03: pass assessmentId for country filtering)
   const { data: configsData } = useQuery({
-    queryKey: ["catalog-configs", currentScopeItemId],
+    queryKey: ["catalog-configs", currentScopeItemId, assessmentId],
     queryFn: () =>
       fetchJson<{ data: ConfigItem[] }>(
-        `/api/catalog/scope-items/${currentScopeItemId}/configs`,
+        `/api/catalog/scope-items/${currentScopeItemId}/configs?assessmentId=${assessmentId}`,
       ),
     enabled: !!currentScopeItemId,
     staleTime: 5 * 60 * 1000,
@@ -378,6 +381,29 @@ function ReviewShellInner({
     allActivityIds, currentActivityId, currentActivityIndex, hasNextActivity, setCurrentStepIndex,
   ]);
 
+  // Bulk mark ALL steps across ALL scope items as FIT
+  const handleAcceptAllStandard = useCallback(async () => {
+    const totalPending = overallProgress.pending;
+    const confirmed = window.confirm(
+      `Accept All SAP Standard?\n\nThis will mark ${totalPending} unreviewed steps across ALL scope items as FIT (standard).\n\nThis is the right choice if your company wants to adopt SAP best practices as-is with no customization.\n\nYou can change individual steps later if needed.`,
+    );
+    if (!confirmed) return;
+
+    setBulkAllLoading(true);
+    try {
+      const res = await fetch(`/api/assessments/${assessmentId}/steps/bulk-all`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (res.ok) {
+        window.location.reload();
+      }
+    } finally {
+      setBulkAllLoading(false);
+    }
+  }, [assessmentId, overallProgress.pending]);
+
   // Reset when scope item changes
   useEffect(() => {
     setLocalStepOverrides(new Map());
@@ -433,7 +459,7 @@ function ReviewShellInner({
                     : "hover:bg-accent border-l-2 border-transparent"
                 }`}
               >
-                <p className="text-xs font-medium text-foreground truncate">{item.nameClean}</p>
+                <p className="text-xs font-medium text-foreground truncate" title={item.nameClean}>{item.nameClean}</p>
                 <div className="flex items-center gap-2 mt-0.5">
                   <div className="flex-1 h-1 rounded-full bg-muted">
                     <div className="h-1 rounded-full bg-blue-500 transition-all" style={{ width: `${pct}%` }} />
@@ -525,7 +551,28 @@ function ReviewShellInner({
                     <h2 className="text-xl font-bold text-foreground">
                       {currentScopeItem?.nameClean}
                     </h2>
+                    {!isReadOnly && (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={handleAcceptAllStandard}
+                        disabled={bulkAllLoading || overallProgress.pending === 0}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        {bulkAllLoading ? "Marking..." : "\u2713 Accept All SAP Standard"}
+                      </Button>
+                    )}
                   </div>
+
+                  {/* Process Flow Overview */}
+                  <ScopeFlowOverview
+                    scopeItemName={currentScopeItem?.nameClean ?? ""}
+                    steps={steps}
+                    onFlowClick={(flowName) => {
+                      const firstStep = steps.findIndex(s => s.solutionProcessFlowName === flowName);
+                      if (firstStep >= 0) setCurrentStepIndex(firstStep);
+                    }}
+                  />
 
                   <div className="mb-4">
                     <ClassifiableProgressBar
@@ -577,7 +624,15 @@ function ReviewShellInner({
                       Previous
                     </Button>
                     <span className="hidden sm:inline text-sm text-muted-foreground">
-                      Esc=map · [/]=activity · F C G N=classify
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowShortcuts(true)}
+                        className="text-muted-foreground px-2"
+                        title="Keyboard shortcuts"
+                      >
+                        <span className="text-xs border rounded px-1.5 py-0.5">?</span>
+                      </Button>
                     </span>
                     <Button
                       variant="outline"
@@ -607,6 +662,37 @@ function ReviewShellInner({
           )}
         </div>
       </div>
+
+      {/* Keyboard Shortcuts Overlay (REM-18) */}
+      {showShortcuts && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowShortcuts(false)}>
+          <div className="bg-card rounded-xl shadow-2xl p-6 max-w-md mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-foreground mb-4">Keyboard Shortcuts</h3>
+            <div className="space-y-3">
+              {([
+                ["\u2190  \u2192", "Previous / Next step"],
+                ["1 or F", "Mark as FIT (matches our process)"],
+                ["2 or C", "Mark as CONFIGURE (needs configuration)"],
+                ["3 or G", "Mark as GAP (our process is different)"],
+                ["4 or N", "Mark as N/A (not applicable)"],
+                ["Esc", "Return to process map"],
+                ["[ / ]", "Previous / Next activity"],
+                ["Tab", "Next activity"],
+              ] as const).map(([key, desc]) => (
+                <div key={key} className="flex items-center gap-3">
+                  <kbd className="inline-flex items-center justify-center min-w-[36px] px-2 py-1 text-xs font-mono bg-muted border rounded text-foreground">
+                    {key}
+                  </kbd>
+                  <span className="text-sm text-muted-foreground">{desc}</span>
+                </div>
+              ))}
+            </div>
+            <Button variant="outline" size="sm" className="mt-6 w-full" onClick={() => setShowShortcuts(false)}>
+              Got it
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
