@@ -93,6 +93,12 @@ const CATEGORY_STYLES: Record<string, string> = {
   Optional: "bg-gray-100 text-gray-600",
 };
 
+const CATEGORY_TOOLTIPS: Record<string, string> = {
+  Mandatory: "This configuration is required for your SAP system. It will always be included in your implementation \u2014 you cannot skip it.",
+  Recommended: "SAP recommends this configuration. It is included by default, but you can exclude it if your business doesn't need it (a reason will be required).",
+  Optional: "This is an advanced configuration. It is NOT included by default. Include it only if your business specifically needs this capability.",
+};
+
 const STEP_TYPE_LABELS: Record<string, string> = {
   LOGON: "Logon",
   ACCESS_APP: "Access App",
@@ -115,6 +121,8 @@ export function StepReviewCard({
   commentCount,
 }: StepReviewCardProps) {
   const [commentPanelOpen, setCommentPanelOpen] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const saveStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [localNote, setLocalNote] = useState<{ stepId: string; value: string }>({
     stepId: step.id,
     value: step.clientNote ?? "",
@@ -137,6 +145,15 @@ export function StepReviewCard({
     setSapContentOverride({ stepId: step.id, fitStatus: step.fitStatus, expanded });
   };
 
+  const triggerSaveIndicator = () => {
+    setSaveStatus("saving");
+    if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current);
+    saveStatusTimer.current = setTimeout(() => {
+      setSaveStatus("saved");
+      saveStatusTimer.current = setTimeout(() => setSaveStatus("idle"), 2000);
+    }, 300);
+  };
+
   const handleFitStatusChange = (fitStatus: string) => {
     if (isReadOnly || isItLead) return;
     onResponseChange(step.id, {
@@ -144,6 +161,7 @@ export function StepReviewCard({
       clientNote: clientNote || undefined,
       confidence: step.confidence ?? undefined,
     });
+    triggerSaveIndicator();
   };
 
   const handleConfidenceChange = (confidence: string) => {
@@ -153,23 +171,27 @@ export function StepReviewCard({
       clientNote: clientNote || undefined,
       confidence: confidence || undefined,
     });
+    triggerSaveIndicator();
   };
 
   const handleNoteChange = (value: string) => {
     setClientNote(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    setSaveStatus("saving");
     debounceRef.current = setTimeout(() => {
       onResponseChange(step.id, {
         fitStatus: step.fitStatus,
         clientNote: value || undefined,
       });
+      triggerSaveIndicator();
     }, 1000);
   };
 
-  // Cleanup debounce on unmount
+  // Cleanup debounce and save status on unmount
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current);
     };
   }, []);
 
@@ -269,6 +291,19 @@ export function StepReviewCard({
               ))}
             </div>
 
+            {/* Save status indicator */}
+            {saveStatus === "saved" && (
+              <span className="text-xs text-green-600 flex items-center gap-1 mt-2">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Saved
+              </span>
+            )}
+            {saveStatus === "saving" && (
+              <span className="text-xs text-muted-foreground mt-2">Saving...</span>
+            )}
+
             {/* Confidence dropdown — shown after a decision */}
             {step.fitStatus !== "PENDING" && (
               <div className="mt-3 flex items-center gap-3">
@@ -352,22 +387,26 @@ export function StepReviewCard({
           </span>
         </button>
         {sapContentExpanded && (
-          <div className="px-5 pb-4 bg-muted/40">
-            <ParsedContentView
-              content={step.parsedContent
-                ? step.parsedContent as unknown as import("@/lib/assessment/content-parser").ParsedStepContent
-                : parseStepContent(step.actionInstructionsHtml)}
-              fallbackHtml={step.actionInstructionsHtml}
-            />
+          <div className="px-5 pb-4 bg-muted/40 overflow-x-auto max-w-full">
+            <div className="prose prose-sm max-w-none [&_table]:max-w-full [&_table]:table-auto [&_table]:overflow-x-auto [&_img]:max-w-full">
+              <ParsedContentView
+                content={step.parsedContent
+                  ? step.parsedContent as unknown as import("@/lib/assessment/content-parser").ParsedStepContent
+                  : parseStepContent(step.actionInstructionsHtml)}
+                fallbackHtml={step.actionInstructionsHtml}
+              />
+            </div>
             {step.actionExpectedResult && (
               <div className="mt-3">
                 <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
                   Expected Result
                 </span>
-                <div
-                  className="prose prose-sm max-w-none text-muted-foreground italic mt-1"
-                  dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(step.actionExpectedResult) }}
-                />
+                <div className="overflow-x-auto max-w-full">
+                  <div
+                    className="prose prose-sm max-w-none text-muted-foreground italic mt-1 [&_table]:max-w-full [&_table]:table-auto [&_img]:max-w-full"
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(step.actionExpectedResult) }}
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -383,12 +422,19 @@ export function StepReviewCard({
           <div className="mt-2 flex flex-col gap-2">
             {configs.map((config) => (
               <div key={config.id} className="flex items-center gap-2">
-                <Badge className={`text-xs ${CATEGORY_STYLES[config.category] ?? "bg-gray-100 text-gray-600"}`}>
+                <Badge
+                  className={`text-xs cursor-help ${CATEGORY_STYLES[config.category] ?? "bg-gray-100 text-gray-600"}`}
+                  title={CATEGORY_TOOLTIPS[config.category] ?? ""}
+                >
                   {config.category}
                 </Badge>
                 <span className="text-sm">{config.configItemName}</span>
                 {config.selfService && (
-                  <Badge variant="outline" className="text-xs text-green-600 border-green-300">
+                  <Badge
+                    variant="outline"
+                    className="text-xs text-green-600 border-green-300 cursor-help"
+                    title="Self-Service: Your team can configure this directly in SAP without raising a support ticket."
+                  >
                     Self-Service
                   </Badge>
                 )}

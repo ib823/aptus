@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { sanitizeHtmlContent } from "@/lib/security/sanitize";
 import { extractScopeSummary } from "@/lib/assessment/scope-summary";
+import { getScopePlainDescription } from "@/constants/scope-descriptions";
 
 interface ScopeItemData {
   id: string;
@@ -65,10 +66,10 @@ const RELEVANCE_OPTIONS = [
 ] as const;
 
 const CURRENT_STATE_OPTIONS = [
-  { value: "MANUAL", label: "Manual Process" },
-  { value: "SYSTEM", label: "Existing System" },
-  { value: "OUTSOURCED", label: "Outsourced" },
-  { value: "NA", label: "Not Applicable" },
+  { value: "MANUAL", label: "Manual (spreadsheets, paper, email)" },
+  { value: "SYSTEM", label: "Existing System (current ERP or software)" },
+  { value: "OUTSOURCED", label: "Outsourced (handled by a third party)" },
+  { value: "NA", label: "Not Applicable (we don't do this)" },
 ] as const;
 
 const PRIORITY_OPTIONS = [
@@ -228,6 +229,11 @@ export const ScopeItemCard = memo(function ScopeItemCard({ item, assessmentId, o
               {item.nameClean}
             </span>
           </div>
+          {getScopePlainDescription(item.id) && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {getScopePlainDescription(item.id)}
+            </p>
+          )}
           <div className="flex items-center gap-4 mt-0.5 text-xs text-muted-foreground">
             <span>{item.totalSteps} steps{item.classifiableSteps != null ? ` (${item.classifiableSteps} classifiable)` : ""}</span>
             <span>{item.subArea}</span>
@@ -257,18 +263,31 @@ export const ScopeItemCard = memo(function ScopeItemCard({ item, assessmentId, o
         </div>
 
         {item.selected && (
-          <Select value={item.currentState ?? ""} onValueChange={handleCurrentStateChange}>
-            <SelectTrigger className="w-40 h-8 text-xs">
-              <SelectValue placeholder="Current state" />
-            </SelectTrigger>
-            <SelectContent>
-              {CURRENT_STATE_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex flex-col items-end gap-0.5">
+            <div className="flex items-center gap-1">
+              <label className="text-[10px] font-medium text-muted-foreground">
+                How do you do this today?
+              </label>
+              <span
+                className="text-[10px] text-muted-foreground/50 cursor-help"
+                title="Select how your company currently handles this process. This helps consultants understand your starting point."
+              >
+                &#9432;
+              </span>
+            </div>
+            <Select value={item.currentState ?? ""} onValueChange={handleCurrentStateChange}>
+              <SelectTrigger className="w-52 h-8 text-xs">
+                <SelectValue placeholder="— Select —" />
+              </SelectTrigger>
+              <SelectContent>
+                {CURRENT_STATE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         )}
 
         <button

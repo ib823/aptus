@@ -161,6 +161,7 @@ export async function getConfigsForScopeItem(scopeItemId: string) {
       category: true,
       selfService: true,
       applicationArea: true,
+      countrySpecific: true,
     },
     orderBy: [{ category: "asc" }, { configItemName: "asc" }],
   });
