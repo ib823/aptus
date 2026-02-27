@@ -16,11 +16,23 @@ import type {
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 
-// --- Config from env vars ---
+// --- Config from env vars (derive from NEXTAUTH_URL when explicit vars are absent) ---
 
-const rpID = process.env.WEBAUTHN_RP_ID ?? "localhost";
+function deriveFromNextAuthUrl() {
+  const raw = process.env.NEXTAUTH_URL;
+  if (!raw) return { hostname: "localhost", origin: "http://localhost:3003" };
+  try {
+    const url = new URL(raw);
+    return { hostname: url.hostname, origin: url.origin };
+  } catch {
+    return { hostname: "localhost", origin: "http://localhost:3003" };
+  }
+}
+
+const _derived = deriveFromNextAuthUrl();
+const rpID = process.env.WEBAUTHN_RP_ID ?? _derived.hostname;
 const rpName = process.env.WEBAUTHN_RP_NAME ?? "aptus";
-const origin = process.env.WEBAUTHN_ORIGIN ?? "http://localhost:3003";
+const origin = process.env.WEBAUTHN_ORIGIN ?? _derived.origin;
 
 const CHALLENGE_COOKIE_NAME = "webauthn-challenge";
 const CHALLENGE_TTL_MS = 5 * 60 * 1000; // 5 minutes
