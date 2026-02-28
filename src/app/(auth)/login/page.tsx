@@ -111,7 +111,7 @@ function LoginForm() {
         <p className="text-xs text-muted-foreground mb-4">
           {UI_TEXT.app.tagline}
         </p>
-        <h1 className="text-xl font-semibold text-slate-900">
+        <h1 className="text-xl font-semibold text-foreground">
           {sent ? UI_TEXT.auth.magicLinkSent : UI_TEXT.auth.loginTitle}
         </h1>
         {!sent && (
