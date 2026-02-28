@@ -14,18 +14,18 @@ interface StatusTransitionBarProps {
 }
 
 const STATUS_DISPLAY: Record<string, { label: string; color: string }> = {
-  draft: { label: "Draft", color: "bg-gray-100 text-gray-700" },
-  scoping: { label: "Scope Selection", color: "bg-blue-100 text-blue-700" },
-  in_progress: { label: "In Progress", color: "bg-indigo-100 text-indigo-700" },
-  workshop_active: { label: "Workshop Active", color: "bg-purple-100 text-purple-700" },
-  review_cycle: { label: "Review Cycle", color: "bg-amber-100 text-amber-700" },
-  gap_resolution: { label: "Gap Resolution", color: "bg-orange-100 text-orange-700" },
-  pending_validation: { label: "Pending Validation", color: "bg-yellow-100 text-yellow-700" },
-  validated: { label: "Validated", color: "bg-lime-100 text-lime-700" },
-  pending_sign_off: { label: "Pending Sign-Off", color: "bg-cyan-100 text-cyan-700" },
-  signed_off: { label: "Signed Off", color: "bg-green-100 text-green-700" },
-  handed_off: { label: "Handed Off", color: "bg-teal-100 text-teal-700" },
-  archived: { label: "Archived", color: "bg-slate-100 text-slate-700" },
+  draft: { label: "Draft", color: "bg-slate-50 text-slate-700" },
+  scoping: { label: "Scope Selection", color: "bg-blue-50 text-blue-700" },
+  in_progress: { label: "In Progress", color: "bg-indigo-50 text-indigo-700" },
+  workshop_active: { label: "Workshop Active", color: "bg-purple-50 text-purple-700" },
+  review_cycle: { label: "Review Cycle", color: "bg-amber-50 text-amber-700" },
+  gap_resolution: { label: "Gap Resolution", color: "bg-orange-50 text-orange-700" },
+  pending_validation: { label: "Pending Validation", color: "bg-yellow-50 text-yellow-700" },
+  validated: { label: "Validated", color: "bg-lime-50 text-lime-700" },
+  pending_sign_off: { label: "Pending Sign-Off", color: "bg-cyan-50 text-cyan-700" },
+  signed_off: { label: "Signed Off", color: "bg-green-50 text-green-700" },
+  handed_off: { label: "Handed Off", color: "bg-teal-50 text-teal-700" },
+  archived: { label: "Archived", color: "bg-slate-50 text-slate-700" },
 };
 
 export function StatusTransitionBar({
@@ -85,7 +85,7 @@ export function StatusTransitionBar({
     }
   };
 
-  const statusInfo = STATUS_DISPLAY[currentStatus] ?? { label: currentStatus, color: "bg-gray-100 text-gray-700" };
+  const statusInfo = STATUS_DISPLAY[currentStatus] ?? { label: currentStatus, color: "bg-slate-50 text-slate-700" };
 
   return (
     <>

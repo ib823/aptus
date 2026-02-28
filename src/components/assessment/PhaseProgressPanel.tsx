@@ -29,10 +29,10 @@ const PHASE_LABELS: Record<string, string> = {
 };
 
 const STATUS_BADGE: Record<string, { label: string; color: string }> = {
-  not_started: { label: "Not Started", color: "bg-gray-100 text-gray-600" },
-  in_progress: { label: "In Progress", color: "bg-blue-100 text-blue-700" },
-  completed: { label: "Completed", color: "bg-green-100 text-green-700" },
-  blocked: { label: "Blocked", color: "bg-amber-100 text-amber-700" },
+  not_started: { label: "Not Started", color: "bg-slate-50 text-slate-600" },
+  in_progress: { label: "In Progress", color: "bg-blue-50 text-blue-700" },
+  completed: { label: "Completed", color: "bg-green-50 text-green-700" },
+  blocked: { label: "Blocked", color: "bg-amber-50 text-amber-700" },
 };
 
 export function PhaseProgressPanel({ assessmentId, compact = false }: PhaseProgressPanelProps) {
@@ -102,7 +102,7 @@ export function PhaseProgressPanel({ assessmentId, compact = false }: PhaseProgr
 
       {phases.map((phase) => {
         const label = PHASE_LABELS[phase.phase] ?? phase.phase;
-        const badge = STATUS_BADGE[phase.status] ?? { label: "Not Started", color: "bg-gray-100 text-gray-600" };
+        const badge = STATUS_BADGE[phase.status] ?? { label: "Not Started", color: "bg-slate-50 text-slate-600" };
 
         return (
           <div key={phase.phase} className={compact ? "space-y-0.5" : "space-y-1"}>
@@ -115,7 +115,7 @@ export function PhaseProgressPanel({ assessmentId, compact = false }: PhaseProgr
                 )}
               </div>
             </div>
-            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+            <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${
                   phase.status === "blocked"
