@@ -42,21 +42,21 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentT
       ],
     },
     {
-      label: "Outputs",
+      label: "Results",
       tabs: [
         { label: "Config", href: `${base}/config`, segment: "config" },
         { label: "Process Map", href: `${base}/process-map`, segment: "process-map" },
         { label: "Flows", href: `${base}/flows`, segment: "flows" },
         { label: "Gaps", href: `${base}/gaps`, segment: "gaps" },
-        { label: "Remaining", href: `${base}/remaining`, segment: "remaining" },
+        { label: "Action Items", href: `${base}/remaining`, segment: "remaining" },
       ],
     },
     {
-      label: "Registers",
+      label: "Tracking",
       tabs: [
-        { label: "Integrations", href: `${base}/integrations`, segment: "integrations" },
-        { label: "Data Migration", href: `${base}/data-migration`, segment: "data-migration" },
-        { label: "Change Mgmt", href: `${base}/ocm`, segment: "ocm", title: "Organizational Change Management" },
+        { label: "System Connections", href: `${base}/integrations`, segment: "integrations" },
+        { label: "Data Transfer", href: `${base}/data-migration`, segment: "data-migration" },
+        { label: "Change Impact", href: `${base}/ocm`, segment: "ocm", title: "Organizational Change Management" },
         { label: "Workshops", href: `${base}/workshops`, segment: "workshops" },
       ],
     },
@@ -101,7 +101,7 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentT
   return (
     <nav className="mb-6" aria-label="Assessment navigation">
       {/* Stage-level tabs */}
-      <div className="flex gap-0 bg-white border-b" role="tablist" aria-label="Assessment stages">
+      <div className="flex gap-0 bg-card border-b" role="tablist" aria-label="Assessment stages">
         {stages.map((stage, stageIndex) => {
           const isActive = activeStage === stage;
           return (
@@ -113,7 +113,7 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentT
                 className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                   isActive
                     ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-slate-500 hover:text-slate-700"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {stage.label}
@@ -127,7 +127,7 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentT
       </div>
       {/* Sub-tabs for active stage (only if >1 tab) */}
       {activeStage.tabs.length > 1 && (
-        <div className="flex gap-0 bg-slate-50/50 border-b" role="tablist" aria-label={`${activeStage.label} sub-navigation`}>
+        <div className="flex gap-0 bg-muted/50 border-b" role="tablist" aria-label={`${activeStage.label} sub-navigation`}>
           {activeStage.tabs.map((tab) => {
             const isActive = tab.segment === activeSegment;
             return (
@@ -139,8 +139,8 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentT
                 title={tab.title}
                 className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
                   isActive
-                    ? "border-blue-500 text-blue-600 bg-white"
-                    : "border-transparent text-slate-500 hover:text-slate-700"
+                    ? "border-blue-500 text-blue-600 bg-card"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {tab.label}
