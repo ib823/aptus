@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, FileText, Settings, LogOut, BookTemplate, BarChart3, Building2 } from "lucide-react";
 import { AptusLogo } from "@/components/shared/AptusLogo";
-import { ThemeToggle } from "@/components/shared/ThemeToggle";
+
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { UI_TEXT } from "@/constants/ui-text";
 import type { SessionUser } from "@/types/assessment";
@@ -56,7 +56,7 @@ export function PortalNav({ user }: PortalNavProps) {
   ];
 
   return (
-    <header className="border-b bg-background">
+    <header className="border-b bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex h-14 items-center justify-between">
           <div className="flex items-center gap-3 sm:gap-8 min-w-0">
@@ -78,11 +78,11 @@ export function PortalNav({ user }: PortalNavProps) {
                       aria-current={isActive ? "page" : undefined}
                       className={`flex items-center gap-2 h-10 px-3 rounded-md text-sm sm:text-base transition-all duration-200 ${
                         isActive
-                          ? "bg-primary/10 text-primary font-medium"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                          ? "bg-blue-50 text-blue-600 font-medium"
+                          : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
                       }`}
                     >
-                      <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+                      <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${isActive ? "text-blue-600" : "text-slate-400"}`} />
                       <span className="hidden md:inline">{item.label}</span>
                     </Link>
                   );
@@ -92,7 +92,6 @@ export function PortalNav({ user }: PortalNavProps) {
           <div className="flex items-center gap-1 sm:gap-3 shrink-0">
             <span className="hidden sm:inline text-sm text-muted-foreground">{user.name}</span>
             <NotificationBell />
-            <ThemeToggle />
             <button
               onClick={() => {
                 window.location.href = "/api/auth/logout";

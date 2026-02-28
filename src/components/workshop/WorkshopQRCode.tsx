@@ -34,13 +34,13 @@ export function WorkshopQRCode({ qrCodeUrl, sessionCode }: WorkshopQRCodeProps) 
           className="w-48 h-48 rounded border"
         />
       ) : (
-        <div className="w-48 h-48 bg-muted rounded border flex items-center justify-center text-sm text-muted-foreground">
+        <div className="w-48 h-48 bg-slate-50 rounded border flex items-center justify-center text-sm text-muted-foreground">
           Start session to generate QR
         </div>
       )}
 
       <div className="text-center">
-        <p className="text-2xl font-mono font-bold tracking-widest">{sessionCode}</p>
+        <p className="text-lg font-mono font-bold tracking-wider">{sessionCode}</p>
         <p className="text-xs text-muted-foreground mt-1">Session Code</p>
       </div>
 

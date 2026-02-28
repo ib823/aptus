@@ -23,9 +23,9 @@ function KpiCard({
 }) {
   return (
     <div className="p-3 rounded-lg border bg-card">
-      <p className="text-xs text-muted-foreground tracking-wide">{label}</p>
+      <p className="text-sm text-slate-500 tracking-wide">{label}</p>
       <div className="flex items-baseline gap-1 mt-1">
-        <span className="text-2xl font-bold">{value}</span>
+        <span className="text-3xl font-bold text-slate-900">{value}</span>
         <span className="text-sm text-muted-foreground">/ {total}</span>
       </div>
       <Progress value={percent} className={`h-1.5 mt-2 ${color}`} />
@@ -39,8 +39,8 @@ export function KpiPanel({ metrics }: KpiPanelProps) {
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Key Performance Indicators</CardTitle>
+      <CardHeader className="pb-3 border-b border-slate-100">
+        <CardTitle className="text-sm font-semibold">Key Performance Indicators</CardTitle>
       </CardHeader>
       <CardContent>
         {!hasData ? (

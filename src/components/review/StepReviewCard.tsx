@@ -84,15 +84,15 @@ const FIT_OPTIONS = [
     value: "NA",
     label: "Not applicable to us",
     description: "This step doesn't apply to our business",
-    color: "bg-gray-50 border-gray-200 text-gray-600",
-    dotColor: "bg-gray-400",
+    color: "bg-slate-50 border-slate-200 text-slate-500",
+    dotColor: "bg-slate-300",
   },
 ] as const;
 
 const CATEGORY_STYLES: Record<string, string> = {
-  Mandatory: "bg-red-100 text-red-700",
-  Recommended: "bg-amber-100 text-amber-700",
-  Optional: "bg-gray-100 text-gray-600",
+  Mandatory: "bg-red-50 text-red-700 border border-red-200",
+  Recommended: "bg-amber-50 text-amber-700 border border-amber-200",
+  Optional: "bg-slate-50 text-slate-500 border border-slate-200",
 };
 
 const CATEGORY_TOOLTIPS: Record<string, string> = {
@@ -394,7 +394,7 @@ export function StepReviewCard({
       </div>
 
       {/* Business Summary — always visible — REM-28 */}
-      <div className="px-5 py-3 bg-muted/20 border-t">
+      <div className="px-5 py-3 bg-slate-50/50 border-t">
         <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
           What This Step Does
         </span>

@@ -186,14 +186,14 @@ export function FlowViewerClient({ assessmentId, diagrams: initialDiagrams }: Fl
                       onClick={() => void loadSvg(d.id)}
                       className={`w-full text-left px-2 py-2 rounded text-sm flex items-center gap-2 ${
                         selectedId === d.id
-                          ? "bg-gray-950 text-white"
+                          ? "bg-primary text-primary-foreground"
                           : "hover:bg-accent text-muted-foreground"
                       }`}
                     >
                       <ChevronRight className="w-3 h-3 shrink-0" />
                       <div className="min-w-0">
                         <p className="truncate font-medium">{d.processFlowName}</p>
-                        <p className={`text-xs ${selectedId === d.id ? "text-gray-400" : "text-muted-foreground"}`}>
+                        <p className={`text-xs ${selectedId === d.id ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
                           {d.stepCount} steps
                         </p>
                       </div>

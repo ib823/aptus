@@ -434,7 +434,7 @@ function ReviewShellInner({
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
-      <div className="hidden sm:flex sm:w-[280px] shrink-0 bg-muted/40 border-r flex-col h-screen sticky top-0 overflow-hidden">
+      <div className="hidden sm:flex sm:w-[280px] shrink-0 bg-white border-r border-slate-200 flex-col h-screen sticky top-0 overflow-hidden">
         {/* Header — REM-21: per-scope-item progress */}
         <div className="p-4 border-b">
           <Link
@@ -624,11 +624,11 @@ function ReviewShellInner({
                       Step {currentStepIndex + 1} of {steps.length}
                     </span>
                     <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
-                      currentStep.fitStatus === "FIT" ? "bg-green-100 text-green-700"
-                      : currentStep.fitStatus === "CONFIGURE" ? "bg-blue-100 text-blue-700"
-                      : currentStep.fitStatus === "GAP" ? "bg-amber-100 text-amber-700"
-                      : currentStep.fitStatus === "NA" ? "bg-gray-100 text-gray-600"
-                      : "bg-muted text-muted-foreground"
+                      currentStep.fitStatus === "FIT" ? "bg-green-50 text-green-700 border border-green-200"
+                      : currentStep.fitStatus === "CONFIGURE" ? "bg-blue-50 text-blue-700 border border-blue-200"
+                      : currentStep.fitStatus === "GAP" ? "bg-amber-50 text-amber-700 border border-amber-200"
+                      : currentStep.fitStatus === "NA" ? "bg-slate-50 text-slate-500 border border-slate-200"
+                      : "bg-gray-50 text-gray-500 border border-gray-200"
                     }`}>
                       {currentStep.fitStatus === "PENDING" ? "Unreviewed" : currentStep.fitStatus}
                     </span>
@@ -659,17 +659,20 @@ function ReviewShellInner({
                       <ChevronLeft className="w-4 h-4 mr-1" />
                       Previous
                     </Button>
-                    <span className="hidden sm:inline text-sm text-muted-foreground">
+                    <div className="hidden sm:flex items-center gap-2">
+                      <span className="text-sm text-slate-500">
+                        Step {currentStepIndex + 1} of {steps.length}
+                      </span>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => setShowShortcuts(true)}
-                        className="text-muted-foreground px-2"
+                        className="text-slate-400 px-2"
                         title="Keyboard shortcuts"
                       >
                         <span className="text-xs border rounded px-1.5 py-0.5">?</span>
                       </Button>
-                    </span>
+                    </div>
                     <Button
                       variant="outline"
                       onClick={() => setCurrentStepIndex(currentStepIndex + 1)}

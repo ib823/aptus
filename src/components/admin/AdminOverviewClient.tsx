@@ -131,7 +131,7 @@ function IntCard({
   href: string;
 }) {
   return (
-    <a href={href} className="block bg-muted/40 rounded-lg p-4 hover:bg-accent transition-colors">
+    <a href={href} className="block bg-slate-50 rounded-lg p-4 hover:bg-slate-100 transition-colors">
       <Icon className="w-5 h-5 text-muted-foreground/60 mb-2" />
       <p className="text-xl font-bold text-foreground">{value}</p>
       <p className="text-xs text-muted-foreground">{label}</p>

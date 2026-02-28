@@ -26,11 +26,11 @@ interface AdminAssessmentsClientProps {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  draft: "bg-muted text-muted-foreground",
-  in_progress: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-  completed: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
-  reviewed: "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300",
-  signed_off: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  draft: "bg-slate-50 text-slate-500",
+  in_progress: "bg-blue-50 text-blue-700",
+  completed: "bg-green-50 text-green-700",
+  reviewed: "bg-purple-50 text-purple-700",
+  signed_off: "bg-emerald-50 text-emerald-700",
 };
 
 export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientProps) {
@@ -70,7 +70,7 @@ export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientPr
         <div className="bg-card border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-muted/40 border-b">
+              <tr className="bg-slate-50 border-b">
                 <th className="px-4 py-2 text-left font-medium text-muted-foreground">Company</th>
                 <th className="px-4 py-2 text-left font-medium text-muted-foreground">Industry</th>
                 <th className="px-4 py-2 text-left font-medium text-muted-foreground">Status</th>
@@ -82,7 +82,7 @@ export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientPr
             </thead>
             <tbody>
               {filtered.map((a) => (
-                <tr key={a.id} className="border-b border-border/50 hover:bg-accent">
+                <tr key={a.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-4 py-2.5">
                     <Link href={`/assessment/${a.id}/scope`} className="text-blue-600 hover:underline font-medium">
                       {a.companyName}

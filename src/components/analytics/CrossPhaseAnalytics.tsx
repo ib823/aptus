@@ -178,7 +178,7 @@ export function CrossPhaseAnalytics({ assessmentId }: CrossPhaseAnalyticsProps) 
                     <TableRow key={`added-${id}`}>
                       <TableCell className="font-medium">{id}</TableCell>
                       <TableCell>
-                        <Badge className="bg-green-100 text-green-800">
+                        <Badge className="bg-green-50 text-green-700">
                           Added
                         </Badge>
                       </TableCell>
@@ -191,7 +191,7 @@ export function CrossPhaseAnalytics({ assessmentId }: CrossPhaseAnalyticsProps) 
                     <TableRow key={`removed-${id}`}>
                       <TableCell className="font-medium">{id}</TableCell>
                       <TableCell>
-                        <Badge className="bg-red-100 text-red-800">
+                        <Badge className="bg-red-50 text-red-700">
                           Removed
                         </Badge>
                       </TableCell>
@@ -206,7 +206,7 @@ export function CrossPhaseAnalytics({ assessmentId }: CrossPhaseAnalyticsProps) 
                         {c.scopeItemId}
                       </TableCell>
                       <TableCell>
-                        <Badge className="bg-amber-100 text-amber-800">
+                        <Badge className="bg-amber-50 text-amber-700">
                           Changed
                         </Badge>
                       </TableCell>

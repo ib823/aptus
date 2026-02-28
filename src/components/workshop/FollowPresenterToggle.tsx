@@ -42,11 +42,11 @@ export function FollowPresenterToggle({
       disabled={updating}
       className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
         isFollowing
-          ? "bg-green-100 text-green-700 hover:bg-green-200"
-          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          ? "bg-green-50 text-green-700 hover:bg-green-100"
+          : "bg-slate-50 text-slate-500 hover:bg-slate-100"
       }`}
     >
-      <span className={`w-2 h-2 rounded-full ${isFollowing ? "bg-green-500" : "bg-gray-400"}`} />
+      <span className={`w-2 h-2 rounded-full ${isFollowing ? "bg-green-500" : "bg-slate-300"}`} />
       {isFollowing ? "Following presenter" : "Browsing independently"}
     </button>
   );

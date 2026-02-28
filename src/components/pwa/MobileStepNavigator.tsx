@@ -24,8 +24,8 @@ interface MobileStepNavigatorProps {
 const fitStatusOptions: { value: FitStatus; label: string; className: string }[] = [
   { value: "FIT", label: "FIT", className: "bg-green-600 text-white hover:bg-green-700" },
   { value: "CONFIGURE", label: "CFG", className: "bg-blue-600 text-white hover:bg-blue-700" },
-  { value: "GAP", label: "GAP", className: "bg-red-600 text-white hover:bg-red-700" },
-  { value: "NA", label: "N/A", className: "bg-neutral-600 text-white hover:bg-neutral-700" },
+  { value: "GAP", label: "GAP", className: "bg-amber-600 text-white hover:bg-amber-700" },
+  { value: "NA", label: "N/A", className: "bg-slate-500 text-white hover:bg-slate-600" },
 ];
 
 const SWIPE_THRESHOLD = 50;

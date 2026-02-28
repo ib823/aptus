@@ -62,9 +62,9 @@ export function OcmHeatmap({ data, onCellClick }: OcmHeatmapProps) {
 
       <div className="border rounded-lg overflow-auto">
         <table className="w-full text-sm">
-          <thead className="bg-muted/50">
+          <thead className="bg-slate-50">
             <tr>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground sticky left-0 bg-muted/50">
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground sticky left-0 bg-slate-50">
                 Role / Area
               </th>
               {areas.map((area) => (

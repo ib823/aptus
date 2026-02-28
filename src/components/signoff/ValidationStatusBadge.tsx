@@ -12,20 +12,20 @@ interface ValidationStatusBadgeProps {
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
   PENDING: {
     label: "Pending",
-    className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300",
+    className: "bg-yellow-50 text-yellow-700",
   },
   APPROVED: {
     label: "Approved",
-    className: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300",
+    className: "bg-green-50 text-green-700",
   },
   REJECTED: {
     label: "Rejected",
-    className: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
+    className: "bg-red-50 text-red-700",
   },
 };
 
 export function ValidationStatusBadge({ status, className }: ValidationStatusBadgeProps) {
-  const style = STATUS_STYLES[status] ?? { label: status, className: "bg-gray-100 text-gray-700" };
+  const style = STATUS_STYLES[status] ?? { label: status, className: "bg-slate-50 text-slate-500" };
 
   return (
     <Badge variant="outline" className={cn("border-transparent", style.className, className)}>

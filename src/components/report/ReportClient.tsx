@@ -191,17 +191,17 @@ export function ReportClient({
       </div>
 
       {/* Complete package download */}
-      <div className="bg-gray-950 text-white rounded-lg p-6 mb-8 flex items-center justify-between">
+      <div className="bg-primary text-primary-foreground rounded-lg p-6 mb-8 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Archive className="w-6 h-6 text-gray-400" />
+          <Archive className="w-6 h-6 text-primary-foreground/60" />
           <div>
             <p className="font-medium">Complete Blueprint Package</p>
-            <p className="text-sm text-gray-400">All reports combined in a single ZIP download</p>
+            <p className="text-sm text-primary-foreground/60">All reports combined in a single ZIP download</p>
           </div>
         </div>
         <Button
           variant="outline"
-          className="border-gray-600 text-white hover:bg-gray-800"
+          className="border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10"
           disabled={!canGenerate}
           onClick={() => handleDownload("complete-package")}
         >

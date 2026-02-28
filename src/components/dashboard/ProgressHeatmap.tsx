@@ -10,8 +10,8 @@ interface ProgressHeatmapProps {
 export function ProgressHeatmap({ cells }: ProgressHeatmapProps) {
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Completion Heatmap</CardTitle>
+      <CardHeader className="pb-3 border-b border-slate-100">
+        <CardTitle className="text-sm font-semibold">Completion Heatmap</CardTitle>
       </CardHeader>
       <CardContent>
         {cells.length === 0 ? (

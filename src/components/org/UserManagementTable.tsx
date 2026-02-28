@@ -71,7 +71,7 @@ export function UserManagementTable({
       ) : (
         <div className="border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-muted/50">
+            <thead className="bg-slate-50">
               <tr>
                 <th className="text-left px-4 py-2 font-medium">Name</th>
                 <th className="text-left px-4 py-2 font-medium">Email</th>
@@ -91,8 +91,8 @@ export function UserManagementTable({
                   <td className="px-4 py-2.5">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                       u.isActive
-                        ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
-                        : "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+                        ? "bg-green-50 text-green-700"
+                        : "bg-red-50 text-red-700"
                     }`}>
                       {u.isActive ? "Active" : "Deactivated"}
                     </span>

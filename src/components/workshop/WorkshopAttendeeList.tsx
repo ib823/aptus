@@ -16,7 +16,7 @@ interface WorkshopAttendeeListProps {
 
 const STATUS_DOT: Record<string, string> = {
   connected: "bg-green-500",
-  disconnected: "bg-gray-400",
+  disconnected: "bg-slate-300",
   away: "bg-amber-500",
 };
 

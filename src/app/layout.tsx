@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     title: "aptus",
   },
   other: {
-    "theme-color": "#09090b",
+    "theme-color": "#f8fafc",
   },
 };
 

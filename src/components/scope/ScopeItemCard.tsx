@@ -63,7 +63,7 @@ interface ImpactData {
 const RELEVANCE_OPTIONS = [
   { value: "YES", label: "Yes", style: "bg-green-100 text-green-700 border-green-300" },
   { value: "MAYBE", label: "Maybe", style: "bg-amber-100 text-amber-700 border-amber-300" },
-  { value: "NO", label: "No", style: "bg-gray-100 text-gray-600 border-gray-300" },
+  { value: "NO", label: "No", style: "bg-slate-50 text-slate-500 border-slate-200" },
 ] as const;
 
 const CURRENT_STATE_OPTIONS = [

@@ -17,7 +17,7 @@ const VOTE_OPTIONS: Array<{ value: VoteClassification; label: string; color: str
   { value: "FIT", label: "FIT", color: "bg-green-600 hover:bg-green-700" },
   { value: "CONFIGURE", label: "CONFIGURE", color: "bg-blue-600 hover:bg-blue-700" },
   { value: "GAP", label: "GAP", color: "bg-amber-600 hover:bg-amber-700" },
-  { value: "NA", label: "N/A", color: "bg-gray-500 hover:bg-gray-600" },
+  { value: "NA", label: "N/A", color: "bg-slate-500 hover:bg-slate-600" },
 ];
 
 export function WorkshopVotingPanel({

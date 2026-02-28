@@ -19,17 +19,17 @@ interface WorkshopActionItemListProps {
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
-  critical: "bg-red-100 text-red-700",
-  high: "bg-orange-100 text-orange-700",
-  medium: "bg-yellow-100 text-yellow-700",
-  low: "bg-gray-100 text-gray-600",
+  critical: "bg-red-50 text-red-700",
+  high: "bg-orange-50 text-orange-700",
+  medium: "bg-yellow-50 text-yellow-700",
+  low: "bg-slate-50 text-slate-500",
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  open: "bg-blue-100 text-blue-700",
-  in_progress: "bg-amber-100 text-amber-700",
-  completed: "bg-green-100 text-green-700",
-  cancelled: "bg-gray-100 text-gray-500",
+  open: "bg-blue-50 text-blue-700",
+  in_progress: "bg-amber-50 text-amber-700",
+  completed: "bg-green-50 text-green-700",
+  cancelled: "bg-slate-50 text-slate-500",
 };
 
 export function WorkshopActionItemList({

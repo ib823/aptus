@@ -112,7 +112,7 @@ export function ReviewSidebar({
                 )}
                 {item.pending > 0 && (
                   <span className="flex items-center gap-0.5 text-xs text-muted-foreground/60">
-                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
                     {item.pending}
                   </span>
                 )}
@@ -137,8 +137,8 @@ export function ReviewSidebar({
           <StatRow label="FIT" count={overallProgress.fit} color="bg-green-500" />
           <StatRow label="CONFIGURE" count={overallProgress.configure} color="bg-blue-500" />
           <StatRow label="GAP" count={overallProgress.gap} color="bg-amber-500" />
-          <StatRow label="N/A" count={overallProgress.na} color="bg-muted-foreground/60" />
-          <StatRow label="PENDING" count={overallProgress.pending} color="bg-muted" />
+          <StatRow label="N/A" count={overallProgress.na} color="bg-slate-300" />
+          <StatRow label="PENDING" count={overallProgress.pending} color="bg-gray-200" />
         </div>
       </div>
     </div>

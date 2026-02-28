@@ -158,23 +158,23 @@ export function WorkshopModeLayout({
   }, [assessmentId, sessionId, refreshActionItems]);
 
   return (
-    <div className={`min-h-screen ${darkMode ? "bg-gray-950 text-white" : "bg-background"}`}>
+    <div className={`min-h-screen ${darkMode ? "bg-slate-900 text-white" : "bg-background"}`}>
       {/* Header */}
-      <div className={`border-b px-6 py-3 flex items-center justify-between ${darkMode ? "border-gray-800" : ""}`}>
+      <div className={`border-b px-6 py-3 flex items-center justify-between ${darkMode ? "border-slate-800" : ""}`}>
         <div>
           <h1 className={`text-lg font-bold ${darkMode ? "text-white" : "text-foreground"}`}>
             {sessionTitle}
           </h1>
           <div className="flex items-center gap-3 text-sm">
-            <span className={darkMode ? "text-gray-400" : "text-muted-foreground"}>
+            <span className={darkMode ? "text-slate-400" : "text-muted-foreground"}>
               Code: <span className="font-mono font-bold">{sessionCode}</span>
             </span>
             <Badge variant="outline" className={
               status === "in_progress"
-                ? "bg-green-100 text-green-700"
+                ? "bg-green-50 text-green-700"
                 : status === "completed"
-                  ? "bg-gray-100 text-gray-600"
-                  : "bg-blue-100 text-blue-700"
+                  ? "bg-slate-50 text-slate-500"
+                  : "bg-blue-50 text-blue-700"
             }>
               {status}
             </Badge>
@@ -236,7 +236,7 @@ export function WorkshopModeLayout({
               />
             </>
           ) : (
-            <div className={`text-center py-12 ${darkMode ? "text-gray-400" : "text-muted-foreground"}`}>
+            <div className={`text-center py-12 ${darkMode ? "text-slate-400" : "text-muted-foreground"}`}>
               No steps to review in this workshop.
             </div>
           )}

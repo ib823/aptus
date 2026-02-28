@@ -34,7 +34,7 @@ export function WorkshopAgenda({ items, currentIndex }: WorkshopAgendaProps) {
                 ? "bg-green-500 border-green-500 text-white"
                 : isCurrent
                   ? "border-blue-500 text-blue-500"
-                  : "border-gray-300 text-gray-400"
+                  : "border-slate-300 text-slate-400"
             }`}>
               {isCompleted ? "\u2713" : idx + 1}
             </div>

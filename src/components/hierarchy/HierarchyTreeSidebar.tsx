@@ -17,11 +17,11 @@ function getActivityStatusColor(
   total: number,
   gapCount: number,
 ): string {
-  if (total === 0) return "text-gray-400";
+  if (total === 0) return "text-slate-300";
   if (gapCount > 0) return "text-amber-500";
   if (reviewed === total) return "text-green-500";
   if (reviewed > 0) return "text-blue-500";
-  return "text-gray-400";
+  return "text-slate-300";
 }
 
 export function HierarchyTreeSidebar({

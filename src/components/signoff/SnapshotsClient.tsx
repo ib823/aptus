@@ -98,8 +98,8 @@ export function SnapshotsClient({ assessmentId }: SnapshotsClientProps) {
     return (
       <div className="p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-muted rounded w-48" />
-          <div className="h-24 bg-muted rounded" />
+          <div className="h-8 bg-slate-200 rounded w-48" />
+          <div className="h-24 bg-slate-200 rounded" />
         </div>
       </div>
     );

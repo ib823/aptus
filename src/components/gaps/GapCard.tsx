@@ -73,7 +73,7 @@ const RESOLUTION_OPTIONS = [
   { value: "ISV", label: "ISV Solution", description: "Third-party software from SAP Store", color: "bg-violet-50 border-violet-200 text-violet-700" },
   { value: "CUSTOM_ABAP", label: "Custom ABAP", description: "Custom development in SAP", color: "bg-red-50 border-red-200 text-red-700" },
   { value: "ADAPT_PROCESS", label: "Adapt Process", description: "Change business process to match SAP", color: "bg-amber-50 border-amber-200 text-amber-700" },
-  { value: "OUT_OF_SCOPE", label: "Out of Scope", description: "Defer to a later phase", color: "bg-gray-50 border-gray-200 text-gray-600" },
+  { value: "OUT_OF_SCOPE", label: "Out of Scope", description: "Defer to a later phase", color: "bg-slate-50 border-slate-200 text-slate-500" },
 ] as const;
 
 const RISK_COLORS: Record<string, string> = {

@@ -12,11 +12,11 @@ interface WorkshopStepCardProps {
 }
 
 const STATUS_BADGE: Record<string, string> = {
-  FIT: "bg-green-100 text-green-700",
-  CONFIGURE: "bg-blue-100 text-blue-700",
-  GAP: "bg-amber-100 text-amber-700",
-  NA: "bg-gray-100 text-gray-600",
-  PENDING: "bg-gray-50 text-gray-500",
+  FIT: "bg-green-50 text-green-700 border border-green-200",
+  CONFIGURE: "bg-blue-50 text-blue-700 border border-blue-200",
+  GAP: "bg-amber-50 text-amber-700 border border-amber-200",
+  NA: "bg-slate-50 text-slate-500 border border-slate-200",
+  PENDING: "bg-slate-50 text-slate-500 border border-slate-200",
 };
 
 export function WorkshopStepCard({
@@ -50,7 +50,7 @@ export function WorkshopStepCard({
         </div>
       )}
       {instructions && (
-        <div className="text-sm text-foreground/80 bg-muted/30 rounded-lg p-3 mt-3 max-h-32 overflow-y-auto">
+        <div className="text-sm text-foreground/80 bg-slate-50 rounded-lg p-3 mt-3 max-h-32 overflow-y-auto">
           {instructions}
         </div>
       )}

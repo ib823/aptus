@@ -35,7 +35,7 @@ export default async function OrganizationsPage() {
       <div className="bg-card rounded-lg border overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-muted/40 border-b">
+            <tr className="bg-slate-50 border-b">
               <th className="px-4 py-2 text-left font-medium text-muted-foreground">Name</th>
               <th className="px-4 py-2 text-left font-medium text-muted-foreground">Type</th>
               <th className="px-4 py-2 text-left font-medium text-muted-foreground">Users</th>
@@ -46,7 +46,7 @@ export default async function OrganizationsPage() {
           </thead>
           <tbody>
             {organizations.map((org) => (
-              <tr key={org.id} className="border-b border-border/50 hover:bg-accent">
+              <tr key={org.id} className="border-b border-slate-100 hover:bg-slate-50">
                 <td className="px-4 py-2.5">
                   <Link
                     href={`/admin/organizations/${org.id}`}
@@ -57,7 +57,7 @@ export default async function OrganizationsPage() {
                   <div className="text-xs text-muted-foreground">{org.slug}</div>
                 </td>
                 <td className="px-4 py-2.5">
-                  <Badge className={ORG_TYPE_COLORS[org.type] ?? "bg-gray-100 text-gray-800"}>
+                  <Badge className={ORG_TYPE_COLORS[org.type] ?? "bg-slate-50 text-slate-500"}>
                     {org.type.replace("_", " ")}
                   </Badge>
                 </td>

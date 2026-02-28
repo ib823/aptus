@@ -24,7 +24,7 @@ export default async function UsersPage() {
       <div className="bg-card rounded-lg border overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-muted/40 border-b">
+            <tr className="bg-slate-50 border-b">
               <th className="px-4 py-2 text-left font-medium text-muted-foreground">Name</th>
               <th className="px-4 py-2 text-left font-medium text-muted-foreground">Email</th>
               <th className="px-4 py-2 text-left font-medium text-muted-foreground">Role</th>
@@ -35,22 +35,22 @@ export default async function UsersPage() {
           </thead>
           <tbody>
             {users.map((u) => (
-              <tr key={u.id} className="border-b border-border/50 hover:bg-accent">
+              <tr key={u.id} className="border-b border-slate-100 hover:bg-slate-50">
                 <td className="px-4 py-2.5 font-medium text-foreground">{u.name ?? "—"}</td>
                 <td className="px-4 py-2.5 text-muted-foreground">{u.email}</td>
                 <td className="px-4 py-2.5">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                     u.role === "admin" || u.role === "platform_admin"
-                      ? "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
+                      ? "bg-purple-100 text-purple-700"
                       : u.role === "consultant"
-                        ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
-                        : "bg-muted text-muted-foreground"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-slate-50 text-slate-500"
                   }`}>
                     {u.role}
                   </span>
                 </td>
                 <td className="px-4 py-2.5">
-                  <span className={`text-xs ${u.mfaEnabled ? "text-green-600 dark:text-green-400" : "text-muted-foreground/60"}`}>
+                  <span className={`text-xs ${u.mfaEnabled ? "text-green-600" : "text-muted-foreground/60"}`}>
                     {u.mfaEnabled ? "Enabled" : "Off"}
                   </span>
                 </td>

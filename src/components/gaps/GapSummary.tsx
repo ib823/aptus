@@ -27,7 +27,7 @@ const TYPE_COLORS: Record<string, string> = {
   ISV: "bg-violet-500",
   CUSTOM_ABAP: "bg-red-500",
   ADAPT_PROCESS: "bg-amber-500",
-  OUT_OF_SCOPE: "bg-gray-400",
+  OUT_OF_SCOPE: "bg-slate-300",
 };
 
 export function GapSummary({ total, resolved, pending, totalEffort, byType }: GapSummaryProps) {
