@@ -48,6 +48,7 @@ interface CompanyProfileFormProps {
   assessmentId: string;
   initialProfile: ProfileData;
   isReadOnly?: boolean;
+  userRole?: string;
 }
 
 interface SectionProps {
@@ -81,7 +82,7 @@ function CollapsibleSection({ title, complete, defaultOpen = false, children }: 
   );
 }
 
-export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }: CompanyProfileFormProps) {
+export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, userRole }: CompanyProfileFormProps) {
   const [profile, setProfile] = useState<ProfileData>(initialProfile);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [currencyManuallySet, setCurrencyManuallySet] = useState(false);
@@ -321,7 +322,8 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
 
         {/* Right column: ERP & Technology */}
         <div className="space-y-3">
-          {/* Section 3: SAP Strategy */}
+          {/* Section 3: SAP Strategy — hidden for business roles who can't answer these */}
+          {!["process_owner", "executive_sponsor", "viewer"].includes(userRole ?? "") && (
           <CollapsibleSection title="SAP Strategy" complete={bd.sapStrategy}>
             <div className="space-y-4 pt-3">
               <div className="grid grid-cols-2 gap-4">
@@ -385,6 +387,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly }:
               </div>
             </div>
           </CollapsibleSection>
+          )}
 
           {/* Section 5: IT Landscape */}
           <CollapsibleSection title="IT Landscape" complete={bd.itLandscape}>
