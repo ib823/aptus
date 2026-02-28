@@ -64,20 +64,38 @@ export default async function AssessmentsPage() {
       />
 
       {assessments.length === 0 ? (
-        <EmptyState
-          title={UI_TEXT.assessment.noAssessments}
-          description={UI_TEXT.assessment.noAssessmentsDescription}
-          action={
-            canCreate ? (
-              <Link href="/assessments/new">
-                <Button>
-                  <Plus className="w-4 h-4 mr-1.5" />
-                  {UI_TEXT.assessment.createNew}
-                </Button>
-              </Link>
-            ) : undefined
-          }
-        />
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-5">
+            <h3 className="text-base font-semibold text-blue-900 mb-1">
+              Welcome to aptus
+            </h3>
+            <p className="text-sm text-blue-800 mb-3">
+              This tool helps you compare your business processes with SAP S/4HANA. Here&apos;s how it works:
+            </p>
+            <ol className="text-sm text-blue-700 space-y-1.5 ml-4 list-decimal">
+              <li><strong>Tell us about your company</strong> &mdash; Fill in your company profile and industry</li>
+              <li><strong>Choose relevant processes</strong> &mdash; Select which SAP business areas apply to you</li>
+              <li><strong>Review the fit</strong> &mdash; For each process step, tell us if SAP matches how you work</li>
+            </ol>
+            <p className="text-sm text-blue-700 mt-3">
+              Most users complete scope selection in 10-15 minutes. Your progress saves automatically.
+            </p>
+          </div>
+          <EmptyState
+            title={UI_TEXT.assessment.noAssessments}
+            description={UI_TEXT.assessment.noAssessmentsDescription}
+            action={
+              canCreate ? (
+                <Link href="/assessments/new">
+                  <Button>
+                    <Plus className="w-4 h-4 mr-1.5" />
+                    {UI_TEXT.assessment.createNew}
+                  </Button>
+                </Link>
+              ) : undefined
+            }
+          />
+        </div>
       ) : (
         <div className="space-y-3">
           {assessments.map((assessment) => {
