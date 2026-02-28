@@ -58,37 +58,6 @@ interface StepReviewCardProps {
   commentCount?: number | undefined;
 }
 
-const FIT_OPTIONS = [
-  {
-    value: "FIT",
-    label: "This matches our process",
-    description: "SAP best practice aligns with how we operate",
-    color: "bg-green-50 border-green-200 text-green-700",
-    dotColor: "bg-green-500",
-  },
-  {
-    value: "CONFIGURE",
-    label: "We can work with this, with configuration",
-    description: "SAP can handle our variation with standard settings",
-    color: "bg-blue-50 border-blue-200 text-blue-700",
-    dotColor: "bg-blue-500",
-  },
-  {
-    value: "GAP",
-    label: "Our process is different",
-    description: "We need something SAP doesn't do out of the box",
-    color: "bg-amber-50 border-amber-200 text-amber-700",
-    dotColor: "bg-amber-500",
-  },
-  {
-    value: "NA",
-    label: "Not applicable to us",
-    description: "This step doesn't apply to our business",
-    color: "bg-slate-50 border-slate-200 text-slate-500",
-    dotColor: "bg-slate-300",
-  },
-] as const;
-
 const CATEGORY_STYLES: Record<string, string> = {
   Mandatory: "bg-red-50 text-red-700 border border-red-200",
   Recommended: "bg-amber-50 text-amber-700 border border-amber-200",
@@ -201,7 +170,48 @@ export function StepReviewCard({
 
   return (
     <div className="bg-card rounded-lg border overflow-hidden">
-      {/* Header */}
+      {/* Decision-First: Compact classification grid at top */}
+      <div className="px-5 py-3 border-b">
+        <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Fit classification">
+          {([
+            { value: "FIT", icon: "✓", label: "FIT", selected: "bg-green-50 border-green-500 text-green-700" },
+            { value: "CONFIGURE", icon: "⚙", label: "CONFIG", selected: "bg-blue-50 border-blue-500 text-blue-700" },
+            { value: "GAP", icon: "⚠", label: "GAP", selected: "bg-amber-50 border-amber-500 text-amber-700" },
+            { value: "NA", icon: "—", label: "N/A", selected: "bg-slate-50 border-slate-300 text-slate-500" },
+          ] as const).map((opt) => {
+            const isSelected = step.fitStatus === opt.value;
+            return (
+              <button
+                key={opt.value}
+                role="radio"
+                aria-checked={isSelected}
+                onClick={() => handleFitStatusChange(opt.value)}
+                disabled={isReadOnly || isItLead}
+                className={`py-2 px-1 rounded-md border text-center text-sm font-medium transition-all ${
+                  isSelected ? opt.selected : "border-slate-200 text-muted-foreground bg-card hover:bg-accent"
+                } ${(isReadOnly || isItLead) ? "cursor-not-allowed opacity-70" : ""}`}
+              >
+                {opt.icon} {opt.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Save status indicator */}
+        {saveStatus === "saved" && (
+          <span className="text-xs text-green-600 flex items-center gap-1 mt-2">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            Saved
+          </span>
+        )}
+        {saveStatus === "saving" && (
+          <span className="text-xs text-muted-foreground mt-2">Saving...</span>
+        )}
+      </div>
+
+      {/* Step header */}
       <div className="px-5 py-4 border-b border flex justify-between items-start">
         <div>
           <span className="text-xs font-medium text-muted-foreground/60">
@@ -240,25 +250,42 @@ export function StepReviewCard({
         </div>
       )}
 
-      {/* Decision-First: Client Response Section — ABOVE SAP content */}
-      <div className="px-5 py-4">
-        <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
-          How Does Your Company Do This?
-        </span>
-
-        {/* Business context guidance — REM-26 */}
+      {/* What this step does — business explanation */}
+      <div className="px-5 py-3 border-b">
+        <span className="text-xs font-semibold text-foreground">What this step does:</span>
         {(() => {
           const hint = getBusinessContextHint(step.actionTitle, step.stepCategory);
-          if (!hint) return null;
+          const parsed = step.parsedContent
+            ? (step.parsedContent as unknown as import("@/lib/assessment/content-parser").ParsedStepContent)
+            : parseStepContent(step.actionInstructionsHtml);
+          const purpose = parsed?.purpose;
+          if (hint) {
+            return (
+              <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                {hint}
+              </p>
+            );
+          }
+          if (purpose) {
+            return (
+              <div
+                className="text-sm text-muted-foreground mt-1 leading-relaxed prose prose-sm max-w-none"
+                dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(purpose) }}
+              />
+            );
+          }
           return (
-            <p className="text-xs text-muted-foreground mt-1.5 mb-2 leading-relaxed bg-blue-50/50 px-3 py-2 rounded-md border border-blue-100">
-              {hint}
+            <p className="text-sm text-muted-foreground mt-1">
+              {step.actionTitle}
             </p>
           );
         })()}
+      </div>
 
+      {/* Response details: confidence, notes */}
+      <div className="px-5 py-4">
         {isReadOnly ? (
-          <div className="mt-3">
+          <div>
             <p className="text-sm text-muted-foreground italic">
               {step.fitStatus === "PENDING"
                 ? "No response yet"
@@ -275,51 +302,9 @@ export function StepReviewCard({
           </div>
         ) : (
           <>
-            <div className="mt-3 flex flex-col gap-3" role="radiogroup" aria-label="Fit classification">
-              {FIT_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  role="radio"
-                  aria-checked={step.fitStatus === opt.value}
-                  onClick={() => handleFitStatusChange(opt.value)}
-                  disabled={isItLead}
-                  className={`flex items-start gap-3 p-3 rounded-lg border text-left transition-all ${
-                    step.fitStatus === opt.value
-                      ? opt.color
-                      : "bg-card border hover:bg-accent"
-                  } ${isItLead ? "cursor-not-allowed opacity-70" : ""}`}
-                >
-                  <div className={`w-4 h-4 rounded-full border-2 mt-0.5 shrink-0 flex items-center justify-center ${
-                    step.fitStatus === opt.value ? "border-current" : "border-muted-foreground/60"
-                  }`}>
-                    {step.fitStatus === opt.value && (
-                      <div className={`w-2 h-2 rounded-full ${opt.dotColor}`} />
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">{opt.label}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {/* Save status indicator */}
-            {saveStatus === "saved" && (
-              <span className="text-xs text-green-600 flex items-center gap-1 mt-2">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Saved
-              </span>
-            )}
-            {saveStatus === "saving" && (
-              <span className="text-xs text-muted-foreground mt-2">Saving...</span>
-            )}
-
             {/* Confidence — REM-27: user-friendly labels + explanation */}
             {step.fitStatus !== "PENDING" && (
-              <div className="mt-3 p-3 bg-muted/30 rounded-md">
+              <div className="p-3 bg-muted/30 rounded-md">
                 <div className="flex items-center gap-3">
                   <label htmlFor={`confidence-${step.id}`} className="text-xs font-medium text-muted-foreground">
                     How sure are you?
@@ -393,32 +378,6 @@ export function StepReviewCard({
         )}
       </div>
 
-      {/* Business Summary — always visible — REM-28 */}
-      <div className="px-5 py-3 bg-slate-50/50 border-t">
-        <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
-          What This Step Does
-        </span>
-        {(() => {
-          const parsed = step.parsedContent
-            ? (step.parsedContent as unknown as import("@/lib/assessment/content-parser").ParsedStepContent)
-            : parseStepContent(step.actionInstructionsHtml);
-          const purpose = parsed?.purpose;
-          if (purpose) {
-            return (
-              <div
-                className="text-sm text-muted-foreground mt-1.5 leading-relaxed prose prose-sm max-w-none"
-                dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(purpose) }}
-              />
-            );
-          }
-          return (
-            <p className="text-sm text-muted-foreground mt-1.5">
-              {step.actionTitle}
-            </p>
-          );
-        })()}
-      </div>
-
       {/* Technical Details — collapsed by default — REM-28 */}
       <div className="border-t">
         <button
@@ -430,14 +389,13 @@ export function StepReviewCard({
           ) : (
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           )}
-          <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
-            Technical Details (SAP System Instructions)
+          <span className="text-sm font-medium text-blue-600">
+            View SAP Reference Content
           </span>
-          <span className="text-[10px] text-muted-foreground/40 ml-auto">for consultants</span>
         </button>
         {sapContentExpanded && (
-          <div className="px-5 pb-4 bg-muted/40 overflow-x-auto max-w-full">
-            <div className="prose prose-sm max-w-none [&_table]:max-w-full [&_table]:table-auto [&_table]:overflow-x-auto [&_img]:max-w-full">
+          <div className="px-5 pb-4 overflow-x-auto max-w-full">
+            <div className="bg-slate-50 rounded-md p-3 prose prose-sm max-w-none font-mono text-xs text-muted-foreground [&_table]:max-w-full [&_table]:table-auto [&_table]:overflow-x-auto [&_img]:max-w-full">
               <ParsedContentView
                 content={step.parsedContent
                   ? step.parsedContent as unknown as import("@/lib/assessment/content-parser").ParsedStepContent
