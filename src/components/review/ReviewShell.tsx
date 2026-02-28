@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { StepReviewCard } from "@/components/review/StepReviewCard";
 import { ReferenceStepRow } from "@/components/review/ReferenceStepRow";
 import { ClassifiableProgressBar } from "@/components/review/ClassifiableProgressBar";
-import { ProgressBar } from "@/components/shared/ProgressBar";
 import { HierarchyProvider, useHierarchy } from "@/components/hierarchy/HierarchyContext";
 import { HierarchyTreeSidebar } from "@/components/hierarchy/HierarchyTreeSidebar";
 import { HierarchyBreadcrumb } from "@/components/hierarchy/HierarchyBreadcrumb";
@@ -434,8 +433,8 @@ function ReviewShellInner({
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
-      <div className="hidden sm:flex sm:w-[280px] shrink-0 bg-white border-r border-slate-200 flex-col h-screen sticky top-0 overflow-hidden">
-        {/* Header — REM-21: per-scope-item progress */}
+      <div className="hidden sm:flex sm:w-[280px] shrink-0 bg-card border-r border-border flex-col h-screen sticky top-0 overflow-hidden">
+        {/* Section 1: Current Scope Item */}
         <div className="p-4 border-b">
           <Link
             href={`/assessment/${assessmentId}/scope`}
@@ -445,16 +444,22 @@ function ReviewShellInner({
             Back to Scope
           </Link>
 
-          {/* Current scope item progress (prominent) */}
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Scope Item</p>
+
           {currentScopeItem && (
             <div className="mb-2">
-              <p className="text-xs font-semibold text-foreground truncate" title={currentScopeItem.nameClean}>
+              <p className="text-[15px] font-semibold text-foreground truncate" title={currentScopeItem.nameClean}>
                 {currentScopeItem.nameClean}
               </p>
-              <ProgressBar value={currentScopeItem.reviewedSteps} max={currentScopeItem.totalSteps} />
-              <p className="text-xs text-muted-foreground mt-1">
-                {currentScopeItem.reviewedSteps} / {currentScopeItem.totalSteps} steps in this scope item
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {currentScopeItem.reviewedSteps} / {currentScopeItem.totalSteps} steps ({currentScopeItem.totalSteps > 0 ? Math.round((currentScopeItem.reviewedSteps / currentScopeItem.totalSteps) * 100) : 0}%)
               </p>
+              <div className="h-1.5 rounded-full bg-slate-100 mt-1.5">
+                <div
+                  className="h-1.5 rounded-full bg-blue-500 transition-all"
+                  style={{ width: `${currentScopeItem.totalSteps > 0 ? Math.round((currentScopeItem.reviewedSteps / currentScopeItem.totalSteps) * 100) : 0}%` }}
+                />
+              </div>
             </div>
           )}
 
@@ -464,43 +469,18 @@ function ReviewShellInner({
               <span>Overall assessment</span>
               <span>{overallProgress.reviewedSteps}/{overallProgress.totalSteps}</span>
             </div>
-            <div className="h-1 rounded-full bg-muted mt-1">
+            <div className="h-1 rounded-full bg-slate-100 mt-1">
               <div
-                className="h-1 rounded-full bg-muted-foreground/30 transition-all"
+                className="h-1 rounded-full bg-blue-500/30 transition-all"
                 style={{ width: `${overallProgress.totalSteps > 0 ? Math.round((overallProgress.reviewedSteps / overallProgress.totalSteps) * 100) : 0}%` }}
               />
             </div>
           </div>
         </div>
 
-        {/* Scope items */}
-        <div className="border-b max-h-[160px] overflow-y-auto overscroll-contain">
-          {scopeItems.map((item) => {
-            const pct = item.totalSteps > 0 ? Math.round((item.reviewedSteps / item.totalSteps) * 100) : 0;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setCurrentScopeItemId(item.id)}
-                className={`w-full text-left px-4 py-2 transition-colors ${
-                  currentScopeItemId === item.id
-                    ? "bg-card border-l-2 border-blue-500"
-                    : "hover:bg-accent border-l-2 border-transparent"
-                }`}
-              >
-                <p className="text-xs font-medium text-foreground truncate" title={item.nameClean}>{item.nameClean}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <div className="flex-1 h-1 rounded-full bg-muted">
-                    <div className="h-1 rounded-full bg-blue-500 transition-all" style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="text-[10px] text-muted-foreground/60 shrink-0">{item.reviewedSteps}/{item.totalSteps}</span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Hierarchy tree */}
+        {/* Section 2: Hierarchy tree */}
         <div className="flex-1 overflow-y-auto overscroll-contain">
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-3 pt-3 pb-1">Hierarchy</p>
           {tree ? (
             <HierarchyTreeSidebar
               tree={tree}
@@ -511,6 +491,33 @@ function ReviewShellInner({
           ) : (
             <div className="p-4 text-xs text-muted-foreground">Loading hierarchy...</div>
           )}
+        </div>
+
+        {/* Section 3: Other Scope Items */}
+        <div className="border-t max-h-[200px] overflow-y-auto overscroll-contain">
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-4 pt-3 pb-1">Other Scope Items</p>
+          {scopeItems.filter((item) => item.id !== currentScopeItemId).map((item) => {
+            const pct = item.totalSteps > 0 ? Math.round((item.reviewedSteps / item.totalSteps) * 100) : 0;
+            const badgeClass = pct === 100
+              ? "bg-green-100 text-green-700"
+              : pct >= 50
+                ? "bg-blue-100 text-blue-700"
+                : pct > 0
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-slate-100 text-slate-500";
+            return (
+              <button
+                key={item.id}
+                onClick={() => setCurrentScopeItemId(item.id)}
+                className="w-full text-left px-4 py-2 hover:bg-accent transition-colors flex items-center gap-2"
+              >
+                <p className="text-xs font-medium text-foreground truncate flex-1" title={item.nameClean}>{item.nameClean}</p>
+                <span className={`text-[10px] font-medium rounded-full px-2 py-0.5 shrink-0 ${badgeClass}`}>
+                  {pct}%
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -660,14 +667,14 @@ function ReviewShellInner({
                       Previous
                     </Button>
                     <div className="hidden sm:flex items-center gap-2">
-                      <span className="text-sm text-slate-500">
+                      <span className="text-sm text-muted-foreground">
                         Step {currentStepIndex + 1} of {steps.length}
                       </span>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => setShowShortcuts(true)}
-                        className="text-slate-400 px-2"
+                        className="text-muted-foreground/60 px-2"
                         title="Keyboard shortcuts"
                       >
                         <span className="text-xs border rounded px-1.5 py-0.5">?</span>

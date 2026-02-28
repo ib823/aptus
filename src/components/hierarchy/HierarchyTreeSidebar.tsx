@@ -141,7 +141,7 @@ export function HierarchyTreeSidebar({
               tabIndex={0}
               data-process-id={process.id}
               onClick={() => toggleProcess(process.id)}
-              className="flex items-center gap-1 px-3 py-1.5 cursor-pointer hover:bg-accent transition-colors"
+              className="flex items-center gap-1 px-3 py-1.5 cursor-pointer hover:bg-slate-50 transition-colors"
             >
               {processExpanded ? (
                 <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
@@ -168,7 +168,7 @@ export function HierarchyTreeSidebar({
                     tabIndex={0}
                     data-flow-id={flow.id}
                     onClick={() => toggleFlow(flow.id)}
-                    className="flex items-center gap-1 pl-6 pr-3 py-1.5 cursor-pointer hover:bg-accent transition-colors"
+                    className="flex items-center gap-1 pl-5 pr-3 py-1.5 cursor-pointer hover:bg-slate-50 transition-colors"
                   >
                     {flowExpanded ? (
                       <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
@@ -197,12 +197,13 @@ export function HierarchyTreeSidebar({
                         aria-selected={isSelected}
                         tabIndex={0}
                         onClick={() => onActivitySelect(activity.id)}
-                        className={`flex items-center gap-2 pl-10 pr-3 py-1.5 cursor-pointer transition-colors min-h-[44px] ${
+                        className={`flex items-center gap-2 pl-7 pr-3 py-1.5 cursor-pointer transition-colors min-h-[44px] ${
                           isSelected
-                            ? "bg-blue-50 border-l-2 border-blue-500"
-                            : "hover:bg-accent border-l-2 border-transparent"
+                            ? "bg-blue-50 text-blue-600 border-l-2 border-blue-500"
+                            : "text-foreground hover:bg-slate-50 border-l-2 border-transparent"
                         }`}
                       >
+                        <span className="text-muted-foreground/40 shrink-0">↳</span>
                         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusColor}`} />
                         <span className="truncate flex-1" title={displayTitle}>
                           {displayTitle}
