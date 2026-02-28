@@ -10,7 +10,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { format } from "date-fns";
 import { ActivityEntry } from "@/components/collaboration/ActivityEntry";
+
+function getEntryDotColor(actionType: string): string {
+  switch (actionType) {
+    case "classified_steps": return "bg-blue-500";
+    case "added_gap":
+    case "resolved_gap": return "bg-amber-500";
+    case "scope_changed":
+    case "sign_off_submitted":
+    case "workshop_completed": return "bg-green-500";
+    case "conflict_detected":
+    case "conflict_resolved": return "bg-orange-500";
+    default: return "bg-slate-400";
+  }
+}
 
 interface ActivityData {
   id: string;
@@ -102,10 +117,10 @@ export function ActivityFeed({ assessmentId }: ActivityFeedProps) {
           <div className="p-4 space-y-3">
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex items-start gap-3">
-                <div className="w-4 h-4 rounded-full bg-slate-200 animate-pulse mt-0.5" />
+                <div className="w-4 h-4 rounded-full bg-muted animate-pulse mt-0.5" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-slate-200 rounded animate-pulse w-3/4" />
-                  <div className="h-3 bg-slate-200 rounded animate-pulse w-1/3" />
+                  <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
+                  <div className="h-3 bg-muted rounded animate-pulse w-1/3" />
                 </div>
               </div>
             ))}
@@ -115,19 +130,45 @@ export function ActivityFeed({ assessmentId }: ActivityFeedProps) {
             No activity recorded yet.
           </div>
         ) : (
-          <div className="divide-y px-3">
-            {entries.map((entry) => (
-              <ActivityEntry
-                key={entry.id}
-                actorName={entry.actorName}
-                actorRole={entry.actorRole}
-                actionType={entry.actionType}
-                summary={entry.summary}
-                entityType={entry.entityType}
-                areaCode={entry.areaCode}
-                createdAt={entry.createdAt}
-              />
-            ))}
+          <div className="space-y-0 px-3">
+            {entries.map((entry, i) => {
+              const ts = new Date(entry.createdAt);
+              return (
+                <div key={entry.id} className="flex gap-4 py-3 border-b border-border last:border-0">
+                  {/* Timestamp column */}
+                  <div className="w-16 flex-shrink-0 text-right">
+                    <div className="text-xs font-medium text-muted-foreground">
+                      {format(ts, "MMM d")}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {format(ts, "HH:mm")}
+                    </div>
+                  </div>
+
+                  {/* Timeline dot + connector */}
+                  <div className="flex flex-col items-center flex-shrink-0">
+                    <div className={`w-2 h-2 rounded-full mt-1.5 ${getEntryDotColor(entry.actionType)}`} />
+                    {i < entries.length - 1 && (
+                      <div className="w-px flex-1 bg-border mt-1" />
+                    )}
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <ActivityEntry
+                      actorName={entry.actorName}
+                      actorRole={entry.actorRole}
+                      actionType={entry.actionType}
+                      summary={entry.summary}
+                      entityType={entry.entityType}
+                      areaCode={entry.areaCode}
+                      createdAt={entry.createdAt}
+                      hideTimestamp
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 

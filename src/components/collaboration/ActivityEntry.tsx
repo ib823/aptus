@@ -20,6 +20,7 @@ interface ActivityEntryProps {
   entityType?: string | null | undefined;
   areaCode?: string | null | undefined;
   createdAt: string;
+  hideTimestamp?: boolean | undefined;
 }
 
 const ACTION_ICONS: Record<string, typeof Activity> = {
@@ -78,6 +79,7 @@ export function ActivityEntry({
   entityType,
   areaCode,
   createdAt,
+  hideTimestamp,
 }: ActivityEntryProps) {
   const Icon = ACTION_ICONS[actionType] ?? Activity;
   const displayRole = humanizeLabel(actorRole, ROLE_LABELS);
@@ -94,9 +96,11 @@ export function ActivityEntry({
           <span className="text-muted-foreground">{summary}</span>
         </p>
         <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-xs text-muted-foreground">
-            {formatDistanceToNow(new Date(createdAt), { addSuffix: true })}
-          </span>
+          {!hideTimestamp && (
+            <span className="text-xs text-muted-foreground">
+              {formatDistanceToNow(new Date(createdAt), { addSuffix: true })}
+            </span>
+          )}
           {actorRole && (
             <Badge variant="outline" className="text-xs h-5">
               {displayRole}
