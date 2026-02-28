@@ -16,8 +16,8 @@ export function DataIntegrityBadge({ isVerified, hash, className }: DataIntegrit
       className={cn(
         "border-transparent font-mono text-xs",
         isVerified
-          ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300"
-          : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
+          ? "bg-green-50 text-green-700"
+          : "bg-red-50 text-red-700",
         className,
       )}
       title={hash ?? "No hash available"}

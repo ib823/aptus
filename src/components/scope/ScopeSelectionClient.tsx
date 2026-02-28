@@ -486,7 +486,7 @@ export function ScopeSelectionClient({
               onClick={() => setFilterMode(opt.value)}
               className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-all ${
                 filterMode === opt.value
-                  ? "bg-gray-900 text-white border-gray-900"
+                  ? "bg-primary text-primary-foreground border-primary"
                   : "bg-card text-muted-foreground border hover:bg-accent"
               }`}
             >
@@ -531,7 +531,7 @@ export function ScopeSelectionClient({
             onClick={() => setViewMode("landscape")}
             className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-all ${
               viewMode === "landscape"
-                ? "bg-gray-900 text-white"
+                ? "bg-primary text-primary-foreground"
                 : "bg-card text-muted-foreground hover:bg-accent"
             }`}
             aria-label={UI_TEXT.scope.viewLandscape}
@@ -543,7 +543,7 @@ export function ScopeSelectionClient({
             onClick={() => setViewMode("list")}
             className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-all ${
               viewMode === "list"
-                ? "bg-gray-900 text-white"
+                ? "bg-primary text-primary-foreground"
                 : "bg-card text-muted-foreground hover:bg-accent"
             }`}
             aria-label={UI_TEXT.scope.viewList}
@@ -567,22 +567,22 @@ export function ScopeSelectionClient({
 
       {/* Impact summary bar */}
       {stats.selectedCount > 0 && (
-        <div className="mb-6 grid grid-cols-4 gap-3">
-          <div className="bg-card border rounded-lg p-3 text-center">
-            <p className="text-lg font-bold text-foreground">{stats.selectedCount}</p>
-            <p className="text-xs text-muted-foreground">Scope Items</p>
+        <div className="mb-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white border rounded-lg p-4">
+            <p className="text-2xl font-bold text-foreground">{stats.selectedCount}</p>
+            <p className="text-sm text-slate-500">Scope Items</p>
           </div>
-          <div className="bg-card border rounded-lg p-3 text-center">
-            <p className="text-lg font-bold text-foreground">{stats.totalStepsInScope}</p>
-            <p className="text-xs text-muted-foreground">Total Steps</p>
+          <div className="bg-white border rounded-lg p-4">
+            <p className="text-2xl font-bold text-foreground">{stats.totalStepsInScope}</p>
+            <p className="text-sm text-slate-500">Total Steps</p>
           </div>
-          <div className="bg-card border rounded-lg p-3 text-center">
-            <p className="text-lg font-bold text-foreground">{stats.totalClassifiable}</p>
-            <p className="text-xs text-muted-foreground">Classifiable</p>
+          <div className="bg-white border rounded-lg p-4">
+            <p className="text-2xl font-bold text-foreground">{stats.totalClassifiable}</p>
+            <p className="text-sm text-slate-500">Classifiable</p>
           </div>
-          <div className="bg-card border rounded-lg p-3 text-center">
-            <p className="text-lg font-bold text-foreground">{stats.totalEffortDays > 0 ? `~${stats.totalEffortDays}d` : "\u2014"}</p>
-            <p className="text-xs text-muted-foreground">Est. Effort</p>
+          <div className="bg-white border rounded-lg p-4">
+            <p className="text-2xl font-bold text-foreground">{stats.totalEffortDays > 0 ? `~${stats.totalEffortDays}d` : "\u2014"}</p>
+            <p className="text-sm text-slate-500">Est. Effort</p>
           </div>
         </div>
       )}

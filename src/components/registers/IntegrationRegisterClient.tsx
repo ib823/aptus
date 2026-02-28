@@ -180,7 +180,7 @@ export function IntegrationRegisterClient({
         ) : (
           <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-muted/50">
+              <thead className="bg-slate-50">
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Name</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Direction</th>

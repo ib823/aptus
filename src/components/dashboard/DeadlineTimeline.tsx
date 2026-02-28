@@ -22,10 +22,10 @@ const STATUS_CONFIG: Record<
   DeadlineStatus,
   { icon: typeof Clock; badgeClass: string; label: string }
 > = {
-  pending: { icon: Clock, badgeClass: "bg-blue-100 text-blue-700", label: "Pending" },
-  at_risk: { icon: AlertTriangle, badgeClass: "bg-amber-100 text-amber-700", label: "At Risk" },
-  overdue: { icon: AlertTriangle, badgeClass: "bg-red-100 text-red-700", label: "Overdue" },
-  completed: { icon: CheckCircle2, badgeClass: "bg-green-100 text-green-700", label: "Done" },
+  pending: { icon: Clock, badgeClass: "bg-blue-50 text-blue-700", label: "Pending" },
+  at_risk: { icon: AlertTriangle, badgeClass: "bg-amber-50 text-amber-700", label: "At Risk" },
+  overdue: { icon: AlertTriangle, badgeClass: "bg-red-50 text-red-700", label: "Overdue" },
+  completed: { icon: CheckCircle2, badgeClass: "bg-green-50 text-green-700", label: "Done" },
 };
 
 export function DeadlineTimeline({ deadlines }: DeadlineTimelineProps) {
@@ -35,8 +35,8 @@ export function DeadlineTimeline({ deadlines }: DeadlineTimelineProps) {
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Deadlines</CardTitle>
+      <CardHeader className="pb-3 border-b border-slate-100">
+        <CardTitle className="text-sm font-semibold">Deadlines</CardTitle>
       </CardHeader>
       <CardContent>
         {sorted.length === 0 ? (

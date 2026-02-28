@@ -58,7 +58,7 @@ export function NotificationItem({
   return (
     <div
       className={`flex items-start gap-3 p-3 rounded-md transition-colors cursor-pointer ${
-        isUnread ? "bg-primary/5" : "hover:bg-muted/50"
+        isUnread ? "bg-blue-50/50 border-l-2 border-blue-400" : "bg-white hover:bg-slate-50"
       }`}
       onClick={handleClick}
       role="button"
@@ -70,13 +70,13 @@ export function NotificationItem({
         }
       }}
     >
-      <div className={`mt-0.5 ${isUnread ? "text-primary" : "text-muted-foreground"}`}>
+      <div className={`mt-0.5 ${isUnread ? "text-blue-500" : "text-slate-400"}`}>
         <Icon className="w-4 h-4" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className={`text-sm ${isUnread ? "font-medium" : ""}`}>{title}</p>
-        <p className="text-xs text-muted-foreground line-clamp-2">{body}</p>
-        <p className="text-xs text-muted-foreground mt-1">
+        <p className={`text-sm text-slate-900 ${isUnread ? "font-medium" : ""}`}>{title}</p>
+        <p className="text-xs text-slate-500 line-clamp-2">{body}</p>
+        <p className="text-xs text-slate-400 mt-1">
           {formatDistanceToNow(new Date(sentAt), { addSuffix: true })}
         </p>
       </div>
@@ -84,7 +84,7 @@ export function NotificationItem({
         <Button
           variant="ghost"
           size="sm"
-          className="shrink-0 h-6 w-6 p-0"
+          className="shrink-0 h-6 w-6 p-0 text-slate-400 hover:text-slate-600"
           onClick={(e) => {
             e.stopPropagation();
             onMarkRead?.(id);

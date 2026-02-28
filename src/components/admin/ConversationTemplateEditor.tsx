@@ -16,10 +16,10 @@ interface ConversationTemplateEditorProps {
 }
 
 const CLASSIFICATION_OPTIONS: Array<{ value: ClassificationValue; label: string; color: string }> = [
-  { value: "FIT", label: "FIT", color: "bg-green-100 text-green-700" },
-  { value: "CONFIGURE", label: "CONFIGURE", color: "bg-blue-100 text-blue-700" },
-  { value: "GAP", label: "GAP", color: "bg-amber-100 text-amber-700" },
-  { value: "NA", label: "N/A", color: "bg-gray-100 text-gray-600" },
+  { value: "FIT", label: "FIT", color: "bg-green-50 text-green-700 border border-green-200" },
+  { value: "CONFIGURE", label: "CONFIGURE", color: "bg-blue-50 text-blue-700 border border-blue-200" },
+  { value: "GAP", label: "GAP", color: "bg-amber-50 text-amber-700 border border-amber-200" },
+  { value: "NA", label: "N/A", color: "bg-slate-50 text-slate-500 border border-slate-200" },
 ];
 
 function generateId(): string {
@@ -152,7 +152,7 @@ export function ConversationTemplateEditor({
                 {currentQ.answers.map((a) => (
                   <button
                     key={a.id}
-                    className="w-full text-left p-3 rounded-md border hover:bg-muted/50 text-sm"
+                    className="w-full text-left p-3 rounded-md border hover:bg-slate-50 text-sm"
                     onClick={() => {
                       if (a.classification) {
                         setPreviewQuestionId(null);
@@ -218,7 +218,7 @@ export function ConversationTemplateEditor({
               <CardTitle className="text-sm">
                 Question {qi + 1}
                 {question.id === rootQuestionId && (
-                  <Badge className="ml-2 bg-blue-100 text-blue-700" variant="outline">Root</Badge>
+                  <Badge className="ml-2 bg-blue-50 text-blue-700" variant="outline">Root</Badge>
                 )}
               </CardTitle>
               <Button

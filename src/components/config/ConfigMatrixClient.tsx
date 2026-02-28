@@ -51,9 +51,9 @@ interface ConfigMatrixClientProps {
 }
 
 const CATEGORY_STYLES: Record<string, string> = {
-  Mandatory: "bg-red-100 text-red-700",
-  Recommended: "bg-amber-100 text-amber-700",
-  Optional: "bg-gray-100 text-gray-600",
+  Mandatory: "bg-red-50 text-red-700",
+  Recommended: "bg-amber-50 text-amber-700",
+  Optional: "bg-slate-50 text-slate-500",
 };
 
 export function ConfigMatrixClient({
@@ -260,13 +260,13 @@ export function ConfigMatrixClient({
       <div className="border rounded-lg overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="bg-muted/40 border-b border">
-              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">Scope Item</th>
-              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">Activity</th>
-              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3 w-28">Category</th>
-              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3 w-28">Self-Service</th>
-              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3 w-20">Include</th>
-              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3 w-16" />
+            <tr className="bg-slate-50 border-b">
+              <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Scope Item</th>
+              <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Activity</th>
+              <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3 w-28">Category</th>
+              <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3 w-28">Self-Service</th>
+              <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3 w-20">Include</th>
+              <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3 w-16" />
             </tr>
           </thead>
           <tbody>
@@ -360,7 +360,7 @@ function ConfigRow({ config, expanded, onToggle, onToggleInclusion, saving, read
 
   return (
     <>
-      <tr className={`border-b border hover:bg-accent ${config.category === "Mandatory" ? "bg-red-50/30" : ""}`}>
+      <tr className={`border-b border-slate-100 hover:bg-slate-50 ${config.category === "Mandatory" ? "bg-red-50/30" : ""}`}>
         <td className="px-4 py-3">
           <span className="text-xs text-muted-foreground/60">{config.scopeItemId}</span>
           <p className="text-sm">{config.scopeItemName}</p>

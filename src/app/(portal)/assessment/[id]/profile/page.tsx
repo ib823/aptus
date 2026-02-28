@@ -89,7 +89,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       />
 
       {/* Sticky bottom bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-background border-t border z-10">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-10">
         <div className="max-w-3xl mx-auto flex items-center justify-between px-4 sm:px-6 py-3">
           <Link
             href="/assessments"

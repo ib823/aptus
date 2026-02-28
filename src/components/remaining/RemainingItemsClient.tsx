@@ -341,7 +341,7 @@ export function RemainingItemsClient({
         <div className="bg-card border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-muted/40 border-b border text-left">
+              <tr className="bg-slate-50 border-b text-left">
                 <th className="px-4 py-2 font-medium text-muted-foreground w-8">#</th>
                 <th className="px-4 py-2 font-medium text-muted-foreground">Category</th>
                 <th className="px-4 py-2 font-medium text-muted-foreground">Title</th>

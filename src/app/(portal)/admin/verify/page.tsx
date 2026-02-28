@@ -46,7 +46,7 @@ export default async function VerifyPage() {
       <div className="bg-card rounded-lg border overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-muted/40 border-b">
+            <tr className="bg-slate-50 border-b">
               <th className="px-4 py-2 text-left font-medium text-muted-foreground w-8">#</th>
               <th className="px-4 py-2 text-left font-medium text-muted-foreground">Check</th>
               <th className="px-4 py-2 text-left font-medium text-muted-foreground">Status</th>
@@ -61,7 +61,7 @@ export default async function VerifyPage() {
                 <td className="px-4 py-2.5">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                     check.status === "pass"
-                      ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
+                      ? "bg-green-50 text-green-700"
                       : "bg-destructive/10 text-destructive"
                   }`}>
                     {check.status === "pass" ? "PASS" : "FAIL"}

@@ -10,7 +10,7 @@ const CLASSIFICATION_COLORS: Record<string, string> = {
   FIT: "bg-green-500",
   CONFIGURE: "bg-blue-500",
   GAP: "bg-amber-500",
-  NA: "bg-gray-400",
+  NA: "bg-slate-300",
 };
 
 export function WorkshopVoteTally({ tally }: WorkshopVoteTallyProps) {
@@ -38,9 +38,9 @@ export function WorkshopVoteTally({ tally }: WorkshopVoteTallyProps) {
             <span className="font-medium">{entry.classification}</span>
             <span className="text-muted-foreground">{entry.count} ({entry.percentage}%)</span>
           </div>
-          <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all ${CLASSIFICATION_COLORS[entry.classification] ?? "bg-gray-400"}`}
+              className={`h-full rounded-full transition-all ${CLASSIFICATION_COLORS[entry.classification] ?? "bg-slate-300"}`}
               style={{ width: `${entry.percentage}%` }}
             />
           </div>

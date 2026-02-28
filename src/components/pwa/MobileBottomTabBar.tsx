@@ -33,7 +33,7 @@ export function MobileBottomTabBar() {
   return (
     <nav
       aria-label="Mobile navigation"
-      className="bg-background fixed inset-x-0 bottom-0 z-50 border-t md:hidden"
+      className="bg-white fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
       <div className="flex items-center justify-around">
@@ -46,8 +46,8 @@ export function MobileBottomTabBar() {
               className={cn(
                 "flex flex-col items-center justify-center gap-1 px-2 py-2 text-xs transition-colors",
                 isActive
-                  ? "text-primary font-medium"
-                  : "text-muted-foreground hover:text-foreground",
+                  ? "text-blue-600 font-medium"
+                  : "text-slate-400 hover:text-slate-600",
               )}
               style={{
                 minWidth: TOUCH_TARGETS.minimum,

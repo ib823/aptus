@@ -102,10 +102,10 @@ export function ActivityFeed({ assessmentId }: ActivityFeedProps) {
           <div className="p-4 space-y-3">
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex items-start gap-3">
-                <div className="w-4 h-4 rounded-full bg-muted animate-pulse mt-0.5" />
+                <div className="w-4 h-4 rounded-full bg-slate-200 animate-pulse mt-0.5" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
-                  <div className="h-3 bg-muted rounded animate-pulse w-1/3" />
+                  <div className="h-4 bg-slate-200 rounded animate-pulse w-3/4" />
+                  <div className="h-3 bg-slate-200 rounded animate-pulse w-1/3" />
                 </div>
               </div>
             ))}

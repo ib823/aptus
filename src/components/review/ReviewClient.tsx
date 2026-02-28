@@ -556,8 +556,8 @@ export function ReviewClient({
             <StatRow label="FIT" count={overallProgress.fit} color="bg-green-500" />
             <StatRow label="CONFIGURE" count={overallProgress.configure} color="bg-blue-500" />
             <StatRow label="GAP" count={overallProgress.gap} color="bg-amber-500" />
-            <StatRow label="N/A" count={overallProgress.na} color="bg-muted-foreground/60" />
-            <StatRow label="PENDING" count={overallProgress.pending} color="bg-muted" />
+            <StatRow label="N/A" count={overallProgress.na} color="bg-slate-300" />
+            <StatRow label="PENDING" count={overallProgress.pending} color="bg-gray-200" />
           </div>
         </div>
       </div>
@@ -637,7 +637,7 @@ export function ReviewClient({
                     currentStep.fitStatus === "FIT" ? "bg-green-100 text-green-700"
                     : currentStep.fitStatus === "CONFIGURE" ? "bg-blue-100 text-blue-700"
                     : currentStep.fitStatus === "GAP" ? "bg-amber-100 text-amber-700"
-                    : currentStep.fitStatus === "NA" ? "bg-gray-100 text-gray-600"
+                    : currentStep.fitStatus === "NA" ? "bg-slate-50 text-slate-500"
                     : "bg-muted text-muted-foreground"
                   }`}>
                     {currentStep.fitStatus === "PENDING" ? "Unreviewed" : currentStep.fitStatus}

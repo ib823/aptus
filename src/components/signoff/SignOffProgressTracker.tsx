@@ -84,7 +84,7 @@ export function SignOffProgressTracker({ currentStatus, className }: SignOffProg
                   "flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold",
                   state === "completed" && "bg-green-600 text-white",
                   state === "active" && "bg-blue-600 text-white",
-                  state === "pending" && "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400",
+                  state === "pending" && "bg-slate-200 text-slate-500",
                   state === "rejected" && "bg-red-600 text-white",
                 )}
               >
@@ -94,10 +94,10 @@ export function SignOffProgressTracker({ currentStatus, className }: SignOffProg
                 <span
                   className={cn(
                     "text-sm font-medium",
-                    state === "active" && "text-blue-700 dark:text-blue-300",
-                    state === "completed" && "text-green-700 dark:text-green-300",
+                    state === "active" && "text-blue-700",
+                    state === "completed" && "text-green-700",
                     state === "pending" && "text-muted-foreground",
-                    state === "rejected" && "text-red-700 dark:text-red-300",
+                    state === "rejected" && "text-red-700",
                   )}
                 >
                   {step.label}
@@ -107,10 +107,10 @@ export function SignOffProgressTracker({ currentStatus, className }: SignOffProg
                 variant="outline"
                 className={cn(
                   "text-xs border-transparent",
-                  state === "completed" && "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
-                  state === "active" && "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-                  state === "pending" && "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400",
-                  state === "rejected" && "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+                  state === "completed" && "bg-green-50 text-green-700",
+                  state === "active" && "bg-blue-50 text-blue-700",
+                  state === "pending" && "bg-slate-50 text-slate-500",
+                  state === "rejected" && "bg-red-50 text-red-700",
                 )}
               >
                 {state === "completed" ? "Done" : state === "active" ? "In Progress" : state === "rejected" ? "Rejected" : "Pending"}

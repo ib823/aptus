@@ -65,7 +65,7 @@ export default async function OrgDetailPage({ params }: OrgDetailPageProps) {
 
       <div className="flex items-center gap-3 mb-1">
         <h1 className="text-3xl font-bold text-foreground tracking-tight">{organization.name}</h1>
-        <Badge className={ORG_TYPE_COLORS[organization.type] ?? "bg-gray-100 text-gray-800"}>
+        <Badge className={ORG_TYPE_COLORS[organization.type] ?? "bg-slate-50 text-slate-500"}>
           {organization.type.replace("_", " ")}
         </Badge>
       </div>

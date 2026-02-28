@@ -66,10 +66,10 @@ export function WidgetCustomizer({ widgets, onSave, isSaving }: WidgetCustomizer
 
   return (
     <Card>
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-3 border-b border-slate-100">
         <div className="flex items-center gap-2">
           <Settings className="h-4 w-4 text-muted-foreground" />
-          <CardTitle className="text-base">Customize Dashboard</CardTitle>
+          <CardTitle className="text-sm font-semibold">Customize Dashboard</CardTitle>
         </div>
       </CardHeader>
       <CardContent>

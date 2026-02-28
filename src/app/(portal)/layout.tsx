@@ -55,7 +55,7 @@ export default async function PortalLayout({
   }
 
   return (
-    <div className="min-h-screen bg-muted/40">
+    <div className="min-h-screen bg-slate-50">
       <OfflineIndicator />
       <PortalNav user={user} />
       {subscriptionStatus !== "ACTIVE" && (

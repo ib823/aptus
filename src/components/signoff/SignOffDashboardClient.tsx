@@ -151,8 +151,8 @@ export function SignOffDashboardClient({ assessmentId }: SignOffDashboardClientP
     return (
       <div className="p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-muted rounded w-48" />
-          <div className="h-32 bg-muted rounded" />
+          <div className="h-8 bg-slate-200 rounded w-48" />
+          <div className="h-32 bg-slate-200 rounded" />
         </div>
       </div>
     );
@@ -226,7 +226,7 @@ export function SignOffDashboardClient({ assessmentId }: SignOffDashboardClientP
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Assessment Sign-Off</h1>
         {signOff.completedAt && (
-          <span className="text-sm bg-green-100 text-green-800 px-3 py-1 rounded-full font-medium">
+          <span className="text-sm bg-green-50 text-green-700 px-3 py-1 rounded-full font-medium">
             Completed
           </span>
         )}
@@ -346,7 +346,7 @@ export function SignOffDashboardClient({ assessmentId }: SignOffDashboardClientP
         <div className="border rounded-lg p-4 bg-green-50">
           <h2 className="text-lg font-semibold mb-2">Sign-Off Certificate</h2>
           <div className="text-sm space-y-2">
-            <p>Certificate Hash: <span className="font-mono text-xs">{signOff.certificateHash.substring(0, 24)}...</span></p>
+            <p>Certificate Hash: <span className="font-mono text-xs text-slate-400">{signOff.certificateHash.substring(0, 24)}...</span></p>
             {signOff.verificationToken && (
               <p>
                 <a

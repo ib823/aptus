@@ -45,7 +45,7 @@ export function AdminSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 bg-sidebar text-sidebar-foreground shrink-0">
+    <aside className="w-64 bg-white border-r border-slate-200 text-sidebar-foreground shrink-0">
       <div className="p-4 border-b border-sidebar-border">
         <p className="text-sm font-semibold text-sidebar-foreground/60 uppercase tracking-wider" aria-hidden="true">
           Admin Panel
@@ -68,8 +68,8 @@ export function AdminSidebar() {
                   href={item.href}
                   className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
                     isActive
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                      : "text-sidebar-foreground/60 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent/50"
+                      ? "bg-blue-50 text-blue-600 font-medium"
+                      : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"
                   }`}
                 >
                   <Icon className="w-4 h-4" />

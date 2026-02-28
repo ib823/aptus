@@ -48,7 +48,7 @@ const ROLE_COLORS: Record<string, string> = {
   it_lead: "bg-teal-100 text-teal-800",
   data_migration_lead: "bg-orange-100 text-orange-800",
   executive_sponsor: "bg-amber-100 text-amber-800",
-  viewer: "bg-gray-100 text-gray-800",
+  viewer: "bg-slate-50 text-slate-500",
   client_admin: "bg-pink-100 text-pink-800",
 };
 
@@ -124,7 +124,7 @@ export function UserManagementTable({
     <>
       <div className="border rounded-lg overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-muted/50">
+          <thead className="bg-slate-50">
             <tr>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">User</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">Role</th>
@@ -138,13 +138,13 @@ export function UserManagementTable({
           </thead>
           <tbody className="divide-y">
             {users.map((user) => (
-              <tr key={user.id} className="hover:bg-muted/30">
+              <tr key={user.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3">
                   <div className="font-medium">{user.name}</div>
                   <div className="text-xs text-muted-foreground">{user.email}</div>
                 </td>
                 <td className="px-4 py-3">
-                  <Badge className={ROLE_COLORS[user.role] ?? "bg-gray-100 text-gray-800"}>
+                  <Badge className={ROLE_COLORS[user.role] ?? "bg-slate-50 text-slate-500"}>
                     {ROLE_LABELS[user.role] ?? user.role}
                   </Badge>
                 </td>

@@ -50,7 +50,7 @@ export function AreaValidationCard({
           </p>
         ) : null}
         {rejectionReason ? (
-          <p className="mb-3 text-sm text-red-600 dark:text-red-400">
+          <p className="mb-3 text-sm text-red-600">
             <span className="font-medium">Rejection Reason:</span> {rejectionReason}
           </p>
         ) : null}

@@ -329,7 +329,7 @@ function renderDefault(value: unknown): React.ReactNode {
   if (value === null || value === undefined) return <span className="text-muted-foreground">—</span>;
   if (typeof value === "boolean") {
     return (
-      <Badge variant="outline" className={value ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300" : ""}>
+      <Badge variant="outline" className={value ? "bg-green-50 text-green-700" : ""}>
         {value ? "Yes" : "No"}
       </Badge>
     );

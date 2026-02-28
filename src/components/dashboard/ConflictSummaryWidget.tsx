@@ -22,11 +22,11 @@ export function ConflictSummaryWidget({ conflicts }: ConflictSummaryWidgetProps)
 
   return (
     <Card>
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-3 border-b border-slate-100">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Classification Conflicts</CardTitle>
+          <CardTitle className="text-sm font-semibold">Classification Conflicts</CardTitle>
           {openConflicts.length > 0 && (
-            <Badge className="bg-amber-100 text-amber-700 text-xs">
+            <Badge className="bg-amber-50 text-amber-700 text-xs">
               {openConflicts.length} open
             </Badge>
           )}
