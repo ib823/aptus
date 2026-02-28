@@ -225,10 +225,10 @@ export const ScopeItemCard = memo(function ScopeItemCard({ item, assessmentId, o
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground/60">{item.id}</span>
             <span className="text-base font-semibold text-foreground truncate">
               {item.nameClean}
             </span>
+            <span className="text-xs text-muted-foreground/60">({item.id})</span>
           </div>
           {getFirstSentence(item.id) && (
             <p className="text-xs text-muted-foreground mt-0.5">
