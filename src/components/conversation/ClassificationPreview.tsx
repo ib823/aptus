@@ -13,10 +13,10 @@ interface ClassificationPreviewProps {
 }
 
 const CLASSIFICATION_STYLES = {
-  FIT: { label: "FIT", className: "bg-green-50 text-green-700 border border-green-200" },
-  CONFIGURE: { label: "CONFIGURE", className: "bg-blue-50 text-blue-700 border border-blue-200" },
-  GAP: { label: "GAP", className: "bg-amber-50 text-amber-700 border border-amber-200" },
-  NA: { label: "N/A", className: "bg-slate-50 text-slate-500 border border-slate-200" },
+  FIT: { label: "Matches", className: "bg-green-50 text-green-700 border border-green-200" },
+  CONFIGURE: { label: "Needs Adjustment", className: "bg-blue-50 text-blue-700 border border-blue-200" },
+  GAP: { label: "Doesn\u2019t Match", className: "bg-amber-50 text-amber-700 border border-amber-200" },
+  NA: { label: "Not Relevant", className: "bg-slate-50 text-slate-500 border border-slate-200" },
 } as const;
 
 export function ClassificationPreview({

@@ -59,10 +59,10 @@ export const UI_TEXT = {
     signed_off: "Signed Off",
   },
   fitStatus: {
-    FIT: "Fits",
-    CONFIGURE: "Configure",
-    GAP: "Gap",
-    NA: "Not Applicable",
+    FIT: "Matches",
+    CONFIGURE: "Needs Adjustment",
+    GAP: "Doesn\u2019t Match",
+    NA: "Not Relevant",
     PENDING: "Pending",
   },
   roles: {

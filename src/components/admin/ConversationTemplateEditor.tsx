@@ -16,10 +16,10 @@ interface ConversationTemplateEditorProps {
 }
 
 const CLASSIFICATION_OPTIONS: Array<{ value: ClassificationValue; label: string; color: string }> = [
-  { value: "FIT", label: "FIT", color: "bg-green-50 text-green-700 border border-green-200" },
-  { value: "CONFIGURE", label: "CONFIGURE", color: "bg-blue-50 text-blue-700 border border-blue-200" },
-  { value: "GAP", label: "GAP", color: "bg-amber-50 text-amber-700 border border-amber-200" },
-  { value: "NA", label: "N/A", color: "bg-slate-50 text-slate-500 border border-slate-200" },
+  { value: "FIT", label: "Matches", color: "bg-green-50 text-green-700 border border-green-200" },
+  { value: "CONFIGURE", label: "Needs Adjustment", color: "bg-blue-50 text-blue-700 border border-blue-200" },
+  { value: "GAP", label: "Doesn\u2019t Match", color: "bg-amber-50 text-amber-700 border border-amber-200" },
+  { value: "NA", label: "Not Relevant", color: "bg-slate-50 text-slate-500 border border-slate-200" },
 ];
 
 function generateId(): string {

@@ -553,11 +553,11 @@ export function ReviewClient({
             </button>
           </div>
           <div className="space-y-1">
-            <StatRow label="FIT" count={overallProgress.fit} color="bg-green-500" />
-            <StatRow label="CONFIGURE" count={overallProgress.configure} color="bg-blue-500" />
-            <StatRow label="GAP" count={overallProgress.gap} color="bg-amber-500" />
-            <StatRow label="N/A" count={overallProgress.na} color="bg-slate-300" />
-            <StatRow label="PENDING" count={overallProgress.pending} color="bg-slate-200" />
+            <StatRow label="Matches" count={overallProgress.fit} color="bg-green-500" />
+            <StatRow label="Needs Adjustment" count={overallProgress.configure} color="bg-blue-500" />
+            <StatRow label="Doesn't Match" count={overallProgress.gap} color="bg-amber-500" />
+            <StatRow label="Not Relevant" count={overallProgress.na} color="bg-slate-300" />
+            <StatRow label="Pending" count={overallProgress.pending} color="bg-slate-200" />
           </div>
         </div>
       </div>
@@ -690,7 +690,7 @@ export function ReviewClient({
                   Previous
                 </Button>
                 <span className="hidden sm:inline text-xs text-muted-foreground">
-                  Keyboard: ← → to navigate, F C G N to classify
+                  Keyboard: ← → to navigate, 1-4 to classify
                 </span>
                 <Button
                   variant="outline"
