@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { ScopeAreaGroup } from "@/components/scope/ScopeAreaGroup";
 import { ScopeProgress } from "@/components/scope/ScopeProgress";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { StatCard } from "@/components/shared/StatCard";
 import { ProcessLandscapeMap } from "@/components/scope/ProcessLandscapeMap";
 import { ScopeItemBriefing } from "@/components/scope/ScopeItemBriefing";
 import { UI_TEXT } from "@/constants/ui-text";
@@ -567,23 +568,11 @@ export function ScopeSelectionClient({
 
       {/* Impact summary bar */}
       {stats.selectedCount > 0 && (
-        <div className="mb-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white border rounded-lg p-4">
-            <p className="text-2xl font-bold text-foreground">{stats.selectedCount}</p>
-            <p className="text-sm text-slate-500">Scope Items</p>
-          </div>
-          <div className="bg-white border rounded-lg p-4">
-            <p className="text-2xl font-bold text-foreground">{stats.totalStepsInScope}</p>
-            <p className="text-sm text-slate-500">Total Steps</p>
-          </div>
-          <div className="bg-white border rounded-lg p-4">
-            <p className="text-2xl font-bold text-foreground">{stats.totalClassifiable}</p>
-            <p className="text-sm text-slate-500">Classifiable</p>
-          </div>
-          <div className="bg-white border rounded-lg p-4">
-            <p className="text-2xl font-bold text-foreground">{stats.totalEffortDays > 0 ? `~${stats.totalEffortDays}d` : "\u2014"}</p>
-            <p className="text-sm text-slate-500">Est. Effort</p>
-          </div>
+        <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-3">
+          <StatCard label="Scope Items" value={stats.selectedCount} />
+          <StatCard label="Total Steps" value={stats.totalStepsInScope} />
+          <StatCard label="Classifiable" value={stats.totalClassifiable} />
+          <StatCard label="Est. Effort" value={stats.totalEffortDays > 0 ? `~${stats.totalEffortDays}d` : "\u2014"} />
         </div>
       )}
 
