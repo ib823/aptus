@@ -41,7 +41,7 @@ export default async function AssessmentLayout({
   }
 
   return (
-    <div>
+    <div className="flex flex-col h-full">
       <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 px-4 pt-3 pb-1 text-sm">
         <Link href="/assessments" className="text-muted-foreground hover:text-foreground transition-colors">
           Assessments
@@ -63,7 +63,9 @@ export default async function AssessmentLayout({
         assessmentStatus={assessment.status}
       />
       <PresenceHeartbeat assessmentId={assessment.id} />
-      {children}
+      <main className="flex-1 min-h-0 overflow-auto" data-assessment-main>
+        {children}
+      </main>
     </div>
   );
 }
