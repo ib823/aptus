@@ -15,10 +15,10 @@ interface OcmHeatmapProps {
 }
 
 const severityColors: Record<string, { bg: string; text: string; border: string }> = {
-  LOW: { bg: "bg-green-100", text: "text-green-800", border: "border-green-200" },
-  MEDIUM: { bg: "bg-amber-100", text: "text-amber-800", border: "border-amber-200" },
-  HIGH: { bg: "bg-orange-100", text: "text-orange-800", border: "border-orange-200" },
-  TRANSFORMATIONAL: { bg: "bg-red-100", text: "text-red-800", border: "border-red-200" },
+  LOW: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200" },
+  MEDIUM: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200" },
+  HIGH: { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200" },
+  TRANSFORMATIONAL: { bg: "bg-red-50", text: "text-red-700", border: "border-red-200" },
 };
 
 export function OcmHeatmap({ data, onCellClick }: OcmHeatmapProps) {
@@ -90,7 +90,7 @@ export function OcmHeatmap({ data, onCellClick }: OcmHeatmapProps) {
                     );
                   }
 
-                  const defaultColors = { bg: "bg-gray-100", text: "text-gray-800", border: "border-gray-200" };
+                  const defaultColors = { bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-200" };
                   const colors = severityColors[cell.severity] ?? defaultColors;
                   return (
                     <td key={area} className="px-4 py-3 text-center">

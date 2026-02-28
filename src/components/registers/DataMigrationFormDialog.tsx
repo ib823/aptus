@@ -222,7 +222,7 @@ export function DataMigrationFormDialog({
           )}
 
           <div className="flex items-center gap-2">
-            <input type="checkbox" checked={cleansingRequired} onChange={(e) => setCleansingRequired(e.target.checked)} id="cleansingRequired" className="rounded border-gray-300" />
+            <input type="checkbox" checked={cleansingRequired} onChange={(e) => setCleansingRequired(e.target.checked)} id="cleansingRequired" className="rounded border-slate-300" />
             <Label htmlFor="cleansingRequired">Cleansing Required</Label>
           </div>
 
