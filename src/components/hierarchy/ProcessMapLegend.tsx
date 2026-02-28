@@ -1,7 +1,7 @@
 "use client";
 
 const LEGEND_ITEMS = [
-  { label: "Not Started", color: "bg-gray-200" },
+  { label: "Not Started", color: "bg-slate-200" },
   { label: "In Progress", color: "bg-blue-400" },
   { label: "Complete", color: "bg-green-500" },
   { label: "Has GAPs", color: "bg-amber-400" },

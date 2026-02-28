@@ -72,7 +72,7 @@ export function ActivityPanel({
               : step.fitStatus === "CONFIGURE" ? "bg-blue-500"
               : step.fitStatus === "GAP" ? "bg-amber-500"
               : step.fitStatus === "NA" ? "bg-slate-300"
-              : "bg-gray-200"
+              : "bg-slate-200"
             }`} />
             <span className="text-xs text-foreground truncate">{step.actionTitle}</span>
           </button>
