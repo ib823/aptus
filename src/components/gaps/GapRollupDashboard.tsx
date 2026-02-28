@@ -25,9 +25,9 @@ function formatCurrency(value: number): string {
 }
 
 const RISK_LEVEL_COLORS: Record<string, string> = {
-  LOW: "bg-green-100 text-green-800",
-  MEDIUM: "bg-amber-100 text-amber-800",
-  HIGH: "bg-red-100 text-red-800",
+  LOW: "bg-green-50 text-green-700",
+  MEDIUM: "bg-amber-50 text-amber-700",
+  HIGH: "bg-red-50 text-red-700",
 };
 
 const STRATEGY_LABELS: Record<string, string> = {
@@ -37,9 +37,9 @@ const STRATEGY_LABELS: Record<string, string> = {
 };
 
 const STRATEGY_COLORS: Record<string, string> = {
-  standard_upgrade: "bg-green-100 text-green-700",
-  needs_revalidation: "bg-blue-100 text-blue-700",
-  custom_maintenance: "bg-amber-100 text-amber-700",
+  standard_upgrade: "bg-green-50 text-green-700",
+  needs_revalidation: "bg-blue-50 text-blue-700",
+  custom_maintenance: "bg-amber-50 text-amber-700",
 };
 
 export function GapRollupDashboard({
@@ -144,7 +144,7 @@ export function GapRollupDashboard({
             })
             .map(([strategy, count]) => (
               <div key={strategy} className="flex items-center justify-between">
-                <Badge className={`text-xs ${STRATEGY_COLORS[strategy] ?? "bg-gray-100 text-gray-600"}`}>
+                <Badge className={`text-xs ${STRATEGY_COLORS[strategy] ?? "bg-slate-50 text-slate-600"}`}>
                   {STRATEGY_LABELS[strategy] ?? strategy}
                 </Badge>
                 <span className="text-sm font-medium text-foreground">{count}</span>
