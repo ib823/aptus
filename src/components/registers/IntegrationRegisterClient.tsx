@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { StatCard } from "@/components/shared/StatCard";
 import { IntegrationFormDialog } from "@/components/registers/IntegrationFormDialog";
 import { IntegrationSummary } from "@/components/registers/IntegrationSummary";
 import {
@@ -169,6 +170,13 @@ export function IntegrationRegisterClient({
           </select>
         </div>
 
+        {/* Summary stat cards */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
+          <StatCard label="Total Integrations" value={summary.total} />
+          <StatCard label="Inbound" value={summary.byDirection["INBOUND"] ?? 0} valueClass="text-blue-600" />
+          <StatCard label="Outbound" value={summary.byDirection["OUTBOUND"] ?? 0} valueClass="text-green-600" />
+        </div>
+
         {/* Table */}
         {filteredItems.length === 0 ? (
           <EmptyState
@@ -180,7 +188,7 @@ export function IntegrationRegisterClient({
         ) : (
           <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50">
+              <thead className="bg-muted">
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Name</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Direction</th>
