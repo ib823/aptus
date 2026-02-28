@@ -79,53 +79,56 @@ export default async function AssessmentsPage() {
           }
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {assessments.map((assessment) => (
-            <Link
-              key={assessment.id}
-              href={assessment.status === "draft" ? `/assessment/${assessment.id}/profile` : `/assessment/${assessment.id}/scope`}
-            >
-              <Card className="hover:shadow-md hover:border-primary/30 transition-all duration-200 cursor-pointer">
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold text-foreground">
+        <div className="space-y-3">
+          {assessments.map((assessment) => {
+            const completionPct =
+              assessment._count.scopeSelections > 0 && assessment._count.stepResponses > 0
+                ? Math.min(100, Math.round((assessment._count.stepResponses / (assessment._count.scopeSelections * 15)) * 100))
+                : 0;
+            return (
+              <Link
+                key={assessment.id}
+                href={assessment.status === "draft" ? `/assessment/${assessment.id}/profile` : `/assessment/${assessment.id}/scope`}
+                className="block"
+              >
+                <Card className="hover:shadow-md hover:border-primary/30 transition-all duration-200 cursor-pointer">
+                  <CardContent className="p-4">
+                    {/* Row 1: Status + Name */}
+                    <div className="flex items-start gap-2 mb-2">
+                      <StatusBadge status={assessment.status} />
+                      <h3 className="font-semibold text-base text-foreground">
                         {assessment.companyName}
                       </h3>
-                      <p className="text-sm text-muted-foreground mt-0.5">
-                        {assessment.industry} &middot; {assessment.country}
-                      </p>
                     </div>
-                    <StatusBadge status={assessment.status} />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-sm text-muted-foreground">
-                    <span>
-                      {assessment._count.scopeSelections} {assessment._count.scopeSelections === 1 ? "scope item" : "scope items"}
-                    </span>
-                    <span>
-                      {assessment._count.stepResponses} {assessment._count.stepResponses === 1 ? "step" : "steps"} reviewed
-                    </span>
-                    <span>
-                      {assessment._count.stakeholders} {assessment._count.stakeholders === 1 ? "member" : "members"}
-                    </span>
-                    <span className="text-xs text-slate-400">
+
+                    {/* Row 2: Metadata */}
+                    <div className="text-sm text-muted-foreground mb-3">
+                      {assessment.industry}
+                      {assessment.country && <> &middot; {assessment.country}</>}
+                      {" "}&middot;{" "}
                       {formatDistanceToNow(assessment.updatedAt, { addSuffix: true })}
-                    </span>
-                  </div>
-                  {assessment._count.scopeSelections > 0 && (
-                    <div className="mt-3">
-                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    </div>
+
+                    {/* Row 3: Progress */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                         <div
-                          className="h-full rounded-full bg-primary transition-all"
-                          style={{ width: `${Math.min(100, assessment._count.stepResponses > 0 ? Math.round((assessment._count.stepResponses / (assessment._count.scopeSelections * 15)) * 100) : 0)}%` }}
+                          className="h-full bg-primary rounded-full transition-all"
+                          style={{ width: `${completionPct}%` }}
                         />
                       </div>
+                      <span className="text-xs text-muted-foreground flex-shrink-0">
+                        {completionPct}%
+                      </span>
+                      <span className="text-xs text-muted-foreground/60 flex-shrink-0 hidden sm:inline">
+                        {assessment._count.scopeSelections} scope items &middot; {assessment._count.stepResponses} steps
+                      </span>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+                  </CardContent>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       )}
     </>
