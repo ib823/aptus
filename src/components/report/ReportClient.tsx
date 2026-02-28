@@ -118,7 +118,7 @@ export function ReportClient({
       />
 
       {/* Summary overview */}
-      <div className="grid grid-cols-5 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
         <StatCard label="Scope Items" value={`${summary.scope.selected}/${summary.scope.total}`} />
         <StatCard label="Fit Rate" value={`${summary.steps.fitPercent}%`} highlight />
         <StatCard label="Steps Reviewed" value={`${summary.steps.reviewed}/${summary.steps.total}`} />
@@ -155,7 +155,7 @@ export function ReportClient({
             Reports are available when the assessment is completed, reviewed, or signed off.
           </div>
         )}
-        <div className="grid grid-cols-1 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {REPORTS.map((report) => {
             const Icon = report.icon;
             const isAuditTrail = report.key === "audit-trail";
@@ -277,7 +277,7 @@ export function ReportClient({
       </div>
 
       {/* Navigation */}
-      <div className="flex items-center justify-between pt-6 border-t border">
+      <div className="flex items-center justify-between pt-6 border-t border-border">
         <Link href={`/assessment/${assessmentId}/config`}>
           <Button variant="outline">
             <ArrowLeft className="w-4 h-4 mr-1.5" />
