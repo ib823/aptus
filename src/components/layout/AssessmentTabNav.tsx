@@ -102,22 +102,26 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentT
     <nav className="mb-6" aria-label="Assessment navigation">
       {/* Stage-level tabs */}
       <div className="flex gap-0 bg-white border-b" role="tablist" aria-label="Assessment stages">
-        {stages.map((stage) => {
+        {stages.map((stage, stageIndex) => {
           const isActive = activeStage === stage;
           return (
-            <Link
-              key={stage.label}
-              href={stage.tabs[0]!.href}
-              role="tab"
-              aria-selected={isActive}
-              className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                isActive
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {stage.label}
-            </Link>
+            <div key={stage.label} className="flex items-center">
+              <Link
+                href={stage.tabs[0]!.href}
+                role="tab"
+                aria-selected={isActive}
+                className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  isActive
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {stage.label}
+              </Link>
+              {stageIndex < stages.length - 1 && (
+                <span className="w-px h-4 bg-border mx-1 self-center" aria-hidden="true" />
+              )}
+            </div>
           );
         })}
       </div>
