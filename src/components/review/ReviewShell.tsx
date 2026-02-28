@@ -119,6 +119,7 @@ function ReviewShellInner({
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [bulkAllLoading, setBulkAllLoading] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showAllSteps, setShowAllSteps] = useState(false);
 
   const isReadOnly = assessmentStatus === "signed_off" || assessmentStatus === "reviewed";
   const isItLead = userRole === "it_lead";
@@ -212,11 +213,24 @@ function ReviewShellInner({
   const stepGroups = useMemo(() => groupStepsByActivity(steps), [steps]);
   const classifiableProgress = useMemo(() => computeClassifiableProgress(stepGroups as never[]), [stepGroups]);
 
+  // Indices of classifiable steps (for skip-navigation)
+  const NON_CLASSIFIABLE_TYPES = ["LOGON", "LOGOFF", "ACCESS_APP", "INFORMATION", "NAVIGATION"];
+  const visibleStepIndices = useMemo(() => {
+    if (showAllSteps) return steps.map((_, i) => i);
+    return steps
+      .map((s, i) => ({ s, i }))
+      .filter(({ s }) => s.isClassifiable !== false && !NON_CLASSIFIABLE_TYPES.includes(s.stepType))
+      .map(({ i }) => i);
+  }, [steps, showAllSteps]);
+
+  const hiddenStepCount = steps.length - visibleStepIndices.length;
+  const visiblePosition = visibleStepIndices.indexOf(currentStepIndex);
+
   // Get current step
   const currentStep = steps[currentStepIndex] ?? null;
   const currentStepIsClassifiable = currentStep
     ? (currentStep.isClassifiable !== false &&
-       !["LOGON", "LOGOFF", "ACCESS_APP", "INFORMATION", "NAVIGATION"].includes(currentStep.stepType))
+       !NON_CLASSIFIABLE_TYPES.includes(currentStep.stepType))
     : false;
 
   const processes = tree?.processes ?? [];
@@ -298,17 +312,24 @@ function ReviewShellInner({
         // Retry silently
       }
 
-      // Auto-advance
+      // Auto-advance (skip non-classifiable steps)
       const oldStep = stepsRef.current.find((s) => s.id === stepId);
       if (oldStep?.fitStatus === "PENDING" && data.fitStatus !== "PENDING") {
         setTimeout(() => {
           const nextIdx = stepsRef.current.findIndex(
-            (s, i) => i > currentStepIndex && s.fitStatus === "PENDING",
+            (s, i) =>
+              i > currentStepIndex &&
+              s.fitStatus === "PENDING" &&
+              s.isClassifiable !== false &&
+              !NON_CLASSIFIABLE_TYPES.includes(s.stepType),
           );
           if (nextIdx >= 0) {
             setCurrentStepIndex(nextIdx);
-          } else if (currentStepIndex < stepsRef.current.length - 1) {
-            setCurrentStepIndex(currentStepIndex + 1);
+          } else {
+            // Find next visible step
+            const curVisPos = visibleStepIndices.indexOf(currentStepIndex);
+            const nextVis = visibleStepIndices[curVisPos + 1];
+            if (nextVis != null) setCurrentStepIndex(nextVis);
           }
         }, 200);
       }
@@ -346,16 +367,20 @@ function ReviewShellInner({
       }
 
       if (view === "step") {
-        if (e.key === "ArrowLeft" && currentStepIndex > 0) {
-          setCurrentStepIndex(currentStepIndex - 1);
-        } else if (e.key === "ArrowRight" && currentStepIndex < steps.length - 1) {
-          setCurrentStepIndex(currentStepIndex + 1);
+        const curVis = visibleStepIndices.indexOf(currentStepIndex);
+        const prevVisIdx = curVis > 0 ? visibleStepIndices[curVis - 1] : undefined;
+        const nextVisIdx = curVis >= 0 && curVis < visibleStepIndices.length - 1 ? visibleStepIndices[curVis + 1] : undefined;
+
+        if (e.key === "ArrowLeft" && prevVisIdx != null) {
+          setCurrentStepIndex(prevVisIdx);
+        } else if (e.key === "ArrowRight" && nextVisIdx != null) {
+          setCurrentStepIndex(nextVisIdx);
         } else if (e.key === "Home") {
           e.preventDefault();
-          setCurrentStepIndex(0);
+          setCurrentStepIndex(visibleStepIndices[0] ?? 0);
         } else if (e.key === "End") {
           e.preventDefault();
-          setCurrentStepIndex(steps.length - 1);
+          setCurrentStepIndex(visibleStepIndices[visibleStepIndices.length - 1] ?? steps.length - 1);
         } else if (e.key === "[") {
           // Prev activity
           e.preventDefault();
@@ -383,6 +408,7 @@ function ReviewShellInner({
     view, currentStepIndex, steps.length, currentStep, currentStepIsClassifiable,
     isReadOnly, handleResponseChange, goToMap, selectActivity,
     allActivityIds, currentActivityId, currentActivityIndex, hasNextActivity, setCurrentStepIndex,
+    visibleStepIndices,
   ]);
 
   // Bulk mark ALL steps across ALL scope items as FIT
@@ -613,7 +639,11 @@ function ReviewShellInner({
                     steps={steps}
                     onFlowClick={(flowName) => {
                       const firstStep = steps.findIndex(s => s.solutionProcessFlowName === flowName);
-                      if (firstStep >= 0) setCurrentStepIndex(firstStep);
+                      if (firstStep >= 0) {
+                        // Navigate to nearest visible step
+                        const visIdx = visibleStepIndices.find(i => i >= firstStep);
+                        setCurrentStepIndex(visIdx ?? firstStep);
+                      }
                     }}
                   />
 
@@ -626,19 +656,33 @@ function ReviewShellInner({
                     />
                   </div>
 
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className="text-sm font-medium text-foreground">
-                      Step {currentStepIndex + 1} of {steps.length}
-                    </span>
-                    <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
-                      currentStep.fitStatus === "FIT" ? "bg-green-50 text-green-700 border border-green-200"
-                      : currentStep.fitStatus === "CONFIGURE" ? "bg-blue-50 text-blue-700 border border-blue-200"
-                      : currentStep.fitStatus === "GAP" ? "bg-amber-50 text-amber-700 border border-amber-200"
-                      : currentStep.fitStatus === "NA" ? "bg-slate-50 text-slate-500 border border-slate-200"
-                      : "bg-slate-50 text-slate-500 border border-slate-200"
-                    }`}>
-                      {currentStep.fitStatus === "PENDING" ? "Unreviewed" : currentStep.fitStatus}
-                    </span>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium text-foreground">
+                        Step {(visiblePosition >= 0 ? visiblePosition : currentStepIndex) + 1} of {visibleStepIndices.length}
+                      </span>
+                      <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
+                        currentStep.fitStatus === "FIT" ? "bg-green-50 text-green-700 border border-green-200"
+                        : currentStep.fitStatus === "CONFIGURE" ? "bg-blue-50 text-blue-700 border border-blue-200"
+                        : currentStep.fitStatus === "GAP" ? "bg-amber-50 text-amber-700 border border-amber-200"
+                        : currentStep.fitStatus === "NA" ? "bg-slate-50 text-slate-500 border border-slate-200"
+                        : "bg-slate-50 text-slate-500 border border-slate-200"
+                      }`}>
+                        {currentStep.fitStatus === "PENDING" ? "Unreviewed" : currentStep.fitStatus}
+                      </span>
+                    </div>
+                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={showAllSteps}
+                        onChange={(e) => setShowAllSteps(e.target.checked)}
+                        className="rounded border-border"
+                      />
+                      Show technical steps
+                      {!showAllSteps && hiddenStepCount > 0 && (
+                        <span className="text-muted-foreground/60">({hiddenStepCount} hidden)</span>
+                      )}
+                    </label>
                   </div>
 
                   {currentStepIsClassifiable ? (
@@ -660,15 +704,18 @@ function ReviewShellInner({
                   <div className="flex items-center justify-between mt-6">
                     <Button
                       variant="outline"
-                      onClick={() => setCurrentStepIndex(currentStepIndex - 1)}
-                      disabled={currentStepIndex === 0}
+                      onClick={() => {
+                        const prev = visiblePosition > 0 ? visibleStepIndices[visiblePosition - 1] : undefined;
+                        if (prev != null) setCurrentStepIndex(prev);
+                      }}
+                      disabled={visiblePosition <= 0}
                     >
                       <ChevronLeft className="w-4 h-4 mr-1" />
                       Previous
                     </Button>
                     <div className="hidden sm:flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">
-                        Step {currentStepIndex + 1} of {steps.length}
+                        Step {(visiblePosition >= 0 ? visiblePosition : currentStepIndex) + 1} of {visibleStepIndices.length}
                       </span>
                       <Button
                         variant="ghost"
@@ -682,8 +729,11 @@ function ReviewShellInner({
                     </div>
                     <Button
                       variant="outline"
-                      onClick={() => setCurrentStepIndex(currentStepIndex + 1)}
-                      disabled={currentStepIndex >= steps.length - 1}
+                      onClick={() => {
+                        const next = visiblePosition >= 0 && visiblePosition < visibleStepIndices.length - 1 ? visibleStepIndices[visiblePosition + 1] : undefined;
+                        if (next != null) setCurrentStepIndex(next);
+                      }}
+                      disabled={visiblePosition >= visibleStepIndices.length - 1}
                     >
                       Next
                       <ChevronRight className="w-4 h-4 ml-1" />
