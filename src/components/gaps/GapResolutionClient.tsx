@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { GapCard } from "@/components/gaps/GapCard";
 import { GapRollupDashboard } from "@/components/gaps/GapRollupDashboard";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { StatCard } from "@/components/shared/StatCard";
 import { computeCostRollup, computeRiskHeatMap, analyzeUpgradeImpact } from "@/lib/assessment/gap-analytics";
 
 interface GapData {
@@ -270,6 +271,13 @@ export function GapResolutionClient({
             <option value="pending">Pending Approval</option>
             <option value="approved">Approved</option>
           </select>
+        </div>
+
+        {/* Summary stat cards */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
+          <StatCard label="Total Gaps" value={summary.total} valueClass="text-amber-600" />
+          <StatCard label="Est. Cost" value={`$${(costRollup.totalOneTimeCost + costRollup.totalRecurringCost).toLocaleString()}`} />
+          <StatCard label="Pending Approval" value={approvalStatus.pending} valueClass={approvalStatus.pending > 0 ? "text-red-600" : "text-foreground"} />
         </div>
 
         {/* Gap cards */}
