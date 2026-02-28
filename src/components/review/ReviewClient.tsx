@@ -645,6 +645,25 @@ export function ReviewClient({
                 )}
               </div>
 
+              {/* Breadcrumb trail */}
+              <div className="text-xs text-muted-foreground mb-3">
+                <span className="font-medium">{scopeItems.find((i) => i.id === currentScopeItemId)?.nameClean}</span>
+                {activeGroupKey && (
+                  <>
+                    <span className="mx-1.5">→</span>
+                    <span>{activeGroupKey}</span>
+                  </>
+                )}
+                {currentStep.actionTitle && (
+                  <>
+                    <span className="mx-1.5">→</span>
+                    <span>{currentStep.actionTitle}</span>
+                  </>
+                )}
+                <span className="mx-2">·</span>
+                <span>Step {currentStepIndex + 1} of {visibleSteps.length}</span>
+              </div>
+
               {/* Current step — classifiable or reference */}
               {currentStepIsClassifiable ? (
                 <StepReviewCard
