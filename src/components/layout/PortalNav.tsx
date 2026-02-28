@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileText, Settings, LogOut, BookTemplate, BarChart3, Building2 } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, LogOut } from "lucide-react";
 import { AptusLogo } from "@/components/shared/AptusLogo";
 
 import { NotificationBell } from "@/components/notifications/NotificationBell";
@@ -28,24 +28,6 @@ export function PortalNav({ user }: PortalNavProps) {
       href: "/assessments",
       icon: FileText,
       show: true,
-    },
-    {
-      label: UI_TEXT.nav.templates,
-      href: "/templates",
-      icon: BookTemplate,
-      show: ["consultant", "partner_lead", "platform_admin", "admin"].includes(user.role),
-    },
-    {
-      label: UI_TEXT.nav.analytics,
-      href: "/analytics",
-      icon: BarChart3,
-      show: ["partner_lead", "platform_admin", "admin"].includes(user.role),
-    },
-    {
-      label: UI_TEXT.nav.organization,
-      href: "/organization",
-      icon: Building2,
-      show: ["partner_lead", "client_admin", "platform_admin", "admin"].includes(user.role),
     },
     {
       label: UI_TEXT.nav.admin,
