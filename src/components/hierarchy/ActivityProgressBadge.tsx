@@ -7,11 +7,11 @@ interface ActivityProgressBadgeProps {
 }
 
 function getStatusColor(reviewed: number, total: number, gapCount: number): string {
-  if (total === 0) return "bg-gray-100 text-gray-600";
-  if (gapCount > 0) return "bg-amber-100 text-amber-700";
-  if (reviewed === total) return "bg-green-100 text-green-700";
-  if (reviewed > 0) return "bg-blue-100 text-blue-700";
-  return "bg-gray-100 text-gray-600";
+  if (total === 0) return "bg-slate-50 text-slate-600";
+  if (gapCount > 0) return "bg-amber-50 text-amber-700";
+  if (reviewed === total) return "bg-green-50 text-green-700";
+  if (reviewed > 0) return "bg-blue-50 text-blue-700";
+  return "bg-slate-50 text-slate-600";
 }
 
 export function ActivityProgressBadge({ reviewed, total, gapCount = 0 }: ActivityProgressBadgeProps) {

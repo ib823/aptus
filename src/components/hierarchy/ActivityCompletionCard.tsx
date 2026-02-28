@@ -56,7 +56,7 @@ export function ActivityCompletionCard({
         )}
         {naCount > 0 && (
           <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-gray-400" />
+            <span className="w-2 h-2 rounded-full bg-slate-400" />
             <span>{naCount} N/A</span>
           </div>
         )}
