@@ -203,7 +203,7 @@ export function ConfigMatrixClient({
       />
 
       {/* Summary cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <SummaryCard label="Mandatory" count={summary.mandatory} color="bg-red-500" description="Always included" />
         <SummaryCard label="Recommended" count={summary.recommended} color="bg-amber-500" description="Included by default" />
         <SummaryCard label="Optional" count={summary.optional} color="bg-slate-400" description="Excluded by default" />
@@ -260,13 +260,13 @@ export function ConfigMatrixClient({
       <div className="border rounded-lg overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="bg-slate-50 border-b">
-              <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Scope Item</th>
-              <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3">Activity</th>
-              <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3 w-28">Category</th>
-              <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3 w-28">Self-Service</th>
-              <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3 w-20">Include</th>
-              <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider px-4 py-3 w-16" />
+            <tr className="bg-muted border-b">
+              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">Scope Item</th>
+              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">Activity</th>
+              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3 w-28">Category</th>
+              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3 w-28">Self-Service</th>
+              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3 w-20">Include</th>
+              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3 w-16" />
             </tr>
           </thead>
           <tbody>
@@ -360,7 +360,7 @@ function ConfigRow({ config, expanded, onToggle, onToggleInclusion, saving, read
 
   return (
     <>
-      <tr className={`border-b border-slate-100 hover:bg-slate-50 ${config.category === "Mandatory" ? "bg-red-50/30" : ""}`}>
+      <tr className={`border-b hover:bg-accent ${config.category === "Mandatory" ? "bg-red-50/30" : ""}`}>
         <td className="px-4 py-3">
           <span className="text-xs text-muted-foreground/60">{config.scopeItemId}</span>
           <p className="text-sm">{config.scopeItemName}</p>
