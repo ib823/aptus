@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { StatCard } from "@/components/shared/StatCard";
 import { DataMigrationFormDialog } from "@/components/registers/DataMigrationFormDialog";
 import { DataMigrationSummary } from "@/components/registers/DataMigrationSummary";
 import {
@@ -157,6 +158,13 @@ export function DataMigrationRegisterClient({
           </select>
         </div>
 
+        {/* Summary stat cards */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
+          <StatCard label="Total Objects" value={summary.total} />
+          <StatCard label="Total Records" value={summary.totalRecordCount.toLocaleString()} />
+          <StatCard label="Cleansing Required" value={items.filter((i) => i.cleansingRequired).length} valueClass={items.some((i) => i.cleansingRequired) ? "text-amber-600" : "text-foreground"} />
+        </div>
+
         {filteredItems.length === 0 ? (
           <EmptyState
             title="No migration objects"
@@ -167,7 +175,7 @@ export function DataMigrationRegisterClient({
         ) : (
           <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50">
+              <thead className="bg-muted">
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Object Name</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Type</th>
