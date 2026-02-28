@@ -16,10 +16,10 @@ interface WorkshopData {
 }
 
 const STATUS_BADGE: Record<string, string> = {
-  scheduled: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-  in_progress: "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300",
-  completed: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
-  cancelled: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400",
+  scheduled: "bg-blue-50 text-blue-700",
+  in_progress: "bg-purple-50 text-purple-700",
+  completed: "bg-green-50 text-green-700",
+  cancelled: "bg-slate-50 text-slate-500",
 };
 
 interface WorkshopSessionListProps {

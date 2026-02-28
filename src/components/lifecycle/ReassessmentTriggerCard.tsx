@@ -21,11 +21,11 @@ interface ReassessmentTriggerCardProps {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  OPEN: "bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300",
-  ACKNOWLEDGED: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
-  IN_PROGRESS: "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300",
-  RESOLVED: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300",
-  DISMISSED: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
+  OPEN: "bg-yellow-50 text-yellow-700",
+  ACKNOWLEDGED: "bg-blue-50 text-blue-700",
+  IN_PROGRESS: "bg-indigo-50 text-indigo-700",
+  RESOLVED: "bg-green-50 text-green-700",
+  DISMISSED: "bg-slate-50 text-slate-700",
 };
 
 export function ReassessmentTriggerCard({
