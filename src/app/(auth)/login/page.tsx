@@ -108,8 +108,11 @@ function LoginForm() {
     <Card className="rounded-xl shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
       <CardHeader className="text-center pb-2">
         <AptusLogo size="lg" className="mb-2 justify-center" />
-        <p className="text-xs text-muted-foreground mb-4">
+        <p className="text-xs text-muted-foreground mb-1">
           {UI_TEXT.app.tagline}
+        </p>
+        <p className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto">
+          Compare your business processes with SAP S/4HANA to plan your implementation.
         </p>
         <h1 className="text-xl font-semibold text-foreground">
           {sent ? UI_TEXT.auth.magicLinkSent : UI_TEXT.auth.loginTitle}

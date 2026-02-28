@@ -3,7 +3,7 @@
 export const UI_TEXT = {
   app: {
     name: "aptus",
-    tagline: "SAP Fit-Gap Assessment",
+    tagline: "SAP Business Process Assessment",
     sapVersion: "SAP Best Practices 2508",
   },
   auth: {
@@ -29,7 +29,7 @@ export const UI_TEXT = {
     listTitle: "Assessments",
     createNew: "New Assessment",
     noAssessments: "No assessments yet",
-    noAssessmentsDescription: "Create your first fit-gap assessment to get started.",
+    noAssessmentsDescription: "Create your first assessment to compare your business processes with SAP.",
     companyName: "Company Name",
     industry: "Industry",
     country: "Primary Country",
