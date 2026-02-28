@@ -68,11 +68,11 @@ export function ChangeRequestsClient({ assessmentId }: ChangeRequestsClientProps
   };
 
   const statusColors: Record<string, string> = {
-    REQUESTED: "bg-blue-100 text-blue-800",
-    APPROVED: "bg-green-100 text-green-800",
-    REJECTED: "bg-red-100 text-red-800",
-    IN_PROGRESS: "bg-amber-100 text-amber-800",
-    COMPLETED: "bg-gray-100 text-gray-800",
+    REQUESTED: "bg-blue-50 text-blue-700",
+    APPROVED: "bg-green-50 text-green-700",
+    REJECTED: "bg-red-50 text-red-700",
+    IN_PROGRESS: "bg-amber-50 text-amber-700",
+    COMPLETED: "bg-slate-50 text-slate-700",
   };
 
   const riskColors: Record<string, string> = {
@@ -86,8 +86,8 @@ export function ChangeRequestsClient({ assessmentId }: ChangeRequestsClientProps
     return (
       <div className="p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-muted rounded w-48" />
-          <div className="h-24 bg-muted rounded" />
+          <div className="h-8 bg-slate-200 rounded w-48" />
+          <div className="h-24 bg-slate-200 rounded" />
         </div>
       </div>
     );

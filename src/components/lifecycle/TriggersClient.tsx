@@ -28,11 +28,11 @@ const TRIGGER_TYPE_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  OPEN: "bg-red-100 text-red-800",
-  ACKNOWLEDGED: "bg-amber-100 text-amber-800",
-  IN_PROGRESS: "bg-blue-100 text-blue-800",
-  RESOLVED: "bg-green-100 text-green-800",
-  DISMISSED: "bg-gray-100 text-gray-800",
+  OPEN: "bg-red-50 text-red-700",
+  ACKNOWLEDGED: "bg-amber-50 text-amber-700",
+  IN_PROGRESS: "bg-blue-50 text-blue-700",
+  RESOLVED: "bg-green-50 text-green-700",
+  DISMISSED: "bg-slate-50 text-slate-700",
 };
 
 export function TriggersClient({ assessmentId }: TriggersClientProps) {
@@ -79,8 +79,8 @@ export function TriggersClient({ assessmentId }: TriggersClientProps) {
     return (
       <div className="p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-muted rounded w-48" />
-          <div className="h-24 bg-muted rounded" />
+          <div className="h-8 bg-slate-200 rounded w-48" />
+          <div className="h-24 bg-slate-200 rounded" />
         </div>
       </div>
     );

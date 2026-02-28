@@ -4,18 +4,18 @@ import type { AssessmentStatusV2 } from "@/types/assessment";
 import { STATUS_LABELS, STATUS_COLORS } from "@/lib/assessment/status-machine";
 
 const COLOR_CLASSES: Record<string, string> = {
-  gray: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-  blue: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-  indigo: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
-  purple: "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300",
-  amber: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  orange: "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
-  yellow: "bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300",
-  lime: "bg-lime-100 text-lime-700 dark:bg-lime-950 dark:text-lime-300",
-  cyan: "bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300",
-  green: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
-  teal: "bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300",
-  slate: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  gray: "bg-slate-50 text-slate-700",
+  blue: "bg-blue-50 text-blue-700",
+  indigo: "bg-indigo-50 text-indigo-700",
+  purple: "bg-purple-50 text-purple-700",
+  amber: "bg-amber-50 text-amber-700",
+  orange: "bg-orange-50 text-orange-700",
+  yellow: "bg-yellow-50 text-yellow-700",
+  lime: "bg-lime-50 text-lime-700",
+  cyan: "bg-cyan-50 text-cyan-700",
+  green: "bg-green-50 text-green-700",
+  teal: "bg-teal-50 text-teal-700",
+  slate: "bg-slate-50 text-slate-700",
 };
 
 interface AssessmentStatusBadgeProps {
