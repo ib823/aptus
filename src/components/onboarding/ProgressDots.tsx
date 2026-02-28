@@ -24,7 +24,7 @@ export function ProgressDots({ total, current, completed, skipped }: ProgressDot
         } else if (isCompleted) {
           className += " bg-green-500";
         } else if (isSkipped) {
-          className += " bg-gray-300";
+          className += " bg-slate-300";
         } else {
           className += " bg-muted-foreground/20";
         }

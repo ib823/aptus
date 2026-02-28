@@ -19,7 +19,7 @@ export function MfaStatusBadge({ enabled, className = "" }: MfaStatusBadgeProps)
 
   return (
     <span
-      className={`inline-flex items-center gap-1 text-xs font-medium text-gray-400 ${className}`}
+      className={`inline-flex items-center gap-1 text-xs font-medium text-slate-400 ${className}`}
     >
       <Shield className="w-3.5 h-3.5" />
       MFA Not Set Up
