@@ -223,7 +223,7 @@ export function OcmFormDialog({
               checked={trainingRequired}
               onChange={(e) => setTrainingRequired(e.target.checked)}
               id="trainingRequired"
-              className="rounded border-gray-300"
+              className="rounded border-slate-300"
             />
             <Label htmlFor="trainingRequired">Training Required</Label>
           </div>
