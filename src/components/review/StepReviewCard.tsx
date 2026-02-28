@@ -174,10 +174,10 @@ export function StepReviewCard({
       <div className="px-5 py-3 border-b">
         <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Fit classification">
           {([
-            { value: "FIT", icon: "✓", label: "FIT", selected: "bg-green-50 border-green-500 text-green-700" },
-            { value: "CONFIGURE", icon: "⚙", label: "CONFIG", selected: "bg-blue-50 border-blue-500 text-blue-700" },
-            { value: "GAP", icon: "⚠", label: "GAP", selected: "bg-amber-50 border-amber-500 text-amber-700" },
-            { value: "NA", icon: "—", label: "N/A", selected: "bg-slate-50 border-slate-300 text-slate-500" },
+            { value: "FIT", icon: "✓", label: "Matches", title: "This step matches how we currently work", selected: "bg-green-50 border-green-500 text-green-700" },
+            { value: "CONFIGURE", icon: "⚙", label: "Needs Adjustment", title: "SAP can handle this with some configuration changes", selected: "bg-blue-50 border-blue-500 text-blue-700" },
+            { value: "GAP", icon: "⚠", label: "Doesn\u2019t Match", title: "This doesn\u2019t match our process \u2014 needs a custom solution", selected: "bg-amber-50 border-amber-500 text-amber-700" },
+            { value: "NA", icon: "—", label: "Not Relevant", title: "This step doesn\u2019t apply to our business", selected: "bg-slate-50 border-slate-300 text-slate-500" },
           ] as const).map((opt) => {
             const isSelected = step.fitStatus === opt.value;
             return (
@@ -185,6 +185,7 @@ export function StepReviewCard({
                 key={opt.value}
                 role="radio"
                 aria-checked={isSelected}
+                title={opt.title}
                 onClick={() => handleFitStatusChange(opt.value)}
                 disabled={isReadOnly || isItLead}
                 className={`py-2 px-1 rounded-md border text-center text-sm font-medium transition-all ${
