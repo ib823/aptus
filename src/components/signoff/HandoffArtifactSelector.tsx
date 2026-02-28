@@ -15,7 +15,7 @@ interface ArtifactOption {
 
 const DEFAULT_ARTIFACTS: ArtifactOption[] = [
   { id: "scope_report", label: "Scope Report", description: "Full scope selection summary with relevance ratings" },
-  { id: "fit_gap_analysis", label: "Fit/Gap Analysis", description: "Complete fit/gap analysis with classifications" },
+  { id: "fit_gap_analysis", label: "Process Assessment", description: "Complete business process assessment with classifications" },
   { id: "gap_resolution_plan", label: "Gap Resolution Plan", description: "All gap resolutions with cost estimates" },
   { id: "integration_register", label: "Integration Register", description: "Integration points and middleware details" },
   { id: "data_migration_plan", label: "Data Migration Plan", description: "Migration objects, volumes, and approach" },
