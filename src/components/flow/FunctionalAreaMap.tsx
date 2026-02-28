@@ -85,10 +85,10 @@ export function FunctionalAreaMap({ areas, assessmentId, assignedAreas }: Functi
               {/* Status breakdown */}
               {isAssigned && (
                 <div className="mt-3 flex gap-2 text-xs">
-                  <span className="text-green-600">{area.fitCount} FIT</span>
-                  <span className="text-blue-600">{area.configureCount} CFG</span>
-                  <span className="text-amber-600">{area.gapCount} GAP</span>
-                  <span className="text-slate-500">{area.pendingCount} PND</span>
+                  <span className="text-green-600">{area.fitCount} Matches</span>
+                  <span className="text-blue-600">{area.configureCount} Adjust</span>
+                  <span className="text-amber-600">{area.gapCount} Gaps</span>
+                  <span className="text-muted-foreground">{area.pendingCount} Pending</span>
                 </div>
               )}
 

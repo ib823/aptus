@@ -112,19 +112,19 @@ export function FunctionalAreaOverviewMap({
               <div className="grid grid-cols-4 gap-2 text-center text-xs">
                 <div>
                   <div className="font-semibold text-green-700">{area.fitCount}</div>
-                  <div className="text-muted-foreground">FIT</div>
+                  <div className="text-muted-foreground">Matches</div>
                 </div>
                 <div>
                   <div className="font-semibold text-blue-700">{area.configureCount}</div>
-                  <div className="text-muted-foreground">CFG</div>
+                  <div className="text-muted-foreground">Adjust</div>
                 </div>
                 <div>
                   <div className="font-semibold text-amber-700">{area.gapCount}</div>
-                  <div className="text-muted-foreground">GAP</div>
+                  <div className="text-muted-foreground">Gaps</div>
                 </div>
                 <div>
-                  <div className="font-semibold text-slate-500">{area.pendingCount}</div>
-                  <div className="text-muted-foreground">PEND</div>
+                  <div className="font-semibold text-muted-foreground">{area.pendingCount}</div>
+                  <div className="text-muted-foreground">Pending</div>
                 </div>
               </div>
 
