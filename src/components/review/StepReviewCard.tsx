@@ -276,8 +276,8 @@ export function StepReviewCard({
             );
           }
           return (
-            <p className="text-sm text-muted-foreground mt-1">
-              {step.actionTitle}
+            <p className="text-sm text-muted-foreground mt-1 italic">
+              Review the technical details below to assess this step.
             </p>
           );
         })()}
@@ -390,13 +390,13 @@ export function StepReviewCard({
           ) : (
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           )}
-          <span className="text-sm font-medium text-blue-600">
-            View SAP Reference Content
+          <span className="text-sm font-medium text-primary">
+            Technical Details for Implementation Team
           </span>
         </button>
         {sapContentExpanded && (
           <div className="px-5 pb-4 overflow-x-auto max-w-full">
-            <div className="bg-slate-50 rounded-md p-3 prose prose-sm max-w-none font-mono text-xs text-muted-foreground [&_table]:max-w-full [&_table]:table-auto [&_table]:overflow-x-auto [&_img]:max-w-full">
+            <div className="bg-muted/50 rounded-md p-3 prose prose-sm max-w-none font-mono text-xs text-muted-foreground [&_table]:max-w-full [&_table]:table-auto [&_table]:overflow-x-auto [&_img]:max-w-full">
               <ParsedContentView
                 content={step.parsedContent
                   ? step.parsedContent as unknown as import("@/lib/assessment/content-parser").ParsedStepContent
