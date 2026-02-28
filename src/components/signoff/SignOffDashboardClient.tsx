@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { CheckCircle2, Circle, Lock } from "lucide-react";
 import { SignOffProgressTracker } from "./SignOffProgressTracker";
 import { AreaValidationCard } from "./AreaValidationCard";
 import { TechnicalValidationPanel } from "./TechnicalValidationPanel";
@@ -151,8 +152,8 @@ export function SignOffDashboardClient({ assessmentId }: SignOffDashboardClientP
     return (
       <div className="p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-slate-200 rounded w-48" />
-          <div className="h-32 bg-slate-200 rounded" />
+          <div className="h-8 bg-muted rounded w-48" />
+          <div className="h-32 bg-muted rounded" />
         </div>
       </div>
     );
@@ -295,10 +296,25 @@ export function SignOffDashboardClient({ assessmentId }: SignOffDashboardClientP
         </div>
       )}
 
-      {/* Signatures */}
-      <div className="border rounded-lg p-4">
-        <h2 className="text-lg font-semibold mb-3">Digital Signatures</h2>
-        <div className="space-y-4">
+      {/* Signatures — Three-slot vertical layout */}
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Digital Signatures</h2>
+
+        {/* Executive Sign-Off Slot */}
+        <div className={`rounded-lg border p-4 ${executiveSignature ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              {executiveSignature ? (
+                <CheckCircle2 className="w-5 h-5 text-green-600" />
+              ) : (
+                <Circle className="w-5 h-5 text-amber-600" />
+              )}
+              <span className="text-sm font-semibold">Executive Sign-Off</span>
+            </div>
+            <span className={`px-2 py-0.5 text-xs font-medium rounded ${executiveSignature ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+              {executiveSignature ? "SIGNED" : "PENDING"}
+            </span>
+          </div>
           {executiveSignature ? (
             <SignatureDisplay
               signatureType={executiveSignature.signatureType}
@@ -314,11 +330,27 @@ export function SignOffDashboardClient({ assessmentId }: SignOffDashboardClientP
               status={executiveSignature.status}
             />
           ) : (
-            <div className="border rounded p-3 text-sm text-muted-foreground">
-              Executive sign-off pending
-            </div>
+            <p className="text-xs text-muted-foreground">Awaiting executive signature</p>
           )}
+        </div>
 
+        {/* Partner Sign-Off Slot */}
+        <div className={`rounded-lg border p-4 ${partnerSignature ? "bg-green-50 border-green-200" : executiveSignature ? "bg-amber-50 border-amber-200" : "bg-slate-100 border-slate-200"}`}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              {partnerSignature ? (
+                <CheckCircle2 className="w-5 h-5 text-green-600" />
+              ) : executiveSignature ? (
+                <Circle className="w-5 h-5 text-amber-600" />
+              ) : (
+                <Lock className="w-5 h-5 text-slate-400" />
+              )}
+              <span className="text-sm font-semibold">Partner Countersign</span>
+            </div>
+            <span className={`px-2 py-0.5 text-xs font-medium rounded ${partnerSignature ? "bg-green-100 text-green-700" : executiveSignature ? "bg-amber-100 text-amber-700" : "bg-muted text-slate-600"}`}>
+              {partnerSignature ? "SIGNED" : executiveSignature ? "PENDING" : "LOCKED"}
+            </span>
+          </div>
           {partnerSignature ? (
             <SignatureDisplay
               signatureType={partnerSignature.signatureType}
@@ -333,10 +365,10 @@ export function SignOffDashboardClient({ assessmentId }: SignOffDashboardClientP
               mfaVerified={partnerSignature.mfaVerified}
               status={partnerSignature.status}
             />
+          ) : executiveSignature ? (
+            <p className="text-xs text-muted-foreground">Awaiting partner countersignature</p>
           ) : (
-            <div className="border rounded p-3 text-sm text-muted-foreground">
-              Partner countersign pending
-            </div>
+            <p className="text-xs text-muted-foreground">Requires executive sign-off first</p>
           )}
         </div>
       </div>
@@ -346,7 +378,7 @@ export function SignOffDashboardClient({ assessmentId }: SignOffDashboardClientP
         <div className="border rounded-lg p-4 bg-green-50">
           <h2 className="text-lg font-semibold mb-2">Sign-Off Certificate</h2>
           <div className="text-sm space-y-2">
-            <p>Certificate Hash: <span className="font-mono text-xs text-slate-400">{signOff.certificateHash.substring(0, 24)}...</span></p>
+            <p>Certificate Hash: <span className="font-mono text-xs text-muted-foreground/60">{signOff.certificateHash.substring(0, 24)}...</span></p>
             {signOff.verificationToken && (
               <p>
                 <a
