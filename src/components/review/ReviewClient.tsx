@@ -689,8 +689,8 @@ export function ReviewClient({
                   <ChevronLeft className="w-4 h-4 mr-1" />
                   Previous
                 </Button>
-                <span className="hidden sm:inline text-sm text-muted-foreground">
-                  Step {currentStepIndex + 1} of {visibleSteps.length} · Keys: ← → navigate · F C G N classify
+                <span className="hidden sm:inline text-xs text-muted-foreground">
+                  Keyboard: ← → to navigate, F C G N to classify
                 </span>
                 <Button
                   variant="outline"
