@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { StatCard } from "@/components/shared/StatCard";
 import { OcmFormDialog } from "@/components/registers/OcmFormDialog";
 import { OcmSummary } from "@/components/registers/OcmSummary";
 import { OcmHeatmap } from "@/components/registers/OcmHeatmap";
@@ -201,6 +202,13 @@ export function OcmRegisterClient({
           )}
         </div>
 
+        {/* Summary stat cards */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
+          <StatCard label="Total Impacts" value={summary.total} />
+          <StatCard label="Readiness" value={`${Math.round(summary.weightedReadiness * 100)}%`} valueClass={summary.weightedReadiness < 0.5 ? "text-amber-600" : "text-foreground"} />
+          <StatCard label="Training Required" value={summary.trainingCount} valueClass={summary.trainingCount > 0 ? "text-blue-600" : "text-foreground"} />
+        </div>
+
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="table">Table View</TabsTrigger>
@@ -218,7 +226,7 @@ export function OcmRegisterClient({
             ) : (
               <div className="border rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50">
+                  <thead className="bg-muted">
                     <tr>
                       <th className="px-4 py-3 text-left font-medium text-muted-foreground">Role / Area</th>
                       <th className="px-4 py-3 text-left font-medium text-muted-foreground">Change Type</th>
