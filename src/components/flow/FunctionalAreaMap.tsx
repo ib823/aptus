@@ -36,17 +36,24 @@ export function FunctionalAreaMap({ areas, assessmentId, assignedAreas }: Functi
   return (
     <div>
       <h2 className="text-lg font-semibold mb-4">Functional Area Overview</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {areas.map((area) => {
           const isAssigned = !assignedAreas || assignedAreas.includes(area.functionalArea);
           const risk = riskBadge(area.riskScore);
+          const borderColor = area.completionPct >= 75
+            ? "border-l-[3px] border-l-green-500"
+            : area.completionPct >= 50
+              ? "border-l-[3px] border-l-blue-500"
+              : area.completionPct >= 25
+                ? "border-l-[3px] border-l-amber-500"
+                : "border-l-[3px] border-l-slate-300";
 
           return (
             <button
               key={area.functionalArea}
               onClick={() => isAssigned ? setSelectedArea(area.functionalArea) : undefined}
               disabled={!isAssigned}
-              className={`text-left p-4 border rounded-lg transition-all ${
+              className={`text-left p-4 border rounded-lg transition-all ${borderColor} ${
                 isAssigned
                   ? "bg-card hover:bg-accent hover:shadow-sm cursor-pointer"
                   : "bg-muted/30 opacity-60 cursor-not-allowed"
