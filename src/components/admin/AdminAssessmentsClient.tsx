@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
 
 interface AssessmentRow {
   id: string;
@@ -34,12 +37,32 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientProps) {
+  const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     if (statusFilter === "all") return assessments;
     return assessments.filter((a) => a.status === statusFilter);
   }, [assessments, statusFilter]);
+
+  const handleDelete = useCallback(async (id: string, companyName: string) => {
+    if (!window.confirm(`Are you sure you want to delete the assessment for "${companyName}"? This action soft-deletes the record.`)) return;
+    setDeleting(id);
+    try {
+      const res = await fetch(`/api/assessments/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        router.refresh();
+      } else {
+        const json = await res.json() as { error?: { message?: string } };
+        alert(json.error?.message ?? "Failed to delete assessment");
+      }
+    } catch {
+      alert("Failed to delete assessment");
+    } finally {
+      setDeleting(null);
+    }
+  }, [router]);
 
   return (
     <div className="max-w-5xl">
@@ -70,7 +93,7 @@ export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientPr
         <div className="bg-card border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-slate-50 border-b">
+              <tr className="bg-muted border-b">
                 <th className="px-4 py-2 text-left font-medium text-muted-foreground">Company</th>
                 <th className="px-4 py-2 text-left font-medium text-muted-foreground">Industry</th>
                 <th className="px-4 py-2 text-left font-medium text-muted-foreground">Status</th>
@@ -78,11 +101,12 @@ export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientPr
                 <th className="px-4 py-2 text-left font-medium text-muted-foreground">Steps</th>
                 <th className="px-4 py-2 text-left font-medium text-muted-foreground">Gaps</th>
                 <th className="px-4 py-2 text-left font-medium text-muted-foreground">Updated</th>
+                <th className="px-4 py-2 text-right font-medium text-muted-foreground">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((a) => (
-                <tr key={a.id} className="border-b border-slate-100 hover:bg-slate-50">
+                <tr key={a.id} className="border-b hover:bg-muted/30">
                   <td className="px-4 py-2.5">
                     <Link href={`/assessment/${a.id}/scope`} className="text-blue-600 hover:underline font-medium">
                       {a.companyName}
@@ -99,6 +123,17 @@ export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientPr
                   <td className="px-4 py-2.5 text-muted-foreground">{a._count.gapResolutions}</td>
                   <td className="px-4 py-2.5 text-xs text-muted-foreground/60">
                     {new Date(a.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      disabled={deleting === a.id}
+                      onClick={() => void handleDelete(a.id, a.companyName)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
                   </td>
                 </tr>
               ))}
