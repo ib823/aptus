@@ -19,7 +19,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const TYPE_COLORS: Record<string, string> = {
-  PENDING: "bg-gray-200",
+  PENDING: "bg-slate-200",
   FIT: "bg-green-500",
   CONFIGURE: "bg-blue-500",
   KEY_USER_EXT: "bg-cyan-500",
@@ -68,7 +68,7 @@ export function GapSummary({ total, resolved, pending, totalEffort, byType }: Ga
             .map(([type, count]) => (
               <div key={type} className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
-                  <span className={`w-2.5 h-2.5 rounded-full ${TYPE_COLORS[type] ?? "bg-gray-300"}`} />
+                  <span className={`w-2.5 h-2.5 rounded-full ${TYPE_COLORS[type] ?? "bg-slate-300"}`} />
                   <span className="text-muted-foreground">{TYPE_LABELS[type] ?? type}</span>
                 </div>
                 <span className="font-medium text-foreground">{count}</span>

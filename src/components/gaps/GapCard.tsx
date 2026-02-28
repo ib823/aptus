@@ -77,9 +77,9 @@ const RESOLUTION_OPTIONS = [
 ] as const;
 
 const RISK_COLORS: Record<string, string> = {
-  LOW: "bg-green-100 text-green-700",
-  MEDIUM: "bg-amber-100 text-amber-700",
-  HIGH: "bg-red-100 text-red-700",
+  LOW: "bg-green-50 text-green-700",
+  MEDIUM: "bg-amber-50 text-amber-700",
+  HIGH: "bg-red-50 text-red-700",
 };
 
 export function GapCard({ gap, assessmentId, onCommentClick, commentCount, onUpdate, isReadOnly }: GapCardProps) {
@@ -150,7 +150,7 @@ export function GapCard({ gap, assessmentId, onCommentClick, commentCount, onUpd
               />
             )}
             {gap.riskLevel && (
-              <Badge className={RISK_COLORS[gap.riskLevel] ?? "bg-gray-100 text-gray-600"}>
+              <Badge className={RISK_COLORS[gap.riskLevel] ?? "bg-slate-50 text-slate-600"}>
                 {gap.riskLevel} Risk
               </Badge>
             )}
@@ -331,7 +331,7 @@ export function GapCard({ gap, assessmentId, onCommentClick, commentCount, onUpd
                 </p>
                 {gap.clientApproved ? (
                   <div className="flex items-center gap-2">
-                    <Badge className="bg-green-100 text-green-700">Approved</Badge>
+                    <Badge className="bg-green-50 text-green-700">Approved</Badge>
                     {gap.clientApprovedBy && (
                       <span className="text-xs text-muted-foreground">by {gap.clientApprovedBy}</span>
                     )}
