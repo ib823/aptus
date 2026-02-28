@@ -64,62 +64,40 @@ export function WorkshopListClient({ assessmentId, sessions }: WorkshopListClien
           <p className="text-sm mt-1">Schedule a workshop to get started.</p>
         </div>
       ) : (
-        <div className="border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted/40 text-left">
-                <th className="px-4 py-2 font-medium">Title</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Facilitator</th>
-                <th className="px-4 py-2 font-medium">Date</th>
-                <th className="px-4 py-2 font-medium text-center">Attendees</th>
-                <th className="px-4 py-2 font-medium text-center">Actions</th>
-                <th className="px-4 py-2 font-medium"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {sessions.map((s) => {
-                const badge = STATUS_BADGES[s.status] ?? { label: s.status, className: "bg-slate-50 text-slate-600" };
-                return (
-                  <tr key={s.id} className="border-t hover:bg-muted/20">
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/assessment/${assessmentId}/workshops/${s.id}`}
-                        className="font-medium text-blue-600 hover:underline"
-                      >
-                        {s.title}
-                      </Link>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Code: {s.sessionCode}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge className={badge.className}>{badge.label}</Badge>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">{s.facilitatorName}</td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {s.scheduledAt ? formatDate(s.scheduledAt) : "Not scheduled"}
-                      {s.duration !== null && (
-                        <span className="text-xs ml-1">({s.duration} min)</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">{s.attendeeCount}</td>
-                    <td className="px-4 py-3 text-center">{s.actionItemCount}</td>
-                    <td className="px-4 py-3 text-right">
-                      {s.hasMinutes && (
-                        <Link
-                          href={`/assessment/${assessmentId}/workshops/${s.id}?tab=minutes`}
-                          className="text-xs text-blue-500 hover:text-blue-600"
-                        >
-                          View Minutes
-                        </Link>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {sessions.map((s) => {
+            const badge = STATUS_BADGES[s.status] ?? { label: s.status, className: "bg-slate-50 text-slate-600" };
+            return (
+              <Link
+                key={s.id}
+                href={`/assessment/${assessmentId}/workshops/${s.id}`}
+                className="block border rounded-lg p-4 bg-card hover:bg-accent hover:shadow-sm transition-all"
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <h3 className="font-medium text-sm">{s.title}</h3>
+                  <Badge className={badge.className}>{badge.label}</Badge>
+                </div>
+
+                <p className="text-xs text-muted-foreground mb-3">
+                  Code: <span className="font-mono font-bold">{s.sessionCode}</span>
+                  <span className="mx-1.5">&middot;</span>
+                  {s.facilitatorName}
+                </p>
+
+                <div className="text-xs text-muted-foreground mb-3">
+                  {s.scheduledAt ? formatDate(s.scheduledAt) : "Not scheduled"}
+                  {s.duration !== null && <span className="ml-1">({s.duration} min)</span>}
+                </div>
+
+                <div className="flex items-center gap-3 text-xs">
+                  <span>{s.attendeeCount} attendees</span>
+                  <span>{s.actionItemCount} actions</span>
+                  {s.voteCount > 0 && <span>{s.voteCount} votes</span>}
+                  {s.hasMinutes && <span className="text-blue-600">Minutes</span>}
+                </div>
+              </Link>
+            );
+          })}
         </div>
       )}
 
