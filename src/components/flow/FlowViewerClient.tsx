@@ -92,15 +92,15 @@ export function FlowViewerClient({
     <div className="relative border rounded-lg bg-white overflow-hidden">
       {/* Controls */}
       <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
-        <button onClick={handleZoomOut} className="px-2 py-1 bg-white border rounded text-sm shadow-sm hover:bg-gray-50" aria-label="Zoom out">−</button>
+        <button onClick={handleZoomOut} className="px-2 py-1 bg-white border rounded text-sm shadow-sm hover:bg-slate-50" aria-label="Zoom out">−</button>
         <span className="text-xs text-muted-foreground w-12 text-center">{Math.round(zoom * 100)}%</span>
-        <button onClick={handleZoomIn} className="px-2 py-1 bg-white border rounded text-sm shadow-sm hover:bg-gray-50" aria-label="Zoom in">+</button>
-        <button onClick={handleZoomFit} className="px-2 py-1 bg-white border rounded text-xs shadow-sm hover:bg-gray-50">Fit</button>
+        <button onClick={handleZoomIn} className="px-2 py-1 bg-white border rounded text-sm shadow-sm hover:bg-slate-50" aria-label="Zoom in">+</button>
+        <button onClick={handleZoomFit} className="px-2 py-1 bg-white border rounded text-xs shadow-sm hover:bg-slate-50">Fit</button>
         {riskOverlayData && riskOverlayData.length > 0 && (
           <button
             onClick={() => setShowRiskOverlay(!showRiskOverlay)}
             className={`px-3 py-1 border rounded text-xs shadow-sm ${
-              showRiskOverlay ? "bg-amber-50 border-amber-300 text-amber-700" : "bg-white hover:bg-gray-50"
+              showRiskOverlay ? "bg-amber-50 border-amber-300 text-amber-700" : "bg-white hover:bg-slate-50"
             }`}
           >
             {showRiskOverlay ? "Hide Risk" : "Show Risk"}

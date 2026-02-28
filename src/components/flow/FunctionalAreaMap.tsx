@@ -81,7 +81,7 @@ export function FunctionalAreaMap({ areas, assessmentId, assignedAreas }: Functi
                   <span className="text-green-600">{area.fitCount} FIT</span>
                   <span className="text-blue-600">{area.configureCount} CFG</span>
                   <span className="text-amber-600">{area.gapCount} GAP</span>
-                  <span className="text-gray-500">{area.pendingCount} PND</span>
+                  <span className="text-slate-500">{area.pendingCount} PND</span>
                 </div>
               )}
 

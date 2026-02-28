@@ -23,7 +23,7 @@ function getCompletionColor(pct: number): string {
   if (pct >= 80) return "bg-green-500";
   if (pct >= 50) return "bg-amber-500";
   if (pct > 0) return "bg-orange-500";
-  return "bg-gray-300";
+  return "bg-slate-300";
 }
 
 export function FunctionalAreaOverviewMap({
@@ -100,7 +100,7 @@ export function FunctionalAreaOverviewMap({
                   <span>Completion</span>
                   <span>{area.completionPct}%</span>
                 </div>
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all ${getCompletionColor(area.completionPct)}`}
                     style={{ width: `${area.completionPct}%` }}
@@ -123,7 +123,7 @@ export function FunctionalAreaOverviewMap({
                   <div className="text-muted-foreground">GAP</div>
                 </div>
                 <div>
-                  <div className="font-semibold text-gray-500">{area.pendingCount}</div>
+                  <div className="font-semibold text-slate-500">{area.pendingCount}</div>
                   <div className="text-muted-foreground">PEND</div>
                 </div>
               </div>
@@ -142,7 +142,7 @@ export function FunctionalAreaOverviewMap({
                         {si.fitCount > 0 && <Badge variant="outline" className="bg-green-50 text-green-700 text-[10px] px-1">{si.fitCount}</Badge>}
                         {si.configureCount > 0 && <Badge variant="outline" className="bg-blue-50 text-blue-700 text-[10px] px-1">{si.configureCount}</Badge>}
                         {si.gapCount > 0 && <Badge variant="outline" className="bg-amber-50 text-amber-700 text-[10px] px-1">{si.gapCount}</Badge>}
-                        {si.pendingCount > 0 && <Badge variant="outline" className="bg-gray-50 text-gray-500 text-[10px] px-1">{si.pendingCount}</Badge>}
+                        {si.pendingCount > 0 && <Badge variant="outline" className="bg-slate-50 text-slate-500 text-[10px] px-1">{si.pendingCount}</Badge>}
                       </div>
                     </div>
                   ))}

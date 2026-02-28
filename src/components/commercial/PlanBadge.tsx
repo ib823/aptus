@@ -8,10 +8,10 @@ interface PlanBadgeProps {
 }
 
 const PLAN_STYLES: Record<PlanTier, string> = {
-  TRIAL: "bg-gray-100 text-gray-700 border-gray-300",
-  STARTER: "bg-blue-100 text-blue-700 border-blue-300",
-  PROFESSIONAL: "bg-purple-100 text-purple-700 border-purple-300",
-  ENTERPRISE: "bg-amber-100 text-amber-700 border-amber-300",
+  TRIAL: "bg-slate-50 text-slate-700 border-slate-300",
+  STARTER: "bg-blue-50 text-blue-700 border-blue-300",
+  PROFESSIONAL: "bg-purple-50 text-purple-700 border-purple-300",
+  ENTERPRISE: "bg-amber-50 text-amber-700 border-amber-300",
 };
 
 export function PlanBadge({ plan }: PlanBadgeProps) {

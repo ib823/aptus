@@ -18,7 +18,7 @@ const ROLE_COLORS: Record<string, string> = {
   client_admin: "bg-emerald-500",
   platform_admin: "bg-purple-500",
   it_lead: "bg-cyan-500",
-  viewer: "bg-gray-400",
+  viewer: "bg-slate-400",
 };
 
 export function PresenceAvatars({ assessmentId }: { assessmentId: string }) {
@@ -64,7 +64,7 @@ export function PresenceAvatars({ assessmentId }: { assessmentId: string }) {
             .join("")
             .slice(0, 2)
             .toUpperCase();
-          const bgColor = ROLE_COLORS[u.userRole] ?? "bg-gray-400";
+          const bgColor = ROLE_COLORS[u.userRole] ?? "bg-slate-400";
           return (
             <div
               key={u.userId}

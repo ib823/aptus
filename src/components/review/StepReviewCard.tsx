@@ -251,7 +251,7 @@ export function StepReviewCard({
           const hint = getBusinessContextHint(step.actionTitle, step.stepCategory);
           if (!hint) return null;
           return (
-            <p className="text-xs text-muted-foreground mt-1.5 mb-2 leading-relaxed bg-blue-50/50 dark:bg-blue-950/20 px-3 py-2 rounded-md border border-blue-100 dark:border-blue-900">
+            <p className="text-xs text-muted-foreground mt-1.5 mb-2 leading-relaxed bg-blue-50/50 px-3 py-2 rounded-md border border-blue-100">
               {hint}
             </p>
           );
@@ -472,7 +472,7 @@ export function StepReviewCard({
             {configs.map((config) => (
               <div key={config.id} className="flex items-center gap-2">
                 <Badge
-                  className={`text-xs cursor-help ${CATEGORY_STYLES[config.category] ?? "bg-gray-100 text-gray-600"}`}
+                  className={`text-xs cursor-help ${CATEGORY_STYLES[config.category] ?? "bg-slate-50 text-slate-600"}`}
                   title={CATEGORY_TOOLTIPS[config.category] ?? ""}
                 >
                   {config.category}

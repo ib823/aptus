@@ -74,7 +74,7 @@ export const StepGroupSidebar = memo(function StepGroupSidebar({
                     : step.fitStatus === "CONFIGURE" ? "bg-blue-500"
                     : step.fitStatus === "GAP" ? "bg-amber-500"
                     : step.fitStatus === "NA" ? "bg-slate-300"
-                    : "bg-gray-200";
+                    : "bg-slate-200";
 
                   return (
                     <button

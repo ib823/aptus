@@ -47,7 +47,7 @@ export function StatusTransitionHistory({ assessmentId }: StatusTransitionHistor
       </h3>
       <div className="space-y-2">
         {entries.map((entry) => (
-          <div key={entry.id} className="flex items-start gap-3 text-sm border-l-2 border-gray-200 dark:border-gray-700 pl-3 py-1">
+          <div key={entry.id} className="flex items-start gap-3 text-sm border-l-2 border-slate-200 pl-3 py-1">
             <div className="flex-1">
               <p>
                 <span className="font-medium">

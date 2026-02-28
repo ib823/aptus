@@ -55,16 +55,16 @@ export function AreaDrillDown({ area, assessmentId, onBack }: AreaDrillDownProps
                   <td className="px-4 py-3 text-center">
                     <div className="flex gap-1 justify-center">
                       {si.fitCount > 0 && (
-                        <Badge className="bg-green-100 text-green-700 text-xs">{si.fitCount}</Badge>
+                        <Badge className="bg-green-50 text-green-700 text-xs">{si.fitCount}</Badge>
                       )}
                       {si.configureCount > 0 && (
-                        <Badge className="bg-blue-100 text-blue-700 text-xs">{si.configureCount}</Badge>
+                        <Badge className="bg-blue-50 text-blue-700 text-xs">{si.configureCount}</Badge>
                       )}
                       {si.gapCount > 0 && (
-                        <Badge className="bg-amber-100 text-amber-700 text-xs">{si.gapCount}</Badge>
+                        <Badge className="bg-amber-50 text-amber-700 text-xs">{si.gapCount}</Badge>
                       )}
                       {si.pendingCount > 0 && (
-                        <Badge className="bg-gray-100 text-gray-500 text-xs">{si.pendingCount}</Badge>
+                        <Badge className="bg-slate-50 text-slate-500 text-xs">{si.pendingCount}</Badge>
                       )}
                     </div>
                   </td>

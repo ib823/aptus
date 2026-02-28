@@ -131,10 +131,10 @@ const ProcessChainRow = memo(function ProcessChainRow({
 
   const typeBadgeStyle =
     chain.type === "core"
-      ? "bg-blue-100 text-blue-700"
+      ? "bg-blue-50 text-blue-700"
       : chain.type === "supporting"
-        ? "bg-gray-100 text-gray-600"
-        : "bg-purple-100 text-purple-700";
+        ? "bg-slate-50 text-slate-600"
+        : "bg-purple-50 text-purple-700";
 
   return (
     <div className="mb-4 last:mb-0">

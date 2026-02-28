@@ -34,7 +34,7 @@ export function ProgressHeatmap({ cells }: ProgressHeatmapProps) {
         <div className="flex items-center gap-2 mt-4 text-xs text-muted-foreground">
           <span>0%</span>
           <div className="flex gap-0.5">
-            <div className="w-4 h-3 rounded-sm bg-gray-100" />
+            <div className="w-4 h-3 rounded-sm bg-slate-100" />
             <div className="w-4 h-3 rounded-sm bg-red-200" />
             <div className="w-4 h-3 rounded-sm bg-orange-200" />
             <div className="w-4 h-3 rounded-sm bg-yellow-200" />

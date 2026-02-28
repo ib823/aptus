@@ -65,7 +65,7 @@ export function ScopeFlowOverview({ scopeItemName, steps, onFlowClick }: ScopeFl
           const done = flow.fit + flow.gap + flow.configure + flow.na;
           const pct = total > 0 ? Math.round((done / total) * 100) : 100;
 
-          let borderColor = "border-gray-300";
+          let borderColor = "border-slate-300";
           let bgColor = "bg-white";
           if (pct === 100 && flow.gap === 0) {
             borderColor = "border-green-400";
@@ -95,7 +95,7 @@ export function ScopeFlowOverview({ scopeItemName, steps, onFlowClick }: ScopeFl
                   {flow.fit > 0 && <span className="w-2 h-2 rounded-full bg-green-500" title={`${flow.fit} FIT`} />}
                   {flow.configure > 0 && <span className="w-2 h-2 rounded-full bg-blue-500" title={`${flow.configure} CONFIGURE`} />}
                   {flow.gap > 0 && <span className="w-2 h-2 rounded-full bg-amber-500" title={`${flow.gap} GAP`} />}
-                  {flow.pending > 0 && <span className="w-2 h-2 rounded-full bg-gray-300" title={`${flow.pending} pending`} />}
+                  {flow.pending > 0 && <span className="w-2 h-2 rounded-full bg-slate-300" title={`${flow.pending} pending`} />}
                 </div>
               </button>
               {index < flows.length - 1 && (
@@ -110,7 +110,7 @@ export function ScopeFlowOverview({ scopeItemName, steps, onFlowClick }: ScopeFl
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> FIT</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" /> CONFIGURE</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> GAP</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300" /> Pending</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300" /> Pending</span>
       </div>
     </div>
   );

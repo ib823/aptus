@@ -135,7 +135,7 @@ export function ReportClient({
               <div className="bg-green-500" style={{ width: `${(summary.steps.fit / summary.steps.total) * 100}%` }} title={`FIT: ${summary.steps.fit}`} />
               <div className="bg-blue-500" style={{ width: `${(summary.steps.configure / summary.steps.total) * 100}%` }} title={`CONFIGURE: ${summary.steps.configure}`} />
               <div className="bg-amber-500" style={{ width: `${(summary.steps.gap / summary.steps.total) * 100}%` }} title={`GAP: ${summary.steps.gap}`} />
-              <div className="bg-gray-400" style={{ width: `${(summary.steps.na / summary.steps.total) * 100}%` }} title={`N/A: ${summary.steps.na}`} />
+              <div className="bg-slate-400" style={{ width: `${(summary.steps.na / summary.steps.total) * 100}%` }} title={`N/A: ${summary.steps.na}`} />
             </>
           )}
         </div>
@@ -143,7 +143,7 @@ export function ReportClient({
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> FIT: {summary.steps.fit}</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" /> CONFIGURE: {summary.steps.configure}</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> GAP: {summary.steps.gap}</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-400" /> N/A: {summary.steps.na}</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-400" /> N/A: {summary.steps.na}</span>
         </div>
       </div>
 
