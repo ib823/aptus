@@ -69,7 +69,7 @@ export function TotpVerifyForm({ onVerified }: TotpVerifyFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
-        <label htmlFor="verify-code" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="verify-code" className="block text-sm font-medium text-slate-700 mb-1">
           {UI_TEXT.auth.mfaVerifyDescription}
         </label>
         <Input
@@ -92,10 +92,10 @@ export function TotpVerifyForm({ onVerified }: TotpVerifyFormProps) {
         )}
       </div>
 
-      <div className="flex items-center justify-between text-sm text-gray-500">
+      <div className="flex items-center justify-between text-sm text-slate-500">
         <span>
           Code refreshes in{" "}
-          <span className="font-mono font-medium text-gray-700">
+          <span className="font-mono font-medium text-slate-700">
             {countdown}s
           </span>
         </span>
