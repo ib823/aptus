@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { prisma } from "@/lib/db/prisma";
 import { AssessmentTabNav } from "@/components/layout/AssessmentTabNav";
+import { MobileBottomTabBar } from "@/components/layout/MobileBottomTabBar";
 import { StatusTransitionBar } from "@/components/assessment/StatusTransitionBar";
 import { PresenceAvatars } from "@/components/collaboration/PresenceAvatars";
 import { PresenceHeartbeat } from "@/components/collaboration/PresenceHeartbeat";
@@ -58,14 +59,19 @@ export default async function AssessmentLayout({
         />
         <PresenceAvatars assessmentId={assessment.id} />
       </div>
-      <AssessmentTabNav
-        assessmentId={assessment.id}
-        assessmentStatus={assessment.status}
-      />
+      <div className="hidden md:block">
+        <AssessmentTabNav
+          assessmentId={assessment.id}
+          assessmentStatus={assessment.status}
+        />
+      </div>
       <PresenceHeartbeat assessmentId={assessment.id} />
-      <main className="flex-1 min-h-0 overflow-auto" data-assessment-main>
+      <main className="flex-1 min-h-0 overflow-auto pb-16 md:pb-0" data-assessment-main>
         {children}
       </main>
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40">
+        <MobileBottomTabBar assessmentId={assessment.id} />
+      </div>
     </div>
   );
 }
