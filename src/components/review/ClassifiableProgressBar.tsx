@@ -13,7 +13,7 @@ export function ClassifiableProgressBar({
   totalSteps,
   percentage,
 }: ClassifiableProgressBarProps) {
-  const label = `${totalClassified} of ${totalClassifiable} classifiable ${totalClassifiable === 1 ? "step" : "steps"} reviewed`;
+  const label = `${totalClassified} of ${totalClassifiable} ${totalClassifiable === 1 ? "step" : "steps"} reviewed`;
   const remainingSteps = totalClassifiable - totalClassified;
   const estimatedMinutes = Math.ceil(remainingSteps * 1);
   const hours = Math.floor(estimatedMinutes / 60);

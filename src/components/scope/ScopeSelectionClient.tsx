@@ -570,8 +570,8 @@ export function ScopeSelectionClient({
       {stats.selectedCount > 0 && (
         <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatCard label="Scope Items" value={stats.selectedCount} />
+          <StatCard label="Steps Needing Your Input" value={stats.totalClassifiable} />
           <StatCard label="Total Steps" value={stats.totalStepsInScope} />
-          <StatCard label="Classifiable" value={stats.totalClassifiable} />
           <StatCard label="Est. Effort" value={stats.totalEffortDays > 0 ? `~${stats.totalEffortDays}d` : "\u2014"} />
         </div>
       )}

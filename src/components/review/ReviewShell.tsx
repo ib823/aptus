@@ -452,7 +452,7 @@ function ReviewShellInner({
                 {currentScopeItem.nameClean}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {currentScopeItem.reviewedSteps} / {currentScopeItem.totalSteps} steps ({currentScopeItem.totalSteps > 0 ? Math.round((currentScopeItem.reviewedSteps / currentScopeItem.totalSteps) * 100) : 0}%)
+                {currentScopeItem.reviewedSteps} of {currentScopeItem.totalSteps} steps reviewed ({currentScopeItem.totalSteps > 0 ? Math.round((currentScopeItem.reviewedSteps / currentScopeItem.totalSteps) * 100) : 0}%)
               </p>
               <div className="h-1.5 rounded-full bg-slate-100 mt-1.5">
                 <div

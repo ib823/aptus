@@ -236,7 +236,7 @@ export const ScopeItemCard = memo(function ScopeItemCard({ item, assessmentId, o
             </p>
           )}
           <div className="flex items-center gap-4 mt-0.5 text-xs text-muted-foreground">
-            <span>{item.totalSteps} steps{item.classifiableSteps != null ? ` (${item.classifiableSteps} classifiable)` : ""}</span>
+            <span>{item.classifiableSteps != null ? `${item.classifiableSteps} steps to review` : `${item.totalSteps} steps`}</span>
             <span>{item.subArea}</span>
             <span>{item.configCount} configs</span>
             {item.effortDays != null && item.effortDays > 0 && (
