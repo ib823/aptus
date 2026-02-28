@@ -81,7 +81,7 @@ export const ONBOARDING_FLOWS: Record<UserRole, OnboardingFlow> = {
   consultant: {
     role: "consultant",
     title: "Consultant Onboarding",
-    description: "Learn how to guide clients through fit-gap analysis.",
+    description: "Learn how to guide clients through business process assessments.",
     steps: [
       { index: 0, title: "Welcome", description: "Welcome to aptus as a Consultant.", isRequired: true, action: { type: "none" } },
       { index: 1, title: "Complete Profile", description: "Fill in your profile and expertise areas.", isRequired: true, action: { type: "complete_profile" } },
