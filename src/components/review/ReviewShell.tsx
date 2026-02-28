@@ -628,7 +628,7 @@ function ReviewShellInner({
                       : currentStep.fitStatus === "CONFIGURE" ? "bg-blue-50 text-blue-700 border border-blue-200"
                       : currentStep.fitStatus === "GAP" ? "bg-amber-50 text-amber-700 border border-amber-200"
                       : currentStep.fitStatus === "NA" ? "bg-slate-50 text-slate-500 border border-slate-200"
-                      : "bg-gray-50 text-gray-500 border border-gray-200"
+                      : "bg-slate-50 text-slate-500 border border-slate-200"
                     }`}>
                       {currentStep.fitStatus === "PENDING" ? "Unreviewed" : currentStep.fitStatus}
                     </span>

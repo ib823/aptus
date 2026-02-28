@@ -206,7 +206,7 @@ export function ConfigMatrixClient({
       <div className="grid grid-cols-4 gap-4 mb-6">
         <SummaryCard label="Mandatory" count={summary.mandatory} color="bg-red-500" description="Always included" />
         <SummaryCard label="Recommended" count={summary.recommended} color="bg-amber-500" description="Included by default" />
-        <SummaryCard label="Optional" count={summary.optional} color="bg-gray-400" description="Excluded by default" />
+        <SummaryCard label="Optional" count={summary.optional} color="bg-slate-400" description="Excluded by default" />
         <SummaryCard label="Self-Service" count={summary.selfService} color="bg-green-500" description="No SAP support needed" />
       </div>
 
@@ -370,7 +370,7 @@ function ConfigRow({ config, expanded, onToggle, onToggleInclusion, saving, read
           <p className="text-xs text-muted-foreground line-clamp-1">{config.activityDescription}</p>
         </td>
         <td className="px-4 py-3">
-          <Badge className={CATEGORY_STYLES[config.category] ?? "bg-gray-100 text-gray-600"}>
+          <Badge className={CATEGORY_STYLES[config.category] ?? "bg-slate-50 text-slate-600"}>
             {config.category}
           </Badge>
         </td>

@@ -50,7 +50,7 @@ export function OcmSummary({ summary }: OcmSummaryProps) {
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-3">
-            <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden">
+            <div className="flex-1 h-3 bg-slate-200 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${readinessTrackColor}`}
                 style={{ width: `${readinessPercent}%` }}

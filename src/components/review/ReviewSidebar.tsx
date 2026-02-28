@@ -138,7 +138,7 @@ export function ReviewSidebar({
           <StatRow label="CONFIGURE" count={overallProgress.configure} color="bg-blue-500" />
           <StatRow label="GAP" count={overallProgress.gap} color="bg-amber-500" />
           <StatRow label="N/A" count={overallProgress.na} color="bg-slate-300" />
-          <StatRow label="PENDING" count={overallProgress.pending} color="bg-gray-200" />
+          <StatRow label="PENDING" count={overallProgress.pending} color="bg-slate-200" />
         </div>
       </div>
     </div>

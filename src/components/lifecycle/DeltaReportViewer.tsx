@@ -13,9 +13,9 @@ interface DeltaReportViewerProps {
 
 function ChangeTypeBadge({ changeType }: { changeType: string }) {
   const styles: Record<string, string> = {
-    added: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300",
-    removed: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
-    modified: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
+    added: "bg-green-50 text-green-700",
+    removed: "bg-red-50 text-red-700",
+    modified: "bg-blue-50 text-blue-700",
   };
   return (
     <Badge variant="outline" className={cn("border-transparent text-xs", styles[changeType] ?? "")}>

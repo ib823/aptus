@@ -27,10 +27,10 @@ interface WorkshopListClientProps {
 }
 
 const STATUS_BADGES: Record<string, { label: string; className: string }> = {
-  scheduled: { label: "Scheduled", className: "bg-blue-100 text-blue-700" },
-  in_progress: { label: "In Progress", className: "bg-green-100 text-green-700" },
-  completed: { label: "Completed", className: "bg-gray-100 text-gray-600" },
-  cancelled: { label: "Cancelled", className: "bg-red-100 text-red-600" },
+  scheduled: { label: "Scheduled", className: "bg-blue-50 text-blue-700" },
+  in_progress: { label: "In Progress", className: "bg-green-50 text-green-700" },
+  completed: { label: "Completed", className: "bg-slate-50 text-slate-600" },
+  cancelled: { label: "Cancelled", className: "bg-red-50 text-red-600" },
 };
 
 function formatDate(iso: string): string {
@@ -79,7 +79,7 @@ export function WorkshopListClient({ assessmentId, sessions }: WorkshopListClien
             </thead>
             <tbody>
               {sessions.map((s) => {
-                const badge = STATUS_BADGES[s.status] ?? { label: s.status, className: "bg-gray-100 text-gray-600" };
+                const badge = STATUS_BADGES[s.status] ?? { label: s.status, className: "bg-slate-50 text-slate-600" };
                 return (
                   <tr key={s.id} className="border-t hover:bg-muted/20">
                     <td className="px-4 py-3">

@@ -56,7 +56,7 @@ const SEVERITY_CONFIG: Record<string, { color: string; bg: string; border: strin
   critical: { color: "text-red-700", bg: "bg-red-50", border: "border-red-200" },
   high: { color: "text-orange-700", bg: "bg-orange-50", border: "border-orange-200" },
   medium: { color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200" },
-  low: { color: "text-gray-600", bg: "bg-gray-50", border: "border-gray-200" },
+  low: { color: "text-slate-600", bg: "bg-slate-50", border: "border-slate-200" },
 };
 
 export function RemainingItemsClient({

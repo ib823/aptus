@@ -25,7 +25,7 @@ const BORDER_COLORS: Record<SubscriptionStatus, string> = {
   TRIALING: "border-blue-300 bg-blue-50",
   ACTIVE: "border-green-300 bg-green-50",
   PAST_DUE: "border-amber-300 bg-amber-50",
-  CANCELED: "border-gray-300 bg-gray-50",
+  CANCELED: "border-slate-300 bg-slate-50",
   TRIAL_EXPIRED: "border-red-300 bg-red-50",
 };
 
@@ -127,10 +127,10 @@ export function SubscriptionStatusBanner({
             </>
           ) : (
             <>
-              <XCircle className="h-5 w-5 text-gray-500 mt-0.5 flex-shrink-0" />
+              <XCircle className="h-5 w-5 text-slate-500 mt-0.5 flex-shrink-0" />
               <div className="flex-1">
-                <p className="font-medium text-gray-700">Subscription Canceled</p>
-                <p className="text-sm text-gray-600 mt-0.5">
+                <p className="font-medium text-slate-700">Subscription Canceled</p>
+                <p className="text-sm text-slate-600 mt-0.5">
                   Your subscription has been canceled. Contact support to reactivate.
                 </p>
               </div>

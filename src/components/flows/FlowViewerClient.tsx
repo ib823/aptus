@@ -239,11 +239,11 @@ export function FlowViewerClient({ assessmentId, diagrams: initialDiagrams }: Fl
                   <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
                     GAP: {selectedDiagram.gapCount}
                   </Badge>
-                  <Badge variant="outline" className="bg-gray-50 text-gray-600 border-gray-200">
+                  <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200">
                     N/A: {selectedDiagram.naCount}
                   </Badge>
                   {selectedDiagram.pendingCount > 0 && (
-                    <Badge variant="outline" className="bg-gray-50 text-gray-500 border-gray-200">
+                    <Badge variant="outline" className="bg-slate-50 text-slate-500 border-slate-200">
                       PENDING: {selectedDiagram.pendingCount}
                     </Badge>
                   )}

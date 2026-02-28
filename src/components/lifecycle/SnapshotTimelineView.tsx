@@ -35,7 +35,7 @@ export function SnapshotTimelineView({ snapshots, onSelect, className }: Snapsho
             className={cn(
               "flex flex-col items-center gap-1 rounded-lg border px-3 py-2 transition-colors",
               snapshot.isActive
-                ? "border-blue-500 bg-blue-50 dark:bg-blue-950"
+                ? "border-blue-500 bg-blue-50"
                 : "border-border hover:bg-muted",
             )}
           >
