@@ -9,7 +9,7 @@ import { z } from "zod";
 
 const querySchema = z.object({
   cursor: z.string().optional(),
-  limit: z.coerce.number().min(1).max(200).default(50),
+  limit: z.coerce.number().min(1).max(2000).default(50),
   hideRepetitive: z.enum(["true", "false"]).optional(),
   activityId: z.string().optional(),
 });

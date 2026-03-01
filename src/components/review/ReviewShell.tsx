@@ -86,6 +86,14 @@ interface ReviewShellProps {
 
 type ReviewMode = "steps" | "questions";
 
+const STATUS_DISPLAY_LABELS: Record<string, string> = {
+  FIT: "Matches",
+  CONFIGURE: "Needs Adjustment",
+  GAP: "Doesn\u2019t Match",
+  NA: "Not Relevant",
+  PENDING: "Unreviewed",
+};
+
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
@@ -128,7 +136,20 @@ function ReviewShellInner({
   const [bulkAllLoading, setBulkAllLoading] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showAllSteps, setShowAllSteps] = useState(false);
-  const [reviewMode, setReviewMode] = useState<ReviewMode>("questions");
+  const [reviewMode, setReviewMode] = useState<ReviewMode>(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("mode") === "steps") return "steps";
+    }
+    return "questions";
+  });
+
+  // Sync review mode to URL
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("mode", reviewMode);
+    window.history.replaceState({}, "", url.toString());
+  }, [reviewMode]);
 
   const isReadOnly = assessmentStatus === "signed_off" || assessmentStatus === "reviewed";
   const isItLead = userRole === "it_lead";
@@ -233,6 +254,19 @@ function ReviewShellInner({
   }, [steps, showAllSteps]);
 
   const hiddenStepCount = steps.length - visibleStepIndices.length;
+
+  // Auto-skip to first classifiable step when entering an activity
+  const prevActivityRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (currentActivityId && currentActivityId !== prevActivityRef.current && visibleStepIndices.length > 0 && currentStepIndex === 0) {
+      const firstClassifiable = visibleStepIndices[0];
+      if (firstClassifiable != null && firstClassifiable > 0) {
+        setCurrentStepIndex(firstClassifiable);
+      }
+    }
+    prevActivityRef.current = currentActivityId;
+  }, [currentActivityId, visibleStepIndices, currentStepIndex, setCurrentStepIndex]);
+
   const visiblePosition = visibleStepIndices.indexOf(currentStepIndex);
 
   // Get current step
@@ -460,9 +494,10 @@ function ReviewShellInner({
     [reviewMode, setView, selectActivity],
   );
 
-  // Reset step implications when step changes
+  // Auto-expand step implications when arriving at a classified step
   useEffect(() => {
-    setStepImplicationsExpanded(false);
+    const step = stepsRef.current[currentStepIndex];
+    setStepImplicationsExpanded(!!step && step.fitStatus !== "PENDING");
   }, [currentStepIndex]);
 
   // Reset when scope item changes
@@ -497,10 +532,10 @@ function ReviewShellInner({
     queryFn: async () => {
       const [catalogRes, responsesRes] = await Promise.all([
         fetchJson<{ data: StepData[] }>(
-          `/api/catalog/scope-items/${currentScopeItemId}/steps?limit=500`,
+          `/api/catalog/scope-items/${currentScopeItemId}/steps?limit=1500`,
         ),
         fetchJson<{ data: Array<{ processStepId: string; fitStatus: string; clientNote: string | null; currentProcess: string | null; confidence?: string | null }> }>(
-          `/api/assessments/${assessmentId}/steps?scopeItemId=${currentScopeItemId}&limit=500`,
+          `/api/assessments/${assessmentId}/steps?scopeItemId=${currentScopeItemId}&limit=1500`,
         ),
       ]);
       // Merge catalog with responses
@@ -519,7 +554,7 @@ function ReviewShellInner({
         };
       });
     },
-    enabled: !!currentScopeItemId && reviewMode === "questions" && view !== "map",
+    enabled: !!currentScopeItemId && reviewMode === "questions",
     staleTime: 60 * 1000,
   });
 
@@ -769,86 +804,145 @@ function ReviewShellInner({
 
           {/* Review mode toggle — shown when in step/activity view */}
           {view !== "map" && (
-            <div className="flex items-center justify-between mb-4">
-              <div className="inline-flex rounded-lg border bg-muted p-0.5">
-                <button
-                  onClick={() => {
-                    setReviewMode("questions");
-                    if (view === "step") setView("activity");
-                  }}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                    reviewMode === "questions"
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Business Questions
-                </button>
-                <button
-                  onClick={() => {
-                    setReviewMode("steps");
-                    if (view === "activity") setView("step");
-                  }}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                    reviewMode === "steps"
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Detailed Steps
-                </button>
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <div className="inline-flex rounded-lg border bg-muted p-0.5">
+                  <button
+                    onClick={() => {
+                      setReviewMode("questions");
+                      if (view === "step") setView("activity");
+                    }}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                      reviewMode === "questions"
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Business Questions
+                  </button>
+                  <button
+                    onClick={() => {
+                      setReviewMode("steps");
+                      if (view === "activity") setView("step");
+                    }}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                      reviewMode === "steps"
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Detailed Steps
+                  </button>
+                </div>
+                {reviewMode === "questions" && (
+                  <span className="text-xs text-muted-foreground">
+                    {allActivitiesFlat.length} activit{allActivitiesFlat.length !== 1 ? "ies" : "y"}
+                  </span>
+                )}
               </div>
-              {reviewMode === "questions" && (
-                <span className="text-xs text-muted-foreground">
-                  {allActivitiesFlat.length} activit{allActivitiesFlat.length !== 1 ? "ies" : "y"}
-                </span>
-              )}
-            </div>
+              <p className="text-xs text-muted-foreground/60 -mt-2 mb-2">
+                {reviewMode === "questions"
+                  ? "Answer one question per business process. Faster for business stakeholders."
+                  : "Review each SAP step individually. More control for consultants."}
+              </p>
+            </>
           )}
 
           {/* Questions mode — activity-level review cards */}
-          {view !== "map" && reviewMode === "questions" && tree && (
-            <div className="space-y-4">
-              {(() => {
-                let lastFlowKey = "";
-                return allActivitiesFlat.map(({ activity, processName, flowName }) => {
-                  const actSteps = stepsByActivityId.get(activity.id) ?? [];
-                  const actMeta = currentScopeItemId
-                    ? getActivityMetadata(currentScopeItemId, activity.title)
-                    : null;
-                  const flowKey = `${processName}::${flowName}`;
-                  const showFlowHeading = flowKey !== lastFlowKey;
-                  lastFlowKey = flowKey;
+          {view !== "map" && reviewMode === "questions" && tree && (() => {
+            const PRELIM_PATTERNS = [
+              /additional information/i,
+              /preliminary steps/i,
+              /test procedures/i,
+              /^BRF\+/i,
+              /eDocument.*prelim/i,
+              /appendix/i,
+            ];
+            const isPreliminary = (title: string) =>
+              PRELIM_PATTERNS.some((p) => p.test(title));
 
-                  return (
-                    <div key={activity.id}>
-                      {showFlowHeading && (
+            const businessActivities = allActivitiesFlat.filter(
+              ({ activity }) => !isPreliminary(activity.title),
+            );
+            const technicalActivities = allActivitiesFlat.filter(
+              ({ activity }) => isPreliminary(activity.title),
+            );
+
+            const renderActivityCards = (
+              items: typeof allActivitiesFlat,
+              trackFlowKey: { current: string },
+            ) =>
+              items.map(({ activity, processName, flowName }) => {
+                const actSteps = stepsByActivityId.get(activity.id) ?? [];
+                const actMeta = currentScopeItemId
+                  ? getActivityMetadata(currentScopeItemId, activity.title)
+                  : null;
+                const flowKey = `${processName}::${flowName}`;
+                const showFlowHeading = flowKey !== trackFlowKey.current;
+                trackFlowKey.current = flowKey;
+
+                return (
+                  <div key={activity.id}>
+                    {showFlowHeading && (() => {
+                      const displayProcess = processName.startsWith("__") ? null : processName;
+                      const displayFlow = flowName.startsWith("__") ? null : flowName;
+                      const label = [displayProcess, displayFlow].filter(Boolean).join(" \u203A ");
+                      if (!label) return null;
+                      return (
                         <div className="mb-2 mt-4 first:mt-0">
                           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                            {processName} &rsaquo; {flowName}
+                            {label}
                           </p>
                         </div>
-                      )}
+                      );
+                    })()}
 
-                      <BusinessQuestionCard
-                        activity={activity}
-                        steps={actSteps}
-                        configs={configs}
-                        scopeItemId={currentScopeItemId ?? ""}
-                        assessmentId={assessmentId}
-                        currentUserId=""
-                        activityMetadata={actMeta}
-                        scopeItemMetadata={scopeItemMeta}
-                        implications={scopeItemMeta?.defaultImplications ?? null}
-                        onActivityClassify={handleActivityClassify}
-                        isReadOnly={isReadOnly}
-                      />
+                    <BusinessQuestionCard
+                      activity={activity}
+                      steps={actSteps}
+                      configs={configs}
+                      scopeItemId={currentScopeItemId ?? ""}
+                      assessmentId={assessmentId}
+                      currentUserId=""
+                      activityMetadata={actMeta}
+                      scopeItemMetadata={scopeItemMeta}
+                      implications={scopeItemMeta?.defaultImplications ?? null}
+                      onActivityClassify={handleActivityClassify}
+                      isReadOnly={isReadOnly}
+                    />
+                  </div>
+                );
+              });
+
+            const flowKeyTracker = { current: "" };
+
+            return (
+              <div className="space-y-4">
+                {businessActivities.length > 0 && (
+                  <>
+                    <h3 className="text-sm font-medium text-muted-foreground">
+                      Business Process Questions ({businessActivities.length})
+                    </h3>
+                    {renderActivityCards(businessActivities, flowKeyTracker)}
+                  </>
+                )}
+
+                {technicalActivities.length > 0 && (
+                  <details className="mt-6">
+                    <summary className="text-sm font-medium text-muted-foreground cursor-pointer hover:text-foreground">
+                      Technical Setup &amp; Configuration ({technicalActivities.length} items)
+                      <span className="text-xs text-muted-foreground/60 ml-2">
+                        — Typically handled by your implementation team
+                      </span>
+                    </summary>
+                    <div className="mt-3 space-y-4 opacity-75">
+                      {renderActivityCards(technicalActivities, { current: "" })}
                     </div>
-                  );
-                });
-              })()}
-            </div>
-          )}
+                  </details>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Step review view */}
           {view === "step" && reviewMode === "steps" && currentActivityId && (
@@ -927,7 +1021,7 @@ function ReviewShellInner({
                         : currentStep.fitStatus === "NA" ? "bg-slate-50 text-slate-500 border border-slate-200"
                         : "bg-slate-50 text-slate-500 border border-slate-200"
                       }`}>
-                        {currentStep.fitStatus === "PENDING" ? "Unreviewed" : currentStep.fitStatus}
+                        {STATUS_DISPLAY_LABELS[currentStep.fitStatus] ?? currentStep.fitStatus}
                       </span>
                     </div>
                     <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
@@ -954,13 +1048,17 @@ function ReviewShellInner({
                         isItLead={isItLead}
                         assessmentId={assessmentId}
                       />
-                      {/* TASK 6: Step-level implications panel (collapsed by default) */}
+                      {/* Step-level implications panel */}
                       {currentStep.fitStatus !== "PENDING" && currentScopeItemId && (
                         <div className="mt-3">
                           <ImplicationsPanel
                             fitStatus={currentStep.fitStatus}
                             scopeItemId={currentScopeItemId}
                             activityTitle={currentStep.activityTitle ?? ""}
+                            activityMetadata={currentScopeItemId ? getActivityMetadata(currentScopeItemId, currentStep.activityTitle ?? "") : null}
+                            scopeItemMetadata={scopeItemMeta}
+                            implications={scopeItemMeta?.defaultImplications ?? null}
+                            configs={configs}
                             isExpanded={stepImplicationsExpanded}
                             onToggle={() => setStepImplicationsExpanded((v) => !v)}
                           />
