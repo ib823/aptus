@@ -67,7 +67,7 @@ export const PROCESS_LANDSCAPES: FunctionalAreaLandscape[] = [
             position: "end",
           },
           {
-            scopeItemId: "2NV",
+            scopeItemId: "1K2",
             businessName: "Revenue Recognition",
             roleInChain: "IFRS 15 contract accounting",
             position: "branch",
@@ -156,8 +156,8 @@ export const PROCESS_LANDSCAPES: FunctionalAreaLandscape[] = [
         type: "supporting",
         steps: [
           {
-            scopeItemId: "J77",
-            businessName: "Fixed Asset Management",
+            scopeItemId: "J62",
+            businessName: "Asset Accounting",
             roleInChain: "Track & depreciate assets",
             position: "start",
           },
@@ -187,8 +187,8 @@ export const PROCESS_LANDSCAPES: FunctionalAreaLandscape[] = [
             position: "start",
           },
           {
-            scopeItemId: "J14",
-            businessName: "End-to-End Procurement",
+            scopeItemId: "J45",
+            businessName: "Direct Materials Procurement",
             roleInChain: "Full procurement cycle",
             position: "middle",
           },
@@ -313,8 +313,8 @@ export const PROCESS_LANDSCAPES: FunctionalAreaLandscape[] = [
         type: "core",
         steps: [
           {
-            scopeItemId: "J45",
-            businessName: "Warehouse Operations",
+            scopeItemId: "BMC",
+            businessName: "Core Inventory Management",
             roleInChain: "Full warehouse flow",
             position: "start",
           },
@@ -329,10 +329,16 @@ export const PROCESS_LANDSCAPES: FunctionalAreaLandscape[] = [
         type: "supporting",
         steps: [
           {
-            scopeItemId: "1YB",
-            businessName: "Basic WM",
-            roleInChain: "Simplified warehouse ops",
+            scopeItemId: "3BR",
+            businessName: "Warehouse Inbound Processing",
+            roleInChain: "Receive & put away goods",
             position: "start",
+          },
+          {
+            scopeItemId: "3BS",
+            businessName: "Warehouse Outbound Processing",
+            roleInChain: "Pick, pack & ship",
+            position: "end",
           },
         ],
       },
