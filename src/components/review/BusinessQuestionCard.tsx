@@ -61,6 +61,15 @@ interface BusinessQuestionCardProps {
 
 const NON_CLASSIFIABLE_TYPES = ["LOGON", "LOGOFF", "ACCESS_APP", "INFORMATION", "NAVIGATION"];
 
+const STATUS_DISPLAY_LABELS: Record<string, string> = {
+  FIT: "Matches",
+  CONFIGURE: "Needs Adjustment",
+  GAP: "Doesn\u2019t Match",
+  NA: "Not Relevant",
+  PENDING: "Unreviewed",
+  MIXED: "Mixed",
+};
+
 // --- Classification button config ---
 
 const CLASSIFICATION_OPTIONS = [
@@ -231,7 +240,7 @@ export function BusinessQuestionCard({
                   : "bg-purple-50 text-purple-700 border-purple-200"
                 }`}
               >
-                {aggregateStatus === "MIXED" ? "Mixed" : aggregateStatus}
+                {STATUS_DISPLAY_LABELS[aggregateStatus] ?? aggregateStatus}
               </Badge>
             )}
             {/* Save indicator */}
@@ -437,7 +446,7 @@ export function BusinessQuestionCard({
                           : "bg-slate-50 text-slate-500"
                         }`}
                       >
-                        {step.fitStatus}
+                        {STATUS_DISPLAY_LABELS[step.fitStatus] ?? step.fitStatus}
                       </Badge>
                     )}
                 </div>

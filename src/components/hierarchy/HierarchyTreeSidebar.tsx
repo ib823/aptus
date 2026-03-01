@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import { ActivityProgressBadge } from "./ActivityProgressBadge";
+import { findChainsForScopeItem } from "@/constants/process-chains";
 import type { HierarchyTree, ActivityProgressMap, ProcessNode, FlowNode } from "@/types/hierarchy";
 
 interface HierarchyTreeSidebarProps {
@@ -182,8 +183,31 @@ export function HierarchyTreeSidebar({
     return map;
   }, [tree.processes, progressMap]);
 
+  const chainMemberships = useMemo(
+    () => findChainsForScopeItem(tree.scopeItemId),
+    [tree.scopeItemId],
+  );
+
   return (
     <div ref={treeRef} role="tree" aria-label="Process hierarchy" className="py-2 text-xs">
+      {chainMemberships.length > 0 && (
+        <div className="mx-3 mb-3">
+          {chainMemberships.map(({ area, chain }) => (
+            <div
+              key={chain.key}
+              className="px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs mb-1.5 last:mb-0"
+            >
+              <div className="flex items-center gap-1.5 text-blue-700 font-medium">
+                <span className="shrink-0">{"\uD83D\uDD17"}</span>
+                <span>Part of: {chain.name} ({chain.abbreviation})</span>
+              </div>
+              <div className="text-blue-600/70 text-[10px] mt-0.5 truncate" title={`${area} \u2192 ${chain.steps.map((s) => s.businessName).join(" \u2192 ")}`}>
+                {area} &rarr; {chain.steps.map((s) => s.businessName).join(" \u2192 ")}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {tree.processes.map((process) => {
         const displayName = process.name === "__main_process__" ? "Main Process" : process.name;
         const processExpanded = expandedProcesses.has(process.id);

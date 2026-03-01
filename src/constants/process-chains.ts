@@ -704,3 +704,18 @@ export function getAreaScopeItemIds(landscape: FunctionalAreaLandscape): string[
   }
   return Array.from(ids);
 }
+
+/** Find which process chain(s) a scope item belongs to (by its ID appearing as a chain step). */
+export function findChainsForScopeItem(
+  scopeItemId: string,
+): { area: string; chain: ProcessChain }[] {
+  const results: { area: string; chain: ProcessChain }[] = [];
+  for (const landscape of PROCESS_LANDSCAPES) {
+    for (const chain of landscape.chains) {
+      if (chain.steps.some((step) => step.scopeItemId === scopeItemId)) {
+        results.push({ area: landscape.area, chain });
+      }
+    }
+  }
+  return results;
+}

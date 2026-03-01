@@ -10,8 +10,9 @@ import { z } from "zod";
 
 const bulkSchema = z.object({
   scopeItemId: z.string(),
-  fitStatus: z.enum(["FIT", "NA"]),
+  fitStatus: z.enum(["FIT", "CONFIGURE", "GAP", "NA"]),
   stepIds: z.array(z.string()).min(1).max(5000).optional(),
+  clientNote: z.string().optional(),
   excludeStepTypes: z.array(
     z.enum([
       "LOGON", "ACCESS_APP", "INFORMATION", "DATA_ENTRY",
@@ -126,6 +127,7 @@ export async function POST(
           fitStatus: parsed.data.fitStatus,
           respondent: user.email,
           respondedAt: new Date(),
+          ...(parsed.data.clientNote != null ? { clientNote: parsed.data.clientNote } : {}),
         },
         create: {
           assessmentId,
@@ -133,6 +135,7 @@ export async function POST(
           fitStatus: parsed.data.fitStatus,
           respondent: user.email,
           respondedAt: new Date(),
+          ...(parsed.data.clientNote != null ? { clientNote: parsed.data.clientNote } : {}),
         },
       }),
     );

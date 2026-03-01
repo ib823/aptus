@@ -9,7 +9,7 @@ import { z } from "zod";
 
 const querySchema = z.object({
   cursor: z.string().optional(),
-  limit: z.coerce.number().min(1).max(200).default(50),
+  limit: z.coerce.number().min(1).max(2000).default(50),
   scopeItemId: z.string().optional(),
   fitStatus: z.enum(["FIT", "CONFIGURE", "GAP", "NA", "PENDING"]).optional(),
   stepType: z.enum([
