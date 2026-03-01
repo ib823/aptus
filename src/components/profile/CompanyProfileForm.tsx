@@ -5,7 +5,9 @@ import { ChevronDown, ChevronRight, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import Link from "next/link";
 import { ProfileCompletenessBar } from "@/components/profile/ProfileCompletenessBar";
+import { PROFILE_COMPLETENESS_GATE } from "@/types/assessment";
 import {
   CURRENCY_CODES,
   LANGUAGE_CODES,
@@ -543,6 +545,43 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
           </div>
         </div>
       </CollapsibleSection>
+
+      {/* Sticky bottom bar — reactive with profile score */}
+      <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-10">
+        <div className="max-w-5xl mx-auto flex items-center justify-between px-4 sm:px-6 py-3">
+          <Link
+            href="/assessments"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            &larr; Back to Assessments
+          </Link>
+
+          <div className="text-center">
+            <p className="text-sm font-medium text-foreground">{profile.completenessScore}% complete</p>
+            <p className="text-xs text-muted-foreground">
+              {profile.completenessScore >= PROFILE_COMPLETENESS_GATE ? "Ready for scope selection" : `${PROFILE_COMPLETENESS_GATE}% required to continue`}
+            </p>
+          </div>
+
+          {profile.completenessScore >= PROFILE_COMPLETENESS_GATE ? (
+            <Link
+              href={`/assessment/${assessmentId}/scope`}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors"
+            >
+              Continue to Scope Selection &rarr;
+            </Link>
+          ) : (
+            <span
+              role="link"
+              aria-disabled="true"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-muted-foreground bg-muted rounded-md cursor-not-allowed"
+              title={`${profile.completenessScore}% complete — reach ${PROFILE_COMPLETENESS_GATE}% to continue`}
+            >
+              Continue to Scope Selection &rarr;
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
