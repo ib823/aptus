@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import { ActivityProgressBadge } from "./ActivityProgressBadge";
-import type { HierarchyTree, ActivityProgressMap } from "@/types/hierarchy";
+import type { HierarchyTree, ActivityProgressMap, ProcessNode, FlowNode } from "@/types/hierarchy";
 
 interface HierarchyTreeSidebarProps {
   tree: HierarchyTree;
@@ -22,6 +22,45 @@ function getActivityStatusColor(
   if (reviewed === total) return "text-green-500";
   if (reviewed > 0) return "text-blue-500";
   return "text-slate-300";
+}
+
+/** Aggregate progress for a flow or process level */
+interface AggregateProgress {
+  reviewed: number;
+  total: number;
+  gaps: number;
+}
+
+function computeFlowProgress(
+  flow: FlowNode,
+  progressMap: ActivityProgressMap | null,
+): AggregateProgress {
+  let reviewed = 0;
+  let total = 0;
+  let gaps = 0;
+  for (const a of flow.activities) {
+    const p = progressMap?.[a.id];
+    reviewed += p?.reviewed ?? a.reviewedCount;
+    total += p?.total ?? a.stepCount;
+    gaps += p?.gap ?? a.gapCount;
+  }
+  return { reviewed, total, gaps };
+}
+
+function computeProcessProgress(
+  process: ProcessNode,
+  progressMap: ActivityProgressMap | null,
+): AggregateProgress {
+  let reviewed = 0;
+  let total = 0;
+  let gaps = 0;
+  for (const f of process.flows) {
+    const fp = computeFlowProgress(f, progressMap);
+    reviewed += fp.reviewed;
+    total += fp.total;
+    gaps += fp.gaps;
+  }
+  return { reviewed, total, gaps };
 }
 
 export function HierarchyTreeSidebar({
@@ -124,11 +163,34 @@ export function HierarchyTreeSidebar({
     return () => el.removeEventListener("keydown", handleKeyDown);
   }, [expandedProcesses, expandedFlows, toggleProcess, toggleFlow]);
 
+  // Precompute aggregate progress for processes and flows
+  const processProgressMap = useMemo(() => {
+    const map = new Map<string, AggregateProgress>();
+    for (const p of tree.processes) {
+      map.set(p.id, computeProcessProgress(p, progressMap));
+    }
+    return map;
+  }, [tree.processes, progressMap]);
+
+  const flowProgressMap = useMemo(() => {
+    const map = new Map<string, AggregateProgress>();
+    for (const p of tree.processes) {
+      for (const f of p.flows) {
+        map.set(f.id, computeFlowProgress(f, progressMap));
+      }
+    }
+    return map;
+  }, [tree.processes, progressMap]);
+
   return (
     <div ref={treeRef} role="tree" aria-label="Process hierarchy" className="py-2 text-xs">
       {tree.processes.map((process) => {
         const displayName = process.name === "__main_process__" ? "Main Process" : process.name;
         const processExpanded = expandedProcesses.has(process.id);
+        const procProg = processProgressMap.get(process.id);
+        const procPct = procProg && procProg.total > 0
+          ? Math.round((procProg.reviewed / procProg.total) * 100)
+          : 0;
 
         return (
           <div key={process.id}>
@@ -148,14 +210,28 @@ export function HierarchyTreeSidebar({
               ) : (
                 <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
               )}
-              <span className="font-medium text-foreground truncate" title={displayName}>
+              <span className="font-medium text-foreground truncate flex-1" title={displayName}>
                 {displayName}
               </span>
+              {procProg && procProg.total > 0 && (
+                <span className={`text-[10px] font-medium shrink-0 ${
+                  procPct === 100 ? "text-green-600"
+                  : procProg.gaps > 0 ? "text-amber-600"
+                  : procPct > 0 ? "text-blue-600"
+                  : "text-muted-foreground/50"
+                }`}>
+                  {procPct}%
+                </span>
+              )}
             </div>
 
             {processExpanded && process.flows.map((flow) => {
               const flowDisplayName = flow.name === "__main_flow__" ? "Main Flow" : flow.name;
               const flowExpanded = expandedFlows.has(flow.id);
+              const flowProg = flowProgressMap.get(flow.id);
+              const flowPct = flowProg && flowProg.total > 0
+                ? Math.round((flowProg.reviewed / flowProg.total) * 100)
+                : 0;
 
               return (
                 <div key={flow.id}>
@@ -175,9 +251,19 @@ export function HierarchyTreeSidebar({
                     ) : (
                       <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
                     )}
-                    <span className="text-muted-foreground truncate" title={flowDisplayName}>
+                    <span className="text-muted-foreground truncate flex-1" title={flowDisplayName}>
                       {flowDisplayName}
                     </span>
+                    {flowProg && flowProg.total > 0 && (
+                      <span className={`text-[10px] font-medium shrink-0 ${
+                        flowPct === 100 ? "text-green-600"
+                        : flowProg.gaps > 0 ? "text-amber-600"
+                        : flowPct > 0 ? "text-blue-600"
+                        : "text-muted-foreground/50"
+                      }`}>
+                        {flowPct}%
+                      </span>
+                    )}
                   </div>
 
                   {flowExpanded && flow.activities.map((activity) => {

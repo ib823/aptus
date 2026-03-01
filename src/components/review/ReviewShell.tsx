@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { StepReviewCard } from "@/components/review/StepReviewCard";
 import { ReferenceStepRow } from "@/components/review/ReferenceStepRow";
@@ -18,6 +18,9 @@ import { MobileHierarchySheet } from "@/components/hierarchy/MobileHierarchyShee
 import { groupStepsByActivity, computeClassifiableProgress, type StepInGroup } from "@/lib/assessment/step-grouper";
 import { ScopeFlowOverview } from "@/components/review/ScopeFlowOverview";
 import { ScopeItemSummary } from "@/components/review/ScopeItemSummary";
+import { BusinessQuestionCard } from "@/components/review/BusinessQuestionCard";
+import { ImplicationsPanel } from "@/components/review/ImplicationsPanel";
+import { getScopeItemMetadata, getActivityMetadata } from "@/constants/scope-item-metadata";
 import type { HierarchyTree, ActivityProgressMap, ActivityNode } from "@/types/hierarchy";
 
 interface ScopeItemNav {
@@ -81,6 +84,8 @@ interface ReviewShellProps {
   initialScopeItemId?: string | undefined;
 }
 
+type ReviewMode = "steps" | "questions";
+
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
@@ -101,12 +106,15 @@ function ReviewShellInner({
     currentActivityId,
     currentStepIndex,
     view,
+    setView,
     setTree,
     setProgressMap,
     selectActivity,
     setCurrentStepIndex,
     goToMap,
   } = useHierarchy();
+
+  const queryClient = useQueryClient();
 
   const [scopeItems] = useState(initialScopeItems);
   // REM-33: If initialScopeItemId is provided (from ?scopeItem= query param), use it
@@ -120,6 +128,7 @@ function ReviewShellInner({
   const [bulkAllLoading, setBulkAllLoading] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showAllSteps, setShowAllSteps] = useState(false);
+  const [reviewMode, setReviewMode] = useState<ReviewMode>("questions");
 
   const isReadOnly = assessmentStatus === "signed_off" || assessmentStatus === "reviewed";
   const isItLead = userRole === "it_lead";
@@ -434,6 +443,28 @@ function ReviewShellInner({
     }
   }, [assessmentId, overallProgress.pending]);
 
+  // Mode-aware activity selection: in questions mode scroll to card, in steps mode navigate
+  const handleActivitySelect = useCallback(
+    (activityId: string) => {
+      if (reviewMode === "questions") {
+        // Switch to activity view and scroll to the card
+        setView("activity");
+        setTimeout(() => {
+          const el = document.getElementById(`activity-${activityId}`);
+          el?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 100);
+      } else {
+        selectActivity(activityId);
+      }
+    },
+    [reviewMode, setView, selectActivity],
+  );
+
+  // Reset step implications when step changes
+  useEffect(() => {
+    setStepImplicationsExpanded(false);
+  }, [currentStepIndex]);
+
   // Reset when scope item changes
   useEffect(() => {
     setLocalStepOverrides(new Map());
@@ -453,6 +484,151 @@ function ReviewShellInner({
       stepCategory: (s.stepCategory ?? "BUSINESS_PROCESS") as import("@/types/assessment").StepCategory,
     })),
   [steps]);
+
+  // Scope item metadata for questions mode
+  const scopeItemMeta = useMemo(
+    () => (currentScopeItemId ? getScopeItemMetadata(currentScopeItemId) : null),
+    [currentScopeItemId],
+  );
+
+  // All scope-item steps for questions mode (fetched once across all activities)
+  const { data: allScopeStepsData } = useQuery({
+    queryKey: ["all-scope-steps", currentScopeItemId, assessmentId],
+    queryFn: async () => {
+      const [catalogRes, responsesRes] = await Promise.all([
+        fetchJson<{ data: StepData[] }>(
+          `/api/catalog/scope-items/${currentScopeItemId}/steps?limit=500`,
+        ),
+        fetchJson<{ data: Array<{ processStepId: string; fitStatus: string; clientNote: string | null; currentProcess: string | null; confidence?: string | null }> }>(
+          `/api/assessments/${assessmentId}/steps?scopeItemId=${currentScopeItemId}&limit=500`,
+        ),
+      ]);
+      // Merge catalog with responses
+      const responseMap = new Map<string, { fitStatus: string; clientNote: string | null; currentProcess: string | null; confidence?: string | null }>();
+      for (const r of responsesRes.data) {
+        responseMap.set(r.processStepId, r);
+      }
+      return catalogRes.data.map((step) => {
+        const response = responseMap.get(step.id);
+        return {
+          ...step,
+          fitStatus: response?.fitStatus ?? "PENDING",
+          clientNote: response?.clientNote ?? null,
+          currentProcess: response?.currentProcess ?? null,
+          confidence: (response?.confidence ?? null) as string | null,
+        };
+      });
+    },
+    enabled: !!currentScopeItemId && reviewMode === "questions" && view !== "map",
+    staleTime: 60 * 1000,
+  });
+
+  // All activities from the tree for questions mode
+  const allActivitiesFlat = useMemo(() => {
+    if (!tree) return [];
+    const result: { activity: ActivityNode; processName: string; flowName: string }[] = [];
+    for (const p of tree.processes) {
+      for (const f of p.flows) {
+        for (const a of f.activities) {
+          result.push({ activity: a, processName: p.name, flowName: f.name });
+        }
+      }
+    }
+    return result;
+  }, [tree]);
+
+  // Steps grouped by activity for questions mode, incorporating local overrides
+  const allStepsMerged = useMemo(() => {
+    if (!allScopeStepsData) return [];
+    return allScopeStepsData.map((step) => {
+      const override = localStepOverrides.get(step.id);
+      if (!override) return step;
+      return {
+        ...step,
+        fitStatus: override.fitStatus ?? step.fitStatus,
+        clientNote: override.clientNote ?? step.clientNote,
+        currentProcess: override.currentProcess ?? step.currentProcess,
+        confidence: (override.confidence ?? step.confidence) as string | null,
+      };
+    });
+  }, [allScopeStepsData, localStepOverrides]);
+
+  // Map from activityId → steps for questions mode
+  const stepsByActivityId = useMemo(() => {
+    const map = new Map<string, StepData[]>();
+    for (const step of allStepsMerged) {
+      const actId = step.activityId ?? "unknown";
+      const existing = map.get(actId);
+      if (existing) {
+        existing.push(step);
+      } else {
+        map.set(actId, [step]);
+      }
+    }
+    return map;
+  }, [allStepsMerged]);
+
+  // Handle activity-level classification (bulk cascade to all child steps)
+  const handleActivityClassify = useCallback(
+    async (activityId: string, fitStatus: string, note?: string) => {
+      if (!currentScopeItemId) return;
+
+      // Get all classifiable step IDs for this activity
+      const actSteps = stepsByActivityId.get(activityId) ?? [];
+      const classifiableIds = actSteps
+        .filter(
+          (s) =>
+            s.isClassifiable !== false &&
+            !["LOGON", "LOGOFF", "ACCESS_APP", "INFORMATION", "NAVIGATION"].includes(s.stepType),
+        )
+        .map((s) => s.id);
+
+      if (classifiableIds.length === 0) return;
+
+      // Optimistic update: set local overrides for all classifiable steps
+      setLocalStepOverrides((prev) => {
+        const next = new Map(prev);
+        for (const stepId of classifiableIds) {
+          next.set(stepId, {
+            fitStatus,
+            clientNote: note ?? null,
+          });
+        }
+        return next;
+      });
+
+      // Use the bulk API to persist
+      try {
+        await fetch(`/api/assessments/${assessmentId}/steps/bulk`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            scopeItemId: currentScopeItemId,
+            fitStatus,
+            stepIds: classifiableIds,
+            clientNote: note,
+          }),
+        });
+
+        // Invalidate step responses to pick up server state
+        void queryClient.invalidateQueries({
+          queryKey: ["step-responses", assessmentId, currentScopeItemId],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["all-scope-steps", currentScopeItemId, assessmentId],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["hierarchy-progress", assessmentId, currentScopeItemId],
+        });
+      } catch {
+        // Optimistic update stays; next fetch will reconcile
+      }
+    },
+    [assessmentId, currentScopeItemId, stepsByActivityId, queryClient],
+  );
+
+  // Step-level implications panel state (TASK 6)
+  const [stepImplicationsExpanded, setStepImplicationsExpanded] = useState(false);
 
   const currentScopeItem = scopeItems.find((i) => i.id === currentScopeItemId);
 
@@ -512,7 +688,7 @@ function ReviewShellInner({
               tree={tree}
               currentActivityId={currentActivityId}
               progressMap={progressMap}
-              onActivitySelect={selectActivity}
+              onActivitySelect={handleActivitySelect}
             />
           ) : (
             <div className="p-4 text-xs text-muted-foreground">Loading hierarchy...</div>
@@ -557,7 +733,7 @@ function ReviewShellInner({
                 tree={tree}
                 currentActivityId={currentActivityId}
                 progressMap={progressMap}
-                onActivitySelect={selectActivity}
+                onActivitySelect={handleActivitySelect}
                 open={mobileSheetOpen}
                 onOpenChange={setMobileSheetOpen}
               />
@@ -587,12 +763,95 @@ function ReviewShellInner({
                 tree={tree}
                 classifiableProgress={classifiableProgress}
               />
-              <ProcessMap tree={tree} onActivitySelect={selectActivity} />
+              <ProcessMap tree={tree} onActivitySelect={handleActivitySelect} />
             </>
           )}
 
+          {/* Review mode toggle — shown when in step/activity view */}
+          {view !== "map" && (
+            <div className="flex items-center justify-between mb-4">
+              <div className="inline-flex rounded-lg border bg-muted p-0.5">
+                <button
+                  onClick={() => {
+                    setReviewMode("questions");
+                    if (view === "step") setView("activity");
+                  }}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    reviewMode === "questions"
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Business Questions
+                </button>
+                <button
+                  onClick={() => {
+                    setReviewMode("steps");
+                    if (view === "activity") setView("step");
+                  }}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    reviewMode === "steps"
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Detailed Steps
+                </button>
+              </div>
+              {reviewMode === "questions" && (
+                <span className="text-xs text-muted-foreground">
+                  {allActivitiesFlat.length} activit{allActivitiesFlat.length !== 1 ? "ies" : "y"}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Questions mode — activity-level review cards */}
+          {view !== "map" && reviewMode === "questions" && tree && (
+            <div className="space-y-4">
+              {(() => {
+                let lastFlowKey = "";
+                return allActivitiesFlat.map(({ activity, processName, flowName }) => {
+                  const actSteps = stepsByActivityId.get(activity.id) ?? [];
+                  const actMeta = currentScopeItemId
+                    ? getActivityMetadata(currentScopeItemId, activity.title)
+                    : null;
+                  const flowKey = `${processName}::${flowName}`;
+                  const showFlowHeading = flowKey !== lastFlowKey;
+                  lastFlowKey = flowKey;
+
+                  return (
+                    <div key={activity.id}>
+                      {showFlowHeading && (
+                        <div className="mb-2 mt-4 first:mt-0">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                            {processName} &rsaquo; {flowName}
+                          </p>
+                        </div>
+                      )}
+
+                      <BusinessQuestionCard
+                        activity={activity}
+                        steps={actSteps}
+                        configs={configs}
+                        scopeItemId={currentScopeItemId ?? ""}
+                        assessmentId={assessmentId}
+                        currentUserId=""
+                        activityMetadata={actMeta}
+                        scopeItemMetadata={scopeItemMeta}
+                        implications={scopeItemMeta?.defaultImplications ?? null}
+                        onActivityClassify={handleActivityClassify}
+                        isReadOnly={isReadOnly}
+                      />
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          )}
+
           {/* Step review view */}
-          {view === "step" && currentActivityId && (
+          {view === "step" && reviewMode === "steps" && currentActivityId && (
             <>
               {stepsLoading ? (
                 <div className="space-y-4">
@@ -686,14 +945,28 @@ function ReviewShellInner({
                   </div>
 
                   {currentStepIsClassifiable ? (
-                    <StepReviewCard
-                      step={currentStep}
-                      configs={configs}
-                      onResponseChange={handleResponseChange}
-                      isReadOnly={isReadOnly}
-                      isItLead={isItLead}
-                      assessmentId={assessmentId}
-                    />
+                    <>
+                      <StepReviewCard
+                        step={currentStep}
+                        configs={configs}
+                        onResponseChange={handleResponseChange}
+                        isReadOnly={isReadOnly}
+                        isItLead={isItLead}
+                        assessmentId={assessmentId}
+                      />
+                      {/* TASK 6: Step-level implications panel (collapsed by default) */}
+                      {currentStep.fitStatus !== "PENDING" && currentScopeItemId && (
+                        <div className="mt-3">
+                          <ImplicationsPanel
+                            fitStatus={currentStep.fitStatus}
+                            scopeItemId={currentScopeItemId}
+                            activityTitle={currentStep.activityTitle ?? ""}
+                            isExpanded={stepImplicationsExpanded}
+                            onToggle={() => setStepImplicationsExpanded((v) => !v)}
+                          />
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <div className="bg-card rounded-lg border">
                       <ReferenceStepRow step={currentStep} />
