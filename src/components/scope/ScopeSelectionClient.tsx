@@ -607,55 +607,43 @@ export function ScopeSelectionClient({
             />
           ) : (
             functionalAreas.map((area) => {
-              const landscape = getLandscape(area);
+              const landscape = getLandscape(area) ?? {
+                area,
+                businessDescription: "",
+                chains: [],
+              };
               const areaItems = items.filter((i) => i.functionalArea === area);
 
-              if (landscape) {
-                // Build item state map for this area
-                const itemStates = new Map<string, { id: string; selected: boolean; nameClean: string }>();
-                for (const item of areaItems) {
-                  itemStates.set(item.id, { id: item.id, selected: item.selected, nameClean: item.nameClean });
-                }
-
-                // Find items not in any chain
-                const chainItemIds = new Set(getAreaScopeItemIds(landscape));
-                const otherItems = areaItems
-                  .filter((i) => !chainItemIds.has(i.id))
-                  .map((i) => ({ id: i.id, selected: i.selected, nameClean: i.nameClean }));
-
-                return (
-                  <ProcessLandscapeMap
-                    key={area}
-                    landscape={landscape}
-                    itemStates={itemStates}
-                    filteredIds={filteredItemIds}
-                    otherItems={otherItems}
-                    onToggle={handleLandscapeToggle}
-                    onSelectChain={handleSelectChain}
-                    onClearChain={handleClearChain}
-                    onOpenBriefing={handleOpenBriefing}
-                    isReadOnly={isReadOnly}
-                  />
-                );
+              // Build item state map for this area
+              const itemStates = new Map<string, { id: string; selected: boolean; nameClean: string }>();
+              for (const item of areaItems) {
+                itemStates.set(item.id, { id: item.id, selected: item.selected, nameClean: item.nameClean });
               }
 
-              // Fallback to list-style for areas without landscape data
-              const selectedInArea = areaItems.filter((i) => i.selected).length;
-              const filteredAreaItems = filteredItems.filter((i) => i.functionalArea === area);
-              if (filteredAreaItems.length === 0 && filteredItemIds.size > 0) return null;
+              // Find items not in any chain
+              const chainItemIds = new Set(getAreaScopeItemIds(landscape));
+              const otherItems = areaItems
+                .filter((i) => !chainItemIds.has(i.id))
+                .map((i) => ({ id: i.id, selected: i.selected, nameClean: i.nameClean }));
+
+              // Skip area entirely if filtering and no items match
+              if (otherItems.length === 0 && chainItemIds.size === 0 && filteredItemIds.size > 0) {
+                const hasFilterMatch = areaItems.some((i) => filteredItemIds.has(i.id));
+                if (!hasFilterMatch) return null;
+              }
 
               return (
-                <ScopeAreaGroup
+                <ProcessLandscapeMap
                   key={area}
-                  area={area}
-                  items={filteredAreaItems.length > 0 ? filteredAreaItems : areaItems}
-                  selectedCount={selectedInArea}
-                  totalCount={areaItems.length}
-                  onSelectionChange={handleSelectionChange}
-                  onBulkAction={handleBulkAction}
-                  industryPreSelectSet={industryPreSelectSet}
-                  isReadOnly={isReadOnly}
+                  landscape={landscape}
+                  itemStates={itemStates}
+                  filteredIds={filteredItemIds}
+                  otherItems={otherItems}
+                  onToggle={handleLandscapeToggle}
+                  onSelectChain={handleSelectChain}
+                  onClearChain={handleClearChain}
                   onOpenBriefing={handleOpenBriefing}
+                  isReadOnly={isReadOnly}
                 />
               );
             })

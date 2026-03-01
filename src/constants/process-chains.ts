@@ -166,11 +166,11 @@ export const PROCESS_LANDSCAPES: FunctionalAreaLandscape[] = [
     ],
   },
 
-  // ===== PROCUREMENT =====
+  // ===== SOURCING AND PROCUREMENT =====
   {
-    area: "Procurement",
+    area: "Sourcing and Procurement",
     businessDescription:
-      "Purchasing goods and services, managing suppliers, travel expenses, and self-service ordering.",
+      "Strategic sourcing, purchasing goods and services, managing suppliers, travel expenses, and self-service ordering.",
     chains: [
       {
         key: "p2p",
@@ -298,11 +298,11 @@ export const PROCESS_LANDSCAPES: FunctionalAreaLandscape[] = [
     ],
   },
 
-  // ===== WAREHOUSE =====
+  // ===== LOGISTICS =====
   {
-    area: "Warehouse",
+    area: "Logistics",
     businessDescription:
-      "Warehouse receiving, storage, picking, shipping, and inventory tracking.",
+      "Warehouse operations, inventory management, goods receipt, storage, picking, packing, and shipping.",
     chains: [
       {
         key: "wh-ops",
@@ -345,11 +345,11 @@ export const PROCESS_LANDSCAPES: FunctionalAreaLandscape[] = [
     ],
   },
 
-  // ===== PRODUCTION =====
+  // ===== MANUFACTURING =====
   {
-    area: "Production",
+    area: "Manufacturing",
     businessDescription:
-      "Production planning, scheduling, bill of materials, and shop floor execution.",
+      "Production planning, scheduling, bill of materials, shop floor execution, and make-to-stock manufacturing.",
     chains: [
       {
         key: "p2p-prod",
@@ -376,11 +376,11 @@ export const PROCESS_LANDSCAPES: FunctionalAreaLandscape[] = [
     ],
   },
 
-  // ===== MAINTENANCE =====
+  // ===== ASSET MANAGEMENT =====
   {
-    area: "Maintenance",
+    area: "Asset Management",
     businessDescription:
-      "Plant maintenance, work orders, preventive schedules, and equipment tracking.",
+      "Plant maintenance, work orders, preventive schedules, equipment lifecycle, and asset tracking.",
     chains: [
       {
         key: "m2o",
@@ -401,11 +401,11 @@ export const PROCESS_LANDSCAPES: FunctionalAreaLandscape[] = [
     ],
   },
 
-  // ===== SERVICES =====
+  // ===== SERVICE =====
   {
-    area: "Services",
+    area: "Service",
     businessDescription:
-      "Service order management for internal and external service requests.",
+      "Service order management, customer service requests, and field service operations.",
     chains: [
       {
         key: "svc-mgmt",
@@ -425,7 +425,262 @@ export const PROCESS_LANDSCAPES: FunctionalAreaLandscape[] = [
       },
     ],
   },
+
+  // ===== SUPPLY CHAIN =====
+  {
+    area: "Supply Chain",
+    businessDescription:
+      "Supply chain planning, demand forecasting, inventory optimization, and material requirements planning.",
+    chains: [
+      {
+        key: "sc-planning",
+        name: "Supply Chain Planning",
+        abbreviation: "SCP",
+        description:
+          "Demand forecasting, supply planning, and inventory optimization across the network.",
+        type: "core",
+        steps: [
+          {
+            scopeItemId: "1B5",
+            businessName: "Demand Planning",
+            roleInChain: "Forecast customer demand",
+            position: "start",
+          },
+          {
+            scopeItemId: "2K3",
+            businessName: "Supply Planning",
+            roleInChain: "Balance supply with demand",
+            position: "end",
+          },
+        ],
+      },
+    ],
+  },
+
+  // ===== ENTERPRISE PORTFOLIO & PROJECT MANAGEMENT =====
+  {
+    area: "Enterprise Portfolio & Project Management",
+    businessDescription:
+      "Project lifecycle management, financial control, budgeting, and portfolio planning.",
+    chains: [
+      {
+        key: "proj-lifecycle",
+        name: "Project Lifecycle",
+        abbreviation: "PLM",
+        description:
+          "From project setup through execution, cost tracking, and settlement.",
+        type: "core",
+        steps: [
+          {
+            scopeItemId: "1NT",
+            businessName: "Project Financial Control",
+            roleInChain: "Budget & cost tracking",
+            position: "start",
+          },
+        ],
+      },
+    ],
+  },
+
+  // ===== QUALITY MANAGEMENT =====
+  {
+    area: "Quality Management",
+    businessDescription:
+      "Quality inspection, quality planning, certificates, and defect management.",
+    chains: [
+      {
+        key: "qi-process",
+        name: "Quality Inspection",
+        abbreviation: "QI",
+        description:
+          "From quality planning through inspection execution and results recording.",
+        type: "core",
+        steps: [
+          {
+            scopeItemId: "1E1",
+            businessName: "Quality Inspection",
+            roleInChain: "Plan & execute inspections",
+            position: "start",
+          },
+          {
+            scopeItemId: "2QN",
+            businessName: "Quality Certificates",
+            roleInChain: "Issue quality certificates",
+            position: "end",
+          },
+        ],
+      },
+    ],
+  },
+
+  // ===== R&D/ENGINEERING =====
+  {
+    area: "R&D/Engineering",
+    businessDescription:
+      "Product development, engineering change management, recipe and formula development.",
+    chains: [
+      {
+        key: "product-dev",
+        name: "Product Development",
+        abbreviation: "PD",
+        description:
+          "Design, engineering changes, and product structure management.",
+        type: "core",
+        steps: [
+          {
+            scopeItemId: "1GP",
+            businessName: "Engineering Change Management",
+            roleInChain: "Manage design changes",
+            position: "start",
+          },
+        ],
+      },
+    ],
+  },
+
+  // ===== ORGANIZATION =====
+  {
+    area: "Organization",
+    businessDescription:
+      "Enterprise structure setup, organizational units, company codes, plants, and business configuration.",
+    chains: [
+      {
+        key: "org-setup",
+        name: "Enterprise Structure Setup",
+        abbreviation: "ESS",
+        description:
+          "Define company codes, plants, sales organizations, and purchasing organizations.",
+        type: "core",
+        steps: [
+          {
+            scopeItemId: "J01",
+            businessName: "Organization Setup",
+            roleInChain: "Define enterprise structure",
+            position: "start",
+          },
+        ],
+      },
+    ],
+  },
+
+  // ===== DATABASE AND DATA MANAGEMENT =====
+  {
+    area: "Database and Data Management",
+    businessDescription:
+      "Master data governance, business partner consolidation, and product data management.",
+    chains: [
+      {
+        key: "mdg",
+        name: "Master Data Governance",
+        abbreviation: "MDG",
+        description:
+          "Consolidate, cleanse, and maintain master data across the enterprise.",
+        type: "core",
+        steps: [
+          {
+            scopeItemId: "1N3",
+            businessName: "Business Partner Consolidation",
+            roleInChain: "Deduplicate & merge records",
+            position: "start",
+          },
+          {
+            scopeItemId: "1RK",
+            businessName: "Business Partner Maintenance",
+            roleInChain: "Bulk load & update records",
+            position: "middle",
+          },
+          {
+            scopeItemId: "1RM",
+            businessName: "Product Master Maintenance",
+            roleInChain: "Bulk load & update products",
+            position: "end",
+          },
+        ],
+      },
+    ],
+  },
+
+  // ===== HUMAN RESOURCES =====
+  {
+    area: "Human Resources",
+    businessDescription:
+      "Employee management, payroll, time tracking, and personnel administration.",
+    chains: [],
+  },
+
+  // ===== APPLICATION PLATFORM AND INFRASTRUCTURE =====
+  {
+    area: "Application Platform and Infrastructure",
+    businessDescription:
+      "System configuration, integration setup, user management, and platform infrastructure.",
+    chains: [],
+  },
+
+  // ===== CROSS TOPICS =====
+  {
+    area: "Cross Topics",
+    businessDescription:
+      "Cross-functional processes that span multiple business areas.",
+    chains: [],
+  },
+
+  // ===== OIL AND GAS =====
+  {
+    area: "Oil and Gas",
+    businessDescription:
+      "Industry-specific processes for oil and gas exploration, production, and distribution.",
+    chains: [],
+  },
+
+  // ===== PROFESSIONAL SERVICES =====
+  {
+    area: "Professional Services",
+    businessDescription:
+      "Project-based service delivery, resource management, and time & billing.",
+    chains: [],
+  },
+
+  // ===== PUBLIC SECTOR =====
+  {
+    area: "Public Sector",
+    businessDescription:
+      "Government-specific processes, public funds management, and regulatory compliance.",
+    chains: [],
+  },
+
+  // ===== UNCATEGORIZED =====
+  {
+    area: "Uncategorized",
+    businessDescription:
+      "Scope items not yet assigned to a specific functional area.",
+    chains: [],
+  },
 ];
+
+// --- Known functional area names (must match database values) ---
+
+export const KNOWN_FUNCTIONAL_AREAS = [
+  "Application Platform and Infrastructure",
+  "Asset Management",
+  "Cross Topics",
+  "Database and Data Management",
+  "Enterprise Portfolio & Project Management",
+  "Finance",
+  "Human Resources",
+  "Logistics",
+  "Manufacturing",
+  "Oil and Gas",
+  "Organization",
+  "Professional Services",
+  "Public Sector",
+  "Quality Management",
+  "R&D/Engineering",
+  "Sales",
+  "Service",
+  "Sourcing and Procurement",
+  "Supply Chain",
+  "Uncategorized",
+] as const;
 
 // --- Helpers ---
 
