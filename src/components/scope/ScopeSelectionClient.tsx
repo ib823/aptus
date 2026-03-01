@@ -569,10 +569,10 @@ export function ScopeSelectionClient({
       {/* Impact summary bar */}
       {stats.selectedCount > 0 && (
         <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="Scope Items" value={stats.selectedCount} />
-          <StatCard label="Steps Needing Your Input" value={stats.totalClassifiable} />
+          <StatCard label="Business Processes" value={stats.selectedCount} />
+          <StatCard label="Steps to Review" value={stats.totalClassifiable} />
           <StatCard label="Total Steps" value={stats.totalStepsInScope} />
-          <StatCard label="Est. Effort" value={stats.totalEffortDays > 0 ? `~${stats.totalEffortDays}d` : "\u2014"} />
+          <StatCard label="Est. Review Time" value={stats.totalClassifiable > 0 ? `~${Math.ceil(stats.totalClassifiable / 60)}h` : "\u2014"} />
         </div>
       )}
 
