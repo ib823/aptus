@@ -99,7 +99,7 @@ export function InviteUserDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={handleClose} modal={false}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Invite User</DialogTitle>
