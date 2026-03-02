@@ -50,7 +50,7 @@ export function ActivityCluster({ activity, x, y, width, height, onSelect }: Act
   const truncTitle = smartTruncate(displayTitle, 28);
 
   const description = getActivityDescription(displayTitle);
-  const ariaLabel = `${displayTitle}: ${activity.classifiableCount ?? activity.stepCount} steps to review, ${activity.reviewedCount} done, ${pct}% complete${description ? `. ${description}` : ""}`;
+  const ariaLabel = `${displayTitle}: ${activity.classifiableCount ?? 0} steps to review, ${activity.reviewedCount} done, ${pct}% complete${description ? `. ${description}` : ""}`;
 
   return (
     <g
@@ -91,7 +91,7 @@ export function ActivityCluster({ activity, x, y, width, height, onSelect }: Act
         fontSize={9}
         fill={colors.text}
       >
-        {activity.classifiableCount ?? activity.stepCount} to review
+        {activity.classifiableCount ?? 0} to review
       </text>
       {/* Progress */}
       <text

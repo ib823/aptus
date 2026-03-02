@@ -147,7 +147,7 @@ describe("assembleImplicationsData", () => {
     expect(data.effort).toBe("low");
   });
 
-  it("does not escalate effort for CONFIGURE status", () => {
+  it("escalates CONFIGURE effort from low to medium", () => {
     const data = assembleImplicationsData(
       "CONFIGURE",
       "TEST",
@@ -155,7 +155,29 @@ describe("assembleImplicationsData", () => {
       { ...mockActivityMeta, effortCategory: "low" },
       mockScopeItemMetadata,
     );
-    expect(data.effort).toBe("low");
+    expect(data.effort).toBe("medium");
+  });
+
+  it("does not escalate CONFIGURE effort from medium", () => {
+    const data = assembleImplicationsData(
+      "CONFIGURE",
+      "TEST",
+      "Payment Run",
+      { ...mockActivityMeta, effortCategory: "medium" },
+      mockScopeItemMetadata,
+    );
+    expect(data.effort).toBe("medium");
+  });
+
+  it("does not escalate CONFIGURE effort from high", () => {
+    const data = assembleImplicationsData(
+      "CONFIGURE",
+      "TEST",
+      "Payment Run",
+      { ...mockActivityMeta, effortCategory: "high" },
+      mockScopeItemMetadata,
+    );
+    expect(data.effort).toBe("high");
   });
 
   it("returns all modules when activity meta has no module filter", () => {
