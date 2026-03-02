@@ -79,6 +79,8 @@ export async function GET(
       evidenceUrls: true,
       reviewedBy: true,
       reviewedAt: true,
+      isPropagated: true,
+      propagatedFrom: true,
       processStep: {
         select: {
           id: true,

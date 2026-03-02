@@ -7,6 +7,9 @@ import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { detectConflict } from "@/lib/collaboration/conflict-detector";
 import { logActivity } from "@/lib/collaboration/activity-logger";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import { PropagationEngine } from "@/lib/dependency/propagation-engine";
+import type { DependencyEffects } from "@/lib/dependency/types";
 import { ERROR_CODES } from "@/types/api";
 import type { DecisionAction } from "@/types/assessment";
 import { z } from "zod";
@@ -208,5 +211,96 @@ export async function PUT(
     }
   }
 
-  return NextResponse.json({ data: response });
+  // Phase: Dependency Engine — evaluate propagation effects
+  let dependencyEffects: DependencyEffects | undefined;
+
+  if (isFeatureEnabled("DEPENDENCY_ENGINE")) {
+    try {
+      // Look up activity + scope item code for this step
+      const stepWithActivity = await prisma.processStep.findUnique({
+        where: { id: stepId },
+        select: {
+          activityId: true,
+          activity: {
+            select: {
+              processFlow: {
+                select: {
+                  solutionProcess: {
+                    select: { scopeItemId: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (stepWithActivity?.activityId) {
+        const scopeItemCode =
+          stepWithActivity.activity?.processFlow?.solutionProcess
+            ?.scopeItemId;
+
+        if (scopeItemCode) {
+          const engine = await PropagationEngine.forScope(scopeItemCode);
+          const activityId = stepWithActivity.activityId;
+
+          // If changing FROM NA to something else → reverse propagation
+          const oldStatus = existing?.fitStatus;
+          if (oldStatus === "NA" && parsed.data.fitStatus !== "NA") {
+            const reversed = await engine.reversePropagation(
+              assessmentId,
+              activityId,
+              user.id,
+            );
+            dependencyEffects = {
+              propagations: [],
+              warnings: [],
+              reversed,
+            };
+          }
+          // If new classification is NA → evaluate forward propagation
+          else if (parsed.data.fitStatus === "NA") {
+            const result = await engine.evaluate(
+              assessmentId,
+              activityId,
+              "NA",
+            );
+
+            if (result.propagations.length > 0) {
+              await engine.applyPropagations(
+                assessmentId,
+                stepId,
+                result.propagations,
+                user.id,
+              );
+            }
+
+            dependencyEffects = {
+              propagations: result.propagations.map((p) => ({
+                activityId: p.activityId,
+                activityTitle: p.activityTitle,
+                stepCount: p.affectedStepIds.length,
+                businessReason: p.businessReason,
+              })),
+              warnings: result.warnings.map((w) => ({
+                activityId: w.activityId,
+                activityTitle: w.activityTitle,
+                scopeItemCode: w.scopeItemCode,
+                warningType: w.warningType,
+                businessReason: w.businessReason,
+              })),
+            };
+          }
+        }
+      }
+    } catch (err) {
+      // Dependency engine errors should not block classification
+      console.error("[DependencyEngine] propagation error:", err);
+    }
+  }
+
+  return NextResponse.json({
+    data: response,
+    ...(dependencyEffects && { dependencyEffects }),
+  });
 }

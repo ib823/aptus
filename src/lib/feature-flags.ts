@@ -3,6 +3,7 @@
 const FLAG_DEFAULTS: Record<string, boolean> = {
   // Hierarchy flags removed — ReviewShell is now the default review experience.
   // Previously: hierarchy_components, review_shell, activity_scoped_fetch, map_default_view
+  DEPENDENCY_ENGINE: false,
 };
 
 export type FeatureFlag = string;
