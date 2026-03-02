@@ -5,6 +5,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
+import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 export async function GET(
@@ -112,6 +113,17 @@ export async function DELETE(
   await prisma.orgInvitation.update({
     where: { id: invitationId },
     data: { status: "revoked" },
+  });
+
+  await logDecision({
+    assessmentId: "SYSTEM",
+    entityType: "invitation",
+    entityId: invitationId,
+    action: "INVITATION_REVOKED",
+    oldValue: { status: invitation.status, email: invitation.email },
+    newValue: { status: "revoked" },
+    actor: user.email,
+    actorRole: user.role,
   });
 
   return NextResponse.json({ data: { revoked: true } });

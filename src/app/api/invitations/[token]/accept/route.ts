@@ -1,6 +1,7 @@
 /** POST: Accept an organization invitation */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { getCurrentUser } from "@/lib/auth/session";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
@@ -11,6 +12,10 @@ export async function POST(
   { params }: { params: Promise<{ token: string }> },
 ): Promise<NextResponse> {
   const { token } = await params;
+
+  // Email ownership check: if an authenticated user is accessing this,
+  // their email must match the invitation email to prevent hijacking
+  const currentUser = await getCurrentUser().catch(() => null);
 
   // Look up the invitation by token
   const invitation = await prisma.orgInvitation.findUnique({
@@ -48,6 +53,14 @@ export async function POST(
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invitation has expired" } },
       { status: 400 },
+    );
+  }
+
+  // If authenticated, verify email matches invitation
+  if (currentUser && currentUser.email !== invitation.email) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "This invitation was sent to a different email address" } },
+      { status: 403 },
     );
   }
 
@@ -119,7 +132,7 @@ export async function POST(
     assessmentId: "SYSTEM",
     entityType: "invitation",
     entityId: invitation.id,
-    action: "USER_INVITED",
+    action: "INVITATION_ACCEPTED",
     oldValue: { status: "pending" },
     newValue: {
       status: "accepted",

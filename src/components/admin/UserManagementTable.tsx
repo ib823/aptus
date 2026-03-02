@@ -97,7 +97,7 @@ export function UserManagementTable({
       const res = await fetch(`/api/organizations/${organizationId}/users/${userId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "deactivate" }),
+        body: JSON.stringify({ isActive: false }),
       });
 
       if (res.ok) onRefresh();
@@ -111,7 +111,7 @@ export function UserManagementTable({
       const res = await fetch(`/api/organizations/${organizationId}/users/${userId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reactivate" }),
+        body: JSON.stringify({ isActive: true }),
       });
 
       if (res.ok) onRefresh();

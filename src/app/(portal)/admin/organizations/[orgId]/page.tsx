@@ -1,5 +1,7 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
+import { getCurrentUser } from "@/lib/auth/session";
+import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { prisma } from "@/lib/db/prisma";
 import { Badge } from "@/components/ui/badge";
 import { OrgDetailClient } from "@/components/admin/OrgDetailClient";
@@ -9,6 +11,10 @@ interface OrgDetailPageProps {
 }
 
 export default async function OrgDetailPage({ params }: OrgDetailPageProps) {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) redirect("/login");
+  const currentUserRole = mapLegacyRole(currentUser.role);
+
   const { orgId } = await params;
 
   const organization = await prisma.organization.findUnique({
@@ -96,6 +102,7 @@ export default async function OrgDetailPage({ params }: OrgDetailPageProps) {
       <OrgDetailClient
         organizationId={organization.id}
         orgType={organization.type as "PLATFORM" | "PARTNER" | "DIRECT_CLIENT"}
+        currentUserRole={currentUserRole}
         users={users.map((u) => ({
           id: u.id,
           name: u.name ?? "Unnamed",

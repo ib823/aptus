@@ -183,6 +183,17 @@ export async function PUT(
       },
     });
 
+    await logDecision({
+      assessmentId: "SYSTEM",
+      entityType: "user",
+      entityId: userId,
+      action: "USER_REACTIVATED",
+      oldValue: { isActive: false },
+      newValue: { isActive: true },
+      actor: user.email,
+      actorRole: user.role,
+    });
+
     return NextResponse.json({
       data: { id: userId, reactivatedAt: new Date().toISOString() },
     });
