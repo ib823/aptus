@@ -135,7 +135,7 @@ export async function GET(
             targetUrl: a.targetUrl,
             sequence: a.sequence,
             stepCount: a._count.processSteps,
-            classifiableCount: classifiableMap.get(a.id) ?? a._count.processSteps,
+            classifiableCount: classifiableMap.get(a.id) ?? 0,
             reviewedCount: reviewed,
             fitCount: progress?.fit ?? 0,
             configureCount: progress?.configure ?? 0,

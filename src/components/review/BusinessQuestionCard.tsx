@@ -296,26 +296,32 @@ export function BusinessQuestionCard({
 
       {/* Classification buttons */}
       <div className="px-5 py-3 border-b">
-        <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Activity classification">
-          {CLASSIFICATION_OPTIONS.map((opt) => {
-            const isSelected = aggregateStatus === opt.value;
-            return (
-              <button
-                key={opt.value}
-                role="radio"
-                aria-checked={isSelected}
-                title={opt.title}
-                onClick={() => handleClassify(opt.value)}
-                disabled={isReadOnly}
-                className={`py-2 px-1 rounded-md border text-center text-sm font-medium transition-all ${
-                  isSelected ? opt.selected : "border-slate-200 text-muted-foreground bg-card hover:bg-accent"
-                } ${isReadOnly ? "cursor-not-allowed opacity-70" : ""}`}
-              >
-                {opt.icon} {opt.label}
-              </button>
-            );
-          })}
-        </div>
+        {classifiableCount === 0 ? (
+          <p className="text-xs text-muted-foreground/60 text-center py-1">
+            No steps require classification in this activity.
+          </p>
+        ) : (
+          <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Activity classification">
+            {CLASSIFICATION_OPTIONS.map((opt) => {
+              const isSelected = aggregateStatus === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  role="radio"
+                  aria-checked={isSelected}
+                  title={opt.title}
+                  onClick={() => handleClassify(opt.value)}
+                  disabled={isReadOnly}
+                  className={`py-2 px-1 rounded-md border text-center text-sm font-medium transition-all ${
+                    isSelected ? opt.selected : "border-slate-200 text-muted-foreground bg-card hover:bg-accent"
+                  } ${isReadOnly ? "cursor-not-allowed opacity-70" : ""}`}
+                >
+                  {opt.icon} {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Conflict warning */}

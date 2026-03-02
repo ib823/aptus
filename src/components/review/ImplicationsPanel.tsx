@@ -65,10 +65,12 @@ function assembleImplicationsData(
 
   const dependencies = scopeMeta?.dependencies ?? [];
 
-  // Escalate effort for GAP
+  // Escalate effort for GAP (any → next tier) and CONFIGURE (low → medium only)
   let effort = actMeta?.effortCategory ?? "medium";
   if (fitStatus === "GAP" && effort !== "high") {
     effort = effort === "low" ? "medium" : "high";
+  } else if (fitStatus === "CONFIGURE" && effort === "low") {
+    effort = "medium";
   }
 
   const implications = scopeMeta?.defaultImplications ?? null;
@@ -146,9 +148,11 @@ export function ImplicationsPanel({
             {statusCfg.icon} {statusCfg.label}
           </span>
         </div>
-        <Badge className={`text-xs ${EFFORT_STYLES[data.effort] ?? ""}`}>
-          {EFFORT_LABELS[data.effort] ?? data.effort}
-        </Badge>
+        {fitStatus !== "NA" && (
+          <Badge className={`text-xs ${EFFORT_STYLES[data.effort] ?? ""}`}>
+            {EFFORT_LABELS[data.effort] ?? data.effort}
+          </Badge>
+        )}
       </button>
 
       {/* Expanded content */}
@@ -161,6 +165,15 @@ export function ImplicationsPanel({
             </p>
           )}
 
+          {/* GAP impact indicator */}
+          {fitStatus === "GAP" && (
+            <p className="text-xs text-amber-600">
+              {data.effort === "high"
+                ? "Significant impact on implementation timeline and budget."
+                : "Moderate impact on implementation timeline."}
+            </p>
+          )}
+
           {/* NA-specific: impact warning */}
           {fitStatus === "NA" && implications?.naImpact && (
             <div className="p-3 bg-amber-50 rounded-md border border-amber-200">
@@ -169,6 +182,9 @@ export function ImplicationsPanel({
               </span>
               <p className="text-sm text-amber-700 mt-1">
                 {implications.naImpact}
+              </p>
+              <p className="text-xs text-amber-600 mt-1 italic">
+                This decision can be changed at any time during the assessment period.
               </p>
             </div>
           )}
@@ -204,6 +220,13 @@ export function ImplicationsPanel({
                   <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
                     A gap resolution workshop will determine whether this requires a Report, Interface, Conversion, Enhancement, Form, or Workflow (RICEFW) object.
                   </p>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {["Configuration Change", "Custom Development", "BTP Extension", "Third-Party Solution", "Process Adaptation"].map((opt) => (
+                      <span key={opt} className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                        {opt}
+                      </span>
+                    ))}
+                  </div>
                   {data.configAreas.length > 0 && (
                     <ul className="mt-2 space-y-1">
                       {data.configAreas.map((area) => (
@@ -218,7 +241,7 @@ export function ImplicationsPanel({
               ) : data.configAreas.length > 0 ? (
                 <div>
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Configuration Areas
+                    {fitStatus === "CONFIGURE" ? "Areas Needing Adjustment" : "Configuration Areas"}
                   </span>
                   <ul className="mt-1.5 space-y-1">
                     {data.configAreas.map((area) => (
@@ -292,6 +315,23 @@ export function ImplicationsPanel({
               </ul>
             </div>
           )}
+
+          {/* What Happens Next */}
+          <div className="mt-4 pt-3 border-t border-border">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              What Happens Next
+            </span>
+            <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
+              {fitStatus === "FIT" &&
+                "This process will be activated using SAP standard configuration during implementation. No custom development is needed."}
+              {fitStatus === "CONFIGURE" &&
+                "Your configuration needs will be documented in the Configuration Workbook. The implementation team will adjust SAP settings to match your process."}
+              {fitStatus === "GAP" &&
+                "This gap will be added to the Gap Register. A resolution workshop will determine the best approach — configuration changes, custom development, a third-party solution, or process adaptation."}
+              {fitStatus === "NA" &&
+                "This process will not be included in the SAP implementation. You can revisit this decision at any time during the assessment."}
+            </p>
+          </div>
         </div>
       )}
     </div>
