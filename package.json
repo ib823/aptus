@@ -2,9 +2,13 @@
   "name": "abeam",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.23.0",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev -p 3003",
-    "build": "prisma db push --skip-generate && next build",
+    "build": "prisma generate && next build",
     "prebuild:production": "node scripts/check-production-env.js",
     "start": "next start -p 3003",
     "lint": "eslint",
