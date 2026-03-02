@@ -195,6 +195,8 @@ model ConfigActivity {
   additionalInfo       String?  @db.Text
   fileUploadEnabled    String?
 
+  rawScopeItemIds  String?  // Preserves original multi-ID value (e.g., "J14, J13, 22Z")
+
   createdAt DateTime @default(now())
 
   // Note: No FK relation to ScopeItem because scopeItemId can be "All" or contain
@@ -2065,6 +2067,18 @@ model CrossScopeDependency {
   @@unique([sourceActivityId, targetActivityId])
   @@index([sourceScopeCode])
   @@index([targetScopeCode])
+}
+
+model DependencyManifestRecord {
+  id              String   @id @default(cuid())
+  version         String   @unique    // "2508", "2602"
+  contentHash     String              // SHA-256 of manifest body
+  withinCount     Int
+  crossCount      Int
+  resolvedCount   Int
+  unresolvedCount Int
+  appliedAt       DateTime @default(now())
+  appliedBy       String
 }
 
 model DependencyPropagationLog {

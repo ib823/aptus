@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, memo } from "react";
-import { ChevronDown, ChevronRight, ExternalLink, Info } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink, Info } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -32,6 +32,12 @@ interface ScopeItemData {
   effortDays?: number;
 }
 
+export interface ScopeItemWarning {
+  missingScopeCode: string;
+  missingScopeName: string;
+  businessReason: string;
+}
+
 interface ScopeItemCardProps {
   item: ScopeItemData;
   assessmentId?: string;
@@ -46,6 +52,7 @@ interface ScopeItemCardProps {
   }) => void;
   isPreSelected?: boolean | undefined;
   onOpenBriefing?: ((itemId: string) => void) | undefined;
+  warnings?: ScopeItemWarning[];
 }
 
 interface ImpactData {
@@ -86,7 +93,7 @@ const COMPLEXITY_OPTIONS = [
   { value: "high", label: "High" },
 ] as const;
 
-export const ScopeItemCard = memo(function ScopeItemCard({ item, assessmentId, onSelectionChange, isPreSelected, onOpenBriefing }: ScopeItemCardProps) {
+export const ScopeItemCard = memo(function ScopeItemCard({ item, assessmentId, onSelectionChange, isPreSelected, onOpenBriefing, warnings }: ScopeItemCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [showEnrichment, setShowEnrichment] = useState(false);
   const [impact, setImpact] = useState<ImpactData | null>(null);
@@ -229,6 +236,15 @@ export const ScopeItemCard = memo(function ScopeItemCard({ item, assessmentId, o
               {item.nameClean}
             </span>
             <span className="text-xs text-muted-foreground/60">({item.id})</span>
+            {warnings && warnings.length > 0 && (
+              <span
+                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200 rounded-full"
+                title={`Depends on ${warnings.map((w) => w.missingScopeCode).join(", ")} — not selected`}
+              >
+                <AlertTriangle className="w-3 h-3" />
+                {warnings.length}
+              </span>
+            )}
           </div>
           {getFirstSentence(item.id) && (
             <p className="text-xs text-muted-foreground mt-0.5">

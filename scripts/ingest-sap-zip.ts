@@ -559,6 +559,7 @@ async function main(): Promise<void> {
 
         configBatch.push({
           scopeItemId,
+          rawScopeItemIds: rawScopeId !== scopeItemId ? rawScopeId : null,
           scopeItemDescription: cellStrOrNull(row[10]),
           applicationArea: cellStr(row[0]),
           applicationSubarea: cellStr(row[1]),
