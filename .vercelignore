@@ -1,0 +1,34 @@
+# Documentation & specs (not needed at runtime)
+docs/
+specs/
+fit-portal-transfer/
+enhancement210226/
+
+# Reports and audit artifacts
+*.csv
+content-quality-audit-results.json
+BACKEND-E2E-TEST-REPORT.md
+BUILD-PHASES-STATUS.md
+DATA-FIXES-REPORT-GEN-REPORT.md
+FORENSIC-AUDIT-REPORT.md
+HANDOFF.md
+SECURITY_AUDIT.md
+content-quality-audit-report.md
+implications-panel-audit-report.md
+
+# Test infrastructure
+tests/
+playwright.config.ts
+vitest.config.ts
+test-results/
+coverage/
+playwright-report/
+
+# Large binaries that should never ship
+*.zip
+*.tar.gz
+*.docx
+*.psd
+*.ai
+*.mov
+*.mp4
