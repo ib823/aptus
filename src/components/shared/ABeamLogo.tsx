@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 interface ABeamLogoProps {
   size?: "sm" | "md" | "lg";
   className?: string;
@@ -18,7 +20,7 @@ export function ABeamLogo({ size = "md", className = "" }: ABeamLogoProps) {
       className={`inline-flex items-center ${className}`}
       aria-label="ABeam"
     >
-      <img
+      <Image
         src="/icons/abeam-logo.png"
         alt=""
         width={px}
