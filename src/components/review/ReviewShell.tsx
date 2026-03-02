@@ -97,6 +97,8 @@ const STATUS_DISPLAY_LABELS: Record<string, string> = {
   PENDING: "Unreviewed",
 };
 
+const NON_CLASSIFIABLE_TYPES = ["LOGON", "LOGOFF", "ACCESS_APP", "INFORMATION", "NAVIGATION"];
+
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
@@ -249,7 +251,6 @@ function ReviewShellInner({
   const classifiableProgress = useMemo(() => computeClassifiableProgress(stepGroups as never[]), [stepGroups]);
 
   // Indices of classifiable steps (for skip-navigation)
-  const NON_CLASSIFIABLE_TYPES = ["LOGON", "LOGOFF", "ACCESS_APP", "INFORMATION", "NAVIGATION"];
   const visibleStepIndices = useMemo(() => {
     if (showAllSteps) return steps.map((_, i) => i);
     return steps
@@ -281,7 +282,7 @@ function ReviewShellInner({
        !NON_CLASSIFIABLE_TYPES.includes(currentStep.stepType))
     : false;
 
-  const processes = tree?.processes ?? [];
+  const processes = useMemo(() => tree?.processes ?? [], [tree]);
 
   // Find current activity node from tree
   const currentActivityNode = useMemo((): ActivityNode | null => {
@@ -382,7 +383,7 @@ function ReviewShellInner({
         }, 200);
       }
     },
-    [assessmentId, currentStepIndex, setCurrentStepIndex],
+    [assessmentId, currentStepIndex, setCurrentStepIndex, visibleStepIndices],
   );
 
   // Keyboard shortcuts

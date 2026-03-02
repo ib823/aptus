@@ -22,7 +22,6 @@ import type {
   WithinScopeRule,
   CrossScopeRule,
   ActivityRef,
-  DerivationSignal,
 } from "../src/lib/dependency/manifest-types";
 
 const prisma = new PrismaClient();
