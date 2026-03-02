@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-Build the notification infrastructure for Aptus supporting three delivery channels: in-app notifications (real-time via polling or SSE), email notifications (via transactional email provider), and Web Push for PWA. Define a unified notification pipeline with per-user channel preferences, event-to-notification mapping, and a notification center UI.
+Build the notification infrastructure for ABeam supporting three delivery channels: in-app notifications (real-time via polling or SSE), email notifications (via transactional email provider), and Web Push for PWA. Define a unified notification pipeline with per-user channel preferences, event-to-notification mapping, and a notification center UI.
 
 **Source**: V2 Brief Section A8 + Addendum 1 Section 5 (notification events)
 
@@ -538,7 +538,7 @@ import webpush from "web-push";
 
 // Configure VAPID
 webpush.setVapidDetails(
-  "mailto:notifications@aptus.app",
+  "mailto:notifications@ABeam.app",
   process.env.VAPID_PUBLIC_KEY!,
   process.env.VAPID_PRIVATE_KEY!,
 );
@@ -771,8 +771,8 @@ VAPID_PRIVATE_KEY=
 # Email provider
 EMAIL_PROVIDER=resend           # "resend" | "sendgrid" | "ses"
 RESEND_API_KEY=
-EMAIL_FROM_ADDRESS=notifications@aptus.app
-EMAIL_FROM_NAME=Aptus
+EMAIL_FROM_ADDRESS=notifications@ABeam.app
+EMAIL_FROM_NAME=ABeam
 
 # Notification config
 NOTIFICATION_DIGEST_WINDOW_MS=900000   # 15 minutes

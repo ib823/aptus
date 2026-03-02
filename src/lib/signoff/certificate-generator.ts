@@ -63,7 +63,7 @@ export function generateSignOffCertificatePdf(
   doc.setFontSize(12);
   doc.text("SAP Fit Assessment Completion", pw / 2, 40, { align: "center" });
   doc.setFontSize(9);
-  doc.text(b.companyName ?? "aptus Assessment Platform", pw / 2, 50, { align: "center" });
+  doc.text(b.companyName ?? "ABeam Assessment Platform", pw / 2, 50, { align: "center" });
 
   // --- Certificate body ---
   let y = 70;

@@ -207,7 +207,7 @@ async function main(): Promise<void> {
   if (remainSetup + remainGeneral + remainOther + remainReadme === 0) {
     console.log("\nAll rows migrated successfully!");
     console.log("\nNext steps:");
-    console.log("  1. Verify downloads: curl -I https://aptus-sandy.vercel.app/api/catalog/setup-guide/J60");
+    console.log("  1. Verify downloads: curl -I https://abeam.vercel.app/api/catalog/setup-guide/J60");
     console.log("  2. NULL out old binary columns to reclaim space:");
     console.log("     UPDATE \"SetupGuide\" SET \"pdfBlob\" = NULL;");
     console.log("     UPDATE \"GeneralFile\" SET blob = NULL;");

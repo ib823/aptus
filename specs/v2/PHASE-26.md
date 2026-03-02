@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-XL-sized phase combining five interconnected analytics and reuse capabilities for the Aptus platform:
+XL-sized phase combining five interconnected analytics and reuse capabilities for the ABeam platform:
 
 1. **Assessment Templates**: Save completed assessments as reusable, anonymized templates stored at organization level. Partners can bootstrap new client engagements from proven scope patterns, reducing assessment startup time from days to hours.
 

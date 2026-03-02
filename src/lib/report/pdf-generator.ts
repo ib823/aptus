@@ -65,7 +65,7 @@ export function generateExecutiveSummaryPdf(summary: ReportSummary, branding?: B
 
   // Branding label
   doc.setFontSize(10);
-  doc.text(b.companyName ?? "aptus", pageWidth - 20, 22, { align: "right" });
+  doc.text(b.companyName ?? "ABeam", pageWidth - 20, 22, { align: "right" });
   doc.setFontSize(8);
   doc.text("Assessment Platform", pageWidth - 20, 29, { align: "right" });
 

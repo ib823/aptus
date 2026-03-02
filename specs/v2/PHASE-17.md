@@ -14,8 +14,8 @@ These map to 11 platform roles:
 
 | # | Actor Type | Platform Role |
 |---|---|---|
-| 1 | Aptus platform operator | `platform_admin` |
-| 2 | Aptus support engineer | `platform_admin` |
+| 1 | ABeam platform operator | `platform_admin` |
+| 2 | ABeam support engineer | `platform_admin` |
 | 3 | Partner firm leader | `partner_lead` |
 | 4 | Partner engagement manager | `partner_lead` |
 | 5 | Senior SAP consultant | `consultant` |
@@ -42,7 +42,7 @@ These map to 11 platform roles:
 
 ### The 11 Platform Roles
 
-1. **platform_admin** -- Aptus platform operators. Full system access. Manages all orgs.
+1. **platform_admin** -- ABeam platform operators. Full system access. Manages all orgs.
 2. **partner_lead** -- Consulting firm leader. Manages partner org, sees all partner assessments.
 3. **consultant** -- Runs assessments. Full access within assigned assessments.
 4. **project_manager** -- PM role. Read-all within assessment + manage timeline/stakeholders.
@@ -224,7 +224,7 @@ export const ROLE_METADATA: Record<UserRole, {
 }> = {
   platform_admin: {
     label: "Platform Admin",
-    description: "Aptus platform operator with full system access",
+    description: "ABeam platform operator with full system access",
     orgTypes: ["PLATFORM"],
     isInternal: true,
     mfaDefault: "optional",
@@ -1115,8 +1115,8 @@ export const MFA_OPTIONAL_ROLES = [
 // prisma/seed-organizations.ts
 const seedOrganizations = [
   {
-    name: "Aptus Platform",
-    slug: "aptus",
+    name: "ABeam Platform",
+    slug: "ABeam",
     type: "PLATFORM",
     mfaPolicy: "optional",
   },
@@ -1138,7 +1138,7 @@ const seedOrganizations = [
 ];
 
 const seedUsers = [
-  { email: "admin@aptus.io", name: "System Admin", role: "platform_admin", org: "aptus" },
+  { email: "admin@ABeam.io", name: "System Admin", role: "platform_admin", org: "ABeam" },
   { email: "lead@meridian-consulting.com", name: "Sarah Chen", role: "partner_lead", org: "meridian" },
   { email: "consultant@meridian-consulting.com", name: "James Tan", role: "consultant", org: "meridian" },
   { email: "architect@meridian-consulting.com", name: "Ravi Kumar", role: "solution_architect", org: "meridian" },

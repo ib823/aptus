@@ -29,7 +29,7 @@ const BORDER_COLORS: Record<SubscriptionStatus, string> = {
   TRIAL_EXPIRED: "border-red-300 bg-red-50",
 };
 
-const DISMISS_KEY = "aptus-banner-dismissed";
+const DISMISS_KEY = "abeam-banner-dismissed";
 
 export function SubscriptionStatusBanner({
   status,

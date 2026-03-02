@@ -1,7 +1,7 @@
 /** Email templates for all automated notifications */
 
 const BRAND_COLOR = "#000000";
-const BRAND_NAME = "aptus";
+const BRAND_NAME = "ABeam";
 
 export function baseLayout(content: string): string {
   return `<!DOCTYPE html>
@@ -74,7 +74,7 @@ export function magicLinkEmail(url: string, email: string): { subject: string; h
       <p style="margin:0 0 16px;font-size:13px;color:#9ca3af;">
         This link expires in 15 minutes. If you didn't request this, you can safely ignore this email.
       </p>
-      ${button(url, "Sign in to aptus")}
+      ${button(url, "Sign in to ABeam")}
       <p style="margin:0;font-size:12px;color:#d1d5db;word-break:break-all;">
         Or copy this link: ${url}
       </p>

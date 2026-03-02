@@ -19,7 +19,7 @@ export default function RootNotFound() {
             <Button variant="outline" size="lg">Sign In</Button>
           </Link>
         </div>
-        <p className="mt-8 text-sm text-muted-foreground/60">aptus</p>
+        <p className="mt-8 text-sm text-muted-foreground/60">ABeam</p>
       </div>
     </main>
   );

@@ -17,14 +17,14 @@ test.describe("Security — Authenticated (Admin)", () => {
 
     // HttpOnly cookies are NOT accessible via JavaScript
     const jsAccessibleCookies = await page.evaluate(() => document.cookie);
-    expect(jsAccessibleCookies).not.toContain("aptus-session");
+    expect(jsAccessibleCookies).not.toContain("abeam-session");
   });
 
   test("API rejects requests with tampered session cookie", async ({ browser }) => {
     // Create a fresh context with a fake session cookie
     const context = await browser.newContext();
     await context.addCookies([{
-      name: "aptus-session",
+      name: "abeam-session",
       value: "tampered-invalid-session-token-that-doesnt-exist",
       domain: "localhost",
       path: "/",
@@ -72,7 +72,7 @@ test.describe("Security — Authenticated (Admin)", () => {
     expect(page.url()).toContain("/login");
 
     const cookies = await page.context().cookies();
-    const sessionCookie = cookies.find(c => c.name === "aptus-session");
+    const sessionCookie = cookies.find(c => c.name === "abeam-session");
     expect(sessionCookie).toBeUndefined();
   });
 });

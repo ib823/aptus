@@ -9,8 +9,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "aptus",
-    template: "%s — aptus",
+    default: "ABeam",
+    template: "%s — ABeam",
   },
   description: "SAP best practices process validation portal",
   manifest: "/manifest.json",
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "aptus",
+    title: "ABeam",
   },
   other: {
     "theme-color": "#f8fafc",

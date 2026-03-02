@@ -1,4 +1,4 @@
-# V2 Specification Index — Aptus Platform Enhancement
+# V2 Specification Index — ABeam Platform Enhancement
 
 ## Document Control
 - Version: 1.0

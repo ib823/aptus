@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, FileText, Settings, LogOut } from "lucide-react";
-import { AptusLogo } from "@/components/shared/AptusLogo";
+import { ABeamLogo } from "@/components/shared/ABeamLogo";
 
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { UI_TEXT } from "@/constants/ui-text";
@@ -43,7 +43,7 @@ export function PortalNav({ user }: PortalNavProps) {
         <div className="flex h-14 items-center justify-between">
           <div className="flex items-center gap-3 sm:gap-8 min-w-0">
             <Link href="/assessments" className="flex items-center shrink-0">
-              <AptusLogo size="sm" />
+              <ABeamLogo size="sm" />
             </Link>
             <nav className="hidden sm:flex items-center gap-1" aria-label="Main navigation">
               {navItems

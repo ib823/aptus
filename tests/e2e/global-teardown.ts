@@ -17,7 +17,7 @@ async function globalTeardown(): Promise<void> {
   try {
     // Clean up sessions for test users
     await prisma.session.deleteMany({
-      where: { user: { email: { endsWith: "@aptus.test" } } },
+      where: { user: { email: { endsWith: "@abeam.test" } } },
     });
 
     // Remove all storage state files

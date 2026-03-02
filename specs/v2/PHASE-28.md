@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-New phase introducing real-time collaboration infrastructure for the Aptus platform. This phase layers five collaboration capabilities onto the existing assessment workflow, enabling multiple stakeholders to work on the same assessment simultaneously with awareness, coordination, and conflict prevention.
+New phase introducing real-time collaboration infrastructure for the ABeam platform. This phase layers five collaboration capabilities onto the existing assessment workflow, enabling multiple stakeholders to work on the same assessment simultaneously with awareness, coordination, and conflict prevention.
 
 **Layer 1 — Presence**: Who is online, what assessment or page they are viewing, and their last action timestamp. Avatar indicators appear on assessment pages showing active collaborators.
 

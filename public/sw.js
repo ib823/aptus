@@ -1,6 +1,6 @@
-// aptus Service Worker — Push notifications + offline caching
+// ABeam Service Worker — Push notifications + offline caching
 
-const CACHE_VERSION = "aptus-v1";
+const CACHE_VERSION = "abeam-v1";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 
@@ -156,7 +156,7 @@ self.addEventListener("push", (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(payload.title || "aptus", options),
+    self.registration.showNotification(payload.title || "ABeam", options),
   );
 });
 

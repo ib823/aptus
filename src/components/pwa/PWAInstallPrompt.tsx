@@ -60,10 +60,10 @@ export function PWAInstallPrompt() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <DownloadIcon className="size-5" />
-            Install aptus
+            Install ABeam
           </DialogTitle>
           <DialogDescription>
-            Install aptus on your device for a faster, more reliable experience.
+            Install ABeam on your device for a faster, more reliable experience.
           </DialogDescription>
         </DialogHeader>
 

@@ -1,4 +1,4 @@
-# Aptus Platform — End-to-End Process by Actor
+# ABeam Platform — End-to-End Process by Actor
 
 > A comprehensive guide to every actor's journey through the SAP Fit-to-Standard assessment lifecycle, from platform setup through sign-off and handoff.
 
@@ -30,7 +30,7 @@
 
 ## 1. Platform Overview
 
-Aptus is a multi-tenant SaaS platform for SAP S/4HANA Cloud Fit-to-Standard assessments. It guides implementation partners and their clients through scoping, process review, gap analysis, validation, sign-off, and handoff — the full lifecycle of an SAP best-practice assessment.
+ABeam is a multi-tenant SaaS platform for SAP S/4HANA Cloud Fit-to-Standard assessments. It guides implementation partners and their clients through scoping, process review, gap analysis, validation, sign-off, and handoff — the full lifecycle of an SAP best-practice assessment.
 
 ### Organization Types
 
@@ -38,7 +38,7 @@ Aptus is a multi-tenant SaaS platform for SAP S/4HANA Cloud Fit-to-Standard asse
 |---|---|---|
 | **PARTNER** | SAP implementation partner firm | Deloitte, Accenture, a boutique SAP consultancy |
 | **DIRECT_CLIENT** | End-client company being assessed | A manufacturing company adopting S/4HANA |
-| **PLATFORM** | Aptus platform operator | The Aptus team itself |
+| **PLATFORM** | ABeam platform operator | The ABeam team itself |
 
 ### Plan Tiers
 
@@ -132,7 +132,7 @@ The Platform Admin has unrestricted access to every feature and is responsible f
 
 > **Org type:** PARTNER | **Hierarchy:** 90 | **MFA:** Optional
 
-The Partner Lead manages the partner firm's engagement with Aptus — assessments, team, billing, and client-facing sign-off.
+The Partner Lead manages the partner firm's engagement with ABeam — assessments, team, billing, and client-facing sign-off.
 
 ### End-to-End Journey
 

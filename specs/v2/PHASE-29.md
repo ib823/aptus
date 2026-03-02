@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-Build the commercial platform layer for Aptus, transforming it from an internally deployed tool into a self-service SaaS product. This phase introduces self-service signup with email verification, automated organization/tenant provisioning, subscription management via Stripe Billing, a partner admin dashboard for firm-level settings, demo/sandbox mode with a pre-loaded sample assessment, usage metering for plan limit enforcement, and plan tier feature gating.
+Build the commercial platform layer for ABeam, transforming it from an internally deployed tool into a self-service SaaS product. This phase introduces self-service signup with email verification, automated organization/tenant provisioning, subscription management via Stripe Billing, a partner admin dashboard for firm-level settings, demo/sandbox mode with a pre-loaded sample assessment, usage metering for plan limit enforcement, and plan tier feature gating.
 
 **Source**: Addendum 2 Section 1 (Subsections 1.1 through 1.8)
 
@@ -10,7 +10,7 @@ Build the commercial platform layer for Aptus, transforming it from an internall
 
 | Type | Label | Description |
 |------|-------|-------------|
-| A | **Consulting Partner** (primary) | SAP consulting firms purchasing Aptus to run Fit-to-Standard assessments for their clients |
+| A | **Consulting Partner** (primary) | SAP consulting firms purchasing ABeam to run Fit-to-Standard assessments for their clients |
 | B | **Direct Enterprise Client** (secondary) | Companies self-assessing their SAP S/4HANA Cloud readiness without a consulting partner |
 
 ### Subscription Tiers
@@ -1096,12 +1096,12 @@ await provisionDemoAssessment(demoOrg.id);
 
 ```
 Products:
-  - aptus_starter      → Price: $499/month or $4,990/year
-  - aptus_professional → Price: $1,499/month or $14,990/year
-  - aptus_enterprise   → Custom pricing (contact sales)
+  - ABeam_starter      → Price: $499/month or $4,990/year
+  - ABeam_professional → Price: $1,499/month or $14,990/year
+  - ABeam_enterprise   → Custom pricing (contact sales)
 
 Metered Usage:
-  - aptus_assessment_usage → Price: $0 (tracking only, overage pricing TBD)
+  - ABeam_assessment_usage → Price: $0 (tracking only, overage pricing TBD)
 ```
 
 ---
