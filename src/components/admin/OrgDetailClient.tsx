@@ -20,7 +20,7 @@ interface OrgUser {
 
 interface OrgDetailClientProps {
   organizationId: string;
-  orgType: "PLATFORM" | "PARTNER" | "DIRECT_CLIENT";
+  orgType: string;
   users: OrgUser[];
   currentUserRole: string;
 }
