@@ -8,7 +8,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { ProgressBar } from "@/components/shared/ProgressBar";
-import { ScopeItemCard } from "@/components/scope/ScopeItemCard";
+import { ScopeItemCard, type ScopeItemWarning } from "@/components/scope/ScopeItemCard";
 
 interface ScopeItemData {
   id: string;
@@ -43,6 +43,7 @@ interface ScopeAreaGroupProps {
   industryPreSelectSet: Set<string>;
   isReadOnly: boolean;
   onOpenBriefing?: ((itemId: string) => void) | undefined;
+  warningsByScope?: Map<string, ScopeItemWarning[]>;
 }
 
 export const ScopeAreaGroup = memo(function ScopeAreaGroup({
@@ -55,6 +56,7 @@ export const ScopeAreaGroup = memo(function ScopeAreaGroup({
   industryPreSelectSet,
   isReadOnly,
   onOpenBriefing,
+  warningsByScope,
 }: ScopeAreaGroupProps) {
   const handleSelectAll = useCallback(
     (e: React.MouseEvent) => {
@@ -112,6 +114,7 @@ export const ScopeAreaGroup = memo(function ScopeAreaGroup({
               onSelectionChange={onSelectionChange}
               isPreSelected={industryPreSelectSet.has(item.id)}
               onOpenBriefing={onOpenBriefing}
+              warnings={warningsByScope?.get(item.id)}
             />
           ))}
         </AccordionContent>

@@ -132,7 +132,7 @@ export async function PUT(
   }).catch(() => { /* fire-and-forget */ });
 
   // Check for cross-scope dependency warnings after deselection
-  let scopeWarnings: Array<{ missingScopeCode: string; missingScopeName: string; businessReason: string }> = [];
+  const scopeWarnings: Array<{ missingScopeCode: string; missingScopeName: string; businessReason: string }> = [];
   if (!parsed.data.selected) {
     try {
       const crossDeps = await prisma.crossScopeDependency.findMany({

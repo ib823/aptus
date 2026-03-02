@@ -52,7 +52,7 @@ interface ScopeItemCardProps {
   }) => void;
   isPreSelected?: boolean | undefined;
   onOpenBriefing?: ((itemId: string) => void) | undefined;
-  warnings?: ScopeItemWarning[];
+  warnings?: ScopeItemWarning[] | undefined;
 }
 
 interface ImpactData {

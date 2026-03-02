@@ -738,6 +738,7 @@ export function ScopeSelectionClient({
                     industryPreSelectSet={industryPreSelectSet}
                     isReadOnly={isReadOnly}
                     onOpenBriefing={handleOpenBriefing}
+                    warningsByScope={perCardWarnings}
                   />
                 );
               })}
