@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { StatCard } from "@/components/shared/StatCard";
 import { ProcessLandscapeMap } from "@/components/scope/ProcessLandscapeMap";
 import { ScopeItemBriefing } from "@/components/scope/ScopeItemBriefing";
+import { ScopeDependencyWarnings, type ScopeDependencyWarning } from "@/components/scope/ScopeDependencyWarnings";
 import { UI_TEXT } from "@/constants/ui-text";
 import {
   getLandscape,
@@ -95,7 +96,9 @@ export function ScopeSelectionClient({
   const [briefingItemId, setBriefingItemId] = useState<string | null>(null);
   const [briefingHierarchy, setBriefingHierarchy] = useState<ProcessAreaInfo[] | null>(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
+  const [scopeWarnings, setScopeWarnings] = useState<ScopeDependencyWarning[]>([]);
   const pendingSaves = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const warningDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Group items by functional area
   const functionalAreas = useMemo(() => {
@@ -217,6 +220,32 @@ export function ScopeSelectionClient({
     [assessmentId],
   );
 
+  // Fetch scope dependency warnings (debounced)
+  const fetchWarnings = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/assessments/${assessmentId}/scope/warnings`);
+      if (res.ok) {
+        const json = await res.json();
+        setScopeWarnings(json.data?.warnings ?? []);
+      }
+    } catch {
+      // Non-critical
+    }
+  }, [assessmentId]);
+
+  // Fetch warnings on mount
+  useEffect(() => {
+    fetchWarnings();
+  }, [fetchWarnings]);
+
+  // Refetch warnings after selection changes (debounced)
+  const scheduleWarningRefresh = useCallback(() => {
+    if (warningDebounce.current) clearTimeout(warningDebounce.current);
+    warningDebounce.current = setTimeout(() => {
+      fetchWarnings();
+    }, 1500);
+  }, [fetchWarnings]);
+
   // Cleanup timeouts on unmount
   useEffect(() => {
     const saves = pendingSaves.current;
@@ -224,6 +253,7 @@ export function ScopeSelectionClient({
       for (const timeout of saves.values()) {
         clearTimeout(timeout);
       }
+      if (warningDebounce.current) clearTimeout(warningDebounce.current);
     };
   }, []);
 
@@ -244,8 +274,9 @@ export function ScopeSelectionClient({
         ),
       );
       saveSelection(itemId, data);
+      scheduleWarningRefresh();
     },
-    [saveSelection],
+    [saveSelection, scheduleWarningRefresh],
   );
 
   // Bulk select/deselect for a functional area
@@ -407,6 +438,31 @@ export function ScopeSelectionClient({
     setBriefingItemId(null);
     setBriefingHierarchy(null);
   }, []);
+
+  // Handle adding a missing scope from dependency warnings
+  const handleAddMissingScope = useCallback(
+    (scopeItemId: string) => {
+      handleSelectionChange(scopeItemId, {
+        selected: true,
+        relevance: "YES",
+      });
+    },
+    [handleSelectionChange],
+  );
+
+  // Per-card warnings: map scopeItemId → warnings where this scope is the target
+  const perCardWarnings = useMemo(() => {
+    const map = new Map<string, ScopeDependencyWarning[]>();
+    for (const w of scopeWarnings) {
+      const existing = map.get(w.targetScopeCode);
+      if (existing) {
+        existing.push(w);
+      } else {
+        map.set(w.targetScopeCode, [w]);
+      }
+    }
+    return map;
+  }, [scopeWarnings]);
 
   const isReadOnly = assessmentStatus === "signed_off" || assessmentStatus === "reviewed";
   const industryPreSelectSet = useMemo(() => new Set(industryPreSelections), [industryPreSelections]);
@@ -594,6 +650,14 @@ export function ScopeSelectionClient({
             {applyingTemplate ? "Applying..." : "Apply Industry Template"}
           </Button>
         </div>
+      )}
+
+      {/* Cross-scope dependency warnings */}
+      {scopeWarnings.length > 0 && !isReadOnly && (
+        <ScopeDependencyWarnings
+          warnings={scopeWarnings}
+          onAddScope={handleAddMissingScope}
+        />
       )}
 
       {/* Scope items — landscape or list view */}

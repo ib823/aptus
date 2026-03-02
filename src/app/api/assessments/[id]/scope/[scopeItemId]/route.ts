@@ -131,5 +131,58 @@ export async function PUT(
     areaCode: scopeItem.functionalArea,
   }).catch(() => { /* fire-and-forget */ });
 
-  return NextResponse.json({ data: selection });
+  // Check for cross-scope dependency warnings after deselection
+  let scopeWarnings: Array<{ missingScopeCode: string; missingScopeName: string; businessReason: string }> = [];
+  if (!parsed.data.selected) {
+    try {
+      const crossDeps = await prisma.crossScopeDependency.findMany({
+        where: {
+          isActive: true,
+          OR: [
+            { sourceScopeCode: scopeItemId },
+            { targetScopeCode: scopeItemId },
+          ],
+        },
+        select: {
+          sourceScopeCode: true,
+          targetScopeCode: true,
+          direction: true,
+          businessReason: true,
+        },
+      });
+
+      if (crossDeps.length > 0) {
+        // Find other selected scopes that depend on this one
+        const otherSelections = await prisma.scopeSelection.findMany({
+          where: { assessmentId, selected: true, scopeItemId: { not: scopeItemId } },
+          select: { scopeItemId: true },
+        });
+        const otherSelectedSet = new Set(otherSelections.map((s) => s.scopeItemId));
+
+        for (const dep of crossDeps) {
+          const affectedScope =
+            dep.sourceScopeCode === scopeItemId ? dep.targetScopeCode : dep.sourceScopeCode;
+
+          if (otherSelectedSet.has(affectedScope)) {
+            const affectedItem = await prisma.scopeItem.findUnique({
+              where: { id: affectedScope },
+              select: { nameClean: true },
+            });
+            scopeWarnings.push({
+              missingScopeCode: scopeItemId,
+              missingScopeName: affectedItem?.nameClean ?? affectedScope,
+              businessReason: dep.businessReason,
+            });
+          }
+        }
+      }
+    } catch {
+      // Non-critical — don't fail the selection save
+    }
+  }
+
+  return NextResponse.json({
+    data: selection,
+    ...(scopeWarnings.length > 0 ? { warnings: scopeWarnings } : {}),
+  });
 }
