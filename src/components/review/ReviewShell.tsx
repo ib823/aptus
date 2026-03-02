@@ -680,7 +680,7 @@ function ReviewShellInner({
         // Optimistic update stays; next fetch will reconcile
       }
     },
-    [assessmentId, currentScopeItemId, stepsByActivityId, queryClient],
+    [assessmentId, currentScopeItemId, stepsByActivityId, queryClient, dependencyEngineEnabled],
   );
 
   // Step-level implications panel state (TASK 6)
@@ -935,7 +935,6 @@ function ReviewShellInner({
                       <div className="mt-2">
                         <DependencyEffectsPanel
                           effects={dependencyEffectsMap.get(activity.id)!}
-                          assessmentId={assessmentId}
                         />
                       </div>
                     )}

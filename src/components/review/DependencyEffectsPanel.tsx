@@ -1,16 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, GitBranch, ChevronDown, ChevronRight, Undo2 } from "lucide-react";
+import { AlertTriangle, GitBranch, ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import type { DependencyEffects } from "@/lib/dependency/types";
 
 interface DependencyEffectsPanelProps {
   effects: DependencyEffects;
-  assessmentId: string;
-  onUndo?: (propagationLogId: string) => void;
-  isUndoing?: boolean;
 }
 
 /**
@@ -19,9 +15,6 @@ interface DependencyEffectsPanelProps {
  */
 export function DependencyEffectsPanel({
   effects,
-  assessmentId,
-  onUndo,
-  isUndoing,
 }: DependencyEffectsPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
