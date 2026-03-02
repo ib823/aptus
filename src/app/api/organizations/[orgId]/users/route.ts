@@ -8,6 +8,8 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { canAssignRole } from "@/lib/auth/role-permissions";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { sendEmail } from "@/lib/email/brevo";
+import { orgInvitationEmail } from "@/lib/email/templates";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import type { UserRole } from "@/types/assessment";
@@ -185,5 +187,26 @@ export async function POST(
     actorRole: user.role,
   });
 
-  return NextResponse.json({ data: { invitation, magicLinkSent: false } }, { status: 201 });
+  // Send invitation email (fire-and-forget)
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { name: true },
+  });
+  const acceptUrl = `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/invitations/${token}`;
+  const emailContent = orgInvitationEmail({
+    recipientEmail: parsed.data.email,
+    inviterName: user.name ?? user.email,
+    organizationName: org?.name ?? "your organization",
+    role: targetRole,
+    acceptUrl,
+  });
+  sendEmail({
+    to: { email: parsed.data.email },
+    subject: emailContent.subject,
+    htmlContent: emailContent.html,
+    textContent: emailContent.text,
+    tags: ["org-invitation"],
+  }).catch((err) => console.error("[EMAIL] Failed to send org invitation:", err));
+
+  return NextResponse.json({ data: { invitation, magicLinkSent: true } }, { status: 201 });
 }

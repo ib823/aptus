@@ -7,6 +7,8 @@ import { isMfaRequired, canManageStakeholders } from "@/lib/auth/permissions";
 import { addStakeholder, getStakeholders } from "@/lib/db/assessments";
 import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { sendEmail } from "@/lib/email/brevo";
+import { stakeholderInviteEmail } from "@/lib/email/templates";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
@@ -150,10 +152,26 @@ export async function POST(
     actorRole: user.role,
   });
 
-  // In dev, log the magic link that would be sent
-  if (process.env.NODE_ENV === "development") {
-    console.log(`[MAGIC LINK] Would send invitation to ${parsed.data.email} for assessment ${assessmentId}`);
-  }
+  // Send stakeholder invitation email (fire-and-forget)
+  const assessmentForEmail = await prisma.assessment.findUnique({
+    where: { id: assessmentId },
+    select: { companyName: true },
+  });
+  const loginUrl = `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/login`;
+  const emailContent = stakeholderInviteEmail({
+    recipientName: parsed.data.name,
+    inviterName: user.name ?? user.email,
+    assessmentName: assessmentForEmail?.companyName ?? "an assessment",
+    role: parsed.data.role,
+    loginUrl,
+  });
+  sendEmail({
+    to: { email: parsed.data.email, name: parsed.data.name },
+    subject: emailContent.subject,
+    htmlContent: emailContent.html,
+    textContent: emailContent.text,
+    tags: ["stakeholder-invite"],
+  }).catch((err) => console.error("[EMAIL] Failed to send stakeholder invite:", err));
 
   return NextResponse.json({ data: stakeholder }, { status: 201 });
 }

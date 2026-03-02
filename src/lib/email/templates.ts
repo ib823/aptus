@@ -289,6 +289,36 @@ export function sessionDisplacedEmail(params: {
   };
 }
 
+// ── Organization Invitation ────────────────────────────────────────────────
+
+export function orgInvitationEmail(params: {
+  recipientEmail: string;
+  inviterName: string;
+  organizationName: string;
+  role: string;
+  acceptUrl: string;
+}): { subject: string; html: string; text: string } {
+  const roleName = params.role.replace(/_/g, " ");
+  return {
+    subject: `You've been invited to join ${params.organizationName} on ${BRAND_NAME}`,
+    html: baseLayout(`
+      <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#111827;">You're invited</h2>
+      <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
+        <strong>${params.inviterName}</strong> has invited you to join
+        <strong>${params.organizationName}</strong> as a <strong>${roleName}</strong>.
+      </p>
+      <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
+        Click the button below to accept the invitation and set up your account.
+      </p>
+      ${button(params.acceptUrl, "Accept Invitation")}
+      <p style="margin:0;font-size:12px;color:#9ca3af;">
+        This invitation expires in 7 days. If you didn't expect this, you can safely ignore this email.
+      </p>
+    `),
+    text: `You've been invited to join ${params.organizationName} on ${BRAND_NAME}\n\n${params.inviterName} has invited you to join ${params.organizationName} as a ${roleName}.\n\nAccept the invitation: ${params.acceptUrl}\n\nThis invitation expires in 7 days.`,
+  };
+}
+
 // ── Report Ready ───────────────────────────────────────────────────────────
 
 export function reportReadyEmail(params: {

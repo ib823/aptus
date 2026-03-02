@@ -60,7 +60,7 @@ export function InviteUserDialog({
     setSuccess(false);
 
     try {
-      const res = await fetch(`/api/organizations/${organizationId}/invitations`, {
+      const res = await fetch(`/api/organizations/${organizationId}/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, role }),

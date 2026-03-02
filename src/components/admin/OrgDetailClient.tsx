@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { UserPlus } from "lucide-react";
 import { UserManagementTable } from "@/components/admin/UserManagementTable";
+import { PendingInvitationsTable } from "@/components/admin/PendingInvitationsTable";
 import { InviteUserDialog } from "@/components/admin/InviteUserDialog";
 
 interface OrgUser {
@@ -21,11 +22,13 @@ interface OrgDetailClientProps {
   organizationId: string;
   orgType: "PLATFORM" | "PARTNER" | "DIRECT_CLIENT";
   users: OrgUser[];
+  currentUserRole: string;
 }
 
-export function OrgDetailClient({ organizationId, orgType, users: initialUsers }: OrgDetailClientProps) {
+export function OrgDetailClient({ organizationId, orgType, users: initialUsers, currentUserRole }: OrgDetailClientProps) {
   const [users, setUsers] = useState(initialUsers);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteRefreshKey, setInviteRefreshKey] = useState(0);
 
   const refreshUsers = useCallback(async () => {
     try {
@@ -37,6 +40,7 @@ export function OrgDetailClient({ organizationId, orgType, users: initialUsers }
     } catch {
       // silent — keep current data
     }
+    setInviteRefreshKey((k) => k + 1);
   }, [organizationId]);
 
   return (
@@ -49,10 +53,15 @@ export function OrgDetailClient({ organizationId, orgType, users: initialUsers }
         </Button>
       </div>
 
+      <PendingInvitationsTable
+        organizationId={organizationId}
+        refreshKey={inviteRefreshKey}
+      />
+
       <UserManagementTable
         organizationId={organizationId}
         users={users}
-        currentUserRole="platform_admin"
+        currentUserRole={currentUserRole}
         onRefresh={refreshUsers}
       />
 
