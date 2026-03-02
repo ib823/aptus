@@ -21,6 +21,9 @@ import { ScopeItemSummary } from "@/components/review/ScopeItemSummary";
 import { BusinessQuestionCard } from "@/components/review/BusinessQuestionCard";
 import { ImplicationsPanel } from "@/components/review/ImplicationsPanel";
 import { getScopeItemMetadata, getActivityMetadata } from "@/constants/scope-item-metadata";
+import { DependencyEffectsPanel } from "@/components/review/DependencyEffectsPanel";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import type { DependencyEffects } from "@/lib/dependency/types";
 import type { HierarchyTree, ActivityProgressMap, ActivityNode } from "@/types/hierarchy";
 
 interface ScopeItemNav {
@@ -131,6 +134,8 @@ function ReviewShellInner({
     : initialScopeItems[0]?.id ?? null;
   const [currentScopeItemId, setCurrentScopeItemId] = useState<string | null>(resolvedInitialId);
   const [localStepOverrides, setLocalStepOverrides] = useState<Map<string, Partial<StepData>>>(new Map());
+  const [dependencyEffectsMap, setDependencyEffectsMap] = useState<Map<string, DependencyEffects>>(new Map());
+  const dependencyEngineEnabled = isFeatureEnabled("DEPENDENCY_ENGINE");
   const [overallProgress] = useState(initialProgress);
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [bulkAllLoading, setBulkAllLoading] = useState(false);
@@ -634,7 +639,7 @@ function ReviewShellInner({
 
       // Use the bulk API to persist
       try {
-        await fetch(`/api/assessments/${assessmentId}/steps/bulk`, {
+        const res = await fetch(`/api/assessments/${assessmentId}/steps/bulk`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -644,6 +649,22 @@ function ReviewShellInner({
             clientNote: note,
           }),
         });
+
+        // Phase: Dependency Engine — capture propagation effects
+        if (dependencyEngineEnabled && res.ok) {
+          try {
+            const json = await res.json();
+            if (json.dependencyEffects) {
+              setDependencyEffectsMap((prev) => {
+                const next = new Map(prev);
+                next.set(activityId, json.dependencyEffects as DependencyEffects);
+                return next;
+              });
+            }
+          } catch {
+            // Response already consumed or no dependency effects
+          }
+        }
 
         // Invalidate step responses to pick up server state
         void queryClient.invalidateQueries({
@@ -910,6 +931,14 @@ function ReviewShellInner({
                       onActivityClassify={handleActivityClassify}
                       isReadOnly={isReadOnly}
                     />
+                    {dependencyEngineEnabled && dependencyEffectsMap.has(activity.id) && (
+                      <div className="mt-2">
+                        <DependencyEffectsPanel
+                          effects={dependencyEffectsMap.get(activity.id)!}
+                          assessmentId={assessmentId}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               });

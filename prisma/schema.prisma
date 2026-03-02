@@ -90,6 +90,10 @@ model Activity {
   processFlow  ProcessFlow   @relation(fields: [processFlowId], references: [id])
   processSteps ProcessStep[]
 
+  // Phase: Dependency Engine
+  dependenciesAsSource ActivityDependency[] @relation("DependencySource")
+  dependenciesAsTarget ActivityDependency[] @relation("DependencyTarget")
+
   @@unique([processFlowId, title])
   @@index([processFlowId])
   @@index([guid])
@@ -446,6 +450,9 @@ model Assessment {
   changeRequests       ChangeRequest[]
   reassessmentTriggers ReassessmentTrigger[]
 
+  // Phase: Dependency Engine
+  propagationLogs      DependencyPropagationLog[]
+
   @@index([status])
   @@index([createdBy])
   @@index([organizationId])
@@ -538,6 +545,10 @@ model StepResponse {
   evidenceUrls   String[]   @default([])
   reviewedBy     String?
   reviewedAt     DateTime?
+
+  // Phase: Dependency Engine
+  isPropagated   Boolean    @default(false)
+  propagatedFrom String?    // DependencyPropagationLog ID if auto-classified
 
   assessment  Assessment  @relation(fields: [assessmentId], references: [id])
   processStep ProcessStep @relation(fields: [processStepId], references: [id])
@@ -1990,4 +2001,91 @@ model PerformanceBaseline {
 
   @@unique([route, metric, period])
   @@index([route, metric])
+}
+
+// =============================================================
+// Phase: Dependency Engine
+// =============================================================
+
+enum DependencyType {
+  HARD_SEQUENTIAL
+  PARENT_CHILD
+  GROUP
+  REQUIRES_DATA
+  ALTERNATIVE_PATH
+  SOFT_DEPENDENCY
+}
+
+enum PropagationRule {
+  IF_SOURCE_NA_THEN_TARGET_NA
+  IF_GROUP_NA_THEN_CHILDREN_NA
+  WARN_IF_ALL_SOURCES_NA
+  WARN_ONLY
+  NO_PROPAGATION
+}
+
+enum FlowDirection {
+  DOWNSTREAM
+  UPSTREAM
+  BIDIRECTIONAL
+}
+
+model ActivityDependency {
+  id               String          @id @default(cuid())
+  scopeItemCode    String
+  sourceActivityId String
+  targetActivityId String
+  dependencyType   DependencyType
+  propagationRule  PropagationRule
+  businessReason   String
+  isActive         Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  sourceActivity Activity @relation("DependencySource", fields: [sourceActivityId], references: [id], onDelete: Cascade)
+  targetActivity Activity @relation("DependencyTarget", fields: [targetActivityId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceActivityId, targetActivityId])
+  @@index([scopeItemCode])
+  @@index([sourceActivityId])
+  @@index([targetActivityId])
+}
+
+model CrossScopeDependency {
+  id               String        @id @default(cuid())
+  sourceScopeCode  String
+  sourceActivityId String
+  targetScopeCode  String
+  targetActivityId String
+  direction        FlowDirection
+  businessReason   String
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+
+  @@unique([sourceActivityId, targetActivityId])
+  @@index([sourceScopeCode])
+  @@index([targetScopeCode])
+}
+
+model DependencyPropagationLog {
+  id              String    @id @default(cuid())
+  assessmentId    String
+  triggerStepId   String
+  affectedStepId  String
+  dependencyId    String
+  previousStatus  String?
+  newStatus       String    @default("NA")
+  propagationType String    // "AUTO_NA" | "WARNING"
+  undone          Boolean   @default(false)
+  undoneAt        DateTime?
+  undoneBy        String?
+  createdAt       DateTime  @default(now())
+  createdBy       String
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId])
+  @@index([triggerStepId])
+  @@index([affectedStepId])
+  @@index([dependencyId])
 }

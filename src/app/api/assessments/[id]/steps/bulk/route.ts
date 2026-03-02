@@ -5,6 +5,9 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired, canEditStepResponse } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import { PropagationEngine } from "@/lib/dependency/propagation-engine";
+import type { DependencyEffects } from "@/lib/dependency/types";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
@@ -178,6 +181,90 @@ export async function POST(
     actorRole: user.role,
   });
 
+  // Phase: Dependency Engine — evaluate propagation after bulk classification
+  let dependencyEffects: DependencyEffects | undefined;
+
+  if (isFeatureEnabled("DEPENDENCY_ENGINE") && operations.length > 0) {
+    try {
+      // Find the activity for the first step to get scope item code
+      const firstStepId = parsed.data.stepIds?.[0] ?? steps[0]?.id;
+      if (firstStepId) {
+        const stepWithActivity = await prisma.processStep.findUnique({
+          where: { id: firstStepId },
+          select: {
+            activityId: true,
+            activity: {
+              select: {
+                processFlow: {
+                  select: {
+                    solutionProcess: {
+                      select: { scopeItemId: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        if (stepWithActivity?.activityId) {
+          const scopeItemCode =
+            stepWithActivity.activity?.processFlow?.solutionProcess?.scopeItemId;
+
+          if (scopeItemCode) {
+            const engine = await PropagationEngine.forScope(scopeItemCode);
+            const activityId = stepWithActivity.activityId;
+
+            if (parsed.data.fitStatus === "NA") {
+              const result = await engine.evaluate(assessmentId, activityId, "NA");
+
+              if (result.propagations.length > 0) {
+                await engine.applyPropagations(
+                  assessmentId,
+                  firstStepId,
+                  result.propagations,
+                  user.id,
+                );
+              }
+
+              dependencyEffects = {
+                propagations: result.propagations.map((p) => ({
+                  activityId: p.activityId,
+                  activityTitle: p.activityTitle,
+                  stepCount: p.affectedStepIds.length,
+                  businessReason: p.businessReason,
+                })),
+                warnings: result.warnings.map((w) => ({
+                  activityId: w.activityId,
+                  activityTitle: w.activityTitle,
+                  scopeItemCode: w.scopeItemCode,
+                  warningType: w.warningType,
+                  businessReason: w.businessReason,
+                })),
+              };
+            } else {
+              // Changing from NA to something else — reverse propagation
+              const reversed = await engine.reversePropagation(
+                assessmentId,
+                activityId,
+                user.id,
+              );
+              if (reversed.undoneSteps.length > 0) {
+                dependencyEffects = {
+                  propagations: [],
+                  warnings: [],
+                  reversed,
+                };
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[DependencyEngine] bulk propagation error:", err);
+    }
+  }
+
   return NextResponse.json({
     data: {
       updated,
@@ -185,5 +272,6 @@ export async function POST(
       skipped,
       total: steps.length,
     },
+    ...(dependencyEffects && { dependencyEffects }),
   });
 }
