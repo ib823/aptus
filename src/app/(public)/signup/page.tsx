@@ -7,7 +7,7 @@ import { CheckCircle, AlertCircle, Building2, User, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { AptusLogo } from "@/components/shared/AptusLogo";
+import { ABeamLogo } from "@/components/shared/ABeamLogo";
 
 export default function SignupPage() {
   return (
@@ -73,7 +73,7 @@ function SignupForm() {
     return (
       <Card className="shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
         <CardHeader className="text-center pb-2">
-          <AptusLogo size="lg" className="mb-6 justify-center" />
+          <ABeamLogo size="lg" className="mb-6 justify-center" />
         </CardHeader>
         <CardContent>
           <div className="flex flex-col items-center py-4">
@@ -94,7 +94,7 @@ function SignupForm() {
   return (
     <Card className="shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
       <CardHeader className="text-center pb-2">
-        <AptusLogo size="lg" className="mb-6 justify-center" />
+        <ABeamLogo size="lg" className="mb-6 justify-center" />
         <h1 className="text-2xl font-bold">Create your account</h1>
         <p className="text-base text-muted-foreground mt-1">
           Start your free 14-day trial. No credit card required.

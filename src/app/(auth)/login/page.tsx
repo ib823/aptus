@@ -6,7 +6,7 @@ import { Mail, CheckCircle, AlertCircle, ArrowLeft, KeyRound } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { AptusLogo } from "@/components/shared/AptusLogo";
+import { ABeamLogo } from "@/components/shared/ABeamLogo";
 import { UI_TEXT } from "@/constants/ui-text";
 import { signIn } from "next-auth/react";
 import { useWebAuthnLogin } from "@/hooks/useWebAuthnLogin";
@@ -107,7 +107,7 @@ function LoginForm() {
   return (
     <Card className="rounded-xl shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
       <CardHeader className="text-center pb-2">
-        <AptusLogo size="lg" className="mb-2 justify-center" />
+        <ABeamLogo size="lg" className="mb-2 justify-center" />
         <p className="text-xs text-muted-foreground mb-1">
           {UI_TEXT.app.tagline}
         </p>

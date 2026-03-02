@@ -1,8 +1,8 @@
-# APTUS V2 — Backend Integration Test Report
+# ABEAM V2 — Backend Integration Test Report
 
 **Date:** 2026-03-02T02:24:22Z
 **Server:** http://localhost:3003 (Next.js dev, port 3003)
-**Auth Method:** `POST /api/auth/test-login` with `E2E_TEST_SECRET` → `aptus-session` cookie, role: `platform_admin`
+**Auth Method:** `POST /api/auth/test-login` with `E2E_TEST_SECRET` → `ABeam-session` cookie, role: `platform_admin`
 **Test Runner:** Node.js ESM script using native `fetch()` — real HTTP requests against running dev server
 **Database:** PostgreSQL 16 via Prisma ORM (102,261 ProcessSteps, 560 ScopeItems, 4,703 ConfigActivities)
 

@@ -14,11 +14,11 @@ config({ path: path.join(__dirname, "../../.env.local") });
 const STATE_DIR = __dirname;
 
 export const TEST_USERS = {
-  admin: { email: "e2e-admin@aptus.test", name: "E2E Admin", role: "admin" },
-  consultant: { email: "e2e-consultant@aptus.test", name: "E2E Consultant", role: "consultant" },
-  processOwner: { email: "e2e-po@aptus.test", name: "E2E Process Owner", role: "process_owner" },
-  itLead: { email: "e2e-it@aptus.test", name: "E2E IT Lead", role: "it_lead" },
-  executive: { email: "e2e-exec@aptus.test", name: "E2E Executive", role: "executive" },
+  admin: { email: "e2e-admin@abeam.test", name: "E2E Admin", role: "admin" },
+  consultant: { email: "e2e-consultant@abeam.test", name: "E2E Consultant", role: "consultant" },
+  processOwner: { email: "e2e-po@abeam.test", name: "E2E Process Owner", role: "process_owner" },
+  itLead: { email: "e2e-it@abeam.test", name: "E2E IT Lead", role: "it_lead" },
+  executive: { email: "e2e-exec@abeam.test", name: "E2E Executive", role: "executive" },
 } as const;
 
 export function storageStatePath(role: string): string {
@@ -77,7 +77,7 @@ function writeStorageState(filePath: string, token: string): void {
   const state = {
     cookies: [
       {
-        name: "aptus-session",
+        name: "abeam-session",
         value: token,
         domain: "localhost",
         path: "/",

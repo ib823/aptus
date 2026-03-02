@@ -862,7 +862,7 @@ ${data.decisionsSummary.map((d) => `| ${d.stepTitle} | ${d.classification ?? "No
 ${data.actionItemsSummary.map((ai, i) => `| ${i + 1} | ${ai.title} | ${ai.assignedToName} | ${ai.dueDate ?? "N/A"} | ${ai.priority} | ${ai.status} |`).join("\n")}
 
 ---
-*Generated automatically by Aptus on ${new Date().toISOString()}*
+*Generated automatically by ABeam on ${new Date().toISOString()}*
 `;
 }
 ```

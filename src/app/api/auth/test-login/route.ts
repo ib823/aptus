@@ -4,7 +4,7 @@
  * 1. Only functional when E2E_TEST_SECRET env var is set (never in production)
  * 2. Requires the secret in the request body — can't be exploited without it
  * 3. Uses the real session system — identical auth path to production
- * 4. Creates/reuses a single test user (e2e-tester@aptus.test)
+ * 4. Creates/reuses a single test user (e2e-tester@abeam.test)
  */
 
 import { NextResponse, type NextRequest } from "next/server";
@@ -12,7 +12,7 @@ import { prisma } from "@/lib/db/prisma";
 import { createSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { APP_CONFIG } from "@/constants/config";
 
-const TEST_USER_EMAIL = "e2e-tester@aptus.test";
+const TEST_USER_EMAIL = "e2e-tester@abeam.test";
 const TEST_USER_NAME = "E2E Tester";
 const TEST_USER_ROLE = "platform_admin";
 

@@ -3,7 +3,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/security/rate-limit";
 
-const SESSION_COOKIE = "aptus-session";
+const SESSION_COOKIE = "abeam-session";
 const NEXTAUTH_COOKIE = "next-auth.session-token";
 const BRIDGE_PATH = "/api/auth/bridge";
 

@@ -46,7 +46,7 @@ test.describe("T-E2E-J07 — Enterprise SSO + SCIM Configuration", () => {
       await settings.configureSso({
         provider: "Okta",
         metadataUrl: "https://dev-12345.okta.com/app/metadata",
-        entityId: "https://aptus.app/sso/j07-test",
+        entityId: "https://abeam.app/sso/j07-test",
       });
     }
   });

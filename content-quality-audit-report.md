@@ -1,4 +1,4 @@
-# APTUS V2 — Content Quality + Decision Experience Audit Report
+# ABEAM V2 — Content Quality + Decision Experience Audit Report
 
 **Date**: 2026-03-02
 **Assessment**: cmm8ll1z104o776v34aydbefg (pending_validation, 6 scope items)
@@ -8,7 +8,7 @@
 
 ## EXECUTIVE SUMMARY
 
-APTUS has **94% metadata coverage** across 316 real activities, with **72% Excellent+Good** question quality and **100% jargon-free** questions. 100% of questions are answerable by a business user. **APTUS is conditionally ready for demos** — the curated scope items have strong content, but uncovered activities show raw SAP data.
+ABEAM has **94% metadata coverage** across 316 real activities, with **72% Excellent+Good** question quality and **100% jargon-free** questions. 100% of questions are answerable by a business user. **ABEAM is conditionally ready for demos** — the curated scope items have strong content, but uncovered activities show raw SAP data.
 
 ---
 

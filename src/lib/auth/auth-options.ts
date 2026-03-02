@@ -121,7 +121,7 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       // Minimize PII in the NextAuth session response.
-      // The app uses a custom session system (aptus-session cookie) for all
+      // The app uses a custom session system (abeam-session cookie) for all
       // authenticated operations. The NextAuth session only facilitates the
       // bridge flow, so we strip unnecessary fields from the response.
       if (session.user) {

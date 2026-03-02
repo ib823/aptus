@@ -1,9 +1,9 @@
-# Security Audit Report — Aptus Platform
+# Security Audit Report — ABeam Platform
 
 **Date:** 2026-02-23
-**Scope:** Full-stack security assessment of the Aptus SAP S/4HANA fit-gap analysis platform
+**Scope:** Full-stack security assessment of the ABeam SAP S/4HANA fit-gap analysis platform
 **Method:** Passive external inspection + comprehensive source code review
-**Target:** https://aptus-sandy.vercel.app
+**Target:** https://ABeam-sandy.vercel.app
 **Framework:** Next.js 15 App Router on Vercel, PostgreSQL (Neon), Prisma ORM
 
 ---
@@ -63,7 +63,7 @@ This audit identified **10 findings** ranging from CRITICAL to INFORMATIONAL sev
 
 **Before:** JWT token contained `userId, role, organizationId, mfaEnabled, totpVerified`
 **Risk:** `organizationId`, `mfaEnabled`, and `totpVerified` leak internal auth state and organizational structure.
-**Fix:** JWT token now contains only `userId` and `role`. The custom session system (`aptus-session` cookie) handles all authenticated operations server-side with full user data from the database.
+**Fix:** JWT token now contains only `userId` and `role`. The custom session system (`ABeam-session` cookie) handles all authenticated operations server-side with full user data from the database.
 **File modified:** `src/lib/auth/auth-options.ts`
 
 ### FINDING 006 — No Rate Limiting on Auth Endpoints (MEDIUM → FIXED)

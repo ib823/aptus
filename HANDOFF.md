@@ -1,4 +1,4 @@
-# Handoff Document — Aptus
+# Handoff Document — ABeam
 
 ## Current State
 
@@ -202,7 +202,7 @@ None.
 - ProcessStep uses `sequence` (not `sequenceNumber`)
 - StepResponse needs `include` (not `select`) for `processStep` relation access
 - jspdf-autotable y-position tracking via `getFinalY()` helper with unknown cast
-- Sign-off auto-transitions assessment status to `signed_off` when all 3 roles (client_representative, aptus_consultant, aptus_pm) have signed
+- Sign-off auto-transitions assessment status to `signed_off` when all 3 roles (client_representative, ABeam_consultant, ABeam_pm) have signed
 - Audit trail report is available at any assessment status (not gated behind completion)
 - Flow diagrams use upsert with `assessmentId_scopeItemId_processFlowName` unique constraint
 
@@ -224,7 +224,7 @@ None.
 
 ### V2 Scope Summary
 
-22 phases (10–31) expanding Aptus from a core FIT-to-Standard assessment tool into a full enterprise platform with:
+22 phases (10–31) expanding ABeam from a core FIT-to-Standard assessment tool into a full enterprise platform with:
 - Enriched assessment workflow (company profile, scope selection, step presentation, gap resolution)
 - New registers (integration, data migration, OCM)
 - 11-role system with SSO/SCIM (up from 5 roles)

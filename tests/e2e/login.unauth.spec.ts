@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("Login Page", () => {
   test("should render the login page", async ({ page }) => {
     await page.goto("/login");
-    await expect(page).toHaveTitle(/Aptus/);
+    await expect(page).toHaveTitle(/ABeam/);
     await expect(page.locator("input[type='email']")).toBeVisible();
   });
 

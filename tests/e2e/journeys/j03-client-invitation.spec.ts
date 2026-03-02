@@ -105,7 +105,7 @@ test.describe("T-E2E-J03 — Client Stakeholder Invitation", () => {
 
     const auth = new AuthPage(page);
     await auth.goToLogin();
-    await expect(page).toHaveTitle(/Aptus/);
+    await expect(page).toHaveTitle(/ABeam/);
     await expect(auth.emailInput).toBeVisible();
 
     await context.close();

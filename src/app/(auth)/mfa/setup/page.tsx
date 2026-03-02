@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { AptusLogo } from "@/components/shared/AptusLogo";
+import { ABeamLogo } from "@/components/shared/ABeamLogo";
 import { TotpSetupForm } from "@/components/mfa/TotpSetupForm";
 import { LoadingSkeleton } from "@/components/shared/LoadingSkeleton";
 import { UI_TEXT } from "@/constants/ui-text";
@@ -26,7 +26,7 @@ export default function MfaSetupPage() {
         const sessionRes = await fetch("/api/auth/session");
         const sessionData = await sessionRes.json();
         if (!sessionData?.user?.email && !sessionData?.user?.id) {
-          // Also check aptus-session via MFA endpoint
+          // Also check abeam-session via MFA endpoint
           const response = await fetch("/api/auth/mfa/setup");
           if (response.status === 401) {
             router.replace("/login");
@@ -72,7 +72,7 @@ export default function MfaSetupPage() {
   return (
     <Card className="shadow-md">
       <CardHeader className="text-center pb-2">
-        <AptusLogo size="lg" className="mb-6 justify-center" />
+        <ABeamLogo size="lg" className="mb-6 justify-center" />
         <h1 className="text-2xl font-bold">
           {UI_TEXT.auth.mfaSetupTitle}
         </h1>

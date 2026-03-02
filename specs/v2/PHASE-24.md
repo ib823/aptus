@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-Role-specific onboarding flows that guide each user type through their first experience with Aptus. Different roles interact with fundamentally different parts of the platform, so a one-size-fits-all onboarding is inadequate.
+Role-specific onboarding flows that guide each user type through their first experience with ABeam. Different roles interact with fundamentally different parts of the platform, so a one-size-fits-all onboarding is inadequate.
 
 **Problem**: Currently, all users land on the same dashboard page after login regardless of role. A process owner invited via magic link has no guidance on what they should do, an executive sponsor has no context on what to expect, and a new consultant must discover the assessment workflow themselves.
 
@@ -35,7 +35,7 @@ Role-specific onboarding flows that guide each user type through their first exp
 3. Land on integration register
 
 **Project Manager (first login)**:
-1. Welcome to Aptus portfolio management
+1. Welcome to ABeam portfolio management
 2. Tour of PM dashboard (timeline, deadlines, resource allocation)
 3. Set up first deadline
 
@@ -487,8 +487,8 @@ const ONBOARDING_FLOWS: Record<string, OnboardingFlow> = {
     steps: [
       {
         index: 0,
-        title: "Welcome to Aptus",
-        description: "Aptus helps you run SAP S/4HANA Cloud Fit-to-Standard assessments. Let's show you around.",
+        title: "Welcome to ABeam",
+        description: "ABeam helps you run SAP S/4HANA Cloud Fit-to-Standard assessments. Let's show you around.",
         illustration: "welcome",
         action: "continue",
         isRequired: false,
@@ -651,7 +651,7 @@ const ONBOARDING_FLOWS: Record<string, OnboardingFlow> = {
     steps: [
       {
         index: 0,
-        title: "Welcome to Aptus Portfolio",
+        title: "Welcome to ABeam Portfolio",
         description: "As Project Manager, you can track assessment progress, manage deadlines, and oversee team activity across all assessments.",
         illustration: "welcome",
         action: "continue",
@@ -744,7 +744,7 @@ const ONBOARDING_FLOWS: Record<string, OnboardingFlow> = {
     steps: [
       {
         index: 0,
-        title: "Welcome to Aptus",
+        title: "Welcome to ABeam",
         description: "As Client Admin, you can manage your team's access and view overall assessment progress.",
         illustration: "welcome",
         action: "continue",
@@ -776,7 +776,7 @@ const ONBOARDING_FLOWS: Record<string, OnboardingFlow> = {
     steps: [
       {
         index: 0,
-        title: "Welcome to Aptus",
+        title: "Welcome to ABeam",
         description: "You have view-only access to assessment data. You can browse scope items, review step classifications, and view reports.",
         illustration: "welcome",
         action: "go_to_dashboard",
@@ -1023,7 +1023,7 @@ Given a consultant logs in for the first time
   And no OnboardingProgress record exists for their userId
 When they access the portal
 Then they are redirected to /onboarding
-  And the OnboardingWizard shows step 1: "Welcome to Aptus"
+  And the OnboardingWizard shows step 1: "Welcome to ABeam"
   And ProgressDots shows 4 steps with step 1 highlighted
 ```
 

@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-Capstone hardening phase that transforms Aptus from a desktop-oriented web application into a production-grade, installable Progressive Web App with offline capability, comprehensive mobile responsiveness, performance optimization, security hardening, and monitoring/observability infrastructure.
+Capstone hardening phase that transforms ABeam from a desktop-oriented web application into a production-grade, installable Progressive Web App with offline capability, comprehensive mobile responsiveness, performance optimization, security hardening, and monitoring/observability infrastructure.
 
 This phase addresses five interconnected concerns:
 
@@ -243,7 +243,7 @@ const performanceReportSchema = z.object({
 PWAInstallPrompt (client)
 ├── Dialog (shadcn)
 │   ├── AppIcon (192px)
-│   ├── Text "Install Aptus for faster access"
+│   ├── Text "Install ABeam for faster access"
 │   ├── FeatureList ("Works offline", "Push notifications", "Home screen access")
 │   ├── Button "Install"
 │   └── Button "Not now" (dismisses for 7 days)
@@ -363,7 +363,7 @@ const CACHE_STRATEGIES = {
   // App shell: cache-first (HTML, CSS, JS bundles)
   appShell: {
     strategy: "CacheFirst",
-    cacheName: "aptus-shell-v1",
+    cacheName: "ABeam-shell-v1",
     maxEntries: 60,
     maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
     match: /\/_next\/static\//,
@@ -372,7 +372,7 @@ const CACHE_STRATEGIES = {
   // API data: network-first with cache fallback
   apiData: {
     strategy: "NetworkFirst",
-    cacheName: "aptus-api-v1",
+    cacheName: "ABeam-api-v1",
     maxEntries: 200,
     maxAgeSeconds: 24 * 60 * 60, // 24 hours
     networkTimeoutSeconds: 5,
@@ -382,7 +382,7 @@ const CACHE_STRATEGIES = {
   // Images: stale-while-revalidate
   images: {
     strategy: "StaleWhileRevalidate",
-    cacheName: "aptus-images-v1",
+    cacheName: "ABeam-images-v1",
     maxEntries: 100,
     maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
     match: /\.(png|jpg|jpeg|svg|webp|ico)$/,
@@ -391,7 +391,7 @@ const CACHE_STRATEGIES = {
   // Fonts: cache-first (long-lived)
   fonts: {
     strategy: "CacheFirst",
-    cacheName: "aptus-fonts-v1",
+    cacheName: "ABeam-fonts-v1",
     maxEntries: 10,
     maxAgeSeconds: 365 * 24 * 60 * 60, // 1 year
     match: /\.(woff2?|ttf|otf)$/,
@@ -412,8 +412,8 @@ interface OfflineSyncItem {
   queuedAt: string; // ISO 8601
 }
 
-const SYNC_QUEUE_KEY = "aptus-sync-queue";
-const DEVICE_ID_KEY = "aptus-device-id";
+const SYNC_QUEUE_KEY = "ABeam-sync-queue";
+const DEVICE_ID_KEY = "ABeam-device-id";
 
 async function queueOfflineAction(item: Omit<OfflineSyncItem, "clientId" | "queuedAt">): Promise<void> {
   const queue = (await get<OfflineSyncItem[]>(SYNC_QUEUE_KEY)) ?? [];
@@ -642,7 +642,7 @@ async function checkRateLimit(
 | Offline sync completed | Push + In-app toast | Syncing user | "{synced} changes synced successfully. {conflicts} conflicts need your attention." |
 | Sync conflict detected | Push + In-app dialog | Affected user | "A classification conflict was detected for step '{stepName}'. Please review and resolve." |
 | Sync failed (after 3 retries) | Push + In-app toast | Affected user | "Failed to sync {failed} changes. Please check your connection and try again." |
-| PWA update available | In-app banner | All users | "A new version of Aptus is available. Refresh to update." |
+| PWA update available | In-app banner | All users | "A new version of ABeam is available. Refresh to update." |
 | Performance degradation detected | Email | platform_admin | "Performance regression detected on route '{route}': LCP increased from {baseline}ms to {current}ms." |
 
 ## 9. Edge Cases & Error Handling
@@ -904,8 +904,8 @@ The following static assets must be created:
 ```json
 // /public/manifest.json
 {
-  "name": "Aptus — SAP S/4HANA Fit-to-Standard",
-  "short_name": "Aptus",
+  "name": "ABeam — SAP S/4HANA Fit-to-Standard",
+  "short_name": "ABeam",
   "description": "SAP S/4HANA Cloud Fit-to-Standard assessment platform",
   "start_url": "/dashboard",
   "display": "standalone",
@@ -953,17 +953,17 @@ No data backfill required. `OfflineSyncQueue` and `PushSubscription` are populat
 
 ### AC-27.1: PWA installation
 ```
-Given I am an authenticated user visiting Aptus on Chrome desktop
+Given I am an authenticated user visiting ABeam on Chrome desktop
 And the service worker has registered successfully
 When the browser detects PWA criteria are met (manifest, service worker, HTTPS)
-Then an install prompt appears offering to install Aptus
+Then an install prompt appears offering to install ABeam
 And clicking "Install" creates a standalone app shortcut
 And the installed app opens without browser chrome
 ```
 
 ### AC-27.2: Offline app shell
 ```
-Given I have previously visited Aptus and the service worker has cached the app shell
+Given I have previously visited ABeam and the service worker has cached the app shell
 When I lose network connectivity
 Then the app shell (layout, navigation, chrome) loads from cache
 And an offline indicator banner appears at the top of the page
@@ -1003,7 +1003,7 @@ And the chosen value becomes the final classification
 
 ### AC-27.6: Mobile layout (375px viewport)
 ```
-Given I am viewing Aptus on a 375px wide viewport (iPhone SE)
+Given I am viewing ABeam on a 375px wide viewport (iPhone SE)
 When I navigate to any page
 Then the bottom tab bar is visible with 4 tabs
 And the sidebar is not visible (replaced by hamburger menu)
@@ -1013,7 +1013,7 @@ And all touch targets are at least 44x44px
 
 ### AC-27.7: Tablet layout (800px viewport)
 ```
-Given I am viewing Aptus on an 800px wide viewport (iPad Mini)
+Given I am viewing ABeam on an 800px wide viewport (iPad Mini)
 When I navigate to the assessment scope page
 Then the sidebar is collapsed by default (hamburger toggle available)
 And content renders in single-column layout
@@ -1042,7 +1042,7 @@ And subsequent requests are blocked until the window resets
 
 ### AC-27.10: Security headers
 ```
-Given I make any request to the Aptus application
+Given I make any request to the ABeam application
 When I inspect the response headers
 Then Content-Security-Policy is present and restrictive
 And X-Frame-Options is set to DENY

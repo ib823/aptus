@@ -1,8 +1,8 @@
-# APTUS V2 — DATA FIXES + REPORT GENERATION TEST REPORT
+# ABEAM V2 — DATA FIXES + REPORT GENERATION TEST REPORT
 
 > **Generated**: 2026-03-02 | **Mode**: Live execution against dev server (localhost:3003)
 > **Database**: PostgreSQL 16, `fit_portal` on localhost:5432
-> **Auth**: `e2e-tester@aptus.test` / `platform_admin` via `/api/auth/test-login`
+> **Auth**: `e2e-tester@ABeam.test` / `platform_admin` via `/api/auth/test-login`
 
 ---
 
@@ -205,7 +205,7 @@ Created fresh assessment `cmm8ll1z104o776v34aydbefg` and advanced through:
 
 ### Generated Report Files
 
-All reports saved to `/tmp/aptus-reports/`:
+All reports saved to `/tmp/ABeam-reports/`:
 
 ```
 executive-summary.pdf    15,366 B
@@ -239,7 +239,7 @@ No other source files were modified. Fixes 1 and 2 were data-only (running exist
 
 ## Database Backup
 
-Pre-fix backup: `/tmp/aptus-backup-1772419710.sql` (476 MB)
+Pre-fix backup: `/tmp/ABeam-backup-1772419710.sql` (476 MB)
 
 ---
 

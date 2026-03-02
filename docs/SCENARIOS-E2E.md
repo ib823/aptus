@@ -1,4 +1,4 @@
-# Aptus Platform — End-to-End Scenarios
+# ABeam Platform — End-to-End Scenarios
 
 > Detailed scenario walkthroughs tracing the ideal path through the entire SAP Fit-to-Standard assessment lifecycle, touching all 11 actors.
 
@@ -31,7 +31,7 @@ A mid-size manufacturing company, **NovaTech Industries** (Germany, 2,500 employ
 
 | Actor | Name | Role | Organization |
 |---|---|---|---|
-| Platform Admin | **Sarah Chen** | `platform_admin` | Aptus (Platform) |
+| Platform Admin | **Sarah Chen** | `platform_admin` | ABeam (Platform) |
 | Partner Lead | **Marcus Weber** | `partner_lead` | Meridian Consulting (Partner) |
 | Consultant | **Priya Sharma** | `consultant` | Meridian Consulting (Partner) |
 | Solution Architect | **Daniel Kim** | `solution_architect` | Meridian Consulting (Partner) |
@@ -54,10 +54,10 @@ A mid-size manufacturing company, **NovaTech Industries** (Germany, 2,500 employ
 
 > **Actor: Sarah Chen** (Platform Admin)
 
-Sarah is the first user registered on Aptus and is automatically assigned `platform_admin`.
+Sarah is the first user registered on ABeam and is automatically assigned `platform_admin`.
 
 ```
-Action:    Register on Aptus platform
+Action:    Register on ABeam platform
 Trigger:   First-user auto-assignment
 Result:    Sarah becomes platform_admin (hierarchy: 100)
 Audit:     ONBOARDING_STARTED
@@ -65,7 +65,7 @@ Audit:     ONBOARDING_STARTED
 
 Sarah completes her onboarding flow:
 1. **Welcome** — Platform overview
-2. **Review org settings** — Configures Aptus platform defaults
+2. **Review org settings** — Configures ABeam platform defaults
 3. **Invite team** — Prepares to onboard partner organizations
 4. **Explore admin dashboard** — Familiarizes with admin panel
 
@@ -1159,7 +1159,7 @@ Audit:     STATUS_TRANSITIONED
 
 ## Scenario 3: Trial-to-Enterprise Upgrade Journey
 
-A new partner firm, **Alpine Digital**, discovers Aptus and grows from Trial to Enterprise.
+A new partner firm, **Alpine Digital**, discovers ABeam and grows from Trial to Enterprise.
 
 ### Phase 1: Trial (Month 1)
 

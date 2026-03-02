@@ -1,4 +1,4 @@
-/** GET: Bridge NextAuth JWT session to custom aptus-session cookie */
+/** GET: Bridge NextAuth JWT session to custom abeam-session cookie */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { getServerSession } from "next-auth";

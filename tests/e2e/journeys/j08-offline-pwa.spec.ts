@@ -132,7 +132,7 @@ test.describe("T-E2E-J08 — Offline PWA", () => {
     const offlineQueueSize = await page.evaluate(() => {
       // Check if IndexedDB has a sync queue
       return new Promise<number>((resolve) => {
-        const request = indexedDB.open("aptus-offline-queue");
+        const request = indexedDB.open("abeam-offline-queue");
         request.onsuccess = () => {
           try {
             const db = request.result;
@@ -183,7 +183,7 @@ test.describe("T-E2E-J08 — Offline PWA", () => {
     // Check that the sync engine processes pending operations
     const syncQueueEmpty = await page.evaluate(() => {
       return new Promise<boolean>((resolve) => {
-        const request = indexedDB.open("aptus-offline-queue");
+        const request = indexedDB.open("abeam-offline-queue");
         request.onsuccess = () => {
           try {
             const db = request.result;

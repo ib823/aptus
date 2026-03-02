@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-Implement a legally rigorous, multi-layer sign-off workflow for Aptus assessments with cryptographic integrity verification, immutable assessment snapshots, a formal sign-off certificate PDF, ALM export adapters (SAP Cloud ALM, Jira Cloud, Azure DevOps, Confluence), and a handoff package generator. This phase transforms the assessment from an internal working document into a contractually significant deliverable suitable for enterprise governance and regulatory audit.
+Implement a legally rigorous, multi-layer sign-off workflow for ABeam assessments with cryptographic integrity verification, immutable assessment snapshots, a formal sign-off certificate PDF, ALM export adapters (SAP Cloud ALM, Jira Cloud, Azure DevOps, Confluence), and a handoff package generator. This phase transforms the assessment from an internal working document into a contractually significant deliverable suitable for enterprise governance and regulatory audit.
 
 **Source**: Addendum 2 Section 2 (Subsections 2.1 through 2.6)
 
@@ -240,7 +240,7 @@ model AlmExportRecord {
   status          String   @default("PENDING") // "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED"
   exportedById    String
   exportConfig    Json     // Target-specific configuration (project key, credentials ref, etc.)
-  exportMapping   Json?    // Mapping of Aptus entities to ALM entities
+  exportMapping   Json?    // Mapping of ABeam entities to ALM entities
   resultSummary   Json?    // { created: N, updated: N, failed: N, errors: [...] }
   errorMessage    String?  @db.Text
   startedAt       DateTime?
@@ -793,7 +793,7 @@ async function generateSignOffCertificate(signOffId: string): Promise<Buffer> {
   });
 
   // Certificate contains:
-  // 1. Header with Aptus logo and certificate title
+  // 1. Header with ABeam logo and certificate title
   // 2. Assessment summary (company, industry, scope stats)
   // 3. Classification breakdown (FIT/CONFIGURE/GAP/NA counts)
   // 4. Area validations table (area, validator, status, date)
@@ -802,8 +802,8 @@ async function generateSignOffCertificate(signOffId: string): Promise<Buffer> {
   // 7. Executive signature block (name, title, org, authority statement, IP, auth method, timestamp)
   // 8. Partner countersign block (name, org, authority statement, IP, auth method, timestamp)
   // 9. Data integrity section (snapshot version, SHA-256 hash)
-  // 10. Verification URL: https://app.aptus.io/verify/{verificationToken}
-  // 11. Footer with generation timestamp and Aptus branding
+  // 10. Verification URL: https://app.ABeam.io/verify/{verificationToken}
+  // 11. Footer with generation timestamp and ABeam branding
 
   const pdfBuffer = await renderCertificatePdf(signOff);
 
@@ -851,7 +851,7 @@ interface AlmExportResult {
   created: number;
   updated: number;
   failed: number;
-  entityMapping: Array<{ aptusId: string; almId: string; almUrl: string; entityType: string }>;
+  entityMapping: Array<{ ABeamId: string; almId: string; almUrl: string; entityType: string }>;
   errors: Array<{ entity: string; error: string }>;
 }
 ```
@@ -875,12 +875,12 @@ class JiraExportAdapter implements AlmExportAdapter {
       const epic = await jira.createIssue({
         projectKey: config.projectKey!,
         issueType: "Epic",
-        summary: `[Aptus] ${area}`,
+        summary: `[ABeam] ${area}`,
         description: `Functional area from Fit-to-Standard assessment: ${payload.assessment.companyName}`,
       });
       result.created++;
       result.entityMapping.push({
-        aptusId: area,
+        ABeamId: area,
         almId: epic.key,
         almUrl: `${config.baseUrl}/browse/${epic.key}`,
         entityType: "Epic",
@@ -897,7 +897,7 @@ class JiraExportAdapter implements AlmExportAdapter {
         });
         result.created++;
         result.entityMapping.push({
-          aptusId: gap.id,
+          ABeamId: gap.id,
           almId: story.key,
           almUrl: `${config.baseUrl}/browse/${story.key}`,
           entityType: "Story",

@@ -8,7 +8,7 @@ import type { SessionUser } from "@/types/assessment";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { cookies } from "next/headers";
 
-export const SESSION_COOKIE_NAME = "aptus-session";
+export const SESSION_COOKIE_NAME = "abeam-session";
 
 /**
  * Generate a cryptographically secure session token.

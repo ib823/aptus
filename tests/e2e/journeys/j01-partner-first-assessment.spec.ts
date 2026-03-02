@@ -25,7 +25,7 @@ test.describe("T-E2E-J01 — Partner Self-Service First Assessment", () => {
   test("Step 01 — Navigate to signup page", async ({ page }) => {
     const auth = new AuthPage(page);
     await auth.goToSignup();
-    await expect(page).toHaveTitle(/Aptus/);
+    await expect(page).toHaveTitle(/ABeam/);
     await expect(auth.emailInput).toBeVisible();
   });
 

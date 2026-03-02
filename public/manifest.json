@@ -1,6 +1,6 @@
 {
-  "name": "aptus — SAP Fit-to-Standard",
-  "short_name": "aptus",
+  "name": "ABeam — SAP Fit-to-Standard",
+  "short_name": "ABeam",
   "description": "SAP Fit-to-Standard assessment platform",
   "start_url": "/",
   "display": "standalone",
