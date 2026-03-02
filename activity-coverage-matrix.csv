@@ -1,0 +1,317 @@
+ScopeItem,ActivityTitle,HasMetadata,QuestionText,QuestionQuality,ThinkAboutQuality,ModulesCorrect,ConfigReadable,MasterDataComplete,EffortAppropriate,DomainSpecific,JargonFree,Answerable
+"J60","Additional Information",true,"Does your implementation team need to configure system-level settings for accounts payable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Additional Information: Preliminary Steps: Define Payment Medium Format Variants (Optional)",true,"Does your implementation team need to configure system-level settings for accounts payable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Additional Information: Preliminary Steps: BRF+ Settings for Payment Advice",true,"Does your implementation team need to configure system-level settings for accounts payable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Additional Information: Preliminary Steps: BRF+ Settings for Supplier Balance Confirmation",true,"Does your implementation team need to configure system-level settings for accounts payable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Additional Information: Preliminary Steps: BRF+ Settings for Item Interest Calculation",true,"Does your implementation team need to configure system-level settings for accounts payable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Additional Information: Preliminary Steps: BRF+ Settings for Payment List",true,"Does your implementation team need to configure system-level settings for accounts payable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Additional Information: Preliminary Steps: Add Fields to Items (Optional)",true,"Does your implementation team need to configure system-level settings for accounts payable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Additional Information: Preliminary Steps: Maintain Business Users",true,"Does your implementation team need to configure system-level settings for accounts payable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Additional Information: Preliminary Steps for eDocument Process: Maintain Business Partner Master Data",true,"Does your implementation team need to configure system-level settings for accounts payable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Additional Information: Preliminary Steps for eDocument Process: Maintain Company Code Data",true,"Does your implementation team need to configure system-level settings for accounts payable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Test Procedures",true,"Does your team need to validate the accounts payable process through testing?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Preparation of Payments: Maintain Business Partner",true,"How do you manage your supplier records?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Preparation of Payments: Display Supplier List",true,"Do you need a centralized view of all your suppliers?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Preparation of Payments: Netting of AR/AP Items (Optional)",true,"Does your company offset receivables against payables for the same business partner?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Preparation of Payments: Available Amounts for Payment Program (Optional)",true,"Do you need to check available cash before processing payments?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Invoice Entry without Purchase Order: Invoice Entry Without Purchase Order",true,"Do you receive invoices that don't reference a purchase order?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Invoice Entry without Purchase Order: Invoice Entry for One-Time Supplier without Purchase Order",true,"Do you receive invoices that don't reference a purchase order?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Park and Post Invoice: Park Invoice",true,"Do invoices go through a parking/approval step before posting?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Park and Post Invoice: Post Invoice",true,"Do invoices go through a parking/approval step before posting?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Recurring Supplier Invoices: Create Recurring Supplier Invoice",true,"Do you have recurring supplier invoices (e.g., rent, subscriptions, maintenance contracts)?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Recurring Supplier Invoices: Review Recurring Supplier Invoice",true,"Do you have recurring supplier invoices (e.g., rent, subscriptions, maintenance contracts)?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Recurring Supplier Invoices: Schedule Recurring Supplier Invoice Posting",true,"Do you have recurring supplier invoices (e.g., rent, subscriptions, maintenance contracts)?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Mass Upload: Mass Import for Supplier Invoices",true,"Do you need to upload large batches of supplier invoices from external systems?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Invoice Payment Preparation: View Supplier Line Items",true,"How does your AP team review open supplier invoices?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Invoice Payment Preparation: Manage Payment Blocks",true,"Do you sometimes block invoices from being paid?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Invoice Payment Preparation: View Supplier Balance",true,"Do you need to see the total balance owed to each supplier?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Payment Run",true,"How do you batch-process payments to suppliers?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Mass Reverse Payment Run (Optional)",true,"How do you batch-process payments to suppliers?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","View Payment List",true,"Do you need to track and report on completed payment runs?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Payment Plans",true,"Do you use payment plans for large supplier invoices?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Single Outgoing Payment",true,"Do you make individual ad-hoc payments outside of the regular payment run?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Create Single Outgoing Payment (Indirect)",true,"Do you make individual ad-hoc payments outside of the regular payment run?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Create Single Payment (Direct)",true,"Do you make individual ad-hoc payments outside of the regular payment run?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Online Payments: Free Form Payment Request",true,"Do you process online payments that aren't linked to a specific invoice?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Online Payments: Review or Edit Free Form Payment Request",true,"Do you process online payments that aren't linked to a specific invoice?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Online Payments: Process Free Form Payment",true,"Do you process online payments that aren't linked to a specific invoice?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Manual Payment Online: Post Outgoing Payment",true,"Do you manually record outgoing payments?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Payment Approval",true,"Do outgoing payments require manager approval before release?",EXCELLENT,OK,YES,YES,NONE,YES,YES,YES,CLEAR
+"J60","Bank Payment Approval (Optional based on Cash Management)",true,"Do outgoing payments require manager approval before release?",EXCELLENT,OK,YES,YES,NONE,YES,YES,YES,CLEAR
+"J60","Payment Media: Create Payment Media",true,"How do you generate payment files for your bank?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Payment Advices: Print or Email Payment Advice",true,"Do you send payment notifications to your suppliers?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Payment Advices: Schedule Payment Advices (Optional)",true,"Do you send payment notifications to your suppliers?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Correspondence",true,"Do you send formal correspondence to suppliers (account statements, balance confirmations)?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Incorrect Posting: Reset Cleared Items",true,"Do you sometimes need to reverse or correct payment postings?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Incorrect Posting: Reset and Reverse Cleared Items",true,"Do you need to both reset and reverse cleared items?",GOOD,OK,YES,YES,YES,YES,NO,YES,NEEDS_CONTEXT
+"J60","Create Down Payment Request",true,"Does your company make advance payments to suppliers before receiving goods or services?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Create Down Payment Request with Workflow",true,"Does your company make advance payments to suppliers before receiving goods or services?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Create Supplier Down Payment Request for Approval",true,"Does your company make advance payments to suppliers before receiving goods or services?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Process Down Payment Request Approval",true,"Does your company make advance payments to suppliers before receiving goods or services?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Down Payments: Post Down Payment",true,"Does your company make advance payments to suppliers before receiving goods or services?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Down Payments: Invoice Entry",true,"Does your company make advance payments to suppliers before receiving goods or services?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Down Payments: Post Outgoing Payment",true,"Do you manually record outgoing payments?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Down Payments: Clear Open Items",true,"Does your company make advance payments to suppliers before receiving goods or services?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Optional: Interest Calculation: Optional: Schedule Interest Calculation Jobs",true,"Do you calculate interest on overdue supplier balances?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Optional: Interest Calculation: Optional: Manage Interest Runs",true,"Do you calculate interest on overdue supplier balances?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Optional: Interest Calculation: Optional: Display Interest Runs",true,"Do you calculate interest on overdue supplier balances?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Guarantees Received",true,"Do you receive bank guarantees or letters of credit from suppliers?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Periodic Activities: Check Open Balances",true,"What month-end activities do you perform for accounts payable?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Periodic Activities: Create Supplier Balance Confirmation",true,"What month-end activities do you perform for accounts payable?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Periodic Activities: Manage Supplier Balance Confirmations",true,"What month-end activities do you perform for accounts payable?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Periodic Activities: Print Supplier Balance Confirmation",true,"What month-end activities do you perform for accounts payable?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Invoice Management Reporting: Accounts Payable Overview",true,"What reports do you need for monitoring payables?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Invoice Management Reporting: Days Payable Outstanding",true,"What reports do you need for monitoring payables?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Invoice Management Reporting: Overdue Payables",true,"What reports do you need for monitoring payables?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Invoice Management Reporting: Future Payables",true,"What reports do you need for monitoring payables?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Invoice Management Reporting: Cash Discount Forecast",true,"What reports do you need for monitoring payables?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Invoice Management Reporting: Cash Discount Utilization",true,"What reports do you need for monitoring payables?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Invoice Management Reporting: Invoice Processing Analysis",true,"What reports do you need for monitoring payables?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Invoice Management Reporting: Invoice Processing Time",true,"What reports do you need for monitoring payables?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Invoice Management Reporting: Aging Analysis",true,"What reports do you need for monitoring payables?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Invoice Management Reporting: Aging Report for Accounts Payable",true,"What reports do you need for monitoring payables?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Invoice Management Reporting: Automatic and Manual Payments Analysis",true,"What reports do you need for monitoring payables?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Invoice Management Reporting: Supplier Payments Analysis",true,"What reports do you need for monitoring payables?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","Invoice Management Reporting: Display Item Change Log",true,"What reports do you need for monitoring payables?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J60","eDocument Cockpit",true,"Do you process electronic invoices (e-invoicing)?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Additional Information: Appendix: Display Process Flow Accounts Payable",true,"Does your implementation team need to configure system-level settings for accounts payable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Additional Information: Monitor Payments",true,"Does your implementation team need to configure system-level settings for accounts payable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J60","Schedule Payment Proposals",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"J60","Revise Payment Proposal",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"J60","Release Payment Proposal",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"J60","Approval by First Approver",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"J60","Rejection",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"J60","Approval by Second Approver",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"J60","Create Team",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"J60","Create Workflow",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"J60","Generic Withholding Tax Report",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"J59","Additional Information",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: Preliminary Steps: Define Accounting Clerk",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: Preliminary Steps: BRF+ Settings for Customer Balance Confirmation",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: Preliminary Steps: BRF+ Settings for Item Interest Calculation",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: BRF+ Settings for Dunning Notice (Optional): Download Standard Template",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: BRF+ Settings for Dunning Notice (Optional): Upload Custom Template",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: BRF+ Settings for Dunning Notice (Optional): Assign Form Template",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: BRF+ Settings for Dunning Notice (Optional): Dunning Output Determination",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: Preliminary Steps: BRF+ Settings for FI Customer Invoice",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: Preliminary Steps: Manage Situation Types (Optional)",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: Preliminary Steps: Business Partner Master Data Maintenance for Electronic Invoicing (Optional)",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: Preliminary Steps: Value Mapping for Electronic Invoicing (Optional)",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: Preliminary Steps: Preliminary Steps for Electronic Invoicing",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: Preliminary Steps: Add Fields to Items (Optional)",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: Preliminary Steps: Assign Reason Codes For Write-Off",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: Preliminary Steps for eDocument Process: Maintain Business Partner Master Data",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: Preliminary Steps for eDocument Process: Maintain Company Code Data",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: Business Partner Master Data Maintenance for Electronic Invoicing (Optional)",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: Value Mapping Maintenance for Electronic Invoicing (Optional)",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Test Procedures",true,"Does your team need to validate the accounts receivable process through testing?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Preparation of Payments: Maintain Business Partners",true,"How do you manage your customer records?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Preparation of Payments: Display Customer List",true,"Do you need a centralized view of all your customers?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Enter Invoice Without Sales Order",true,"Do you create customer invoices that are not linked to a sales order?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Mass Upload: Mass Import of Customer Invoices",true,"Do you need to upload large batches of customer invoices?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Invoice Reporting",true,"Do you need reports on customer invoicing activity?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Create Dunning Notices",true,"Do you send payment reminders to customers who haven't paid on time?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Manage My Dunning Proposals",true,"Do you send payment reminders to customers who haven't paid on time?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Display Dunning History",true,"Do you send payment reminders to customers who haven't paid on time?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Open Correspondence",true,"Do you send formal correspondence to customers (statements, confirmations)?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Display Correspondence History",true,"Do you send formal correspondence to customers (statements, confirmations)?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Invoice Management Reporting: Accounts Receivable Overview",true,"What reports do you need for monitoring receivables?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Invoice Management Reporting: Monitor Overdue Receivables",true,"What reports do you need for monitoring receivables?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Invoice Management Reporting: Monitor Overdue Receivables by Risk Class",true,"What reports do you need for monitoring receivables?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Invoice Management Reporting: Future Receivables",true,"What reports do you need for monitoring receivables?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Invoice Management Reporting: Total Receivables",true,"What reports do you need for monitoring receivables?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Invoice Management Reporting: Days Sales Outstanding",true,"What reports do you need for monitoring receivables?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Invoice Management Reporting: Dunning Level Distribution",true,"Do you send payment reminders to customers who haven't paid on time?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Invoice Management Reporting: Days Beyond Terms",true,"What reports do you need for monitoring receivables?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Invoice Management Reporting: Display Item Change Log",true,"What reports do you need for monitoring receivables?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Invoice Management Reporting: Cash Collection Tracker",true,"What reports do you need for monitoring receivables?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Down Payments: Create Down Payment Request",true,"Does your company receive advance payments from customers before delivering goods or services?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Down Payments: Display Down Payment Request",true,"Does your company receive advance payments from customers before delivering goods or services?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Down Payments: Post Down Payment",true,"Does your company receive advance payments from customers before delivering goods or services?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Down Payments: Enter Invoice Without Sales Order",true,"Do you create customer invoices that are not linked to a sales order?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Down Payments: Post Incoming Payments",true,"Does your company receive advance payments from customers before delivering goods or services?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Down Payments: Clear Open Items Manually",true,"Does your company receive advance payments from customers before delivering goods or services?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Incoming Payment with Electronic Bank Statement: Daily Cash Operations – Bank Statement",true,"Do you receive electronic bank statements for matching incoming payments?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Incoming Payment with Electronic Bank Statement: Cash Application Intelligence Integration",true,"Do you receive electronic bank statements for matching incoming payments?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Incoming Payment with Electronic Bank Statement: Reprocess Bank Statement Items",true,"Do you receive electronic bank statements for matching incoming payments?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Incoming Payment with Electronic Bank Statement: Manage Bank Statement Processing Rules (Optional)",true,"Do you receive electronic bank statements for matching incoming payments?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Incoming Payment with Electronic Bank Statement: Obtain Payment Advices Manually (Optional)",true,"Do you receive electronic bank statements for matching incoming payments?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Incoming Payment with Electronic Bank Statement: Manage Payment Advice",true,"Do you receive electronic bank statements for matching incoming payments?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Incoming Payment with Electronic Bank Statement: Clear Open Items Manually",true,"Do you receive electronic bank statements for matching incoming payments?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Incoming Payment with Electronic Bank Statement: Clear Credit/Debit Memos Manually",true,"Do you receive electronic bank statements for matching incoming payments?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Incoming Payment without Electronic Bank Statement: Post Incoming Payments",true,"Do you receive electronic bank statements for matching incoming payments?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Incorrect Posting: Reset Cleared Items",true,"Do you sometimes need to reverse or correct payment postings?",GOOD,OK,YES,YES,YES,YES,NO,YES,NEEDS_CONTEXT
+"J59","Incorrect Posting: Reset and Reverse Cleared Items",true,"Do you sometimes need to reverse or correct payment postings?",GOOD,OK,YES,YES,YES,YES,NO,YES,NEEDS_CONTEXT
+"J59","Incorrect Posting: Reverse Individual Documents",true,"Do you sometimes need to reverse or correct payment postings?",GOOD,OK,YES,YES,YES,YES,NO,YES,NEEDS_CONTEXT
+"J59","Invoice Collection Preparation: Manage Customer Line Items",true,"How does your AR team review open customer items?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Interest Calculation: Schedule Interest Calculation Jobs",true,"Do you calculate interest on overdue customer balances?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Interest Calculation: Manage Interest Runs",true,"Do you calculate interest on overdue customer balances?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Interest Calculation: Display Interest Runs",true,"Do you calculate interest on overdue customer balances?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Guarantees Made: Guarantees Made",true,"Do you issue bank guarantees or letters of credit for customers?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","Guarantees Made: Reverse Guarantees",true,"Do you need to reverse individual financial documents?",GOOD,OK,YES,YES,YES,YES,NO,YES,NEEDS_CONTEXT
+"J59","Periodic Activities: Check Open Balances",true,"What month-end activities do you perform for accounts receivable?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Periodic Activities: Create Balance Confirmation",true,"What month-end activities do you perform for accounts receivable?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Periodic Activities: Manage Balance Confirmations",true,"What month-end activities do you perform for accounts receivable?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Periodic Activities: Print Customer Balance Confirmation",true,"What month-end activities do you perform for accounts receivable?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Periodic Activities: Bad Debt Write-Off",true,"What month-end activities do you perform for accounts receivable?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Malaysia eInvoice: One-Time Customer (Optional)",true,"Do you process electronic invoices for customers?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J59","eDocument Cockpit",true,"Do you need to monitor electronic document processing?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J59","Additional Information: Appendix: Display Process Flow Accounts Receivable",true,"Does your implementation team need to configure system-level settings for accounts receivable?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Preliminary Steps: Create Purchasing Info Record (Optional)",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Preliminary Steps: Create Purchase Requisition",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Preliminary Steps: Check Flexible Workflow for Purchase Order Approval",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Preliminary Steps: Configure Flexible Workflow for Purchase Order",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Preliminary Steps: Manage Conditions to Restart Flexible Workflow",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Preliminary Steps: Create Ready-to-Use Situation Type for Cash Discount at Risk (Optional)",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Preliminary Steps: Create Team and Responsibilities (Optional)",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Change Material Master Data - Purchasing Data",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Change Supplier Master Data - Purchasing Organization Data",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Generate Source List",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Preliminary Steps: Edit User-Specific Parameters for Supplier Invoices (Optional)",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Preliminary Steps for eDocument Process (Optional): Maintain Business Partner Master Data",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Preliminary Steps for eDocument Process (Optional): Maintain Company Code Data",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Preliminary Steps for eDocument Process (Optional): Define Process Communication Through Cloud Services",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Preliminary Steps for eDocument Process (Optional): Value Mapping Maintenance for Electronic Invoicing (Optional)",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Test Procedures",true,"Does your team need to validate the procurement process through testing?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Procurement of Stock Material: Convert Purchase Requisitions to Purchase Orders",true,"How do your employees request materials to be purchased?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Procurement of Stock Material: Create Purchase Order",true,"How are purchase orders created in your company?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Procurement of Stock Material: Approve Purchase Order (Optional)",true,"Do purchase orders require approval before being sent to suppliers?",EXCELLENT,OK,YES,YES,NONE,YES,YES,YES,CLEAR
+"J45","Procurement of Stock Material: Preview Purchase Order (Optional)",true,"Do you preview purchase orders before sending them to suppliers?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Procurement of Stock Material: Change Purchase Order (Optional)",true,"Do you frequently need to modify purchase orders after creation?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Procurement of Stock Material: Monitor Purchase Order Items (Optional)",true,"How do you track and monitor open purchase orders?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Procurement of Stock Material: Execute Mass Changes to Purchase Orders (Optional)",true,"Do you need to update multiple purchase orders at once?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Procurement of Stock Material: Post Goods Receipt",true,"How do you record when purchased materials arrive?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Procurement of Stock Material: Preview Goods Receipt Slip and Label (Optional)",true,"Do you print goods receipt slips or labels for received materials?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Procurement of Stock Material: Reverse Goods Receipt (Optional)",true,"Do you sometimes need to reverse a goods receipt?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Procurement of Stock Material: Analyze Stock Overview (Optional)",true,"Do you need to check current stock levels?",GOOD,OK,YES,YES,YES,YES,NO,YES,NEEDS_CONTEXT
+"J45","Procurement of Stock Material: Manage Stock (Optional)",true,"How do you manage and adjust inventory?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Option A: Create Supplier Invoice with PO/GR Relation",true,"How do you process supplier invoices for purchased materials?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Option B: Create Supplier Invoice with PO/GR relation (with Invoice Reduction) (Optional)",true,"How do you process supplier invoices for purchased materials?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Option B: Print Complaint Letter in case of Invoice Reduction (Only relevant for SAP S/4HANA Cloud Public Edition)",true,"Do you reduce invoice amounts when they don't match the PO?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Create Supplier Invoice without PO/GR (Optional)",true,"How do you process supplier invoices for purchased materials?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Procurement of Stock Material: Create Credit Memo (Optional)",true,"Do you process supplier credit memos?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Procurement of Stock Material: Clear GR / IR (Optional)",true,"Do you need to clear the GR/IR clearing account?",GOOD,OK,YES,YES,YES,YES,NO,YES,NEEDS_CONTEXT
+"J45","Monitor Down Payment process: Create Purchase Order Manually for Down Payment",true,"How are purchase orders created in your company?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Monitor Down Payment process: Monitor Down Payments (Optional)",true,"Do you make advance payments to suppliers for direct materials?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Monitor Down Payment process: Create Down Payment Request",true,"Do you make advance payments to suppliers for direct materials?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Monitor Down Payment process: Create Down Payment",true,"Do you make advance payments to suppliers for direct materials?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Monitor Down Payment process: Post Goods Receipt",true,"How do you record when purchased materials arrive?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Monitor Down Payment process: Create Supplier Invoice for Down Payment (Optional)",true,"How do you process supplier invoices for purchased materials?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Automatic Purchase Order Creation from Purchase Requisition",true,"How do your employees request materials to be purchased?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Create Purchase Requisition",true,"How do your employees request materials to be purchased?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Automatic Conversion of Purchase Requisition to Purchase Order",true,"How do your employees request materials to be purchased?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Post Goods Receipt",true,"How do you record when purchased materials arrive?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","Create Supplier Invoice",true,"How do you process supplier invoices for purchased materials?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"J45","eDocument Cockpit",true,"Do you need to monitor electronic document processing for procurement?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Post Goods Receipt Blocked Stock",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Release Goods Receipt Blocked Stock",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Setup Mail Notification for Purchase Order Workflow",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Setup Mail Notification for Purchase Order Deadline",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Configure Deadline in Manage Workflows for Purchase Orders",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Change Material Master Data – For Free Goods",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Change Supplier Master Data - For Free Goods",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Create Purchase Order Manually for Free Goods",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Quantity Optimization for Purchase Order: Setup a Static Rounding Profile",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Quantity Optimization for Purchase Order: Maintain a Rounding Profile in the Purchasing Info Record",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Quantity Optimization for Purchase Order: Create Purchase Order with Quantity Optimization",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Quantity Optimization for Purchase Order: Simulate Quantity Optimizing",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Rework Flexible Workflow for Purchase Orders: Activate Inquiry Workflow for Purchase Orders",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Rework Flexible Workflow for Purchase Orders: Configure Rework Flexible Workflow for Purchase Orders",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Rework Flexible Workflow for Purchase Orders: Rework Purchase Order",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Output Parameter Determination for Purchase Orders Dunning Reminder",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Create Purchase Order for Dunning Reminder",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Dunning Reminder on Purchase Orders Advanced",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Schedule Dunning Reminder Output for Purchase Orders (Optional)",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Maintain CDS Based Custom Attributes for Purchase Order Workflow (Optional)",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Approve Purchase Order through Task Cards (Optional)",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Purchase Order Workflow Review: Configure Purchase Order Flexible Workflow for Review",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Additional Information: Purchase Order Workflow Review: Review Purchase Order Items (Optional)",true,"Does your implementation team need to configure procurement system settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"J45","Procurement of Stock Material: Check Goods Receipt Details (Optional)",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"J45","Procurement of Stock Material: Analyze Material Document (Optional)",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"J45","Procurement of Stock Material: Detect Critical Cash Discount Situations (Optional)",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"J45","Procurement of Stock Material: React to Critical Cash Discount Situations (Optional)",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"J45","Procurement of Stock Material: Check Supplier Invoice List (Optional)",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"J45","Procurement of Stock Material: Approve Supplier Invoice (Optional)",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"J45","Procurement of Stock Material: Reverse Invoice (Optional)",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"J45","Procurement of Stock Material: Cancel Journal Entry (Optional)",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"1NT","Additional Information",true,"Does your implementation team need to configure project management settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"1NT","Additional Information: Manage Teams and Responsibilities for Projects (Optional)",true,"Does your implementation team need to configure project management settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"1NT","Additional Information: Manage Situation Types (Optional)",true,"Does your implementation team need to configure project management settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"1NT","Test Procedures",true,"Does your team need to validate the project control process through testing?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"1NT","Create Project",true,"How do you create and set up new projects?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"1NT","Create Project Using Copy Functionality (Optional)",true,"How do you create and set up new projects?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"1NT","Project Review (Optional)",true,"Do you conduct periodic project reviews?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Update Project (Optional)",true,"How do you update project details as things change?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"1NT","Mass Changes to Projects and Work Packages (Optional)",true,"Do you need to update multiple projects or work packages at once?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"1NT","Capture Planned Costs",true,"How do you plan and estimate project costs?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Capture Project Budget",true,"How do you manage project budgets?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Upload Project Budget (Optional)",true,"How do you manage project budgets?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Manage Project Budget (Optional)",true,"How do you manage project budgets?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Define Demand",true,"How do you define resource and material demands for projects?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Release Projects/Project Parts",true,"How do you authorize projects to start spending?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Direct Activity Allocation",true,"Do you allocate internal activities (labor hours) directly to projects?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"1NT","Post General Journal Entry",true,"Do you post manual journal entries to projects?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Time Recording",true,"How do your employees record time spent on projects?",GOOD,OK,YES,YES,NONE,YES,YES,YES,NEEDS_CONTEXT
+"1NT","Project Control Procurement",true,"How do you procure materials and services for projects?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Monitor Projects",true,"How do you monitor project progress and financials?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Monitor Projects via Project Financial Controller Overview",true,"How do you monitor project progress and financials?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Monitor Projects via Monitor Projects App",true,"How do you monitor project progress and financials?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Monitor Projects via Project Cost Report",true,"How do you monitor project progress and financials?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Monitor Projects via Project Budget Report",true,"How do you manage project budgets?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Monitor Projects via Manage Project Procurement",true,"How do you monitor project progress and financials?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Monitor Projects via P&amp;L Plan/Actual",true,"How do you monitor project progress and financials?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Check/update Settlement Rules (Optional)",true,"How do you settle project costs to final receivers?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Settlement Rule for Overhead Projects",true,"How do you settle project costs to final receivers?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Settlement Rule for Investment Projects",true,"How do you settle project costs to final receivers?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Period End Closing Projects (Optional)",true,"What period-end activities do you perform for projects?",GOOD,OK,YES,YES,NONE,YES,YES,YES,CLEAR
+"1NT","Period End Closing Projects - Apply Overhead (Optional)",true,"What period-end activities do you perform for projects?",GOOD,OK,YES,YES,NONE,YES,YES,YES,CLEAR
+"1NT","Period End Closing Projects – Run Settlements",true,"What period-end activities do you perform for projects?",GOOD,OK,YES,YES,NONE,YES,YES,YES,CLEAR
+"1NT","Period End Closing Projects- Monitor Financials",true,"What period-end activities do you perform for projects?",GOOD,OK,YES,YES,NONE,YES,YES,YES,CLEAR
+"1NT","Complete Project Parts and Project",true,"How do you formally complete project phases or entire projects?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"1NT","Close Project Parts and Project",true,"How do you close projects and prevent further postings?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"1NT","Monitor Notification (Optional)",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"BDW","Additional Information",true,"Does your implementation team need to configure returnables processing settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"BDW","Test Procedures",true,"Does your team need to validate the returnables process through testing?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"BDW","Display Pallets Stock",true,"Do you need to track the stock of returnable packaging?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"BDW","Create Sales Order",true,"How do you process sales orders that include returnable packaging?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"BDW","Create Attachment for Sales Order (Optional)",true,"Do you attach documents to sales, delivery, or billing records?",GOOD,OK,YES,YES,YES,YES,NO,YES,CLEAR
+"BDW","Create Delivery",true,"How do you create delivery documents for shipments?",GOOD,OK,YES,YES,NONE,YES,NO,YES,CLEAR
+"BDW","Create Attachment for Delivery (Optional)",true,"Do you attach documents to sales, delivery, or billing records?",GOOD,OK,YES,YES,YES,YES,NO,YES,CLEAR
+"BDW","Add Delivery Item for Pallet",true,"Do you add returnable packaging as a separate line item on deliveries?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"BDW","Execute Picking",true,"How do you pick goods and returnable packaging for shipment?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"BDW","Check Batches (Optional)",true,"Do you use batch management for returnable packaging?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"BDW","Post Goods Issue",true,"How do you record goods leaving your warehouse?",GOOD,OK,YES,YES,YES,YES,NO,YES,NEEDS_CONTEXT
+"BDW","Create Billing Documents",true,"How do you bill customers for returnable packaging?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"BDW","Create Attachment for Billing (Optional)",true,"Do you attach documents to sales, delivery, or billing records?",GOOD,OK,YES,YES,YES,YES,NO,YES,CLEAR
+"BDW","Post Incoming Payment",true,"How do you process incoming payments for returnables?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"BDW","Create Outbound Delivery without Order Reference (Optional)",true,"Do you ship returnable packaging without a formal sales order?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"BDW","Create Pallets Return Sales Order",true,"How do you process the return of packaging from customers?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"BDW","Post Goods Receipt",true,"How do you record returned packaging arriving at your warehouse?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"BDW","Return Process for Returnable Materials (Second Variant)",true,"Do you use an alternative return process for returnable materials?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"BDW","Create Pallets Issue Order",true,"Do you issue returnable packaging through a separate issue process?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"BDW","Create Billing Document",true,"How do you bill customers for returnable packaging?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"BDW","Additional Information: Scheduling Job (alternative): Job Scheduling for Delivery Creation (Alternative)",true,"Does your implementation team need to configure returnables processing settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"BDW","Additional Information: Scheduling Job (alternative): Job Scheduling for Goods Issue Deliveries (Alternative)",true,"Does your implementation team need to configure returnables processing settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"BDW","Additional Information: Scheduling Job (alternative): Job Scheduling for Billing Creation (Alternative)",true,"Does your implementation team need to configure returnables processing settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"BDW","Additional Information: Scheduling Job (alternative): Job Scheduling for Billing Release (Alternative)",true,"Does your implementation team need to configure returnables processing settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"BDW","Additional Information: Scheduling Job (alternative): Job Scheduling for Billing Output (Alternative)",true,"Does your implementation team need to configure returnables processing settings?",GENERIC,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"BDW","Delivery Process for Returnable Materials (Optional)",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"BDW","Create Outbound Delivery w/o Order Reference",false,"",MISSING,MISSING,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+"2ET","Additional Information",true,"Does your implementation team need to configure sales order settings for non-stock materials?",GENERIC,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"2ET","Additional Information: Preliminary Steps: Set POD Relevance for Delivery Item Category",true,"Does your implementation team need to configure sales order settings for non-stock materials?",GENERIC,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"2ET","Additional Information: Preliminary Steps: Set Relevant for Proof of Delivery in BP Master Data",true,"Does your implementation team need to configure sales order settings for non-stock materials?",GENERIC,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"2ET","Test Procedures",true,"Does your team need to validate the non-stock sales order process through testing?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"2ET","Basic Credit Management (BD6) - Set Credit Limit (Optional)",true,"Do you check customer credit limits before accepting sales orders?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"2ET","Sales Quotation (BDG) (Optional)",true,"Do you create formal quotations for customers before they place orders?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"2ET","Sales Contract (Optional)",true,"Do you use long-term sales contracts or agreements with customers?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"2ET","Create Sales Order",true,"How do customer orders for non-stock items enter your system?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"2ET","Process Sales Order Approval (Optional)",true,"Do sales orders require approval before processing?",EXCELLENT,OK,YES,YES,NONE,YES,YES,YES,CLEAR
+"2ET","Basic Credit Management (BD6) - Review Blocked Sales Orders (Optional)",true,"Do you check customer credit limits before accepting sales orders?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"2ET","Create Delivery",true,"How do you create delivery documents for non-stock items?",GOOD,OK,YES,YES,NONE,YES,YES,YES,CLEAR
+"2ET","Split Outbound Delivery (Optional)",true,"Do you split deliveries across multiple shipments?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"2ET","Add Freight Cost (Optional)",true,"Do you add freight charges to deliveries?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"2ET","Post Goods Issue",true,"How do you record goods leaving your location for non-stock items?",GOOD,OK,YES,YES,YES,YES,YES,YES,NEEDS_CONTEXT
+"2ET","Proof of Delivery (Optional)",true,"Do you use proof of delivery confirmation?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"2ET","Create Billing Document",true,"How do you create customer invoices for non-stock items?",EXCELLENT,OK,YES,YES,YES,YES,YES,YES,CLEAR
+"2ET","Create Pro Forma Invoice (Optional)",true,"Do you issue pro forma invoices before actual billing?",GOOD,OK,YES,YES,YES,YES,YES,YES,CLEAR

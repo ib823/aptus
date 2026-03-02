@@ -63,6 +63,18 @@ export async function POST(
     );
   }
 
+  // Scope validation: scope item must be selected in this assessment
+  const scopeSelection = await prisma.scopeSelection.findFirst({
+    where: { assessmentId, scopeItemId: parsed.data.scopeItemId, selected: true },
+    select: { id: true },
+  });
+  if (!scopeSelection) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "Scope item not selected in this assessment" } },
+      { status: 403 },
+    );
+  }
+
   // Check permissions
   const permCheck = await canEditStepResponse(user, assessmentId, scopeItem.functionalArea);
   if (!permCheck.allowed) {
