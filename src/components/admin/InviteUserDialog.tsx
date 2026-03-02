@@ -99,7 +99,7 @@ export function InviteUserDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose} modal={false}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Invite User</DialogTitle>
@@ -123,7 +123,7 @@ export function InviteUserDialog({
               <SelectTrigger className="mt-1">
                 <SelectValue placeholder="Select a role" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent portal={false}>
                 {availableRoles.map((r) => (
                   <SelectItem key={r.value} value={r.value}>
                     {r.label}
