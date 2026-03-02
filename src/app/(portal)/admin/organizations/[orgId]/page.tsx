@@ -101,7 +101,7 @@ export default async function OrgDetailPage({ params }: OrgDetailPageProps) {
 
       <OrgDetailClient
         organizationId={organization.id}
-        orgType={organization.type as "PLATFORM" | "PARTNER" | "DIRECT_CLIENT"}
+        orgType={organization.type}
         currentUserRole={currentUserRole}
         users={users.map((u) => ({
           id: u.id,

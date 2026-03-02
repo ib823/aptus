@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 
 interface InviteUserDialogProps {
   organizationId: string;
-  orgType: "PLATFORM" | "PARTNER" | "DIRECT_CLIENT";
+  orgType: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
@@ -38,6 +38,13 @@ const ROLES_BY_ORG_TYPE: Record<string, Array<{ value: string; label: string }>>
   ],
 };
 
+/** Normalize DB org type values (e.g. "partner", "client") to lookup keys */
+function normalizeOrgType(raw: string): string {
+  const upper = raw.toUpperCase();
+  if (upper === "CLIENT") return "DIRECT_CLIENT";
+  return upper;
+}
+
 export function InviteUserDialog({
   organizationId,
   orgType,
@@ -51,7 +58,7 @@ export function InviteUserDialog({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const availableRoles = ROLES_BY_ORG_TYPE[orgType] ?? [];
+  const availableRoles = ROLES_BY_ORG_TYPE[normalizeOrgType(orgType)] ?? [];
 
   const handleSubmit = async () => {
     if (!email || !role) return;
