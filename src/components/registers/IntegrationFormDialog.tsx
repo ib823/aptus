@@ -164,7 +164,7 @@ export function IntegrationFormDialog({
             </div>
             <div>
               <Label>Target System *</Label>
-              <Input value={targetSystem} onChange={(e) => setTargetSystem(e.target.value)} placeholder="e.g., S/4HANA Cloud" className="mt-1" />
+              <Input value={targetSystem} onChange={(e) => setTargetSystem(e.target.value)} placeholder="e.g., SAP Cloud" className="mt-1" />
             </div>
           </div>
 

@@ -1,31 +1,48 @@
 "use client"
 
 import * as React from "react"
-import { CheckIcon } from "lucide-react"
-import { Checkbox as CheckboxPrimitive } from "radix-ui"
-
+import { CheckBox as UI5CheckBox } from "@ui5/webcomponents-react"
+import type { Ui5CustomEvent } from "@ui5/webcomponents-react"
 import { cn } from "@/lib/utils"
+
+interface CheckboxProps extends Omit<React.ComponentProps<"button">, "onChange"> {
+  checked?: boolean | "indeterminate"
+  defaultChecked?: boolean
+  onCheckedChange?: (checked: boolean | "indeterminate") => void
+  required?: boolean
+  value?: string
+}
 
 function Checkbox({
   className,
+  checked,
+  defaultChecked: _defaultChecked,
+  onCheckedChange,
+  disabled,
+  required,
+  name,
+  id,
+  value: _value,
   ...props
-}: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
+}: CheckboxProps) {
+  const handleChange = (e: Ui5CustomEvent) => {
+    const target = e.target as HTMLInputElement
+    onCheckedChange?.(target.checked)
+  }
+
   return (
-    <CheckboxPrimitive.Root
+    <UI5CheckBox
       data-slot="checkbox"
-      className={cn(
-        "peer border-input dark:bg-input/30 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground dark:data-[state=checked]:bg-primary data-[state=checked]:border-primary focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive size-4 shrink-0 rounded-[4px] border shadow-xs transition-shadow outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50",
-        className
-      )}
-      {...props}
-    >
-      <CheckboxPrimitive.Indicator
-        data-slot="checkbox-indicator"
-        className="grid place-content-center text-current transition-none"
-      >
-        <CheckIcon className="size-3.5" />
-      </CheckboxPrimitive.Indicator>
-    </CheckboxPrimitive.Root>
+      checked={checked === true}
+      indeterminate={checked === "indeterminate"}
+      disabled={disabled ?? false}
+      required={required ?? false}
+      name={name ?? ""}
+      id={id}
+      onChange={handleChange}
+      className={cn("shrink-0", className)}
+      {...(props as Record<string, unknown>)}
+    />
   )
 }
 

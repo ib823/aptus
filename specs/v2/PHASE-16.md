@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The OCM (Organizational Change Management) Impact Register introduces a dedicated register for tracking change impacts discovered during a Fit-to-Standard assessment. SAP S/4HANA Cloud implementations drive significant process changes that affect people, roles, and departments. Early identification of these impacts during the assessment phase is critical for planning training, communication, and adoption activities in the Realize and Deploy phases.
+The OCM (Organizational Change Management) Impact Register introduces a dedicated register for tracking change impacts discovered during a Fit-to-Standard assessment. SAP Cloud implementations drive significant process changes that affect people, roles, and departments. Early identification of these impacts during the assessment phase is critical for planning training, communication, and adoption activities in the Realize and Deploy phases.
 
 Each OCM impact entry captures: impacted role/department, change type (process change, new process, eliminated process, system change, role change), impact severity (low/medium/high/transformational), training requirements (type, duration), communication plan, resistance risk, readiness assessment score, and mitigation strategies. Impacts can be linked to specific scope items and gap resolutions to maintain traceability from assessment findings to organizational impact.
 

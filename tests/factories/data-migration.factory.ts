@@ -107,7 +107,7 @@ export function createByType(
       volumeEstimate: "SMALL",
       recordCount: 2000,
       cleansingRequired: true,
-      cleansingNotes: "Align with new S/4HANA account structure",
+      cleansingNotes: "Align with new SAP account structure",
       mappingComplexity: "COMPLEX",
       migrationApproach: "MANUAL",
       migrationTool: "LTMC",

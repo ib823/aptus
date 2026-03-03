@@ -11,7 +11,7 @@ Build the commercial platform layer for ABeam, transforming it from an internall
 | Type | Label | Description |
 |------|-------|-------------|
 | A | **Consulting Partner** (primary) | SAP consulting firms purchasing ABeam to run Fit-to-Standard assessments for their clients |
-| B | **Direct Enterprise Client** (secondary) | Companies self-assessing their SAP S/4HANA Cloud readiness without a consulting partner |
+| B | **Direct Enterprise Client** (secondary) | Companies self-assessing their SAP Cloud readiness without a consulting partner |
 
 ### Subscription Tiers
 

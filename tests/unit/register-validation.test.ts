@@ -74,7 +74,7 @@ describe("CreateIntegrationSchema", () => {
     description: "Import bank statements for reconciliation",
     direction: "INBOUND" as const,
     sourceSystem: "Bank",
-    targetSystem: "S/4HANA",
+    targetSystem: "SAP",
     interfaceType: "FILE" as const,
     frequency: "BATCH_DAILY" as const,
   };

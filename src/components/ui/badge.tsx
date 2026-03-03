@@ -1,47 +1,78 @@
-import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
-import { Slot } from "radix-ui"
+"use client"
 
+import * as React from "react"
+import { Tag } from "@ui5/webcomponents-react"
+import { Slot } from "radix-ui"
 import { cn } from "@/lib/utils"
 
-const badgeVariants = cva(
-  "inline-flex items-center justify-center rounded-full border border-transparent px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground [a&]:hover:bg-primary/90",
-        secondary:
-          "bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90",
-        destructive:
-          "bg-destructive text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
-        outline:
-          "border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
-        ghost: "[a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 [a&]:hover:underline",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-    },
-  }
-)
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline" | "ghost" | "link"
+
+/**
+ * Maps badge variants to a combination of Tailwind classes that complement
+ * the UI5 Tag styling. We keep the CSS-based approach for variants that
+ * don't have direct UI5 Tag design equivalents.
+ */
+const VARIANT_CLASSES: Record<BadgeVariant, string> = {
+  default: "bg-primary text-primary-foreground",
+  secondary: "bg-secondary text-secondary-foreground",
+  destructive: "bg-destructive text-white",
+  outline: "border border-border text-foreground bg-transparent",
+  ghost: "bg-transparent text-foreground",
+  link: "text-primary underline-offset-4 hover:underline bg-transparent",
+}
+
+function badgeVariants({
+  variant = "default",
+}: {
+  variant?: BadgeVariant | null
+} = {}) {
+  return cn(
+    "inline-flex items-center justify-center rounded-full border border-transparent px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none transition-[color,box-shadow] overflow-hidden",
+    VARIANT_CLASSES[(variant ?? "default") as BadgeVariant],
+  )
+}
+
+interface BadgeProps extends React.ComponentProps<"span"> {
+  variant?: BadgeVariant | null
+  asChild?: boolean
+}
 
 function Badge({
   className,
   variant = "default",
   asChild = false,
+  children,
   ...props
-}: React.ComponentProps<"span"> &
-  VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
-  const Comp = asChild ? Slot.Root : "span"
+}: BadgeProps) {
+  const resolvedVariant = (variant ?? "default") as BadgeVariant
 
+  // For outline/ghost/link variants or asChild, use styled span/slot
+  if (asChild) {
+    return (
+      <Slot.Root
+        data-slot="badge"
+        data-variant={resolvedVariant}
+        className={cn(badgeVariants({ variant: resolvedVariant }), className)}
+        {...props}
+      >
+        {children}
+      </Slot.Root>
+    )
+  }
+
+  // Use UI5 Tag for standard badge rendering
   return (
-    <Comp
+    <Tag
       data-slot="badge"
-      data-variant={variant}
-      className={cn(badgeVariants({ variant }), className)}
-      {...props}
-    />
+      data-variant={resolvedVariant}
+      className={cn(
+        badgeVariants({ variant: resolvedVariant }),
+        className,
+      )}
+      {...(props as Record<string, unknown>)}
+    >
+      {children}
+    </Tag>
   )
 }
 

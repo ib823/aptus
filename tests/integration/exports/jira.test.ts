@@ -83,7 +83,7 @@ function mapGapToJiraIssue(
       .join("\n"),
     issuetype: { name: config.issueType },
     priority: { name: jiraPriority },
-    labels: config.labels ?? ["s4hana-assessment"],
+    labels: config.labels ?? ["sap-assessment"],
     ...(config.customFieldMappings
       ? {
           customFields: {
@@ -201,7 +201,7 @@ describe("Jira Export (T-JIRA)", () => {
       medium: "Medium",
       low: "Low",
     },
-    labels: ["s4hana-assessment", "gap-resolution"],
+    labels: ["sap-assessment", "gap-resolution"],
     batchSize: 50,
   };
 
@@ -223,7 +223,7 @@ describe("Jira Export (T-JIRA)", () => {
     expect(issue.summary).toContain("Automated three-way matching");
     expect(issue.issuetype.name).toBe("Story");
     expect(issue.priority.name).toBe("Medium");
-    expect(issue.labels).toContain("s4hana-assessment");
+    expect(issue.labels).toContain("sap-assessment");
     expect(issue.description).toContain("Scope Item:* J60");
     expect(issue.description).toContain("Resolution Type:* CONFIGURE");
   });

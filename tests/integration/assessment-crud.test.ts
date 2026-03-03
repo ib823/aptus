@@ -569,7 +569,7 @@ describe("Assessment CRUD & Lifecycle (T-CRUD)", () => {
         description: "Automated vendor invoice posting from EDI",
         direction: "INBOUND",
         sourceSystem: "EDI Gateway",
-        targetSystem: "SAP S/4HANA",
+        targetSystem: "SAP",
         interfaceType: "IDOC",
         frequency: "BATCH_DAILY",
         middleware: "SAP_CPI",

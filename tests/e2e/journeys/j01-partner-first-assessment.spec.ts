@@ -247,7 +247,7 @@ test.describe("T-E2E-J01 — Partner Self-Service First Assessment", () => {
         if (await assessment.addIntegrationButton.isVisible().catch(() => false)) {
           await assessment.addIntegration({
             name: "SAP to Legacy ERP",
-            source: "S/4HANA",
+            source: "SAP",
             target: "Legacy ERP",
           });
         }

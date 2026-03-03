@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Building2, BarChart3, Puzzle, ArrowLeftRight,
-  Database, FileArchive, ClipboardCheck, Users, ListChecks, Landmark,
+  Database, FileArchive, ClipboardCheck, Users, ListChecks, Landmark, Shield,
 } from "lucide-react";
 
 const NAV_SECTIONS = [
@@ -36,6 +36,7 @@ const NAV_SECTIONS = [
     items: [
       { href: "/admin/organizations", label: "Organizations", icon: Landmark },
       { href: "/admin/users", label: "Users", icon: Users },
+      { href: "/admin/roles", label: "Roles & Permissions", icon: Shield },
       { href: "/admin/assessments", label: "All Assessments", icon: ListChecks },
     ],
   },

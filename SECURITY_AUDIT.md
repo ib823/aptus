@@ -1,7 +1,7 @@
 # Security Audit Report — ABeam Platform
 
 **Date:** 2026-02-23
-**Scope:** Full-stack security assessment of the ABeam SAP S/4HANA fit-gap analysis platform
+**Scope:** Full-stack security assessment of the ABeam SAP fit-gap analysis platform
 **Method:** Passive external inspection + comprehensive source code review
 **Target:** https://ABeam-sandy.vercel.app
 **Framework:** Next.js 15 App Router on Vercel, PostgreSQL (Neon), Prisma ORM

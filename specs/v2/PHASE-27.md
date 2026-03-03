@@ -904,9 +904,9 @@ The following static assets must be created:
 ```json
 // /public/manifest.json
 {
-  "name": "ABeam — SAP S/4HANA Fit-to-Standard",
+  "name": "ABeam — SAP Fit-to-Standard",
   "short_name": "ABeam",
-  "description": "SAP S/4HANA Cloud Fit-to-Standard assessment platform",
+  "description": "SAP Fit-to-Standard assessment platform",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#09090b",

@@ -30,14 +30,14 @@
 
 ## 1. Platform Overview
 
-ABeam is a multi-tenant SaaS platform for SAP S/4HANA Cloud Fit-to-Standard assessments. It guides implementation partners and their clients through scoping, process review, gap analysis, validation, sign-off, and handoff — the full lifecycle of an SAP best-practice assessment.
+ABeam is a multi-tenant SaaS platform for SAP Fit-to-Standard assessments. It guides implementation partners and their clients through scoping, process review, gap analysis, validation, sign-off, and handoff — the full lifecycle of an SAP best-practice assessment.
 
 ### Organization Types
 
 | Type | Description | Example |
 |---|---|---|
 | **PARTNER** | SAP implementation partner firm | Deloitte, Accenture, a boutique SAP consultancy |
-| **DIRECT_CLIENT** | End-client company being assessed | A manufacturing company adopting S/4HANA |
+| **DIRECT_CLIENT** | End-client company being assessed | A manufacturing company adopting SAP |
 | **PLATFORM** | ABeam platform operator | The ABeam team itself |
 
 ### Plan Tiers

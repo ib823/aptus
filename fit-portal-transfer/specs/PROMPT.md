@@ -5,7 +5,7 @@
 ---
 
 ```
-You are building the Bound Fit Portal — a standalone Next.js web application for SAP S/4HANA Cloud best practices process validation with role-based access, TOTP MFA, area-locked editing, and blueprint output generation.
+You are building the Bound Fit Portal — a standalone Next.js web application for SAP Cloud best practices process validation with role-based access, TOTP MFA, area-locked editing, and blueprint output generation.
 
 ## Your Bible
 
