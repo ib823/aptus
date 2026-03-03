@@ -1,17 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { Tag } from "@ui5/webcomponents-react"
 import { Slot } from "radix-ui"
 import { cn } from "@/lib/utils"
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline" | "ghost" | "link"
 
-/**
- * Maps badge variants to a combination of Tailwind classes that complement
- * the UI5 Tag styling. We keep the CSS-based approach for variants that
- * don't have direct UI5 Tag design equivalents.
- */
 const VARIANT_CLASSES: Record<BadgeVariant, string> = {
   default: "bg-primary text-primary-foreground",
   secondary: "bg-secondary text-secondary-foreground",
@@ -46,7 +40,6 @@ function Badge({
 }: BadgeProps) {
   const resolvedVariant = (variant ?? "default") as BadgeVariant
 
-  // For outline/ghost/link variants or asChild, use styled span/slot
   if (asChild) {
     return (
       <Slot.Root
@@ -60,19 +53,15 @@ function Badge({
     )
   }
 
-  // Use UI5 Tag for standard badge rendering
   return (
-    <Tag
+    <span
       data-slot="badge"
       data-variant={resolvedVariant}
-      className={cn(
-        badgeVariants({ variant: resolvedVariant }),
-        className,
-      )}
-      {...(props as Record<string, unknown>)}
+      className={cn(badgeVariants({ variant: resolvedVariant }), className)}
+      {...props}
     >
       {children}
-    </Tag>
+    </span>
   )
 }
 
