@@ -48,8 +48,7 @@ export function ReportBrandingEditor({
       });
 
       if (!res.ok) {
-        const data = await res.json() as { error?: { message?: string } };
-        setError(data.error?.message ?? "Failed to save branding");
+        setError("Failed to save branding. Please try again.");
         return;
       }
 

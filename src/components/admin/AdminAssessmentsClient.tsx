@@ -54,8 +54,7 @@ export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientPr
       if (res.ok) {
         router.refresh();
       } else {
-        const json = await res.json() as { error?: { message?: string } };
-        alert(json.error?.message ?? "Failed to delete assessment");
+        alert("Failed to delete assessment. Please try again.");
       }
     } catch {
       alert("Failed to delete assessment");

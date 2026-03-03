@@ -43,13 +43,13 @@ export function PortfolioDashboard() {
       setLoading(true);
       const res = await fetch("/api/analytics/portfolio");
       if (!res.ok) {
-        const body = (await res.json()) as { error?: { message?: string } };
-        throw new Error(body.error?.message ?? "Failed to load portfolio data");
+        setError("Failed to load portfolio data. Please try again.");
+        return;
       }
       const json = (await res.json()) as { data: PortfolioData };
       setData(json.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+    } catch {
+      setError("Failed to load portfolio data. Please try again.");
     } finally {
       setLoading(false);
     }

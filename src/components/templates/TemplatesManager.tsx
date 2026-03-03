@@ -39,13 +39,13 @@ export function TemplatesManager({ assessments }: TemplatesManagerProps) {
       setLoading(true);
       const res = await fetch("/api/templates");
       if (!res.ok) {
-        const body = (await res.json()) as { error?: { message?: string } };
-        throw new Error(body.error?.message ?? "Failed to load templates");
+        setError("Failed to load templates. Please try again.");
+        return;
       }
       const json = (await res.json()) as { data: Template[] };
       setTemplates(json.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+    } catch {
+      setError("Failed to load templates. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -71,13 +71,13 @@ export function TemplatesManager({ assessments }: TemplatesManagerProps) {
         body: JSON.stringify(data),
       });
       if (!res.ok) {
-        const body = (await res.json()) as { error?: { message?: string } };
-        throw new Error(body.error?.message ?? "Failed to create template");
+        setError("Failed to create template. Please try again.");
+        return;
       }
       setCreateOpen(false);
       void fetchTemplates();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+    } catch {
+      setError("Failed to create template. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -103,13 +103,13 @@ export function TemplatesManager({ assessments }: TemplatesManagerProps) {
         }),
       });
       if (!res.ok) {
-        const body = (await res.json()) as { error?: { message?: string } };
-        throw new Error(body.error?.message ?? "Failed to create assessment");
+        setError("Failed to create assessment from template. Please try again.");
+        return;
       }
       setUseOpen(false);
       void fetchTemplates();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+    } catch {
+      setError("Failed to create assessment from template. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -121,12 +121,12 @@ export function TemplatesManager({ assessments }: TemplatesManagerProps) {
         method: "DELETE",
       });
       if (!res.ok) {
-        const body = (await res.json()) as { error?: { message?: string } };
-        throw new Error(body.error?.message ?? "Failed to delete template");
+        setError("Failed to delete template. Please try again.");
+        return;
       }
       void fetchTemplates();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+    } catch {
+      setError("Failed to delete template. Please try again.");
     }
   };
 

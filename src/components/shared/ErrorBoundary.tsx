@@ -42,7 +42,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             {UI_TEXT.errors.generic}
           </h3>
           <p className="text-base text-slate-600 mb-6 max-w-md">
-            {this.state.error?.message ?? "An unexpected error occurred"}
+            An unexpected error occurred. Please try again.
           </p>
           <Button onClick={this.handleRetry} variant="outline">
             Try Again

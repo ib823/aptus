@@ -52,8 +52,7 @@ export function InviteUserDialog({
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        setError(data.error?.message ?? "Failed to send invitation");
+        setError("Failed to send invitation. Please try again.");
         setSending(false);
         return;
       }

@@ -128,8 +128,7 @@ export function OcmFormDialog({
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        setError(data.error?.message ?? "Failed to save");
+        setError("Failed to save OCM impact. Please try again.");
         setSaving(false);
         return;
       }

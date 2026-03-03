@@ -60,12 +60,12 @@ export function StakeholderManager({
           body: JSON.stringify(newStakeholder),
         });
 
-        const data: { error?: { message: string } } = await response.json();
-
         if (!response.ok) {
-          setError(data.error?.message ?? "Failed to add stakeholder");
+          setError("Failed to add team member. Please try again.");
           return;
         }
+
+        await response.json();
 
         setNewStakeholder({ name: "", email: "", role: "process_owner", assignedAreas: [] });
         setOpen(false);

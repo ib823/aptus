@@ -4,7 +4,7 @@ import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function AssessmentError({
-  error,
+  error: _error,
   reset,
 }: {
   error: Error & { digest?: string };
@@ -15,7 +15,7 @@ export default function AssessmentError({
       <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
       <h2 className="text-xl font-semibold text-slate-950 mb-2">Assessment Error</h2>
       <p className="text-base text-slate-600 mb-6 max-w-md">
-        {error.message || "Failed to load assessment data. Please try again."}
+        Failed to load assessment data. Please try again.
       </p>
       <div className="flex gap-3">
         <Button onClick={reset} variant="outline">
