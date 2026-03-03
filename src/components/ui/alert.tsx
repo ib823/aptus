@@ -1,15 +1,14 @@
 "use client"
 
 import * as React from "react"
-import { MessageStrip } from "@ui5/webcomponents-react"
 import { cn } from "@/lib/utils"
 
 type AlertVariant = "default" | "destructive"
 
-const VARIANT_TO_DESIGN = {
-  default: "Information",
-  destructive: "Negative",
-} as const
+const VARIANT_CLASSES: Record<AlertVariant, string> = {
+  default: "bg-muted/50 text-foreground border-border",
+  destructive: "text-destructive bg-destructive/5 border-destructive/20 *:data-[slot=alert-description]:text-destructive/80 [&>svg]:text-current",
+}
 
 function Alert({
   className,
@@ -18,23 +17,22 @@ function Alert({
   ...props
 }: React.ComponentProps<"div"> & { variant?: AlertVariant | null }) {
   const resolvedVariant = (variant ?? "default") as AlertVariant
-  const design = VARIANT_TO_DESIGN[resolvedVariant]
 
   return (
-    <MessageStrip
+    <div
       data-slot="alert"
-      design={design}
-      hideCloseButton
+      role="alert"
       className={cn(
-        "w-full rounded-lg [&]:p-4",
+        "w-full rounded-lg border p-4",
+        VARIANT_CLASSES[resolvedVariant],
         className,
       )}
-      {...(props as Record<string, unknown>)}
+      {...props}
     >
       <div className="grid has-[>svg]:grid-cols-[calc(var(--spacing)*4)_1fr] grid-cols-[0_1fr] has-[>svg]:gap-x-3 gap-y-0.5 items-start [&>svg]:size-4 [&>svg]:translate-y-0.5 [&>svg]:text-current">
         {children}
       </div>
-    </MessageStrip>
+    </div>
   )
 }
 

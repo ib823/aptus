@@ -1,21 +1,18 @@
 "use client"
 
 import * as React from "react"
-import { Card as UI5Card } from "@ui5/webcomponents-react"
 import { cn } from "@/lib/utils"
 
-function Card({ className, children, ...props }: React.ComponentProps<"div">) {
+function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <UI5Card
+    <div
       data-slot="card"
       className={cn(
         "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
         className,
       )}
-      {...(props as Record<string, unknown>)}
-    >
-      {children}
-    </UI5Card>
+      {...props}
+    />
   )
 }
 
