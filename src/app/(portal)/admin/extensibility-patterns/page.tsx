@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/db/prisma";
 import { AdminCrudTable } from "@/components/admin/AdminCrudTable";
+
+export const metadata: Metadata = { title: "Extensibility Patterns" };
 
 export default async function ExtensibilityPatternsPage() {
   const patterns = await prisma.extensibilityPattern.findMany({

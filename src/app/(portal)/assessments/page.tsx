@@ -6,13 +6,11 @@ export const metadata: Metadata = { title: "Assessments" };
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { StatusBadge } from "@/components/shared/StatusBadge";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { AssessmentsList } from "@/components/assessment/AssessmentsList";
 import { UI_TEXT } from "@/constants/ui-text";
 import { redirect } from "next/navigation";
-import { formatDistanceToNow } from "date-fns";
 
 export default async function AssessmentsPage() {
   const user = await getCurrentUser();
@@ -97,57 +95,10 @@ export default async function AssessmentsPage() {
           />
         </div>
       ) : (
-        <div className="space-y-3">
-          {assessments.map((assessment) => {
-            const completionPct =
-              assessment._count.scopeSelections > 0 && assessment._count.stepResponses > 0
-                ? Math.min(100, Math.round((assessment._count.stepResponses / (assessment._count.scopeSelections * 15)) * 100))
-                : 0;
-            return (
-              <Link
-                key={assessment.id}
-                href={assessment.status === "draft" ? `/assessment/${assessment.id}/profile` : `/assessment/${assessment.id}/scope`}
-                className="block"
-              >
-                <Card className="hover:shadow-md hover:border-primary/30 transition-all duration-200 cursor-pointer">
-                  <CardContent className="p-4">
-                    {/* Row 1: Status + Name */}
-                    <div className="flex items-start gap-2 mb-2">
-                      <StatusBadge status={assessment.status} />
-                      <h3 className="font-semibold text-base text-foreground">
-                        {assessment.companyName}
-                      </h3>
-                    </div>
-
-                    {/* Row 2: Metadata */}
-                    <div className="text-sm text-muted-foreground mb-3">
-                      {assessment.industry}
-                      {assessment.country && <> &middot; {assessment.country}</>}
-                      {" "}&middot;{" "}
-                      {formatDistanceToNow(assessment.updatedAt, { addSuffix: true })}
-                    </div>
-
-                    {/* Row 3: Progress */}
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-primary rounded-full transition-all"
-                          style={{ width: `${completionPct}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-muted-foreground flex-shrink-0">
-                        {completionPct}%
-                      </span>
-                      <span className="text-xs text-muted-foreground/60 flex-shrink-0 hidden sm:inline">
-                        {assessment._count.scopeSelections} scope items &middot; {assessment._count.stepResponses} steps
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            );
-          })}
-        </div>
+        <AssessmentsList assessments={assessments.map((a) => ({
+          ...a,
+          updatedAt: a.updatedAt.toISOString(),
+        }))} />
       )}
     </>
   );

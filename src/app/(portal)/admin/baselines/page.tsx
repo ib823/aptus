@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/db/prisma";
 import { AdminCrudTable } from "@/components/admin/AdminCrudTable";
+
+export const metadata: Metadata = { title: "Effort Baselines" };
 
 export default async function BaselinesPage() {
   const baselines = await prisma.effortBaseline.findMany({

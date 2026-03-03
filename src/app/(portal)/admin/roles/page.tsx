@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { ROLE_METADATA } from "@/lib/auth/role-metadata";
 import { PERMISSION_MATRIX } from "@/lib/auth/permission-matrix";
 import { ROLE_CAPABILITIES } from "@/lib/auth/role-permissions";
 import { RolesPermissionsClient } from "@/components/admin/RolesPermissionsClient";
 import type { UserRole } from "@/types/assessment";
+
+export const metadata: Metadata = { title: "Roles & Permissions" };
 
 export default function RolesPage() {
   // Pre-serialize Sets to arrays for the client component

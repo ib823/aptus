@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/db/prisma";
 import { AdminCrudTable } from "@/components/admin/AdminCrudTable";
+
+export const metadata: Metadata = { title: "Industries" };
 
 export default async function IndustriesPage() {
   const profiles = await prisma.industryProfile.findMany({

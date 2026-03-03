@@ -51,7 +51,7 @@ export default function RootLayout({
         <Providers>
           <ServiceWorkerProvider />
           <TooltipProvider>
-            <main id="main-content">{children}</main>
+            <div id="main-content">{children}</div>
           </TooltipProvider>
           <Toaster />
         </Providers>

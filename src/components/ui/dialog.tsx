@@ -24,11 +24,14 @@ interface DialogProps {
 }
 
 function Dialog({ open, onOpenChange, children }: DialogProps) {
+  const triggerRef = React.useRef<HTMLElement | null>(null)
   return (
     <DialogPresenceContext.Provider value={true}>
-      <DialogContextProvider open={open} onOpenChange={onOpenChange}>
-        {children}
-      </DialogContextProvider>
+      <TriggerRefCtx.Provider value={triggerRef}>
+        <DialogContextProvider open={open} onOpenChange={onOpenChange}>
+          {children}
+        </DialogContextProvider>
+      </TriggerRefCtx.Provider>
     </DialogPresenceContext.Provider>
   )
 }
@@ -74,26 +77,34 @@ function DialogContextProvider({
 /* ------------------------------------------------------------------ */
 /*  DialogTrigger                                                       */
 /* ------------------------------------------------------------------ */
+/* Internal context to return focus to trigger on close */
+const TriggerRefCtx = React.createContext<React.RefObject<HTMLElement | null>>({ current: null })
+
 function DialogTrigger({
   asChild,
   children,
   ...props
 }: React.ComponentProps<"button"> & { asChild?: boolean }) {
   const { setOpen } = React.useContext(DialogCtxInner)
+  const triggerRef = React.useContext(TriggerRefCtx)
+  const localRef = React.useRef<HTMLButtonElement>(null)
 
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     props.onClick?.(e)
+    triggerRef.current = localRef.current
     setOpen(true)
   }
 
   if (asChild && React.isValidElement(children)) {
     return React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
       onClick: handleClick,
+      ref: localRef,
     })
   }
 
   return (
     <button
+      ref={localRef}
       data-slot="dialog-trigger"
       type="button"
       {...props}
@@ -127,8 +138,14 @@ function DialogContent({
   const { open, setOpen } = React.useContext(DialogCtxInner)
   const dialogRef = React.useRef(null)
 
+  const triggerRef = React.useContext(TriggerRefCtx)
+
   const handleAfterClose = () => {
     setOpen(false)
+    // Return focus to the trigger element
+    requestAnimationFrame(() => {
+      triggerRef.current?.focus()
+    })
   }
 
   // Separate header, footer, and body content from children

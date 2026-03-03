@@ -71,7 +71,13 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
             </Button>
           )}
           {onClose && (
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onClose}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-10 w-10 p-0"
+              onClick={onClose}
+              aria-label="Close notifications"
+            >
               &times;
             </Button>
           )}

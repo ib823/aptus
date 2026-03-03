@@ -14,12 +14,14 @@ export default async function AdminLayout({
   return (
     <div className="flex min-h-[calc(100vh-64px)]">
       <AdminSidebar />
-      <main
+      <div
         className="flex-1 p-8"
         style={{ background: "var(--sapBackgroundColor, #f5f6f7)" }}
+        role="region"
+        aria-label="Admin content"
       >
         {children}
-      </main>
+      </div>
     </div>
   );
 }

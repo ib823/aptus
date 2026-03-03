@@ -56,7 +56,11 @@ export function AreaValidationCard({
         ) : null}
         {!(readOnly ?? false) && status === "PENDING" ? (
           <div className="space-y-3">
+            <label htmlFor={`validation-comment-${functionalArea}`} className="sr-only">
+              Comments or rejection reason
+            </label>
             <Textarea
+              id={`validation-comment-${functionalArea}`}
               placeholder="Add comments or rejection reason..."
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}

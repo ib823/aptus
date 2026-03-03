@@ -24,7 +24,7 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider>
-        <NextThemeProvider attribute="class" defaultTheme="light" enableSystem={false} forcedTheme="light" disableTransitionOnChange>
+        <NextThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <UI5ThemeProvider staticCssInjected>
             {children}
           </UI5ThemeProvider>

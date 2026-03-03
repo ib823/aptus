@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { getCatalogStats } from "@/lib/db/cached-queries";
 import { IngestClient } from "@/components/admin/IngestClient";
+
+export const metadata: Metadata = { title: "ZIP Ingestion" };
 
 export default async function IngestPage() {
   const catalog = await getCatalogStats();

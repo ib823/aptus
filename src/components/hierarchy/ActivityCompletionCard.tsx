@@ -38,25 +38,25 @@ export function ActivityCompletionCard({
       <div className="flex justify-center gap-4 mb-6 text-xs">
         {fitCount > 0 && (
           <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-green-500" />
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--sapPositiveColor, #256f3a)" }} />
             <span>{fitCount} FIT</span>
           </div>
         )}
         {configureCount > 0 && (
           <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-blue-500" />
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--sapInformativeColor, #0070f2)" }} />
             <span>{configureCount} CONFIGURE</span>
           </div>
         )}
         {gapCount > 0 && (
           <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-amber-500" />
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--sapCriticalColor, #e9730c)" }} />
             <span>{gapCount} GAP</span>
           </div>
         )}
         {naCount > 0 && (
           <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-slate-400" />
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--sapNeutralColor, #6a6d70)" }} />
             <span>{naCount} N/A</span>
           </div>
         )}

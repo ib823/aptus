@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/db/prisma";
+
+export const metadata: Metadata = { title: "Users" };
 
 export default async function UsersPage() {
   const users = await prisma.user.findMany({

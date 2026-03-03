@@ -66,9 +66,9 @@ export default async function AssessmentLayout({
         />
       </div>
       <PresenceHeartbeat assessmentId={assessment.id} />
-      <main className="flex-1 min-h-0 overflow-auto pb-16 md:pb-0" data-assessment-main>
+      <div className="flex-1 min-h-0 overflow-auto pb-16 md:pb-0" role="region" aria-label="Assessment content" data-assessment-main>
         {children}
-      </main>
+      </div>
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-40">
         <MobileBottomTabBar assessmentId={assessment.id} />
       </div>
