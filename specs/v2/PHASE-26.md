@@ -990,7 +990,7 @@ await prisma.assessmentTemplate.create({
     id: "tmpl-demo-manufacturing",
     organizationId: "org-partner-demo",
     name: "Manufacturing Standard (MY)",
-    description: "Standard template for Malaysian manufacturing companies migrating from SAP ECC to S/4HANA Cloud. Covers core modules: FI, CO, MM, PP, SD, QM.",
+    description: "Standard template for Malaysian manufacturing companies migrating from SAP ECC to SAP Cloud. Covers core modules: FI, CO, MM, PP, SD, QM.",
     industry: "manufacturing",
     companySize: "midsize",
     modules: ["FI", "CO", "MM", "PP", "SD", "QM"],

@@ -1,16 +1,63 @@
-import * as React from "react"
+"use client"
 
+import * as React from "react"
+import { TextArea as UI5TextArea } from "@ui5/webcomponents-react"
+import type { Ui5CustomEvent } from "@ui5/webcomponents-react"
 import { cn } from "@/lib/utils"
 
-function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
+interface TextareaProps extends Omit<React.ComponentProps<"textarea">, "onChange" | "onInput"> {
+  onChange?: React.ChangeEventHandler<HTMLTextAreaElement>
+  onInput?: React.ChangeEventHandler<HTMLTextAreaElement>
+}
+
+function Textarea({
+  className,
+  onChange,
+  onInput,
+  value,
+  defaultValue: _defaultValue,
+  placeholder,
+  disabled,
+  readOnly,
+  name,
+  id,
+  required,
+  rows,
+  maxLength,
+  ...props
+}: TextareaProps) {
+  const handleInput = (e: Ui5CustomEvent) => {
+    const target = e.target as unknown as HTMLTextAreaElement
+    const syntheticEvent = {
+      ...e,
+      target,
+      currentTarget: target,
+      type: "change",
+    } as unknown as React.ChangeEvent<HTMLTextAreaElement>
+    onChange?.(syntheticEvent)
+    onInput?.(syntheticEvent)
+  }
+
+  const ariaInvalid = props["aria-invalid"]
+  const valueState = ariaInvalid ? "Negative" : "None"
+
   return (
-    <textarea
+    <UI5TextArea
       data-slot="textarea"
-      className={cn(
-        "border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 flex field-sizing-content min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
-        className
-      )}
-      {...props}
+      value={value != null ? String(value) : undefined}
+      placeholder={placeholder}
+      disabled={disabled}
+      readonly={readOnly}
+      name={name}
+      id={id}
+      required={required}
+      rows={rows ?? 3}
+      maxlength={maxLength}
+      growing
+      valueState={valueState}
+      onInput={handleInput}
+      className={cn("w-full min-h-16 rounded-md text-base md:text-sm", className)}
+      {...({ "aria-invalid": ariaInvalid } as Record<string, unknown>)}
     />
   )
 }

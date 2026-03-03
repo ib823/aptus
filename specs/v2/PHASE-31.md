@@ -4,7 +4,7 @@
 
 Phase 31 implements the continuity layer for the ABeam assessment lifecycle -- enabling assessments to evolve over time through versioned snapshots, cross-phase cloning, controlled post-sign-off modifications, reassessment triggers, and template generation. Where Phase 30 created immutable snapshots and a sign-off workflow, Phase 31 builds the mechanisms to compare snapshots (delta reports), clone signed-off Phase 1 assessments into Phase 2 with carry-forward selection, perform controlled changes after sign-off via a formal change request process, detect and respond to reassessment triggers (SAP version updates, regulatory changes, scope expansion), and save completed assessments as anonymized reusable templates (extending Phase 26).
 
-This phase transforms the assessment from a single point-in-time document into a living, version-tracked artifact that supports the full S/4HANA Cloud implementation lifecycle across multiple project phases.
+This phase transforms the assessment from a single point-in-time document into a living, version-tracked artifact that supports the full SAP Cloud implementation lifecycle across multiple project phases.
 
 **Source**: V2 Master Brief Addendum 2 Section 3 (Assessment Lifecycle Continuity)
 

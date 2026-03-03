@@ -112,7 +112,7 @@ function LoginForm() {
           {UI_TEXT.app.tagline}
         </p>
         <p className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto">
-          Compare your business processes with SAP S/4HANA to plan your implementation.
+          Compare your business processes with SAP to plan your implementation.
         </p>
         <h1 className="text-xl font-semibold text-foreground">
           {sent ? UI_TEXT.auth.magicLinkSent : UI_TEXT.auth.loginTitle}

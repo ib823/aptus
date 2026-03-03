@@ -7,7 +7,7 @@
 ## Table of Contents
 
 - [Scenario Cast](#scenario-cast)
-- [Scenario 1: Greenfield S/4HANA Assessment — Ideal Path](#scenario-1-greenfield-s4hana-assessment--ideal-path)
+- [Scenario 1: Greenfield SAP Assessment — Ideal Path](#scenario-1-greenfield-sap-assessment--ideal-path)
   - [Act 1: Platform Setup & Onboarding](#act-1-platform-setup--onboarding)
   - [Act 2: Subscription & Team Assembly](#act-2-subscription--team-assembly)
   - [Act 3: Assessment Creation & Company Profile](#act-3-assessment-creation--company-profile)
@@ -27,7 +27,7 @@
 
 ## Scenario Cast
 
-A mid-size manufacturing company, **NovaTech Industries** (Germany, 2,500 employees), is adopting SAP S/4HANA Cloud Public Edition. Their SAP implementation partner is **Meridian Consulting**.
+A mid-size manufacturing company, **NovaTech Industries** (Germany, 2,500 employees), is adopting SAP Cloud. Their SAP implementation partner is **Meridian Consulting**.
 
 | Actor | Name | Role | Organization |
 |---|---|---|---|
@@ -46,7 +46,7 @@ A mid-size manufacturing company, **NovaTech Industries** (Germany, 2,500 employ
 
 ---
 
-## Scenario 1: Greenfield S/4HANA Assessment — Ideal Path
+## Scenario 1: Greenfield SAP Assessment — Ideal Path
 
 ### Act 1: Platform Setup & Onboarding
 
@@ -192,7 +192,7 @@ All client users authenticate via magic link and enroll MFA (required for all cl
 > **Actor: Priya Sharma** (Consultant)
 
 ```
-Action:    Create assessment "NovaTech S/4HANA Fit-to-Standard — Phase 1"
+Action:    Create assessment "NovaTech SAP Fit-to-Standard — Phase 1"
 Status:    → draft
 Audit:     STATUS_TRANSITIONED (draft)
 ```
@@ -1102,8 +1102,8 @@ After the Phase 1 assessment is signed off, NovaTech needs to add Manufacturing 
 > **Actor: Priya Sharma** (Consultant)
 
 ```
-Action:    Clone assessment "NovaTech S/4HANA — Phase 1"
-           → "NovaTech S/4HANA — Phase 2"
+Action:    Clone assessment "NovaTech SAP — Phase 1"
+           → "NovaTech SAP — Phase 2"
 Result:    New assessment created in draft status
 Carry-forward data:
   ├─ Company profile (100%)

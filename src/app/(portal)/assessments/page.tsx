@@ -70,7 +70,7 @@ export default async function AssessmentsPage() {
               Welcome to ABeam
             </h3>
             <p className="text-sm text-blue-800 mb-3">
-              This tool helps you compare your business processes with SAP S/4HANA. Here&apos;s how it works:
+              This tool helps you compare your business processes with SAP. Here&apos;s how it works:
             </p>
             <ol className="text-sm text-blue-700 space-y-1.5 ml-4 list-decimal">
               <li><strong>Tell us about your company</strong> &mdash; Fill in your company profile and industry</li>

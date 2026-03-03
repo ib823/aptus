@@ -1,12 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { Badge } from "@/components/ui/badge";
-
-const ORG_TYPE_COLORS: Record<string, string> = {
-  PLATFORM: "bg-purple-100 text-purple-800",
-  PARTNER: "bg-blue-100 text-blue-800",
-  DIRECT_CLIENT: "bg-green-100 text-green-800",
-};
+import { getOrgTypeLabel, getOrgTypeColor } from "@/lib/utils/org-type";
 
 export default async function OrganizationsPage() {
   const organizations = await prisma.organization.findMany({
@@ -57,8 +52,8 @@ export default async function OrganizationsPage() {
                   <div className="text-xs text-muted-foreground">{org.slug}</div>
                 </td>
                 <td className="px-4 py-2.5">
-                  <Badge className={ORG_TYPE_COLORS[org.type] ?? "bg-slate-50 text-slate-500"}>
-                    {org.type.replace("_", " ")}
+                  <Badge className={getOrgTypeColor(org.type)}>
+                    {getOrgTypeLabel(org.type)}
                   </Badge>
                 </td>
                 <td className="px-4 py-2.5 text-muted-foreground">{org._count.users}</td>

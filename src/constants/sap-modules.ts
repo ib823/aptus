@@ -27,7 +27,7 @@ export const SAP_MODULE_NAMES: Record<string, string> = {
   BW: "Business Warehouse / Analytics",
   GRC: "Governance, Risk & Compliance",
   IBP: "Integrated Business Planning",
-  S4: "SAP S/4HANA Core",
+  S4: "SAP Core",
   GTS: "Global Trade Services",
 };
 

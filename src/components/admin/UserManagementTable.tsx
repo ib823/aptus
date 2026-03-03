@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ROLE_METADATA, getRolesForOrgType } from "@/lib/auth/role-metadata";
+import { normalizeOrgType } from "@/lib/utils/org-type";
+import type { UserRole } from "@/types/assessment";
 
 interface OrgUser {
   id: string;
@@ -19,24 +22,11 @@ interface OrgUser {
 
 interface UserManagementTableProps {
   organizationId: string;
+  orgType: string;
   users: OrgUser[];
   currentUserRole: string;
   onRefresh: () => void;
 }
-
-const ROLE_LABELS: Record<string, string> = {
-  platform_admin: "Platform Admin",
-  partner_lead: "Partner Lead",
-  consultant: "Consultant",
-  project_manager: "Project Manager",
-  solution_architect: "Solution Architect",
-  process_owner: "Process Owner",
-  it_lead: "IT Lead",
-  data_migration_lead: "Data Migration Lead",
-  executive_sponsor: "Executive Sponsor",
-  viewer: "Viewer",
-  client_admin: "Client Admin",
-};
 
 const ROLE_COLORS: Record<string, string> = {
   platform_admin: "bg-red-100 text-red-800",
@@ -54,6 +44,7 @@ const ROLE_COLORS: Record<string, string> = {
 
 export function UserManagementTable({
   organizationId,
+  orgType,
   users,
   currentUserRole,
   onRefresh,
@@ -63,6 +54,11 @@ export function UserManagementTable({
   const [error, setError] = useState<string | null>(null);
 
   const canManageUsers = ["platform_admin", "partner_lead", "client_admin"].includes(currentUserRole);
+
+  const filteredRoles = getRolesForOrgType(normalizeOrgType(orgType));
+
+  const getRoleLabel = (role: string): string =>
+    ROLE_METADATA[role as UserRole]?.label ?? role;
 
   const handleRoleChange = useCallback(async () => {
     if (!roleChangeDialog) return;
@@ -145,7 +141,7 @@ export function UserManagementTable({
                 </td>
                 <td className="px-4 py-3">
                   <Badge className={ROLE_COLORS[user.role] ?? "bg-slate-50 text-slate-500"}>
-                    {ROLE_LABELS[user.role] ?? user.role}
+                    {getRoleLabel(user.role)}
                   </Badge>
                 </td>
                 <td className="px-4 py-3">
@@ -175,8 +171,8 @@ export function UserManagementTable({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {Object.entries(ROLE_LABELS).map(([value, label]) => (
-                          <SelectItem key={value} value={value}>{label}</SelectItem>
+                        {filteredRoles.map((value) => (
+                          <SelectItem key={value} value={value}>{getRoleLabel(value)}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -206,11 +202,11 @@ export function UserManagementTable({
             <p className="text-sm">
               Change role from{" "}
               <Badge className={ROLE_COLORS[roleChangeDialog?.currentRole ?? ""] ?? ""}>
-                {ROLE_LABELS[roleChangeDialog?.currentRole ?? ""] ?? roleChangeDialog?.currentRole}
+                {getRoleLabel(roleChangeDialog?.currentRole ?? "")}
               </Badge>
               {" to "}
               <Badge className={ROLE_COLORS[roleChangeDialog?.newRole ?? ""] ?? ""}>
-                {ROLE_LABELS[roleChangeDialog?.newRole ?? ""] ?? roleChangeDialog?.newRole}
+                {getRoleLabel(roleChangeDialog?.newRole ?? "")}
               </Badge>?
             </p>
             <p className="text-xs text-muted-foreground">

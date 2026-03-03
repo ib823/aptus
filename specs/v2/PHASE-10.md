@@ -498,7 +498,7 @@ No backfill needed. All new fields are nullable. Existing assessments will have 
    - Recommended: Yes. Validation enforces "future date" only for assessments in "draft" status. Once an assessment is beyond draft, the go-live date is treated as historical data.
 
 3. **Should sapModules use free-text tags or a predefined list?**
-   - Recommended: Predefined list. Use the standard SAP S/4HANA Cloud module codes (FI, CO, MM, SD, PP, PM, QM, HCM, PS, WM, etc.). Store as string codes. Display with human-readable labels in the UI.
+   - Recommended: Predefined list. Use the standard SAP module codes (FI, CO, MM, SD, PP, PM, QM, HCM, PS, WM, etc.). Store as string codes. Display with human-readable labels in the UI.
 
 4. **Should regulatory frameworks be standardized or free-text?**
    - Recommended: Free-text tags. Regulatory landscapes vary too much by country and industry to pre-populate. Allow users to type and add tags. Consider adding a curated suggestion list in a later phase.

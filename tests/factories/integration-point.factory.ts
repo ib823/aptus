@@ -22,7 +22,7 @@ function createBase(overrides: IntegrationPointOverrides = {}): IntegrationPoint
     description: overrides.description ?? `Description for integration point ${id}`,
     direction: overrides.direction ?? "INBOUND",
     sourceSystem: overrides.sourceSystem ?? "Legacy ERP",
-    targetSystem: overrides.targetSystem ?? "S/4HANA Cloud",
+    targetSystem: overrides.targetSystem ?? "SAP Cloud",
     interfaceType: overrides.interfaceType ?? "API",
     frequency: overrides.frequency ?? "REAL_TIME",
     middleware: overrides.middleware ?? null,
@@ -60,7 +60,7 @@ export function createByDirection(
     INBOUND: {
       direction: "INBOUND",
       sourceSystem: "External CRM",
-      targetSystem: "S/4HANA Cloud",
+      targetSystem: "SAP Cloud",
       name: "Customer Master Data Inbound",
       description: "Inbound customer master data synchronization from CRM system",
       interfaceType: "IDOC",
@@ -68,7 +68,7 @@ export function createByDirection(
     },
     OUTBOUND: {
       direction: "OUTBOUND",
-      sourceSystem: "S/4HANA Cloud",
+      sourceSystem: "SAP Cloud",
       targetSystem: "Data Warehouse",
       name: "Financial Postings Outbound",
       description: "Outbound financial posting data for reporting and analytics",
@@ -77,7 +77,7 @@ export function createByDirection(
     },
     BIDIRECTIONAL: {
       direction: "BIDIRECTIONAL",
-      sourceSystem: "S/4HANA Cloud",
+      sourceSystem: "SAP Cloud",
       targetSystem: "SAP CPI / Third-party",
       name: "Purchase Order Bidirectional Sync",
       description: "Bidirectional purchase order synchronization with supplier portal",

@@ -5,6 +5,7 @@ import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { prisma } from "@/lib/db/prisma";
 import { Badge } from "@/components/ui/badge";
 import { OrgDetailClient } from "@/components/admin/OrgDetailClient";
+import { getOrgTypeLabel, getOrgTypeColor } from "@/lib/utils/org-type";
 
 interface OrgDetailPageProps {
   params: Promise<{ orgId: string }>;
@@ -55,12 +56,6 @@ export default async function OrgDetailPage({ params }: OrgDetailPageProps) {
     where: { organizationId: orgId, status: "pending" },
   });
 
-  const ORG_TYPE_COLORS: Record<string, string> = {
-    PLATFORM: "bg-purple-100 text-purple-800",
-    PARTNER: "bg-blue-100 text-blue-800",
-    DIRECT_CLIENT: "bg-green-100 text-green-800",
-  };
-
   return (
     <div className="max-w-5xl">
       <div className="mb-6">
@@ -71,8 +66,8 @@ export default async function OrgDetailPage({ params }: OrgDetailPageProps) {
 
       <div className="flex items-center gap-3 mb-1">
         <h1 className="text-3xl font-bold text-foreground tracking-tight">{organization.name}</h1>
-        <Badge className={ORG_TYPE_COLORS[organization.type] ?? "bg-slate-50 text-slate-500"}>
-          {organization.type.replace("_", " ")}
+        <Badge className={getOrgTypeColor(organization.type)}>
+          {getOrgTypeLabel(organization.type)}
         </Badge>
       </div>
       <p className="text-sm text-muted-foreground mb-8">

@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { SessionProvider } from "next-auth/react";
-import { ThemeProvider } from "next-themes";
+import { ThemeProvider as NextThemeProvider } from "next-themes";
+import { ThemeProvider as UI5ThemeProvider } from "@ui5/webcomponents-react";
+import "@ui5/webcomponents-react/dist/Assets.js";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
@@ -22,9 +24,11 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} forcedTheme="light" disableTransitionOnChange>
-          {children}
-        </ThemeProvider>
+        <NextThemeProvider attribute="class" defaultTheme="light" enableSystem={false} forcedTheme="light" disableTransitionOnChange>
+          <UI5ThemeProvider staticCssInjected>
+            {children}
+          </UI5ThemeProvider>
+        </NextThemeProvider>
       </SessionProvider>
     </QueryClientProvider>
   );

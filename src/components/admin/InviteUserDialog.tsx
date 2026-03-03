@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { getRolesForOrgType, ROLE_METADATA } from "@/lib/auth/role-metadata";
+import { normalizeOrgType } from "@/lib/utils/org-type";
 
 interface InviteUserDialogProps {
   organizationId: string;
@@ -13,36 +15,6 @@ interface InviteUserDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
-}
-
-const ROLES_BY_ORG_TYPE: Record<string, Array<{ value: string; label: string }>> = {
-  PLATFORM: [
-    { value: "platform_admin", label: "Platform Admin" },
-  ],
-  PARTNER: [
-    { value: "partner_lead", label: "Partner Lead" },
-    { value: "consultant", label: "Consultant" },
-    { value: "project_manager", label: "Project Manager" },
-    { value: "solution_architect", label: "Solution Architect" },
-    { value: "data_migration_lead", label: "Data Migration Lead" },
-    { value: "viewer", label: "Viewer" },
-  ],
-  DIRECT_CLIENT: [
-    { value: "client_admin", label: "Client Admin" },
-    { value: "process_owner", label: "Process Owner" },
-    { value: "it_lead", label: "IT Lead" },
-    { value: "data_migration_lead", label: "Data Migration Lead" },
-    { value: "executive_sponsor", label: "Executive Sponsor" },
-    { value: "project_manager", label: "Project Manager" },
-    { value: "viewer", label: "Viewer" },
-  ],
-};
-
-/** Normalize DB org type values (e.g. "partner", "client") to lookup keys */
-function normalizeOrgType(raw: string): string {
-  const upper = raw.toUpperCase();
-  if (upper === "CLIENT") return "DIRECT_CLIENT";
-  return upper;
 }
 
 export function InviteUserDialog({
@@ -58,7 +30,13 @@ export function InviteUserDialog({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const availableRoles = ROLES_BY_ORG_TYPE[normalizeOrgType(orgType)] ?? [];
+  const availableRoles = getRolesForOrgType(normalizeOrgType(orgType)).map(
+    (r) => ({
+      value: r,
+      label: ROLE_METADATA[r].label,
+      description: ROLE_METADATA[r].description,
+    })
+  );
 
   const handleSubmit = async () => {
     if (!email || !role) return;
@@ -130,10 +108,13 @@ export function InviteUserDialog({
               <SelectTrigger className="mt-1">
                 <SelectValue placeholder="Select a role" />
               </SelectTrigger>
-              <SelectContent portal={false}>
+              <SelectContent>
                 {availableRoles.map((r) => (
                   <SelectItem key={r.value} value={r.value}>
-                    {r.label}
+                    <div>
+                      <span className="font-medium">{r.label}</span>
+                      <p className="text-xs text-muted-foreground">{r.description}</p>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>

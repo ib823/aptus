@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The Integration Register introduces a dedicated register for tracking integration points discovered during a Fit-to-Standard assessment. SAP S/4HANA Cloud Public Edition projects require clear documentation of every interface between S/4HANA and surrounding systems (legacy ERPs, third-party SaaS, banks, EDI partners, government portals, etc.). Each integration point captures: source and target systems, interface type (file, API, iDoc, RFC, CPI, OData, BAPI), direction (inbound/outbound/bidirectional), frequency (real-time, batch daily, batch weekly, event-driven, on-demand), data objects exchanged, middleware requirement, complexity estimate, priority, status, and current-state documentation.
+The Integration Register introduces a dedicated register for tracking integration points discovered during a Fit-to-Standard assessment. SAP Cloud projects require clear documentation of every interface between SAP and surrounding systems (legacy ERPs, third-party SaaS, banks, EDI partners, government portals, etc.). Each integration point captures: source and target systems, interface type (file, API, iDoc, RFC, CPI, OData, BAPI), direction (inbound/outbound/bidirectional), frequency (real-time, batch daily, batch weekly, event-driven, on-demand), data objects exchanged, middleware requirement, complexity estimate, priority, status, and current-state documentation.
 
 This register sits alongside the existing Gap Register and Remaining Items Register within an assessment, giving consultants and IT leads a single place to catalog all integration work that will flow into the Realize phase.
 

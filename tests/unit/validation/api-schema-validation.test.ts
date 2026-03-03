@@ -220,7 +220,7 @@ const schemas = {
 
 const validPayloads: Record<keyof typeof schemas, Record<string, unknown>> = {
   createAssessment: {
-    name: "Q4 SAP S/4HANA Assessment",
+    name: "Q4 SAP Assessment",
     description: "Full-scope assessment for manufacturing plant",
     clientCompanyName: "Acme Manufacturing Ltd",
     targetGoLiveDate: "2027-06-01T00:00:00.000Z",
@@ -240,7 +240,7 @@ const validPayloads: Record<keyof typeof schemas, Record<string, unknown>> = {
   },
   createGap: {
     title: "Missing warehouse management integration",
-    description: "Current WMS does not support S/4HANA EWM APIs. Need custom middleware development to bridge the gap between legacy WMS and the new system.",
+    description: "Current WMS does not support SAP EWM APIs. Need custom middleware development to bridge the gap between legacy WMS and the new system.",
     severity: "high",
     category: "integration",
     areaId: "logistics",
@@ -249,7 +249,7 @@ const validPayloads: Record<keyof typeof schemas, Record<string, unknown>> = {
     recommendation: "Develop middleware adapter using SAP CPI",
   },
   createIntegration: {
-    sourceName: "SAP S/4HANA",
+    sourceName: "SAP",
     targetName: "Salesforce CRM",
     direction: "bidirectional",
     protocol: "api",

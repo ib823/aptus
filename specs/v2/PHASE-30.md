@@ -502,7 +502,7 @@ export const HandoffPackageSchema = z.object({
 ```json
 // Request
 {
-  "authorityStatement": "I, Maria Santos, in my capacity as Chief Operating Officer of GlobalTech Industries, authorize this SAP S/4HANA Cloud Fit-to-Standard assessment as an accurate representation of our requirements and readiness.",
+  "authorityStatement": "I, Maria Santos, in my capacity as Chief Operating Officer of GlobalTech Industries, authorize this SAP Fit-to-Standard assessment as an accurate representation of our requirements and readiness.",
   "signerTitle": "Chief Operating Officer",
   "acknowledgement": true
 }

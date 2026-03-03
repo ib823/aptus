@@ -488,7 +488,7 @@ const ONBOARDING_FLOWS: Record<string, OnboardingFlow> = {
       {
         index: 0,
         title: "Welcome to ABeam",
-        description: "ABeam helps you run SAP S/4HANA Cloud Fit-to-Standard assessments. Let's show you around.",
+        description: "ABeam helps you run SAP Fit-to-Standard assessments. Let's show you around.",
         illustration: "welcome",
         action: "continue",
         isRequired: false,
@@ -527,7 +527,7 @@ const ONBOARDING_FLOWS: Record<string, OnboardingFlow> = {
       {
         index: 0,
         title: "You've Been Invited",
-        description: "Welcome! You've been invited to participate in {companyName}'s SAP S/4HANA assessment. Your expertise in {assignedAreas} is needed to evaluate how well SAP fits your current processes.",
+        description: "Welcome! You've been invited to participate in {companyName}'s SAP assessment. Your expertise in {assignedAreas} is needed to evaluate how well SAP fits your current processes.",
         illustration: "welcome",
         action: "continue",
         isRequired: false,
@@ -574,7 +574,7 @@ const ONBOARDING_FLOWS: Record<string, OnboardingFlow> = {
       {
         index: 0,
         title: "Welcome, Executive Sponsor",
-        description: "You've been invited as the Executive Sponsor for {companyName}'s SAP S/4HANA assessment. Your role is to review and sign off on the final assessment.",
+        description: "You've been invited as the Executive Sponsor for {companyName}'s SAP assessment. Your role is to review and sign off on the final assessment.",
         illustration: "welcome",
         action: "continue",
         isRequired: false,

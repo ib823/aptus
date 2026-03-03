@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-The Data Migration Register introduces a dedicated register for cataloging data migration objects discovered during a Fit-to-Standard assessment. SAP S/4HANA Cloud Public Edition implementations require careful planning of data migration from legacy systems. Each entry in the register captures: object name, object type (master data, transactional, configuration, reference data), source system, source format, volume estimate, cleansing requirements, mapping complexity, migration approach (manual, automated, hybrid), migration tool (LTMC, LSMW, CPI, BTP, custom), validation rules, priority, dependencies on other migration objects, and effort estimates.
+The Data Migration Register introduces a dedicated register for cataloging data migration objects discovered during a Fit-to-Standard assessment. SAP Cloud implementations require careful planning of data migration from legacy systems. Each entry in the register captures: object name, object type (master data, transactional, configuration, reference data), source system, source format, volume estimate, cleansing requirements, mapping complexity, migration approach (manual, automated, hybrid), migration tool (LTMC, LSMW, CPI, BTP, custom), validation rules, priority, dependencies on other migration objects, and effort estimates.
 
 This register complements the Integration Register (Phase 14) by focusing on one-time data loads rather than ongoing interfaces. It provides the data migration lead and IT lead with a structured workspace to plan, track, and prioritize the data migration workstream that runs in parallel with the Realize phase.
 

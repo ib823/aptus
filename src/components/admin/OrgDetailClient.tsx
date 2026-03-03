@@ -60,6 +60,7 @@ export function OrgDetailClient({ organizationId, orgType, users: initialUsers, 
 
       <UserManagementTable
         organizationId={organizationId}
+        orgType={orgType}
         users={users}
         currentUserRole={currentUserRole}
         onRefresh={refreshUsers}

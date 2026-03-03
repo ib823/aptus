@@ -104,7 +104,7 @@ export function createUnresolved(overrides: GapOverrides = {}): GapResolution {
 export function createHighRisk(overrides: GapOverrides = {}): GapResolution {
   return createBase({
     resolutionType: "EXTEND",
-    gapDescription: "Critical business process not supported by standard S/4HANA",
+    gapDescription: "Critical business process not supported by standard SAP",
     resolutionDescription: "Custom ABAP development with BAdI implementation required",
     effortDays: 30,
     costEstimate: { labor: 60000, license: 15000 },

@@ -65,7 +65,7 @@ function mapGapToAdoWorkItem(
 ): AdoWorkItem {
   const priority = config.priorityMapping[gap.priority ?? "medium"] ?? 3;
   const tags = [
-    config.tagPrefix ?? "s4hana",
+    config.tagPrefix ?? "sap",
     gap.scopeItemId,
     gap.resolutionType,
     gap.riskCategory ?? "unclassified",
@@ -179,17 +179,17 @@ describe("Azure DevOps Export (T-ADO)", () => {
   const defaultConfig: AdoExportConfig = {
     assessmentId,
     adoOrganization: "contoso",
-    adoProject: "S4HANA-Migration",
+    adoProject: "SAP-Migration",
     workItemType: "User Story",
-    areaPath: "S4HANA-Migration\\Gaps",
-    iterationPath: "S4HANA-Migration\\Sprint 1",
+    areaPath: "SAP-Migration\\Gaps",
+    iterationPath: "SAP-Migration\\Sprint 1",
     priorityMapping: {
       critical: 1,
       high: 2,
       medium: 3,
       low: 4,
     },
-    tagPrefix: "s4hana-fit",
+    tagPrefix: "sap-fit",
   };
 
   beforeEach(() => {
@@ -227,16 +227,16 @@ describe("Azure DevOps Export (T-ADO)", () => {
 
     const tagsField = workItem.fields.find((f) => f.path === "/fields/System.Tags");
     expect(tagsField).toBeDefined();
-    expect(tagsField!.value as string).toContain("s4hana-fit");
+    expect(tagsField!.value as string).toContain("sap-fit");
     expect(tagsField!.value as string).toContain("J60");
 
     const areaField = workItem.fields.find((f) => f.path === "/fields/System.AreaPath");
     expect(areaField).toBeDefined();
-    expect(areaField!.value).toBe("S4HANA-Migration\\Gaps");
+    expect(areaField!.value).toBe("SAP-Migration\\Gaps");
 
     const iterField = workItem.fields.find((f) => f.path === "/fields/System.IterationPath");
     expect(iterField).toBeDefined();
-    expect(iterField!.value).toBe("S4HANA-Migration\\Sprint 1");
+    expect(iterField!.value).toBe("SAP-Migration\\Sprint 1");
   });
 
   it("T-ADO-002: Successful bulk export creates work items and returns IDs", () => {
@@ -258,7 +258,7 @@ describe("Azure DevOps Export (T-ADO)", () => {
 
     // Export record persisted
     const record = adoExportRecords.get(result.exportRecordId)!;
-    expect(record.config.adoProject).toBe("S4HANA-Migration");
+    expect(record.config.adoProject).toBe("SAP-Migration");
     expect(record.result!.status).toBe("COMPLETED");
     expect(record.createdAt).toBeInstanceOf(Date);
   });
