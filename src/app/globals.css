@@ -8,6 +8,79 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--sapFontFamily, var(--font-geist-sans, "72", "72full", Arial, Helvetica, sans-serif));
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+
+  /* SAP Horizon token bridge — remap common Tailwind palette to SAP variables */
+  /* Slate (neutral grays) */
+  --color-slate-50: var(--sapNeutralBackground, #f5f6f7);
+  --color-slate-100: var(--sapGroup_ContentBorderColor, #d9d9d9);
+  --color-slate-200: var(--sapContent_ImagePlaceholderBackground, #e0e0e0);
+  --color-slate-300: var(--sapContent_NonInteractiveIconColor, #bcc3ca);
+  --color-slate-400: var(--sapContent_LabelColor, #6a6d70);
+  --color-slate-500: var(--sapContent_LabelColor, #6a6d70);
+  --color-slate-600: var(--sapContent_IconColor, #346187);
+  --color-slate-700: var(--sapTextColor, #32363a);
+  --color-slate-800: var(--sapTextColor, #32363a);
+  --color-slate-900: var(--sapTextColor, #32363a);
+
+  /* Blue (brand / informative) */
+  --color-blue-50: var(--sapInformativeBackground, #e1f4ff);
+  --color-blue-100: var(--sapInformativeBackground, #e1f4ff);
+  --color-blue-200: #b3d7ff;
+  --color-blue-300: #6eb4f7;
+  --color-blue-400: var(--sapBrandColor, #0070f2);
+  --color-blue-500: var(--sapBrandColor, #0070f2);
+  --color-blue-600: var(--sapSelectedColor, #0854a0);
+  --color-blue-700: var(--sapInformativeTextColor, #0070f2);
+  --color-blue-800: #0a3b6e;
+  --color-blue-900: #0a2744;
+
+  /* Red (negative / error) */
+  --color-red-50: var(--sapNegativeBackground, #fce8e8);
+  --color-red-100: var(--sapNegativeBackground, #fce8e8);
+  --color-red-200: #f5b9b9;
+  --color-red-300: #e87878;
+  --color-red-400: var(--sapNegativeColor, #b00);
+  --color-red-500: var(--sapNegativeColor, #b00);
+  --color-red-600: var(--sapNegativeColor, #b00);
+  --color-red-700: var(--sapNegativeTextColor, #b00);
+
+  /* Green (positive / success) */
+  --color-green-50: var(--sapPositiveBackground, #e8f5e4);
+  --color-green-100: var(--sapPositiveBackground, #e8f5e4);
+  --color-green-200: #b5e3a7;
+  --color-green-300: #7cc96a;
+  --color-green-400: var(--sapPositiveColor, #256f3a);
+  --color-green-500: var(--sapPositiveColor, #256f3a);
+  --color-green-600: var(--sapPositiveColor, #256f3a);
+  --color-green-700: var(--sapPositiveTextColor, #256f3a);
+
+  /* Amber/Yellow (critical / warning) */
+  --color-amber-50: var(--sapCriticalBackground, #fef0db);
+  --color-amber-100: var(--sapCriticalBackground, #fef0db);
+  --color-amber-200: #fcd6a0;
+  --color-amber-300: #f5b84d;
+  --color-amber-400: var(--sapCriticalColor, #e9730c);
+  --color-amber-500: var(--sapCriticalColor, #e9730c);
+  --color-amber-600: var(--sapCriticalColor, #e9730c);
+  --color-amber-700: var(--sapCriticalTextColor, #e9730c);
+
+  /* Yellow (overlaps with amber/critical in SAP) */
+  --color-yellow-200: var(--sapCriticalBackground, #fef0db);
+
+  /* Orange (overlaps with critical in SAP) */
+  --color-orange-200: var(--sapCriticalBackground, #fef0db);
+
+  /* Purple/Violet (accent) */
+  --color-purple-50: #f3e8fd;
+  --color-purple-100: #e1c8fa;
+  --color-purple-400: var(--sapAccentColor7, #a100c2);
+  --color-purple-500: var(--sapAccentColor7, #a100c2);
+  --color-purple-600: var(--sapAccentColor7, #a100c2);
+  --color-violet-50: #f3e8fd;
+  --color-violet-100: #e1c8fa;
+  --color-violet-400: var(--sapAccentColor7, #a100c2);
+  --color-violet-500: var(--sapAccentColor7, #a100c2);
+  --color-violet-600: var(--sapAccentColor7, #a100c2);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

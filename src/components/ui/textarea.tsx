@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { TextArea as UI5TextArea } from "@ui5/webcomponents-react"
-import type { Ui5CustomEvent } from "@ui5/webcomponents-react"
 import { cn } from "@/lib/utils"
 
 interface TextareaProps extends Omit<React.ComponentProps<"textarea">, "onChange" | "onInput"> {
@@ -26,10 +25,11 @@ function Textarea({
   maxLength,
   ...props
 }: TextareaProps) {
-  const handleInput = (e: Ui5CustomEvent) => {
-    const target = e.target as unknown as HTMLTextAreaElement
+  const handleInput = (e: unknown) => {
+    const event = e as { target: unknown }
+    const target = event.target as HTMLTextAreaElement
     const syntheticEvent = {
-      ...e,
+      ...event,
       target,
       currentTarget: target,
       type: "change",
@@ -44,17 +44,17 @@ function Textarea({
   return (
     <UI5TextArea
       data-slot="textarea"
-      value={value != null ? String(value) : undefined}
-      placeholder={placeholder}
-      disabled={disabled}
-      readonly={readOnly}
-      name={name}
+      value={value != null ? String(value) : ""}
+      placeholder={placeholder ?? ""}
+      disabled={disabled ?? false}
+      readonly={readOnly ?? false}
+      name={name ?? ""}
       id={id}
-      required={required}
+      required={required ?? false}
       rows={rows ?? 3}
-      maxlength={maxLength}
+      maxlength={maxLength ?? 0}
       growing
-      valueState={valueState}
+      valueState={valueState as "None" | "Negative" | "Positive" | "Critical" | "Information"}
       onInput={handleInput}
       className={cn("w-full min-h-16 rounded-md text-base md:text-sm", className)}
       {...({ "aria-invalid": ariaInvalid } as Record<string, unknown>)}

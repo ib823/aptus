@@ -55,7 +55,7 @@ export default async function PortalLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen" style={{ background: "var(--sapBackgroundColor, #f5f6f7)" }}>
       <OfflineIndicator />
       <PortalNav user={user} />
       {subscriptionStatus !== "ACTIVE" && (

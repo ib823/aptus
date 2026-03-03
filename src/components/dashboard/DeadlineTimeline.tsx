@@ -20,12 +20,32 @@ interface DeadlineTimelineProps {
 
 const STATUS_CONFIG: Record<
   DeadlineStatus,
-  { icon: typeof Clock; badgeClass: string; label: string }
+  { icon: typeof Clock; badgeBg: string; badgeFg: string; label: string }
 > = {
-  pending: { icon: Clock, badgeClass: "bg-blue-50 text-blue-700", label: "Pending" },
-  at_risk: { icon: AlertTriangle, badgeClass: "bg-amber-50 text-amber-700", label: "At Risk" },
-  overdue: { icon: AlertTriangle, badgeClass: "bg-red-50 text-red-700", label: "Overdue" },
-  completed: { icon: CheckCircle2, badgeClass: "bg-green-50 text-green-700", label: "Done" },
+  pending: {
+    icon: Clock,
+    badgeBg: "var(--sapInformativeBackground, #e1f4ff)",
+    badgeFg: "var(--sapInformativeTextColor, #0070f2)",
+    label: "Pending",
+  },
+  at_risk: {
+    icon: AlertTriangle,
+    badgeBg: "var(--sapCriticalBackground, #fef0db)",
+    badgeFg: "var(--sapCriticalTextColor, #e9730c)",
+    label: "At Risk",
+  },
+  overdue: {
+    icon: AlertTriangle,
+    badgeBg: "var(--sapNegativeBackground, #fce8e8)",
+    badgeFg: "var(--sapNegativeTextColor, #b00)",
+    label: "Overdue",
+  },
+  completed: {
+    icon: CheckCircle2,
+    badgeBg: "var(--sapPositiveBackground, #e8f5e4)",
+    badgeFg: "var(--sapPositiveTextColor, #256f3a)",
+    label: "Done",
+  },
 };
 
 export function DeadlineTimeline({ deadlines }: DeadlineTimelineProps) {
@@ -35,7 +55,7 @@ export function DeadlineTimeline({ deadlines }: DeadlineTimelineProps) {
 
   return (
     <Card>
-      <CardHeader className="pb-3 border-b border-slate-100">
+      <CardHeader className="pb-3 border-b" style={{ borderColor: "var(--sapGroup_ContentBorderColor, #d9d9d9)" }}>
         <CardTitle className="text-sm font-semibold">Deadlines</CardTitle>
       </CardHeader>
       <CardContent>
@@ -56,7 +76,10 @@ export function DeadlineTimeline({ deadlines }: DeadlineTimelineProps) {
                       <div className="flex items-center gap-2">
                         <Icon className="h-3.5 w-3.5 text-muted-foreground" />
                         <span className="text-sm font-medium">{deadline.title}</span>
-                        <Badge className={`text-xs ${config.badgeClass}`}>
+                        <Badge
+                          className="text-xs"
+                          style={{ backgroundColor: config.badgeBg, color: config.badgeFg }}
+                        >
                           {config.label}
                         </Badge>
                       </div>

@@ -48,8 +48,8 @@ function DialogContextProvider({
   onOpenChange,
   children,
 }: {
-  open?: boolean
-  onOpenChange?: (open: boolean) => void
+  open?: boolean | undefined
+  onOpenChange?: ((open: boolean) => void) | undefined
   children: React.ReactNode
 }) {
   const [internalOpen, setInternalOpen] = React.useState(false)
@@ -125,7 +125,7 @@ function DialogContent({
   ...props
 }: React.ComponentProps<"div"> & { showCloseButton?: boolean }) {
   const { open, setOpen } = React.useContext(DialogCtxInner)
-  const dialogRef = React.useRef<HTMLElement>(null)
+  const dialogRef = React.useRef(null)
 
   const handleAfterClose = () => {
     setOpen(false)

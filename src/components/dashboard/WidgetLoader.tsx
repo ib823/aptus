@@ -72,7 +72,7 @@ function useApiFetch<T>(url: string | null) {
 
 function WidgetError({ onRetry }: { message?: string; onRetry?: () => void }) {
   return (
-    <div className="p-4 border rounded-lg bg-slate-50 text-sm text-muted-foreground">
+    <div className="p-4 border rounded-lg text-sm text-muted-foreground" style={{ background: "var(--sapNeutralBackground, #f5f6f7)" }}>
       <p>Unable to load this section right now.</p>
       {onRetry && (
         <button
@@ -88,7 +88,7 @@ function WidgetError({ onRetry }: { message?: string; onRetry?: () => void }) {
 
 function WidgetPlaceholder({ widgetType }: { widgetType: WidgetType }) {
   return (
-    <div className="p-4 border rounded-lg bg-slate-50/50 text-sm text-muted-foreground">
+    <div className="p-4 border rounded-lg text-sm text-muted-foreground" style={{ background: "var(--sapNeutralBackground, #f5f6f7)" }}>
       {widgetType} widget
     </div>
   );

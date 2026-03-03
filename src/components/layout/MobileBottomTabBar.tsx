@@ -46,7 +46,13 @@ export function MobileBottomTabBar({ assessmentId }: MobileBottomTabBarProps) {
   const activeStage = getActiveStage();
 
   return (
-    <nav className="flex items-center justify-around bg-card border-t border-border py-2 px-1">
+    <nav
+      className="flex items-center justify-around border-t py-2 px-1"
+      style={{
+        background: "var(--sapTile_Background, #fff)",
+        borderColor: "var(--sapGroup_ContentBorderColor, #d9d9d9)",
+      }}
+    >
       {stages.map((stage) => {
         const isActive = stage.segment === activeStage;
         const Icon = stage.icon;
@@ -54,11 +60,12 @@ export function MobileBottomTabBar({ assessmentId }: MobileBottomTabBarProps) {
           <Link
             key={stage.segment}
             href={`${base}${stage.href}`}
-            className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-md text-[10px] font-medium transition-colors ${
-              isActive
-                ? "text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            className="flex flex-col items-center gap-0.5 px-2 py-1 rounded-md text-[10px] font-medium transition-colors"
+            style={{
+              color: isActive
+                ? "var(--sapSelectedColor, #0854a0)"
+                : "var(--sapContent_LabelColor, #6a6d70)",
+            }}
           >
             <Icon className="w-5 h-5" />
             <span>{stage.label}</span>

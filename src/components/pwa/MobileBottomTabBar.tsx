@@ -33,8 +33,12 @@ export function MobileBottomTabBar() {
   return (
     <nav
       aria-label="Mobile navigation"
-      className="bg-white fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 md:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      className="fixed inset-x-0 bottom-0 z-50 border-t md:hidden"
+      style={{
+        background: "var(--sapTile_Background, #fff)",
+        borderColor: "var(--sapGroup_ContentBorderColor, #d9d9d9)",
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+      }}
     >
       <div className="flex items-center justify-around">
         {tabs.map(({ href, label, icon: TabIcon, matchPrefix }) => {
@@ -45,11 +49,12 @@ export function MobileBottomTabBar() {
               href={href}
               className={cn(
                 "flex flex-col items-center justify-center gap-1 px-2 py-2 text-xs transition-colors",
-                isActive
-                  ? "text-blue-600 font-medium"
-                  : "text-slate-400 hover:text-slate-600",
+                isActive ? "font-medium" : "",
               )}
               style={{
+                color: isActive
+                  ? "var(--sapSelectedColor, #0854a0)"
+                  : "var(--sapContent_LabelColor, #6a6d70)",
                 minWidth: TOUCH_TARGETS.minimum,
                 minHeight: TOUCH_TARGETS.minimum,
               }}

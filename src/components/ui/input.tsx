@@ -57,7 +57,7 @@ function Input({ className, type = "text", onChange, onInput, value, defaultValu
     )
   }
 
-  const ui5Type = TYPE_MAP[type] ?? "Text"
+  const ui5Type = (TYPE_MAP as Record<string, string>)[type] ?? "Text"
 
   const handleInput = (e: Ui5CustomEvent) => {
     const target = e.target as HTMLInputElement
@@ -78,15 +78,15 @@ function Input({ className, type = "text", onChange, onInput, value, defaultValu
   return (
     <UI5Input
       data-slot="input"
-      type={ui5Type}
-      value={value != null ? String(value) : undefined}
-      placeholder={placeholder}
-      disabled={disabled}
-      readonly={readOnly}
-      name={name}
+      type={ui5Type as "Text" | "Password" | "Email" | "Number" | "Tel" | "URL" | "Search"}
+      value={value != null ? String(value) : ""}
+      placeholder={placeholder ?? ""}
+      disabled={disabled ?? false}
+      readonly={readOnly ?? false}
+      name={name ?? ""}
       id={id}
-      required={required}
-      valueState={valueState}
+      required={required ?? false}
+      valueState={valueState as "None" | "Negative" | "Positive" | "Critical" | "Information"}
       onInput={handleInput}
       className={cn(
         "h-9 w-full min-w-0 rounded-md text-base md:text-sm",

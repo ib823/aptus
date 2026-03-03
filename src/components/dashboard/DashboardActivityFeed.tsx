@@ -19,7 +19,7 @@ interface DashboardActivityFeedProps {
 export function DashboardActivityFeed({ entries }: DashboardActivityFeedProps) {
   return (
     <Card>
-      <CardHeader className="pb-3 border-b border-slate-100">
+      <CardHeader className="pb-3 border-b" style={{ borderColor: "var(--sapGroup_ContentBorderColor, #d9d9d9)" }}>
         <CardTitle className="text-sm font-semibold">Recent Activity</CardTitle>
       </CardHeader>
       <CardContent>
@@ -29,7 +29,7 @@ export function DashboardActivityFeed({ entries }: DashboardActivityFeedProps) {
           <div className="space-y-3">
             {entries.map((entry) => (
               <div key={entry.id} className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 shrink-0" />
+                <div className="w-1.5 h-1.5 rounded-full mt-2 shrink-0" style={{ backgroundColor: "var(--sapBrandColor, #0070f2)" }} />
                 <div>
                   <p className="text-sm">
                     <span className="font-medium">{entry.actorName}</span>{" "}

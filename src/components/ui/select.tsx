@@ -5,7 +5,6 @@ import {
   Select as UI5Select,
   Option,
 } from "@ui5/webcomponents-react"
-import type { Ui5CustomEvent } from "@ui5/webcomponents-react"
 import { cn } from "@/lib/utils"
 import { DialogPresenceContext } from "@/components/ui/dialog"
 
@@ -15,13 +14,13 @@ import { DialogPresenceContext } from "@/components/ui/dialog"
 /*  into the flat UI5 Select > Option pattern.                         */
 /* ------------------------------------------------------------------ */
 interface SelectCtx {
-  value?: string
-  onValueChange?: (value: string) => void
-  open?: boolean
-  onOpenChange?: (open: boolean) => void
-  disabled?: boolean
-  required?: boolean
-  name?: string
+  value?: string | undefined
+  onValueChange?: ((value: string) => void) | undefined
+  open?: boolean | undefined
+  onOpenChange?: ((open: boolean) => void) | undefined
+  disabled?: boolean | undefined | undefined
+  required?: boolean | undefined
+  name?: string | undefined
 }
 
 const SelectContext = React.createContext<SelectCtx>({})
@@ -35,7 +34,7 @@ interface SelectProps {
   onValueChange?: (value: string) => void
   open?: boolean
   onOpenChange?: (open: boolean) => void
-  disabled?: boolean
+  disabled?: boolean | undefined
   required?: boolean
   name?: string
   children?: React.ReactNode
@@ -107,7 +106,7 @@ function SelectTriggerRenderer({
   ...props
 }: React.ComponentProps<"button"> & { size?: "sm" | "default" }) {
   const ctx = React.useContext(SelectContext)
-  const [items, setItems] = React.useState<Array<{ value: string; label: string; disabled?: boolean }>>([])
+  const [items, setItems] = React.useState<Array<{ value: string; label: string; disabled?: boolean | undefined }>>([])
   React.useContext(DialogPresenceContext) // consume context for compatibility
 
   return (
@@ -115,11 +114,12 @@ function SelectTriggerRenderer({
       <UI5Select
         data-slot="select"
         data-size={size}
-        disabled={ctx.disabled}
-        required={ctx.required}
-        name={ctx.name}
-        onChange={(e: Ui5CustomEvent) => {
-          const selectedOption = (e.detail as Record<string, unknown>)?.selectedOption as HTMLElement | undefined
+        disabled={ctx.disabled ?? false}
+        required={ctx.required ?? false}
+        name={ctx.name ?? ""}
+        onChange={(e: unknown) => {
+          const event = e as { detail?: { selectedOption?: HTMLElement } }
+          const selectedOption = event.detail?.selectedOption
           const val = selectedOption?.getAttribute("data-value") ?? ""
           ctx.onValueChange?.(val)
         }}
@@ -135,7 +135,6 @@ function SelectTriggerRenderer({
             key={item.value}
             data-value={item.value}
             selected={item.value === ctx.value}
-            disabled={item.disabled}
           >
             {item.label}
           </Option>
@@ -147,8 +146,8 @@ function SelectTriggerRenderer({
 
 /* Collector context for items */
 interface ItemsCollectorCtx {
-  items: Array<{ value: string; label: string; disabled?: boolean }>
-  setItems: React.Dispatch<React.SetStateAction<Array<{ value: string; label: string; disabled?: boolean }>>>
+  items: Array<{ value: string; label: string; disabled?: boolean | undefined }>
+  setItems: React.Dispatch<React.SetStateAction<Array<{ value: string; label: string; disabled?: boolean | undefined }>>>
 }
 
 const SelectItemsCollector = React.createContext<ItemsCollectorCtx>({
@@ -183,7 +182,7 @@ function SelectContent({
 
   // Collect items from children on mount
   React.useEffect(() => {
-    const collected: Array<{ value: string; label: string; disabled?: boolean }> = []
+    const collected: Array<{ value: string; label: string; disabled?: boolean | undefined }> = []
 
     function extractItems(nodes: React.ReactNode) {
       React.Children.forEach(nodes, (child) => {
@@ -221,7 +220,7 @@ function SelectContent({
 /* ------------------------------------------------------------------ */
 /*  SelectItem                                                          */
 /* ------------------------------------------------------------------ */
-function SelectItem(_props: React.ComponentProps<"div"> & { value: string; disabled?: boolean }) {
+function SelectItem(_props: React.ComponentProps<"div"> & { value: string; disabled?: boolean | undefined }) {
   // Items are collected by SelectContent, not rendered directly
   return null
 }
