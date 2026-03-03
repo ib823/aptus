@@ -150,7 +150,7 @@ export function PortfolioDashboard() {
               <TableBody>
                 {data.topGaps.slice(0, 10).map((gap, i) => (
                   <TableRow key={`${gap.description}-${i}`}>
-                    <TableCell className="max-w-xs truncate whitespace-normal">
+                    <TableCell className="max-w-xs" style={{ wordBreak: "break-word" }}>
                       {gap.description}
                     </TableCell>
                     <TableCell>

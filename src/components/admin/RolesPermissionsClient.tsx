@@ -301,10 +301,10 @@ export function RolesPermissionsClient({ roles, permissionMatrix }: RolesPermiss
                     Domain / Action
                   </th>
                   {filteredRoles.map((role) => (
-                    <th key={role.id} className="px-2 py-2.5 text-center font-medium text-muted-foreground min-w-[80px]">
+                    <th key={role.id} className="px-2 py-2.5 text-center font-medium text-muted-foreground min-w-[100px]">
                       <Tooltip>
                         <TooltipTrigger className="cursor-default">
-                          <span className="block truncate max-w-[80px]">{role.label}</span>
+                          <span className="block truncate max-w-[120px]" title={role.label}>{role.label}</span>
                         </TooltipTrigger>
                         <TooltipContent>{role.description}</TooltipContent>
                       </Tooltip>

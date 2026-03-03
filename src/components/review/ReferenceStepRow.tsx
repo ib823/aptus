@@ -33,7 +33,7 @@ export function ReferenceStepRow({ step }: ReferenceStepRowProps) {
         <span className="text-xs text-muted-foreground/60 w-8 shrink-0">
           {step.sequence + 1}
         </span>
-        <span className="text-sm text-muted-foreground flex-1 truncate">
+        <span className="text-sm text-muted-foreground flex-1 truncate" title={step.actionTitle}>
           {step.actionTitle}
         </span>
         <Badge variant="outline" className="text-xs shrink-0">

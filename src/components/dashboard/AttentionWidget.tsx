@@ -72,7 +72,7 @@ export function AttentionWidget({ items, maxItems }: AttentionWidgetProps) {
                   <Icon className="h-4 w-4 mt-0.5 shrink-0" style={{ color: config.iconColor }} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium truncate">{item.title}</span>
+                      <span className="text-sm font-medium truncate" title={item.title}>{item.title}</span>
                       <Badge
                         className="text-xs shrink-0"
                         style={{ backgroundColor: config.badgeBg, color: config.badgeFg }}

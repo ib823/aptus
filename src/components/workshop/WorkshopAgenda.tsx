@@ -38,7 +38,7 @@ export function WorkshopAgenda({ items, currentIndex }: WorkshopAgendaProps) {
             }`}>
               {isCompleted ? "\u2713" : idx + 1}
             </div>
-            <span className={`truncate ${isCompleted ? "line-through text-muted-foreground" : ""}`}>
+            <span className={`truncate ${isCompleted ? "line-through text-muted-foreground" : ""}`} title={item.title}>
               {item.title}
             </span>
             {item.duration && (

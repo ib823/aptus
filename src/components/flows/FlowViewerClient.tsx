@@ -192,7 +192,7 @@ export function FlowViewerClient({ assessmentId, diagrams: initialDiagrams }: Fl
                     >
                       <ChevronRight className="w-3 h-3 shrink-0" />
                       <div className="min-w-0">
-                        <p className="truncate font-medium">{d.processFlowName}</p>
+                        <p className="truncate font-medium" title={d.processFlowName}>{d.processFlowName}</p>
                         <p className={`text-xs ${selectedId === d.id ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
                           {d.stepCount} steps
                         </p>

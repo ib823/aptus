@@ -2,11 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  TabContainer,
-  Tab,
-  TabSeparator,
-} from "@ui5/webcomponents-react";
 
 interface TabDef {
   label: string;
@@ -105,35 +100,41 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentT
 
   return (
     <nav className="mb-6" aria-label="Assessment navigation">
-      {/* Stage-level tabs using UI5 TabContainer */}
-      <TabContainer
-        onTabSelect={(e: unknown) => {
-          const event = e as { detail?: { tab?: HTMLElement } };
-          const tab = event.detail?.tab;
-          const href = tab?.dataset?.href;
-          if (href) {
-            window.location.href = href;
-          }
-        }}
-        className="[&]:border-b"
+      {/* Stage-level tabs */}
+      <div
+        className="flex border-b"
+        role="tablist"
+        aria-label="Assessment stages"
+        style={{ borderColor: "var(--sapGroup_ContentBorderColor, #d9d9d9)" }}
       >
-        {stages.map((stage, stageIndex) => {
+        {stages.map((stage) => {
           const isActive = activeStage === stage;
           return (
-            <>
-              <Tab
-                key={stage.label}
-                text={stage.label}
-                selected={isActive}
-                data-href={stage.tabs[0]!.href}
-              />
-              {stageIndex < stages.length - 1 && (
-                <TabSeparator key={`sep-${stageIndex}`} />
-              )}
-            </>
+            <Link
+              key={stage.label}
+              href={stage.tabs[0]!.href}
+              role="tab"
+              aria-selected={isActive}
+              className={`px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${
+                isActive ? "" : "hover:opacity-80"
+              }`}
+              style={{
+                color: isActive
+                  ? "var(--sapSelectedColor, #0854a0)"
+                  : "var(--sapContent_LabelColor, #6a6d70)",
+                boxShadow: isActive
+                  ? "inset 0 -2px 0 var(--sapSelectedColor, #0854a0)"
+                  : "none",
+                background: isActive
+                  ? "var(--sapList_Active_Background, #eaf6ff)"
+                  : "transparent",
+              }}
+            >
+              {stage.label}
+            </Link>
           );
         })}
-      </TabContainer>
+      </div>
       {/* Sub-tabs for active stage (only if >1 tab) */}
       {activeStage.tabs.length > 1 && (
         <div

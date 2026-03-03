@@ -65,7 +65,7 @@ export function SyncStatusIndicator({ items, onSyncNow }: SyncStatusIndicatorPro
                   key={item.clientId}
                   className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
                 >
-                  <span className="truncate">{item.action.replace(/_/g, " ")}</span>
+                  <span className="truncate" title={item.action.replace(/_/g, " ")}>{item.action.replace(/_/g, " ")}</span>
                   <span className="text-muted-foreground text-xs">
                     {new Date(item.queuedAt).toLocaleTimeString()}
                   </span>

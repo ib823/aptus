@@ -154,7 +154,7 @@ export function PasskeyCredentialList() {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium truncate">
+                    <span className="text-sm font-medium truncate" title={cred.deviceName ?? "Passkey"}>
                       {cred.deviceName ?? "Passkey"}
                     </span>
                     {cred.backedUp && (

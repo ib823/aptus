@@ -36,7 +36,7 @@ export function WorkshopAttendeeList({ attendees }: WorkshopAttendeeListProps) {
         {[...connected, ...other].map((att) => (
           <div key={att.id} className="flex items-center gap-2 text-sm">
             <div className={`w-2 h-2 rounded-full ${STATUS_DOT[att.connectionStatus] ?? STATUS_DOT.disconnected}`} />
-            <span className="truncate">{att.name}</span>
+            <span className="truncate" title={att.name}>{att.name}</span>
             {att.isPresenter && (
               <Badge variant="outline" className="text-[10px] px-1 shrink-0">
                 Presenter

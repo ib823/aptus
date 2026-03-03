@@ -72,7 +72,7 @@ export function DependencyEffectsPanel({
                   className="flex items-start gap-2 p-2 bg-white/60 rounded border border-violet-100"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
+                    <p className="text-sm font-medium text-foreground truncate" title={p.activityTitle}>
                       {p.activityTitle}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -98,7 +98,7 @@ export function DependencyEffectsPanel({
                 >
                   <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
+                    <p className="text-sm font-medium text-foreground truncate" title={w.activityTitle || w.activityId}>
                       {w.activityTitle || w.activityId}
                       {w.warningType === "WARN_CROSS_SCOPE" && (
                         <Badge

@@ -55,7 +55,7 @@ export function ConflictSummaryWidget({ conflicts }: ConflictSummaryWidgetProps)
                     className="flex items-center gap-2 p-2 rounded-lg bg-amber-50 border border-amber-100"
                   >
                     <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                    <span className="text-sm truncate">
+                    <span className="text-sm truncate" title={`${conflict.entityType} ${conflict.entityId}`}>
                       {conflict.entityType} {conflict.entityId}
                     </span>
                   </div>
