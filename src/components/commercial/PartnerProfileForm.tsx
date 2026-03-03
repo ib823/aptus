@@ -67,8 +67,7 @@ export function PartnerProfileForm({
       });
 
       if (!res.ok) {
-        const data = await res.json() as { error?: { message?: string } };
-        setError(data.error?.message ?? "Failed to save profile");
+        setError("Failed to save profile. Please try again.");
         return;
       }
 

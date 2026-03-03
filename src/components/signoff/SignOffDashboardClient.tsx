@@ -124,8 +124,7 @@ export function SignOffDashboardClient({ assessmentId }: SignOffDashboardClientP
       if (res.ok) {
         await fetchData();
       } else {
-        const json = await res.json() as { error?: { message?: string } };
-        setError(json.error?.message ?? "Failed to start sign-off");
+        setError("Failed to start sign-off. Please try again.");
       }
     } finally {
       setActionLoading(false);

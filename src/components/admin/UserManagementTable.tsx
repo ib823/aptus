@@ -73,8 +73,7 @@ export function UserManagementTable({
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        setError(data.error?.message ?? "Failed to update role");
+        setError("Failed to update role. Please try again.");
         setSaving(false);
         return;
       }

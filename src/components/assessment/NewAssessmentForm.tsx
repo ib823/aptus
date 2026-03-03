@@ -73,7 +73,7 @@ export function NewAssessmentForm() {
           await response.json();
 
         if (!response.ok) {
-          setError(data.error?.message ?? "Failed to create assessment");
+          setError("Failed to create assessment. Please try again.");
           return;
         }
 

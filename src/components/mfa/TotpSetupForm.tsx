@@ -29,14 +29,12 @@ export function TotpSetupForm({ qrUri, secret, onVerified }: TotpSetupFormProps)
           body: JSON.stringify({ code, secret }),
         });
 
-        const data: { data?: { success: boolean }; error?: { message: string } } =
-          await response.json();
-
         if (!response.ok) {
-          setError(data.error?.message ?? "Verification failed");
+          setError("Verification failed. Please check the code and try again.");
           return;
         }
 
+        await response.json();
         onVerified();
       } catch {
         setError("Network error. Please try again.");

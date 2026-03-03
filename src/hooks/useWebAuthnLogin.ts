@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { startAuthentication } from "@simplewebauthn/browser";
 import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
+import { humanizeWebAuthnError } from "@/lib/errors";
 
 interface UseWebAuthnLoginReturn {
   isSupported: boolean;
@@ -48,10 +49,9 @@ export function useWebAuthnLogin(): UseWebAuthnLoginReturn {
         );
 
         if (!optionsRes.ok) {
-          const err = await optionsRes.json().catch(() => ({}));
           return {
             success: false,
-            error: err?.error?.message ?? "Failed to get authentication options",
+            error: "Failed to start passkey sign-in. Please try again.",
           };
         }
 
@@ -73,10 +73,9 @@ export function useWebAuthnLogin(): UseWebAuthnLoginReturn {
         );
 
         if (!verifyRes.ok) {
-          const err = await verifyRes.json().catch(() => ({}));
           return {
             success: false,
-            error: err?.error?.message ?? "Authentication failed",
+            error: "Passkey authentication failed. Please try again.",
           };
         }
 
@@ -88,14 +87,13 @@ export function useWebAuthnLogin(): UseWebAuthnLoginReturn {
         router.push(data.redirectUrl);
         return { success: true };
       } catch (err) {
-        // User cancelled or browser error
-        const message =
-          err instanceof Error ? err.message : "Passkey authentication failed";
-        // Don't show error for user cancellation
-        if (message.includes("cancelled") || message.includes("canceled") || message.includes("AbortError")) {
+        // Map browser WebAuthn errors to user-friendly messages
+        const friendlyMessage = humanizeWebAuthnError(err);
+        // null means silent (user cancelled) — don't show error
+        if (!friendlyMessage) {
           return { success: false };
         }
-        return { success: false, error: message };
+        return { success: false, error: friendlyMessage };
       } finally {
         setIsPending(false);
       }

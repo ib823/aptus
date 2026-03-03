@@ -44,8 +44,7 @@ export function WorkshopCreateDialog({
         onCreated();
         onClose();
       } else {
-        const json = await res.json();
-        setError(json.error?.message ?? "Failed to create workshop");
+        setError("Failed to create workshop. Please try again.");
       }
     } finally {
       setSubmitting(false);

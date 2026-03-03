@@ -99,8 +99,7 @@ export function DataMigrationFormDialog({
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        setError(data.error?.message ?? "Failed to save");
+        setError("Failed to save migration object. Please try again.");
         setSaving(false);
         return;
       }

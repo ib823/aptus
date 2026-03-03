@@ -58,13 +58,13 @@ export function CrossPhaseAnalytics({ assessmentId }: CrossPhaseAnalyticsProps) 
       setLoading(true);
       const res = await fetch(`/api/analytics/cross-phase/${assessmentId}`);
       if (!res.ok) {
-        const body = (await res.json()) as { error?: { message?: string } };
-        throw new Error(body.error?.message ?? "Failed to load cross-phase data");
+        setError("Failed to load cross-phase data. Please try again.");
+        return;
       }
       const json = (await res.json()) as { data: CrossPhaseData };
       setData(json.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+    } catch {
+      setError("Failed to load cross-phase data. Please try again.");
     } finally {
       setLoading(false);
     }

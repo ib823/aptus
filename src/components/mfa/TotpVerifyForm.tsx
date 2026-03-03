@@ -46,16 +46,14 @@ export function TotpVerifyForm({ onVerified }: TotpVerifyFormProps) {
           body: JSON.stringify({ code }),
         });
 
-        const data: { data?: { success: boolean }; error?: { message: string } } =
-          await response.json();
-
         if (!response.ok) {
-          setError(data.error?.message ?? "Verification failed");
+          setError("Verification failed. Please check the code and try again.");
           setCode("");
           inputRef.current?.focus();
           return;
         }
 
+        await response.json();
         onVerified();
       } catch {
         setError("Network error. Please try again.");

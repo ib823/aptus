@@ -51,8 +51,7 @@ export function WorkshopScheduleDialog({
         onCreated?.(json.data.id);
         onClose();
       } else {
-        const err = await res.json() as { error?: { message?: string } };
-        setError(err.error?.message ?? "Failed to create workshop");
+        setError("Failed to create workshop. Please try again.");
       }
     } catch {
       setError("Failed to create workshop");

@@ -68,8 +68,7 @@ export function StatusTransitionBar({
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        setError(data.error?.message ?? "Transition failed");
+        setError("Status transition failed. Please try again.");
         setTransitioning(false);
         return;
       }

@@ -51,8 +51,7 @@ export function WorkshopMinutesViewer({
         const json = await res.json() as { data: { content: string } };
         setContent(json.data.content);
       } else {
-        const err = await res.json() as { error?: { message?: string } };
-        setError(err.error?.message ?? "Failed to generate minutes");
+        setError("Failed to generate minutes. Please try again.");
       }
     } catch {
       setError("Failed to generate minutes");

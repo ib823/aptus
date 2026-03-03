@@ -6,6 +6,7 @@ import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/bro
 import { KeyRound, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { humanizeWebAuthnError } from "@/lib/errors";
 
 interface PasskeyRegistrationButtonProps {
   onSuccess?: () => void;
@@ -20,8 +21,7 @@ export function PasskeyRegistrationButton({ onSuccess }: PasskeyRegistrationButt
       // Step 1: Get registration options
       const optionsRes = await fetch("/api/auth/webauthn/register/options");
       if (!optionsRes.ok) {
-        const err = await optionsRes.json().catch(() => ({}));
-        toast.error(err?.error?.message ?? "Failed to start passkey registration");
+        toast.error("Failed to start passkey registration. Please try again.");
         return;
       }
 
@@ -40,17 +40,17 @@ export function PasskeyRegistrationButton({ onSuccess }: PasskeyRegistrationButt
       });
 
       if (!verifyRes.ok) {
-        const err = await verifyRes.json().catch(() => ({}));
-        toast.error(err?.error?.message ?? "Passkey registration failed");
+        toast.error("Passkey registration failed. Please try again.");
         return;
       }
 
       toast.success("Passkey registered successfully");
       onSuccess?.();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Passkey registration failed";
-      if (!message.includes("cancelled") && !message.includes("canceled") && !message.includes("AbortError")) {
-        toast.error(message);
+      const friendlyMessage = humanizeWebAuthnError(err);
+      // null means silent (user cancelled)
+      if (friendlyMessage) {
+        toast.error(friendlyMessage);
       }
     } finally {
       setIsPending(false);

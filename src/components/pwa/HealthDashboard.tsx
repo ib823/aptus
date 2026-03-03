@@ -17,8 +17,7 @@ export function HealthDashboard() {
     try {
       const res = await fetch("/api/health");
       if (!res.ok) {
-        const body = (await res.json()) as { error?: { message?: string } };
-        setError(body.error?.message ?? "Failed to fetch health status");
+        setError("Failed to fetch health status. Please try again.");
         return;
       }
       const body = (await res.json()) as { data: HealthCheck };
