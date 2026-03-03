@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/db/prisma";
 import { AdminAssessmentsClient } from "@/components/admin/AdminAssessmentsClient";
+
+export const metadata: Metadata = { title: "All Assessments" };
 
 export default async function AdminAssessmentsPage() {
   const assessments = await prisma.assessment.findMany({

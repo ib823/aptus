@@ -20,7 +20,7 @@ export function ProgressBar({
       {showPercentage && (
         <p className="text-sm text-muted-foreground text-right mb-1">{percentage}%</p>
       )}
-      <div className="h-2 rounded-full bg-muted">
+      <div className="h-2 rounded-full bg-muted" title={label ?? `${percentage}% complete`}>
         <div
           className="h-2 rounded-full transition-all duration-500 ease-out"
           style={{ backgroundColor: "var(--sapBrandColor, #0070f2)", width: `${percentage}%` }}

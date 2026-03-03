@@ -127,6 +127,11 @@ function LoginForm() {
         {sent ? (
           <div className="flex flex-col items-center py-4">
             <CheckCircle className="w-12 h-12 text-green-500 mb-4" />
+            {sentEmail && (
+              <p className="text-sm font-medium text-foreground text-center mb-2">
+                {sentEmail}
+              </p>
+            )}
             <p className="text-sm text-muted-foreground text-center mb-6">
               {UI_TEXT.auth.magicLinkDescription}
             </p>

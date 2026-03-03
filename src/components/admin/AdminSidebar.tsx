@@ -59,7 +59,7 @@ export function AdminSidebar() {
   const router = useRouter();
 
   return (
-    <aside className="w-64 shrink-0 border-r" style={{ background: "var(--sapGroup_ContentBackground, #fff)" }}>
+    <aside className="w-64 shrink-0 border-r" aria-label="Admin navigation" style={{ background: "var(--sapGroup_ContentBackground, #fff)" }}>
       <div className="p-4 border-b" style={{ borderColor: "var(--sapGroup_ContentBorderColor, #d9d9d9)" }}>
         <p
           className="text-sm font-semibold uppercase tracking-wider"

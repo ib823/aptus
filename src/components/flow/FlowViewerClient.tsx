@@ -146,7 +146,7 @@ export function FlowViewerClient({
         >
           <defs>
             <marker id="flow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-              <path d="M0,0 L10,5 L0,10 Z" fill="#ccc" />
+              <path d="M0,0 L10,5 L0,10 Z" fill="#888" />
             </marker>
           </defs>
 
@@ -161,7 +161,7 @@ export function FlowViewerClient({
             const ty = target.position.y + target.height / 2;
 
             if (Math.abs(sy - ty) < 5) {
-              return <line key={edge.id} x1={sx} y1={sy} x2={tx} y2={ty} stroke="#ddd" strokeWidth={1.5} markerEnd="url(#flow-arrow)" />;
+              return <line key={edge.id} x1={sx} y1={sy} x2={tx} y2={ty} stroke="#999" strokeWidth={1.5} markerEnd="url(#flow-arrow)" />;
             }
             const mx = sx + 20;
             return (
@@ -169,7 +169,7 @@ export function FlowViewerClient({
                 key={edge.id}
                 points={`${sx},${sy} ${mx},${sy} ${mx},${ty} ${tx},${ty}`}
                 fill="none"
-                stroke="#ddd"
+                stroke="#999"
                 strokeWidth={1.5}
                 markerEnd="url(#flow-arrow)"
               />

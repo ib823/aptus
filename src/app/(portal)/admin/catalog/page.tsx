@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/db/prisma";
 import { getCatalogStats } from "@/lib/db/cached-queries";
+
+export const metadata: Metadata = { title: "SAP Catalog" };
 
 export default async function CatalogPage() {
   const [catalog, areaGroups] = await Promise.all([

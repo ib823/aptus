@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { Badge } from "@/components/ui/badge";
 import { getOrgTypeLabel, getOrgTypeColor } from "@/lib/utils/org-type";
+
+export const metadata: Metadata = { title: "Organizations" };
 
 export default async function OrganizationsPage() {
   const organizations = await prisma.organization.findMany({

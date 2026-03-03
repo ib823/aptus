@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/db/prisma";
 import { getCatalogStats } from "@/lib/db/cached-queries";
+
+export const metadata: Metadata = { title: "Data Verification" };
 
 export default async function VerifyPage() {
   // Run all verification queries in parallel (first 3 from cache)
