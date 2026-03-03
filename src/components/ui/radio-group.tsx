@@ -1,8 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { RadioButton as UI5RadioButton } from "@ui5/webcomponents-react"
-import type { Ui5CustomEvent } from "@ui5/webcomponents-react"
 import { cn } from "@/lib/utils"
 
 interface RadioGroupProps extends Omit<React.ComponentProps<"div">, "onChange" | "value" | "defaultValue"> {
@@ -75,22 +73,34 @@ function RadioGroupItem({
   ...props
 }: RadioGroupItemProps) {
   const ctx = React.useContext(RadioGroupContext)
-
-  const handleChange = (_e: Ui5CustomEvent) => {
-    ctx.onValueChange?.(itemValue)
-  }
+  const isSelected = ctx.value === itemValue
 
   return (
-    <UI5RadioButton
-      data-slot="radio-group-item"
-      name={ctx.name ?? "radio-group"}
-      checked={ctx.value === itemValue}
-      disabled={ctx.disabled ?? itemDisabled ?? false}
-      onChange={handleChange}
-      text={typeof children === "string" ? children : ""}
-      className={cn("shrink-0", className)}
-      {...(props as Record<string, unknown>)}
-    />
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        role="radio"
+        aria-checked={isSelected}
+        data-slot="radio-group-item"
+        data-state={isSelected ? "checked" : "unchecked"}
+        disabled={ctx.disabled || itemDisabled}
+        onClick={() => ctx.onValueChange?.(itemValue)}
+        className={cn(
+          "border-input text-primary focus-visible:ring-ring/50 aspect-square size-4 shrink-0 rounded-full border shadow-xs transition-shadow outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50",
+          className,
+        )}
+        {...props}
+      >
+        {isSelected && (
+          <span className="flex items-center justify-center">
+            <span className="bg-primary size-2 rounded-full" />
+          </span>
+        )}
+      </button>
+      {children && (
+        <span className="text-sm">{children}</span>
+      )}
+    </div>
   )
 }
 

@@ -1,14 +1,8 @@
 "use client"
 
 import * as React from "react"
-import {
-  Dialog as UI5Dialog,
-  Bar,
-} from "@ui5/webcomponents-react"
-
 import { XIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 
 export const DialogPresenceContext = React.createContext<boolean>(false)
 
@@ -77,7 +71,6 @@ function DialogContextProvider({
 /* ------------------------------------------------------------------ */
 /*  DialogTrigger                                                       */
 /* ------------------------------------------------------------------ */
-/* Internal context to return focus to trigger on close */
 const TriggerRefCtx = React.createContext<React.RefObject<HTMLElement | null>>({ current: null })
 
 function DialogTrigger({
@@ -123,7 +116,7 @@ function DialogPortal({ children }: { children?: React.ReactNode; container?: El
 }
 
 function DialogOverlay(_props: React.ComponentProps<"div">) {
-  return null // UI5 Dialog handles its own overlay
+  return null
 }
 
 /* ------------------------------------------------------------------ */
@@ -136,85 +129,76 @@ function DialogContent({
   ...props
 }: React.ComponentProps<"div"> & { showCloseButton?: boolean }) {
   const { open, setOpen } = React.useContext(DialogCtxInner)
-  const dialogRef = React.useRef(null)
-
   const triggerRef = React.useContext(TriggerRefCtx)
+  const overlayRef = React.useRef<HTMLDivElement>(null)
 
-  const handleAfterClose = () => {
-    setOpen(false)
-    // Return focus to the trigger element
-    requestAnimationFrame(() => {
-      triggerRef.current?.focus()
-    })
-  }
-
-  // Separate header, footer, and body content from children
-  const childArray = React.Children.toArray(children)
-  const headerChildren: React.ReactNode[] = []
-  const footerChildren: React.ReactNode[] = []
-  const bodyChildren: React.ReactNode[] = []
-
-  for (const child of childArray) {
-    if (React.isValidElement(child)) {
-      const slotProp = (child.props as Record<string, unknown>)?.["data-slot"]
-      if (slotProp === "dialog-header") {
-        headerChildren.push(child)
-      } else if (slotProp === "dialog-footer") {
-        footerChildren.push(child)
-      } else {
-        bodyChildren.push(child)
-      }
-    } else {
-      bodyChildren.push(child)
+  // Close on Escape
+  React.useEffect(() => {
+    if (!open) return
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false)
     }
-  }
+    document.addEventListener("keydown", handleKey)
+    return () => document.removeEventListener("keydown", handleKey)
+  }, [open, setOpen])
+
+  // Return focus on close
+  React.useEffect(() => {
+    if (!open) {
+      requestAnimationFrame(() => {
+        triggerRef.current?.focus()
+      })
+    }
+  }, [open, triggerRef])
+
+  // Prevent body scroll when open
+  React.useEffect(() => {
+    if (open) {
+      document.body.style.overflow = "hidden"
+      return () => { document.body.style.overflow = "" }
+    }
+  }, [open])
+
+  if (!open) return null
 
   return (
-    <UI5Dialog
-      ref={dialogRef}
-      data-slot="dialog-content"
-      open={open}
-      onClose={handleAfterClose}
-      className={cn(
-        "rounded-lg max-w-[calc(100%-2rem)] sm:max-w-lg",
-        className,
-      )}
-      header={
-        showCloseButton ? (
-          <Bar
-            design={"Header"}
-            endContent={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setOpen(false)}
-                aria-label="Close"
-              >
-                <XIcon className="size-4" />
-              </Button>
-            }
-          >
-            {headerChildren.length > 0 ? headerChildren : null}
-          </Bar>
-        ) : headerChildren.length > 0 ? (
-          <Bar design={"Header"}>
-            {headerChildren}
-          </Bar>
-        ) : undefined
-      }
-      footer={
-        footerChildren.length > 0 ? (
-          <Bar design={"Footer"}>
-            <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              {footerChildren}
-            </div>
-          </Bar>
-        ) : undefined
-      }
-      {...(props as Record<string, unknown>)}
-    >
-      <div className="p-6 grid gap-4">{bodyChildren}</div>
-    </UI5Dialog>
+    <>
+      {/* Backdrop */}
+      <div
+        ref={overlayRef}
+        className="fixed inset-0 z-50 bg-black/50 animate-in fade-in-0"
+        onClick={(e) => {
+          if (e.target === overlayRef.current) setOpen(false)
+        }}
+      />
+      {/* Dialog panel */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          data-slot="dialog-content"
+          role="dialog"
+          aria-modal="true"
+          className={cn(
+            "bg-background relative w-full rounded-lg border shadow-lg animate-in fade-in-0 zoom-in-95",
+            "max-w-lg max-h-[85vh] overflow-y-auto",
+            className,
+          )}
+          onClick={(e) => e.stopPropagation()}
+          {...props}
+        >
+          {showCloseButton && (
+            <button
+              type="button"
+              className="absolute right-4 top-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden z-10"
+              onClick={() => setOpen(false)}
+              aria-label="Close"
+            >
+              <XIcon className="size-4" />
+            </button>
+          )}
+          <div className="p-6 grid gap-4">{children}</div>
+        </div>
+      </div>
+    </>
   )
 }
 
@@ -282,7 +266,12 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogClose asChild>
-          <Button variant="outline">Close</Button>
+          <button
+            type="button"
+            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-xs hover:bg-accent hover:text-accent-foreground"
+          >
+            Close
+          </button>
         </DialogClose>
       )}
     </div>

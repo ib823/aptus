@@ -34,13 +34,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
-      <head>
-        <script
-          data-ui5-config
-          type="application/json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify({ theme: "sap_horizon" }) }}
-        />
-      </head>
+      <head />
       <body className="antialiased">
         <a
           href="#main-content"

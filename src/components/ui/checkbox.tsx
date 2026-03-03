@@ -1,8 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { CheckBox as UI5CheckBox } from "@ui5/webcomponents-react"
-import type { Ui5CustomEvent } from "@ui5/webcomponents-react"
+import { CheckIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface CheckboxProps extends Omit<React.ComponentProps<"button">, "onChange"> {
@@ -16,33 +15,44 @@ interface CheckboxProps extends Omit<React.ComponentProps<"button">, "onChange">
 function Checkbox({
   className,
   checked,
-  defaultChecked: _defaultChecked,
   onCheckedChange,
   disabled,
   required,
   name,
   id,
-  value: _value,
   ...props
 }: CheckboxProps) {
-  const handleChange = (e: Ui5CustomEvent) => {
-    const target = e.target as HTMLInputElement
-    onCheckedChange?.(target.checked)
-  }
+  const isChecked = checked === true
 
   return (
-    <UI5CheckBox
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked === "indeterminate" ? "mixed" : isChecked}
       data-slot="checkbox"
-      checked={checked === true}
-      indeterminate={checked === "indeterminate"}
-      disabled={disabled ?? false}
-      required={required ?? false}
-      name={name ?? ""}
+      data-state={isChecked ? "checked" : "unchecked"}
+      disabled={disabled}
       id={id}
-      onChange={handleChange}
-      className={cn("shrink-0", className)}
-      {...(props as Record<string, unknown>)}
-    />
+      className={cn(
+        "peer border-input data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground data-[state=checked]:border-primary focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive flex size-4 shrink-0 items-center justify-center rounded-[4px] border shadow-xs transition-shadow outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50",
+        className,
+      )}
+      onClick={() => onCheckedChange?.(!isChecked)}
+      {...props}
+    >
+      {isChecked && <CheckIcon className="size-3.5" />}
+      {checked === "indeterminate" && (
+        <div className="size-2 rounded-[1px] bg-current" />
+      )}
+      {name && (
+        <input
+          type="hidden"
+          name={name}
+          value={isChecked ? "on" : ""}
+          required={required}
+        />
+      )}
+    </button>
   )
 }
 

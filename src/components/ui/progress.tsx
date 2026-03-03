@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { ProgressIndicator } from "@ui5/webcomponents-react"
 import { cn } from "@/lib/utils"
 
 interface ProgressProps extends Omit<React.ComponentProps<"div">, "value"> {
@@ -13,20 +12,29 @@ interface ProgressProps extends Omit<React.ComponentProps<"div">, "value"> {
 function Progress({
   className,
   value,
-  max: _max,
+  max = 100,
   displayValue,
   ...props
 }: ProgressProps) {
-  const numericValue = value ?? 0
+  const numericValue = Math.min(Math.max(value ?? 0, 0), max)
+  const percentage = (numericValue / max) * 100
 
   return (
-    <ProgressIndicator
+    <div
       data-slot="progress"
-      value={numericValue}
-      displayValue={displayValue}
-      className={cn("w-full", className)}
-      {...(props as Record<string, unknown>)}
-    />
+      role="progressbar"
+      aria-valuenow={numericValue}
+      aria-valuemin={0}
+      aria-valuemax={max}
+      aria-valuetext={displayValue}
+      className={cn("bg-muted relative h-2 w-full overflow-hidden rounded-full", className)}
+      {...props}
+    >
+      <div
+        className="bg-primary h-full rounded-full transition-all duration-300"
+        style={{ width: `${percentage}%` }}
+      />
+    </div>
   )
 }
 

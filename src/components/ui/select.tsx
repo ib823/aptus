@@ -1,24 +1,18 @@
 "use client"
 
 import * as React from "react"
-import {
-  Select as UI5Select,
-  Option,
-} from "@ui5/webcomponents-react"
+import { ChevronDownIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { DialogPresenceContext } from "@/components/ui/dialog"
 
 /* ------------------------------------------------------------------ */
-/*  Internal context to collect SelectItems and bridge the composed    */
-/*  shadcn pattern (Select > SelectTrigger > SelectContent > items)   */
-/*  into the flat UI5 Select > Option pattern.                         */
+/*  Internal context to bridge the composed shadcn Select pattern      */
+/*  (Select > SelectTrigger > SelectContent > SelectItem)              */
+/*  into a flat native <select> + <option>.                            */
 /* ------------------------------------------------------------------ */
 interface SelectCtx {
   value?: string | undefined
   onValueChange?: ((value: string) => void) | undefined
-  open?: boolean | undefined
-  onOpenChange?: ((open: boolean) => void) | undefined
-  disabled?: boolean | undefined | undefined
+  disabled?: boolean | undefined
   required?: boolean | undefined
   name?: string | undefined
 }
@@ -26,7 +20,7 @@ interface SelectCtx {
 const SelectContext = React.createContext<SelectCtx>({})
 
 /* ------------------------------------------------------------------ */
-/*  Select (root) — wraps children, renders UI5 Select                 */
+/*  Select (root)                                                      */
 /* ------------------------------------------------------------------ */
 interface SelectProps {
   value?: string
@@ -44,8 +38,6 @@ function Select({
   value,
   defaultValue,
   onValueChange,
-  open,
-  onOpenChange,
   disabled,
   required,
   name,
@@ -67,8 +59,6 @@ function Select({
       value={{
         value: resolvedValue,
         onValueChange: handleValueChange,
-        open,
-        onOpenChange,
         disabled,
         required,
         name,
@@ -80,74 +70,17 @@ function Select({
 }
 
 /* ------------------------------------------------------------------ */
-/*  SelectTrigger — renders UI5 Select collecting items from content   */
+/*  Collector context — gathers items from SelectContent children      */
 /* ------------------------------------------------------------------ */
-function SelectTrigger({
-  className,
-  size = "default",
-  children,
-  ...props
-}: React.ComponentProps<"button"> & { size?: "sm" | "default" }) {
-  return (
-    <SelectTriggerRenderer className={className} size={size} {...props}>
-      {children}
-    </SelectTriggerRenderer>
-  )
+interface ItemDef {
+  value: string
+  label: string
+  disabled?: boolean | undefined
 }
 
-/**
- * SelectTriggerRenderer actually renders the UI5 Select.
- * It collects item information via context from SelectContent's children.
- */
-function SelectTriggerRenderer({
-  className,
-  size,
-  children: _triggerChildren,
-  ...props
-}: React.ComponentProps<"button"> & { size?: "sm" | "default" }) {
-  const ctx = React.useContext(SelectContext)
-  const [items, setItems] = React.useState<Array<{ value: string; label: string; disabled?: boolean | undefined }>>([])
-  React.useContext(DialogPresenceContext) // consume context for compatibility
-
-  return (
-    <SelectItemsCollector.Provider value={{ items, setItems }}>
-      <UI5Select
-        data-slot="select"
-        data-size={size}
-        disabled={ctx.disabled ?? false}
-        required={ctx.required ?? false}
-        name={ctx.name ?? ""}
-        onChange={(e: unknown) => {
-          const event = e as { detail?: { selectedOption?: HTMLElement } }
-          const selectedOption = event.detail?.selectedOption
-          const val = selectedOption?.getAttribute("data-value") ?? ""
-          ctx.onValueChange?.(val)
-        }}
-        className={cn(
-          "w-fit min-w-[8rem] rounded-md text-sm",
-          size === "sm" ? "[&]:h-8" : "[&]:h-9",
-          className,
-        )}
-        {...(props as Record<string, unknown>)}
-      >
-        {items.map((item) => (
-          <Option
-            key={item.value}
-            data-value={item.value}
-            selected={item.value === ctx.value}
-          >
-            {item.label}
-          </Option>
-        ))}
-      </UI5Select>
-    </SelectItemsCollector.Provider>
-  )
-}
-
-/* Collector context for items */
 interface ItemsCollectorCtx {
-  items: Array<{ value: string; label: string; disabled?: boolean | undefined }>
-  setItems: React.Dispatch<React.SetStateAction<Array<{ value: string; label: string; disabled?: boolean | undefined }>>>
+  items: ItemDef[]
+  setItems: React.Dispatch<React.SetStateAction<ItemDef[]>>
 }
 
 const SelectItemsCollector = React.createContext<ItemsCollectorCtx>({
@@ -156,22 +89,60 @@ const SelectItemsCollector = React.createContext<ItemsCollectorCtx>({
 })
 
 /* ------------------------------------------------------------------ */
-/*  SelectValue — placeholder display (handled by UI5 Select)          */
+/*  SelectTrigger — renders the native <select>                        */
+/* ------------------------------------------------------------------ */
+function SelectTrigger({
+  className,
+  size = "default",
+  children: _triggerChildren,
+  ...props
+}: React.ComponentProps<"button"> & { size?: "sm" | "default" }) {
+  const ctx = React.useContext(SelectContext)
+  const [items, setItems] = React.useState<ItemDef[]>([])
+
+  return (
+    <SelectItemsCollector.Provider value={{ items, setItems }}>
+      <div className="relative inline-flex" data-slot="select">
+        <select
+          data-size={size}
+          disabled={ctx.disabled}
+          required={ctx.required}
+          name={ctx.name}
+          value={ctx.value}
+          onChange={(e) => ctx.onValueChange?.(e.target.value)}
+          className={cn(
+            "appearance-none border-input bg-background text-foreground placeholder:text-muted-foreground flex w-full min-w-[8rem] items-center rounded-md border pr-8 pl-3 text-sm shadow-xs transition-[color,box-shadow] outline-none",
+            "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+            "disabled:cursor-not-allowed disabled:opacity-50",
+            size === "sm" ? "h-8 text-xs" : "h-9",
+            className,
+          )}
+          {...(props as React.ComponentProps<"select">)}
+        >
+          {items.map((item) => (
+            <option key={item.value} value={item.value} disabled={item.disabled}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDownIcon className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+      </div>
+    </SelectItemsCollector.Provider>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/*  SelectValue — no-op for compat (native select shows value)         */
 /* ------------------------------------------------------------------ */
 function SelectValue(_props: { placeholder?: string; children?: React.ReactNode }) {
-  // UI5 Select handles display internally; this is a no-op for compatibility
   return null
 }
 
 /* ------------------------------------------------------------------ */
-/*  SelectContent — collects children items                             */
+/*  SelectContent — collects children items via context                 */
 /* ------------------------------------------------------------------ */
 function SelectContent({
-  className: _className,
   children,
-  position: _position,
-  align: _align,
-  portal: _portal,
   ..._props
 }: React.ComponentProps<"div"> & {
   position?: string
@@ -180,16 +151,14 @@ function SelectContent({
 }) {
   const collector = React.useContext(SelectItemsCollector)
 
-  // Collect items from children on mount
   React.useEffect(() => {
-    const collected: Array<{ value: string; label: string; disabled?: boolean | undefined }> = []
+    const collected: ItemDef[] = []
 
     function extractItems(nodes: React.ReactNode) {
       React.Children.forEach(nodes, (child) => {
         if (!React.isValidElement(child)) return
         const childProps = child.props as Record<string, unknown>
 
-        // SelectItem
         if (childProps.value !== undefined && typeof childProps.value === "string") {
           const label =
             typeof childProps.children === "string"
@@ -202,7 +171,6 @@ function SelectContent({
           })
         }
 
-        // SelectGroup — recurse into children
         if (childProps.children && childProps.value === undefined) {
           extractItems(childProps.children as React.ReactNode)
         }
@@ -213,7 +181,6 @@ function SelectContent({
     collector.setItems(collected)
   }, [children, collector])
 
-  // Render nothing — items are collected and rendered by SelectTriggerRenderer
   return null
 }
 
@@ -221,12 +188,11 @@ function SelectContent({
 /*  SelectItem                                                          */
 /* ------------------------------------------------------------------ */
 function SelectItem(_props: React.ComponentProps<"div"> & { value: string; disabled?: boolean | undefined }) {
-  // Items are collected by SelectContent, not rendered directly
   return null
 }
 
 /* ------------------------------------------------------------------ */
-/*  Compat exports (no-ops for API compatibility)                       */
+/*  Compat exports (no-ops)                                             */
 /* ------------------------------------------------------------------ */
 function SelectGroup({ children }: React.ComponentProps<"div">) {
   return <>{children}</>
