@@ -10,27 +10,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-/** Switch both next-themes and UI5 web component themes */
-function applyTheme(theme: string) {
-  // Dynamic import to avoid SSR issues with UI5 theme API
-  void import("@ui5/webcomponents-base/dist/config/Theme.js").then(({ setTheme: setUi5Theme }) => {
-    setUi5Theme(theme === "dark" ? "sap_horizon_dark" : "sap_horizon");
-  });
-}
-
 export function ThemeToggle() {
   const { setTheme } = useTheme();
-
-  const handleSetTheme = (theme: string) => {
-    setTheme(theme);
-    if (theme !== "system") {
-      applyTheme(theme);
-    } else {
-      // For system, detect preference
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      applyTheme(prefersDark ? "dark" : "light");
-    }
-  };
 
   return (
     <DropdownMenu>
@@ -42,15 +23,15 @@ export function ThemeToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => handleSetTheme("light")}>
+        <DropdownMenuItem onClick={() => setTheme("light")}>
           <Sun className="size-4 mr-2" />
           Light
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleSetTheme("dark")}>
+        <DropdownMenuItem onClick={() => setTheme("dark")}>
           <Moon className="size-4 mr-2" />
           Dark
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleSetTheme("system")}>
+        <DropdownMenuItem onClick={() => setTheme("system")}>
           <Monitor className="size-4 mr-2" />
           System
         </DropdownMenuItem>

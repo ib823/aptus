@@ -1,8 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { Switch as UI5Switch } from "@ui5/webcomponents-react"
-import type { Ui5CustomEvent } from "@ui5/webcomponents-react"
 import { cn } from "@/lib/utils"
 
 interface SwitchProps extends Omit<React.ComponentProps<"button">, "onChange"> {
@@ -16,33 +14,40 @@ interface SwitchProps extends Omit<React.ComponentProps<"button">, "onChange"> {
 function Switch({
   className,
   checked,
-  defaultChecked: _defaultChecked,
   onCheckedChange,
   disabled,
-  name: _name,
-  id: _id,
   size = "default",
   ...props
 }: SwitchProps) {
-  const handleChange = (e: Ui5CustomEvent) => {
-    const target = e.target as HTMLInputElement
-    onCheckedChange?.(target.checked)
-  }
+  const isChecked = checked ?? false
 
   return (
-    <UI5Switch
+    <button
+      type="button"
+      role="switch"
+      aria-checked={isChecked}
       data-slot="switch"
-      data-size={size}
-      checked={checked ?? false}
-      disabled={disabled ?? false}
-      onChange={handleChange}
+      data-state={isChecked ? "checked" : "unchecked"}
+      disabled={disabled}
+      onClick={() => onCheckedChange?.(!isChecked)}
       className={cn(
-        "shrink-0",
-        size === "sm" && "[&]:scale-75",
+        "peer data-[state=checked]:bg-primary data-[state=unchecked]:bg-input focus-visible:ring-ring/50 inline-flex shrink-0 items-center rounded-full border border-transparent shadow-xs transition-all outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50",
+        size === "sm" ? "h-4 w-7" : "h-5 w-9",
         className,
       )}
-      {...(props as Record<string, unknown>)}
-    />
+      {...props}
+    >
+      <span
+        data-state={isChecked ? "checked" : "unchecked"}
+        className={cn(
+          "bg-background pointer-events-none block rounded-full shadow-lg ring-0 transition-transform",
+          size === "sm" ? "size-3" : "size-4",
+          isChecked
+            ? size === "sm" ? "translate-x-3" : "translate-x-4"
+            : "translate-x-0",
+        )}
+      />
+    </button>
   )
 }
 
