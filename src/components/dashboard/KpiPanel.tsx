@@ -23,9 +23,9 @@ function KpiCard({
 }) {
   return (
     <div className="p-3 rounded-lg border bg-card">
-      <p className="text-sm text-slate-500 tracking-wide">{label}</p>
+      <p className="text-sm tracking-wide" style={{ color: "var(--sapContent_LabelColor, #6a6d70)" }}>{label}</p>
       <div className="flex items-baseline gap-1 mt-1">
-        <span className="text-3xl font-bold text-slate-900">{value}</span>
+        <span className="text-3xl font-bold" style={{ color: "var(--sapTextColor, #32363a)" }}>{value}</span>
         <span className="text-sm text-muted-foreground">/ {total}</span>
       </div>
       <Progress value={percent} className={`h-1.5 mt-2 ${color}`} />
@@ -39,7 +39,7 @@ export function KpiPanel({ metrics }: KpiPanelProps) {
 
   return (
     <Card>
-      <CardHeader className="pb-3 border-b border-slate-100">
+      <CardHeader className="pb-3 border-b" style={{ borderColor: "var(--sapGroup_ContentBorderColor, #d9d9d9)" }}>
         <CardTitle className="text-sm font-semibold">Key Performance Indicators</CardTitle>
       </CardHeader>
       <CardContent>

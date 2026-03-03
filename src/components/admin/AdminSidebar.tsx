@@ -1,86 +1,116 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, Building2, BarChart3, Puzzle, ArrowLeftRight,
-  Database, FileArchive, ClipboardCheck, Users, ListChecks, Landmark, Shield,
-} from "lucide-react";
+  SideNavigation,
+  SideNavigationItem,
+  SideNavigationGroup,
+} from "@ui5/webcomponents-react";
+import "@ui5/webcomponents-icons/dist/home.js";
+import "@ui5/webcomponents-icons/dist/building.js";
+import "@ui5/webcomponents-icons/dist/bar-chart.js";
+import "@ui5/webcomponents-icons/dist/puzzle.js";
+import "@ui5/webcomponents-icons/dist/switch-views.js";
+import "@ui5/webcomponents-icons/dist/database.js";
+import "@ui5/webcomponents-icons/dist/upload-to-cloud.js";
+import "@ui5/webcomponents-icons/dist/accept.js";
+import "@ui5/webcomponents-icons/dist/official-service.js";
+import "@ui5/webcomponents-icons/dist/group.js";
+import "@ui5/webcomponents-icons/dist/shield.js";
+import "@ui5/webcomponents-icons/dist/list.js";
 
 const NAV_SECTIONS = [
   {
     label: null,
     items: [
-      { href: "/admin", label: "Overview", icon: LayoutDashboard },
+      { href: "/admin", label: "Overview", icon: "sap-icon://home" },
     ],
   },
   {
     label: "Intelligence",
     items: [
-      { href: "/admin/industries", label: "Industries", icon: Building2 },
-      { href: "/admin/baselines", label: "Effort Baselines", icon: BarChart3 },
-      { href: "/admin/extensibility-patterns", label: "Extensibility Patterns", icon: Puzzle },
-      { href: "/admin/adaptation-patterns", label: "Adaptation Patterns", icon: ArrowLeftRight },
+      { href: "/admin/industries", label: "Industries", icon: "sap-icon://building" },
+      { href: "/admin/baselines", label: "Effort Baselines", icon: "sap-icon://bar-chart" },
+      { href: "/admin/extensibility-patterns", label: "Extensibility Patterns", icon: "sap-icon://puzzle" },
+      { href: "/admin/adaptation-patterns", label: "Adaptation Patterns", icon: "sap-icon://switch-views" },
     ],
   },
   {
     label: "Data",
     items: [
-      { href: "/admin/catalog", label: "SAP Catalog", icon: Database },
-      { href: "/admin/ingest", label: "ZIP Ingestion", icon: FileArchive },
-      { href: "/admin/verify", label: "Data Verification", icon: ClipboardCheck },
+      { href: "/admin/catalog", label: "SAP Catalog", icon: "sap-icon://database" },
+      { href: "/admin/ingest", label: "ZIP Ingestion", icon: "sap-icon://upload-to-cloud" },
+      { href: "/admin/verify", label: "Data Verification", icon: "sap-icon://accept" },
     ],
   },
   {
     label: "System",
     items: [
-      { href: "/admin/organizations", label: "Organizations", icon: Landmark },
-      { href: "/admin/users", label: "Users", icon: Users },
-      { href: "/admin/roles", label: "Roles & Permissions", icon: Shield },
-      { href: "/admin/assessments", label: "All Assessments", icon: ListChecks },
+      { href: "/admin/organizations", label: "Organizations", icon: "sap-icon://official-service" },
+      { href: "/admin/users", label: "Users", icon: "sap-icon://group" },
+      { href: "/admin/roles", label: "Roles & Permissions", icon: "sap-icon://shield" },
+      { href: "/admin/assessments", label: "All Assessments", icon: "sap-icon://list" },
     ],
   },
 ] as const;
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
 
   return (
-    <aside className="w-64 bg-card border-r border-border text-sidebar-foreground shrink-0">
-      <div className="p-4 border-b border-sidebar-border">
-        <p className="text-sm font-semibold text-sidebar-foreground/60 uppercase tracking-wider" aria-hidden="true">
+    <aside className="w-64 shrink-0 border-r" style={{ background: "var(--sapGroup_ContentBackground, #fff)" }}>
+      <div className="p-4 border-b" style={{ borderColor: "var(--sapGroup_ContentBorderColor, #d9d9d9)" }}>
+        <p
+          className="text-sm font-semibold uppercase tracking-wider"
+          style={{ color: "var(--sapContent_LabelColor, #6a6d70)" }}
+          aria-hidden="true"
+        >
           Admin Panel
         </p>
       </div>
-      <nav aria-label="Admin Panel" className="p-3 space-y-4">
-        {NAV_SECTIONS.map((section, idx) => (
-          <div key={idx}>
-            {section.label && (
-              <p className="px-3 text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider mb-1">
-                {section.label}
-              </p>
-            )}
-            {section.items.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-              return (
-                <Link
+      <SideNavigation
+        onSelectionChange={(e: unknown) => {
+          const event = e as { detail?: { item?: HTMLElement } };
+          const item = event.detail?.item;
+          const href = item?.dataset?.href;
+          if (href) {
+            router.push(href);
+          }
+        }}
+      >
+        {NAV_SECTIONS.map((section, idx) => {
+          if (!section.label) {
+            // Ungrouped items
+            return section.items.map((item) => (
+              <SideNavigationItem
+                key={item.href}
+                text={item.label}
+                icon={item.icon}
+                selected={pathname === item.href}
+                data-href={item.href}
+              />
+            ));
+          }
+          return (
+            <SideNavigationGroup
+              key={idx}
+              text={section.label}
+              expanded
+            >
+              {section.items.map((item) => (
+                <SideNavigationItem
                   key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
-                    isActive
-                      ? "bg-blue-50 text-blue-600 font-medium"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </div>
-        ))}
-      </nav>
+                  text={item.label}
+                  icon={item.icon}
+                  selected={pathname === item.href}
+                  data-href={item.href}
+                />
+              ))}
+            </SideNavigationGroup>
+          );
+        })}
+      </SideNavigation>
     </aside>
   );
 }

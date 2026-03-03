@@ -16,11 +16,11 @@ interface RadioGroupProps extends Omit<React.ComponentProps<"div">, "onChange" |
 }
 
 const RadioGroupContext = React.createContext<{
-  value?: string
-  onValueChange?: (value: string) => void
-  name?: string
-  disabled?: boolean
-  required?: boolean
+  value?: string | undefined
+  onValueChange?: ((value: string) => void) | undefined
+  name?: string | undefined
+  disabled?: boolean | undefined
+  required?: boolean | undefined
 }>({})
 
 function RadioGroup({
@@ -85,9 +85,9 @@ function RadioGroupItem({
       data-slot="radio-group-item"
       name={ctx.name ?? "radio-group"}
       checked={ctx.value === itemValue}
-      disabled={ctx.disabled || itemDisabled}
+      disabled={ctx.disabled ?? itemDisabled ?? false}
       onChange={handleChange}
-      text={typeof children === "string" ? children : undefined}
+      text={typeof children === "string" ? children : ""}
       className={cn("shrink-0", className)}
       {...(props as Record<string, unknown>)}
     />

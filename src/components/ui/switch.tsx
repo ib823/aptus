@@ -33,8 +33,8 @@ function Switch({
     <UI5Switch
       data-slot="switch"
       data-size={size}
-      checked={checked}
-      disabled={disabled}
+      checked={checked ?? false}
+      disabled={disabled ?? false}
       onChange={handleChange}
       className={cn(
         "shrink-0",

@@ -30,7 +30,8 @@ export function DashboardShell({ initialWidgets, assessmentId }: DashboardShellP
       {primaryWidgets.map((widgetType) => (
         <div
           key={widgetType}
-          className={widgetType === "attention" ? "border-l-[3px] border-amber-500 rounded-lg" : ""}
+          className={widgetType === "attention" ? "border-l-[3px] rounded-lg" : ""}
+          style={widgetType === "attention" ? { borderColor: "var(--sapCriticalColor, #e9730c)" } : undefined}
         >
           <WidgetLoader widgetType={widgetType} assessmentId={assessmentId} />
         </div>

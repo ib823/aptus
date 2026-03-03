@@ -22,8 +22,8 @@ export function ProgressBar({
       )}
       <div className="h-2 rounded-full bg-muted">
         <div
-          className="h-2 rounded-full bg-blue-500 transition-all duration-500 ease-out"
-          style={{ width: `${percentage}%` }}
+          className="h-2 rounded-full transition-all duration-500 ease-out"
+          style={{ backgroundColor: "var(--sapBrandColor, #0070f2)", width: `${percentage}%` }}
           role="progressbar"
           aria-label={label ?? `${percentage}% complete`}
           aria-valuenow={value}

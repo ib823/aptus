@@ -2,8 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  TabContainer,
+  Tab,
+  TabSeparator,
+} from "@ui5/webcomponents-react";
 
-interface Tab {
+interface TabDef {
   label: string;
   href: string;
   segment: string;
@@ -12,7 +17,7 @@ interface Tab {
 
 interface TabStage {
   label: string;
-  tabs: Tab[];
+  tabs: TabDef[];
 }
 
 interface AssessmentTabNavProps {
@@ -100,34 +105,46 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentT
 
   return (
     <nav className="mb-6" aria-label="Assessment navigation">
-      {/* Stage-level tabs */}
-      <div className="flex gap-0 bg-card border-b" role="tablist" aria-label="Assessment stages">
+      {/* Stage-level tabs using UI5 TabContainer */}
+      <TabContainer
+        onTabSelect={(e: unknown) => {
+          const event = e as { detail?: { tab?: HTMLElement } };
+          const tab = event.detail?.tab;
+          const href = tab?.dataset?.href;
+          if (href) {
+            window.location.href = href;
+          }
+        }}
+        className="[&]:border-b"
+      >
         {stages.map((stage, stageIndex) => {
           const isActive = activeStage === stage;
           return (
-            <div key={stage.label} className="flex items-center">
-              <Link
-                href={stage.tabs[0]!.href}
-                role="tab"
-                aria-selected={isActive}
-                className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  isActive
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {stage.label}
-              </Link>
+            <>
+              <Tab
+                key={stage.label}
+                text={stage.label}
+                selected={isActive}
+                data-href={stage.tabs[0]!.href}
+              />
               {stageIndex < stages.length - 1 && (
-                <span className="w-px h-4 bg-border mx-1 self-center" aria-hidden="true" />
+                <TabSeparator key={`sep-${stageIndex}`} />
               )}
-            </div>
+            </>
           );
         })}
-      </div>
+      </TabContainer>
       {/* Sub-tabs for active stage (only if >1 tab) */}
       {activeStage.tabs.length > 1 && (
-        <div className="flex gap-0 bg-muted/50 border-b" role="tablist" aria-label={`${activeStage.label} sub-navigation`}>
+        <div
+          className="flex gap-0 border-b"
+          role="tablist"
+          aria-label={`${activeStage.label} sub-navigation`}
+          style={{
+            background: "var(--sapGroup_ContentBackground, #fff)",
+            borderColor: "var(--sapGroup_ContentBorderColor, #d9d9d9)",
+          }}
+        >
           {activeStage.tabs.map((tab) => {
             const isActive = tab.segment === activeSegment;
             return (
@@ -137,11 +154,18 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentT
                 role="tab"
                 aria-selected={isActive}
                 title={tab.title}
-                className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  isActive
-                    ? "border-blue-500 text-blue-600 bg-card"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}
+                className="px-3 py-1.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors"
+                style={{
+                  borderColor: isActive
+                    ? "var(--sapSelectedColor, #0854a0)"
+                    : "transparent",
+                  color: isActive
+                    ? "var(--sapSelectedColor, #0854a0)"
+                    : "var(--sapContent_LabelColor, #6a6d70)",
+                  background: isActive
+                    ? "var(--sapList_Active_Background, #eaf6ff)"
+                    : "transparent",
+                }}
               >
                 {tab.label}
               </Link>
