@@ -795,7 +795,7 @@ function ReviewShellInner({
                 onOpenChange={setMobileSheetOpen}
               />
             )}
-            <span className="text-sm font-medium truncate">{currentScopeItem?.nameClean}</span>
+            <span className="text-sm font-medium truncate" title={currentScopeItem?.nameClean}>{currentScopeItem?.nameClean}</span>
           </div>
 
           {/* Breadcrumb */}

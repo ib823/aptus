@@ -27,7 +27,7 @@ export function PhaseProgressCard({
 
   return (
     <div className={`rounded-lg p-2 ${bg}`} title={blockedReason ?? undefined}>
-      <p className={`text-xs font-medium truncate ${text}`}>{label}</p>
+      <p className={`text-xs font-medium truncate ${text}`} title={label}>{label}</p>
       <div className="mt-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all ${bar}`}

@@ -21,8 +21,8 @@ export async function AdminActivitySection() {
               <span className="text-xs text-muted-foreground/60 w-36 shrink-0">
                 {entry.timestamp.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
               </span>
-              <span className="text-muted-foreground truncate">{entry.actor}</span>
-              <span className="text-foreground font-medium truncate">{entry.action}</span>
+              <span className="text-muted-foreground truncate" title={entry.actor}>{entry.actor}</span>
+              <span className="text-foreground font-medium truncate" title={entry.action}>{entry.action}</span>
               <span className="text-xs text-muted-foreground/60">{entry.entityType}</span>
             </div>
           ))}

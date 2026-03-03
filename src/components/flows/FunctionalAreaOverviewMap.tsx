@@ -137,7 +137,7 @@ export function FunctionalAreaOverviewMap({
                 <div className="mt-3 pt-3 border-t space-y-2">
                   {area.scopeItems.map((si) => (
                     <div key={si.scopeItemId} className="flex items-center justify-between text-xs">
-                      <span className="truncate mr-2">{si.scopeItemName}</span>
+                      <span className="truncate mr-2" title={si.scopeItemName}>{si.scopeItemName}</span>
                       <div className="flex gap-1 shrink-0">
                         {si.fitCount > 0 && <Badge variant="outline" className="bg-green-50 text-green-700 text-[10px] px-1">{si.fitCount}</Badge>}
                         {si.configureCount > 0 && <Badge variant="outline" className="bg-blue-50 text-blue-700 text-[10px] px-1">{si.configureCount}</Badge>}

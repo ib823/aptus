@@ -1,66 +1,60 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
-  SideNavigation,
-  SideNavigationItem,
-  SideNavigationGroup,
-} from "@ui5/webcomponents-react";
-import "@ui5/webcomponents-icons/dist/home.js";
-import "@ui5/webcomponents-icons/dist/building.js";
-import "@ui5/webcomponents-icons/dist/bar-chart.js";
-import "@ui5/webcomponents-icons/dist/puzzle.js";
-import "@ui5/webcomponents-icons/dist/switch-views.js";
-import "@ui5/webcomponents-icons/dist/database.js";
-import "@ui5/webcomponents-icons/dist/upload-to-cloud.js";
-import "@ui5/webcomponents-icons/dist/accept.js";
-import "@ui5/webcomponents-icons/dist/official-service.js";
-import "@ui5/webcomponents-icons/dist/group.js";
-import "@ui5/webcomponents-icons/dist/shield.js";
-import "@ui5/webcomponents-icons/dist/list.js";
+  Home, Building2, BarChart3, Puzzle, ArrowLeftRight,
+  Database, Upload, CheckCircle, Landmark, Users, Shield, List,
+} from "lucide-react";
 
 const NAV_SECTIONS = [
   {
     label: null,
     items: [
-      { href: "/admin", label: "Overview", icon: "sap-icon://home" },
+      { href: "/admin", label: "Overview", icon: Home },
     ],
   },
   {
     label: "Intelligence",
     items: [
-      { href: "/admin/industries", label: "Industries", icon: "sap-icon://building" },
-      { href: "/admin/baselines", label: "Effort Baselines", icon: "sap-icon://bar-chart" },
-      { href: "/admin/extensibility-patterns", label: "Extensibility Patterns", icon: "sap-icon://puzzle" },
-      { href: "/admin/adaptation-patterns", label: "Adaptation Patterns", icon: "sap-icon://switch-views" },
+      { href: "/admin/industries", label: "Industries", icon: Building2 },
+      { href: "/admin/baselines", label: "Effort Baselines", icon: BarChart3 },
+      { href: "/admin/extensibility-patterns", label: "Extensibility Patterns", icon: Puzzle },
+      { href: "/admin/adaptation-patterns", label: "Adaptation Patterns", icon: ArrowLeftRight },
     ],
   },
   {
     label: "Data",
     items: [
-      { href: "/admin/catalog", label: "SAP Catalog", icon: "sap-icon://database" },
-      { href: "/admin/ingest", label: "ZIP Ingestion", icon: "sap-icon://upload-to-cloud" },
-      { href: "/admin/verify", label: "Data Verification", icon: "sap-icon://accept" },
+      { href: "/admin/catalog", label: "SAP Catalog", icon: Database },
+      { href: "/admin/ingest", label: "ZIP Ingestion", icon: Upload },
+      { href: "/admin/verify", label: "Data Verification", icon: CheckCircle },
     ],
   },
   {
     label: "System",
     items: [
-      { href: "/admin/organizations", label: "Organizations", icon: "sap-icon://official-service" },
-      { href: "/admin/users", label: "Users", icon: "sap-icon://group" },
-      { href: "/admin/roles", label: "Roles & Permissions", icon: "sap-icon://shield" },
-      { href: "/admin/assessments", label: "All Assessments", icon: "sap-icon://list" },
+      { href: "/admin/organizations", label: "Organizations", icon: Landmark },
+      { href: "/admin/users", label: "Users", icon: Users },
+      { href: "/admin/roles", label: "Roles & Permissions", icon: Shield },
+      { href: "/admin/assessments", label: "All Assessments", icon: List },
     ],
   },
 ] as const;
 
 export function AdminSidebar() {
   const pathname = usePathname();
-  const router = useRouter();
 
   return (
-    <aside className="w-64 shrink-0 border-r" aria-label="Admin navigation" style={{ background: "var(--sapGroup_ContentBackground, #fff)" }}>
-      <div className="p-4 border-b" style={{ borderColor: "var(--sapGroup_ContentBorderColor, #d9d9d9)" }}>
+    <aside
+      className="w-64 shrink-0 border-r"
+      aria-label="Admin navigation"
+      style={{ background: "var(--sapGroup_ContentBackground, #fff)" }}
+    >
+      <div
+        className="p-4 border-b"
+        style={{ borderColor: "var(--sapGroup_ContentBorderColor, #d9d9d9)" }}
+      >
         <p
           className="text-sm font-semibold uppercase tracking-wider"
           style={{ color: "var(--sapContent_LabelColor, #6a6d70)" }}
@@ -69,48 +63,53 @@ export function AdminSidebar() {
           Admin Panel
         </p>
       </div>
-      <SideNavigation
-        onSelectionChange={(e: unknown) => {
-          const event = e as { detail?: { item?: HTMLElement } };
-          const item = event.detail?.item;
-          const href = item?.dataset?.href;
-          if (href) {
-            router.push(href);
-          }
-        }}
-      >
-        {NAV_SECTIONS.map((section, idx) => {
-          if (!section.label) {
-            // Ungrouped items
-            return section.items.map((item) => (
-              <SideNavigationItem
-                key={item.href}
-                text={item.label}
-                icon={item.icon}
-                selected={pathname === item.href}
-                data-href={item.href}
-              />
-            ));
-          }
-          return (
-            <SideNavigationGroup
-              key={idx}
-              text={section.label}
-              expanded
-            >
-              {section.items.map((item) => (
-                <SideNavigationItem
+      <nav className="py-2">
+        {NAV_SECTIONS.map((section, idx) => (
+          <div key={idx}>
+            {section.label && (
+              <p
+                className="px-4 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider"
+                style={{ color: "var(--sapContent_LabelColor, #6a6d70)" }}
+              >
+                {section.label}
+              </p>
+            )}
+            {section.items.map((item) => {
+              const isActive =
+                item.href === "/admin"
+                  ? pathname === "/admin"
+                  : pathname === item.href || pathname.startsWith(item.href + "/");
+              const Icon = item.icon;
+              return (
+                <Link
                   key={item.href}
-                  text={item.label}
-                  icon={item.icon}
-                  selected={pathname === item.href}
-                  data-href={item.href}
-                />
-              ))}
-            </SideNavigationGroup>
-          );
-        })}
-      </SideNavigation>
+                  href={item.href}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`flex items-center gap-3 px-4 py-2 text-sm transition-colors ${
+                    isActive
+                      ? "font-medium"
+                      : "hover:opacity-80"
+                  }`}
+                  style={{
+                    color: isActive
+                      ? "var(--sapSelectedColor, #0854a0)"
+                      : "var(--sapTextColor, #32363a)",
+                    background: isActive
+                      ? "var(--sapList_Active_Background, #eaf6ff)"
+                      : "transparent",
+                    borderLeft: isActive
+                      ? "3px solid var(--sapSelectedColor, #0854a0)"
+                      : "3px solid transparent",
+                  }}
+                >
+                  <Icon className="size-4 shrink-0" />
+                  <span className="truncate" title={item.label}>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        ))}
+      </nav>
     </aside>
   );
 }
