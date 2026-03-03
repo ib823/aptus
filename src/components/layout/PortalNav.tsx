@@ -96,60 +96,59 @@ export function PortalNav({ user }: PortalNavProps) {
       className="border-b"
       style={{ background: "var(--sapShell_Background, #fff)" }}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex h-12 items-center justify-between">
-          {/* Left: Logo + Nav Links */}
-          <div className="flex items-center gap-4 min-w-0">
-            <Link
-              href="/assessments"
-              className="flex items-center gap-2 shrink-0"
-              aria-label="ABeam home"
+      <div className="mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex h-12 items-center gap-4">
+          {/* Logo */}
+          <Link
+            href="/assessments"
+            className="flex items-center gap-2 shrink-0"
+            aria-label="ABeam home"
+          >
+            <ABeamLogo size="sm" />
+            <span
+              className="hidden lg:inline text-sm font-semibold"
+              style={{ color: "var(--sapShell_TextColor, #32363a)" }}
             >
-              <ABeamLogo size="sm" />
-              <span
-                className="hidden sm:inline text-sm font-semibold"
-                style={{ color: "var(--sapShell_TextColor, #32363a)" }}
-              >
-                ABeam
-              </span>
-            </Link>
-            <div
-              className="hidden sm:block h-6 w-px shrink-0"
-              style={{ background: "var(--sapGroup_ContentBorderColor, #d9d9d9)" }}
-            />
-            <nav className="hidden sm:flex items-center gap-1" aria-label="Main navigation">
-              {navItems
-                .filter((item) => item.show)
-                .map((item) => {
-                  const isActive =
-                    pathname === item.href ||
-                    pathname.startsWith(item.href + "/");
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      aria-current={isActive ? "page" : undefined}
-                      className={`flex items-center h-12 px-3 text-sm transition-all duration-200 ${
-                        isActive ? "font-medium" : "hover:opacity-80"
-                      }`}
-                      style={{
-                        color: isActive
-                          ? "var(--sapShell_Navigation_SelectedColor, #0854a0)"
-                          : "var(--sapShell_Navigation_TextColor, #515456)",
-                        boxShadow: isActive
-                          ? "inset 0 -2px 0 var(--sapShell_Navigation_SelectedColor, #0854a0)"
-                          : "none",
-                      }}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
-            </nav>
-          </div>
+              ABeam
+            </span>
+          </Link>
+
+          {/* Nav Links — scrollable when overflowing */}
+          <nav
+            className="hidden sm:flex items-center gap-1 flex-1 min-w-0 overflow-x-auto scrollbar-none"
+            aria-label="Main navigation"
+          >
+            {navItems
+              .filter((item) => item.show)
+              .map((item) => {
+                const isActive =
+                  pathname === item.href ||
+                  pathname.startsWith(item.href + "/");
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    aria-current={isActive ? "page" : undefined}
+                    className={`flex items-center h-12 px-3 text-sm whitespace-nowrap shrink-0 transition-all duration-200 ${
+                      isActive ? "font-medium" : "hover:opacity-80"
+                    }`}
+                    style={{
+                      color: isActive
+                        ? "var(--sapShell_Navigation_SelectedColor, #0854a0)"
+                        : "var(--sapShell_Navigation_TextColor, #515456)",
+                      boxShadow: isActive
+                        ? "inset 0 -2px 0 var(--sapShell_Navigation_SelectedColor, #0854a0)"
+                        : "none",
+                    }}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+          </nav>
 
           {/* Right: Notification + User Menu */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0 relative" ref={menuRef}>
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0 relative ml-auto" ref={menuRef}>
             <NotificationBell />
             <button
               onClick={() => setMenuOpen((prev) => !prev)}
