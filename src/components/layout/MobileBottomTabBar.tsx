@@ -47,7 +47,7 @@ export function MobileBottomTabBar({ assessmentId }: MobileBottomTabBarProps) {
 
   return (
     <nav
-      className="flex items-center justify-around border-t py-2 px-1"
+      className="flex items-center justify-around border-t py-2 px-1 pb-[env(safe-area-inset-bottom)] min-h-[calc(64px+env(safe-area-inset-bottom))]"
       style={{
         background: "var(--sapTile_Background, #fff)",
         borderColor: "var(--sapGroup_ContentBorderColor, #d9d9d9)",

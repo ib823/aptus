@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
+import { Trash2, Calendar, Layout, CheckCircle2, AlertCircle } from "lucide-react";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 interface AssessmentRow {
@@ -67,7 +67,7 @@ export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientPr
 
   return (
     <div className="max-w-5xl">
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold text-foreground tracking-tight">All Assessments</h1>
           <p className="mt-1 text-base text-muted-foreground">View assessments across all clients</p>
@@ -75,7 +75,7 @@ export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientPr
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="border rounded-md px-3 py-1.5 text-sm bg-background"
+          className="border rounded-md px-3 py-2 text-sm bg-background h-11 sm:h-9"
         >
           <option value="all">All Status ({assessments.length})</option>
           <option value="draft">Draft</option>
@@ -87,62 +87,117 @@ export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientPr
       </div>
 
       {filtered.length === 0 ? (
-        <div className="bg-card border rounded-lg p-8 text-center text-muted-foreground/60">
-          No assessments found.
+        <div className="bg-card border rounded-lg p-12 text-center text-muted-foreground/60 border-dashed">
+          No assessments found matching the criteria.
         </div>
       ) : (
-        <div className="bg-card border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted border-b">
-                <th className="px-4 py-2 text-left font-medium text-muted-foreground">Company</th>
-                <th className="px-4 py-2 text-left font-medium text-muted-foreground">Industry</th>
-                <th className="px-4 py-2 text-left font-medium text-muted-foreground">Status</th>
-                <th className="px-4 py-2 text-left font-medium text-muted-foreground">Scope</th>
-                <th className="px-4 py-2 text-left font-medium text-muted-foreground">Steps</th>
-                <th className="px-4 py-2 text-left font-medium text-muted-foreground">Gaps</th>
-                <th className="px-4 py-2 text-left font-medium text-muted-foreground">Updated</th>
-                <th className="px-4 py-2 text-right font-medium text-muted-foreground">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((a) => (
-                <tr key={a.id} className="border-b hover:bg-muted/30">
-                  <td className="px-4 py-2.5">
-                    <Link href={`/assessment/${a.id}/scope`} className="text-blue-600 hover:underline font-medium">
+        <>
+          {/* Desktop View Table */}
+          <div className="hidden md:block bg-card border rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted border-b">
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Company</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Industry</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Scope</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Steps</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Gaps</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Updated</th>
+                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((a) => (
+                  <tr key={a.id} className="border-b hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3 font-medium">
+                      <Link href={`/assessment/${a.id}/scope`} className="text-blue-600 hover:underline">
+                        {a.companyName}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{a.industry}</td>
+                    <td className="px-4 py-3">
+                      <Badge className={`text-xs ${STATUS_COLORS[a.status] ?? "bg-muted"}`}>
+                        {a.status.replace("_", " ")}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{a._count.scopeSelections}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{a._count.stepResponses}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{a._count.gapResolutions}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground/60">
+                      {new Date(a.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        disabled={deleting === a.id}
+                        onClick={() => setDeleteTarget({ id: a.id, companyName: a.companyName })}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden space-y-4">
+            {filtered.map((a) => (
+              <div key={a.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <Link href={`/assessment/${a.id}/scope`} className="text-lg font-bold text-blue-600">
                       {a.companyName}
                     </Link>
-                  </td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{a.industry}</td>
-                  <td className="px-4 py-2.5">
-                    <Badge className={`text-xs ${STATUS_COLORS[a.status] ?? "bg-muted"}`}>
-                      {a.status.replace("_", " ")}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{a._count.scopeSelections}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{a._count.stepResponses}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{a._count.gapResolutions}</td>
-                  <td className="px-4 py-2.5 text-xs text-muted-foreground/60">
-                    {new Date(a.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                  </td>
-                  <td className="px-4 py-2.5 text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      disabled={deleting === a.id}
-                      onClick={() => setDeleteTarget({ id: a.id, companyName: a.companyName })}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    <p className="text-sm text-muted-foreground">{a.industry} &middot; {a.country}</p>
+                  </div>
+                  <Badge className={`text-xs ${STATUS_COLORS[a.status] ?? "bg-muted"}`}>
+                    {a.status.replace("_", " ")}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 py-3 border-y">
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-foreground">{a._count.scopeSelections}</p>
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground">Scope</p>
+                  </div>
+                  <div className="text-center border-x">
+                    <p className="text-lg font-bold text-foreground">{a._count.stepResponses}</p>
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground">Steps</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-lg font-bold text-foreground">{a._count.gapResolutions}</p>
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground">Gaps</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>Updated {new Date(a.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    className="text-red-600 h-11 px-4 -mr-2"
+                    disabled={deleting === a.id}
+                    onClick={() => setDeleteTarget({ id: a.id, companyName: a.companyName })}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
-      <p className="text-xs text-muted-foreground/60 mt-2">{filtered.length} of {assessments.length} assessments</p>
+      <p className="text-xs text-muted-foreground/60 mt-4 text-center md:text-left">
+        Showing {filtered.length} of {assessments.length} assessments
+      </p>
       
       <ConfirmDialog
         open={!!deleteTarget}
