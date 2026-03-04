@@ -12,7 +12,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowUpDown, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -62,16 +62,18 @@ export function DataTable<TData, TValue>({
           placeholder={filterPlaceholder}
           value={(table.getColumn(filterColumn)?.getFilterValue() as string) ?? ""}
           onChange={(e) => table.getColumn(filterColumn)?.setFilterValue(e.target.value)}
-          className="max-w-sm"
+          className="max-w-sm h-11 sm:h-9"
         />
       )}
-      <div className="rounded-md border">
+
+      {/* Desktop Table View */}
+      <div className="hidden sm:block rounded-md border overflow-hidden">
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-muted/50">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
+                  <TableHead key={header.id} className="h-10 text-xs font-semibold uppercase tracking-wider">
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -83,9 +85,9 @@ export function DataTable<TData, TValue>({
           <TableBody>
             {table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                <TableRow key={row.id} data-state={row.getIsSelected() && "selected"} className="hover:bg-muted/30">
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className="py-3">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
@@ -101,27 +103,80 @@ export function DataTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
+
+      {/* Mobile Card View */}
+      <div className="sm:hidden space-y-3">
+        {table.getRowModel().rows.length ? (
+          table.getRowModel().rows.map((row) => (
+            <div 
+              key={row.id} 
+              className="rounded-lg border bg-card p-4 shadow-sm active:bg-muted/50 transition-colors"
+            >
+              <div className="space-y-3">
+                {row.getVisibleCells().map((cell, idx) => {
+                  // The first cell is usually the "Title" or primary identifier
+                  if (idx === 0) {
+                    return (
+                      <div key={cell.id} className="flex justify-between items-start border-b pb-2">
+                        <div className="font-semibold text-base text-foreground">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </div>
+                        <MoreHorizontal className="size-4 text-muted-foreground" />
+                      </div>
+                    );
+                  }
+                  
+                  // Hide empty cells or internal IDs if needed, but here we show labels
+                  const header = columns[idx]?.header;
+                  const label = typeof header === 'string' ? header : null;
+
+                  return (
+                    <div key={cell.id} className="flex flex-col gap-1">
+                      {label && (
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                          {label}
+                        </span>
+                      )}
+                      <div className="text-sm text-foreground">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="h-32 flex items-center justify-center border rounded-lg border-dashed text-muted-foreground italic">
+            No results found.
+          </div>
+        )}
+      </div>
+
+      {/* Pagination Controls - Mobile Optimized */}
       {table.getPageCount() > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+        <div className="flex items-center justify-between px-1">
+          <p className="text-xs font-medium text-muted-foreground">
+            {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
           </p>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
-              size="sm"
+              className="h-11 w-11 p-0 sm:h-8 sm:w-8"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
+              aria-label="Previous page"
             >
-              <ChevronLeft className="size-4" />
+              <ChevronLeft className="size-5 sm:size-4" />
             </Button>
             <Button
               variant="outline"
-              size="sm"
+              className="h-11 w-11 p-0 sm:h-8 sm:w-8"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
+              aria-label="Next page"
             >
-              <ChevronRight className="size-4" />
+              <ChevronRight className="size-5 sm:size-4" />
             </Button>
           </div>
         </div>
@@ -135,11 +190,11 @@ export function SortableHeader({ column, children }: { column: { toggleSorting: 
     <Button
       variant="ghost"
       size="sm"
-      className="-ml-3 h-8"
+      className="-ml-3 h-8 text-xs font-semibold hover:bg-transparent px-2"
       onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
     >
       {children}
-      <ArrowUpDown className="ml-2 size-3.5" />
+      <ArrowUpDown className="ml-2 size-3" />
     </Button>
   );
 }

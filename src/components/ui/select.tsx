@@ -114,7 +114,7 @@ function SelectTrigger({
             "appearance-none border-input bg-background text-foreground placeholder:text-muted-foreground flex w-full min-w-[8rem] items-center rounded-md border pr-8 pl-3 text-sm shadow-xs transition-[color,box-shadow] outline-none",
             "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
             "disabled:cursor-not-allowed disabled:opacity-50",
-            size === "sm" ? "h-8 text-xs" : "h-9",
+            size === "sm" ? "h-8 text-xs" : "h-11 sm:h-9",
             className,
           )}
           {...(props as React.ComponentProps<"select">)}

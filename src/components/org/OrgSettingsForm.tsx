@@ -105,11 +105,13 @@ export function OrgSettingsForm({ organization }: OrgSettingsFormProps) {
           <Input
             id="max-sessions"
             type="number"
+            inputMode="numeric"
+            pattern="[0-9]*"
             min={1}
             max={10}
             value={maxSessions}
             onChange={(e) => setMaxSessions(parseInt(e.target.value, 10) || 1)}
-            className="mt-1"
+            className="mt-1 h-11 sm:h-9"
           />
         </div>
 
