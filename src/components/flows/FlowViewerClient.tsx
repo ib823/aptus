@@ -136,6 +136,12 @@ export function FlowViewerClient({ assessmentId, diagrams: initialDiagrams }: Fl
         description="Visual representation of process flows with fit analysis status"
         actions={
           <div className="flex gap-2">
+            <Link href={`/assessment/${assessmentId}/flows/overview`}>
+              <Button variant="outline">
+                <BarChart3 className="w-4 h-4 mr-1.5" />
+                Global Overview
+              </Button>
+            </Link>
             {diagrams.length === 0 ? (
               <Button onClick={() => void handleGenerate()} disabled={generating}>
                 {generating ? "Generating..." : "Generate Diagrams"}

@@ -8,5 +8,5 @@ export default async function StakeholdersPage({
   params,
 }: StakeholdersPageProps) {
   const { id } = await params;
-  redirect(`/assessment/${id}/overview`);
+  redirect(`/assessment/${id}/profile`);
 }
