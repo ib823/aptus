@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired, canEditStepResponse } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { logStepResponseChange } from "@/lib/audit/temporal-logger";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { PropagationEngine } from "@/lib/dependency/propagation-engine";
 import type { DependencyEffects } from "@/lib/dependency/types";
@@ -109,14 +110,18 @@ export async function POST(
       assessmentId,
       processStepId: { in: steps.map((s) => s.id) },
     },
-    select: { processStepId: true, fitStatus: true },
+    select: { processStepId: true, fitStatus: true, clientNote: true },
   });
 
   const existingMap = new Map(existingResponses.map((r) => [r.processStepId, r.fitStatus]));
+  const existingNoteMap = new Map(existingResponses.map((r) => [r.processStepId, r.clientNote]));
 
   let updated = 0;
   let created = 0;
   let skipped = 0;
+
+  // Track operation data for auditing
+  const auditMetadata: Array<{ stepId: string; prevStatus: string; prevNote: string | null }> = [];
 
   // Only target steps that don't already have a non-PENDING response (unless overriding)
   const operations = [];
@@ -132,6 +137,12 @@ export async function POST(
       skipped++;
       continue;
     }
+
+    auditMetadata.push({
+      stepId: step.id,
+      prevStatus: existing || "PENDING",
+      prevNote: existingNoteMap.get(step.id) || null,
+    });
 
     operations.push(
       prisma.stepResponse.upsert({
@@ -163,7 +174,25 @@ export async function POST(
   }
 
   if (operations.length > 0) {
-    await prisma.$transaction(operations);
+    const results = await prisma.$transaction(operations);
+    
+    // Log temporal history for each affected step
+    void Promise.all(results.map(async (res, idx) => {
+      const meta = auditMetadata[idx];
+      if (meta) {
+        await logStepResponseChange({
+          stepResponseId: res.id,
+          actorId: user.id,
+          actorName: user.name || user.email,
+          actionType: meta.prevStatus === "PENDING" ? "CREATED" : "UPDATED",
+          previousStatus: meta.prevStatus,
+          newStatus: res.fitStatus,
+          previousNote: meta.prevNote,
+          newNote: res.clientNote,
+          metadata: { bulk: true, scopeItemId: parsed.data.scopeItemId }
+        });
+      }
+    }));
   }
 
   // Log bulk decision

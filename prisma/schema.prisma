@@ -554,11 +554,35 @@ model StepResponse {
 
   assessment  Assessment  @relation(fields: [assessmentId], references: [id])
   processStep ProcessStep @relation(fields: [processStepId], references: [id])
+  history     StepResponseHistory[]
 
   @@unique([assessmentId, processStepId])
   @@index([assessmentId])
   @@index([assessmentId, fitStatus])
   @@index([processStepId])
+}
+
+model StepResponseHistory {
+  id             String   @id @default(cuid())
+  stepResponseId String
+  actorId        String
+  actorName      String
+  actionType     String   // CREATED, UPDATED, DELETED
+  
+  // Snapshots of the change
+  previousStatus String?
+  newStatus      String
+  previousNote   String?
+  newNote        String?
+  
+  metadata       Json?    // Stores additional context (e.g. "propagated from X")
+  createdAt      DateTime @default(now())
+
+  stepResponse   StepResponse @relation(fields: [stepResponseId], references: [id], onDelete: Cascade)
+
+  @@index([stepResponseId])
+  @@index([actorId])
+  @@index([createdAt])
 }
 
 model GapResolution {
