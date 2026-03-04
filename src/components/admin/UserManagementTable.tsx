@@ -159,7 +159,7 @@ export function UserManagementTable({
                 {canManageUsers && (
                   <td className="px-4 py-3 text-right space-x-1">
                     <Select
-                      value={user.role}
+                      value={String(user.role)}
                       onValueChange={(newRole) => {
                         if (newRole !== user.role) {
                           setRoleChangeDialog({ userId: user.id, currentRole: user.role, newRole });

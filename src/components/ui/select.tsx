@@ -9,15 +9,24 @@ import { cn } from "@/lib/utils"
 /*  (Select > SelectTrigger > SelectContent > SelectItem)              */
 /*  into a flat native <select> + <option>.                            */
 /* ------------------------------------------------------------------ */
+interface ItemDef {
+  value: string
+  label: string
+  disabled?: boolean | undefined
+}
+
 interface SelectCtx {
-  value?: string | undefined
-  onValueChange?: ((value: string) => void) | undefined
+  value: string
+  onValueChange: (value: string) => void
   disabled?: boolean | undefined
   required?: boolean | undefined
   name?: string | undefined
+  registerItem: (item: ItemDef) => void
+  unregisterItem: (value: string) => void
+  items: ItemDef[]
 }
 
-const SelectContext = React.createContext<SelectCtx>({})
+const SelectContext = React.createContext<SelectCtx | null>(null)
 
 /* ------------------------------------------------------------------ */
 /*  Select (root)                                                      */
@@ -26,9 +35,7 @@ interface SelectProps {
   value?: string
   defaultValue?: string
   onValueChange?: (value: string) => void
-  open?: boolean
-  onOpenChange?: (open: boolean) => void
-  disabled?: boolean | undefined
+  disabled?: boolean
   required?: boolean
   name?: string
   children?: React.ReactNode
@@ -44,7 +51,27 @@ function Select({
   children,
 }: SelectProps) {
   const [internalValue, setInternalValue] = React.useState(defaultValue ?? "")
+  const [itemsMap, setItemsMap] = React.useState<Record<string, ItemDef>>({})
+  
   const resolvedValue = value !== undefined ? value : internalValue
+
+  const registerItem = React.useCallback((item: ItemDef) => {
+    setItemsMap(prev => {
+      if (prev[item.value]?.label === item.label && prev[item.value]?.disabled === item.disabled) {
+        return prev;
+      }
+      return { ...prev, [item.value]: item };
+    })
+  }, [])
+
+  const unregisterItem = React.useCallback((val: string) => {
+    setItemsMap(prev => {
+      if (!prev[val]) return prev;
+      const next = { ...prev };
+      delete next[val];
+      return next;
+    })
+  }, [])
 
   const handleValueChange = React.useCallback(
     (v: string) => {
@@ -54,165 +81,136 @@ function Select({
     [value, onValueChange],
   )
 
+  const items = React.useMemo(() => Object.values(itemsMap), [itemsMap])
+
+  const contextValue = React.useMemo(() => ({
+    value: resolvedValue,
+    onValueChange: handleValueChange,
+    disabled,
+    required,
+    name,
+    registerItem,
+    unregisterItem,
+    items
+  }), [resolvedValue, handleValueChange, disabled, required, name, registerItem, unregisterItem, items])
+
   return (
-    <SelectContext.Provider
-      value={{
-        value: resolvedValue,
-        onValueChange: handleValueChange,
-        disabled,
-        required,
-        name,
-      }}
-    >
+    <SelectContext.Provider value={contextValue}>
       {children}
     </SelectContext.Provider>
   )
 }
 
 /* ------------------------------------------------------------------ */
-/*  Collector context — gathers items from SelectContent children      */
-/* ------------------------------------------------------------------ */
-interface ItemDef {
-  value: string
-  label: string
-  disabled?: boolean | undefined
-}
-
-interface ItemsCollectorCtx {
-  items: ItemDef[]
-  setItems: React.Dispatch<React.SetStateAction<ItemDef[]>>
-}
-
-const SelectItemsCollector = React.createContext<ItemsCollectorCtx>({
-  items: [],
-  setItems: () => {},
-})
-
-/* ------------------------------------------------------------------ */
 /*  SelectTrigger — renders the native <select>                        */
 /* ------------------------------------------------------------------ */
+interface SelectValueProps {
+  placeholder?: string;
+  children?: React.ReactNode;
+}
+
 function SelectTrigger({
   className,
   size = "default",
-  children: _triggerChildren,
+  children,
   ...props
 }: React.ComponentProps<"button"> & { size?: "sm" | "default" }) {
   const ctx = React.useContext(SelectContext)
-  const [items, setItems] = React.useState<ItemDef[]>([])
+  if (!ctx) throw new Error("SelectTrigger must be used within a Select")
+
+  // Find placeholder from children if SelectValue is present
+  let placeholder: string | undefined
+  React.Children.forEach(children, (child) => {
+    if (React.isValidElement<SelectValueProps>(child) && 
+        typeof child.type !== 'string' && 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (child.type as any).displayName === "SelectValue") {
+      placeholder = child.props.placeholder
+    }
+  })
 
   return (
-    <SelectItemsCollector.Provider value={{ items, setItems }}>
-      <div className="relative inline-flex" data-slot="select">
-        <select
-          data-size={size}
-          disabled={ctx.disabled}
-          required={ctx.required}
-          name={ctx.name}
-          value={ctx.value}
-          onChange={(e) => ctx.onValueChange?.(e.target.value)}
-          className={cn(
-            "appearance-none border-input bg-background text-foreground placeholder:text-muted-foreground flex w-full min-w-[8rem] items-center rounded-md border pr-8 pl-3 text-sm shadow-xs transition-[color,box-shadow] outline-none",
-            "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
-            "disabled:cursor-not-allowed disabled:opacity-50",
-            size === "sm" ? "h-8 text-xs" : "h-11 sm:h-9",
-            className,
-          )}
-          {...(props as React.ComponentProps<"select">)}
-        >
-          {items.map((item) => (
-            <option key={item.value} value={item.value} disabled={item.disabled}>
-              {item.label}
-            </option>
-          ))}
-        </select>
-        <ChevronDownIcon className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+    <div className="relative inline-flex w-full" data-slot="select-trigger">
+      <select
+        data-size={size}
+        disabled={ctx.disabled}
+        required={ctx.required}
+        name={ctx.name}
+        value={ctx.value || ""}
+        onChange={(e) => ctx.onValueChange(e.target.value)}
+        className={cn(
+          "appearance-none border-input bg-background text-foreground placeholder:text-muted-foreground flex w-full min-w-[8rem] items-center rounded-md border pr-8 pl-3 text-sm shadow-xs transition-[color,box-shadow] outline-none",
+          "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+          "disabled:cursor-not-allowed disabled:opacity-50",
+          size === "sm" ? "h-8 text-xs" : "h-11 sm:h-9",
+          className,
+        )}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        {...(props as any)}
+      >
+        {placeholder && (
+          <option value="" disabled={ctx.required}>
+            {placeholder}
+          </option>
+        )}
+        {ctx.items.map((item) => (
+          <option key={item.value} value={item.value} disabled={item.disabled}>
+            {item.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDownIcon className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 size-4 text-muted-foreground z-10" />
+      {/* Hidden children to allow SelectItem to mount and register */}
+      <div className="hidden" aria-hidden="true">
+        {children}
       </div>
-    </SelectItemsCollector.Provider>
+    </div>
   )
 }
 
-/* ------------------------------------------------------------------ */
-/*  SelectValue — no-op for compat (native select shows value)         */
-/* ------------------------------------------------------------------ */
-function SelectValue(_props: { placeholder?: string; children?: React.ReactNode }) {
+function SelectValue({ placeholder: _p }: SelectValueProps) {
   return null
 }
+SelectValue.displayName = "SelectValue"
 
-/* ------------------------------------------------------------------ */
-/*  SelectContent — collects children items via context                 */
-/* ------------------------------------------------------------------ */
-function SelectContent({
-  children,
-  ..._props
-}: React.ComponentProps<"div"> & {
-  position?: string
-  align?: string
-  portal?: boolean
-}) {
-  const collector = React.useContext(SelectItemsCollector)
-
-  React.useEffect(() => {
-    const collected: ItemDef[] = []
-
-    function extractItems(nodes: React.ReactNode) {
-      React.Children.forEach(nodes, (child) => {
-        if (!React.isValidElement(child)) return
-        const childProps = child.props as Record<string, unknown>
-
-        if (childProps.value !== undefined && typeof childProps.value === "string") {
-          const label =
-            typeof childProps.children === "string"
-              ? childProps.children
-              : String(childProps.children ?? childProps.value)
-          collected.push({
-            value: childProps.value as string,
-            label,
-            disabled: childProps.disabled as boolean | undefined,
-          })
-        }
-
-        if (childProps.children && childProps.value === undefined) {
-          extractItems(childProps.children as React.ReactNode)
-        }
-      })
-    }
-
-    extractItems(children)
-    collector.setItems(collected)
-  }, [children, collector])
-
-  return null
-}
-
-/* ------------------------------------------------------------------ */
-/*  SelectItem                                                          */
-/* ------------------------------------------------------------------ */
-function SelectItem(_props: React.ComponentProps<"div"> & { value: string; disabled?: boolean | undefined }) {
-  return null
-}
-
-/* ------------------------------------------------------------------ */
-/*  Compat exports (no-ops)                                             */
-/* ------------------------------------------------------------------ */
-function SelectGroup({ children }: React.ComponentProps<"div">) {
+function SelectContent({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-function SelectLabel(_props: React.ComponentProps<"div">) {
+/* ------------------------------------------------------------------ */
+/*  SelectItem — Registers itself with the parent Select context       */
+/* ------------------------------------------------------------------ */
+interface SelectItemProps {
+  children: React.ReactNode;
+  value: string | number;
+  disabled?: boolean;
+}
+
+function SelectItem({ children, value, disabled }: SelectItemProps) {
+  const ctx = React.useContext(SelectContext)
+  const valStr = String(value)
+  const label = typeof children === "string" ? children : valStr
+
+  React.useEffect(() => {
+    if (!ctx) return
+    ctx.registerItem({ value: valStr, label, disabled })
+    return () => ctx.unregisterItem(valStr)
+  }, [ctx, valStr, label, disabled])
+
   return null
 }
 
-function SelectSeparator(_props: React.ComponentProps<"div">) {
-  return null
+/* ------------------------------------------------------------------ */
+/*  Compat exports                                                      */
+/* ------------------------------------------------------------------ */
+function SelectGroup({ children }: { children: React.ReactNode }) {
+  return <>{children}</>
 }
 
-function SelectScrollUpButton(_props: Record<string, unknown>) {
-  return null
-}
-
-function SelectScrollDownButton(_props: Record<string, unknown>) {
-  return null
-}
+function SelectLabel() { return null }
+function SelectSeparator() { return null }
+function SelectScrollUpButton() { return null }
+function SelectScrollDownButton() { return null }
 
 export {
   Select,
