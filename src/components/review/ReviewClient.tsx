@@ -16,6 +16,7 @@ import { ReferenceStepRow } from "@/components/review/ReferenceStepRow";
 import { StepGroupSidebar } from "@/components/review/StepGroupSidebar";
 import { ClassifiableProgressBar } from "@/components/review/ClassifiableProgressBar";
 import { ProgressBar } from "@/components/shared/ProgressBar";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { groupSteps, computeClassifiableProgress } from "@/lib/assessment/step-grouper";
 
 interface ScopeItemNav {
@@ -142,6 +143,8 @@ export function ReviewClient({
   const [overallProgress, setOverallProgress] = useState(initialProgress);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkAllLoading, setBulkAllLoading] = useState(false);
+  const [showBulkFitConfirm, setShowBulkFitConfirm] = useState(false);
+  const [showAcceptAllConfirm, setShowAcceptAllConfirm] = useState(false);
 
   const isReadOnly = assessmentStatus === "signed_off" || assessmentStatus === "reviewed";
   const isItLead = userRole === "it_lead";
@@ -424,11 +427,6 @@ export function ReviewClient({
     const pendingSteps = stepsRef.current.filter((s) => s.fitStatus === "PENDING");
     if (pendingSteps.length === 0) return;
 
-    const confirmed = window.confirm(
-      `Mark ${pendingSteps.length} remaining ${pendingSteps.length === 1 ? "step" : "steps"} as FIT? This will classify all unreviewed steps in this scope item.`,
-    );
-    if (!confirmed) return;
-
     setBulkLoading(true);
 
     try {
@@ -466,17 +464,12 @@ export function ReviewClient({
       }
     } finally {
       setBulkLoading(false);
+      setShowBulkFitConfirm(false);
     }
   }, [assessmentId, currentScopeItemId, bulkLoading]);
 
   // Bulk mark ALL steps across ALL scope items as FIT
   const handleAcceptAllStandard = useCallback(async () => {
-    const totalPending = overallProgress.pending;
-    const confirmed = window.confirm(
-      `Accept All SAP Standard?\n\nThis will mark ${totalPending} unreviewed steps across ALL scope items as FIT (standard).\n\nThis is the right choice if your company wants to adopt SAP best practices as-is with no customization.\n\nYou can change individual steps later if needed.`,
-    );
-    if (!confirmed) return;
-
     setBulkAllLoading(true);
     try {
       const res = await fetch(`/api/assessments/${assessmentId}/steps/bulk-all`, {
@@ -489,8 +482,9 @@ export function ReviewClient({
       }
     } finally {
       setBulkAllLoading(false);
+      setShowAcceptAllConfirm(false);
     }
-  }, [assessmentId, overallProgress.pending]);
+  }, [assessmentId]);
 
   return (
     <div className="flex">
@@ -598,7 +592,7 @@ export function ReviewClient({
                       <Button
                         variant="default"
                         size="sm"
-                        onClick={handleAcceptAllStandard}
+                        onClick={() => setShowAcceptAllConfirm(true)}
                         disabled={bulkAllLoading || overallProgress.pending === 0}
                         className="bg-green-600 hover:bg-green-700 text-white"
                       >
@@ -607,7 +601,7 @@ export function ReviewClient({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={handleBulkFit}
+                        onClick={() => setShowBulkFitConfirm(true)}
                         disabled={bulkLoading || steps.filter((s) => s.fitStatus === "PENDING").length === 0}
                       >
                         {bulkLoading ? "Marking..." : "Mark remaining as FIT"}
@@ -705,6 +699,24 @@ export function ReviewClient({
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showBulkFitConfirm}
+        onOpenChange={setShowBulkFitConfirm}
+        title="Mark Remaining as FIT?"
+        description={`Mark ${steps.filter((s) => s.fitStatus === "PENDING").length} remaining steps as FIT? This will classify all unreviewed steps in this scope item.`}
+        confirmText="Confirm"
+        onConfirm={handleBulkFit}
+      />
+
+      <ConfirmDialog
+        open={showAcceptAllConfirm}
+        onOpenChange={setShowAcceptAllConfirm}
+        title="Accept All SAP Standard?"
+        description={`This will mark ${overallProgress.pending} unreviewed steps across ALL scope items as FIT (standard).\n\nThis is the right choice if your company wants to adopt SAP best practices as-is with no customization.\n\nYou can change individual steps later if needed.`}
+        confirmText="Accept All Standard"
+        onConfirm={handleAcceptAllStandard}
+      />
     </div>
   );
 }

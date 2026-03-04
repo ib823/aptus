@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ImplicationsPanel } from "@/components/review/ImplicationsPanel";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { getBusinessContextHint } from "@/lib/assessment/business-context";
 import type { ActivityNode } from "@/types/hierarchy";
 import type {
@@ -94,6 +95,7 @@ export function BusinessQuestionCard({
 }: BusinessQuestionCardProps) {
   const [showSteps, setShowSteps] = useState(false);
   const [showImplications, setShowImplications] = useState(false);
+  const [overrideConfirm, setOverrideConfirm] = useState<{ status: string; count: number } | null>(null);
   const [localNote, setLocalNote] = useState("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -160,6 +162,16 @@ export function BusinessQuestionCard({
     }, 300);
   }, []);
 
+  const executeClassify = useCallback(
+    (fitStatus: string) => {
+      onActivityClassify(activity.id, fitStatus, localNote || undefined);
+      triggerSave();
+      setShowImplications(true);
+      setOverrideConfirm(null);
+    },
+    [activity.id, localNote, onActivityClassify, triggerSave],
+  );
+
   // Handle classification
   const handleClassify = useCallback(
     (fitStatus: string) => {
@@ -171,17 +183,13 @@ export function BusinessQuestionCard({
       );
 
       if (alreadyClassifiedDifferently.length > 0) {
-        const confirmed = window.confirm(
-          `${alreadyClassifiedDifferently.length} step(s) already have different classifications. Override them with "${fitStatus}"?`,
-        );
-        if (!confirmed) return;
+        setOverrideConfirm({ status: fitStatus, count: alreadyClassifiedDifferently.length });
+        return;
       }
 
-      onActivityClassify(activity.id, fitStatus, localNote || undefined);
-      triggerSave();
-      setShowImplications(true);
+      executeClassify(fitStatus);
     },
-    [activity.id, classifiableSteps, isReadOnly, localNote, onActivityClassify, triggerSave],
+    [classifiableSteps, isReadOnly, executeClassify],
   );
 
   // Debounced note save
@@ -461,6 +469,21 @@ export function BusinessQuestionCard({
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!overrideConfirm}
+        onOpenChange={(open) => {
+          if (!open) setOverrideConfirm(null);
+        }}
+        title="Override Step Classifications?"
+        description={`${overrideConfirm?.count} step(s) already have different classifications. Override them with "${overrideConfirm?.status}"?`}
+        confirmText="Override"
+        onConfirm={() => {
+          if (overrideConfirm) {
+            executeClassify(overrideConfirm.status);
+          }
+        }}
+      />
     </div>
   );
 }
