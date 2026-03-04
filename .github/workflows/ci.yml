@@ -65,4 +65,10 @@ jobs:
       - name: Production build
         run: pnpm build
 
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Automated accessibility gate
+        run: pnpm test:a11y
+
   # E2E tests run locally only — use `pnpm test:e2e` to run with Playwright
