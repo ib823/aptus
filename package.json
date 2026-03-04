@@ -44,6 +44,7 @@
     "@auth/prisma-adapter": "^2.11.1",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^6.19.2",
+    "@radix-ui/react-alert-dialog": "^1.1.15",
     "@sentry/nextjs": "^10.39.0",
     "@simplewebauthn/browser": "^13.2.2",
     "@simplewebauthn/server": "^13.2.2",
