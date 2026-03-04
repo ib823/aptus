@@ -4,11 +4,10 @@ import type { NextAuthOptions } from "next-auth";
 import EmailProvider from "next-auth/providers/email";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/db/prisma";
-// createSession and SESSION_COOKIE_NAME are used by the bridge route (src/app/api/auth/bridge/route.ts),
-// not here. This file only exports authOptions for NextAuth.
 import { sendEmail } from "@/lib/email/brevo";
 import { magicLinkEmail } from "@/lib/email/templates";
 import type { Adapter } from "next-auth/adapters";
+import { canRegister } from "@/lib/auth/auth-config";
 
 /**
  * Custom adapter that wraps Prisma for NextAuth compatibility.
@@ -32,10 +31,7 @@ function getAdapter(): Adapter {
         },
       });
     },
-    // Override session methods to no-ops: we use JWT strategy with a custom
-    // Session model (token/expiresAt) that doesn't match PrismaAdapter's
-    // expected schema (sessionToken/expires). Without these overrides, the
-    // adapter may attempt CRUD on Session with wrong field names.
+    // Override session methods to no-ops
     createSession: () => Promise.resolve(null!),
     getSessionAndUser: () => Promise.resolve(null),
     updateSession: () => Promise.resolve(null),
@@ -54,13 +50,11 @@ export const authOptions: NextAuthOptions = {
       },
       from: process.env.EMAIL_FROM ?? "no-reply@brevo.com",
       sendVerificationRequest: async ({ identifier: email, url }) => {
-        // Without SMTP credentials, log to console
         if (!process.env.SMTP_USER) {
           console.log(`\n[MAGIC LINK] For ${email}:\n${url}\n`);
           return;
         }
 
-        // Send via Brevo
         try {
           const template = magicLinkEmail(url, email);
           await sendEmail({
@@ -79,7 +73,7 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: "jwt",
-    maxAge: 24 * 60 * 60, // 24 hours
+    maxAge: 24 * 60 * 60,
   },
   pages: {
     signIn: "/login",
@@ -90,17 +84,21 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user }) {
       if (!user.email) return false;
 
-      // User is created by the adapter's createUser override above.
-      // Here we only need to block deactivated users.
+      const email = user.email.toLowerCase();
+
+      // 1. Check if user already exists in the system
       const existingUser = await prisma.user.findUnique({
-        where: { email: user.email },
+        where: { email },
       });
 
-      if (existingUser && !existingUser.isActive) {
-        return false;
+      // 2. If user exists, only check if they are active
+      if (existingUser) {
+        return existingUser.isActive;
       }
 
-      return true;
+      // 3. If user is NEW, enforce the security policy
+      const policy = canRegister(email);
+      return policy.allowed;
     },
     async jwt({ token, user }) {
       if (user?.email) {
@@ -120,15 +118,9 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
-      // Minimize PII in the NextAuth session response.
-      // The app uses a custom session system (abeam-session cookie) for all
-      // authenticated operations. The NextAuth session only facilitates the
-      // bridge flow, so we strip unnecessary fields from the response.
       if (session.user) {
-        // Remove PII — email/name/image not needed in client-visible response
         delete (session.user as Record<string, unknown>).email;
         delete (session.user as Record<string, unknown>).image;
-        // Only expose the user ID (needed by bridge) and role
         if (token.userId) {
           (session.user as Record<string, unknown>).id = token.userId;
           (session.user as Record<string, unknown>).role = token.role;
@@ -138,4 +130,3 @@ export const authOptions: NextAuthOptions = {
     },
   },
 };
-

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { generateSlug } from "@/lib/commercial/plan-engine";
 import { createTrial } from "@/lib/commercial/trial-manager";
+import { canRegister } from "@/lib/auth/auth-config";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const body = await request.json() as {
@@ -21,6 +22,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const email = body.email.toLowerCase().trim();
+
+  // Enforce security policy (Whitelist / Invitation Only)
+  const policy = canRegister(email);
+  if (!policy.allowed) {
+    return NextResponse.json(
+      { error: { code: "FORBIDDEN", message: policy.reason } },
+      { status: 403 },
+    );
+  }
 
   // Check if email is already taken
   const existingUser = await prisma.user.findUnique({
