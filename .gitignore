@@ -43,3 +43,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Temporary and Large Files
+all_routes.txt
+all_navigation_calls.txt
+prisma/dev.db
+*.zip
+*.gz
+*.png
+*.html
+*.docx

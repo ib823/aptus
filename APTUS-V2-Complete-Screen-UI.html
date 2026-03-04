@@ -1,0 +1,2156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ABEAM V2 — Complete Process Flow & Screen UI Reference</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════
+   DESIGN SYSTEM — Matches actual ABEAM codebase
+   Source: DESIGN-SYSTEM.md + globals.css
+   ═══════════════════════════════════════════════════════ */
+:root {
+  /* Surface & Background (light theme from codebase) */
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-secondary: #f1f5f9;
+  --border: #e2e8f0;
+  --border-light: #f1f5f9;
+
+  /* Text */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
+  --text-inverse: #ffffff;
+
+  /* Accent — Blue (from codebase) */
+  --blue-50: #eff6ff;
+  --blue-100: #dbeafe;
+  --blue-500: #3b82f6;
+  --blue-600: #2563eb;
+  --blue-700: #1d4ed8;
+
+  /* Status colors (from DESIGN-SYSTEM.md) */
+  --fit: #22c55e;
+  --fit-bg: #f0fdf4;
+  --fit-text: #15803d;
+  --configure: #3b82f6;
+  --configure-bg: #eff6ff;
+  --configure-text: #1d4ed8;
+  --gap: #f59e0b;
+  --gap-bg: #fffbeb;
+  --gap-text: #b45309;
+  --na: #94a3b8;
+  --na-bg: #f8fafc;
+  --pending: #6b7280;
+  --pending-bg: #f9fafb;
+
+  /* Semantic */
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --info: #3b82f6;
+
+  /* Shadows (from codebase) */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+
+  /* Typography */
+  --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Layout */
+  --nav-height: 56px;
+  --sidebar-width: 280px;
+  --max-content: 896px;
+  --max-wide: 1024px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text-primary);
+  line-height: 1.6;
+  font-size: 15px;
+}
+
+/* ═══ Document Layout ═══ */
+.doc-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 48px 32px 32px;
+  text-align: center;
+}
+.doc-header h1 { font-size: 28px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
+.doc-header .subtitle { font-size: 15px; color: var(--text-secondary); }
+.doc-header .meta { font-size: 12px; color: var(--text-tertiary); margin-top: 12px; font-family: var(--font-mono); }
+
+/* Sticky TOC */
+.toc {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 16px;
+  overflow-x: auto;
+  white-space: nowrap;
+  display: flex; gap: 4px; align-items: center;
+  box-shadow: var(--shadow-sm);
+}
+.toc a {
+  display: inline-block;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.toc a:hover, .toc a.active { background: var(--blue-50); color: var(--blue-600); }
+.toc .divider { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; margin: 0 4px; }
+
+.content { max-width: 1200px; margin: 0 auto; padding: 24px 24px 120px; }
+
+/* ═══ Section ═══ */
+section {
+  margin-bottom: 48px;
+  scroll-margin-top: 60px;
+}
+section > h2 {
+  font-size: 22px; font-weight: 700; color: var(--text-primary);
+  padding-bottom: 12px; margin-bottom: 24px;
+  border-bottom: 2px solid var(--blue-500);
+  display: flex; align-items: center; gap: 12px;
+}
+section > h2 .num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 8px;
+  background: var(--blue-500); color: #fff; font-size: 13px; font-weight: 700;
+}
+h3 {
+  font-size: 17px; font-weight: 600; color: var(--text-primary);
+  margin: 24px 0 12px;
+}
+h4 {
+  font-size: 14px; font-weight: 600; color: var(--text-secondary);
+  margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 0.5px;
+}
+p { color: var(--text-secondary); margin-bottom: 12px; }
+
+/* ═══ Screen Mockup (browser chrome) ═══ */
+.screen {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 16px 0 24px;
+  box-shadow: var(--shadow-md);
+}
+.screen-chrome {
+  background: #f1f5f9;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.screen-dots { display: flex; gap: 6px; }
+.screen-dots span { width: 12px; height: 12px; border-radius: 50%; }
+.screen-dots .r { background: #ef4444; }
+.screen-dots .y { background: #f59e0b; }
+.screen-dots .g { background: #22c55e; }
+.screen-url {
+  flex: 1; background: #fff; border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 12px;
+  font-size: 12px; color: var(--text-tertiary); font-family: var(--font-mono);
+}
+.screen-body { padding: 0; min-height: 200px; }
+
+/* ═══ GlobalNav mockup ═══ */
+.mock-nav {
+  height: 56px; background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 24px; gap: 24px;
+}
+.mock-nav .logo {
+  width: 32px; height: 32px; background: var(--blue-500); border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 14px;
+}
+.mock-nav .logo-text { font-weight: 600; font-size: 15px; color: var(--text-primary); }
+.mock-nav .nav-links { display: flex; gap: 4px; margin-left: 16px; }
+.mock-nav .nav-link {
+  padding: 6px 12px; font-size: 13px; font-weight: 500;
+  color: var(--text-secondary); border-radius: 6px; text-decoration: none;
+}
+.mock-nav .nav-link.active { background: var(--blue-50); color: var(--blue-600); }
+.mock-nav .spacer { flex: 1; }
+.mock-nav .avatar {
+  width: 32px; height: 32px; background: var(--blue-100);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: var(--blue-700);
+}
+
+/* ═══ Tab Nav (AssessmentTabNav from codebase) ═══ */
+.mock-tabs {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex; gap: 2px; overflow-x: auto;
+}
+.mock-tab-group { display: flex; align-items: center; gap: 2px; }
+.mock-tab-group::before {
+  content: attr(data-label);
+  font-size: 10px; font-weight: 600; color: var(--text-tertiary);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 0 8px; white-space: nowrap;
+}
+.mock-tab {
+  padding: 10px 14px; font-size: 13px; font-weight: 500;
+  color: var(--text-secondary); border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+.mock-tab.active { color: var(--blue-600); border-bottom-color: var(--blue-500); }
+.tab-divider { width: 1px; height: 24px; background: var(--border); margin: 0 8px; align-self: center; }
+
+/* ═══ Layout Patterns ═══ */
+.layout-sidebar {
+  display: grid; grid-template-columns: var(--sidebar-width) 1fr;
+  min-height: 500px;
+}
+.sidebar {
+  background: var(--surface-secondary);
+  border-right: 1px solid var(--border);
+  padding: 16px;
+}
+.main-content { padding: 24px; }
+
+.layout-centered { max-width: var(--max-content); margin: 0 auto; padding: 32px 24px; }
+.layout-wide { max-width: var(--max-wide); margin: 0 auto; padding: 32px 24px; }
+
+/* ═══ Component: Cards ═══ */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+.card-sm { padding: 16px; border-radius: 8px; }
+.card:hover { box-shadow: var(--shadow); }
+
+/* ═══ Component: Stat Cards ═══ */
+.stat-grid { display: grid; gap: 16px; margin: 16px 0; }
+.stat-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.stat-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.stat-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+.stat-card .stat-label { font-size: 12px; font-weight: 500; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; }
+.stat-card .stat-value { font-size: 28px; font-weight: 700; color: var(--text-primary); margin: 4px 0; }
+.stat-card .stat-sub { font-size: 12px; color: var(--text-secondary); }
+
+/* ═══ Component: Badges ═══ */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 10px; border-radius: 9999px;
+  font-size: 12px; font-weight: 500;
+}
+.badge-fit { background: var(--fit-bg); color: var(--fit-text); }
+.badge-configure { background: var(--configure-bg); color: var(--configure-text); }
+.badge-gap { background: var(--gap-bg); color: var(--gap-text); }
+.badge-pending { background: var(--pending-bg); color: var(--pending); }
+.badge-na { background: var(--na-bg); color: var(--na); }
+.badge-blue { background: var(--blue-50); color: var(--blue-700); }
+.badge-green { background: #f0fdf4; color: #15803d; }
+.badge-amber { background: #fffbeb; color: #b45309; }
+.badge-red { background: #fef2f2; color: #b91c1c; }
+.badge-gray { background: #f9fafb; color: #6b7280; }
+
+/* ═══ Component: Buttons ═══ */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 8px;
+  font-size: 14px; font-weight: 500; border: none; cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-primary { background: var(--blue-600); color: #fff; }
+.btn-primary:hover { background: var(--blue-700); }
+.btn-ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+.btn-ghost:hover { background: var(--surface-secondary); }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-fit { background: var(--fit); color: #fff; }
+.btn-configure { background: var(--configure); color: #fff; }
+.btn-gap { background: var(--gap); color: #fff; }
+.btn-na { background: var(--na); color: #fff; }
+
+/* ═══ Component: Progress Bar ═══ */
+.progress-bar { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+.progress-fill.blue { background: var(--blue-500); }
+.progress-fill.green { background: var(--fit); }
+
+/* ═══ Component: Table ═══ */
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th {
+  text-align: left; padding: 10px 16px; font-weight: 600; font-size: 12px;
+  color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px;
+  background: var(--surface-secondary); border-bottom: 1px solid var(--border);
+}
+.table td { padding: 10px 16px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); }
+.table tr:last-child td { border-bottom: none; }
+.table tr:hover td { background: var(--blue-50); }
+
+/* ═══ Component: Sidebar Items ═══ */
+.sidebar-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: 6px;
+  font-size: 13px; color: var(--text-secondary);
+  cursor: pointer; transition: all 0.15s ease;
+}
+.sidebar-item:hover { background: var(--surface); }
+.sidebar-item.active { background: var(--blue-50); color: var(--blue-600); font-weight: 500; }
+.sidebar-section-label {
+  font-size: 11px; font-weight: 600; color: var(--text-tertiary);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 16px 12px 4px;
+}
+
+/* ═══ Component: Form Elements ═══ */
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 4px; }
+.form-input {
+  width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+  border-radius: 8px; font-size: 14px; font-family: var(--font-body);
+  background: var(--surface); color: var(--text-primary);
+}
+.form-input:focus { outline: none; border-color: var(--blue-500); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+
+/* ═══ Component: Step Card (from DESIGN-SYSTEM.md) ═══ */
+.step-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden;
+}
+.step-card-header {
+  padding: 16px 20px; display: flex; align-items: center; gap: 12px;
+  border-bottom: 1px solid var(--border-light);
+}
+.step-number {
+  width: 36px; height: 36px; border-radius: 8px;
+  background: var(--blue-50); color: var(--blue-600);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700;
+}
+.step-card-body { padding: 20px; }
+.classification-buttons {
+  display: flex; gap: 8px; padding: 16px 20px;
+  border-bottom: 1px solid var(--border-light);
+}
+.cls-btn {
+  flex: 1; padding: 10px; border-radius: 8px; border: 2px solid var(--border);
+  font-size: 13px; font-weight: 600; text-align: center;
+  cursor: pointer; transition: all 0.15s ease; background: var(--surface);
+}
+.cls-btn.fit { border-color: var(--fit); color: var(--fit-text); }
+.cls-btn.fit.selected { background: var(--fit-bg); }
+.cls-btn.configure { border-color: var(--configure); color: var(--configure-text); }
+.cls-btn.gap { border-color: var(--gap); color: var(--gap-text); }
+.cls-btn.na { border-color: var(--na); color: var(--na); }
+
+/* ═══ Component: Wizard Steps ═══ */
+.wizard-steps {
+  display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px 0;
+}
+.wizard-step {
+  display: flex; align-items: center; gap: 8px;
+}
+.wizard-dot {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600;
+  background: var(--surface-secondary); color: var(--text-tertiary);
+  border: 2px solid var(--border);
+}
+.wizard-dot.active { background: var(--blue-500); color: #fff; border-color: var(--blue-500); }
+.wizard-dot.done { background: var(--fit); color: #fff; border-color: var(--fit); }
+.wizard-line { width: 40px; height: 2px; background: var(--border); }
+.wizard-line.done { background: var(--fit); }
+
+/* ═══ BPMN Diagram Styles ═══ */
+.bpmn-container {
+  background: #fafbfc; border: 1px solid var(--border);
+  border-radius: 8px; padding: 24px; overflow-x: auto;
+}
+.bpmn-lane {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; margin-bottom: 12px; overflow: hidden;
+}
+.bpmn-lane-header {
+  background: var(--surface-secondary); padding: 8px 16px;
+  font-size: 13px; font-weight: 600; color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+}
+.bpmn-lane-body { padding: 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.bpmn-node {
+  padding: 8px 14px; border-radius: 6px; font-size: 12px;
+  border: 1px solid var(--border); background: var(--surface);
+  white-space: nowrap; position: relative;
+}
+.bpmn-node.start { background: var(--fit-bg); border-color: var(--fit); border-radius: 50%; width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; }
+.bpmn-node.end { background: var(--fit-bg); border-color: var(--fit); border-radius: 50%; width: 32px; height: 32px; padding: 0; border-width: 3px; display: flex; align-items: center; justify-content: center; }
+.bpmn-node.task { background: var(--blue-50); border-color: var(--blue-500); }
+.bpmn-node.gateway { background: #fffbeb; border-color: var(--gap); transform: rotate(45deg); width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center; }
+.bpmn-node.gateway span { transform: rotate(-45deg); font-size: 14px; }
+.bpmn-arrow { color: var(--text-tertiary); font-size: 16px; }
+.bpmn-subprocess { border: 1px dashed var(--blue-500); background: var(--blue-50); padding: 4px 10px; border-radius: 6px; font-size: 11px; }
+
+/* ═══ Annotation Box ═══ */
+.annotation {
+  background: var(--blue-50); border-left: 3px solid var(--blue-500);
+  padding: 12px 16px; border-radius: 0 8px 8px 0;
+  margin: 16px 0; font-size: 13px; color: var(--blue-700);
+}
+.annotation.warn { background: #fffbeb; border-left-color: var(--gap); color: var(--gap-text); }
+.annotation.success { background: var(--fit-bg); border-left-color: var(--fit); color: var(--fit-text); }
+.annotation strong { font-weight: 600; }
+
+/* ═══ Flow diagram ═══ */
+.flow-chain {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 12px 0;
+}
+.flow-node {
+  padding: 8px 16px; border-radius: 8px;
+  font-size: 13px; font-weight: 500;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.flow-arrow { color: var(--text-tertiary); font-size: 18px; }
+
+/* ═══ Swimlane ═══ */
+.swimlane-container { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
+.swimlane {
+  display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+}
+.swimlane-label {
+  width: 140px; min-width: 140px; background: var(--surface-secondary);
+  padding: 12px; font-size: 12px; font-weight: 600; color: var(--text-primary);
+  display: flex; align-items: center; border-right: 1px solid var(--border);
+}
+.swimlane-content {
+  flex: 1; padding: 12px; display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ═══ Admin Sidebar ═══ */
+.admin-layout { display: grid; grid-template-columns: 240px 1fr; min-height: 500px; }
+.admin-sidebar {
+  background: var(--surface); border-right: 1px solid var(--border);
+  padding: 16px 12px;
+}
+
+/* ═══ Heatmap ═══ */
+.heatmap { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 4px; margin: 12px 0; }
+.heatmap-cell {
+  aspect-ratio: 1; border-radius: 6px; display: flex; align-items: center;
+  justify-content: center; font-size: 11px; font-weight: 600; color: #fff;
+}
+.heat-0 { background: #f1f5f9; color: var(--text-tertiary); }
+.heat-25 { background: #fecaca; color: #991b1b; }
+.heat-50 { background: #fde68a; color: #92400e; }
+.heat-75 { background: #bbf7d0; color: #166534; }
+.heat-100 { background: var(--fit); color: #fff; }
+
+/* ═══ Route indicator ═══ */
+.route-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary);
+  background: var(--surface-secondary); padding: 2px 8px; border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+/* ═══ Responsive ═══ */
+@media (max-width: 768px) {
+  .stat-grid.cols-4 { grid-template-columns: repeat(2, 1fr); }
+  .stat-grid.cols-3 { grid-template-columns: repeat(2, 1fr); }
+  .layout-sidebar { grid-template-columns: 1fr; }
+  .admin-layout { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .mock-tabs { font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     DOCUMENT HEADER
+     ═══════════════════════════════════════════════════════ -->
+<div class="doc-header">
+  <h1>ABEAM V2 — Complete Process Flow & Screen UI</h1>
+  <div class="subtitle">Exhaustive screen-by-screen reference matching the actual codebase implementation</div>
+  <div class="meta">Version 2.0 — 27 Feb 2026 — 30 screens across 22 phases — Codebase-faithful UI</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TABLE OF CONTENTS
+     ═══════════════════════════════════════════════════════ -->
+<nav class="toc" id="toc">
+  <a href="#overview">Overview</a>
+  <a href="#lifecycle">Lifecycle</a>
+  <span class="divider"></span>
+  <a href="#s-login">Login</a>
+  <a href="#s-mfa">MFA</a>
+  <a href="#s-onboarding">Onboarding</a>
+  <span class="divider"></span>
+  <a href="#s-assessments">Assessments</a>
+  <a href="#s-dashboard">Dashboard</a>
+  <a href="#s-profile">Profile</a>
+  <a href="#s-scope">Scope</a>
+  <a href="#s-review">Review</a>
+  <a href="#s-conversation">Conversation</a>
+  <span class="divider"></span>
+  <a href="#s-config">Config</a>
+  <a href="#s-processmap">Process Map</a>
+  <a href="#s-flows">Flows</a>
+  <a href="#s-gaps">Gaps</a>
+  <a href="#s-remaining">Remaining</a>
+  <span class="divider"></span>
+  <a href="#s-integrations">Integrations</a>
+  <a href="#s-dm">Data Migration</a>
+  <a href="#s-ocm">OCM</a>
+  <a href="#s-workshops">Workshops</a>
+  <span class="divider"></span>
+  <a href="#s-activity">Activity</a>
+  <a href="#s-signoff">Sign-Off</a>
+  <a href="#s-report">Report</a>
+  <span class="divider"></span>
+  <a href="#s-org">Organization</a>
+  <a href="#s-analytics">Analytics</a>
+  <a href="#s-templates">Templates</a>
+  <a href="#s-admin">Admin</a>
+  <span class="divider"></span>
+  <a href="#bpmn">BPMN</a>
+</nav>
+
+<div class="content">
+
+<!-- ═══════════════════════════════════════════════════════
+     01. PLATFORM OVERVIEW
+     ═══════════════════════════════════════════════════════ -->
+<section id="overview">
+<h2><span class="num">01</span> Platform Overview & Navigation Architecture</h2>
+
+<p>ABEAM V2 has <strong>~30 distinct screens</strong> organized into 3 navigation contexts: <strong>Portal</strong> (top nav), <strong>Assessment</strong> (tab nav inside an assessment), and <strong>Admin</strong> (admin sidebar). Below is the complete route map.</p>
+
+<h3>Portal-Level Routes (GlobalNav)</h3>
+<div class="table-wrap">
+<table class="table">
+<thead><tr><th>Route</th><th>Screen</th><th>Access</th></tr></thead>
+<tbody>
+<tr><td><code>/login</code></td><td>Magic Link Login</td><td>Public</td></tr>
+<tr><td><code>/mfa/setup</code></td><td>TOTP MFA Setup</td><td>Authenticated</td></tr>
+<tr><td><code>/mfa/verify</code></td><td>MFA Code Verification</td><td>Authenticated</td></tr>
+<tr><td><code>/assessments</code></td><td>Assessment List</td><td>All roles</td></tr>
+<tr><td><code>/assessments/new</code></td><td>New Assessment</td><td>Consultant+</td></tr>
+<tr><td><code>/dashboard</code></td><td>Intelligent Dashboard</td><td>All roles</td></tr>
+<tr><td><code>/organization</code></td><td>Organization Settings</td><td>Client Admin+</td></tr>
+<tr><td><code>/organization/users</code></td><td>User Management</td><td>Client Admin+</td></tr>
+<tr><td><code>/analytics</code></td><td>Portfolio Analytics</td><td>Partner Lead+</td></tr>
+<tr><td><code>/templates</code></td><td>Assessment Templates</td><td>Consultant+</td></tr>
+<tr><td><code>/workshops/join</code></td><td>Workshop Join</td><td>Authenticated</td></tr>
+<tr><td><code>/admin/*</code></td><td>Admin Panel (8 sub-pages)</td><td>Platform Admin</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Assessment-Level Routes (AssessmentTabNav)</h3>
+<p>The <code>AssessmentTabNav</code> component groups tabs into 5 stages:</p>
+
+<div class="screen">
+<div class="screen-chrome">
+  <div class="screen-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+  <div class="screen-url">ABeam.app/assessment/abc123/scope</div>
+</div>
+<div class="screen-body">
+  <div class="mock-nav">
+    <div class="logo">A</div>
+    <span class="logo-text">ABeam</span>
+    <div class="nav-links">
+      <span class="nav-link">Dashboard</span>
+      <span class="nav-link active">Assessment</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="avatar">IK</div>
+  </div>
+  <div class="mock-tabs">
+    <div class="mock-tab-group" data-label="Setup">
+      <span class="mock-tab">Profile</span>
+      <span class="mock-tab active">Scope</span>
+    </div>
+    <span class="tab-divider"></span>
+    <div class="mock-tab-group" data-label="Review">
+      <span class="mock-tab">Step Review</span>
+      <span class="mock-tab">Conversation</span>
+    </div>
+    <span class="tab-divider"></span>
+    <div class="mock-tab-group" data-label="Outputs">
+      <span class="mock-tab">Config</span>
+      <span class="mock-tab">Process Map</span>
+      <span class="mock-tab">Flows</span>
+      <span class="mock-tab">Gaps</span>
+      <span class="mock-tab">Remaining</span>
+    </div>
+    <span class="tab-divider"></span>
+    <div class="mock-tab-group" data-label="Registers">
+      <span class="mock-tab">Integrations</span>
+      <span class="mock-tab">Data Migration</span>
+      <span class="mock-tab">Change Mgmt</span>
+      <span class="mock-tab">Workshops</span>
+    </div>
+    <span class="tab-divider"></span>
+    <div class="mock-tab-group" data-label="Wrap-up">
+      <span class="mock-tab">Activity Log</span>
+      <span class="mock-tab">Sign-Off</span>
+      <span class="mock-tab">Report</span>
+    </div>
+  </div>
+  <div style="padding: 32px; text-align: center; color: var(--text-tertiary); font-size: 13px;">
+    ← 5 tab groups · 16 assessment sub-pages · Conditional Sign-Off and Report tabs appear in late stages →
+  </div>
+</div>
+</div>
+
+<div class="annotation">
+  <strong>AssessmentTabNav.tsx</strong> — Groups tabs into Setup → Review → Outputs → Registers → Wrap-up. Sign-Off and Report tabs are conditional, only appearing when <code>assessmentStatus</code> reaches the appropriate lifecycle stage.
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     02. ASSESSMENT LIFECYCLE
+     ═══════════════════════════════════════════════════════ -->
+<section id="lifecycle">
+<h2><span class="num">02</span> Assessment Lifecycle (10-State Machine)</h2>
+
+<div class="flow-chain">
+  <span class="flow-node" style="background: var(--pending-bg);">DRAFT</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node" style="background: var(--blue-50);">SCOPING</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node" style="background: var(--configure-bg);">IN_PROGRESS</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node" style="background: var(--gap-bg);">WORKSHOP_ACTIVE</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node" style="background: var(--configure-bg);">GAP_RESOLUTION</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node" style="background: var(--gap-bg);">REVIEW_CYCLE</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node" style="background: var(--blue-50);">PENDING_SIGN_OFF</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node" style="background: var(--fit-bg);">SIGNED_OFF</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-node" style="background: var(--fit-bg); border: 2px solid var(--fit);">HANDED_OFF</span>
+</div>
+
+<div class="table-wrap">
+<table class="table">
+<thead><tr><th>State</th><th>Active Screens</th><th>Who Acts</th></tr></thead>
+<tbody>
+<tr><td><span class="badge badge-gray">DRAFT</span></td><td>Profile</td><td>Consultant</td></tr>
+<tr><td><span class="badge badge-blue">SCOPING</span></td><td>Profile, Scope</td><td>Consultant, Process Owner</td></tr>
+<tr><td><span class="badge badge-blue">IN_PROGRESS</span></td><td>Review, Conversation, Config, Registers</td><td>All stakeholders</td></tr>
+<tr><td><span class="badge badge-amber">WORKSHOP_ACTIVE</span></td><td>Workshop Mode (full-screen)</td><td>Facilitator + attendees</td></tr>
+<tr><td><span class="badge badge-blue">GAP_RESOLUTION</span></td><td>Gaps, Registers, Process Map</td><td>Consultant, SA, Process Owner</td></tr>
+<tr><td><span class="badge badge-amber">REVIEW_CYCLE</span></td><td>All review screens (read-only for clients)</td><td>Partner Lead, Consultant</td></tr>
+<tr><td><span class="badge badge-blue">PENDING_SIGN_OFF</span></td><td>Sign-Off, Report</td><td>3 roles: Client Rep, Consultant, PM</td></tr>
+<tr><td><span class="badge badge-green">SIGNED_OFF</span></td><td>Report (read-only)</td><td>All (view only)</td></tr>
+<tr><td><span class="badge badge-green">HANDED_OFF</span></td><td>Report + ALM Export</td><td>Platform Admin</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     03. LOGIN
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-login">
+<h2><span class="num">03</span> Login — Magic Link</h2>
+<div class="route-tag">GET /login</div>
+
+<div class="screen">
+<div class="screen-chrome">
+  <div class="screen-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+  <div class="screen-url">ABeam.app/login</div>
+</div>
+<div class="screen-body" style="display: flex; align-items: center; justify-content: center; min-height: 480px; background: var(--bg);">
+  <div style="width: 400px; text-align: center;">
+    <div style="width: 48px; height: 48px; background: var(--blue-500); border-radius: 12px; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 20px;">A</div>
+    <h2 style="font-size: 22px; margin-bottom: 4px;">Welcome to ABeam</h2>
+    <p style="color: var(--text-tertiary); font-size: 14px; margin-bottom: 24px;">Sign in with your email address</p>
+    <div class="card" style="text-align: left;">
+      <div class="form-group">
+        <label class="form-label">Email address</label>
+        <input class="form-input" type="email" placeholder="you@company.com" disabled>
+      </div>
+      <button class="btn btn-primary" style="width: 100%; justify-content: center;">Send Magic Link</button>
+      <p style="font-size: 12px; color: var(--text-tertiary); margin-top: 12px; text-align: center;">We'll send you a secure link to sign in — no password needed.</p>
+    </div>
+  </div>
+</div>
+</div>
+<div class="annotation"><strong>No password.</strong> Magic link sent via email. After clicking, user is redirected to MFA verify (if enrolled) or directly to assessments list.</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     04. MFA
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-mfa">
+<h2><span class="num">04</span> MFA Setup & Verify</h2>
+<div class="route-tag">GET /mfa/setup · GET /mfa/verify</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+<div class="card">
+  <h4>MFA Setup (/mfa/setup)</h4>
+  <div style="text-align: center; padding: 16px;">
+    <div style="width: 160px; height: 160px; background: var(--surface-secondary); border: 1px solid var(--border); border-radius: 8px; margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; color: var(--text-tertiary); font-size: 12px;">QR Code<br>(TOTP)</div>
+    <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">Scan with your authenticator app</p>
+    <div class="form-group">
+      <input class="form-input" type="text" placeholder="Enter 6-digit code" style="text-align: center; letter-spacing: 8px; font-size: 20px; font-family: var(--font-mono);" disabled>
+    </div>
+    <button class="btn btn-primary btn-sm">Verify & Enable</button>
+  </div>
+</div>
+<div class="card">
+  <h4>MFA Verify (/mfa/verify)</h4>
+  <div style="text-align: center; padding: 16px;">
+    <div style="width: 48px; height: 48px; background: var(--blue-50); border-radius: 12px; margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; font-size: 22px;">🔐</div>
+    <p style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Two-Factor Authentication</p>
+    <p style="font-size: 12px; color: var(--text-tertiary); margin-bottom: 16px;">Enter the 6-digit code from your authenticator</p>
+    <div class="form-group">
+      <input class="form-input" type="text" placeholder="000000" style="text-align: center; letter-spacing: 8px; font-size: 24px; font-family: var(--font-mono);" disabled>
+    </div>
+    <div style="height: 4px; background: var(--border); border-radius: 2px; margin: 8px auto; width: 120px;">
+      <div style="height: 100%; width: 60%; background: var(--blue-500); border-radius: 2px;"></div>
+    </div>
+    <p style="font-size: 11px; color: var(--text-tertiary);">Code expires in 18s</p>
+    <button class="btn btn-primary btn-sm" style="margin-top: 12px;">Verify</button>
+    <p style="font-size: 11px; color: var(--text-tertiary); margin-top: 8px;">Lost your device? <a style="color: var(--blue-600);">Use recovery code</a></p>
+  </div>
+</div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     05. ONBOARDING WIZARD
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-onboarding">
+<h2><span class="num">05</span> Onboarding Wizard (Per-Role)</h2>
+<div class="route-tag">OnboardingGuard overlay · Phase 24</div>
+
+<p>11 role-specific onboarding flows with 3–6 steps each. The <code>OnboardingGuard</code> component wraps the portal layout and shows the wizard overlay until onboarding is complete.</p>
+
+<div class="screen">
+<div class="screen-chrome">
+  <div class="screen-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+  <div class="screen-url">ABeam.app/assessments (overlay)</div>
+</div>
+<div class="screen-body" style="background: rgba(15,23,42,0.6); display: flex; align-items: center; justify-content: center; min-height: 400px;">
+  <div class="card" style="width: 520px; text-align: center;">
+    <div class="wizard-steps">
+      <div class="wizard-step"><div class="wizard-dot done">✓</div></div>
+      <div class="wizard-line done"></div>
+      <div class="wizard-step"><div class="wizard-dot done">✓</div></div>
+      <div class="wizard-line done"></div>
+      <div class="wizard-step"><div class="wizard-dot active">3</div></div>
+      <div class="wizard-line"></div>
+      <div class="wizard-step"><div class="wizard-dot">4</div></div>
+    </div>
+    <h3 style="margin-top: 16px;">Explore Your Dashboard</h3>
+    <p style="font-size: 14px; color: var(--text-secondary); margin: 8px 0 20px;">Your dashboard shows KPIs, progress heatmaps, and what needs attention. Widgets are customizable for your role.</p>
+    <div style="display: flex; gap: 8px; justify-content: center;">
+      <button class="btn btn-ghost">Skip</button>
+      <button class="btn btn-primary">Open Dashboard →</button>
+    </div>
+  </div>
+</div>
+</div>
+<div class="annotation"><strong>Per-role flows:</strong> Consultant gets 5 steps (welcome → create assessment → scope → review → reports). Process Owner gets 4 steps (welcome → MFA → dashboard → classification intro). Executive Sponsor gets 3 steps (welcome → dashboard → reports).</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     06. ASSESSMENT LIST
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-assessments">
+<h2><span class="num">06</span> Assessment List</h2>
+<div class="route-tag">GET /assessments</div>
+
+<div class="screen">
+<div class="screen-chrome">
+  <div class="screen-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+  <div class="screen-url">ABeam.app/assessments</div>
+</div>
+<div class="screen-body">
+  <div class="mock-nav">
+    <div class="logo">A</div>
+    <span class="logo-text">ABeam</span>
+    <div class="nav-links">
+      <span class="nav-link">Dashboard</span>
+      <span class="nav-link active">Assessments</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="avatar">IK</div>
+  </div>
+  <div class="layout-centered">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <div>
+        <h2 style="font-size: 22px; border: none; padding: 0; margin: 0;">Assessments</h2>
+        <p style="font-size: 14px; color: var(--text-secondary); margin: 0;">Manage SAP fit assessments</p>
+      </div>
+      <button class="btn btn-primary">+ New Assessment</button>
+    </div>
+
+    <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+      <select class="form-input" style="width: 180px;" disabled>
+        <option>All Statuses</option>
+      </select>
+      <input class="form-input" placeholder="Search by company name..." disabled>
+    </div>
+
+    <!-- Assessment Card -->
+    <div class="card" style="margin-bottom: 12px; cursor: pointer;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span style="font-size: 17px; font-weight: 600;">Velesto Energy</span>
+        <span class="badge badge-blue">In Progress</span>
+      </div>
+      <div style="display: flex; gap: 24px; font-size: 12px; color: var(--text-tertiary); margin-bottom: 8px;">
+        <span>Oil & Gas</span>
+        <span>Malaysia</span>
+        <span>14 scope items</span>
+        <span>1,204 / 8,432 steps reviewed</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill blue" style="width: 14%;"></div></div>
+      <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+        <span style="font-size: 11px; color: var(--text-tertiary);">Updated 2 hours ago</span>
+        <span style="font-size: 13px; color: var(--blue-600); font-weight: 500;">Continue →</span>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 12px; cursor: pointer;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span style="font-size: 17px; font-weight: 600;">Global Manufacturing Corp</span>
+        <span class="badge badge-green">Signed Off</span>
+      </div>
+      <div style="display: flex; gap: 24px; font-size: 12px; color: var(--text-tertiary); margin-bottom: 8px;">
+        <span>Manufacturing</span>
+        <span>Germany</span>
+        <span>87 scope items</span>
+        <span>42,310 / 42,310 steps reviewed</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill green" style="width: 100%;"></div></div>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     07. INTELLIGENT DASHBOARD
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-dashboard">
+<h2><span class="num">07</span> Intelligent Dashboard</h2>
+<div class="route-tag">GET /dashboard · Phase 23 · DashboardShell + WidgetLoader</div>
+
+<div class="screen">
+<div class="screen-chrome">
+  <div class="screen-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+  <div class="screen-url">ABeam.app/dashboard</div>
+</div>
+<div class="screen-body">
+  <div class="mock-nav">
+    <div class="logo">A</div><span class="logo-text">ABeam</span>
+    <div class="nav-links"><span class="nav-link active">Dashboard</span><span class="nav-link">Assessments</span></div>
+    <div class="spacer"></div>
+    <span style="font-size: 13px; color: var(--text-tertiary); margin-right: 12px;">🔔 3</span>
+    <div class="avatar">IK</div>
+  </div>
+  <div class="layout-wide" style="padding-top: 24px;">
+    <!-- What Needs Attention -->
+    <div class="card" style="border-left: 3px solid var(--warning); margin-bottom: 20px;">
+      <h4 style="margin: 0 0 8px; color: var(--gap-text);">⚠ What Needs Attention</h4>
+      <div style="font-size: 13px; color: var(--text-secondary);">
+        <div style="padding: 6px 0; border-bottom: 1px solid var(--border-light);">• <strong>Velesto Energy:</strong> 3 gaps pending approval for more than 7 days</div>
+        <div style="padding: 6px 0; border-bottom: 1px solid var(--border-light);">• <strong>Velesto Energy:</strong> Finance scope — 0% reviewed (stale 14 days)</div>
+        <div style="padding: 6px 0;">• <strong>Global Mfg:</strong> Sign-off deadline tomorrow</div>
+      </div>
+    </div>
+
+    <!-- KPI Row -->
+    <div class="stat-grid cols-4">
+      <div class="stat-card"><div class="stat-label">FIT Rate</div><div class="stat-value" style="color: var(--fit);">72%</div><div class="stat-sub">across all active assessments</div></div>
+      <div class="stat-card"><div class="stat-label">Open Gaps</div><div class="stat-value" style="color: var(--gap);">23</div><div class="stat-sub">12 pending approval</div></div>
+      <div class="stat-card"><div class="stat-label">Completion</div><div class="stat-value">58%</div><div class="stat-sub">steps reviewed</div></div>
+      <div class="stat-card"><div class="stat-label">Est. Effort</div><div class="stat-value">340d</div><div class="stat-sub">gap resolution days</div></div>
+    </div>
+
+    <!-- Progress Heatmap -->
+    <h3>Progress by Functional Area</h3>
+    <div class="heatmap">
+      <div class="heatmap-cell heat-100">Finance<br>100%</div>
+      <div class="heatmap-cell heat-75">Procure<br>82%</div>
+      <div class="heatmap-cell heat-50">Sales<br>45%</div>
+      <div class="heatmap-cell heat-25">MM<br>18%</div>
+      <div class="heatmap-cell heat-0">HR<br>0%</div>
+      <div class="heatmap-cell heat-75">PM<br>76%</div>
+      <div class="heatmap-cell heat-50">WM<br>55%</div>
+      <div class="heatmap-cell heat-25">CS<br>22%</div>
+    </div>
+
+    <!-- Activity Feed Widget -->
+    <h3>Recent Activity</h3>
+    <div class="card-sm" style="border: 1px solid var(--border); border-radius: 8px;">
+      <div style="padding: 8px 12px; border-bottom: 1px solid var(--border-light); font-size: 13px;"><span style="color: var(--text-tertiary);">2m ago</span> — <strong>Sarah</strong> marked step #45 as <span class="badge badge-fit">FIT</span> in J60</div>
+      <div style="padding: 8px 12px; border-bottom: 1px solid var(--border-light); font-size: 13px;"><span style="color: var(--text-tertiary);">15m ago</span> — <strong>Ali</strong> approved gap resolution for step #102</div>
+      <div style="padding: 8px 12px; font-size: 13px;"><span style="color: var(--text-tertiary);">1h ago</span> — <strong>System</strong> auto-detected 5 remaining items</div>
+    </div>
+  </div>
+</div>
+</div>
+<div class="annotation"><strong>Role-aware widgets:</strong> Executive sees summary KPIs + timeline. Process Owner sees their assigned areas + pending items. Consultant sees cross-assessment metrics. Widgets are customizable via <code>WidgetCustomizer</code> (move up/down, show/hide).</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     08. COMPANY PROFILE
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-profile">
+<h2><span class="num">08</span> Company Profile</h2>
+<div class="route-tag">GET /assessment/[id]/profile · Phase 10</div>
+
+<div class="screen">
+<div class="screen-chrome">
+  <div class="screen-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+  <div class="screen-url">ABeam.app/assessment/abc123/profile</div>
+</div>
+<div class="screen-body">
+  <div class="mock-nav"><div class="logo">A</div><span class="logo-text">ABeam</span><div class="spacer"></div><div class="avatar">IK</div></div>
+  <div class="mock-tabs">
+    <div class="mock-tab-group" data-label="Setup"><span class="mock-tab active">Profile</span><span class="mock-tab">Scope</span></div>
+  </div>
+  <div style="max-width: 672px; margin: 32px auto; padding: 0 24px;">
+    <div class="wizard-steps">
+      <div class="wizard-step"><div class="wizard-dot active">1</div></div>
+      <div class="wizard-line"></div>
+      <div class="wizard-step"><div class="wizard-dot">2</div></div>
+      <div class="wizard-line"></div>
+      <div class="wizard-step"><div class="wizard-dot">3</div></div>
+      <div class="wizard-line"></div>
+      <div class="wizard-step"><div class="wizard-dot">4</div></div>
+    </div>
+    <p style="text-align: center; font-size: 12px; color: var(--text-tertiary); margin-bottom: 24px;">Basic Info → ERP Landscape → Operating Model → Stakeholders</p>
+
+    <div class="card">
+      <h3 style="margin-top: 0;">Basic Information</h3>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div class="form-group"><label class="form-label">Company Name</label><input class="form-input" value="Velesto Energy" disabled></div>
+        <div class="form-group"><label class="form-label">Industry</label><input class="form-input" value="Oil & Gas" disabled></div>
+        <div class="form-group"><label class="form-label">Country</label><input class="form-input" value="Malaysia" disabled></div>
+        <div class="form-group"><label class="form-label">Legal Entities</label><input class="form-input" value="35" disabled></div>
+        <div class="form-group" style="grid-column: span 2;"><label class="form-label">Annual Revenue Range</label><input class="form-input" value="RM 1-5 Billion" disabled></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 16px; opacity: 0.5;">
+      <h3 style="margin-top: 0;">Current ERP Landscape</h3>
+      <p style="font-size: 13px; color: var(--text-tertiary);">Primary ERP, version, deployment model, pain points...</p>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
+      <button class="btn btn-ghost">Save Draft</button>
+      <button class="btn btn-primary">Next: ERP Landscape →</button>
+    </div>
+  </div>
+</div>
+</div>
+<div class="annotation"><strong>4-step wizard:</strong> (1) Basic Info — company name, industry, country, entities, revenue. (2) ERP Landscape — current ERP, version, deployment, integrations, pain points. (3) Operating Model — org structure, process maturity, regulatory requirements. (4) Stakeholders — team members with role assignments and functional area locks.</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     09. SCOPE SELECTION
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-scope">
+<h2><span class="num">09</span> Scope Selection</h2>
+<div class="route-tag">GET /assessment/[id]/scope · Phase 11 + REM-32 + REM-33</div>
+
+<h3>Process Landscape Map (REM-32)</h3>
+<p>Default view. Shows business process chains instead of raw SAP codes. Department heads identify their areas in under 5 minutes.</p>
+
+<div class="swimlane-container">
+  <div class="swimlane">
+    <div class="swimlane-label" style="background: var(--fit-bg); color: var(--fit-text);">Record to Report<br>(R2R)</div>
+    <div class="swimlane-content">
+      <span class="flow-node" style="background: var(--fit-bg); font-size: 12px;">J58 General Ledger</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-node" style="background: var(--fit-bg); font-size: 12px;">J59 Accounts Receivable</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-node" style="background: var(--fit-bg); font-size: 12px;">BKP Asset Accounting</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-node" style="background: var(--fit-bg); font-size: 12px;">J14 Closing</span>
+      <div style="margin-left: auto;"><button class="btn btn-sm btn-primary">Select Chain</button></div>
+    </div>
+  </div>
+  <div class="swimlane">
+    <div class="swimlane-label" style="background: var(--configure-bg); color: var(--configure-text);">Procure to Pay<br>(P2P)</div>
+    <div class="swimlane-content">
+      <span class="flow-node" style="background: var(--configure-bg); font-size: 12px;">J60 Accounts Payable</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-node" style="background: var(--configure-bg); font-size: 12px;">BNX Non-Stock Procurement</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-node" style="background: var(--configure-bg); font-size: 12px;">1EG Invoice Verification</span>
+      <div style="margin-left: auto;"><button class="btn btn-sm btn-primary">Select Chain</button></div>
+    </div>
+  </div>
+  <div class="swimlane">
+    <div class="swimlane-label" style="background: var(--gap-bg); color: var(--gap-text);">Order to Cash<br>(O2C)</div>
+    <div class="swimlane-content">
+      <span class="flow-node" style="background: var(--gap-bg); font-size: 12px;">BD9 Sales Order</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-node" style="background: var(--gap-bg); font-size: 12px;">1YB Billing</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-node" style="background: var(--gap-bg); font-size: 12px;">BJ5 Credit Mgmt</span>
+      <div style="margin-left: auto;"><button class="btn btn-sm btn-ghost">Select Chain</button></div>
+    </div>
+  </div>
+</div>
+
+<h3>Scope Item Briefing (REM-33)</h3>
+<p>When a user clicks a scope item, instead of seeing 710 cryptic steps, they see a business narrative:</p>
+
+<div class="card" style="border-left: 3px solid var(--blue-500);">
+  <div style="display: flex; justify-content: space-between; align-items: start;">
+    <div>
+      <span class="badge badge-blue" style="margin-bottom: 8px;">J58</span>
+      <h3 style="margin: 0;">General Ledger Accounting</h3>
+      <p style="font-size: 14px; margin: 8px 0;">Your finance team's daily operations — journal entries, monthly closings, and period-end financial statements.</p>
+    </div>
+    <span style="font-size: 12px; color: var(--text-tertiary);">710 steps · 6 process areas</span>
+  </div>
+
+  <h4>What This Covers</h4>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px;">
+    <div class="card-sm" style="background: var(--surface-secondary);">
+      <strong>Daily:</strong> Your team posts journal entries, manages cash positions
+    </div>
+    <div class="card-sm" style="background: var(--surface-secondary);">
+      <strong>Monthly:</strong> SAP runs the closing cockpit, generates trial balance
+    </div>
+    <div class="card-sm" style="background: var(--surface-secondary);">
+      <strong>Period-End:</strong> Balance sheet and P&L are generated automatically
+    </div>
+    <div class="card-sm" style="background: var(--surface-secondary);">
+      <strong>Regulatory:</strong> Tax reporting, statutory consolidation, audit trail
+    </div>
+  </div>
+
+  <h4>Before You Review, Consider</h4>
+  <div style="font-size: 13px; color: var(--text-secondary);">
+    <div style="padding: 4px 0;">❓ Do you close monthly or quarterly?</div>
+    <div style="padding: 4px 0;">❓ How many legal entities post to the same GL?</div>
+    <div style="padding: 4px 0;">❓ Do you use intercompany eliminations?</div>
+  </div>
+
+  <h4>Process Areas (6)</h4>
+  <div class="table-wrap" style="margin-top: 8px;">
+    <table class="table">
+      <thead><tr><th>Area</th><th>Steps</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>Journal Entry Processing</td><td>142</td><td>Manual & recurring journal entries</td></tr>
+        <tr><td>Period-End Close</td><td>198</td><td>Closing cockpit, accruals, reclassifications</td></tr>
+        <tr><td>Financial Reporting</td><td>89</td><td>Balance sheet, P&L, trial balance</td></tr>
+        <tr><td>Tax Management</td><td>104</td><td>Tax codes, withholding, regulatory reporting</td></tr>
+        <tr><td>Intercompany</td><td>96</td><td>IC postings, reconciliation, elimination</td></tr>
+        <tr><td>Cash & Bank</td><td>81</td><td>Bank reconciliation, cash position</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<h3>Detailed Scope Items List</h3>
+<p>Below the landscape map and briefing — the actual selection with checkboxes, grouped by functional area.</p>
+<div class="card-sm" style="border: 1px solid var(--border);">
+  <div style="display: flex; align-items: center; gap: 8px; padding: 8px 0;">
+    <input type="checkbox" checked disabled> <strong style="font-size: 14px;">Finance (12 items)</strong>
+    <span class="badge badge-blue" style="margin-left: auto;">8 selected</span>
+  </div>
+  <div style="padding-left: 24px; font-size: 13px; color: var(--text-secondary);">
+    <div style="padding: 4px 0; display: flex; align-items: center; gap: 8px;"><input type="checkbox" checked disabled> J58 — General Ledger Accounting <span style="color: var(--text-tertiary); margin-left: auto; font-size: 11px;">710 steps</span></div>
+    <div style="padding: 4px 0; display: flex; align-items: center; gap: 8px;"><input type="checkbox" checked disabled> J60 — Accounts Payable <span style="color: var(--text-tertiary); margin-left: auto; font-size: 11px;">523 steps</span></div>
+    <div style="padding: 4px 0; display: flex; align-items: center; gap: 8px;"><input type="checkbox" disabled> J14 — Closing Operations <span style="color: var(--text-tertiary); margin-left: auto; font-size: 11px;">89 steps</span></div>
+  </div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     10. PROCESS STEP REVIEW
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-review">
+<h2><span class="num">10</span> Process Step Review</h2>
+<div class="route-tag">GET /assessment/[id]/review/[scopeItemId] · Phase 12</div>
+
+<div class="screen">
+<div class="screen-chrome">
+  <div class="screen-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+  <div class="screen-url">ABeam.app/assessment/abc123/review/j60</div>
+</div>
+<div class="screen-body">
+  <div class="mock-nav"><div class="logo">A</div><span class="logo-text">ABeam</span><div class="spacer"></div><div class="avatar">IK</div></div>
+  <div class="mock-tabs">
+    <div class="mock-tab-group" data-label="Review"><span class="mock-tab active">Step Review</span><span class="mock-tab">Conversation</span></div>
+  </div>
+  <div class="layout-sidebar">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div style="margin-bottom: 16px;">
+        <div style="font-size: 12px; font-weight: 600; color: var(--text-tertiary); margin-bottom: 4px;">SCOPE ITEM</div>
+        <div style="font-size: 15px; font-weight: 600;">J60 — Accounts Payable</div>
+        <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 4px;">78 / 523 steps reviewed (15%)</div>
+        <div class="progress-bar" style="margin-top: 6px;"><div class="progress-fill blue" style="width: 15%;"></div></div>
+      </div>
+
+      <div class="sidebar-section-label">Hierarchy</div>
+      <div class="sidebar-item active" style="padding-left: 12px;">📂 Invoice Processing</div>
+      <div class="sidebar-item" style="padding-left: 28px; font-size: 12px;">↳ Create Invoice</div>
+      <div class="sidebar-item" style="padding-left: 28px; font-size: 12px; background: var(--blue-50); color: var(--blue-600);">↳ Post Invoice <span style="margin-left: auto; font-size: 11px;">← current</span></div>
+      <div class="sidebar-item" style="padding-left: 28px; font-size: 12px;">↳ Verify Invoice</div>
+      <div class="sidebar-item" style="padding-left: 12px;">📂 Payment Run</div>
+      <div class="sidebar-item" style="padding-left: 12px;">📂 Down Payments</div>
+
+      <div class="sidebar-section-label" style="margin-top: 16px;">Other Scope Items</div>
+      <div class="sidebar-item"><span style="font-size: 12px;">J58 General Ledger</span> <span class="badge badge-green badge-sm" style="margin-left: auto; font-size: 10px;">100%</span></div>
+      <div class="sidebar-item"><span style="font-size: 12px;">BNX Non-Stock</span> <span class="badge badge-amber badge-sm" style="margin-left: auto; font-size: 10px;">42%</span></div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+      <div style="font-size: 12px; color: var(--text-tertiary); margin-bottom: 16px;">
+        J60 → Invoice Processing → Post Invoice · Step 23 of 523
+      </div>
+
+      <div class="step-card">
+        <!-- Decision-first: Classification buttons ABOVE content (REM-04) -->
+        <div class="classification-buttons">
+          <div class="cls-btn fit">✓ FIT</div>
+          <div class="cls-btn configure">⚙ CONFIGURE</div>
+          <div class="cls-btn gap">⚠ GAP</div>
+          <div class="cls-btn na">— N/A</div>
+        </div>
+
+        <div class="step-card-header">
+          <div class="step-number">23</div>
+          <div>
+            <div style="font-size: 15px; font-weight: 600;">Post Supplier Invoice</div>
+            <div style="font-size: 12px; color: var(--text-tertiary);">
+              <span class="badge badge-blue" style="font-size: 10px;">Classifiable</span>
+              <span class="badge badge-gray" style="font-size: 10px;">Mandatory Config</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-card-body">
+          <p style="font-size: 14px; margin-bottom: 12px;"><strong>What this step does:</strong> The accounts payable clerk posts an incoming supplier invoice against a purchase order. SAP automatically matches the invoice to the PO line items and checks for quantity and price variances.</p>
+
+          <details style="margin-top: 12px;">
+            <summary style="font-size: 12px; color: var(--blue-600); cursor: pointer;">View SAP Reference Content ▾</summary>
+            <div style="background: var(--surface-secondary); padding: 12px; border-radius: 6px; margin-top: 8px; font-size: 12px; font-family: var(--font-mono); color: var(--text-secondary);">
+              Transaction: MIRO / Fiori App: Post Supplier Invoice<br>
+              Configuration: Output determination, tolerance groups, GR/IR clearing...
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; margin-top: 16px;">
+        <button class="btn btn-ghost">← Previous</button>
+        <span style="font-size: 12px; color: var(--text-tertiary); align-self: center;">Keyboard: ← → to navigate, 1-4 to classify</span>
+        <button class="btn btn-primary">Next →</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     11. CONVERSATION MODE
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-conversation">
+<h2><span class="num">11</span> Conversation Mode</h2>
+<div class="route-tag">GET /assessment/[id]/conversation · Phase 22</div>
+
+<p>Alternative to Step Review for non-technical users. Translates SAP process steps into plain-language business questions with a decision tree.</p>
+
+<div class="screen">
+<div class="screen-chrome">
+  <div class="screen-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+  <div class="screen-url">ABeam.app/assessment/abc123/conversation</div>
+</div>
+<div class="screen-body" style="max-width: 640px; margin: 0 auto; padding: 24px;">
+  <div style="text-align: center; margin-bottom: 20px;">
+    <span class="badge badge-blue">J60 — Accounts Payable</span>
+    <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 4px;">Question 3 of 12 · 2 classified</div>
+    <div class="progress-bar" style="margin-top: 8px;"><div class="progress-fill blue" style="width: 25%;"></div></div>
+  </div>
+
+  <!-- Chat bubbles -->
+  <div style="margin-bottom: 16px;">
+    <div class="card-sm" style="background: var(--surface-secondary); max-width: 80%; margin-bottom: 8px;">
+      <p style="font-size: 14px; margin: 0;">How does your team currently receive supplier invoices?</p>
+    </div>
+    <div class="card-sm" style="background: var(--blue-50); max-width: 80%; margin-left: auto; margin-bottom: 16px;">
+      <p style="font-size: 14px; margin: 0; color: var(--blue-700);">Mostly via email as PDF attachments</p>
+    </div>
+    <div class="card-sm" style="background: var(--surface-secondary); max-width: 80%; margin-bottom: 8px;">
+      <p style="font-size: 14px; margin: 0;">Do you match invoices against purchase orders before posting?</p>
+    </div>
+  </div>
+
+  <!-- Answer options -->
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+    <button class="btn btn-ghost" style="justify-content: flex-start; text-align: left;">Yes, always — 3-way match (PO, GR, Invoice)</button>
+    <button class="btn btn-ghost" style="justify-content: flex-start; text-align: left;">Sometimes — depends on the amount</button>
+    <button class="btn btn-ghost" style="justify-content: flex-start; text-align: left;">No — we post without PO matching</button>
+    <button class="btn btn-ghost" style="justify-content: flex-start; text-align: left;">I'm not sure</button>
+  </div>
+</div>
+</div>
+
+<div class="annotation"><strong>Auto-classification:</strong> Based on answers, the system derives FIT/CONFIGURE/GAP for the underlying SAP step. "3-way match → always" = FIT. "No PO matching" = GAP. Consultants author the decision trees via <code>ConversationTemplateEditor</code> in admin.</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     12. CONFIGURATION MATRIX
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-config">
+<h2><span class="num">12</span> Configuration Matrix</h2>
+<div class="route-tag">GET /assessment/[id]/config · Phase 6</div>
+
+<div class="screen">
+<div class="screen-chrome">
+  <div class="screen-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+  <div class="screen-url">ABeam.app/assessment/abc123/config</div>
+</div>
+<div class="screen-body">
+  <div class="mock-tabs">
+    <div class="mock-tab-group" data-label="Outputs"><span class="mock-tab active">Config</span><span class="mock-tab">Process Map</span><span class="mock-tab">Flows</span><span class="mock-tab">Gaps</span><span class="mock-tab">Remaining</span></div>
+  </div>
+  <div style="padding: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <div>
+        <h3 style="margin: 0;">Configuration Activities</h3>
+        <p style="font-size: 13px; color: var(--text-tertiary); margin: 0;">4,703 activities across selected scope items</p>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <select class="form-input" style="width: 180px; font-size: 13px;" disabled><option>All Scope Items</option></select>
+        <select class="form-input" style="width: 140px; font-size: 13px;" disabled><option>All Types</option></select>
+      </div>
+    </div>
+
+    <div class="stat-grid cols-3" style="margin-bottom: 16px;">
+      <div class="stat-card"><div class="stat-label">Total Activities</div><div class="stat-value">4,703</div></div>
+      <div class="stat-card"><div class="stat-label">Included</div><div class="stat-value" style="color: var(--fit);">3,891</div></div>
+      <div class="stat-card"><div class="stat-label">Excluded</div><div class="stat-value" style="color: var(--text-tertiary);">812</div></div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Activity</th><th>Scope Item</th><th>Type</th><th>Mandatory</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Configure Payment Terms</td><td>J60</td><td><span class="badge badge-blue">SSCUI</span></td><td><span class="badge badge-red">Mandatory</span></td><td><span class="badge badge-green">Included</span></td></tr>
+          <tr><td>Set Tolerance Groups</td><td>J60</td><td><span class="badge badge-blue">SSCUI</span></td><td><span class="badge badge-amber">Recommended</span></td><td><span class="badge badge-green">Included</span></td></tr>
+          <tr><td>Activate Digital Payments</td><td>J60</td><td><span class="badge badge-gray">Expert</span></td><td><span class="badge badge-gray">Optional</span></td><td><span class="badge badge-gray">Excluded</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+<div class="annotation"><strong>Mandatory vs Optional:</strong> Mandatory = SAP requires this config for the scope item to work. Recommended = SAP suggests it for best practice. Optional = Nice-to-have. Consultants include/exclude each activity. Config de-duplication (Phase 12) prevents showing the same SSCUI across multiple scope items.</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     13. PROCESS MAP — BPMN VISUALIZATION
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-processmap">
+<h2><span class="num">13</span> Process Map — BPMN Visualization</h2>
+<div class="route-tag">GET /assessment/[id]/process-map · Phase 20 · ProcessMapCanvas + FunctionalAreaOverviewMap</div>
+
+<div class="annotation"><strong>This is where BPMN lives in ABEAM.</strong> Phase 20 (Process Visualization) provides a multi-level drill-down: Functional Area Overview → Scope Item → Process → Flow → Activity → Steps. The <code>ProcessMapCanvas</code> renders SVG swimlanes with sequence arrows and color-coded nodes.</div>
+
+<h3>Level 1: Functional Area Overview (Birds-Eye Heatmap)</h3>
+<div class="screen">
+<div class="screen-chrome">
+  <div class="screen-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+  <div class="screen-url">ABeam.app/assessment/abc123/process-map</div>
+</div>
+<div class="screen-body" style="padding: 24px;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+    <h3 style="margin: 0;">Process Map — Functional Area Overview</h3>
+    <div style="display: flex; gap: 8px;">
+      <button class="btn btn-ghost btn-sm">Risk Overlay</button>
+      <button class="btn btn-ghost btn-sm">Export PDF</button>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+    <div class="card" style="cursor: pointer; border-left: 3px solid var(--fit);">
+      <div style="font-size: 14px; font-weight: 600;">Finance</div>
+      <div style="font-size: 12px; color: var(--text-tertiary);">8 scope items · 4,210 steps</div>
+      <div class="progress-bar" style="margin-top: 8px;"><div class="progress-fill green" style="width: 92%;"></div></div>
+      <div style="font-size: 11px; color: var(--fit-text); margin-top: 4px;">92% complete</div>
+    </div>
+    <div class="card" style="cursor: pointer; border-left: 3px solid var(--configure);">
+      <div style="font-size: 14px; font-weight: 600;">Procurement</div>
+      <div style="font-size: 12px; color: var(--text-tertiary);">5 scope items · 2,890 steps</div>
+      <div class="progress-bar" style="margin-top: 8px;"><div class="progress-fill blue" style="width: 65%;"></div></div>
+      <div style="font-size: 11px; color: var(--configure-text); margin-top: 4px;">65% complete</div>
+    </div>
+    <div class="card" style="cursor: pointer; border-left: 3px solid var(--gap);">
+      <div style="font-size: 14px; font-weight: 600;">Sales</div>
+      <div style="font-size: 12px; color: var(--text-tertiary);">6 scope items · 3,150 steps</div>
+      <div class="progress-bar" style="margin-top: 8px;"><div class="progress-fill blue" style="width: 30%;"></div></div>
+      <div style="font-size: 11px; color: var(--gap-text); margin-top: 4px;">30% complete</div>
+    </div>
+    <div class="card" style="cursor: pointer; border-left: 3px solid var(--pending);">
+      <div style="font-size: 14px; font-weight: 600;">Plant Maint.</div>
+      <div style="font-size: 12px; color: var(--text-tertiary);">3 scope items · 1,420 steps</div>
+      <div class="progress-bar" style="margin-top: 8px;"><div class="progress-fill blue" style="width: 10%;"></div></div>
+      <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 4px;">10% complete</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<h3>Level 2: Scope Item Processes (Swimlane Diagram)</h3>
+<p>Click a functional area card → drill down to scope items → click a scope item → see the <code>ProcessMapCanvas</code> with swimlanes showing Process → Flows → Activities.</p>
+
+<div class="bpmn-container">
+  <div style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">J60 — Accounts Payable · Process Map</div>
+  <div class="bpmn-lane">
+    <div class="bpmn-lane-header">Invoice Processing</div>
+    <div class="bpmn-lane-body">
+      <div class="bpmn-node start"><span style="font-size: 10px;">●</span></div>
+      <span class="bpmn-arrow">→</span>
+      <div class="bpmn-node task" style="background: var(--fit-bg); border-color: var(--fit);">Receive Invoice</div>
+      <span class="bpmn-arrow">→</span>
+      <div class="bpmn-node task" style="background: var(--fit-bg); border-color: var(--fit);">3-Way Match</div>
+      <span class="bpmn-arrow">→</span>
+      <div class="bpmn-node gateway"><span>◇</span></div>
+      <span class="bpmn-arrow">→</span>
+      <div class="bpmn-node task" style="background: var(--configure-bg); border-color: var(--configure);">Post Invoice</div>
+      <span class="bpmn-arrow">→</span>
+      <div class="bpmn-node task" style="background: var(--fit-bg); border-color: var(--fit);">Release for Payment</div>
+      <span class="bpmn-arrow">→</span>
+      <div class="bpmn-node end"><span style="font-size: 10px;">●</span></div>
+    </div>
+  </div>
+  <div class="bpmn-lane">
+    <div class="bpmn-lane-header">Payment Run</div>
+    <div class="bpmn-lane-body">
+      <div class="bpmn-node start"><span style="font-size: 10px;">●</span></div>
+      <span class="bpmn-arrow">→</span>
+      <div class="bpmn-node task" style="background: var(--fit-bg); border-color: var(--fit);">Create Payment Proposal</div>
+      <span class="bpmn-arrow">→</span>
+      <div class="bpmn-node gateway"><span>◇</span></div>
+      <span class="bpmn-arrow">→</span>
+      <div class="bpmn-node task" style="background: var(--gap-bg); border-color: var(--gap);">Execute Payment</div>
+      <span class="bpmn-arrow">→</span>
+      <div class="bpmn-node task" style="background: var(--fit-bg); border-color: var(--fit);">Print Remittance</div>
+      <span class="bpmn-arrow">→</span>
+      <div class="bpmn-node end"><span style="font-size: 10px;">●</span></div>
+    </div>
+  </div>
+  <div class="bpmn-lane">
+    <div class="bpmn-lane-header">Down Payments</div>
+    <div class="bpmn-lane-body">
+      <div class="bpmn-node start"><span style="font-size: 10px;">●</span></div>
+      <span class="bpmn-arrow">→</span>
+      <div class="bpmn-node task" style="background: var(--fit-bg); border-color: var(--fit);">Request Down Payment</div>
+      <span class="bpmn-arrow">→</span>
+      <div class="bpmn-node task" style="background: var(--fit-bg); border-color: var(--fit);">Post Down Payment</div>
+      <span class="bpmn-arrow">→</span>
+      <div class="bpmn-node task" style="background: var(--configure-bg); border-color: var(--configure);">Clear Down Payment</div>
+      <span class="bpmn-arrow">→</span>
+      <div class="bpmn-node end"><span style="font-size: 10px;">●</span></div>
+    </div>
+  </div>
+
+  <div style="margin-top: 12px; display: flex; gap: 16px; font-size: 11px; color: var(--text-tertiary);">
+    <span>Legend:</span>
+    <span><span style="display: inline-block; width: 12px; height: 12px; background: var(--fit-bg); border: 1px solid var(--fit); border-radius: 2px;"></span> FIT</span>
+    <span><span style="display: inline-block; width: 12px; height: 12px; background: var(--configure-bg); border: 1px solid var(--configure); border-radius: 2px;"></span> CONFIGURE</span>
+    <span><span style="display: inline-block; width: 12px; height: 12px; background: var(--gap-bg); border: 1px solid var(--gap); border-radius: 2px;"></span> GAP</span>
+    <span>◇ = Decision Gateway</span>
+    <span>● = Start/End Event</span>
+  </div>
+</div>
+
+<div class="annotation warn">
+  <strong>BPMN Enhancement Opportunity:</strong> Currently ABEAM renders processes as sequential swimlanes with color-coded nodes. To match what users see in <strong>SAP Signavio Process Navigator</strong>, ABEAM could render actual BPMN 2.0 notation — gateways (exclusive/parallel), events (timer, message, error), sub-processes, and pools/lanes. This would let consultants and clients see the exact same process diagrams they encounter in SAP's Best Practice Explorer. See the BPMN section at the end of this document for a detailed proposal.
+</div>
+
+<div class="annotation">
+  <strong>Interactive features (Phase 20):</strong> Clickable nodes → popover with step details. Risk overlay toggle adds colored borders (green/yellow/orange/red). Cross-area dependency graph shows inter-functional-area links. Mobile: pinch-zoom + pan. Export: PDF (vector) and PNG (raster).
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     14. FLOW ATLAS
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-flows">
+<h2><span class="num">14</span> Flow Atlas (Per-Scope-Item Diagrams)</h2>
+<div class="route-tag">GET /assessment/[id]/flows · FlowViewerClient.tsx</div>
+
+<div class="screen">
+<div class="screen-chrome">
+  <div class="screen-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+  <div class="screen-url">ABeam.app/assessment/abc123/flows</div>
+</div>
+<div class="screen-body">
+  <div class="layout-sidebar">
+    <div class="sidebar">
+      <div class="sidebar-section-label">Scope Items</div>
+      <div class="sidebar-item active">J58 General Ledger <span class="badge badge-green" style="margin-left: auto; font-size: 10px;">3 flows</span></div>
+      <div class="sidebar-item">J60 Accounts Payable <span class="badge badge-blue" style="margin-left: auto; font-size: 10px;">4 flows</span></div>
+      <div class="sidebar-item">BNX Non-Stock <span class="badge badge-gray" style="margin-left: auto; font-size: 10px;">Not generated</span></div>
+      <div style="padding: 12px;">
+        <button class="btn btn-primary btn-sm" style="width: 100%; justify-content: center;">Generate All</button>
+      </div>
+    </div>
+    <div class="main-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="margin: 0;">J58 — General Ledger · Flow: Period-End Close</h3>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-ghost btn-sm">Regenerate</button>
+          <button class="btn btn-ghost btn-sm">Export PDF</button>
+        </div>
+      </div>
+      <div class="bpmn-container" style="min-height: 200px; display: flex; align-items: center; justify-content: center;">
+        <div style="text-align: center; color: var(--text-tertiary);">
+          <div style="font-size: 48px; margin-bottom: 12px;">📊</div>
+          <p>SVG flow diagram rendered here by <code>generateFlowSvg()</code></p>
+          <p style="font-size: 12px;">Sequential nodes with color coding · Arrows showing process flow · Classification status per step</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+<div class="annotation"><strong>Flow Atlas vs Process Map:</strong> Process Map (<code>/process-map</code>) is the interactive, drill-down visualization with functional area overview. Flow Atlas (<code>/flows</code>) shows pre-generated SVG diagrams per scope item — simpler, exportable, suitable for inclusion in reports. The Flow Atlas PDF is part of the 13-report export package.</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     15. GAP RESOLUTION
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-gaps">
+<h2><span class="num">15</span> Gap Resolution</h2>
+<div class="route-tag">GET /assessment/[id]/gaps · Phase 5 + Phase 13</div>
+
+<div class="screen">
+<div class="screen-chrome">
+  <div class="screen-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+  <div class="screen-url">ABeam.app/assessment/abc123/gaps</div>
+</div>
+<div class="screen-body" style="padding: 24px;">
+  <div class="stat-grid cols-3">
+    <div class="stat-card"><div class="stat-label">Total Gaps</div><div class="stat-value" style="color: var(--gap);">23</div></div>
+    <div class="stat-card"><div class="stat-label">Estimated Cost</div><div class="stat-value">$284K</div><div class="stat-sub">Phase 13 cost model</div></div>
+    <div class="stat-card"><div class="stat-label">Pending Approval</div><div class="stat-value" style="color: var(--error);">8</div></div>
+  </div>
+
+  <div class="card" style="margin-top: 16px;">
+    <div style="display: flex; justify-content: space-between; align-items: start;">
+      <div>
+        <span class="badge badge-amber" style="margin-bottom: 4px;">GAP-007</span>
+        <h3 style="margin: 4px 0 0;">Custom Approval Workflow for PO > $50K</h3>
+        <p style="font-size: 13px; color: var(--text-tertiary); margin: 4px 0;">J60 → Step #89 · Accounts Payable</p>
+      </div>
+      <span class="badge badge-red">High Risk</span>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px;">
+      <div>
+        <h4>Resolution</h4>
+        <div class="card-sm" style="background: var(--surface-secondary);">
+          <div style="font-size: 13px; font-weight: 500;">BTP Extension (Clean Core)</div>
+          <div style="font-size: 12px; color: var(--text-tertiary);">Custom workflow on SAP BTP using SAP Build Process Automation</div>
+        </div>
+      </div>
+      <div>
+        <h4>Cost & Effort</h4>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px;">
+          <div class="card-sm" style="background: var(--surface-secondary);"><div style="font-size: 11px; color: var(--text-tertiary);">Effort</div><strong>15 days</strong></div>
+          <div class="card-sm" style="background: var(--surface-secondary);"><div style="font-size: 11px; color: var(--text-tertiary);">Cost</div><strong>$22,500</strong></div>
+        </div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 8px; margin-top: 12px;">
+      <button class="btn btn-primary btn-sm">Approve Resolution</button>
+      <button class="btn btn-ghost btn-sm">View Alternatives</button>
+      <button class="btn btn-ghost btn-sm">What-If Analysis</button>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     16. REMAINING ITEMS
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-remaining">
+<h2><span class="num">16</span> Remaining Items Register</h2>
+<div class="route-tag">GET /assessment/[id]/remaining · RemainingItemsClient.tsx</div>
+
+<div class="screen">
+<div class="screen-chrome">
+  <div class="screen-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+  <div class="screen-url">ABeam.app/assessment/abc123/remaining</div>
+</div>
+<div class="screen-body" style="padding: 24px;">
+  <div class="stat-grid cols-4">
+    <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value">47</div></div>
+    <div class="stat-card"><div class="stat-label">Critical</div><div class="stat-value" style="color: var(--error);">5</div></div>
+    <div class="stat-card"><div class="stat-label">High</div><div class="stat-value" style="color: var(--gap);">12</div></div>
+    <div class="stat-card"><div class="stat-label">Resolved</div><div class="stat-value" style="color: var(--fit);">18</div></div>
+  </div>
+
+  <div style="display: flex; gap: 8px; margin: 16px 0;">
+    <select class="form-input" style="width: 160px; font-size: 12px;" disabled><option>All Categories</option></select>
+    <select class="form-input" style="width: 140px; font-size: 12px;" disabled><option>All Severities</option></select>
+    <input class="form-input" placeholder="Search..." style="font-size: 12px;" disabled>
+    <button class="btn btn-ghost btn-sm" style="margin-left: auto;">+ Add Item</button>
+    <button class="btn btn-primary btn-sm">Auto-Detect</button>
+    <button class="btn btn-ghost btn-sm">Export XLSX</button>
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Category</th><th>Item</th><th>Scope Item</th><th>Severity</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge badge-gray">Unreviewed Step</span></td><td>Step #412 — Configure tax codes</td><td>J58</td><td><span class="badge badge-amber">High</span></td><td><span class="badge badge-gray">Open</span></td></tr>
+        <tr><td><span class="badge badge-amber">Undecided Scope</span></td><td>1YB — Billing</td><td>—</td><td><span class="badge badge-amber">Medium</span></td><td><span class="badge badge-gray">Open</span></td></tr>
+        <tr><td><span class="badge badge-red">Deferred Gap</span></td><td>GAP-015 — Custom pricing</td><td>BD9</td><td><span class="badge badge-red">Critical</span></td><td><span class="badge badge-green">Resolved</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</div>
+<div class="annotation"><strong>Auto-detect</strong> scans: unreviewed steps, MAYBE scope items, excluded recommended configs, OUT_OF_SCOPE gaps, integration points without middleware. Manual items can be added. Expandable rows show description, source reference, resolution notes.</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     17-19. REGISTERS (Integration, DM, OCM)
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-integrations">
+<h2><span class="num">17</span> Integration Register</h2>
+<div class="route-tag">GET /assessment/[id]/integrations · Phase 14</div>
+<p>Tracks integration points between SAP and external systems — direction, middleware type, complexity, and status.</p>
+<div class="stat-grid cols-4">
+  <div class="stat-card"><div class="stat-label">Total Points</div><div class="stat-value">13</div></div>
+  <div class="stat-card"><div class="stat-label">Inbound</div><div class="stat-value">5</div></div>
+  <div class="stat-card"><div class="stat-label">Outbound</div><div class="stat-value">6</div></div>
+  <div class="stat-card"><div class="stat-label">Bidirectional</div><div class="stat-value">2</div></div>
+</div>
+<div class="table-wrap" style="margin-top: 12px;">
+  <table class="table">
+    <thead><tr><th>Integration</th><th>Direction</th><th>Source</th><th>Target</th><th>Middleware</th><th>Priority</th></tr></thead>
+    <tbody>
+      <tr><td>Master Data — Cost Centers</td><td>→ Outbound</td><td>SAP</td><td>Dynamics 365</td><td><span class="badge badge-blue">CPI</span></td><td><span class="badge badge-red">Critical</span></td></tr>
+      <tr><td>Work Order Completion</td><td>← Inbound</td><td>Maximo</td><td>SAP PM</td><td><span class="badge badge-blue">API</span></td><td><span class="badge badge-amber">High</span></td></tr>
+    </tbody>
+  </table>
+</div>
+</section>
+
+<section id="s-dm">
+<h2><span class="num">18</span> Data Migration Register</h2>
+<div class="route-tag">GET /assessment/[id]/data-migration · Phase 15</div>
+<p>Tracks data migration objects — type, volume, complexity, source system, and effort estimate.</p>
+<div class="stat-grid cols-3">
+  <div class="stat-card"><div class="stat-label">Migration Objects</div><div class="stat-value">28</div></div>
+  <div class="stat-card"><div class="stat-label">Total Records</div><div class="stat-value">2.4M</div></div>
+  <div class="stat-card"><div class="stat-label">Est. Effort</div><div class="stat-value">45 days</div></div>
+</div>
+</section>
+
+<section id="s-ocm">
+<h2><span class="num">19</span> OCM Impact Register</h2>
+<div class="route-tag">GET /assessment/[id]/ocm · Phase 16</div>
+<p>Tracks organizational change management impacts — severity, change type, affected roles, training needs.</p>
+<div class="stat-grid cols-3">
+  <div class="stat-card"><div class="stat-label">OCM Impacts</div><div class="stat-value">34</div></div>
+  <div class="stat-card"><div class="stat-label">Training Days</div><div class="stat-value">22</div></div>
+  <div class="stat-card"><div class="stat-label">Affected Users</div><div class="stat-value">180</div></div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     20. WORKSHOP MANAGEMENT
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-workshops">
+<h2><span class="num">20</span> Workshop Management</h2>
+<div class="route-tag">GET /assessment/[id]/workshops · /workshops/join · Phase 21</div>
+
+<h3>Workshop List (inside assessment)</h3>
+<div class="card" style="margin-bottom: 12px;">
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+      <div style="font-size: 15px; font-weight: 600;">Finance Process Review</div>
+      <div style="font-size: 12px; color: var(--text-tertiary);">J58, J59, J60 · 8 attendees · Session Code: <code style="font-family: var(--font-mono); font-weight: 600;">K7MN3P</code></div>
+    </div>
+    <span class="badge badge-green">Active</span>
+  </div>
+  <div style="margin-top: 8px; display: flex; gap: 8px;">
+    <button class="btn btn-primary btn-sm">Join Session</button>
+    <button class="btn btn-ghost btn-sm">View Minutes</button>
+  </div>
+</div>
+
+<h3>Workshop Mode (Full-Screen Facilitation)</h3>
+<div class="screen">
+<div class="screen-chrome">
+  <div class="screen-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+  <div class="screen-url">ABeam.app/workshops/K7MN3P</div>
+</div>
+<div class="screen-body" style="background: #0f172a; color: #fff; padding: 20px; min-height: 400px;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #1e293b;">
+    <div style="font-size: 16px; font-weight: 600;">Finance Process Review</div>
+    <div style="display: flex; gap: 16px; align-items: center; font-size: 13px; color: #94a3b8;">
+      <span>⏱ 45:23</span>
+      <span>Code: <code style="color: #60a5fa; font-family: var(--font-mono);">K7MN3P</code></span>
+      <span>👥 8/12</span>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: 1fr 240px; gap: 20px;">
+    <div>
+      <div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Step 5 of 47 · Procurement</div>
+      <div style="background: #1e293b; border-radius: 12px; padding: 24px;">
+        <div style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">Create Purchase Order</div>
+        <p style="color: #94a3b8; font-size: 14px;">The user creates a standard purchase order for procurement of materials...</p>
+        <div style="display: flex; gap: 12px; margin-top: 20px;">
+          <div style="flex: 1; text-align: center; padding: 14px; border-radius: 8px; background: rgba(34,197,94,0.15); border: 2px solid #22c55e; font-weight: 600; color: #22c55e;">FIT (3)</div>
+          <div style="flex: 1; text-align: center; padding: 14px; border-radius: 8px; background: rgba(59,130,246,0.1); border: 2px solid transparent; color: #94a3b8;">CFG (1)</div>
+          <div style="flex: 1; text-align: center; padding: 14px; border-radius: 8px; background: rgba(245,158,11,0.1); border: 2px solid transparent; color: #94a3b8;">GAP (1)</div>
+          <div style="flex: 1; text-align: center; padding: 14px; border-radius: 8px; background: transparent; border: 2px solid transparent; color: #475569;">N/A (0)</div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size: 13px;">
+      <div style="margin-bottom: 16px;">
+        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Attendees</div>
+        <div style="padding: 4px 0;">🟢 Alice (PO)</div>
+        <div style="padding: 4px 0;">🟢 Bob (IT)</div>
+        <div style="padding: 4px 0;">🟢 Carol (PM)</div>
+        <div style="padding: 4px 0;">⚪ Dave (SA)</div>
+      </div>
+      <div>
+        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Action Items</div>
+        <div style="padding: 4px 0; color: #94a3b8;">☐ Review PO approval workflow</div>
+        <div style="padding: 4px 0; color: #94a3b8;">☐ Check GL account mapping</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<h3>Workshop Join Page</h3>
+<div class="route-tag">GET /workshops/join</div>
+<div class="card" style="max-width: 400px; text-align: center; padding: 32px;">
+  <div style="font-size: 40px; margin-bottom: 12px;">🎯</div>
+  <h3>Join Workshop</h3>
+  <p style="font-size: 14px;">Enter the 6-character session code from your facilitator</p>
+  <input class="form-input" placeholder="K7MN3P" style="text-align: center; font-size: 24px; letter-spacing: 6px; font-family: var(--font-mono); margin: 16px 0;" disabled>
+  <button class="btn btn-primary" style="width: 100%; justify-content: center;">Join Session</button>
+  <p style="font-size: 12px; color: var(--text-tertiary); margin-top: 8px;">Or scan the QR code on the projector screen</p>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     21. ACTIVITY LOG
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-activity">
+<h2><span class="num">21</span> Activity Log</h2>
+<div class="route-tag">GET /assessment/[id]/activity · Phase 28 · ActivityFeedEntry</div>
+
+<p>Real-time feed of all assessment activity — classifications, comments, gap resolutions, status changes.</p>
+<div class="card" style="max-width: 700px;">
+  <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+    <select class="form-input" style="width: 140px; font-size: 12px;" disabled><option>All Types</option></select>
+    <select class="form-input" style="width: 140px; font-size: 12px;" disabled><option>All Users</option></select>
+  </div>
+  <div style="font-size: 13px;">
+    <div style="padding: 10px 0; border-bottom: 1px solid var(--border-light); display: flex; gap: 12px;">
+      <span style="color: var(--text-tertiary); width: 60px; flex-shrink: 0;">2m ago</span>
+      <span><strong>Sarah Chen</strong> classified step #45 as <span class="badge badge-fit">FIT</span> in J60 — Accounts Payable</span>
+    </div>
+    <div style="padding: 10px 0; border-bottom: 1px solid var(--border-light); display: flex; gap: 12px;">
+      <span style="color: var(--text-tertiary); width: 60px; flex-shrink: 0;">15m ago</span>
+      <span><strong>Ali Hassan</strong> approved gap resolution <span class="badge badge-amber">GAP-007</span> — BTP Extension approved</span>
+    </div>
+    <div style="padding: 10px 0; border-bottom: 1px solid var(--border-light); display: flex; gap: 12px;">
+      <span style="color: var(--text-tertiary); width: 60px; flex-shrink: 0;">1h ago</span>
+      <span><strong>System</strong> transitioned assessment status to <span class="badge badge-blue">GAP_RESOLUTION</span></span>
+    </div>
+    <div style="padding: 10px 0; display: flex; gap: 12px;">
+      <span style="color: var(--text-tertiary); width: 60px; flex-shrink: 0;">2h ago</span>
+      <span><strong>Maria Lopez</strong> commented on step #102: <em>"Need to verify with treasury team"</em></span>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     22. SIGN-OFF
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-signoff">
+<h2><span class="num">22</span> Digital Sign-Off</h2>
+<div class="route-tag">GET /assessment/[id]/sign-off · Phase 30 · SignOffProcess + SignatureRecord</div>
+
+<p>Multi-layer validation with cryptographic hash. Three roles must sign: Client Representative, ABEAM Consultant, ABEAM Project Manager.</p>
+
+<div class="card" style="max-width: 700px;">
+  <h3 style="margin-top: 0;">Assessment Sign-Off Status</h3>
+
+  <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
+    <!-- Signed -->
+    <div style="display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--fit-bg); border-radius: 8px; border: 1px solid #bbf7d0;">
+      <div style="width: 40px; height: 40px; background: var(--fit); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700;">✓</div>
+      <div style="flex: 1;">
+        <div style="font-weight: 600;">ABEAM Consultant</div>
+        <div style="font-size: 12px; color: var(--text-tertiary);">Signed by Sarah Chen · 26 Feb 2026 14:30</div>
+      </div>
+      <div style="font-family: var(--font-mono); font-size: 10px; color: var(--text-tertiary);">SHA-256: a3f7...8e2d</div>
+    </div>
+
+    <!-- Pending -->
+    <div style="display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--gap-bg); border-radius: 8px; border: 1px solid #fde68a;">
+      <div style="width: 40px; height: 40px; background: var(--gap); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700;">⏳</div>
+      <div style="flex: 1;">
+        <div style="font-weight: 600;">Client Representative</div>
+        <div style="font-size: 12px; color: var(--text-tertiary);">Awaiting signature from Ali Hassan</div>
+      </div>
+      <button class="btn btn-primary btn-sm">Sign Now</button>
+    </div>
+
+    <!-- Not Yet -->
+    <div style="display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--surface-secondary); border-radius: 8px; border: 1px solid var(--border);">
+      <div style="width: 40px; height: 40px; background: var(--border); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text-tertiary); font-weight: 700;">3</div>
+      <div style="flex: 1;">
+        <div style="font-weight: 600; color: var(--text-tertiary);">ABEAM Project Manager</div>
+        <div style="font-size: 12px; color: var(--text-tertiary);">Requires Client Rep signature first</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="annotation"><strong>Cryptographic integrity:</strong> Each signature is computed as SHA-256 hash of assessment snapshot + signer identity + timestamp. When all 3 roles sign, assessment auto-transitions to <code>SIGNED_OFF</code>. The hash chain ensures the assessment content hasn't changed since the first signature.</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     23. REPORT
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-report">
+<h2><span class="num">23</span> Report & Export</h2>
+<div class="route-tag">GET /assessment/[id]/report · ReportClient.tsx · Phase 7 + 25</div>
+
+<div class="screen">
+<div class="screen-chrome">
+  <div class="screen-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+  <div class="screen-url">ABeam.app/assessment/abc123/report</div>
+</div>
+<div class="screen-body" style="padding: 24px;">
+  <div class="stat-grid cols-4" style="margin-bottom: 20px;">
+    <div class="stat-card"><div class="stat-label">FIT Rate</div><div class="stat-value" style="color: var(--fit);">72%</div></div>
+    <div class="stat-card"><div class="stat-label">Gaps</div><div class="stat-value">23</div></div>
+    <div class="stat-card"><div class="stat-label">Config Activities</div><div class="stat-value">3,891</div></div>
+    <div class="stat-card"><div class="stat-label">Est. Effort</div><div class="stat-value">340d</div></div>
+  </div>
+
+  <h3>Download Reports</h3>
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+    <div class="card-sm" style="text-align: center; cursor: pointer; border: 1px solid var(--border);">
+      <div style="font-size: 24px; margin-bottom: 4px;">📄</div>
+      <div style="font-size: 13px; font-weight: 500;">Executive Summary</div>
+      <div style="font-size: 11px; color: var(--text-tertiary);">PDF</div>
+    </div>
+    <div class="card-sm" style="text-align: center; cursor: pointer; border: 1px solid var(--border);">
+      <div style="font-size: 24px; margin-bottom: 4px;">📊</div>
+      <div style="font-size: 13px; font-weight: 500;">Scope Catalog</div>
+      <div style="font-size: 11px; color: var(--text-tertiary);">XLSX</div>
+    </div>
+    <div class="card-sm" style="text-align: center; cursor: pointer; border: 1px solid var(--border);">
+      <div style="font-size: 24px; margin-bottom: 4px;">📊</div>
+      <div style="font-size: 13px; font-weight: 500;">Step Detail</div>
+      <div style="font-size: 11px; color: var(--text-tertiary);">XLSX</div>
+    </div>
+    <div class="card-sm" style="text-align: center; cursor: pointer; border: 1px solid var(--border);">
+      <div style="font-size: 24px; margin-bottom: 4px;">⚠️</div>
+      <div style="font-size: 13px; font-weight: 500;">Gap Register</div>
+      <div style="font-size: 11px; color: var(--text-tertiary);">XLSX</div>
+    </div>
+    <div class="card-sm" style="text-align: center; cursor: pointer; border: 1px solid var(--border);">
+      <div style="font-size: 24px; margin-bottom: 4px;">⚙️</div>
+      <div style="font-size: 13px; font-weight: 500;">Config Workbook</div>
+      <div style="font-size: 11px; color: var(--text-tertiary);">XLSX</div>
+    </div>
+    <div class="card-sm" style="text-align: center; cursor: pointer; border: 1px solid var(--border);">
+      <div style="font-size: 24px; margin-bottom: 4px;">⏱</div>
+      <div style="font-size: 13px; font-weight: 500;">Effort Estimate</div>
+      <div style="font-size: 11px; color: var(--text-tertiary);">PDF</div>
+    </div>
+    <div class="card-sm" style="text-align: center; cursor: pointer; border: 1px solid var(--border);">
+      <div style="font-size: 24px; margin-bottom: 4px;">📋</div>
+      <div style="font-size: 13px; font-weight: 500;">Audit Trail</div>
+      <div style="font-size: 11px; color: var(--text-tertiary);">XLSX</div>
+    </div>
+    <div class="card-sm" style="text-align: center; cursor: pointer; border: 1px solid var(--border);">
+      <div style="font-size: 24px; margin-bottom: 4px;">🔄</div>
+      <div style="font-size: 13px; font-weight: 500;">Flow Atlas</div>
+      <div style="font-size: 11px; color: var(--text-tertiary);">PDF</div>
+    </div>
+    <div class="card-sm" style="text-align: center; cursor: pointer; border: 1px solid var(--border);">
+      <div style="font-size: 24px; margin-bottom: 4px;">📝</div>
+      <div style="font-size: 13px; font-weight: 500;">Remaining Items</div>
+      <div style="font-size: 11px; color: var(--text-tertiary);">XLSX</div>
+    </div>
+    <div class="card-sm" style="text-align: center; cursor: pointer; border: 1px solid var(--border);">
+      <div style="font-size: 24px; margin-bottom: 4px;">🔗</div>
+      <div style="font-size: 13px; font-weight: 500;">Integration Register</div>
+      <div style="font-size: 11px; color: var(--text-tertiary);">XLSX</div>
+    </div>
+    <div class="card-sm" style="text-align: center; cursor: pointer; border: 1px solid var(--border);">
+      <div style="font-size: 24px; margin-bottom: 4px;">💾</div>
+      <div style="font-size: 13px; font-weight: 500;">DM Register</div>
+      <div style="font-size: 11px; color: var(--text-tertiary);">XLSX</div>
+    </div>
+    <div class="card-sm" style="text-align: center; cursor: pointer; border: 1px solid var(--border);">
+      <div style="font-size: 24px; margin-bottom: 4px;">👥</div>
+      <div style="font-size: 13px; font-weight: 500;">OCM Report</div>
+      <div style="font-size: 11px; color: var(--text-tertiary);">XLSX</div>
+    </div>
+    <div class="card-sm" style="text-align: center; cursor: pointer; border: 1px solid var(--border);">
+      <div style="font-size: 24px; margin-bottom: 4px;">✅</div>
+      <div style="font-size: 13px; font-weight: 500;">Readiness Scorecard</div>
+      <div style="font-size: 11px; color: var(--text-tertiary);">PDF</div>
+    </div>
+  </div>
+
+  <div style="margin-top: 20px; text-align: center;">
+    <button class="btn btn-primary" style="padding: 12px 32px;">📦 Download Complete Package (ZIP)</button>
+  </div>
+</div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     24. ORGANIZATION MANAGEMENT
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-org">
+<h2><span class="num">24</span> Organization & User Management</h2>
+<div class="route-tag">GET /organization · /organization/users · Phase 17</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+  <div class="card">
+    <h4>Organization Settings (/organization)</h4>
+    <div class="form-group"><label class="form-label">Organization Name</label><input class="form-input" value="TechPartners Consulting" disabled></div>
+    <div class="form-group"><label class="form-label">Plan</label><input class="form-input" value="Enterprise" disabled></div>
+    <div class="form-group"><label class="form-label">SSO Provider</label><input class="form-input" value="Azure AD" disabled></div>
+    <div class="form-group"><label class="form-label">Billing Email</label><input class="form-input" value="billing@techpartners.com" disabled></div>
+  </div>
+  <div class="card">
+    <h4>User Management (/organization/users)</h4>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Name</th><th>Role</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Ikmal A.</td><td><span class="badge badge-blue">Partner Lead</span></td><td><span class="badge badge-green">Active</span></td></tr>
+          <tr><td>Sarah C.</td><td><span class="badge badge-blue">Consultant</span></td><td><span class="badge badge-green">Active</span></td></tr>
+          <tr><td>Ali H.</td><td><span class="badge badge-gray">Process Owner</span></td><td><span class="badge badge-amber">Pending MFA</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <button class="btn btn-primary btn-sm" style="margin-top: 8px;">+ Invite User</button>
+  </div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     25. ANALYTICS
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-analytics">
+<h2><span class="num">25</span> Portfolio Analytics & Benchmarking</h2>
+<div class="route-tag">GET /analytics · Phase 26</div>
+<p>Cross-assessment portfolio dashboard with benchmarking against industry averages.</p>
+
+<div class="stat-grid cols-4">
+  <div class="stat-card"><div class="stat-label">Active Assessments</div><div class="stat-value">7</div></div>
+  <div class="stat-card"><div class="stat-label">Avg FIT Rate</div><div class="stat-value" style="color: var(--fit);">68%</div><div class="stat-sub">Industry avg: 62%</div></div>
+  <div class="stat-card"><div class="stat-label">Total Gaps</div><div class="stat-value" style="color: var(--gap);">142</div></div>
+  <div class="stat-card"><div class="stat-label">Avg Completion</div><div class="stat-value">74%</div></div>
+</div>
+
+<div class="card" style="margin-top: 16px;">
+  <h4>Assessment Comparison</h4>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Assessment</th><th>Industry</th><th>FIT Rate</th><th>Gaps</th><th>Completion</th><th>vs Benchmark</th></tr></thead>
+      <tbody>
+        <tr><td>Velesto Energy</td><td>Oil & Gas</td><td><span class="badge badge-fit">72%</span></td><td>23</td><td>58%</td><td><span style="color: var(--fit);">↑ +10%</span></td></tr>
+        <tr><td>Global Manufacturing</td><td>Manufacturing</td><td><span class="badge badge-fit">81%</span></td><td>34</td><td>100%</td><td><span style="color: var(--fit);">↑ +19%</span></td></tr>
+        <tr><td>RetailCo Asia</td><td>Retail</td><td><span class="badge badge-amber">55%</span></td><td>67</td><td>42%</td><td><span style="color: var(--error);">↓ -7%</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     26. TEMPLATES
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-templates">
+<h2><span class="num">26</span> Assessment Templates</h2>
+<div class="route-tag">GET /templates · Phase 26</div>
+<p>Re-usable assessment templates with anonymized data from completed assessments.</p>
+
+<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+  <div class="card" style="cursor: pointer;">
+    <span class="badge badge-blue" style="margin-bottom: 8px;">Manufacturing</span>
+    <h4 style="margin: 4px 0;">Manufacturing — Standard</h4>
+    <p style="font-size: 12px; color: var(--text-tertiary);">87 scope items · Finance, Procurement, Sales, PP, WM · Based on 12 completed assessments</p>
+    <button class="btn btn-ghost btn-sm" style="margin-top: 8px;">Use Template</button>
+  </div>
+  <div class="card" style="cursor: pointer;">
+    <span class="badge badge-green" style="margin-bottom: 8px;">Finance Only</span>
+    <h4 style="margin: 4px 0;">Finance + Procurement</h4>
+    <p style="font-size: 12px; color: var(--text-tertiary);">22 scope items · Minimum viable SAP package · Based on 5 completed assessments</p>
+    <button class="btn btn-ghost btn-sm" style="margin-top: 8px;">Use Template</button>
+  </div>
+  <div class="card" style="cursor: pointer;">
+    <span class="badge badge-amber" style="margin-bottom: 8px;">Oil & Gas</span>
+    <h4 style="margin: 4px 0;">Oil & Gas — EAM Focus</h4>
+    <p style="font-size: 12px; color: var(--text-tertiary);">14 scope items · EAM core + prerequisites · Based on 3 completed assessments</p>
+    <button class="btn btn-ghost btn-sm" style="margin-top: 8px;">Use Template</button>
+  </div>
+</div>
+<div class="annotation"><strong>Data anonymization:</strong> Templates strip all PII — company names, stakeholder names, emails, and comments. Only structural data (scope selections, classification percentages, gap patterns) is preserved. <code>anonymizeAssessment()</code> in Phase 26.</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     27. ADMIN PANEL
+     ═══════════════════════════════════════════════════════ -->
+<section id="s-admin">
+<h2><span class="num">27</span> Admin Panel (8 Sub-Pages)</h2>
+<div class="route-tag">GET /admin/* · Phase 8</div>
+
+<div class="screen">
+<div class="screen-chrome">
+  <div class="screen-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+  <div class="screen-url">ABeam.app/admin</div>
+</div>
+<div class="screen-body">
+  <div class="mock-nav"><div class="logo">A</div><span class="logo-text">ABeam</span><div class="nav-links"><span class="nav-link">Dashboard</span><span class="nav-link">Assessments</span><span class="nav-link active">Admin</span></div><div class="spacer"></div><div class="avatar">IK</div></div>
+  <div class="admin-layout">
+    <div class="admin-sidebar">
+      <div class="sidebar-section-label">Overview</div>
+      <div class="sidebar-item active">📊 Overview</div>
+
+      <div class="sidebar-section-label">Intelligence</div>
+      <div class="sidebar-item">🏭 Industries</div>
+      <div class="sidebar-item">📐 Effort Baselines</div>
+      <div class="sidebar-item">🧩 Extensibility Patterns</div>
+      <div class="sidebar-item">🔄 Adaptation Patterns</div>
+
+      <div class="sidebar-section-label">Data</div>
+      <div class="sidebar-item">📦 SAP Catalog</div>
+      <div class="sidebar-item">📤 ZIP Ingestion</div>
+
+      <div class="sidebar-section-label">System</div>
+      <div class="sidebar-item">👥 Users</div>
+      <div class="sidebar-item">📋 All Assessments</div>
+    </div>
+    <div style="padding: 24px;">
+      <h3>Admin Overview</h3>
+      <div class="stat-grid cols-3">
+        <div class="stat-card"><div class="stat-label">Total Assessments</div><div class="stat-value">24</div></div>
+        <div class="stat-card"><div class="stat-label">SAP Catalog</div><div class="stat-value">550</div><div class="stat-sub">scope items · v2508</div></div>
+        <div class="stat-card"><div class="stat-label">Process Steps</div><div class="stat-value">102K+</div></div>
+      </div>
+      <div class="stat-grid cols-3" style="margin-top: 0;">
+        <div class="stat-card"><div class="stat-label">Industry Profiles</div><div class="stat-value">8</div></div>
+        <div class="stat-card"><div class="stat-label">Effort Baselines</div><div class="stat-value">156</div></div>
+        <div class="stat-card"><div class="stat-label">Extensibility Patterns</div><div class="stat-value">42</div></div>
+      </div>
+
+      <div class="table-wrap" style="margin-top: 16px;">
+        <table class="table">
+          <thead><tr><th>Sub-Page</th><th>Route</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Industries</strong></td><td><code>/admin/industries</code></td><td>CRUD for industry profiles — assign scope items per industry vertical</td></tr>
+            <tr><td><strong>Effort Baselines</strong></td><td><code>/admin/baselines</code></td><td>Per scope item: complexity, effort days, confidence rating</td></tr>
+            <tr><td><strong>Extensibility Patterns</strong></td><td><code>/admin/patterns</code></td><td>Common gap resolution templates — BTP, Key User, ISV, Adapt</td></tr>
+            <tr><td><strong>Adaptation Patterns</strong></td><td><code>/admin/adaptations</code></td><td>Process adaptation recommendations for common gaps</td></tr>
+            <tr><td><strong>SAP Catalog</strong></td><td><code>/admin/catalog</code></td><td>Catalog stats — functional area distribution, step counts</td></tr>
+            <tr><td><strong>ZIP Ingestion</strong></td><td><code>/admin/ingest</code></td><td>Trigger re-ingestion for new SAP releases — shows version, last ingestion</td></tr>
+            <tr><td><strong>Users</strong></td><td><code>/admin/users</code></td><td>All platform users across organizations</td></tr>
+            <tr><td><strong>All Assessments</strong></td><td><code>/admin/assessments</code></td><td>Cross-org assessment list with status filter</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     28. BPMN VISUALIZATION PROPOSAL
+     ═══════════════════════════════════════════════════════ -->
+<section id="bpmn">
+<h2><span class="num">28</span> BPMN Process Flow Visualization — Enhancement Proposal</h2>
+
+<h3>What SAP Signavio Shows</h3>
+<p>In SAP Signavio Process Navigator, each scope item has process diagrams showing the <strong>BPMN 2.0 notation</strong> — start events, tasks, gateways (exclusive/parallel), sub-processes, message events, timer events, and end events arranged in swimlanes by role. This is the standard way SAP presents its Best Practices catalog to consultants and clients.</p>
+
+<h3>What ABEAM Currently Shows (Phase 20)</h3>
+<p>ABEAM generates <strong>sequential flow diagrams</strong> from BPD test script data. The <code>ProcessMapCanvas</code> shows swimlanes with activity clusters. Each node is color-coded by classification status (FIT/CONFIGURE/GAP). Nodes are clickable and support risk overlays. This is functional but lacks the BPMN visual vocabulary that SAP users expect.</p>
+
+<h3>Proposed Enhancement: BPMN Rendering Layer</h3>
+
+<div class="bpmn-container">
+<div style="font-size: 14px; font-weight: 600; margin-bottom: 16px;">J60 — Accounts Payable · Invoice Verification (BPMN 2.0 Style)</div>
+
+<!-- BPMN Diagram Mock -->
+<div class="bpmn-lane">
+  <div class="bpmn-lane-header">Accounts Payable Clerk</div>
+  <div class="bpmn-lane-body">
+    <div class="bpmn-node start"><span style="font-size: 10px;">●</span></div>
+    <span class="bpmn-arrow">→</span>
+    <div class="bpmn-node task" style="background: var(--fit-bg); border-color: var(--fit);">Receive<br>Invoice</div>
+    <span class="bpmn-arrow">→</span>
+    <div class="bpmn-node task" style="background: var(--fit-bg); border-color: var(--fit);">Enter<br>Invoice Data</div>
+    <span class="bpmn-arrow">→</span>
+    <div class="bpmn-node gateway"><span>✕</span></div>
+    <span class="bpmn-arrow">→</span>
+    <div class="bpmn-node task" style="background: var(--configure-bg); border-color: var(--configure);">3-Way<br>Match</div>
+    <span class="bpmn-arrow">→</span>
+    <div class="bpmn-node gateway"><span>✕</span></div>
+    <span class="bpmn-arrow">→</span>
+    <div class="bpmn-node task" style="background: var(--fit-bg); border-color: var(--fit);">Post<br>Invoice</div>
+    <span class="bpmn-arrow">→</span>
+    <div class="bpmn-node end"><span style="font-size: 10px;">●</span></div>
+  </div>
+</div>
+<div class="bpmn-lane">
+  <div class="bpmn-lane-header">AP Manager</div>
+  <div class="bpmn-lane-body">
+    <span style="width: 100px;"></span>
+    <span style="width: 120px;"></span>
+    <span style="width: 120px;"></span>
+    <span style="width: 40px;"></span>
+    <div class="bpmn-node task" style="background: var(--gap-bg); border-color: var(--gap);">Review<br>Exceptions</div>
+    <span class="bpmn-arrow">→</span>
+    <div class="bpmn-node task" style="background: var(--gap-bg); border-color: var(--gap);">Approve /<br>Reject</div>
+  </div>
+</div>
+
+<div style="margin-top: 16px; display: flex; gap: 20px; font-size: 11px; color: var(--text-tertiary); flex-wrap: wrap;">
+  <span><span class="bpmn-node start" style="display: inline-flex; width: 16px; height: 16px; vertical-align: middle;"><span style="font-size: 6px;">●</span></span> Start Event</span>
+  <span><span class="bpmn-node end" style="display: inline-flex; width: 16px; height: 16px; vertical-align: middle;"><span style="font-size: 6px;">●</span></span> End Event</span>
+  <span><span class="bpmn-node gateway" style="display: inline-flex; width: 16px; height: 16px; vertical-align: middle;"><span style="font-size: 8px;">✕</span></span> Exclusive Gateway</span>
+  <span><span style="display: inline-block; width: 16px; height: 16px; background: var(--fit-bg); border: 1px solid var(--fit); border-radius: 2px; vertical-align: middle;"></span> FIT</span>
+  <span><span style="display: inline-block; width: 16px; height: 16px; background: var(--configure-bg); border: 1px solid var(--configure); border-radius: 2px; vertical-align: middle;"></span> CONFIGURE</span>
+  <span><span style="display: inline-block; width: 16px; height: 16px; background: var(--gap-bg); border: 1px solid var(--gap); border-radius: 2px; vertical-align: middle;"></span> GAP</span>
+</div>
+</div>
+
+<h3>Implementation Approach</h3>
+<div class="table-wrap">
+<table class="table">
+<thead><tr><th>Approach</th><th>Effort</th><th>Pros</th><th>Cons</th></tr></thead>
+<tbody>
+<tr>
+  <td><strong>A: bpmn-js library</strong><br><span style="font-size: 11px; color: var(--text-tertiary);">bpmn.io rendering engine</span></td>
+  <td>M (2-3 weeks)</td>
+  <td>Full BPMN 2.0 standard, zoom/pan built-in, industry standard</td>
+  <td>Large bundle (~200KB), requires BPMN XML generation from BPD data</td>
+</tr>
+<tr>
+  <td><strong>B: Custom SVG with BPMN shapes</strong><br><span style="font-size: 11px; color: var(--text-tertiary);">Extend existing ProcessMapCanvas</span></td>
+  <td>L (3-4 weeks)</td>
+  <td>Full control, lighter bundle, integrates with existing classification overlay</td>
+  <td>More dev effort, need to implement gateway/event rendering from scratch</td>
+</tr>
+<tr>
+  <td><strong>C: Signavio embed</strong><br><span style="font-size: 11px; color: var(--text-tertiary);">iframe SAP Signavio Process Navigator</span></td>
+  <td>S (1 week)</td>
+  <td>Shows exact SAP diagrams, zero rendering work</td>
+  <td>Requires Signavio license, no classification overlay, external dependency</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<div class="annotation success">
+<strong>Recommendation:</strong> <strong>Approach A (bpmn-js)</strong> is the best balance. It renders standard BPMN notation that consultants recognize from Signavio, while allowing ABEAM to overlay its own classification colors (FIT/CONFIGURE/GAP) on each task node. The BPMN XML can be generated from the existing BPD process step data — mapping SAP process flows to BPMN pools, activities to tasks, and decision points to gateways. This creates a direct visual bridge between what clients see in SAP's tools and what they see in ABEAM.
+</div>
+
+<h3>Data Mapping: SAP BPD → BPMN 2.0</h3>
+<div class="table-wrap">
+<table class="table">
+<thead><tr><th>SAP BPD Concept</th><th>BPMN 2.0 Element</th><th>ABEAM Enhancement</th></tr></thead>
+<tbody>
+<tr><td>Process (e.g., "Invoice Processing")</td><td>Pool / Lane</td><td>Color-coded lane header by completion %</td></tr>
+<tr><td>Process Flow</td><td>Sub-Process</td><td>Collapsible sub-process boundary</td></tr>
+<tr><td>Activity</td><td>Task (User Task / Service Task)</td><td>Classification status overlay (FIT/GAP/etc)</td></tr>
+<tr><td>Decision Point (from step sequence)</td><td>Exclusive Gateway (XOR)</td><td>Risk score badge</td></tr>
+<tr><td>Parallel Activities</td><td>Parallel Gateway (AND)</td><td>Dependency visualization</td></tr>
+<tr><td>Configuration Activity</td><td>Business Rule Task</td><td>Mandatory/Optional badge</td></tr>
+<tr><td>Test Script Start</td><td>Start Event</td><td>—</td></tr>
+<tr><td>Test Script End</td><td>End Event</td><td>—</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+</div><!-- /content -->
+
+<!-- ═══ TOC Auto-highlight Script ═══ -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const toc = document.getElementById('toc');
+  const links = toc.querySelectorAll('a[href^="#"]');
+  const sections = [];
+
+  links.forEach(link => {
+    const id = link.getAttribute('href').slice(1);
+    const el = document.getElementById(id);
+    if (el) sections.push({ el, link });
+  });
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const match = sections.find(s => s.el === entry.target);
+        if (match) match.link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-60px 0px -80% 0px' });
+
+  sections.forEach(s => observer.observe(s.el));
+});
+</script>
+
+</body>
+</html>
