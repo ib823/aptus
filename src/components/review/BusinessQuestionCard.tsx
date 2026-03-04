@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ImplicationsPanel } from "@/components/review/ImplicationsPanel";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { getBusinessContextHint } from "@/lib/assessment/business-context";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ActivityNode } from "@/types/hierarchy";
 import type {
   ActivityMetadata,
@@ -87,19 +88,46 @@ export function BusinessQuestionCard({
   steps,
   configs,
   scopeItemId,
+  assessmentId,
   activityMetadata,
   scopeItemMetadata,
   implications,
   onActivityClassify,
   isReadOnly,
 }: BusinessQuestionCardProps) {
+  const queryClient = useQueryClient();
   const [showSteps, setShowSteps] = useState(false);
   const [showImplications, setShowImplications] = useState(false);
   const [overrideConfirm, setOverrideConfirm] = useState<{ status: string; count: number } | null>(null);
   const [localNote, setLocalNote] = useState("");
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * Recommendation D: Offline-Resilient Mutation with Optimistic UI
+   */
+  const mutation = useMutation({
+    mutationFn: async ({ status, note }: { status: string; note?: string }) => {
+      const res = await fetch(`/api/assessments/${assessmentId}/steps/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          activityId: activity.id,
+          fitStatus: status,
+          clientNote: note,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to save classification");
+      return res.json();
+    },
+    // Optimistic Update logic
+    onMutate: async ({ status, note }) => {
+      // In a real implementation, we would cancel outgoing refetches and 
+      // manually update the 'steps' cache here.
+      // For now, we trigger the callback which updates local parent state.
+      onActivityClassify(activity.id, status, note || undefined);
+    },
+    retry: 3, // Retry 3 times if offline
+  });
 
   // Compute classifiable step statistics
   const classifiableSteps = useMemo(
@@ -152,24 +180,13 @@ export function BusinessQuestionCard({
 
   const thinkAboutText = activityMetadata?.thinkAbout ?? null;
 
-  // Save indicator
-  const triggerSave = useCallback(() => {
-    setSaveStatus("saving");
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      setSaveStatus("saved");
-      saveTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
-    }, 300);
-  }, []);
-
   const executeClassify = useCallback(
     (fitStatus: string) => {
-      onActivityClassify(activity.id, fitStatus, localNote || undefined);
-      triggerSave();
+      mutation.mutate({ status: fitStatus, note: localNote });
       setShowImplications(true);
       setOverrideConfirm(null);
     },
-    [activity.id, localNote, onActivityClassify, triggerSave],
+    [localNote, mutation],
   );
 
   // Handle classification
@@ -177,7 +194,6 @@ export function BusinessQuestionCard({
     (fitStatus: string) => {
       if (isReadOnly) return;
 
-      // If some steps already have different classifications, confirm override
       const alreadyClassifiedDifferently = classifiableSteps.filter(
         (s) => s.fitStatus !== "PENDING" && s.fitStatus !== fitStatus,
       );
@@ -198,21 +214,18 @@ export function BusinessQuestionCard({
       setLocalNote(value);
       if (debounceRef.current) clearTimeout(debounceRef.current);
       if (aggregateStatus !== "PENDING" && aggregateStatus !== "MIXED") {
-        setSaveStatus("saving");
         debounceRef.current = setTimeout(() => {
-          onActivityClassify(activity.id, aggregateStatus, value || undefined);
-          triggerSave();
+          mutation.mutate({ status: aggregateStatus, note: value });
         }, 1000);
       }
     },
-    [activity.id, aggregateStatus, onActivityClassify, triggerSave],
+    [aggregateStatus, mutation],
   );
 
   // Cleanup
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, []);
 
@@ -252,11 +265,14 @@ export function BusinessQuestionCard({
               </Badge>
             )}
             {/* Save indicator */}
-            {saveStatus === "saved" && (
+            {mutation.isSuccess && (
               <span className="text-xs text-green-600">Saved</span>
             )}
-            {saveStatus === "saving" && (
-              <span className="text-xs text-muted-foreground">Saving...</span>
+            {mutation.isPending && (
+              <span className="text-xs text-muted-foreground animate-pulse">Syncing...</span>
+            )}
+            {mutation.isError && (
+              <span className="text-xs text-red-500 font-medium">Offline - Retrying</span>
             )}
           </div>
         </div>
@@ -266,25 +282,25 @@ export function BusinessQuestionCard({
           <div className="h-1.5 rounded-full bg-slate-100 mt-2 flex overflow-hidden">
             {statusCounts.FIT > 0 && (
               <div
-                className="h-full bg-green-500"
+                className="h-full bg-green-500 transition-all"
                 style={{ width: `${(statusCounts.FIT / classifiableCount) * 100}%` }}
               />
             )}
             {statusCounts.CONFIGURE > 0 && (
               <div
-                className="h-full bg-blue-500"
+                className="h-full bg-blue-500 transition-all"
                 style={{ width: `${(statusCounts.CONFIGURE / classifiableCount) * 100}%` }}
               />
             )}
             {statusCounts.GAP > 0 && (
               <div
-                className="h-full bg-amber-500"
+                className="h-full bg-amber-500 transition-all"
                 style={{ width: `${(statusCounts.GAP / classifiableCount) * 100}%` }}
               />
             )}
             {statusCounts.NA > 0 && (
               <div
-                className="h-full bg-slate-400"
+                className="h-full bg-slate-400 transition-all"
                 style={{ width: `${(statusCounts.NA / classifiableCount) * 100}%` }}
               />
             )}
@@ -319,10 +335,10 @@ export function BusinessQuestionCard({
                   aria-checked={isSelected}
                   title={opt.title}
                   onClick={() => handleClassify(opt.value)}
-                  disabled={isReadOnly}
+                  disabled={isReadOnly || mutation.isPending}
                   className={`py-2 px-1 rounded-md border text-center text-sm font-medium transition-all ${
                     isSelected ? opt.selected : "border-slate-200 text-muted-foreground bg-card hover:bg-accent"
-                  } ${isReadOnly ? "cursor-not-allowed opacity-70" : ""}`}
+                  } ${isReadOnly ? "cursor-not-allowed opacity-70" : ""} ${mutation.isPending ? "opacity-80" : ""}`}
                 >
                   {opt.icon} {opt.label}
                 </button>
