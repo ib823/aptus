@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trash2, Calendar, Layout, CheckCircle2, AlertCircle } from "lucide-react";
+import { Trash2, Calendar } from "lucide-react";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 interface AssessmentRow {
