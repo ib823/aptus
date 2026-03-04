@@ -24,7 +24,7 @@ function LoginForm() {
   const [error, setError] = useState(() => {
     if (!isError && !errorParam) return "";
     if (errorParam === "Verification") return "This sign-in link has expired or already been used. Enter your email to receive a new one.";
-    if (errorParam === "AccessDenied") return "Access denied. Your account may not have permission to sign in.";
+    if (errorParam === "AccessDenied") return "Access restricted. Please use an authorized company email or request an invitation from your administrator.";
     if (errorParam === "Configuration") return "There is a configuration issue. Please contact support.";
     return "Sign-in failed. Please check your email and try again.";
   });
