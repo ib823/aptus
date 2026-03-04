@@ -50,6 +50,7 @@ function createBase(overrides: OrganizationOverrides = {}): Organization {
     websiteUrl: overrides.websiteUrl ?? null,
     hasDemoAssessment: overrides.hasDemoAssessment ?? false,
     demoAssessmentId: overrides.demoAssessmentId ?? null,
+    aiConfig: overrides.aiConfig ?? null,
     createdAt: overrides.createdAt ?? now,
     updatedAt: overrides.updatedAt ?? now,
   };
