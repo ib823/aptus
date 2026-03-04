@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired, canEditStepResponse } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { logStepResponseChange } from "@/lib/audit/temporal-logger";
 import { detectConflict } from "@/lib/collaboration/conflict-detector";
 import { logActivity } from "@/lib/collaboration/activity-logger";
 import { isFeatureEnabled } from "@/lib/feature-flags";
@@ -145,6 +146,19 @@ export async function PUT(
       processStepId: stepId,
       ...responseData,
     },
+  });
+
+  // Log temporal history
+  void logStepResponseChange({
+    stepResponseId: response.id,
+    actorId: user.id,
+    actorName: user.name || user.email,
+    actionType: existing ? "UPDATED" : "CREATED",
+    previousStatus: existing?.fitStatus || "PENDING",
+    newStatus: response.fitStatus,
+    previousNote: existing?.clientNote,
+    newNote: response.clientNote,
+    metadata: { reason: parsed.data.overrideReason }
   });
 
   // Log decision

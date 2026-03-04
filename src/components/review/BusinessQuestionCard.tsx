@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, History as HistoryIcon } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ImplicationsPanel } from "@/components/review/ImplicationsPanel";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { DecisionTimeline } from "@/components/assessment/DecisionTimeline";
 import { getBusinessContextHint } from "@/lib/assessment/business-context";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import type { ActivityNode } from "@/types/hierarchy";
 import type {
   ActivityMetadata,
@@ -95,9 +96,9 @@ export function BusinessQuestionCard({
   onActivityClassify,
   isReadOnly,
 }: BusinessQuestionCardProps) {
-  const queryClient = useQueryClient();
   const [showSteps, setShowSteps] = useState(false);
   const [showImplications, setShowImplications] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [overrideConfirm, setOverrideConfirm] = useState<{ status: string; count: number } | null>(null);
   const [localNote, setLocalNote] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -274,8 +275,34 @@ export function BusinessQuestionCard({
             {mutation.isError && (
               <span className="text-xs text-red-500 font-medium">Offline - Retrying</span>
             )}
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className={`p-1.5 rounded-md transition-colors ${
+                showHistory ? "bg-blue-100 text-blue-600" : "text-muted-foreground hover:bg-muted"
+              }`}
+              title="View Decision History"
+            >
+              <HistoryIcon className="size-4" />
+            </button>
           </div>
         </div>
+
+        {/* Temporal Audit Timeline */}
+        {showHistory && (
+          <div className="mt-4 p-4 bg-background rounded-lg border border-blue-100 shadow-inner">
+            <div className="flex items-center gap-2 mb-4">
+              <HistoryIcon className="size-4 text-blue-600" />
+              <h4 className="text-sm font-semibold text-foreground">Decision Timeline</h4>
+            </div>
+            <DecisionTimeline 
+              assessmentId={assessmentId} 
+              processStepId={classifiableSteps[0]?.id || ""} 
+            />
+            <p className="text-[10px] text-muted-foreground mt-4 text-center">
+              Timeline shows the evolution of this decision across all versions.
+            </p>
+          </div>
+        )}
 
         {/* Mini progress bar */}
         {classifiableCount > 0 && (
