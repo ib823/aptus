@@ -1018,6 +1018,9 @@ model Organization {
   hasDemoAssessment     Boolean  @default(false)
   demoAssessmentId      String?
 
+  // BYOAI Configuration
+  aiConfig              Json?    // Stores provider, encrypted key, endpoint, model name
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
