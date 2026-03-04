@@ -6,6 +6,7 @@ import { MessageSquare, CheckCircle, Trash2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CommentComposer } from "@/components/comments/CommentComposer";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 interface CommentAuthor {
   id: string;
@@ -58,6 +59,7 @@ export function CommentBubble({
 }: CommentBubbleProps) {
   const [showReplyBox, setShowReplyBox] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const isOwner = author.id === currentUserId;
   const isResolved = status === "RESOLVED";
 
@@ -140,11 +142,7 @@ export function CommentBubble({
             variant="ghost"
             size="sm"
             className="h-7 text-xs text-destructive hover:text-destructive"
-            onClick={() => {
-              if (window.confirm("Delete this comment? This action cannot be undone.")) {
-                onDelete(id);
-              }
-            }}
+            onClick={() => setShowDeleteConfirm(true)}
           >
             <Trash2 className="w-3 h-3 mr-1" />
             Delete
@@ -179,6 +177,21 @@ export function CommentBubble({
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title="Delete Comment"
+        description="Are you sure you want to delete this comment? This action cannot be undone."
+        confirmText="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (onDelete) {
+            onDelete(id);
+          }
+          setShowDeleteConfirm(false);
+        }}
+      />
     </div>
   );
 }

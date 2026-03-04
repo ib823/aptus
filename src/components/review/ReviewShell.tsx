@@ -15,6 +15,7 @@ import { HierarchyBreadcrumb } from "@/components/hierarchy/HierarchyBreadcrumb"
 import { ProcessMap } from "@/components/hierarchy/ProcessMap";
 import { ActivityCompletionCard } from "@/components/hierarchy/ActivityCompletionCard";
 import { MobileHierarchySheet } from "@/components/hierarchy/MobileHierarchySheet";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { groupStepsByActivity, computeClassifiableProgress, type StepInGroup } from "@/lib/assessment/step-grouper";
 import { ScopeFlowOverview } from "@/components/review/ScopeFlowOverview";
 import { ScopeItemSummary } from "@/components/review/ScopeItemSummary";
@@ -141,6 +142,7 @@ function ReviewShellInner({
   const [overallProgress] = useState(initialProgress);
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
   const [bulkAllLoading, setBulkAllLoading] = useState(false);
+  const [showAcceptAllConfirm, setShowAcceptAllConfirm] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showAllSteps, setShowAllSteps] = useState(false);
   const [reviewMode, setReviewMode] = useState<ReviewMode>(() => {
@@ -462,12 +464,6 @@ function ReviewShellInner({
 
   // Bulk mark ALL steps across ALL scope items as FIT
   const handleAcceptAllStandard = useCallback(async () => {
-    const totalPending = overallProgress.pending;
-    const confirmed = window.confirm(
-      `Accept All SAP Standard?\n\nThis will mark ${totalPending} unreviewed steps across ALL scope items as FIT (standard).\n\nThis is the right choice if your company wants to adopt SAP best practices as-is with no customization.\n\nYou can change individual steps later if needed.`,
-    );
-    if (!confirmed) return;
-
     setBulkAllLoading(true);
     try {
       const res = await fetch(`/api/assessments/${assessmentId}/steps/bulk-all`, {
@@ -480,8 +476,9 @@ function ReviewShellInner({
       }
     } finally {
       setBulkAllLoading(false);
+      setShowAcceptAllConfirm(false);
     }
-  }, [assessmentId, overallProgress.pending]);
+  }, [assessmentId]);
 
   // Mode-aware activity selection: in questions mode scroll to card, in steps mode navigate
   const handleActivitySelect = useCallback(
@@ -1006,7 +1003,7 @@ function ReviewShellInner({
                       <Button
                         variant="default"
                         size="sm"
-                        onClick={handleAcceptAllStandard}
+                        onClick={() => setShowAcceptAllConfirm(true)}
                         disabled={bulkAllLoading || overallProgress.pending === 0}
                         className="bg-green-600 hover:bg-green-700 text-white"
                       >
@@ -1188,6 +1185,17 @@ function ReviewShellInner({
             </Button>
           </div>
         </div>
+      )}
+
+      {showAcceptAllConfirm && (
+        <ConfirmDialog
+          open={showAcceptAllConfirm}
+          onOpenChange={setShowAcceptAllConfirm}
+          title="Accept All SAP Standard?"
+          description={`This will mark ${overallProgress.pending} unreviewed steps across ALL scope items as FIT (standard).\n\nThis is the right choice if your company wants to adopt SAP best practices as-is with no customization.\n\nYou can change individual steps later if needed.`}
+          confirmText="Accept All Standard"
+          onConfirm={handleAcceptAllStandard}
+        />
       )}
     </div>
   );

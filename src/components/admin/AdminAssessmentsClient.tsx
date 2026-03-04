@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 interface AssessmentRow {
   id: string;
@@ -40,14 +41,14 @@ export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientPr
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; companyName: string } | null>(null);
 
   const filtered = useMemo(() => {
     if (statusFilter === "all") return assessments;
     return assessments.filter((a) => a.status === statusFilter);
   }, [assessments, statusFilter]);
 
-  const handleDelete = useCallback(async (id: string, companyName: string) => {
-    if (!window.confirm(`Are you sure you want to delete the assessment for "${companyName}"? This action soft-deletes the record.`)) return;
+  const handleDelete = useCallback(async (id: string) => {
     setDeleting(id);
     try {
       const res = await fetch(`/api/assessments/${id}`, { method: "DELETE" });
@@ -60,6 +61,7 @@ export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientPr
       alert("Failed to delete assessment");
     } finally {
       setDeleting(null);
+      setDeleteTarget(null);
     }
   }, [router]);
 
@@ -129,7 +131,7 @@ export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientPr
                       size="sm"
                       className="text-red-600 hover:text-red-700 hover:bg-red-50"
                       disabled={deleting === a.id}
-                      onClick={() => void handleDelete(a.id, a.companyName)}
+                      onClick={() => setDeleteTarget({ id: a.id, companyName: a.companyName })}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
@@ -141,6 +143,22 @@ export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientPr
         </div>
       )}
       <p className="text-xs text-muted-foreground/60 mt-2">{filtered.length} of {assessments.length} assessments</p>
+      
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title="Delete Assessment"
+        description={`Are you sure you want to delete the assessment for "${deleteTarget?.companyName}"? This action soft-deletes the record.`}
+        confirmText="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (deleteTarget) {
+            void handleDelete(deleteTarget.id);
+          }
+        }}
+      />
     </div>
   );
 }

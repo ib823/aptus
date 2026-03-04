@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { WorkshopStepCard } from "@/components/workshop/WorkshopStepCard";
@@ -72,7 +73,7 @@ export function WorkshopModeLayout({
   const [status, setStatus] = useState(sessionStatus);
   const [attendees, setAttendees] = useState(initialAttendees);
   const [actionItems, setActionItems] = useState(initialActionItems);
-  const [darkMode, setDarkMode] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   const currentStep = steps[currentIndex];
 
@@ -158,15 +159,15 @@ export function WorkshopModeLayout({
   }, [assessmentId, sessionId, refreshActionItems]);
 
   return (
-    <div className={`min-h-screen ${darkMode ? "bg-slate-900 text-white" : "bg-background"}`}>
+    <div className="min-h-screen bg-background text-foreground dark:bg-slate-900 dark:text-white">
       {/* Header */}
-      <div className={`border-b px-6 py-3 flex items-center justify-between ${darkMode ? "border-slate-800" : ""}`}>
+      <div className="border-b px-6 py-3 flex items-center justify-between dark:border-slate-800">
         <div>
-          <h1 className={`text-lg font-bold ${darkMode ? "text-white" : "text-foreground"}`}>
+          <h1 className="text-lg font-bold text-foreground dark:text-white">
             {sessionTitle}
           </h1>
           <div className="flex items-center gap-3 text-sm">
-            <span className={darkMode ? "text-slate-400" : "text-muted-foreground"}>
+            <span className="text-muted-foreground dark:text-slate-400">
               Code: <span className="font-mono font-bold">{sessionCode}</span>
             </span>
             <Badge variant="outline" className={
@@ -184,9 +185,9 @@ export function WorkshopModeLayout({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setDarkMode(!darkMode)}
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           >
-            {darkMode ? "Light" : "Dark"}
+            {theme === 'dark' ? "Light" : "Dark"}
           </Button>
           {isFacilitator && status === "scheduled" && (
             <Button size="sm" onClick={() => void handleStart()}>Start Workshop</Button>
@@ -236,7 +237,7 @@ export function WorkshopModeLayout({
               />
             </>
           ) : (
-            <div className={`text-center py-12 ${darkMode ? "text-slate-400" : "text-muted-foreground"}`}>
+            <div className="text-center py-12 text-muted-foreground dark:text-slate-400">
               No steps to review in this workshop.
             </div>
           )}

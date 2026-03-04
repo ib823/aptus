@@ -3,10 +3,19 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, User, Settings, ChevronDown } from "lucide-react";
+import { LogOut, User, Settings, ChevronDown, Menu } from "lucide-react";
 import { ABeamLogo } from "@/components/shared/ABeamLogo";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { CommandMenu } from "@/components/shared/CommandMenu";
 import { UI_TEXT } from "@/constants/ui-text";
+import { 
+  Sheet, 
+  SheetContent, 
+  SheetHeader, 
+  SheetTitle, 
+  SheetTrigger 
+} from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 import type { SessionUser } from "@/types/assessment";
 
 interface PortalNavProps {
@@ -17,6 +26,7 @@ export function PortalNav({ user }: PortalNavProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -113,6 +123,63 @@ export function PortalNav({ user }: PortalNavProps) {
             </span>
           </Link>
 
+          {/* Mobile Menu Trigger */}
+          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <SheetTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="sm:hidden -ml-2 h-10 w-10"
+                aria-label="Open navigation menu"
+              >
+                <Menu className="size-5" style={{ color: "var(--sapShell_TextColor, #32363a)" }} />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-[280px] p-0 flex flex-col">
+              <SheetHeader className="p-4 border-b text-left">
+                <SheetTitle className="flex items-center gap-2">
+                  <ABeamLogo size="sm" />
+                  <span className="text-sm font-semibold">ABeam</span>
+                </SheetTitle>
+              </SheetHeader>
+              <nav className="flex-1 py-2 overflow-y-auto">
+                {navItems
+                  .filter((item) => item.show)
+                  .map((item) => {
+                    const isActive =
+                      pathname === item.href ||
+                      pathname.startsWith(item.href + "/");
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={`flex items-center px-4 py-3 text-sm transition-colors ${
+                          isActive 
+                            ? "font-medium bg-blue-50/50" 
+                            : "hover:bg-muted"
+                        }`}
+                        style={{
+                          color: isActive
+                            ? "var(--sapShell_Navigation_SelectedColor, #0854a0)"
+                            : "var(--sapShell_Navigation_TextColor, #515456)",
+                          borderLeft: isActive 
+                            ? "3px solid var(--sapShell_Navigation_SelectedColor, #0854a0)" 
+                            : "3px solid transparent",
+                        }}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+              </nav>
+              <div className="p-4 border-t mt-auto">
+                <p className="text-xs text-muted-foreground mb-1">Signed in as</p>
+                <p className="text-sm font-medium truncate">{user.name}</p>
+              </div>
+            </SheetContent>
+          </Sheet>
+
           {/* Nav Links — scrollable when overflowing */}
           <nav
             className="hidden sm:flex items-center gap-1 flex-1 min-w-0 overflow-x-auto scrollbar-none"
@@ -149,6 +216,7 @@ export function PortalNav({ user }: PortalNavProps) {
 
           {/* Right: Notification + User Menu */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0 relative ml-auto" ref={menuRef}>
+            <CommandMenu />
             <NotificationBell />
             <button
               onClick={() => setMenuOpen((prev) => !prev)}
