@@ -6,7 +6,6 @@ import { AssessmentTabNav } from "@/components/layout/AssessmentTabNav";
 import { MobileBottomTabBar } from "@/components/layout/MobileBottomTabBar";
 import { StatusTransitionBar } from "@/components/assessment/StatusTransitionBar";
 import { PresenceAvatars } from "@/components/collaboration/PresenceAvatars";
-import { PresenceHeartbeat } from "@/components/collaboration/PresenceHeartbeat";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
@@ -65,7 +64,6 @@ export default async function AssessmentLayout({
           assessmentStatus={assessment.status}
         />
       </div>
-      <PresenceHeartbeat assessmentId={assessment.id} />
       <div className="flex-1 min-h-0 overflow-auto pb-16 md:pb-0" role="region" aria-label="Assessment content" data-assessment-main>
         {children}
       </div>

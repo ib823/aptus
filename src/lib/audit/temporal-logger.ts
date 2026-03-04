@@ -4,17 +4,18 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
+import { Prisma } from "@prisma/client";
 
 interface LogParams {
   stepResponseId: string;
   actorId: string;
   actorName: string;
   actionType: "CREATED" | "UPDATED" | "DELETED";
-  previousStatus?: string;
+  previousStatus?: string | null | undefined;
   newStatus: string;
-  previousNote?: string | null;
-  newNote?: string | null;
-  metadata?: any;
+  previousNote?: string | null | undefined;
+  newNote?: string | null | undefined;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -29,11 +30,11 @@ export async function logStepResponseChange(params: LogParams) {
         actorId: params.actorId,
         actorName: params.actorName,
         actionType: params.actionType,
-        previousStatus: params.previousStatus,
+        previousStatus: params.previousStatus ?? null,
         newStatus: params.newStatus,
-        previousNote: params.previousNote,
-        newNote: params.newNote,
-        metadata: params.metadata || {},
+        previousNote: params.previousNote ?? null,
+        newNote: params.newNote ?? null,
+        metadata: (params.metadata as Prisma.InputJsonValue) || {},
       },
     });
   } catch (error) {

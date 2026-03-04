@@ -1,87 +1,53 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { usePresence } from "@/hooks/usePresence";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-interface PresenceUser {
-  userId: string;
-  userName: string;
-  userRole: string;
-  currentPage: string | null;
-  lastSeenAt: string;
+interface PresenceAvatarsProps {
+  assessmentId: string;
 }
 
-const POLL_INTERVAL_MS = 30_000;
-const ROLE_COLORS: Record<string, string> = {
-  partner_lead: "bg-blue-500",
-  partner_manager: "bg-indigo-500",
-  client_lead: "bg-green-500",
-  client_admin: "bg-emerald-500",
-  platform_admin: "bg-purple-500",
-  it_lead: "bg-cyan-500",
-  viewer: "bg-slate-400",
-};
+export function PresenceAvatars({ assessmentId }: PresenceAvatarsProps) {
+  const { activeUsers } = usePresence(assessmentId);
 
-export function PresenceAvatars({ assessmentId }: { assessmentId: string }) {
-  const [users, setUsers] = useState<PresenceUser[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchPresence() {
-      try {
-        const res = await fetch(`/api/assessments/${assessmentId}/presence`);
-        if (res.ok) {
-          const json = await res.json();
-          if (!cancelled) setUsers(json.data ?? []);
-        }
-      } catch {
-        // Silently fail
-      }
-    }
-
-    void fetchPresence();
-    const interval = setInterval(fetchPresence, POLL_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [assessmentId]);
-
-  if (users.length === 0) return null;
-
-  const displayed = users.slice(0, 5);
-  const overflow = users.length - 5;
+  if (activeUsers.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-1">
-      <span className="text-xs text-muted-foreground mr-1" title={`${users.length} ${users.length === 1 ? "collaborator" : "collaborators"} currently active`}>Online:</span>
-      <div className="flex -space-x-2">
-        {displayed.map((u) => {
-          const initials = u.userName
-            .split(" ")
-            .map((n) => n[0])
-            .join("")
-            .slice(0, 2)
-            .toUpperCase();
-          const bgColor = ROLE_COLORS[u.userRole] ?? "bg-slate-400";
-          return (
-            <div
-              key={u.userId}
-              className={`relative w-7 h-7 rounded-full ${bgColor} flex items-center justify-center text-[10px] font-medium text-white ring-2 ring-background`}
-              title={`${u.userName} (${u.userRole.replace(/_/g, " ")})${u.currentPage ? ` — ${u.currentPage}` : ""}`}
-            >
-              {initials}
-              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-400 rounded-full ring-2 ring-background" />
-            </div>
-          );
-        })}
-        {overflow > 0 && (
-          <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium text-muted-foreground ring-2 ring-background">
-            +{overflow}
-          </div>
-        )}
-      </div>
+    <div className="flex items-center -space-x-2 overflow-hidden">
+      <TooltipProvider>
+        {activeUsers.map((user) => (
+          <Tooltip key={user.userId}>
+            <TooltipTrigger asChild>
+              <div className="relative inline-block border-2 border-background rounded-full transition-transform hover:translate-y-[-2px] hover:z-10 cursor-default">
+                <Avatar className="size-7">
+                  {user.userImage && <AvatarImage src={user.userImage} alt={user.userName} />}
+                  <AvatarFallback className="bg-blue-600 text-[10px] text-white font-bold">
+                    {user.userName.substring(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                {/* Active pulse dot */}
+                <span className="absolute bottom-0 right-0 block size-2 rounded-full bg-green-500 ring-1 ring-background" />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent className="p-2 text-xs">
+              <div className="font-bold">{user.userName}</div>
+              <div className="text-muted-foreground uppercase text-[9px] tracking-wider">{user.userRole.replace('_', ' ')}</div>
+              {user.currentPage && (
+                <div className="mt-1 pt-1 border-t border-border/50 italic opacity-80">
+                  Viewing: {user.currentPage.split('/').pop()?.replace('-', ' ')}
+                </div>
+              )}
+            </TooltipContent>
+          </Tooltip>
+        ))}
+      </TooltipProvider>
+      
+      {activeUsers.length > 5 && (
+        <div className="flex items-center justify-center size-7 rounded-full bg-muted border-2 border-background text-[9px] font-medium text-muted-foreground z-0 ml-1">
+          +{activeUsers.length - 5}
+        </div>
+      )}
     </div>
   );
 }

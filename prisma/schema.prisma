@@ -1982,7 +1982,9 @@ model PresenceRecord {
   userId       String
   userName     String
   userRole     String
+  userImage    String?
   currentPage  String?
+  entityId     String?  // Optional: ID of the specific step or gap being viewed
   lastSeenAt   DateTime @default(now())
 
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)

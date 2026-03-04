@@ -16,12 +16,18 @@ interface HistoryEntry {
   previousNote: string | null;
   newNote: string | null;
   createdAt: string;
-  metadata: any;
+  metadata?: Record<string, unknown> | null;
 }
 
 interface DecisionTimelineProps {
   assessmentId: string;
   processStepId: string;
+}
+
+interface AuditMetadata {
+  bulk?: boolean;
+  scopeItemId?: string;
+  reason?: string;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -44,7 +50,7 @@ export function DecisionTimeline({ assessmentId, processStepId }: DecisionTimeli
           const json = await res.json();
           setHistory(json.data);
         }
-      } catch (err) {
+      } catch {
         console.error("Failed to fetch history");
       } finally {
         setLoading(false);
@@ -81,63 +87,67 @@ export function DecisionTimeline({ assessmentId, processStepId }: DecisionTimeli
   return (
     <ScrollArea className="h-[400px] pr-4">
       <div className="relative pl-6 space-y-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-border">
-        {history.map((entry) => (
-          <div key={entry.id} className="relative">
-            {/* Timeline dot */}
-            <div className="absolute -left-[25px] top-1.5 size-2.5 rounded-full bg-blue-500 border-2 border-background ring-4 ring-background" />
-            
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-1.5 font-medium text-foreground">
-                  <User className="size-3 text-muted-foreground" />
-                  {entry.actorName}
+        {history.map((entry) => {
+          const meta = entry.metadata as AuditMetadata | undefined;
+          
+          return (
+            <div key={entry.id} className="relative">
+              {/* Timeline dot */}
+              <div className="absolute -left-[25px] top-1.5 size-2.5 rounded-full bg-blue-500 border-2 border-background ring-4 ring-background" />
+              
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 font-medium text-foreground">
+                    <User className="size-3 text-muted-foreground" />
+                    {entry.actorName}
+                  </div>
+                  <div className="flex items-center gap-1 text-muted-foreground">
+                    <Clock className="size-3" />
+                    {formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })}
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <Clock className="size-3" />
-                  {formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })}
-                </div>
-              </div>
 
-              <div className="p-3 bg-muted/30 rounded-lg border border-border/50">
-                <div className="flex items-center flex-wrap gap-2 mb-2">
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">
-                    {entry.actionType}
-                  </span>
-                  {entry.previousStatus && entry.previousStatus !== entry.newStatus && (
-                    <div className="flex items-center gap-1">
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                        {STATUS_LABELS[entry.previousStatus] || entry.previousStatus}
-                      </Badge>
-                      <ArrowRight className="size-2.5 text-muted-foreground" />
+                <div className="p-3 bg-muted/30 rounded-lg border border-border/50">
+                  <div className="flex items-center flex-wrap gap-2 mb-2">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">
+                      {entry.actionType}
+                    </span>
+                    {entry.previousStatus && entry.previousStatus !== entry.newStatus && (
+                      <div className="flex items-center gap-1">
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                          {STATUS_LABELS[entry.previousStatus] || entry.previousStatus}
+                        </Badge>
+                        <ArrowRight className="size-2.5 text-muted-foreground" />
+                      </div>
+                    )}
+                    <Badge className={`text-[10px] px-1.5 py-0 ${
+                      entry.newStatus === "FIT" ? "bg-green-100 text-green-700 hover:bg-green-100"
+                      : entry.newStatus === "GAP" ? "bg-amber-100 text-amber-700 hover:bg-amber-100"
+                      : "bg-blue-100 text-blue-700 hover:bg-blue-100"
+                    }`}>
+                      {STATUS_LABELS[entry.newStatus] || entry.newStatus}
+                    </Badge>
+                  </div>
+
+                  {entry.newNote && (
+                    <div className="flex gap-2 mt-2 pt-2 border-t border-border/30">
+                      <MessageSquare className="size-3 text-muted-foreground shrink-0 mt-0.5" />
+                      <p className="text-xs text-foreground italic">
+                        &ldquo;{entry.newNote}&rdquo;
+                      </p>
                     </div>
                   )}
-                  <Badge className={`text-[10px] px-1.5 py-0 ${
-                    entry.newStatus === "FIT" ? "bg-green-100 text-green-700 hover:bg-green-100"
-                    : entry.newStatus === "GAP" ? "bg-amber-100 text-amber-700 hover:bg-amber-100"
-                    : "bg-blue-100 text-blue-700 hover:bg-blue-100"
-                  }`}>
-                    {STATUS_LABELS[entry.newStatus] || entry.newStatus}
-                  </Badge>
-                </div>
-
-                {entry.newNote && (
-                  <div className="flex gap-2 mt-2 pt-2 border-t border-border/30">
-                    <MessageSquare className="size-3 text-muted-foreground shrink-0 mt-0.5" />
-                    <p className="text-xs text-foreground italic">
-                      &ldquo;{entry.newNote}&rdquo;
+                  
+                  {meta?.bulk && (
+                    <p className="text-[10px] text-muted-foreground/60 mt-2 italic">
+                      * Part of a bulk classification
                     </p>
-                  </div>
-                )}
-                
-                {entry.metadata?.bulk && (
-                  <p className="text-[10px] text-muted-foreground/60 mt-2 italic">
-                    * Part of a bulk classification
-                  </p>
-                )}
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </ScrollArea>
   );

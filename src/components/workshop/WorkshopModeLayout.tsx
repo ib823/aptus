@@ -12,6 +12,7 @@ import { WorkshopNavigationBar } from "@/components/workshop/WorkshopNavigationB
 import { WorkshopActionItemForm } from "@/components/workshop/WorkshopActionItemForm";
 import { WorkshopActionItemList } from "@/components/workshop/WorkshopActionItemList";
 import { WorkshopMinutesViewer } from "@/components/workshop/WorkshopMinutesViewer";
+import { PresenceAvatars } from "@/components/collaboration/PresenceAvatars";
 import type { AgendaItem } from "@/types/workshop";
 
 interface StepInfo {
@@ -181,22 +182,26 @@ export function WorkshopModeLayout({
             </Badge>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          >
-            {theme === 'dark' ? "Light" : "Dark"}
-          </Button>
-          {isFacilitator && status === "scheduled" && (
-            <Button size="sm" onClick={() => void handleStart()}>Start Workshop</Button>
-          )}
-          {isFacilitator && status === "in_progress" && (
-            <Button size="sm" variant="outline" className="text-red-600" onClick={() => void handleEnd()}>
-              End Workshop
+        <div className="flex items-center gap-4">
+          <PresenceAvatars assessmentId={assessmentId} />
+          <div className="h-6 w-px bg-border mx-2" />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            >
+              {theme === 'dark' ? "Light" : "Dark"}
             </Button>
-          )}
+            {isFacilitator && status === "scheduled" && (
+              <Button size="sm" onClick={() => void handleStart()}>Start Workshop</Button>
+            )}
+            {isFacilitator && status === "in_progress" && (
+              <Button size="sm" variant="outline" className="text-red-600" onClick={() => void handleEnd()}>
+                End Workshop
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
