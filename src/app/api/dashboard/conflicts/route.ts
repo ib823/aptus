@@ -14,25 +14,13 @@ export async function GET(): Promise<NextResponse> {
     );
   }
 
-  const assessmentFilter = user.organizationId
-    ? { organizationId: user.organizationId }
-    : {};
-
-  const assessmentIds = (
-    await prisma.assessment.findMany({
-      where: { deletedAt: null, ...assessmentFilter },
-      select: { id: true },
-    })
-  ).map((a) => a.id);
-
-  if (assessmentIds.length === 0) {
-    return NextResponse.json({ data: [] });
-  }
-
   const conflicts = await prisma.conflict.findMany({
     where: {
-      assessmentId: { in: assessmentIds },
       status: "OPEN",
+      assessment: {
+        deletedAt: null,
+        ...(user.organizationId ? { organizationId: user.organizationId } : {}),
+      },
     },
     orderBy: { createdAt: "desc" },
     take: 50,

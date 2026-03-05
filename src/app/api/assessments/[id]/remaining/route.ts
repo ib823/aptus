@@ -1,4 +1,4 @@
-/** GET: List remaining items. POST: Add manual remaining item */
+/** GET: List remaining items (cursor paginated). POST: Add manual remaining item */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -14,6 +14,11 @@ const CATEGORIES = [
 ] as const;
 
 const SEVERITIES = ["critical", "high", "medium", "low"] as const;
+
+const listQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().min(1).max(200).default(50),
+});
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -48,6 +53,15 @@ export async function GET(
   }
 
   const sp = request.nextUrl.searchParams;
+  const parsedList = listQuerySchema.safeParse(Object.fromEntries(sp.entries()));
+  if (!parsedList.success) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid query parameters" } },
+      { status: 400 },
+    );
+  }
+  const { cursor, limit } = parsedList.data;
+
   const where: Record<string, unknown> = { assessmentId };
   if (sp.get("category")) where.category = sp.get("category");
   if (sp.get("severity")) where.severity = sp.get("severity");
@@ -56,34 +70,47 @@ export async function GET(
   if (sp.get("resolved") === "true") where.resolvedAt = { not: null };
   else if (sp.get("resolved") === "false") where.resolvedAt = null;
 
-  const items = await prisma.remainingItem.findMany({
-    where,
-    orderBy: [{ severity: "asc" }, { createdAt: "asc" }],
-  });
+  const [items, total, resolved, byCategoryRows, bySeverityRows] = await Promise.all([
+    prisma.remainingItem.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    }),
+    prisma.remainingItem.count({ where: { assessmentId } }),
+    prisma.remainingItem.count({ where: { assessmentId, resolvedAt: { not: null } } }),
+    prisma.remainingItem.groupBy({
+      by: ["category"],
+      where: { assessmentId },
+      _count: { _all: true },
+    }),
+    prisma.remainingItem.groupBy({
+      by: ["severity"],
+      where: { assessmentId },
+      _count: { _all: true },
+    }),
+  ]);
 
-  // Compute summary
-  const allItems = await prisma.remainingItem.findMany({
-    where: { assessmentId },
-    select: { category: true, severity: true, resolvedAt: true },
-  });
+  const hasMore = items.length > limit;
+  if (hasMore) items.pop();
 
-  const byCategory: Record<string, number> = {};
-  const bySeverity: Record<string, number> = {};
-  let resolved = 0;
-  for (const item of allItems) {
-    byCategory[item.category] = (byCategory[item.category] ?? 0) + 1;
-    bySeverity[item.severity] = (bySeverity[item.severity] ?? 0) + 1;
-    if (item.resolvedAt) resolved++;
-  }
+  const byCategory: Record<string, number> = Object.fromEntries(
+    byCategoryRows.map((row) => [row.category, row._count._all]),
+  );
+  const bySeverity: Record<string, number> = Object.fromEntries(
+    bySeverityRows.map((row) => [row.severity, row._count._all]),
+  );
 
   return NextResponse.json({
     data: items,
+    nextCursor: hasMore ? items[items.length - 1]?.id ?? null : null,
+    hasMore,
     summary: {
-      total: allItems.length,
+      total,
       byCategory,
       bySeverity,
       resolved,
-      unresolved: allItems.length - resolved,
+      unresolved: total - resolved,
     },
   });
 }

@@ -1,10 +1,18 @@
 /** GET: Attention items for the current user */
 
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { computeAttentionItems } from "@/lib/dashboard/attention-engine";
+
+interface OverdueDeadlineRow {
+  id: string;
+  title: string;
+  dueDate: Date;
+  assessmentId: string;
+}
 export async function GET(): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {
@@ -22,28 +30,19 @@ export async function GET(): Promise<NextResponse> {
   const staleThreshold = new Date();
   staleThreshold.setDate(staleThreshold.getDate() - 14);
 
-  // DashboardDeadline has no Prisma relation to Assessment; resolve IDs only for this query.
-  const deadlineAssessmentIds = (
-    await prisma.assessment.findMany({
-      where: assessmentFilter,
-      select: { id: true },
-    })
-  ).map((a) => a.id);
-
   // Fetch data in parallel for attention engine
   const [overdueDeadlines, conflicts, unresolvedGaps, staleAssessments] = await Promise.all([
-    deadlineAssessmentIds.length > 0
-      ? prisma.dashboardDeadline.findMany({
-          where: {
-            assessmentId: { in: deadlineAssessmentIds },
-            dueDate: { lt: new Date() },
-            status: { not: "completed" },
-          },
-          orderBy: { dueDate: "asc" },
-          take: 200,
-          select: { id: true, title: true, dueDate: true, assessmentId: true },
-        })
-      : Promise.resolve([]),
+    prisma.$queryRaw<OverdueDeadlineRow[]>(Prisma.sql`
+      SELECT d.id, d.title, d."dueDate", d."assessmentId"
+      FROM "DashboardDeadline" d
+      JOIN "Assessment" a ON a.id = d."assessmentId"
+      WHERE a."deletedAt" IS NULL
+        ${user.organizationId ? Prisma.sql`AND a."organizationId" = ${user.organizationId}` : Prisma.empty}
+        AND d."dueDate" < NOW()
+        AND d.status <> 'completed'
+      ORDER BY d."dueDate" ASC
+      LIMIT 200
+    `),
     prisma.conflict.findMany({
       where: {
         status: "OPEN",

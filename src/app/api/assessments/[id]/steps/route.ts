@@ -1,6 +1,7 @@
 /** GET: Step responses for an assessment */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
@@ -19,6 +20,36 @@ const querySchema = z.object({
   grouped: z.string().optional(),
   summary: z.enum(["true", "false"]).optional(),
 });
+
+interface StepCursorParts {
+  id: string;
+  createdAt: Date;
+}
+
+function encodeStepCursor(input: StepCursorParts): string {
+  return Buffer.from(
+    JSON.stringify({
+      id: input.id,
+      createdAt: input.createdAt.toISOString(),
+    }),
+  ).toString("base64url");
+}
+
+function decodeStepCursor(cursor: string | undefined): StepCursorParts | undefined {
+  if (!cursor) return undefined;
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as {
+      id?: string;
+      createdAt?: string;
+    };
+    if (!parsed.id || !parsed.createdAt) return undefined;
+    const createdAt = new Date(parsed.createdAt);
+    if (Number.isNaN(createdAt.getTime())) return undefined;
+    return { id: parsed.id, createdAt };
+  } catch {
+    return undefined;
+  }
+}
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -50,25 +81,51 @@ export async function GET(
   }
 
   const { cursor, limit, scopeItemId, fitStatus, stepType } = parsed.data;
+  const decodedCursor = decodeStepCursor(cursor);
+  if (cursor && !decodedCursor) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid cursor" } },
+      { status: 400 },
+    );
+  }
   const summaryMode = parsed.data.summary === "true";
 
-  const where: Record<string, unknown> = { assessmentId };
+  const where: Prisma.StepResponseWhereInput = { assessmentId };
   if (fitStatus) where.fitStatus = fitStatus;
   if (scopeItemId || stepType) {
-    const processStepWhere: Record<string, unknown> = {};
+    const processStepWhere: Prisma.ProcessStepWhereInput = {};
     if (scopeItemId) processStepWhere.scopeItemId = scopeItemId;
     if (stepType) processStepWhere.stepType = stepType;
     where.processStep = processStepWhere;
   }
+  if (decodedCursor) {
+    const existingAnd = Array.isArray(where.AND)
+      ? where.AND
+      : where.AND
+        ? [where.AND]
+        : [];
+    where.AND = [
+      ...existingAnd,
+      {
+        OR: [
+          { createdAt: { lt: decodedCursor.createdAt } },
+          {
+            createdAt: decodedCursor.createdAt,
+            id: { lt: decodedCursor.id },
+          },
+        ],
+      },
+    ];
+  }
 
   const entries = await prisma.stepResponse.findMany({
     where,
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit + 1,
-    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     select: summaryMode
       ? {
           id: true,
+          createdAt: true,
           processStepId: true,
           fitStatus: true,
           clientNote: true,
@@ -83,6 +140,7 @@ export async function GET(
         }
       : {
           id: true,
+          createdAt: true,
           assessmentId: true,
           processStepId: true,
           fitStatus: true,
@@ -90,7 +148,6 @@ export async function GET(
           currentProcess: true,
           respondent: true,
           respondedAt: true,
-          createdAt: true,
           updatedAt: true,
           confidence: true,
           evidenceUrls: true,
@@ -117,6 +174,13 @@ export async function GET(
 
   const hasMore = entries.length > limit;
   if (hasMore) entries.pop();
+  const cursorEntry = entries.at(-1);
+  const nextCursor = hasMore && cursorEntry
+    ? encodeStepCursor({
+        id: cursorEntry.id,
+        createdAt: cursorEntry.createdAt,
+      })
+    : null;
 
   // Compute classifiable step counts
   const totalSteps = entries.length;
@@ -142,7 +206,7 @@ export async function GET(
       totalSteps,
       classifiableSteps,
       reviewedClassifiable,
-      nextCursor: hasMore ? entries[entries.length - 1]?.id ?? null : null,
+      nextCursor,
       hasMore,
     });
   }
@@ -152,7 +216,7 @@ export async function GET(
     totalSteps,
     classifiableSteps,
     reviewedClassifiable,
-    nextCursor: hasMore ? entries[entries.length - 1]?.id ?? null : null,
+    nextCursor,
     hasMore,
   });
 }

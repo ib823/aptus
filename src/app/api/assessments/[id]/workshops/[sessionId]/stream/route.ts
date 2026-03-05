@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 
-const POLL_INTERVAL_MS = 2000;
+const POLL_INTERVAL_MS = 5000;
 const MAX_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 const HEARTBEAT_INTERVAL_MS = 15000;
 
@@ -39,24 +39,41 @@ export async function GET(
   let lastStepId: string | null = null;
   let lastVoteCount = 0;
   let lastAttendeeCount = 0;
+  let closed = false;
+  let pollTimeout: ReturnType<typeof setTimeout> | null = null;
+  let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
   const stream = new ReadableStream({
     async start(controller) {
       const startTime = Date.now();
 
+      function closeStream() {
+        if (closed) return;
+        closed = true;
+        if (pollTimeout) clearTimeout(pollTimeout);
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        try {
+          controller.close();
+        } catch {
+          // Already closed
+        }
+      }
+
       function send(event: string, data: unknown) {
+        if (closed) return;
         try {
           controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
         } catch {
-          // Stream closed
+          closeStream();
         }
       }
 
       async function poll() {
+        if (closed) return;
         try {
           if (Date.now() - startTime > MAX_DURATION_MS) {
             send("reconnect", { reason: "max_duration" });
-            controller.close();
+            closeStream();
             return;
           }
 
@@ -71,14 +88,14 @@ export async function GET(
           });
 
           if (!current) {
-            controller.close();
+            closeStream();
             return;
           }
 
           // Session ended
           if (current.status === "completed" || current.status === "cancelled") {
             send("session_ended", { status: current.status });
-            controller.close();
+            closeStream();
             return;
           }
 
@@ -114,24 +131,26 @@ export async function GET(
             send("attendee", { count: current._count.attendees });
           }
 
-          setTimeout(poll, POLL_INTERVAL_MS);
+          pollTimeout = setTimeout(poll, POLL_INTERVAL_MS);
         } catch {
-          try { controller.close(); } catch { /* already closed */ }
+          closeStream();
         }
       }
 
       // Heartbeat
-      const heartbeatInterval = setInterval(() => {
+      heartbeatInterval = setInterval(() => {
         try {
           send("heartbeat", { ts: Date.now() });
         } catch {
-          clearInterval(heartbeatInterval);
+          closeStream();
         }
       }, HEARTBEAT_INTERVAL_MS);
 
       // Send initial state
       send("connected", { sessionId, userId: user.id });
-      poll();
+      void poll();
+
+      _request.signal.addEventListener("abort", closeStream, { once: true });
     },
   });
 

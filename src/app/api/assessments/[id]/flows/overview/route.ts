@@ -4,8 +4,20 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
-import { buildFunctionalAreaOverview } from "@/lib/assessment/functional-area-overview";
+import { buildFunctionalAreaOverviewFromCounts } from "@/lib/assessment/functional-area-overview";
 import { ERROR_CODES } from "@/types/api";
+
+interface ResponseCountRow {
+  scopeItemId: string;
+  fitStatus: string;
+  count: number;
+}
+
+interface GapResolutionCountRow {
+  scopeItemId: string;
+  resolutionType: string;
+  count: number;
+}
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -63,31 +75,28 @@ export async function GET(
     },
   });
 
-  // Get step responses for this assessment
-  const stepResponses = await prisma.stepResponse.findMany({
-    where: { assessmentId },
-    select: {
-      processStepId: true,
-      fitStatus: true,
-      processStep: {
-        select: { scopeItemId: true },
-      },
-    },
-  });
+  const [responseCounts, gapResolutionCounts] = await Promise.all([
+    prisma.$queryRaw<ResponseCountRow[]>`
+      SELECT ps."scopeItemId", sr."fitStatus", COUNT(*)::int AS count
+      FROM "StepResponse" sr
+      JOIN "ProcessStep" ps ON sr."processStepId" = ps.id
+      WHERE sr."assessmentId" = ${assessmentId}
+        AND ps."scopeItemId" = ANY(${selectedScopeItemIds})
+      GROUP BY ps."scopeItemId", sr."fitStatus"
+    `,
+    prisma.$queryRaw<GapResolutionCountRow[]>`
+      SELECT "scopeItemId", "resolutionType", COUNT(*)::int AS count
+      FROM "GapResolution"
+      WHERE "assessmentId" = ${assessmentId}
+        AND "scopeItemId" = ANY(${selectedScopeItemIds})
+      GROUP BY "scopeItemId", "resolutionType"
+    `,
+  ]);
 
-  // Get gap resolutions for risk scoring
-  const gapResolutions = await prisma.gapResolution.findMany({
-    where: { assessmentId },
-    select: {
-      scopeItemId: true,
-      resolutionType: true,
-    },
-  });
-
-  const result = buildFunctionalAreaOverview({
+  const result = buildFunctionalAreaOverviewFromCounts({
     scopeItems,
-    stepResponses,
-    gapResolutions,
+    responseCounts,
+    gapResolutionCounts,
   });
 
   return NextResponse.json({ data: result });

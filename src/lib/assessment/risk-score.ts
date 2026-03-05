@@ -67,3 +67,41 @@ export function computeRiskScore(
   // Clamp to [0, 1]
   return Math.min(1, Math.max(0, Math.round(raw * 1000) / 1000));
 }
+
+/**
+ * Compute risk score using aggregated resolution-type counts.
+ * This avoids materializing large per-gap resolution arrays.
+ */
+export function computeRiskScoreFromResolutionCounts(
+  totalSteps: number,
+  gapCount: number,
+  pendingCount: number,
+  resolutionCounts: Record<string, number>,
+): number {
+  if (totalSteps === 0) return 0;
+
+  const gapDensity = gapCount / totalSteps;
+
+  const resolutionTotal = Object.values(resolutionCounts).reduce((sum, count) => sum + count, 0);
+  const unresolvedRatio = gapCount > 0
+    ? Math.max(0, gapCount - resolutionTotal) / gapCount
+    : 0;
+
+  let avgComplexity = 0;
+  if (resolutionTotal > 0) {
+    let weightedSum = 0;
+    for (const [resolutionType, count] of Object.entries(resolutionCounts)) {
+      weightedSum += (COMPLEXITY_WEIGHTS[resolutionType] ?? 0.5) * count;
+    }
+    avgComplexity = weightedSum / resolutionTotal;
+  }
+
+  const pendingRatio = pendingCount / totalSteps;
+  const raw =
+    gapDensity * 0.4 +
+    unresolvedRatio * 0.3 +
+    avgComplexity * 0.2 +
+    pendingRatio * 0.1;
+
+  return Math.min(1, Math.max(0, Math.round(raw * 1000) / 1000));
+}

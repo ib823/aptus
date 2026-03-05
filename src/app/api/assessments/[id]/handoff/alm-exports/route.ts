@@ -7,7 +7,7 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { Prisma } from "@prisma/client";
-import { getAlmAdapter } from "@/lib/alm/adapter-interface";
+import { getAlmAdapter } from "@/lib/alm/adapter-factory";
 import type { AlmTarget, SnapshotData } from "@/types/signoff";
 import { z } from "zod";
 

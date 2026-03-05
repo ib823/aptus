@@ -15,6 +15,36 @@ export interface CreateAssessmentInput {
   organizationId: string;
 }
 
+interface AssessmentCursorParts {
+  updatedAt: Date;
+  id: string;
+}
+
+export function encodeAssessmentCursor(input: AssessmentCursorParts): string {
+  return Buffer.from(
+    JSON.stringify({
+      updatedAt: input.updatedAt.toISOString(),
+      id: input.id,
+    }),
+  ).toString("base64url");
+}
+
+export function decodeAssessmentCursor(cursor: string | undefined): AssessmentCursorParts | undefined {
+  if (!cursor) return undefined;
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as {
+      updatedAt?: string;
+      id?: string;
+    };
+    if (!parsed.updatedAt || !parsed.id) return undefined;
+    const updatedAt = new Date(parsed.updatedAt);
+    if (Number.isNaN(updatedAt.getTime())) return undefined;
+    return { updatedAt, id: parsed.id };
+  } catch {
+    return undefined;
+  }
+}
+
 export async function createAssessment(input: CreateAssessmentInput) {
   return prisma.assessment.create({
     data: {
@@ -85,11 +115,25 @@ export async function listAssessmentsPaginated(
   input: { limit?: number; cursor?: string } = {},
 ) {
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
+  const decodedCursor = decodeAssessmentCursor(input.cursor);
   const rows = await prisma.assessment.findMany({
-    where: { organizationId, deletedAt: null },
-    orderBy: { updatedAt: "desc" },
+    where: {
+      organizationId,
+      deletedAt: null,
+      ...(decodedCursor
+        ? {
+            OR: [
+              { updatedAt: { lt: decodedCursor.updatedAt } },
+              {
+                updatedAt: decodedCursor.updatedAt,
+                id: { lt: decodedCursor.id },
+              },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
     take: limit + 1,
-    ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
     select: {
       id: true,
       companyName: true,
@@ -114,10 +158,16 @@ export async function listAssessmentsPaginated(
 
   const hasMore = rows.length > limit;
   if (hasMore) rows.pop();
+  const cursorRow = rows.at(-1);
 
   return {
     data: rows,
-    nextCursor: hasMore ? rows[rows.length - 1]?.id ?? null : null,
+    nextCursor: hasMore && cursorRow
+      ? encodeAssessmentCursor({
+          id: cursorRow.id,
+          updatedAt: cursorRow.updatedAt,
+        })
+      : null,
     hasMore,
   };
 }

@@ -458,6 +458,7 @@ model Assessment {
   @@index([status])
   @@index([createdBy])
   @@index([organizationId])
+  @@index([organizationId, deletedAt, updatedAt])
   @@index([deletedAt])
   @@index([parentAssessmentId])
   @@index([phaseNumber])
@@ -558,6 +559,7 @@ model StepResponse {
 
   @@unique([assessmentId, processStepId])
   @@index([assessmentId])
+  @@index([assessmentId, createdAt])
   @@index([assessmentId, fitStatus])
   @@index([processStepId])
 }
@@ -772,8 +774,11 @@ model RemainingItem {
   assessment Assessment @relation(fields: [assessmentId], references: [id])
 
   @@index([assessmentId])
+  @@index([assessmentId, createdAt])
   @@index([assessmentId, category])
   @@index([assessmentId, severity])
+  @@index([assessmentId, severity, createdAt])
+  @@index([assessmentId, resolvedAt])
   @@index([scopeItemId])
 }
 
@@ -1424,6 +1429,8 @@ model Conflict {
 
   @@index([assessmentId, status])
   @@index([assessmentId, entityType, entityId])
+  @@index([assessmentId, status, createdAt])
+  @@index([status, createdAt])
 }
 
 model ActivityFeedEntry {
@@ -1519,6 +1526,7 @@ model DashboardDeadline {
 
   @@index([assessmentId])
   @@index([dueDate])
+  @@index([assessmentId, status, dueDate])
   @@index([assignedRole])
   @@index([status])
 }
