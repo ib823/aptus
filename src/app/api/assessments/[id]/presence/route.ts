@@ -1,8 +1,29 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 
 type PresencePayload = { currentPage?: string; entityId?: string };
+type AuthenticatedUser = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
+type PresenceResponseRow = {
+  userId: string;
+  userName: string;
+  userRole: string;
+  userImage: string | null;
+  currentPage: string | null;
+  entityId: string | null;
+  lastSeenAt: Date;
+};
+
+function isMissingOptionalPresenceColumnsError(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2022") {
+    return false;
+  }
+
+  const column = (error.meta as { column?: unknown } | undefined)?.column;
+  const combined = `${typeof column === "string" ? column : ""} ${error.message}`.toLowerCase();
+  return combined.includes("userimage") || combined.includes("entityid");
+}
 
 function isRequestAbortError(error: unknown): boolean {
   if (!(error instanceof Error)) {
@@ -35,6 +56,106 @@ async function parsePresencePayload(req: Request): Promise<PresencePayload> {
   }
 }
 
+async function upsertPresenceRecord(params: {
+  assessmentId: string;
+  user: AuthenticatedUser;
+  currentPage: string | undefined;
+  entityId: string | undefined;
+  now: Date;
+}): Promise<void> {
+  const { assessmentId, user, currentPage, entityId, now } = params;
+  const sharedData = {
+    userName: user.name || user.email,
+    userRole: user.role,
+    currentPage: currentPage ?? null,
+    lastSeenAt: now,
+  };
+
+  try {
+    await prisma.presenceRecord.upsert({
+      where: {
+        assessmentId_userId: {
+          assessmentId,
+          userId: user.id,
+        },
+      },
+      update: {
+        ...sharedData,
+        userImage: user.image ?? null,
+        entityId: entityId ?? null,
+      },
+      create: {
+        assessmentId,
+        userId: user.id,
+        ...sharedData,
+        userImage: user.image ?? null,
+        entityId: entityId ?? null,
+      },
+      select: { id: true },
+    });
+  } catch (error) {
+    if (!isMissingOptionalPresenceColumnsError(error)) {
+      throw error;
+    }
+
+    await prisma.presenceRecord.upsert({
+      where: {
+        assessmentId_userId: {
+          assessmentId,
+          userId: user.id,
+        },
+      },
+      update: sharedData,
+      create: {
+        assessmentId,
+        userId: user.id,
+        ...sharedData,
+      },
+      select: { id: true },
+    });
+  }
+}
+
+async function listActivePresenceUsers(assessmentId: string): Promise<PresenceResponseRow[]> {
+  try {
+    return await prisma.presenceRecord.findMany({
+      where: { assessmentId },
+      orderBy: { lastSeenAt: "desc" },
+      select: {
+        userId: true,
+        userName: true,
+        userRole: true,
+        userImage: true,
+        currentPage: true,
+        entityId: true,
+        lastSeenAt: true,
+      },
+    });
+  } catch (error) {
+    if (!isMissingOptionalPresenceColumnsError(error)) {
+      throw error;
+    }
+
+    const users = await prisma.presenceRecord.findMany({
+      where: { assessmentId },
+      orderBy: { lastSeenAt: "desc" },
+      select: {
+        userId: true,
+        userName: true,
+        userRole: true,
+        currentPage: true,
+        lastSeenAt: true,
+      },
+    });
+
+    return users.map((user) => ({
+      ...user,
+      userImage: null,
+      entityId: null,
+    }));
+  }
+}
+
 /**
  * Presence Heartbeat API
  * Handles real-time active user tracking for an assessment.
@@ -54,35 +175,12 @@ export async function POST(
 
   try {
     const { currentPage, entityId } = await parsePresencePayload(req);
-
-    const now = new Date();
-
-    // Upsert the presence record
-    await prisma.presenceRecord.upsert({
-      where: {
-        assessmentId_userId: {
-          assessmentId,
-          userId: user.id,
-        },
-      },
-      update: {
-        userName: user.name || user.email,
-        userRole: user.role,
-        userImage: user.image ?? null,
-        currentPage: currentPage ?? null,
-        entityId: entityId ?? null,
-        lastSeenAt: now,
-      },
-      create: {
-        assessmentId,
-        userId: user.id,
-        userName: user.name || user.email,
-        userRole: user.role,
-        userImage: user.image ?? null,
-        currentPage: currentPage ?? null,
-        entityId: entityId ?? null,
-        lastSeenAt: now,
-      },
+    await upsertPresenceRecord({
+      assessmentId,
+      user,
+      currentPage,
+      entityId,
+      now: new Date(),
     });
 
     return NextResponse.json({ success: true });
@@ -117,10 +215,7 @@ export async function GET(
     });
 
     // 2. Fetch remaining active records
-    const activeUsers = await prisma.presenceRecord.findMany({
-      where: { assessmentId },
-      orderBy: { lastSeenAt: 'desc' },
-    });
+    const activeUsers = await listActivePresenceUsers(assessmentId);
 
     return NextResponse.json({ data: activeUsers });
   } catch (error) {
