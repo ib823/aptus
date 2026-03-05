@@ -16,14 +16,14 @@ test.describe("Portal — Authenticated", () => {
 
   test("should navigate to new assessment page", async ({ page }) => {
     await page.goto("/assessments/new");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     // Should either show the assessment creation form or redirect
     expect(page.url()).toMatch(/assessments/);
   });
 
   test("should load dashboard page", async ({ page }) => {
     await page.goto("/dashboard");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     expect(page.url()).toMatch(/dashboard|assessments/);
   });
 });

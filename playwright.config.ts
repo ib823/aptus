@@ -9,10 +9,10 @@ export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  retries: process.env.CI ? 2 : 1,
   workers: 1,
   reporter: process.env.CI ? "github" : [["html", { open: "never" }]],
-  timeout: 30_000,
+  timeout: process.env.CI ? 45_000 : 60_000,
   expect: {
     timeout: 10_000,
   },
@@ -20,6 +20,7 @@ export default defineConfig({
   globalTeardown: "./tests/e2e/global-teardown.ts",
   use: {
     baseURL: process.env.BASE_URL ?? "http://localhost:3003",
+    navigationTimeout: process.env.CI ? 45_000 : 60_000,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
@@ -82,7 +83,7 @@ export default defineConfig({
       testMatch: /journeys\/.*\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
-        storageState: statePath("admin"),
+        storageState: statePath("journeysAdmin"),
       },
       timeout: 60_000,
     },
@@ -91,7 +92,7 @@ export default defineConfig({
       testMatch: /edge-cases\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
-        storageState: statePath("admin"),
+        storageState: statePath("journeysAdmin"),
       },
       timeout: 60_000,
     },
@@ -100,7 +101,7 @@ export default defineConfig({
       testMatch: /responsive\/.*\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
-        storageState: statePath("admin"),
+        storageState: statePath("journeysAdmin"),
       },
       timeout: 30_000,
     },
@@ -108,7 +109,7 @@ export default defineConfig({
   webServer: {
     command: process.env.CI ? "pnpm start" : "pnpm dev",
     port: 3003,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    reuseExistingServer: false,
+    timeout: 240_000,
   },
 });

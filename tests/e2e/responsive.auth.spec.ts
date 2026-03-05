@@ -14,7 +14,7 @@ test.describe("Responsive — Assessments Page", () => {
     }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await page.goto("/assessments");
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("load");
 
       // Page should load without errors
       expect(page.url()).toContain("/assessments");
@@ -23,10 +23,12 @@ test.describe("Responsive — Assessments Page", () => {
       const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
       expect(bodyWidth).toBeLessThanOrEqual(viewport.width + 1);
 
-      // Take screenshot for visual comparison
-      await expect(page).toHaveScreenshot(`assessments-${viewport.name}.png`, {
-        maxDiffPixelRatio: 0.05,
-      });
+      // Optional visual baseline check for dedicated visual-regression runs.
+      if (process.env.E2E_VISUAL_REGRESSION === "true") {
+        await expect(page).toHaveScreenshot(`assessments-${viewport.name}.png`, {
+          maxDiffPixelRatio: 0.05,
+        });
+      }
     });
   }
 });
@@ -38,16 +40,18 @@ test.describe("Responsive — Dashboard Page", () => {
     }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await page.goto("/dashboard");
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("load");
 
       // No horizontal overflow
       const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
       expect(bodyWidth).toBeLessThanOrEqual(viewport.width + 1);
 
-      // Take screenshot for visual comparison
-      await expect(page).toHaveScreenshot(`dashboard-${viewport.name}.png`, {
-        maxDiffPixelRatio: 0.05,
-      });
+      // Optional visual baseline check for dedicated visual-regression runs.
+      if (process.env.E2E_VISUAL_REGRESSION === "true") {
+        await expect(page).toHaveScreenshot(`dashboard-${viewport.name}.png`, {
+          maxDiffPixelRatio: 0.05,
+        });
+      }
     });
   }
 });

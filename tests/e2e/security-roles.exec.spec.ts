@@ -20,7 +20,7 @@ test.describe("Security — Executive Role Boundaries", () => {
 
   test("executive cannot access admin page", async ({ page }) => {
     await page.goto("/admin");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     const url = page.url();
     const body = await page.textContent("body");
     const blocked = url.includes("/dashboard") || url.includes("/assessments") ||

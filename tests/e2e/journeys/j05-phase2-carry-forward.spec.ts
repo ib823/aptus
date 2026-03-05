@@ -187,7 +187,7 @@ test.describe("T-E2E-J05 — Phase 2 Carry-Forward Cloning", () => {
 
     // Also verify through UI
     await page.goto(`/analytics/cross-phase/${clonedAssessmentId}`);
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     // Page should load without a 500 error
     const body = await page.textContent("body");
     expect(body).not.toContain("Internal Server Error");

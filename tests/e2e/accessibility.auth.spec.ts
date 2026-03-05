@@ -4,7 +4,7 @@ import AxeBuilder from "@axe-core/playwright";
 test.describe("Accessibility — Authenticated Pages", () => {
   test("assessments page should have no critical accessibility violations", async ({ page }) => {
     await page.goto("/assessments");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
@@ -27,7 +27,7 @@ test.describe("Accessibility — Authenticated Pages", () => {
 
   test("dashboard page should have no critical accessibility violations", async ({ page }) => {
     await page.goto("/dashboard");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa"])
@@ -43,7 +43,7 @@ test.describe("Accessibility — Authenticated Pages", () => {
 
   test("new assessment page should have no critical accessibility violations", async ({ page }) => {
     await page.goto("/assessments/new");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa"])

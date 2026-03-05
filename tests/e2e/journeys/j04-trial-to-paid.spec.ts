@@ -127,11 +127,11 @@ test.describe("T-E2E-J04 — Trial to Paid Conversion", () => {
 
     // Should be able to access analytics, templates, etc.
     await page.goto("/analytics");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     expect(page.url()).toMatch(/analytics|dashboard|assessments/);
 
     await page.goto("/templates");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     expect(page.url()).toMatch(/templates|dashboard|assessments/);
 
     // Dashboard should show upgraded plan capabilities

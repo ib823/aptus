@@ -74,7 +74,7 @@ export default async function PortalLayout({
         <PasskeyEnrollmentPrompt hasWebAuthn={user.hasWebAuthn} />
         <OnboardingGuard>{children}</OnboardingGuard>
       </main>
-      <MobileBottomTabBar />
+      <MobileBottomTabBar role={user.role} />
     </div>
   );
 }

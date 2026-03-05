@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("UI Consistency — Authenticated Pages", () => {
   test("assessments page uses correct font family", async ({ page }) => {
     await page.goto("/assessments");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     // Check that the body uses the SF Pro font stack
     const fontFamily = await page.evaluate(() => {
@@ -22,7 +22,7 @@ test.describe("UI Consistency — Authenticated Pages", () => {
 
   test("navigation bar has consistent styling", async ({ page }) => {
     await page.goto("/assessments");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     // Nav should exist
     const nav = page.locator("nav").first();
@@ -35,7 +35,7 @@ test.describe("UI Consistency — Authenticated Pages", () => {
 
   test("buttons follow consistent design patterns", async ({ page }) => {
     await page.goto("/assessments");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     // Check all visible buttons with data-slot="button" (shadcn) have consistent styling
     const buttons = page.locator('button[data-slot="button"]');
@@ -100,7 +100,7 @@ test.describe("UI Consistency — Authenticated Pages", () => {
     });
 
     await page.goto("/assessments");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     // Filter out known acceptable errors (e.g., 3rd party script errors)
     const realErrors = errors.filter(
@@ -111,7 +111,7 @@ test.describe("UI Consistency — Authenticated Pages", () => {
 
   test("no broken images on assessments page", async ({ page }) => {
     await page.goto("/assessments");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     const brokenImages = await page.evaluate(() => {
       const images = document.querySelectorAll("img");

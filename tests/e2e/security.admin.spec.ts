@@ -13,7 +13,7 @@ test.describe("Security — Authenticated (Admin)", () => {
 
   test("session cookie has HttpOnly flag", async ({ page }) => {
     await page.goto("/assessments");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     // HttpOnly cookies are NOT accessible via JavaScript
     const jsAccessibleCookies = await page.evaluate(() => document.cookie);
@@ -39,7 +39,7 @@ test.describe("Security — Authenticated (Admin)", () => {
 
   test("no sensitive data in page source", async ({ page }) => {
     await page.goto("/assessments");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     const content = await page.content();
     expect(content).not.toContain("NEXTAUTH_SECRET");
@@ -49,13 +49,13 @@ test.describe("Security — Authenticated (Admin)", () => {
 
   test("admin can access admin page", async ({ page }) => {
     await page.goto("/admin");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     expect(page.url()).toContain("/admin");
   });
 
   test("admin can list assessments", async ({ page }) => {
     await page.goto("/assessments");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     expect(page.url()).toContain("/assessments");
     const body = await page.textContent("body");
     expect(body).toBeTruthy();
@@ -64,10 +64,10 @@ test.describe("Security — Authenticated (Admin)", () => {
   // Logout test MUST be last — it invalidates the session
   test("logout clears session cookie", async ({ page }) => {
     await page.goto("/assessments");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     await page.goto("/api/auth/logout");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     expect(page.url()).toContain("/login");
 

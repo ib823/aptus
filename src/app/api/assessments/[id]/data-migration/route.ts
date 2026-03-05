@@ -29,6 +29,19 @@ const CreateDataMigrationSchema = z.object({
   scopeItemId: z.string().optional(),
   technicalNotes: z.string().max(5000).optional(),
 });
+
+function isRequestAbortError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const code = (error as Error & { code?: unknown }).code;
+  return code === "ECONNRESET" || error.message.toLowerCase() === "aborted";
+}
+
+function isInvalidJsonBodyError(error: unknown): boolean {
+  return error instanceof SyntaxError || (error instanceof Error && error.message.includes("Unexpected end of JSON input"));
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -103,7 +116,18 @@ export async function POST(
     );
   }
 
-  const body = await request.json();
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch (error) {
+    if (isInvalidJsonBodyError(error) || isRequestAbortError(error)) {
+      return NextResponse.json(
+        { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid JSON body" } },
+        { status: 400 },
+      );
+    }
+    throw error;
+  }
   const parsed = CreateDataMigrationSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(

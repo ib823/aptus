@@ -12,7 +12,7 @@ export class AuthPage extends BasePage {
   }
 
   async goToSignup() {
-    await this.navigateTo("/login");
+    await this.navigateTo("/signup");
   }
 
   async goToMfaSetup() {
@@ -33,19 +33,21 @@ export class AuthPage extends BasePage {
   }
 
   get companyNameInput(): Locator {
-    return this.page.locator("[data-testid='company-name'], input[name='companyName']");
+    return this.page.locator(
+      "[data-testid='company-name'], input[name='companyName'], input[name='orgName'], #org-name",
+    );
   }
 
   get fullNameInput(): Locator {
-    return this.page.locator("[data-testid='full-name'], input[name='name']");
+    return this.page.locator("[data-testid='full-name'], input[name='name'], input[name='fullName'], #full-name");
   }
 
   get signInButton(): Locator {
-    return this.page.getByRole("button", { name: /sign in|send|log in/i });
+    return this.page.locator("form button[type='submit']").first();
   }
 
   get signUpButton(): Locator {
-    return this.page.getByRole("button", { name: /sign up|register|create account/i });
+    return this.page.getByRole("button", { name: /sign up|register|create account|create your account/i });
   }
 
   get signInHeading(): Locator {

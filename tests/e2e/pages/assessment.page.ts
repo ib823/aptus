@@ -85,25 +85,25 @@ export class AssessmentPage extends BasePage {
   // ── New Assessment Form Locators ────────────────────────────
   get companyNameInput(): Locator {
     return this.page.locator(
-      "[data-testid='company-name'], input[name='companyName']"
+      "[data-testid='company-name'], input[name='companyName'], #company-name"
     );
   }
 
   get industrySelect(): Locator {
     return this.page.locator(
-      "[data-testid='industry-select'], select[name='industry'], [name='industry']"
+      "[data-testid='industry-select'], select[name='industry'], [name='industry'], #industry"
     );
   }
 
   get countrySelect(): Locator {
     return this.page.locator(
-      "[data-testid='country-select'], select[name='country'], [name='country']"
+      "[data-testid='country-select'], select[name='country'], [name='country'], #country"
     );
   }
 
   get companySizeSelect(): Locator {
     return this.page.locator(
-      "[data-testid='company-size'], select[name='companySize'], [name='companySize']"
+      "[data-testid='company-size'], select[name='companySize'], [name='companySize'], #company-size"
     );
   }
 
@@ -114,7 +114,7 @@ export class AssessmentPage extends BasePage {
   }
 
   get submitButton(): Locator {
-    return this.page.getByRole("button", { name: /create|save|submit|next/i });
+    return this.page.locator("form button[type='submit']").first();
   }
 
   // ── Profile Locators ───────────────────────────────────────
@@ -389,16 +389,13 @@ export class AssessmentPage extends BasePage {
     await this.companyNameInput.fill(data.companyName);
 
     if (data.industry) {
-      await this.industrySelect.click();
-      await this.page.getByText(data.industry, { exact: false }).first().click();
+      await this.industrySelect.selectOption(data.industry);
     }
     if (data.country) {
-      await this.countrySelect.click();
-      await this.page.getByText(data.country, { exact: false }).first().click();
+      await this.countrySelect.fill(data.country);
     }
     if (data.companySize) {
-      await this.companySizeSelect.click();
-      await this.page.getByText(data.companySize, { exact: false }).first().click();
+      await this.companySizeSelect.selectOption(data.companySize);
     }
 
     await this.submitButton.click();
@@ -451,25 +448,49 @@ export class AssessmentPage extends BasePage {
 
   async addIntegration(data: { name: string; source: string; target: string }) {
     await this.addIntegrationButton.click();
-    await this.integrationNameInput.fill(data.name);
-    await this.integrationSourceInput.fill(data.source);
-    await this.integrationTargetInput.fill(data.target);
-    await this.saveIntegrationButton.click();
+
+    const dialog = this.page.getByRole("dialog");
+    await dialog.locator("input[placeholder*='Bank Statement' i]").first().fill(data.name);
+    await dialog.locator("textarea[placeholder*='Describe the integration' i]").first().fill(`Integration for ${data.name}`);
+    await dialog.locator("input[placeholder*='SAP ECC' i]").first().fill(data.source);
+    await dialog.locator("input[placeholder*='SAP Cloud' i]").first().fill(data.target);
+
+    const selects = dialog.locator("select");
+    await selects.nth(0).selectOption("INBOUND");
+    await selects.nth(1).selectOption("API");
+    await selects.nth(2).selectOption("REAL_TIME");
+
+    await dialog.getByRole("button", { name: /create|save|update/i }).first().click();
     await this.waitForPageLoad();
   }
 
   async addDataMigrationObject(data: { name: string; source: string }) {
     await this.addMigrationObjectButton.click();
-    await this.migrationObjectNameInput.fill(data.name);
-    await this.migrationSourceInput.fill(data.source);
-    await this.saveMigrationObjectButton.click();
+
+    const dialog = this.page.getByRole("dialog");
+    await dialog.locator("input[placeholder*='Customer Master' i]").first().fill(data.name);
+    await dialog.locator("textarea[placeholder*='Describe the migration object' i]").first().fill(`Migration object for ${data.name}`);
+    await dialog.locator("input[placeholder*='SAP ECC' i]").first().fill(data.source);
+
+    const selects = dialog.locator("select");
+    await selects.nth(0).selectOption("MASTER_DATA");
+
+    await dialog.getByRole("button", { name: /create|save|update/i }).first().click();
     await this.waitForPageLoad();
   }
 
   async addOcmImpact(data: { description: string }) {
     await this.addOcmImpactButton.click();
-    await this.ocmDescriptionInput.fill(data.description);
-    await this.saveOcmImpactButton.click();
+
+    const dialog = this.page.getByRole("dialog");
+    await dialog.locator("input[placeholder*='AP Clerk' i]").first().fill("Finance Analyst");
+    await dialog.locator("textarea[placeholder*='Describe the change impact' i]").first().fill(data.description);
+
+    const selects = dialog.locator("select");
+    await selects.nth(0).selectOption("PROCESS_CHANGE");
+    await selects.nth(1).selectOption("MEDIUM");
+
+    await dialog.getByRole("button", { name: /create|save|update/i }).first().click();
     await this.waitForPageLoad();
   }
 

@@ -16,16 +16,12 @@ export function ABeamLogo({ size = "md", className = "" }: ABeamLogoProps) {
   const px = sizeMap[size];
 
   return (
-    <span
-      className={`inline-flex items-center ${className}`}
-      aria-label="ABeam"
-    >
+    <span className={`inline-flex items-center ${className}`}>
       <Image
         src="/icons/abeam-logo.png"
-        alt=""
+        alt="ABeam"
         width={px}
         height={px}
-        aria-hidden="true"
         className="shrink-0"
       />
     </span>

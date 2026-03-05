@@ -215,7 +215,10 @@ function LoginForm() {
             )}
             <p className="text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{" "}
-              <a href="/signup" className="text-primary hover:underline">
+              <a
+                href="/signup"
+                className="font-medium text-foreground underline underline-offset-2 hover:text-foreground"
+              >
                 Sign up
               </a>
             </p>

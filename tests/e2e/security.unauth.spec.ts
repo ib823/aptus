@@ -21,7 +21,7 @@ test.describe("Security — Unauthenticated", () => {
 
   test("protected routes redirect to login when unauthenticated", async ({ page }) => {
     await page.goto("/assessments");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     expect(page.url()).toContain("/login");
   });
 

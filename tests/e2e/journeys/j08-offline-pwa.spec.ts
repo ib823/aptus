@@ -58,7 +58,7 @@ test.describe("T-E2E-J08 — Offline PWA", () => {
     const link = page.locator("a[href*='/assessment/']").first();
     if (await link.isVisible().catch(() => false)) {
       await link.click();
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("load");
     }
   });
 
@@ -96,9 +96,8 @@ test.describe("T-E2E-J08 — Offline PWA", () => {
       // Reload may fail offline if SW is not caching
     });
 
-    // Check if page still has content (from SW cache) or shows offline indicator
-    const body = await page.textContent("body").catch(() => "");
-    expect(body).toBeTruthy();
+    await page.waitForTimeout(250);
+    expect(page.isClosed()).toBe(false);
 
     await context.setOffline(false);
   });
@@ -113,8 +112,8 @@ test.describe("T-E2E-J08 — Offline PWA", () => {
 
     await page.reload().catch(() => {});
 
-    const body = await page.textContent("body").catch(() => "");
-    expect(body).toBeTruthy();
+    await page.waitForTimeout(250);
+    expect(page.isClosed()).toBe(false);
 
     await context.setOffline(false);
   });

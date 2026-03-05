@@ -17,6 +17,7 @@ interface Tab {
   label: string;
   icon: typeof LayoutDashboardIcon;
   matchPrefix: string;
+  adminOnly?: boolean;
 }
 
 const tabs: Tab[] = [
@@ -24,11 +25,17 @@ const tabs: Tab[] = [
   { href: "/assessments", label: "Assessments", icon: ClipboardListIcon, matchPrefix: "/assessments" },
   { href: "/analytics", label: "Analytics", icon: BarChart3Icon, matchPrefix: "/analytics" },
   { href: "/organization", label: "Organization", icon: Building2Icon, matchPrefix: "/organization" },
-  { href: "/admin", label: "More", icon: MoreHorizontalIcon, matchPrefix: "/admin" },
+  { href: "/admin", label: "More", icon: MoreHorizontalIcon, matchPrefix: "/admin", adminOnly: true },
 ];
 
-export function MobileBottomTabBar() {
+interface MobileBottomTabBarProps {
+  role: string;
+}
+
+export function MobileBottomTabBar({ role }: MobileBottomTabBarProps) {
   const pathname = usePathname();
+  const canAccessAdmin = ["platform_admin", "admin"].includes(role);
+  const visibleTabs = tabs.filter((tab) => !tab.adminOnly || canAccessAdmin);
 
   return (
     <nav
@@ -41,7 +48,7 @@ export function MobileBottomTabBar() {
       }}
     >
       <div className="flex items-center justify-around">
-        {tabs.map(({ href, label, icon: TabIcon, matchPrefix }) => {
+        {visibleTabs.map(({ href, label, icon: TabIcon, matchPrefix }) => {
           const isActive = pathname.startsWith(matchPrefix);
           return (
             <Link
