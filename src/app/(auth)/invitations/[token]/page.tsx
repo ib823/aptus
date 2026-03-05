@@ -13,7 +13,8 @@ interface AcceptResult {
 }
 
 export default function InvitationAcceptPage() {
-  const { token } = useParams<{ token: string }>();
+  const params = useParams<{ token: string }>();
+  const token = typeof params?.token === "string" ? params.token : "";
   const router = useRouter();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [result, setResult] = useState<AcceptResult | null>(null);
@@ -23,6 +24,12 @@ export default function InvitationAcceptPage() {
   useEffect(() => {
     if (attempted.current) return;
     attempted.current = true;
+
+    if (!token) {
+      setErrorMessage("Invalid invitation link");
+      setStatus("error");
+      return;
+    }
 
     async function acceptInvitation() {
       try {

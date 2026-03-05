@@ -9,6 +9,7 @@ import { logDecision } from "@/lib/db/decision-log";
 import { detectCircularDependency } from "@/lib/assessment/dependency-graph";
 import { ERROR_CODES } from "@/types/api";
 import type { DecisionAction, UserRole } from "@/types/assessment";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 
 const UpdateDataMigrationSchema = z.object({
   objectName: z.string().min(1).max(200).optional(),
@@ -83,8 +84,15 @@ export async function PUT(
     );
   }
 
-  const body = await request.json();
-  const parsed = UpdateDataMigrationSchema.safeParse(body);
+  const parsedBody = await safeParseJsonBody(request);
+  if (!parsedBody.ok) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid JSON body" } },
+      { status: 400 },
+    );
+  }
+
+  const parsed = UpdateDataMigrationSchema.safeParse(parsedBody.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Validation failed", details: parsed.error.flatten().fieldErrors as unknown as Record<string, string> } },

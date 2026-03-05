@@ -107,7 +107,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: process.env.CI ? "pnpm start" : "pnpm dev",
+    command: process.env.CI ? "pnpm start" : "NEXT_DISABLE_WEBPACK_CACHE=1 pnpm dev",
     port: 3003,
     reuseExistingServer: false,
     timeout: 240_000,

@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/db/decision-log";
 import { ERROR_CODES } from "@/types/api";
 import type { DecisionAction, UserRole } from "@/types/assessment";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 
 const CreateDataMigrationSchema = z.object({
   objectName: z.string().min(1).max(200),
@@ -29,18 +30,6 @@ const CreateDataMigrationSchema = z.object({
   scopeItemId: z.string().optional(),
   technicalNotes: z.string().max(5000).optional(),
 });
-
-function isRequestAbortError(error: unknown): boolean {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  const code = (error as Error & { code?: unknown }).code;
-  return code === "ECONNRESET" || error.message.toLowerCase() === "aborted";
-}
-
-function isInvalidJsonBodyError(error: unknown): boolean {
-  return error instanceof SyntaxError || (error instanceof Error && error.message.includes("Unexpected end of JSON input"));
-}
 
 export async function GET(
   request: NextRequest,
@@ -116,19 +105,15 @@ export async function POST(
     );
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch (error) {
-    if (isInvalidJsonBodyError(error) || isRequestAbortError(error)) {
-      return NextResponse.json(
-        { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid JSON body" } },
-        { status: 400 },
-      );
-    }
-    throw error;
+  const parsedBody = await safeParseJsonBody(request);
+  if (!parsedBody.ok) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid JSON body" } },
+      { status: 400 },
+    );
   }
-  const parsed = CreateDataMigrationSchema.safeParse(body);
+
+  const parsed = CreateDataMigrationSchema.safeParse(parsedBody.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Validation failed", details: parsed.error.flatten().fieldErrors as unknown as Record<string, string> } },

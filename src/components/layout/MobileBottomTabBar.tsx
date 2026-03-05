@@ -33,7 +33,7 @@ export function MobileBottomTabBar({ assessmentId }: MobileBottomTabBarProps) {
   const base = `/assessment/${assessmentId}`;
 
   const getActiveStage = () => {
-    const currentSegment = pathname.replace(base + "/", "").split("/")[0];
+    const currentSegment = (pathname ?? "").replace(base + "/", "").split("/")[0];
 
     if (setupSegments.includes(currentSegment ?? "")) return "profile";
     if (reviewSegments.includes(currentSegment ?? "")) return "review";
