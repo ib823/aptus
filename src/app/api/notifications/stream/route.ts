@@ -4,9 +4,26 @@ import { type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 
-const POLL_INTERVAL_MS = 10_000; // Poll DB every 10 seconds (reduced from 3s)
-const HEARTBEAT_INTERVAL_MS = 30_000; // Send heartbeat every 30 seconds
+const POLL_INTERVAL_MS = 15_000; // Poll DB every 15 seconds
+const HEARTBEAT_INTERVAL_MS = 45_000; // Send heartbeat every 45 seconds
 const MAX_DURATION_MS = 5 * 60 * 1_000; // 5-minute max stream (Vercel-compatible)
+const UNREAD_CACHE_TTL_MS = 30_000;
+
+const unreadCountCache = new Map<string, { count: number; fetchedAt: number }>();
+
+async function getUnreadCount(userId: string, forceRefresh = false): Promise<number> {
+  const now = Date.now();
+  const cached = unreadCountCache.get(userId);
+  if (!forceRefresh && cached && now - cached.fetchedAt < UNREAD_CACHE_TTL_MS) {
+    return cached.count;
+  }
+
+  const count = await prisma.notification.count({
+    where: { userId, status: "unread" },
+  });
+  unreadCountCache.set(userId, { count, fetchedAt: now });
+  return count;
+}
 
 export async function GET(_request: NextRequest): Promise<Response> {
   const user = await getCurrentUser();
@@ -35,6 +52,8 @@ export async function GET(_request: NextRequest): Promise<Response> {
       send("connected", { userId, timestamp: new Date().toISOString() });
 
       let heartbeatCounter = 0;
+      let pollCounter = 0;
+      const unreadRefreshCycles = Math.max(1, Math.ceil(UNREAD_CACHE_TTL_MS / POLL_INTERVAL_MS));
 
       const interval = setInterval(async () => {
         // Check max duration
@@ -46,35 +65,37 @@ export async function GET(_request: NextRequest): Promise<Response> {
         }
 
         heartbeatCounter++;
+        pollCounter++;
 
         // Send heartbeat every ~30s
         if (heartbeatCounter % Math.ceil(HEARTBEAT_INTERVAL_MS / POLL_INTERVAL_MS) === 0) {
           send("heartbeat", { timestamp: new Date().toISOString() });
         }
 
-        // Poll for new notifications — single query for both new items and count
+        // Poll for new notifications; refresh unread counts less frequently.
         try {
-          const [newNotifications, count] = await Promise.all([
-            prisma.notification.findMany({
-              where: {
-                userId,
-                status: "unread",
-                sentAt: { gt: lastCheckedAt },
-              },
-              orderBy: { sentAt: "desc" },
-              take: 10,
-            }),
-            prisma.notification.count({
-              where: { userId, status: "unread" },
-            }),
-          ]);
+          const newNotifications = await prisma.notification.findMany({
+            where: {
+              userId,
+              status: "unread",
+              sentAt: { gt: lastCheckedAt },
+            },
+            orderBy: { sentAt: "desc" },
+            take: 10,
+          });
 
           if (newNotifications.length > 0) {
             send("notifications", newNotifications);
-            lastCheckedAt = new Date();
+            lastCheckedAt = newNotifications[0]?.sentAt ?? new Date();
           }
 
-          // Only send unread_count when it changes
+          const shouldRefreshCount =
+            newNotifications.length > 0 || pollCounter % unreadRefreshCycles === 0;
+          const count = shouldRefreshCount
+            ? await getUnreadCount(userId, newNotifications.length > 0)
+            : lastSentCount;
+
+          // Send unread_count only when it changes
           if (count !== lastSentCount) {
             send("unread_count", { count });
             lastSentCount = count;

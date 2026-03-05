@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { ArrowLeft } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -20,12 +21,11 @@ import { groupStepsByActivity, computeClassifiableProgress, type StepInGroup } f
 import { ScopeFlowOverview } from "@/components/review/ScopeFlowOverview";
 import { ScopeItemSummary } from "@/components/review/ScopeItemSummary";
 import { BusinessQuestionCard } from "@/components/review/BusinessQuestionCard";
-import { ImplicationsPanel } from "@/components/review/ImplicationsPanel";
-import { getScopeItemMetadata, getActivityMetadata } from "@/constants/scope-item-metadata";
 import { DependencyEffectsPanel } from "@/components/review/DependencyEffectsPanel";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import type { DependencyEffects } from "@/lib/dependency/types";
 import type { HierarchyTree, ActivityProgressMap, ActivityNode } from "@/types/hierarchy";
+import type { ScopeItemMetadata, ActivityMetadata } from "@/constants/scope-item-metadata";
 
 interface ScopeItemNav {
   id: string;
@@ -90,6 +90,21 @@ interface ReviewShellProps {
 
 type ReviewMode = "steps" | "questions";
 
+interface MetadataModule {
+  getScopeItemMetadata: (scopeItemId: string) => ScopeItemMetadata | null;
+  getActivityMetadata: (scopeItemId: string, activityTitle: string) => ActivityMetadata | null;
+}
+
+interface CursorPage<T> {
+  data: T[];
+  nextCursor?: string | null;
+  hasMore?: boolean;
+}
+
+const ImplicationsPanel = dynamic(
+  () => import("@/components/review/ImplicationsPanel").then((mod) => mod.ImplicationsPanel),
+);
+
 const STATUS_DISPLAY_LABELS: Record<string, string> = {
   FIT: "Matches",
   CONFIGURE: "Needs Adjustment",
@@ -145,6 +160,7 @@ function ReviewShellInner({
   const [showAcceptAllConfirm, setShowAcceptAllConfirm] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showAllSteps, setShowAllSteps] = useState(false);
+  const [metadataModule, setMetadataModule] = useState<MetadataModule | null>(null);
   const [reviewMode, setReviewMode] = useState<ReviewMode>(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
@@ -159,6 +175,30 @@ function ReviewShellInner({
     url.searchParams.set("mode", reviewMode);
     window.history.replaceState({}, "", url.toString());
   }, [reviewMode]);
+
+  // Lazy-load heavy scope metadata to keep initial client bundle smaller.
+  useEffect(() => {
+    if (!currentScopeItemId) return;
+    let cancelled = false;
+
+    void import("@/constants/scope-item-metadata")
+      .then((mod) => {
+        if (cancelled) return;
+        setMetadataModule({
+          getScopeItemMetadata: mod.getScopeItemMetadata,
+          getActivityMetadata: mod.getActivityMetadata,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setMetadataModule(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentScopeItemId]);
 
   const isReadOnly = assessmentStatus === "signed_off" || assessmentStatus === "reviewed";
   const isItLead = userRole === "it_lead";
@@ -525,31 +565,96 @@ function ReviewShellInner({
 
   // Scope item metadata for questions mode
   const scopeItemMeta = useMemo(
-    () => (currentScopeItemId ? getScopeItemMetadata(currentScopeItemId) : null),
-    [currentScopeItemId],
+    () => (
+      currentScopeItemId && metadataModule
+        ? metadataModule.getScopeItemMetadata(currentScopeItemId)
+        : null
+    ),
+    [currentScopeItemId, metadataModule],
+  );
+
+  const resolveActivityMetadata = useCallback(
+    (activityTitle: string): ActivityMetadata | null => {
+      if (!currentScopeItemId || !metadataModule) return null;
+      return metadataModule.getActivityMetadata(currentScopeItemId, activityTitle);
+    },
+    [currentScopeItemId, metadataModule],
   );
 
   // All scope-item steps for questions mode (fetched once across all activities)
   const { data: allScopeStepsData } = useQuery({
     queryKey: ["all-scope-steps", currentScopeItemId, assessmentId],
     queryFn: async () => {
-      const [catalogRes, responsesRes] = await Promise.all([
-        fetchJson<{ data: StepData[] }>(
-          `/api/catalog/scope-items/${currentScopeItemId}/steps?limit=1500`,
-        ),
-        fetchJson<{ data: Array<{ processStepId: string; fitStatus: string; clientNote: string | null; currentProcess: string | null; confidence?: string | null }> }>(
-          `/api/assessments/${assessmentId}/steps?scopeItemId=${currentScopeItemId}&limit=1500`,
-        ),
+      type CatalogSummaryStep = Pick<
+        StepData,
+        | "id"
+        | "sequence"
+        | "actionTitle"
+        | "stepType"
+        | "processFlowGroup"
+        | "activityTitle"
+        | "activityTargetUrl"
+        | "activityId"
+        | "solutionProcessFlowName"
+        | "stepCategory"
+        | "isClassifiable"
+      >;
+      type StepResponseSummary = {
+        processStepId: string;
+        fitStatus: string;
+        clientNote: string | null;
+        currentProcess: string | null;
+        confidence?: string | null;
+      };
+
+      const fetchAllByCursor = async <T,>(
+        buildUrl: (cursor?: string) => string,
+      ): Promise<T[]> => {
+        const rows: T[] = [];
+        let cursor: string | undefined;
+        let hasMore = true;
+
+        while (hasMore) {
+          const page = await fetchJson<CursorPage<T>>(buildUrl(cursor));
+          rows.push(...page.data);
+          hasMore = !!page.hasMore && !!page.nextCursor;
+          cursor = page.nextCursor ?? undefined;
+        }
+
+        return rows;
+      };
+
+      const [catalogRows, responseRows] = await Promise.all([
+        fetchAllByCursor<CatalogSummaryStep>((cursor) => {
+          const params = new URLSearchParams({
+            limit: "400",
+            summary: "true",
+          });
+          if (cursor) params.set("cursor", cursor);
+          return `/api/catalog/scope-items/${currentScopeItemId}/steps?${params.toString()}`;
+        }),
+        fetchAllByCursor<StepResponseSummary>((cursor) => {
+          const params = new URLSearchParams({
+            scopeItemId: currentScopeItemId ?? "",
+            limit: "500",
+            summary: "true",
+          });
+          if (cursor) params.set("cursor", cursor);
+          return `/api/assessments/${assessmentId}/steps?${params.toString()}`;
+        }),
       ]);
+
       // Merge catalog with responses
       const responseMap = new Map<string, { fitStatus: string; clientNote: string | null; currentProcess: string | null; confidence?: string | null }>();
-      for (const r of responsesRes.data) {
+      for (const r of responseRows) {
         responseMap.set(r.processStepId, r);
       }
-      return catalogRes.data.map((step) => {
+      return catalogRows.map((step) => {
         const response = responseMap.get(step.id);
         return {
           ...step,
+          actionInstructionsHtml: "",
+          actionExpectedResult: null,
           fitStatus: response?.fitStatus ?? "PENDING",
           clientNote: response?.clientNote ?? null,
           currentProcess: response?.currentProcess ?? null,
@@ -893,9 +998,7 @@ function ReviewShellInner({
             ) =>
               items.map(({ activity, processName, flowName }) => {
                 const actSteps = stepsByActivityId.get(activity.id) ?? [];
-                const actMeta = currentScopeItemId
-                  ? getActivityMetadata(currentScopeItemId, activity.title)
-                  : null;
+                const actMeta = resolveActivityMetadata(activity.title);
                 const flowKey = `${processName}::${flowName}`;
                 const showFlowHeading = flowKey !== trackFlowKey.current;
                 trackFlowKey.current = flowKey;
@@ -1081,7 +1184,7 @@ function ReviewShellInner({
                             fitStatus={currentStep.fitStatus}
                             scopeItemId={currentScopeItemId}
                             activityTitle={currentStep.activityTitle ?? ""}
-                            activityMetadata={currentScopeItemId ? getActivityMetadata(currentScopeItemId, currentStep.activityTitle ?? "") : null}
+                            activityMetadata={resolveActivityMetadata(currentStep.activityTitle ?? "")}
                             scopeItemMetadata={scopeItemMeta}
                             implications={scopeItemMeta?.defaultImplications ?? null}
                             configs={configs}

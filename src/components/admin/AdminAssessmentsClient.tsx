@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Trash2, Calendar } from "lucide-react";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface AssessmentRow {
   id: string;
@@ -27,6 +28,11 @@ interface AssessmentRow {
 
 interface AdminAssessmentsClientProps {
   assessments: AssessmentRow[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalCount: number;
+  };
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -37,7 +43,7 @@ const STATUS_COLORS: Record<string, string> = {
   signed_off: "bg-emerald-50 text-emerald-700",
 };
 
-export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientProps) {
+export function AdminAssessmentsClient({ assessments, pagination }: AdminAssessmentsClientProps) {
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -47,6 +53,14 @@ export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientPr
     if (statusFilter === "all") return assessments;
     return assessments.filter((a) => a.status === statusFilter);
   }, [assessments, statusFilter]);
+  const totalPages = Math.max(1, Math.ceil(pagination.totalCount / pagination.pageSize));
+  const startItem = pagination.totalCount === 0
+    ? 0
+    : (pagination.page - 1) * pagination.pageSize + 1;
+  const endItem = Math.min(
+    pagination.totalCount,
+    startItem + assessments.length - 1,
+  );
 
   const handleDelete = useCallback(async (id: string) => {
     setDeleting(id);
@@ -72,18 +86,22 @@ export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientPr
           <h1 className="text-3xl font-bold text-foreground tracking-tight">All Assessments</h1>
           <p className="mt-1 text-base text-muted-foreground">View assessments across all clients</p>
         </div>
-        <select
+        <Select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="border rounded-md px-3 py-2 text-sm bg-background h-11 sm:h-9"
+          onValueChange={(val) => setStatusFilter(val)}
         >
-          <option value="all">All Status ({assessments.length})</option>
-          <option value="draft">Draft</option>
-          <option value="in_progress">In Progress</option>
-          <option value="completed">Completed</option>
-          <option value="reviewed">Reviewed</option>
-          <option value="signed_off">Signed Off</option>
-        </select>
+          <SelectTrigger className="w-[180px] h-9">
+            <SelectValue placeholder={`All Status (${assessments.length})`} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{`All Status (${assessments.length})`}</SelectItem>
+            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="in_progress">In Progress</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="reviewed">Reviewed</SelectItem>
+            <SelectItem value="signed_off">Signed Off</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {filtered.length === 0 ? (
@@ -196,8 +214,42 @@ export function AdminAssessmentsClient({ assessments }: AdminAssessmentsClientPr
         </>
       )}
       <p className="text-xs text-muted-foreground/60 mt-4 text-center md:text-left">
-        Showing {filtered.length} of {assessments.length} assessments
+        Showing {startItem}-{endItem} of {pagination.totalCount} assessments
       </p>
+      <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
+        <span>
+          Filtered view: {filtered.length} on this page
+        </span>
+        <div className="flex items-center gap-2">
+          {pagination.page > 1 ? (
+            <Link
+              href={`/admin/assessments?page=${pagination.page - 1}`}
+              className="px-3 py-1.5 border rounded-md hover:bg-accent text-foreground"
+            >
+              Previous
+            </Link>
+          ) : (
+            <span className="px-3 py-1.5 border rounded-md opacity-40 cursor-not-allowed">
+              Previous
+            </span>
+          )}
+          <span className="text-xs">
+            Page {pagination.page} of {totalPages}
+          </span>
+          {pagination.page < totalPages ? (
+            <Link
+              href={`/admin/assessments?page=${pagination.page + 1}`}
+              className="px-3 py-1.5 border rounded-md hover:bg-accent text-foreground"
+            >
+              Next
+            </Link>
+          ) : (
+            <span className="px-3 py-1.5 border rounded-md opacity-40 cursor-not-allowed">
+              Next
+            </span>
+          )}
+        </div>
+      </div>
       
       <ConfirmDialog
         open={!!deleteTarget}

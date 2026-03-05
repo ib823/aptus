@@ -15,7 +15,7 @@ import { z } from "zod";
 const bulkSchema = z.object({
   scopeItemId: z.string(),
   fitStatus: z.enum(["FIT", "CONFIGURE", "GAP", "NA"]),
-  stepIds: z.array(z.string()).min(1).max(5000).optional(),
+  stepIds: z.array(z.string()).min(1).max(2000).optional(),
   clientNote: z.string().optional(),
   excludeStepTypes: z.array(
     z.enum([
@@ -103,6 +103,11 @@ export async function POST(
     where: stepWhere,
     select: { id: true },
   });
+  if (steps.length === 0) {
+    return NextResponse.json({
+      data: { updated: 0, created: 0, skipped: 0, total: 0 },
+    });
+  }
 
   // Get existing responses
   const existingResponses = await prisma.stepResponse.findMany({
@@ -113,98 +118,127 @@ export async function POST(
     select: { processStepId: true, fitStatus: true, clientNote: true },
   });
 
-  const existingMap = new Map(existingResponses.map((r) => [r.processStepId, r.fitStatus]));
-  const existingNoteMap = new Map(existingResponses.map((r) => [r.processStepId, r.clientNote]));
+  const existingMap = new Map(
+    existingResponses.map((r) => [r.processStepId, { fitStatus: r.fitStatus, clientNote: r.clientNote }]),
+  );
 
-  let updated = 0;
-  let created = 0;
+  let updated = 0; // applied updates
+  let created = 0; // applied creates
   let skipped = 0;
 
-  // Track operation data for auditing
-  const auditMetadata: Array<{ stepId: string; prevStatus: string; prevNote: string | null }> = [];
-
-  // Only target steps that don't already have a non-PENDING response (unless overriding)
-  const operations = [];
+  const createIds: string[] = [];
+  const updateIds: string[] = [];
+  const auditMetadata = new Map<string, { prevStatus: string; prevNote: string | null }>();
   for (const step of steps) {
     const existing = existingMap.get(step.id);
-    if (existing === parsed.data.fitStatus) {
+    if (existing?.fitStatus === parsed.data.fitStatus) {
       skipped++;
       continue;
     }
 
-    if (existing && existing !== "PENDING") {
+    if (existing && existing.fitStatus !== "PENDING") {
       // Already has a real response, skip
       skipped++;
       continue;
     }
 
-    auditMetadata.push({
-      stepId: step.id,
-      prevStatus: existing || "PENDING",
-      prevNote: existingNoteMap.get(step.id) || null,
-    });
-
-    operations.push(
-      prisma.stepResponse.upsert({
-        where: {
-          assessmentId_processStepId: { assessmentId, processStepId: step.id },
-        },
-        update: {
-          fitStatus: parsed.data.fitStatus,
-          respondent: user.email,
-          respondedAt: new Date(),
-          ...(parsed.data.clientNote != null ? { clientNote: parsed.data.clientNote } : {}),
-        },
-        create: {
-          assessmentId,
-          processStepId: step.id,
-          fitStatus: parsed.data.fitStatus,
-          respondent: user.email,
-          respondedAt: new Date(),
-          ...(parsed.data.clientNote != null ? { clientNote: parsed.data.clientNote } : {}),
-        },
-      }),
-    );
-
     if (existing) {
-      updated++;
+      updateIds.push(step.id);
+      auditMetadata.set(step.id, {
+        prevStatus: existing.fitStatus,
+        prevNote: existing.clientNote ?? null,
+      });
     } else {
-      created++;
+      createIds.push(step.id);
+      auditMetadata.set(step.id, {
+        prevStatus: "PENDING",
+        prevNote: null,
+      });
     }
   }
 
-  if (operations.length > 0) {
-    const results = await prisma.$transaction(operations);
-    
+  const changedStepIds = [...createIds, ...updateIds];
+  if (changedStepIds.length > 0) {
+    const now = new Date();
+    const batchSize = 250;
+    const sharedData = {
+      fitStatus: parsed.data.fitStatus,
+      respondent: user.email,
+      respondedAt: now,
+      ...(parsed.data.clientNote != null ? { clientNote: parsed.data.clientNote } : {}),
+    };
+
+    for (let i = 0; i < createIds.length; i += batchSize) {
+      const chunk = createIds.slice(i, i + batchSize);
+      const res = await prisma.stepResponse.createMany({
+        data: chunk.map((stepId) => ({
+          assessmentId,
+          processStepId: stepId,
+          ...sharedData,
+        })),
+        skipDuplicates: true,
+      });
+      created += res.count;
+    }
+
+    for (let i = 0; i < updateIds.length; i += batchSize) {
+      const chunk = updateIds.slice(i, i + batchSize);
+      const res = await prisma.stepResponse.updateMany({
+        where: {
+          assessmentId,
+          processStepId: { in: chunk },
+          fitStatus: "PENDING",
+        },
+        data: sharedData,
+      });
+      updated += res.count;
+    }
+
+    const affectedResponses = await prisma.stepResponse.findMany({
+      where: {
+        assessmentId,
+        processStepId: { in: changedStepIds },
+        fitStatus: parsed.data.fitStatus,
+      },
+      select: {
+        id: true,
+        processStepId: true,
+        fitStatus: true,
+        clientNote: true,
+      },
+    });
+
     // Log temporal history for each affected step
-    void Promise.all(results.map(async (res, idx) => {
-      const meta = auditMetadata[idx];
-      if (meta) {
-        await logStepResponseChange({
-          stepResponseId: res.id,
-          actorId: user.id,
-          actorName: user.name || user.email,
-          actionType: meta.prevStatus === "PENDING" ? "CREATED" : "UPDATED",
-          previousStatus: meta.prevStatus,
-          newStatus: res.fitStatus,
-          previousNote: meta.prevNote,
-          newNote: res.clientNote,
-          metadata: { bulk: true, scopeItemId: parsed.data.scopeItemId }
-        });
-      }
+    void Promise.all(affectedResponses.map(async (response) => {
+      const meta = auditMetadata.get(response.processStepId);
+      if (!meta) return;
+
+      await logStepResponseChange({
+        stepResponseId: response.id,
+        actorId: user.id,
+        actorName: user.name || user.email,
+        actionType: meta.prevStatus === "PENDING" ? "CREATED" : "UPDATED",
+        previousStatus: meta.prevStatus,
+        newStatus: response.fitStatus,
+        previousNote: meta.prevNote,
+        newNote: response.clientNote,
+        metadata: { bulk: true, scopeItemId: parsed.data.scopeItemId },
+      });
     }));
   }
 
   // Log bulk decision
+  const bulkAction =
+    parsed.data.fitStatus === "GAP" ? "MARKED_GAP" : "MARKED_FIT";
   await logDecision({
     assessmentId,
     entityType: "process_step",
     entityId: "bulk",
-    action: parsed.data.fitStatus === "FIT" ? "MARKED_FIT" : "MARKED_FIT",
+    action: bulkAction,
     newValue: {
       scopeItemId: parsed.data.scopeItemId,
       fitStatus: parsed.data.fitStatus,
-      count: created + updated,
+      count: updated + created,
     },
     actor: user.email,
     actorRole: user.role,
@@ -213,10 +247,10 @@ export async function POST(
   // Phase: Dependency Engine — evaluate propagation after bulk classification
   let dependencyEffects: DependencyEffects | undefined;
 
-  if (isFeatureEnabled("DEPENDENCY_ENGINE") && operations.length > 0) {
+  if (isFeatureEnabled("DEPENDENCY_ENGINE") && changedStepIds.length > 0) {
     try {
       // Find the activity for the first step to get scope item code
-      const firstStepId = parsed.data.stepIds?.[0] ?? steps[0]?.id;
+      const firstStepId = changedStepIds[0];
       if (firstStepId) {
         const stepWithActivity = await prisma.processStep.findUnique({
           where: { id: firstStepId },

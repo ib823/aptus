@@ -52,7 +52,7 @@ export async function PUT(
   // Check scope item exists and get its functional area
   const scopeItem = await prisma.scopeItem.findUnique({
     where: { id: scopeItemId },
-    select: { functionalArea: true },
+    select: { functionalArea: true, nameClean: true },
   });
 
   if (!scopeItem) {
@@ -158,19 +158,27 @@ export async function PUT(
           select: { scopeItemId: true },
         });
         const otherSelectedSet = new Set(otherSelections.map((s) => s.scopeItemId));
+        const affectedScopeIds = new Set<string>();
 
         for (const dep of crossDeps) {
           const affectedScope =
             dep.sourceScopeCode === scopeItemId ? dep.targetScopeCode : dep.sourceScopeCode;
 
           if (otherSelectedSet.has(affectedScope)) {
-            const affectedItem = await prisma.scopeItem.findUnique({
-              where: { id: affectedScope },
-              select: { nameClean: true },
-            });
+            affectedScopeIds.add(affectedScope);
+          }
+        }
+
+        if (affectedScopeIds.size > 0) {
+          for (const dep of crossDeps) {
+            const affectedScope =
+              dep.sourceScopeCode === scopeItemId ? dep.targetScopeCode : dep.sourceScopeCode;
+
+            if (!otherSelectedSet.has(affectedScope)) continue;
+
             scopeWarnings.push({
               missingScopeCode: scopeItemId,
-              missingScopeName: affectedItem?.nameClean ?? affectedScope,
+              missingScopeName: scopeItem.nameClean,
               businessReason: dep.businessReason,
             });
           }

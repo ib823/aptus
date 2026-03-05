@@ -6,7 +6,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { getCapabilities } from "@/lib/auth/role-permissions";
-import { createAssessment, listAssessments } from "@/lib/db/assessments";
+import { createAssessment, listAssessmentsPaginated } from "@/lib/db/assessments";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { checkAssessmentLimit, recordUsageEvent } from "@/lib/commercial/usage-metering";
@@ -21,7 +21,13 @@ const createSchema = z.object({
   revenueBand: z.string().optional(),
   currentErp: z.string().optional(),
 });
-export async function GET(): Promise<NextResponse> {
+
+const listQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().min(1).max(200).default(50),
+});
+
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json(
@@ -37,6 +43,16 @@ export async function GET(): Promise<NextResponse> {
     );
   }
 
+  const searchParams = Object.fromEntries(request.nextUrl.searchParams.entries());
+  const parsedQuery = listQuerySchema.safeParse(searchParams);
+  if (!parsedQuery.success) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid query parameters" } },
+      { status: 400 },
+    );
+  }
+  const { cursor, limit } = parsedQuery.data;
+
   // Platform admins, partner leads, and consultants without org see all assessments
   const role = mapLegacyRole(user.role);
   const caps = getCapabilities(role);
@@ -44,6 +60,8 @@ export async function GET(): Promise<NextResponse> {
     const assessments = await prisma.assessment.findMany({
       where: { deletedAt: null },
       orderBy: { updatedAt: "desc" },
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       select: {
         id: true,
         companyName: true,
@@ -65,15 +83,25 @@ export async function GET(): Promise<NextResponse> {
         },
       },
     });
-    return NextResponse.json({ data: assessments });
+    const hasMore = assessments.length > limit;
+    if (hasMore) assessments.pop();
+
+    return NextResponse.json({
+      data: assessments,
+      nextCursor: hasMore ? assessments[assessments.length - 1]?.id ?? null : null,
+      hasMore,
+    });
   }
 
   if (!user.organizationId) {
-    return NextResponse.json({ data: [] });
+    return NextResponse.json({ data: [], nextCursor: null, hasMore: false });
   }
 
-  const assessments = await listAssessments(user.organizationId);
-  return NextResponse.json({ data: assessments });
+  const assessments = await listAssessmentsPaginated(user.organizationId, {
+    limit,
+    ...(cursor ? { cursor } : {}),
+  });
+  return NextResponse.json(assessments);
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {

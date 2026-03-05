@@ -17,6 +17,7 @@ const querySchema = z.object({
     "ACTION", "VERIFICATION", "NAVIGATION", "PROCESS_STEP",
   ]).optional(),
   grouped: z.string().optional(),
+  summary: z.enum(["true", "false"]).optional(),
 });
 export async function GET(
   request: NextRequest,
@@ -49,6 +50,7 @@ export async function GET(
   }
 
   const { cursor, limit, scopeItemId, fitStatus, stepType } = parsed.data;
+  const summaryMode = parsed.data.summary === "true";
 
   const where: Record<string, unknown> = { assessmentId };
   if (fitStatus) where.fitStatus = fitStatus;
@@ -64,38 +66,53 @@ export async function GET(
     orderBy: { createdAt: "desc" },
     take: limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    select: {
-      id: true,
-      assessmentId: true,
-      processStepId: true,
-      fitStatus: true,
-      clientNote: true,
-      currentProcess: true,
-      respondent: true,
-      respondedAt: true,
-      createdAt: true,
-      updatedAt: true,
-      confidence: true,
-      evidenceUrls: true,
-      reviewedBy: true,
-      reviewedAt: true,
-      isPropagated: true,
-      propagatedFrom: true,
-      processStep: {
-        select: {
+    select: summaryMode
+      ? {
           id: true,
-          scopeItemId: true,
-          sequence: true,
-          actionTitle: true,
-          stepType: true,
-          processFlowGroup: true,
-          stepCategory: true,
-          isClassifiable: true,
-          groupKey: true,
-          groupLabel: true,
+          processStepId: true,
+          fitStatus: true,
+          clientNote: true,
+          currentProcess: true,
+          confidence: true,
+          processStep: {
+            select: {
+              isClassifiable: true,
+              groupKey: true,
+            },
+          },
+        }
+      : {
+          id: true,
+          assessmentId: true,
+          processStepId: true,
+          fitStatus: true,
+          clientNote: true,
+          currentProcess: true,
+          respondent: true,
+          respondedAt: true,
+          createdAt: true,
+          updatedAt: true,
+          confidence: true,
+          evidenceUrls: true,
+          reviewedBy: true,
+          reviewedAt: true,
+          isPropagated: true,
+          propagatedFrom: true,
+          processStep: {
+            select: {
+              id: true,
+              scopeItemId: true,
+              sequence: true,
+              actionTitle: true,
+              stepType: true,
+              processFlowGroup: true,
+              stepCategory: true,
+              isClassifiable: true,
+              groupKey: true,
+              groupLabel: true,
+            },
+          },
         },
-      },
-    },
   });
 
   const hasMore = entries.length > limit;

@@ -4,7 +4,22 @@ import { AdminAssessmentsClient } from "@/components/admin/AdminAssessmentsClien
 
 export const metadata: Metadata = { title: "All Assessments" };
 
-export default async function AdminAssessmentsPage() {
+interface AdminAssessmentsPageProps {
+  searchParams: Promise<{ page?: string }>;
+}
+
+export default async function AdminAssessmentsPage({ searchParams }: AdminAssessmentsPageProps) {
+  const query = await searchParams;
+  const requestedPage = Number.parseInt(query.page ?? "1", 10);
+  const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const pageSize = 100;
+
+  const totalCount = await prisma.assessment.count({
+    where: { deletedAt: null },
+  });
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const clampedPage = Math.min(page, totalPages);
+
   const assessments = await prisma.assessment.findMany({
     where: { deletedAt: null },
     select: {
@@ -26,6 +41,8 @@ export default async function AdminAssessmentsPage() {
       },
     },
     orderBy: { updatedAt: "desc" },
+    skip: (clampedPage - 1) * pageSize,
+    take: pageSize,
   });
 
   return (
@@ -35,6 +52,11 @@ export default async function AdminAssessmentsPage() {
         createdAt: a.createdAt.toISOString(),
         updatedAt: a.updatedAt.toISOString(),
       }))}
+      pagination={{
+        page: clampedPage,
+        pageSize,
+        totalCount,
+      }}
     />
   );
 }

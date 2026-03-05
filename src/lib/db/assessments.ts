@@ -80,6 +80,48 @@ export async function listAssessments(organizationId: string) {
   });
 }
 
+export async function listAssessmentsPaginated(
+  organizationId: string,
+  input: { limit?: number; cursor?: string } = {},
+) {
+  const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
+  const rows = await prisma.assessment.findMany({
+    where: { organizationId, deletedAt: null },
+    orderBy: { updatedAt: "desc" },
+    take: limit + 1,
+    ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
+    select: {
+      id: true,
+      companyName: true,
+      industry: true,
+      country: true,
+      companySize: true,
+      status: true,
+      createdBy: true,
+      organizationId: true,
+      createdAt: true,
+      updatedAt: true,
+      _count: {
+        select: {
+          scopeSelections: { where: { selected: true } },
+          stepResponses: true,
+          gapResolutions: true,
+          stakeholders: true,
+        },
+      },
+    },
+  });
+
+  const hasMore = rows.length > limit;
+  if (hasMore) rows.pop();
+
+  return {
+    data: rows,
+    nextCursor: hasMore ? rows[rows.length - 1]?.id ?? null : null,
+    hasMore,
+  };
+}
+
 export async function updateAssessmentStatus(
   id: string,
   status: AssessmentStatus,

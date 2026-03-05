@@ -4,7 +4,6 @@ import { getSecurityHeaders } from "./src/lib/pwa/security-headers";
 const nextConfig: NextConfig = {
   transpilePackages: [],
   serverExternalPackages: [
-    "pdf-parse",
     "exceljs",
     "mammoth",
     "adm-zip",

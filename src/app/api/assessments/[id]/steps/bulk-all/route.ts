@@ -7,7 +7,7 @@ import { logDecision } from "@/lib/audit/decision-logger";
 import { ERROR_CODES } from "@/types/api";
 
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   const user = await getCurrentUser();
@@ -54,47 +54,75 @@ export async function POST(
     });
   }
 
-  // Find all existing step responses for this assessment
-  const existingResponses = await prisma.stepResponse.findMany({
-    where: { assessmentId },
-    select: { processStepId: true, fitStatus: true },
-  });
-
-  const respondedStepIds = new Set<string>();
-  for (const r of existingResponses) {
-    if (r.fitStatus !== "PENDING") {
-      respondedStepIds.add(r.processStepId);
-    }
-  }
-
-  // Find all classifiable steps in selected scope items that don't have a response
-  const unrespondedSteps = await prisma.processStep.findMany({
+  // Steps with no response yet -> create new FIT rows
+  const createCandidates = await prisma.processStep.findMany({
     where: {
       scopeItemId: { in: scopeItemIds },
       isClassifiable: true,
-      id: { notIn: Array.from(respondedStepIds) },
+      stepResponses: {
+        none: { assessmentId },
+      },
     },
-    select: { id: true, scopeItemId: true },
+    select: { id: true },
   });
 
-  if (unrespondedSteps.length === 0) {
+  // Existing PENDING responses -> update to FIT
+  const pendingResponses = await prisma.stepResponse.findMany({
+    where: {
+      assessmentId,
+      fitStatus: "PENDING",
+      processStep: {
+        scopeItemId: { in: scopeItemIds },
+        isClassifiable: true,
+      },
+    },
+    select: { id: true },
+  });
+
+  if (createCandidates.length === 0 && pendingResponses.length === 0) {
     return NextResponse.json({
       data: { marked: 0, scopeItems: scopeItemIds.length, message: "No pending steps to mark" },
     });
   }
 
-  // Bulk create step responses as FIT
   const now = new Date();
-  await prisma.stepResponse.createMany({
-    data: unrespondedSteps.map((step) => ({
-      assessmentId,
-      processStepId: step.id,
-      fitStatus: "FIT",
-      respondent: user.email,
-      respondedAt: now,
-    })),
-    skipDuplicates: true,
-  });
+  const batchSize = 250;
+  let created = 0;
+  let updated = 0;
+
+  for (let i = 0; i < createCandidates.length; i += batchSize) {
+    const chunk = createCandidates.slice(i, i + batchSize);
+    const res = await prisma.stepResponse.createMany({
+      data: chunk.map((step) => ({
+        assessmentId,
+        processStepId: step.id,
+        fitStatus: "FIT",
+        respondent: user.email,
+        respondedAt: now,
+      })),
+      skipDuplicates: true,
+    });
+    created += res.count;
+  }
+
+  for (let i = 0; i < pendingResponses.length; i += batchSize) {
+    const chunk = pendingResponses.slice(i, i + batchSize).map((r) => r.id);
+    const res = await prisma.stepResponse.updateMany({
+      where: {
+        assessmentId,
+        id: { in: chunk },
+        fitStatus: "PENDING",
+      },
+      data: {
+        fitStatus: "FIT",
+        respondent: user.email,
+        respondedAt: now,
+      },
+    });
+    updated += res.count;
+  }
+
+  const marked = created + updated;
 
   // Log to decision log
   await logDecision({
@@ -103,9 +131,9 @@ export async function POST(
     entityId: "bulk-all",
     action: "BULK_MARK_ALL_FIT",
     newValue: {
-      stepCount: unrespondedSteps.length,
+      stepCount: marked,
       scopeItemCount: scopeItemIds.length,
-      message: `Marked ${unrespondedSteps.length} steps as FIT across ${scopeItemIds.length} scope items`,
+      message: `Marked ${marked} steps as FIT across ${scopeItemIds.length} scope items`,
     },
     actor: user.email,
     actorRole: user.role,
@@ -113,9 +141,11 @@ export async function POST(
 
   return NextResponse.json({
     data: {
-      marked: unrespondedSteps.length,
+      marked,
+      created,
+      updated,
       scopeItems: scopeItemIds.length,
-      message: `Marked ${unrespondedSteps.length} steps as FIT`,
+      message: `Marked ${marked} steps as FIT`,
     },
   });
 }

@@ -1,10 +1,24 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { User, ShieldCheck, Clock, Mail, Calendar } from "lucide-react";
 
 export const metadata: Metadata = { title: "Users" };
 
-export default async function UsersPage() {
+interface UsersPageProps {
+  searchParams: Promise<{ page?: string }>;
+}
+
+export default async function UsersPage({ searchParams }: UsersPageProps) {
+  const query = await searchParams;
+  const requestedPage = Number.parseInt(query.page ?? "1", 10);
+  const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const pageSize = 100;
+
+  const totalCount = await prisma.user.count();
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const clampedPage = Math.min(page, totalPages);
+
   const users = await prisma.user.findMany({
     select: {
       id: true,
@@ -16,13 +30,18 @@ export default async function UsersPage() {
       createdAt: true,
     },
     orderBy: { createdAt: "desc" },
+    skip: (clampedPage - 1) * pageSize,
+    take: pageSize,
   });
+
+  const startItem = totalCount === 0 ? 0 : (clampedPage - 1) * pageSize + 1;
+  const endItem = Math.min(totalCount, startItem + users.length - 1);
 
   return (
     <div className="max-w-5xl mx-auto pb-12">
       <h1 className="text-3xl font-bold text-foreground tracking-tight mb-1">Users</h1>
       <p className="text-base text-muted-foreground mb-8">
-        All registered users ({users.length})
+        All registered users ({totalCount})
       </p>
 
       {/* Desktop Table */}
@@ -121,6 +140,41 @@ export default async function UsersPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="mt-6 flex items-center justify-between text-sm text-muted-foreground">
+        <span>
+          Showing {startItem}-{endItem} of {totalCount}
+        </span>
+        <div className="flex items-center gap-2">
+          {clampedPage > 1 ? (
+            <Link
+              href={`/admin/users?page=${clampedPage - 1}`}
+              className="px-3 py-1.5 border rounded-md hover:bg-accent text-foreground"
+            >
+              Previous
+            </Link>
+          ) : (
+            <span className="px-3 py-1.5 border rounded-md opacity-40 cursor-not-allowed">
+              Previous
+            </span>
+          )}
+          <span className="text-xs">
+            Page {clampedPage} of {totalPages}
+          </span>
+          {clampedPage < totalPages ? (
+            <Link
+              href={`/admin/users?page=${clampedPage + 1}`}
+              className="px-3 py-1.5 border rounded-md hover:bg-accent text-foreground"
+            >
+              Next
+            </Link>
+          ) : (
+            <span className="px-3 py-1.5 border rounded-md opacity-40 cursor-not-allowed">
+              Next
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

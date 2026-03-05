@@ -14,54 +14,62 @@ export async function GET(): Promise<NextResponse> {
     );
   }
 
-  const assessmentFilter = user.organizationId
-    ? { organizationId: user.organizationId }
-    : {};
-
-  const assessmentIds = (
-    await prisma.assessment.findMany({
-      where: { deletedAt: null, ...assessmentFilter },
-      select: { id: true },
-    })
-  ).map((a) => a.id);
-
-  if (assessmentIds.length === 0) {
-    return NextResponse.json({ data: [] });
-  }
+  const assessmentFilter = {
+    deletedAt: null as null,
+    ...(user.organizationId ? { organizationId: user.organizationId } : {}),
+  };
 
   const staleThreshold = new Date();
   staleThreshold.setDate(staleThreshold.getDate() - 14);
 
+  // DashboardDeadline has no Prisma relation to Assessment; resolve IDs only for this query.
+  const deadlineAssessmentIds = (
+    await prisma.assessment.findMany({
+      where: assessmentFilter,
+      select: { id: true },
+    })
+  ).map((a) => a.id);
+
   // Fetch data in parallel for attention engine
   const [overdueDeadlines, conflicts, unresolvedGaps, staleAssessments] = await Promise.all([
-    prisma.dashboardDeadline.findMany({
-      where: {
-        assessmentId: { in: assessmentIds },
-        dueDate: { lt: new Date() },
-        status: { not: "completed" },
-      },
-      select: { id: true, title: true, dueDate: true, assessmentId: true },
-    }),
+    deadlineAssessmentIds.length > 0
+      ? prisma.dashboardDeadline.findMany({
+          where: {
+            assessmentId: { in: deadlineAssessmentIds },
+            dueDate: { lt: new Date() },
+            status: { not: "completed" },
+          },
+          orderBy: { dueDate: "asc" },
+          take: 200,
+          select: { id: true, title: true, dueDate: true, assessmentId: true },
+        })
+      : Promise.resolve([]),
     prisma.conflict.findMany({
       where: {
-        assessmentId: { in: assessmentIds },
         status: "OPEN",
+        assessment: assessmentFilter,
       },
+      orderBy: { createdAt: "desc" },
+      take: 300,
       select: { id: true, entityType: true, entityId: true, assessmentId: true, createdAt: true },
     }),
     prisma.gapResolution.findMany({
       where: {
-        assessmentId: { in: assessmentIds },
         resolutionType: "PENDING",
+        assessment: assessmentFilter,
       },
+      orderBy: { createdAt: "desc" },
+      take: 500,
       select: { id: true, scopeItemId: true, gapDescription: true, createdAt: true },
     }),
     prisma.assessment.findMany({
       where: {
-        id: { in: assessmentIds },
+        ...assessmentFilter,
         updatedAt: { lt: staleThreshold },
         status: { notIn: ["archived", "handed_off", "signed_off"] },
       },
+      orderBy: { updatedAt: "asc" },
+      take: 300,
       select: { id: true, companyName: true, updatedAt: true },
     }),
   ]);
