@@ -3,19 +3,19 @@ import { test, expect } from "@playwright/test";
 test.describe("Process Owner Role — Navigation & Access", () => {
   test("can access assessments page", async ({ page }) => {
     await page.goto("/assessments");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     expect(page.url()).toContain("/assessments");
   });
 
   test("can access dashboard page", async ({ page }) => {
     await page.goto("/dashboard");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     expect(page.url()).toContain("/dashboard");
   });
 
   test("cannot access admin panel", async ({ page }) => {
     await page.goto("/admin");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     const url = page.url();
     const body = await page.textContent("body");
     const blocked = url.includes("/dashboard") || url.includes("/assessments") ||
@@ -25,7 +25,7 @@ test.describe("Process Owner Role — Navigation & Access", () => {
 
   test("does not see admin link in navigation", async ({ page }) => {
     await page.goto("/assessments");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     const adminLink = page.locator('a[href="/admin"]');
     await expect(adminLink).toHaveCount(0);
   });
@@ -34,7 +34,7 @@ test.describe("Process Owner Role — Navigation & Access", () => {
 test.describe("Process Owner Role — Assessment Visibility", () => {
   test("sees assessments where they are a stakeholder", async ({ page }) => {
     await page.goto("/assessments");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     // PO should see assessments they're assigned to
     const body = await page.textContent("body");
     // Either sees the test assessment or an empty state

@@ -4,7 +4,7 @@ import AxeBuilder from "@axe-core/playwright";
 test.describe("Accessibility — Login Page", () => {
   test("login page should have no critical accessibility violations", async ({ page }) => {
     await page.goto("/login");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])

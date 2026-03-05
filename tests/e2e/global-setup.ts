@@ -15,6 +15,11 @@ const STATE_DIR = __dirname;
 
 export const TEST_USERS = {
   admin: { email: "e2e-admin@abeam.test", name: "E2E Admin", role: "admin" },
+  journeysAdmin: {
+    email: "e2e-journeys-admin@abeam.test",
+    name: "E2E Journeys Admin",
+    role: "admin",
+  },
   consultant: { email: "e2e-consultant@abeam.test", name: "E2E Consultant", role: "consultant" },
   processOwner: { email: "e2e-po@abeam.test", name: "E2E Process Owner", role: "process_owner" },
   itLead: { email: "e2e-it@abeam.test", name: "E2E IT Lead", role: "it_lead" },
@@ -49,6 +54,25 @@ async function createUserAndSession(
     create: {
       email: user.email, name: user.name, role: user.role, isActive: true,
       mfaEnabled: isExternal, totpVerified: isExternal,
+    },
+  });
+
+  await prisma.onboardingProgress.upsert({
+    where: { userId: dbUser.id },
+    update: {
+      role: user.role,
+      currentStep: 3,
+      completedSteps: [0, 1, 2],
+      isComplete: true,
+      completedAt: new Date(),
+    },
+    create: {
+      userId: dbUser.id,
+      role: user.role,
+      currentStep: 3,
+      completedSteps: [0, 1, 2],
+      isComplete: true,
+      completedAt: new Date(),
     },
   });
 
@@ -92,10 +116,41 @@ function writeStorageState(filePath: string, token: string): void {
   fs.writeFileSync(filePath, JSON.stringify(state, null, 2));
 }
 
+async function warmUpApp(baseUrl: string): Promise<void> {
+  const warmupPaths = ["/login", "/dashboard", "/assessment"];
+  const deadline = Date.now() + 180_000;
+  let lastError: unknown;
+
+  for (const route of warmupPaths) {
+    let ready = false;
+    while (Date.now() < deadline && !ready) {
+      try {
+        const res = await fetch(`${baseUrl}${route}`, { redirect: "manual" });
+        if (res.status >= 200 && res.status < 500) {
+          ready = true;
+          break;
+        }
+        lastError = new Error(`Warmup for ${route} returned status ${res.status}`);
+      } catch (error) {
+        lastError = error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+    }
+    if (!ready) {
+      throw new Error(
+        `Timed out warming route ${route} at ${baseUrl}. Last error: ${String(lastError)}`,
+      );
+    }
+  }
+}
+
 async function globalSetup(): Promise<void> {
   const prisma = new PrismaClient();
+  const baseUrl = process.env.BASE_URL ?? "http://localhost:3003";
 
   try {
+    await warmUpApp(baseUrl);
+
     // Create all role users and sessions
     const userIds = new Map<string, string>();
     for (const [key, user] of Object.entries(TEST_USERS)) {

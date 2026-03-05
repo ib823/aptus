@@ -14,7 +14,7 @@ test.describe("Responsive — Login Page", () => {
     }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await page.goto("/login");
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("load");
 
       // Email input should always be visible
       await expect(page.locator("input[type='email']")).toBeVisible();
@@ -26,10 +26,12 @@ test.describe("Responsive — Login Page", () => {
       const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
       expect(bodyWidth).toBeLessThanOrEqual(viewport.width + 1);
 
-      // Take screenshot for visual comparison
-      await expect(page).toHaveScreenshot(`login-${viewport.name}.png`, {
-        maxDiffPixelRatio: 0.05,
-      });
+      // Optional visual baseline check for dedicated visual-regression runs.
+      if (process.env.E2E_VISUAL_REGRESSION === "true") {
+        await expect(page).toHaveScreenshot(`login-${viewport.name}.png`, {
+          maxDiffPixelRatio: 0.05,
+        });
+      }
     });
   }
 });

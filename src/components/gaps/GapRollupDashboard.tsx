@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import { Badge } from "@/components/ui/badge";
 import type { CostRollupV2, RiskHeatMap, UpgradeImpactSummary } from "@/lib/assessment/gap-analytics";
 
@@ -102,8 +103,8 @@ export function GapRollupDashboard({
           ))}
           {/* Data rows */}
           {["technical", "business", "compliance", "integration"].map((category) => (
-            <>
-              <div key={category} className="capitalize text-muted-foreground py-1 pr-2 truncate" title={category}>
+            <Fragment key={category}>
+              <div className="capitalize text-muted-foreground py-1 pr-2 truncate" title={category}>
                 {category}
               </div>
               {["LOW", "MEDIUM", "HIGH"].map((level) => {
@@ -123,7 +124,7 @@ export function GapRollupDashboard({
                   </div>
                 );
               })}
-            </>
+            </Fragment>
           ))}
         </div>
         <p className="text-xs text-muted-foreground/60 mt-2">

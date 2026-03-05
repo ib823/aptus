@@ -5,7 +5,12 @@ interface LoadingSkeletonProps {
 
 export function LoadingSkeleton({ lines = 3, className = "" }: LoadingSkeletonProps) {
   return (
-    <div className={`space-y-3 ${className}`} aria-label="Loading">
+    <div
+      className={`space-y-3 ${className}`}
+      role="status"
+      aria-live="polite"
+      aria-label="Loading"
+    >
       {Array.from({ length: lines }).map((_, i) => (
         <div
           key={i}
@@ -21,6 +26,8 @@ export function CardSkeleton({ className = "" }: { className?: string }) {
   return (
     <div
       className={`bg-card rounded-lg border p-5 ${className}`}
+      role="status"
+      aria-live="polite"
       aria-label="Loading"
     >
       <div className="h-5 bg-[var(--sapContent_ImagePlaceholderBackground,#e0e0e0)] rounded animate-pulse w-2/3 mb-3" />

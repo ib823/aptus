@@ -4,7 +4,7 @@ export class BasePage {
   constructor(protected page: Page) {}
 
   async waitForPageLoad() {
-    await this.page.waitForLoadState("networkidle");
+    await this.page.waitForLoadState("load");
   }
 
   get notification(): Locator {

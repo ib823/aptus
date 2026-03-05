@@ -420,13 +420,15 @@ async function main(): Promise<void> {
     if (pfKey) actLookup.set(`${pfKey}::${a.title}`, a.id);
   }
 
-  let bfCursor: string | undefined;
+  let bfLastId: string | undefined;
   let bfCount = 0;
   while (true) {
     const batch = await prisma.processStep.findMany({
-      where: { activityId: null },
+      where: {
+        activityId: null,
+        ...(bfLastId ? { id: { gt: bfLastId } } : {}),
+      },
       take: 500,
-      ...(bfCursor ? { cursor: { id: bfCursor }, skip: 1 } : {}),
       orderBy: { id: "asc" },
       select: { id: true, scopeItemId: true, solutionProcessName: true, solutionProcessFlowName: true, activityTitle: true },
     });
@@ -438,8 +440,7 @@ async function main(): Promise<void> {
     }
     if (ups.length > 0) await prisma.$transaction(ups);
     bfCount += ups.length;
-    bfCursor = batch[batch.length - 1]?.id;
-    if (batch.length < 500) break;
+    bfLastId = batch[batch.length - 1]?.id;
   }
   console.log(`  ProcessStep.activityId backfilled: ${bfCount}`);
 
