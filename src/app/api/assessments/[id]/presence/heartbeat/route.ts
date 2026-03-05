@@ -59,6 +59,15 @@ export async function POST(
       currentPage: parsed.data.currentPage ?? null,
       lastSeenAt: new Date(),
     },
+    select: {
+      id: true,
+      assessmentId: true,
+      userId: true,
+      userName: true,
+      userRole: true,
+      currentPage: true,
+      lastSeenAt: true,
+    },
   });
 
   return NextResponse.json({ data: record });
