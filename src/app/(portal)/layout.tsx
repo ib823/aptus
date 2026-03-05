@@ -11,6 +11,9 @@ import { PasskeyEnrollmentPrompt } from "@/components/auth/PasskeyEnrollmentProm
 import type { SubscriptionStatus } from "@/types/commercial";
 import type { ReactNode } from "react";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function PortalLayout({
   children,
 }: {

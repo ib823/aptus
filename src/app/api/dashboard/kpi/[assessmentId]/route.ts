@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
-import { calculateKpiMetrics } from "@/lib/dashboard/kpi-calculator";
+import type { KpiMetrics } from "@/types/dashboard";
 
 /** Map OCM severity to a numeric impact score for KPI calculation */
 function severityToScore(severity: string): number {
@@ -54,36 +54,124 @@ export async function GET(
     );
   }
 
-  const [steps, gaps, integrations, migrations, ocmImpacts] = await Promise.all([
-    prisma.stepResponse.findMany({
+  const [stepStats, gapStats, integrationStats, migrationStats, ocmStats] = await Promise.all([
+    prisma.stepResponse.groupBy({
+      by: ["fitStatus"],
       where: { assessmentId },
-      select: { fitStatus: true },
+      _count: { _all: true },
     }),
-    prisma.gapResolution.findMany({
+    prisma.gapResolution.groupBy({
+      by: ["resolutionType"],
       where: { assessmentId },
-      select: { resolutionType: true },
+      _count: { _all: true },
     }),
-    prisma.integrationPoint.findMany({
+    prisma.integrationPoint.groupBy({
+      by: ["status"],
       where: { assessmentId },
-      select: { status: true },
+      _count: { _all: true },
     }),
-    prisma.dataMigrationObject.findMany({
+    prisma.dataMigrationObject.groupBy({
+      by: ["status"],
       where: { assessmentId },
-      select: { status: true },
+      _count: { _all: true },
     }),
-    prisma.ocmImpact.findMany({
+    prisma.ocmImpact.groupBy({
+      by: ["severity"],
       where: { assessmentId },
-      select: { severity: true },
+      _count: { _all: true },
     }),
   ]);
 
-  const metrics = calculateKpiMetrics(
-    steps,
-    gaps,
-    integrations,
-    migrations,
-    ocmImpacts.map((o) => ({ impactScore: severityToScore(o.severity) })),
-  );
+  let totalSteps = 0;
+  let fitCount = 0;
+  let configureCount = 0;
+  let gapCount = 0;
+  let naCount = 0;
+  let pendingCount = 0;
+
+  for (const row of stepStats) {
+    const count = row._count._all;
+    totalSteps += count;
+    switch (row.fitStatus) {
+      case "FIT":
+        fitCount += count;
+        break;
+      case "CONFIGURE":
+        configureCount += count;
+        break;
+      case "GAP":
+        gapCount += count;
+        break;
+      case "NA":
+        naCount += count;
+        break;
+      default:
+        pendingCount += count;
+        break;
+    }
+  }
+
+  const completedSteps = fitCount + configureCount + gapCount + naCount;
+  const completionPercent = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
+
+  const totalGaps = gapStats.reduce((sum, row) => sum + row._count._all, 0);
+  const resolvedGaps = gapStats.reduce((sum, row) => {
+    if (!row.resolutionType || row.resolutionType === "PENDING") return sum;
+    return sum + row._count._all;
+  }, 0);
+  const gapResolutionPercent = totalGaps > 0 ? Math.round((resolvedGaps / totalGaps) * 100) : 0;
+
+  const totalIntegrations = integrationStats.reduce((sum, row) => sum + row._count._all, 0);
+  const completedIntegrations = integrationStats.reduce((sum, row) => {
+    if (row.status.toUpperCase() === "COMPLETED") return sum + row._count._all;
+    return sum;
+  }, 0);
+  const integrationPercent =
+    totalIntegrations > 0 ? Math.round((completedIntegrations / totalIntegrations) * 100) : 0;
+
+  const totalMigrations = migrationStats.reduce((sum, row) => sum + row._count._all, 0);
+  const completedMigrations = migrationStats.reduce((sum, row) => {
+    if (row.status.toUpperCase() === "COMPLETED") return sum + row._count._all;
+    return sum;
+  }, 0);
+  const migrationPercent =
+    totalMigrations > 0 ? Math.round((completedMigrations / totalMigrations) * 100) : 0;
+
+  let ocmWeightedScoreTotal = 0;
+  let ocmCount = 0;
+  let ocmHighImpactCount = 0;
+  for (const row of ocmStats) {
+    const score = severityToScore(row.severity);
+    const count = row._count._all;
+    ocmWeightedScoreTotal += score * count;
+    ocmCount += count;
+    if (score >= 4) {
+      ocmHighImpactCount += count;
+    }
+  }
+  const ocmAverageScore = ocmCount > 0 ? Math.round(ocmWeightedScoreTotal / ocmCount) : 0;
+
+  const metrics: KpiMetrics = {
+    totalSteps,
+    completedSteps,
+    completionPercent,
+    fitCount,
+    configureCount,
+    gapCount,
+    naCount,
+    pendingCount,
+    totalGaps,
+    resolvedGaps,
+    gapResolutionPercent,
+    totalIntegrations,
+    completedIntegrations,
+    integrationPercent,
+    totalMigrations,
+    completedMigrations,
+    migrationPercent,
+    ocmAverageScore,
+    ocmHighImpactCount,
+  };
 
   return NextResponse.json({ data: metrics });
 }

@@ -17,8 +17,16 @@ const TEST_USER_NAME = "E2E Tester";
 const TEST_USER_ROLE = "platform_admin";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  // Gate 0: never available in production unless explicitly opted in
-  if (process.env.NODE_ENV === "production" && !process.env.ALLOW_TEST_LOGIN) {
+  // Gate 0: endpoint must be explicitly enabled
+  if (process.env.ENABLE_TEST_LOGIN_ENDPOINT !== "true") {
+    return NextResponse.json(
+      { error: "Not available" },
+      { status: 404 },
+    );
+  }
+
+  // Gate 1: never available in production unless explicitly opted in
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_TEST_LOGIN_IN_PROD !== "true") {
     return NextResponse.json(
       { error: "Not available" },
       { status: 404 },
@@ -27,7 +35,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const secret = process.env.E2E_TEST_SECRET;
 
-  // Gate 1: endpoint is a no-op unless E2E_TEST_SECRET is configured
+  // Gate 2: endpoint is a no-op unless E2E_TEST_SECRET is configured
   if (!secret) {
     return NextResponse.json(
       { error: "Not available" },
@@ -35,10 +43,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Gate 2: caller must provide the correct secret
-  let body: { secret?: string; role?: string };
+  // Gate 3: caller must provide the correct secret
+  let body: { secret?: string; role?: string; email?: string };
   try {
-    body = await request.json() as { secret?: string; role?: string };
+    body = await request.json() as { secret?: string; role?: string; email?: string };
   } catch {
     return NextResponse.json(
       { error: "Invalid request body" },
@@ -53,12 +61,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  const targetEmail = body.email ?? TEST_USER_EMAIL;
   // Optional: allow specifying a role for the test user
   const role = body.role ?? TEST_USER_ROLE;
 
   // Upsert the test user
   let user = await prisma.user.findUnique({
-    where: { email: TEST_USER_EMAIL },
+    where: { email: targetEmail },
     select: { id: true, role: true },
   });
 
@@ -83,7 +92,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     user = await prisma.user.create({
       data: {
-        email: TEST_USER_EMAIL,
+        email: targetEmail,
         name: TEST_USER_NAME,
         role,
         organizationId: org.id,
@@ -95,7 +104,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   } else if (user.role !== role) {
     // Update role if requested differently
     await prisma.user.update({
-      where: { email: TEST_USER_EMAIL },
+      where: { email: targetEmail },
       data: { role },
     });
   }
@@ -126,7 +135,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // Set the session cookie
   const response = NextResponse.json({
     ok: true,
-    user: { id: user.id, email: TEST_USER_EMAIL, role },
+    user: { id: user.id, email: targetEmail, role },
     message: "Test session created. You are now authenticated.",
   });
 

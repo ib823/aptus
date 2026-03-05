@@ -12,6 +12,7 @@ const querySchema = z.object({
   limit: z.coerce.number().min(1).max(2000).default(50),
   hideRepetitive: z.enum(["true", "false"]).optional(),
   activityId: z.string().optional(),
+  summary: z.enum(["true", "false"]).optional(),
 });
 export async function GET(
   request: NextRequest,
@@ -59,20 +60,35 @@ export async function GET(
     orderBy: { sequence: "asc" },
     take: limit + 1,
     ...(parsed.data.cursor ? { cursor: { id: parsed.data.cursor }, skip: 1 } : {}),
-    select: {
-      id: true,
-      scopeItemId: true,
-      sequence: true,
-      actionTitle: true,
-      actionInstructionsHtml: true,
-      actionExpectedResult: true,
-      stepType: true,
-      processFlowGroup: true,
-      activityTitle: true,
-      activityTargetUrl: true,
-      activityId: true,
-      solutionProcessFlowName: true,
-    },
+    select: parsed.data.summary === "true"
+      ? {
+          id: true,
+          scopeItemId: true,
+          sequence: true,
+          actionTitle: true,
+          stepType: true,
+          processFlowGroup: true,
+          activityTitle: true,
+          activityTargetUrl: true,
+          activityId: true,
+          solutionProcessFlowName: true,
+          stepCategory: true,
+          isClassifiable: true,
+        }
+      : {
+          id: true,
+          scopeItemId: true,
+          sequence: true,
+          actionTitle: true,
+          actionInstructionsHtml: true,
+          actionExpectedResult: true,
+          stepType: true,
+          processFlowGroup: true,
+          activityTitle: true,
+          activityTargetUrl: true,
+          activityId: true,
+          solutionProcessFlowName: true,
+        },
   });
 
   const hasMore = steps.length > limit;

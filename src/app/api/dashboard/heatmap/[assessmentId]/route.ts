@@ -1,6 +1,7 @@
 /** GET: Heatmap data for an assessment */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
@@ -68,36 +69,23 @@ export async function GET(
       totalSteps: true,
     },
   });
-
-  const responses = await prisma.stepResponse.findMany({
-    where: { assessmentId },
-    select: {
-      processStepId: true,
-      fitStatus: true,
-    },
-  });
-
-  // Get processStepId -> scopeItemId mapping (only for visible scope items)
   const visibleScopeIds = scopeItems.map((si) => si.id);
-  const stepToScope = new Map<string, string>();
-  const steps = await prisma.processStep.findMany({
-    where: { scopeItemId: { in: visibleScopeIds } },
-    select: { id: true, scopeItemId: true },
-  });
-  for (const step of steps) {
-    stepToScope.set(step.id, step.scopeItemId);
+  if (visibleScopeIds.length === 0) {
+    return NextResponse.json({ data: [] });
   }
 
-  // Count completed responses per scope item
-  const completedByScope = new Map<string, number>();
-  for (const response of responses) {
-    if (response.fitStatus !== "PENDING") {
-      const scopeId = stepToScope.get(response.processStepId);
-      if (scopeId) {
-        completedByScope.set(scopeId, (completedByScope.get(scopeId) ?? 0) + 1);
-      }
-    }
-  }
+  const completedRows = await prisma.$queryRaw<Array<{ scopeItemId: string; completedCount: number }>>(
+    Prisma.sql`
+      SELECT ps."scopeItemId" AS "scopeItemId", COUNT(*)::int AS "completedCount"
+      FROM "StepResponse" sr
+      INNER JOIN "ProcessStep" ps ON ps.id = sr."processStepId"
+      WHERE sr."assessmentId" = ${assessmentId}
+        AND sr."fitStatus" <> 'PENDING'
+        AND ps."scopeItemId" IN (${Prisma.join(visibleScopeIds)})
+      GROUP BY ps."scopeItemId"
+    `,
+  );
+  const completedByScope = new Map(completedRows.map((row) => [row.scopeItemId, row.completedCount]));
 
   const heatmapData: HeatmapCell[] = scopeItems.map((si) => {
     const completedSteps = completedByScope.get(si.id) ?? 0;

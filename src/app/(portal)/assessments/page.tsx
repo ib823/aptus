@@ -6,9 +6,18 @@ import { prisma } from "@/lib/db/prisma";
 import { AssessmentsPageClient } from "@/components/assessment/AssessmentsPageClient";
 import { redirect } from "next/navigation";
 
-export default async function AssessmentsPage() {
+interface AssessmentsPageProps {
+  searchParams: Promise<{ page?: string }>;
+}
+
+export default async function AssessmentsPage({ searchParams }: AssessmentsPageProps) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+
+  const query = await searchParams;
+  const requestedPage = Number.parseInt(query.page ?? "1", 10);
+  const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const pageSize = 50;
 
   // Fetch assessments based on user role
   const whereClause = user.organizationId
@@ -17,9 +26,15 @@ export default async function AssessmentsPage() {
       ? { deletedAt: null }
       : { deletedAt: null, stakeholders: { some: { userId: user.id } } };
 
+  const totalCount = await prisma.assessment.count({ where: whereClause });
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const clampedPage = Math.min(page, totalPages);
+
   const assessments = await prisma.assessment.findMany({
     where: whereClause,
     orderBy: { updatedAt: "desc" },
+    skip: (clampedPage - 1) * pageSize,
+    take: pageSize,
     select: {
       id: true,
       companyName: true,
@@ -46,6 +61,11 @@ export default async function AssessmentsPage() {
         updatedAt: a.updatedAt.toISOString(),
       }))}
       canCreate={canCreate}
+      pagination={{
+        page: clampedPage,
+        pageSize,
+        totalCount,
+      }}
     />
   );
 }

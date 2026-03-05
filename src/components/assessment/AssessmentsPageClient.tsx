@@ -28,15 +28,29 @@ interface AssessmentData {
 interface AssessmentsPageClientProps {
   assessments: AssessmentData[];
   canCreate: boolean;
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalCount: number;
+  };
 }
 
 export function AssessmentsPageClient({
   assessments,
   canCreate,
+  pagination,
 }: AssessmentsPageClientProps) {
   const router = useRouter();
   const [coreEdgeOpen, setCoreEdgeOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const totalPages = Math.max(1, Math.ceil(pagination.totalCount / pagination.pageSize));
+  const startItem = pagination.totalCount === 0
+    ? 0
+    : (pagination.page - 1) * pagination.pageSize + 1;
+  const endItem = Math.min(
+    pagination.totalCount,
+    startItem + assessments.length - 1,
+  );
 
   const handleCoreEdgeSubmit = async (data: {
     companyName: string;
@@ -144,7 +158,43 @@ export function AssessmentsPageClient({
           />
         </div>
       ) : (
-        <AssessmentsList assessments={assessments} />
+        <>
+          <AssessmentsList assessments={assessments} />
+          <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
+            <span>
+              Showing {startItem}-{endItem} of {pagination.totalCount}
+            </span>
+            <div className="flex items-center gap-2">
+              {pagination.page > 1 ? (
+                <Link
+                  href={`/assessments?page=${pagination.page - 1}`}
+                  className="px-3 py-1.5 border rounded-md hover:bg-accent text-foreground"
+                >
+                  Previous
+                </Link>
+              ) : (
+                <span className="px-3 py-1.5 border rounded-md opacity-40 cursor-not-allowed">
+                  Previous
+                </span>
+              )}
+              <span className="text-xs">
+                Page {pagination.page} of {totalPages}
+              </span>
+              {pagination.page < totalPages ? (
+                <Link
+                  href={`/assessments?page=${pagination.page + 1}`}
+                  className="px-3 py-1.5 border rounded-md hover:bg-accent text-foreground"
+                >
+                  Next
+                </Link>
+              ) : (
+                <span className="px-3 py-1.5 border rounded-md opacity-40 cursor-not-allowed">
+                  Next
+                </span>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       <CoreEdgeDialog

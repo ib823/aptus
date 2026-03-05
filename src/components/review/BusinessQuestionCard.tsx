@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { ChevronDown, ChevronRight, History as HistoryIcon } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ImplicationsPanel } from "@/components/review/ImplicationsPanel";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { DecisionTimeline } from "@/components/assessment/DecisionTimeline";
 import { getBusinessContextHint } from "@/lib/assessment/business-context";
@@ -56,7 +56,7 @@ interface BusinessQuestionCardProps {
   activityMetadata: ActivityMetadata | null;
   scopeItemMetadata: ScopeItemMetadata | null;
   implications: ClassificationImplication | null;
-  onActivityClassify: (activityId: string, fitStatus: string, note?: string) => void;
+  onActivityClassify: (activityId: string, fitStatus: string, note?: string) => Promise<void> | void;
   isReadOnly: boolean;
 }
 
@@ -81,6 +81,10 @@ const CLASSIFICATION_OPTIONS = [
   { value: "GAP", icon: "\u26A0", label: "Doesn\u2019t Match", title: "This doesn\u2019t match our process \u2014 needs a custom solution", selected: "bg-amber-50 border-amber-500 text-amber-700" },
   { value: "NA", icon: "\u2014", label: "Not Relevant", title: "This doesn\u2019t apply to our business", selected: "bg-slate-50 border-slate-300 text-slate-500" },
 ] as const;
+
+const ImplicationsPanel = dynamic(
+  () => import("@/components/review/ImplicationsPanel").then((mod) => mod.ImplicationsPanel),
+);
 
 // --- Component ---
 
@@ -108,24 +112,8 @@ export function BusinessQuestionCard({
    */
   const mutation = useMutation({
     mutationFn: async ({ status, note }: { status: string; note?: string }) => {
-      const res = await fetch(`/api/assessments/${assessmentId}/steps/bulk`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          activityId: activity.id,
-          fitStatus: status,
-          clientNote: note,
-        }),
-      });
-      if (!res.ok) throw new Error("Failed to save classification");
-      return res.json();
-    },
-    // Optimistic Update logic
-    onMutate: async ({ status, note }) => {
-      // In a real implementation, we would cancel outgoing refetches and 
-      // manually update the 'steps' cache here.
-      // For now, we trigger the callback which updates local parent state.
-      onActivityClassify(activity.id, status, note || undefined);
+      await onActivityClassify(activity.id, status, note);
+      return { ok: true };
     },
     retry: 3, // Retry 3 times if offline
   });

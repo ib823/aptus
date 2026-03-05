@@ -17,23 +17,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "20", 10), 100);
   const cursor = searchParams.get("cursor") ?? undefined;
 
-  const assessmentFilter = user.organizationId
-    ? { organizationId: user.organizationId }
-    : {};
-
-  const assessmentIds = (
-    await prisma.assessment.findMany({
-      where: { deletedAt: null, ...assessmentFilter },
-      select: { id: true },
-    })
-  ).map((a) => a.id);
-
-  if (assessmentIds.length === 0) {
-    return NextResponse.json({ data: [], nextCursor: null, hasMore: false });
-  }
-
   const entries = await prisma.activityFeedEntry.findMany({
-    where: { assessmentId: { in: assessmentIds } },
+    where: {
+      assessment: {
+        deletedAt: null,
+        ...(user.organizationId ? { organizationId: user.organizationId } : {}),
+      },
+    },
     orderBy: { createdAt: "desc" },
     take: limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
