@@ -23,7 +23,7 @@ interface AssessmentTabNavProps {
 export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentTabNavProps) {
   const pathname = usePathname();
   const base = `/assessment/${assessmentId}`;
-  const activeSegment = pathname.replace(base, "").split("/").filter(Boolean)[0] ?? "profile";
+  const activeSegment = (pathname ?? "").replace(base, "").split("/").filter(Boolean)[0] ?? "profile";
 
   // Build stages with conditional tabs
   const stages: TabStage[] = [

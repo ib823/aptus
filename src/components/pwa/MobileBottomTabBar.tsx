@@ -34,6 +34,7 @@ interface MobileBottomTabBarProps {
 
 export function MobileBottomTabBar({ role }: MobileBottomTabBarProps) {
   const pathname = usePathname();
+  const currentPath = pathname ?? "";
   const canAccessAdmin = ["platform_admin", "admin"].includes(role);
   const visibleTabs = tabs.filter((tab) => !tab.adminOnly || canAccessAdmin);
 
@@ -49,7 +50,7 @@ export function MobileBottomTabBar({ role }: MobileBottomTabBarProps) {
     >
       <div className="flex items-center justify-around">
         {visibleTabs.map(({ href, label, icon: TabIcon, matchPrefix }) => {
-          const isActive = pathname.startsWith(matchPrefix);
+          const isActive = currentPath.startsWith(matchPrefix);
           return (
             <Link
               key={href}

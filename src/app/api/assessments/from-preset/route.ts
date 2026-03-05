@@ -7,6 +7,7 @@ import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
 import { PRESETS, type PresetKey } from "@/constants/presets";
 import { ERROR_CODES } from "@/types/api";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { z } from "zod";
 
 const presetKeys = Object.keys(PRESETS) as [PresetKey, ...PresetKey[]];
@@ -50,8 +51,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const body: unknown = await request.json();
-  const parsed = createFromPresetSchema.safeParse(body);
+  const parsedBody = await safeParseJsonBody(request);
+  if (!parsedBody.ok) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid JSON body" } },
+      { status: 400 },
+    );
+  }
+
+  const parsed = createFromPresetSchema.safeParse(parsedBody.data);
   if (!parsed.success) {
     return NextResponse.json(
       {

@@ -15,6 +15,7 @@ import {
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { checkAssessmentLimit, recordUsageEvent } from "@/lib/commercial/usage-metering";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -160,8 +161,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const body: unknown = await request.json();
-  const parsed = createSchema.safeParse(body);
+  const parsedBody = await safeParseJsonBody(request);
+  if (!parsedBody.ok) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid JSON body" } },
+      { status: 400 },
+    );
+  }
+
+  const parsed = createSchema.safeParse(parsedBody.data);
   if (!parsed.success) {
     return NextResponse.json(
       {

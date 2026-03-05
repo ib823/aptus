@@ -6,6 +6,7 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { z } from "zod";
 
 const createFromTemplateSchema = z.object({
@@ -49,8 +50,15 @@ export async function POST(
   }
 
   const { templateId } = await params;
-  const body: unknown = await request.json();
-  const parsed = createFromTemplateSchema.safeParse(body);
+  const parsedBody = await safeParseJsonBody(request);
+  if (!parsedBody.ok) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid JSON body" } },
+      { status: 400 },
+    );
+  }
+
+  const parsed = createFromTemplateSchema.safeParse(parsedBody.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: parsed.error.issues[0]?.message ?? "Validation failed" } },

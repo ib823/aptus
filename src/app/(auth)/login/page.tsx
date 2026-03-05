@@ -13,14 +13,14 @@ import { useWebAuthnLogin } from "@/hooks/useWebAuthnLogin";
 
 function LoginForm() {
   const searchParams = useSearchParams();
-  const isVerify = searchParams.get("verify") === "true";
-  const isError = searchParams.get("error") === "true";
+  const isVerify = searchParams?.get("verify") === "true";
+  const isError = searchParams?.get("error") === "true";
 
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(isVerify);
   const [sentEmail, setSentEmail] = useState("");
-  const errorParam = searchParams.get("error");
+  const errorParam = searchParams?.get("error");
   const [error, setError] = useState(() => {
     if (!isError && !errorParam) return "";
     if (errorParam === "Verification") return "This sign-in link has expired or already been used. Enter your email to receive a new one.";

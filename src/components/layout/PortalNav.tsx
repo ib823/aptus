@@ -24,6 +24,7 @@ interface PortalNavProps {
 
 export function PortalNav({ user }: PortalNavProps) {
   const pathname = usePathname();
+  const currentPath = pathname ?? "";
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -147,8 +148,8 @@ export function PortalNav({ user }: PortalNavProps) {
                   .filter((item) => item.show)
                   .map((item) => {
                     const isActive =
-                      pathname === item.href ||
-                      pathname.startsWith(item.href + "/");
+                      currentPath === item.href ||
+                      currentPath.startsWith(item.href + "/");
                     return (
                       <Link
                         key={item.href}
@@ -189,8 +190,8 @@ export function PortalNav({ user }: PortalNavProps) {
               .filter((item) => item.show)
               .map((item) => {
                 const isActive =
-                  pathname === item.href ||
-                  pathname.startsWith(item.href + "/");
+                  currentPath === item.href ||
+                  currentPath.startsWith(item.href + "/");
                 return (
                   <Link
                     key={item.href}

@@ -29,7 +29,7 @@ export default function SignupPage() {
 
 function SignupForm() {
   const searchParams = useSearchParams();
-  const planParam = searchParams.get("plan") ?? "TRIAL";
+  const planParam = searchParams?.get("plan") ?? "TRIAL";
 
   const [form, setForm] = useState({
     orgName: "",
