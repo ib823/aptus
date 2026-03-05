@@ -142,78 +142,159 @@ export async function POST(
     const requested = new Set(parsed.data.scopeItemIds);
     targetIds = targetIds.filter((id) => requested.has(id));
   }
+  if (targetIds.length === 0) {
+    return NextResponse.json({
+      success: true,
+      generated: 0,
+      skipped: 0,
+      scopeItemsCovered: 0,
+    }, { status: 202 });
+  }
 
-  // Get scope item names
-  const scopeItems = await prisma.scopeItem.findMany({
-    where: { id: { in: targetIds } },
-    select: { id: true, nameClean: true },
-  });
+  // Batch-fetch all required data for target scope items to avoid per-scope N+1 queries.
+  const [scopeItems, processFlows, allSteps, existingDiagrams] = await Promise.all([
+    prisma.scopeItem.findMany({
+      where: { id: { in: targetIds } },
+      select: { id: true, nameClean: true },
+    }),
+    prisma.processFlow.findMany({
+      where: { solutionProcess: { scopeItemId: { in: targetIds } } },
+      select: {
+        id: true,
+        name: true,
+        solutionProcess: {
+          select: { scopeItemId: true },
+        },
+      },
+    }),
+    prisma.processStep.findMany({
+      where: { scopeItemId: { in: targetIds } },
+      select: {
+        id: true,
+        scopeItemId: true,
+        sequence: true,
+        actionTitle: true,
+        stepType: true,
+        solutionProcessFlowName: true,
+      },
+      orderBy: [{ scopeItemId: "asc" }, { sequence: "asc" }],
+    }),
+    parsed.data.regenerate
+      ? Promise.resolve([])
+      : prisma.processFlowDiagram.findMany({
+          where: { assessmentId, scopeItemId: { in: targetIds } },
+          select: { scopeItemId: true, processFlowName: true },
+        }),
+  ]);
+
   const scopeMap = new Map(scopeItems.map((s) => [s.id, s.nameClean]));
+  const flowIdByScopeAndName = new Map<string, string>();
+  for (const processFlow of processFlows) {
+    flowIdByScopeAndName.set(
+      `${processFlow.solutionProcess.scopeItemId}::${processFlow.name}`,
+      processFlow.id,
+    );
+  }
+
+  const flowGroupsByScope = new Map<string, Map<string, typeof allSteps>>();
+  for (const step of allSteps) {
+    const flowName = step.solutionProcessFlowName ?? "Main Flow";
+    const byFlow = flowGroupsByScope.get(step.scopeItemId) ?? new Map<string, typeof allSteps>();
+    const group = byFlow.get(flowName) ?? [];
+    group.push(step);
+    byFlow.set(flowName, group);
+    flowGroupsByScope.set(step.scopeItemId, byFlow);
+  }
+
+  const allStepIds = allSteps.map((step) => step.id);
+  const responses = allStepIds.length > 0
+    ? await prisma.stepResponse.findMany({
+        where: { assessmentId, processStepId: { in: allStepIds } },
+        select: { processStepId: true, fitStatus: true },
+      })
+    : [];
+  const responseMap = new Map(responses.map((r) => [r.processStepId, r.fitStatus]));
+
+  const existingKeys = new Set(
+    existingDiagrams.map((diagram) => `${diagram.scopeItemId}::${diagram.processFlowName}`),
+  );
+
+  const createPayload: Array<{
+    assessmentId: string;
+    scopeItemId: string;
+    processFlowName: string;
+    processFlowId: string | null;
+    svgContent: string;
+    diagramType: string;
+    stepCount: number;
+    fitCount: number;
+    configureCount: number;
+    gapCount: number;
+    naCount: number;
+    pendingCount: number;
+    generatedBy: string;
+  }> = [];
+  const upsertPayload: Array<{
+    scopeItemId: string;
+    processFlowName: string;
+    processFlowId: string | null;
+    svgContent: string;
+    stepCount: number;
+    fitCount: number;
+    configureCount: number;
+    gapCount: number;
+    naCount: number;
+    pendingCount: number;
+  }> = [];
 
   let generated = 0;
   let skipped = 0;
   const scopeItemsCovered = new Set<string>();
 
   for (const scopeItemId of targetIds) {
-    // Get process steps grouped by flow — prefer ProcessFlow entities, fall back to string grouping
-    const processFlows = await prisma.processFlow.findMany({
-      where: { solutionProcess: { scopeItemId } },
-      select: { id: true, name: true },
-    });
-
-    const steps = await prisma.processStep.findMany({
-      where: { scopeItemId },
-      select: {
-        id: true,
-        sequence: true,
-        actionTitle: true,
-        stepType: true,
-        solutionProcessFlowName: true,
-        activityId: true,
-      },
-      orderBy: { sequence: "asc" },
-    });
-
-    // Group by flow name
-    const flowGroups = new Map<string, typeof steps>();
-    for (const step of steps) {
-      const flowName = step.solutionProcessFlowName ?? "Main Flow";
-      const group = flowGroups.get(flowName) ?? [];
-      group.push(step);
-      flowGroups.set(flowName, group);
-    }
-
-    // Build processFlow name-to-id lookup for FK linking
-    const pfNameToId = new Map(processFlows.map((pf) => [pf.name, pf.id]));
-
-    // Get step responses for this assessment
-    const stepIds = steps.map((s) => s.id);
-    const responses = await prisma.stepResponse.findMany({
-      where: { assessmentId, processStepId: { in: stepIds } },
-      select: { processStepId: true, fitStatus: true },
-    });
-    const responseMap = new Map(responses.map((r) => [r.processStepId, r.fitStatus]));
+    const flowGroups = flowGroupsByScope.get(scopeItemId);
+    if (!flowGroups || flowGroups.size === 0) continue;
 
     for (const [flowName, flowSteps] of flowGroups) {
-      // Check if diagram already exists
-      if (!parsed.data.regenerate) {
-        const existing = await prisma.processFlowDiagram.findUnique({
-          where: { assessmentId_scopeItemId_processFlowName: { assessmentId, scopeItemId, processFlowName: flowName } },
-        });
-        if (existing) {
-          skipped++;
-          continue;
-        }
+      const key = `${scopeItemId}::${flowName}`;
+      if (!parsed.data.regenerate && existingKeys.has(key)) {
+        skipped++;
+        continue;
       }
 
       // Build flow step data with fit statuses
-      const enrichedSteps = flowSteps.map((s) => ({
-        id: s.id,
-        sequence: s.sequence,
-        actionTitle: s.actionTitle,
-        stepType: s.stepType,
-        fitStatus: responseMap.get(s.id) ?? "PENDING",
-      }));
+      let fitCount = 0;
+      let configureCount = 0;
+      let gapCount = 0;
+      let naCount = 0;
+      let pendingCount = 0;
+      const enrichedSteps = flowSteps.map((step) => {
+        const fitStatus = responseMap.get(step.id) ?? "PENDING";
+        switch (fitStatus) {
+          case "FIT":
+            fitCount++;
+            break;
+          case "CONFIGURE":
+            configureCount++;
+            break;
+          case "GAP":
+            gapCount++;
+            break;
+          case "NA":
+            naCount++;
+            break;
+          default:
+            pendingCount++;
+            break;
+        }
+        return {
+          id: step.id,
+          sequence: step.sequence,
+          actionTitle: step.actionTitle,
+          stepType: step.stepType,
+          fitStatus,
+        };
+      });
 
       const svg = generateFlowSvg(
         flowName,
@@ -221,18 +302,22 @@ export async function POST(
         enrichedSteps,
       );
 
-      // Count statuses
-      const fitCount = enrichedSteps.filter((s) => s.fitStatus === "FIT").length;
-      const configureCount = enrichedSteps.filter((s) => s.fitStatus === "CONFIGURE").length;
-      const gapCount = enrichedSteps.filter((s) => s.fitStatus === "GAP").length;
-      const naCount = enrichedSteps.filter((s) => s.fitStatus === "NA").length;
-      const pendingCount = enrichedSteps.filter((s) => s.fitStatus === "PENDING").length;
-
-      const processFlowId = pfNameToId.get(flowName) ?? null;
-
-      await prisma.processFlowDiagram.upsert({
-        where: { assessmentId_scopeItemId_processFlowName: { assessmentId, scopeItemId, processFlowName: flowName } },
-        create: {
+      const processFlowId = flowIdByScopeAndName.get(key) ?? null;
+      if (parsed.data.regenerate) {
+        upsertPayload.push({
+          scopeItemId,
+          processFlowName: flowName,
+          processFlowId,
+          svgContent: svg,
+          stepCount: enrichedSteps.length,
+          fitCount,
+          configureCount,
+          gapCount,
+          naCount,
+          pendingCount,
+        });
+      } else {
+        createPayload.push({
           assessmentId,
           scopeItemId,
           processFlowName: flowName,
@@ -246,24 +331,68 @@ export async function POST(
           naCount,
           pendingCount,
           generatedBy: user.email,
-        },
-        update: {
-          svgContent: svg,
-          processFlowId,
-          stepCount: enrichedSteps.length,
-          fitCount,
-          configureCount,
-          gapCount,
-          naCount,
-          pendingCount,
-          generatedBy: user.email,
-          generatedAt: new Date(),
-        },
-      });
+        });
+      }
 
       generated++;
       scopeItemsCovered.add(scopeItemId);
     }
+  }
+
+  if (parsed.data.regenerate) {
+    const UPSERT_BATCH_SIZE = 100;
+    for (let i = 0; i < upsertPayload.length; i += UPSERT_BATCH_SIZE) {
+      const batch = upsertPayload.slice(i, i + UPSERT_BATCH_SIZE);
+      await prisma.$transaction(
+        batch.map((item) =>
+          prisma.processFlowDiagram.upsert({
+            where: {
+              assessmentId_scopeItemId_processFlowName: {
+                assessmentId,
+                scopeItemId: item.scopeItemId,
+                processFlowName: item.processFlowName,
+              },
+            },
+            create: {
+              assessmentId,
+              scopeItemId: item.scopeItemId,
+              processFlowName: item.processFlowName,
+              processFlowId: item.processFlowId,
+              svgContent: item.svgContent,
+              diagramType: "sequential",
+              stepCount: item.stepCount,
+              fitCount: item.fitCount,
+              configureCount: item.configureCount,
+              gapCount: item.gapCount,
+              naCount: item.naCount,
+              pendingCount: item.pendingCount,
+              generatedBy: user.email,
+            },
+            update: {
+              svgContent: item.svgContent,
+              processFlowId: item.processFlowId,
+              stepCount: item.stepCount,
+              fitCount: item.fitCount,
+              configureCount: item.configureCount,
+              gapCount: item.gapCount,
+              naCount: item.naCount,
+              pendingCount: item.pendingCount,
+              generatedBy: user.email,
+              generatedAt: new Date(),
+            },
+          }),
+        ),
+      );
+    }
+  } else if (createPayload.length > 0) {
+    const inserted = await prisma.processFlowDiagram.createMany({
+      data: createPayload,
+      skipDuplicates: true,
+    });
+    if (inserted.count < createPayload.length) {
+      skipped += createPayload.length - inserted.count;
+    }
+    generated = inserted.count;
   }
 
   if (generated > 0) {

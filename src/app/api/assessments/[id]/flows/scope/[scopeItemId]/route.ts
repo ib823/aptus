@@ -116,6 +116,18 @@ export async function GET(
   }
 
   // Return existing diagrams, generating interactive data if missing
+  const needsRiskOverlayRegeneration = diagrams.some((d) => !d.riskOverlayData);
+  const gapResolutionMap = needsRiskOverlayRegeneration
+    ? new Map(
+        (
+          await prisma.gapResolution.findMany({
+            where: { assessmentId, scopeItemId },
+            select: { processStepId: true, resolutionType: true },
+          })
+        ).map((resolution) => [resolution.processStepId, resolution.resolutionType]),
+      )
+    : new Map<string, string>();
+
   const result = [];
   for (const d of diagrams) {
     let interactiveData = d.interactiveData as unknown as InteractiveFlowData | null;
@@ -155,16 +167,11 @@ export async function GET(
         thumbnailSvg = generateThumbnailSvg(stepsWithResponse);
       }
       if (!riskOverlayData) {
-        const gapResolutions = await prisma.gapResolution.findMany({
-          where: { assessmentId, scopeItemId },
-          select: { processStepId: true, resolutionType: true },
-        });
-        const resMap = new Map(gapResolutions.map((r) => [r.processStepId, r.resolutionType]));
         riskOverlayData = computeRiskOverlay(
           stepsWithResponse.map((s) => ({
             processStepId: s.id,
             fitStatus: s.fitStatus,
-            hasResolution: resMap.has(s.id),
+            hasResolution: gapResolutionMap.has(s.id),
           })),
         );
       }

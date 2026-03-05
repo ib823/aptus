@@ -6,7 +6,12 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { getCapabilities } from "@/lib/auth/role-permissions";
-import { createAssessment, listAssessmentsPaginated } from "@/lib/db/assessments";
+import {
+  createAssessment,
+  decodeAssessmentCursor,
+  encodeAssessmentCursor,
+  listAssessmentsPaginated,
+} from "@/lib/db/assessments";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { checkAssessmentLimit, recordUsageEvent } from "@/lib/commercial/usage-metering";
@@ -56,12 +61,32 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // Platform admins, partner leads, and consultants without org see all assessments
   const role = mapLegacyRole(user.role);
   const caps = getCapabilities(role);
+  const decodedCursor = decodeAssessmentCursor(cursor);
+  if (cursor && !decodedCursor) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid cursor" } },
+      { status: 400 },
+    );
+  }
+
   if (!user.organizationId && (caps.canViewAllAssessments || role === "consultant")) {
     const assessments = await prisma.assessment.findMany({
-      where: { deletedAt: null },
-      orderBy: { updatedAt: "desc" },
+      where: {
+        deletedAt: null,
+        ...(decodedCursor
+          ? {
+              OR: [
+                { updatedAt: { lt: decodedCursor.updatedAt } },
+                {
+                  updatedAt: decodedCursor.updatedAt,
+                  id: { lt: decodedCursor.id },
+                },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
       take: limit + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       select: {
         id: true,
         companyName: true,
@@ -85,10 +110,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
     const hasMore = assessments.length > limit;
     if (hasMore) assessments.pop();
+    const cursorAssessment = assessments.at(-1);
 
     return NextResponse.json({
       data: assessments,
-      nextCursor: hasMore ? assessments[assessments.length - 1]?.id ?? null : null,
+      nextCursor: hasMore && cursorAssessment
+        ? encodeAssessmentCursor({
+            id: cursorAssessment.id,
+            updatedAt: cursorAssessment.updatedAt,
+          })
+        : null,
       hasMore,
     });
   }

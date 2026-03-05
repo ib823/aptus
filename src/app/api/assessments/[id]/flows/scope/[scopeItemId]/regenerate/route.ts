@@ -95,25 +95,17 @@ export async function POST(
     })),
   );
 
-  // Update all flow diagrams for this scope item
-  const diagrams = await prisma.processFlowDiagram.findMany({
+  const updated = await prisma.processFlowDiagram.updateMany({
     where: { assessmentId, scopeItemId },
-    select: { id: true },
+    data: {
+      interactiveData: JSON.parse(JSON.stringify(interactiveData)) as InputJsonValue,
+      thumbnailSvg,
+      riskOverlayData: JSON.parse(JSON.stringify(riskOverlayData)) as InputJsonValue,
+      layoutVersion: 1,
+    },
   });
 
-  for (const d of diagrams) {
-    await prisma.processFlowDiagram.update({
-      where: { id: d.id },
-      data: {
-        interactiveData: JSON.parse(JSON.stringify(interactiveData)) as InputJsonValue,
-        thumbnailSvg,
-        riskOverlayData: JSON.parse(JSON.stringify(riskOverlayData)) as InputJsonValue,
-        layoutVersion: 1,
-      },
-    });
-  }
-
   return NextResponse.json({
-    data: { regenerated: diagrams.length, scopeItemId },
+    data: { regenerated: updated.count, scopeItemId },
   });
 }

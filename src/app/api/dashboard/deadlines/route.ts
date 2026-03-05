@@ -1,11 +1,21 @@
 /** GET + POST: Dashboard deadlines */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
+
+interface DeadlineRow {
+  id: string;
+  title: string;
+  description: string | null;
+  dueDate: Date;
+  status: string;
+  assignedRole: string | null;
+}
 
 /** GET: List deadlines for the user's assessments */
 export async function GET(): Promise<NextResponse> {
@@ -17,34 +27,15 @@ export async function GET(): Promise<NextResponse> {
     );
   }
 
-  const assessmentFilter = user.organizationId
-    ? { organizationId: user.organizationId }
-    : {};
-
-  const assessmentIds = (
-    await prisma.assessment.findMany({
-      where: { deletedAt: null, ...assessmentFilter },
-      select: { id: true },
-    })
-  ).map((a) => a.id);
-
-  if (assessmentIds.length === 0) {
-    return NextResponse.json({ data: [] });
-  }
-
-  const deadlines = await prisma.dashboardDeadline.findMany({
-    where: { assessmentId: { in: assessmentIds } },
-    orderBy: { dueDate: "asc" },
-    take: 50,
-    select: {
-      id: true,
-      title: true,
-      description: true,
-      dueDate: true,
-      status: true,
-      assignedRole: true,
-    },
-  });
+  const deadlines = await prisma.$queryRaw<DeadlineRow[]>(Prisma.sql`
+    SELECT d.id, d.title, d.description, d."dueDate", d.status, d."assignedRole"
+    FROM "DashboardDeadline" d
+    JOIN "Assessment" a ON a.id = d."assessmentId"
+    WHERE a."deletedAt" IS NULL
+    ${user.organizationId ? Prisma.sql`AND a."organizationId" = ${user.organizationId}` : Prisma.empty}
+    ORDER BY d."dueDate" ASC
+    LIMIT 50
+  `);
 
   return NextResponse.json({ data: deadlines });
 }

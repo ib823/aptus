@@ -1,7 +1,19 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
-import { buildFunctionalAreaOverview } from "@/lib/assessment/functional-area-overview";
+import { buildFunctionalAreaOverviewFromCounts } from "@/lib/assessment/functional-area-overview";
 import { ProcessMapClient } from "./ProcessMapClient";
+
+interface ResponseCountRow {
+  scopeItemId: string;
+  fitStatus: string;
+  count: number;
+}
+
+interface GapResolutionCountRow {
+  scopeItemId: string;
+  resolutionType: string;
+  count: number;
+}
 
 interface ProcessMapPageProps {
   params: Promise<{ id: string }>;
@@ -43,23 +55,28 @@ export default async function ProcessMapPage({ params, searchParams }: ProcessMa
     select: { id: true, nameClean: true, functionalArea: true, totalSteps: true },
   });
 
-  const stepResponses = await prisma.stepResponse.findMany({
-    where: { assessmentId },
-    select: {
-      fitStatus: true,
-      processStep: { select: { scopeItemId: true } },
-    },
-  });
+  const [responseCounts, gapResolutionCounts] = await Promise.all([
+    prisma.$queryRaw<ResponseCountRow[]>`
+      SELECT ps."scopeItemId", sr."fitStatus", COUNT(*)::int AS count
+      FROM "StepResponse" sr
+      JOIN "ProcessStep" ps ON sr."processStepId" = ps.id
+      WHERE sr."assessmentId" = ${assessmentId}
+        AND ps."scopeItemId" = ANY(${selectedIds})
+      GROUP BY ps."scopeItemId", sr."fitStatus"
+    `,
+    prisma.$queryRaw<GapResolutionCountRow[]>`
+      SELECT "scopeItemId", "resolutionType", COUNT(*)::int AS count
+      FROM "GapResolution"
+      WHERE "assessmentId" = ${assessmentId}
+        AND "scopeItemId" = ANY(${selectedIds})
+      GROUP BY "scopeItemId", "resolutionType"
+    `,
+  ]);
 
-  const gapResolutions = await prisma.gapResolution.findMany({
-    where: { assessmentId },
-    select: { scopeItemId: true, resolutionType: true },
-  });
-
-  const initialAreas = buildFunctionalAreaOverview({
+  const initialAreas = buildFunctionalAreaOverviewFromCounts({
     scopeItems,
-    stepResponses,
-    gapResolutions,
+    responseCounts,
+    gapResolutionCounts,
   });
 
   return (
