@@ -180,7 +180,7 @@ export async function POST(
 
   if (uniqueUserIds.length > 0) {
     // For help requests, dispatch a specific notification type
-    const notificationType = body.isHelpRequest ? "help_request" : "mention";
+    const notificationType = body.isHelpRequest ? "help_request" : "comment_mention";
     const title = body.isHelpRequest ? `${user.name} requested help` : `${user.name} mentioned you`;
     const bodyText = body.isHelpRequest 
       ? `A help request was created on ${targetType}.`
@@ -188,7 +188,7 @@ export async function POST(
       
     for (const targetUserId of uniqueUserIds) {
       dispatchNotification({
-        userId: targetUserId,
+        recipientUserIds: [targetUserId],
         assessmentId,
         type: notificationType,
         title,
