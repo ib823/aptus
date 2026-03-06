@@ -4,8 +4,23 @@ import { NextResponse, type NextRequest } from "next/server";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/security/rate-limit";
 
 const SESSION_COOKIE = "abeam-session";
-const NEXTAUTH_COOKIE = "next-auth.session-token";
 const BRIDGE_PATH = "/api/auth/bridge";
+const NEXTAUTH_SESSION_COOKIE_PREFIXES = [
+  "next-auth.session-token",
+  "__Secure-next-auth.session-token",
+  "authjs.session-token",
+  "__Secure-authjs.session-token",
+] as const;
+
+function hasCookieWithPrefix(
+  request: NextRequest,
+  prefixes: readonly string[],
+): boolean {
+  const cookies = request.cookies.getAll();
+  return cookies.some(({ name }) =>
+    prefixes.some((prefix) => name === prefix || name.startsWith(`${prefix}.`)),
+  );
+}
 
 /** Paths exempt from rate limiting — called automatically on every page load */
 const RATE_LIMIT_EXEMPT = [
@@ -88,7 +103,10 @@ export function middleware(request: NextRequest): NextResponse | undefined {
   }
 
   const hasCustomSession = request.cookies.has(SESSION_COOKIE);
-  const hasNextAuthSession = request.cookies.has(NEXTAUTH_COOKIE);
+  const hasNextAuthSession = hasCookieWithPrefix(
+    request,
+    NEXTAUTH_SESSION_COOKIE_PREFIXES,
+  );
 
   // If user has NextAuth JWT but no custom session, bridge it
   if (hasNextAuthSession && !hasCustomSession) {

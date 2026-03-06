@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -8,26 +9,50 @@ import { NotificationPanel } from "@/components/notifications/NotificationPanel"
 
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
 
-async function fetchCount(): Promise<number> {
+type CountResult = {
+  count: number;
+  unauthorized: boolean;
+};
+
+async function fetchCount(): Promise<CountResult> {
   try {
     const res = await fetch("/api/notifications/unread-count");
+    if (res.status === 401) {
+      return { count: 0, unauthorized: true };
+    }
     if (res.ok) {
       const json = await res.json();
-      return json.data?.count ?? 0;
+      return { count: json.data?.count ?? 0, unauthorized: false };
     }
   } catch {
     // Silently fail — polling will retry
   }
-  return 0;
+  return { count: 0, unauthorized: false };
 }
 
 export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
+  const [authFailed, setAuthFailed] = useState(false);
   const prevOpenRef = useRef(open);
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const handleUnauthorized = useRef<() => void>(() => undefined);
+  handleUnauthorized.current = () => {
+    if (authFailed) return;
+    setAuthFailed(true);
+    setOpen(false);
+    const callbackPath = pathname || "/assessments";
+    router.replace(
+      `/api/auth/bridge?callbackUrl=${encodeURIComponent(callbackPath)}`,
+    );
+  };
 
   // SSE enhancement: connect to stream for real-time updates
   useEffect(() => {
+    if (authFailed) return;
+
     let eventSource: EventSource | null = null;
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -68,19 +93,31 @@ export function NotificationBell() {
       eventSource?.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
-  }, []);
+  }, [authFailed]);
 
   // Polling fallback — always runs regardless of SSE
   useEffect(() => {
+    if (authFailed) return;
+
     let cancelled = false;
 
-    void fetchCount().then((count) => {
-      if (!cancelled) setUnreadCount(count);
+    void fetchCount().then((result) => {
+      if (cancelled) return;
+      if (result.unauthorized) {
+        handleUnauthorized.current();
+        return;
+      }
+      setUnreadCount(result.count);
     });
 
     const interval = setInterval(() => {
-      void fetchCount().then((count) => {
-        if (!cancelled) setUnreadCount(count);
+      void fetchCount().then((result) => {
+        if (cancelled) return;
+        if (result.unauthorized) {
+          handleUnauthorized.current();
+          return;
+        }
+        setUnreadCount(result.count);
       });
     }, POLL_INTERVAL_MS);
 
@@ -88,19 +125,25 @@ export function NotificationBell() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, []);
+  }, [authFailed]);
 
   // Refresh count when panel closes (open transitions from true to false)
   useEffect(() => {
+    if (authFailed) return;
+
     const wasOpen = prevOpenRef.current;
     prevOpenRef.current = open;
 
     if (wasOpen && !open) {
-      void fetchCount().then((count) => {
-        setUnreadCount(count);
+      void fetchCount().then((result) => {
+        if (result.unauthorized) {
+          handleUnauthorized.current();
+          return;
+        }
+        setUnreadCount(result.count);
       });
     }
-  }, [open]);
+  }, [authFailed, open]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
