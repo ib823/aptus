@@ -52,9 +52,36 @@ export function ActiveEditors({
     void fetchLocks();
     const interval = setInterval(fetchLocks, POLL_INTERVAL_MS);
 
+    // 2. Connect to the Server-Sent Events stream for instant lock updates
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout>;
+
+    const connectSSE = () => {
+      if (document.visibilityState === "hidden") return;
+      try {
+        eventSource = new EventSource(`/api/assessments/${assessmentId}/stream`);
+        eventSource.addEventListener("locks_updated", () => {
+          void fetchLocks();
+        });
+        eventSource.onerror = () => {
+          eventSource?.close();
+          reconnectTimeout = setTimeout(connectSSE, 5000);
+        };
+      } catch {
+        // Silently fail if EventSource isn't supported
+      }
+    };
+
+    connectSSE();
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         void fetchLocks();
+        if (!eventSource || eventSource.readyState === EventSource.CLOSED) {
+          connectSSE();
+        }
+      } else {
+        if (eventSource) eventSource.close();
       }
     };
 
@@ -63,6 +90,8 @@ export function ActiveEditors({
     return () => {
       cancelled = true;
       clearInterval(interval);
+      clearTimeout(reconnectTimeout);
+      if (eventSource) eventSource.close();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [assessmentId, entityType, entityId]);

@@ -73,29 +73,67 @@ export function usePresence(assessmentId: string, entityId?: string) {
   useEffect(() => {
     if (!assessmentId) return;
 
-    // We only want to ping if the user is actually looking at the tab
-    const performCycle = () => {
+    // 1. Maintain the heartbeat (sending presence)
+    const performHeartbeat = () => {
       if (document.visibilityState === "hidden") return;
       void sendHeartbeat();
-      void fetchPresence();
     };
 
-    // Initial sequence
-    performCycle();
+    performHeartbeat(); // Initial
+    const heartbeatInterval = setInterval(performHeartbeat, HEARTBEAT_INTERVAL);
 
-    const interval = setInterval(performCycle, HEARTBEAT_INTERVAL);
+    // 2. Initial fetch for presence data
+    void fetchPresence();
 
-    // If the user comes back to the tab, fire immediately so it updates without waiting for the next interval tick.
+    // 3. Connect to the Server-Sent Events stream for real-time updates
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout>;
+
+    const connectSSE = () => {
+      if (document.visibilityState === "hidden") return;
+      
+      try {
+        eventSource = new EventSource(`/api/assessments/${assessmentId}/stream`);
+
+        eventSource.addEventListener("ping", () => {
+          // When the server broadcasts a ping, it means there was generic activity or a heartbeat cycle
+          void fetchPresence();
+        });
+
+        eventSource.onerror = () => {
+          eventSource?.close();
+          // Attempt to reconnect if SSE fails, falling back on the standard heartbeat
+          reconnectTimeout = setTimeout(connectSSE, 5000);
+        };
+      } catch {
+        // Silently fail if EventSource isn't supported
+      }
+    };
+
+    connectSSE();
+
+    // Handle tab visibility to save resources
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        performCycle();
+        performHeartbeat();
+        void fetchPresence();
+        if (!eventSource || eventSource.readyState === EventSource.CLOSED) {
+          connectSSE();
+        }
+      } else {
+        // Close SSE when tab is hidden to save Vercel connection limits
+        if (eventSource) {
+          eventSource.close();
+        }
       }
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      clearInterval(interval);
+      clearInterval(heartbeatInterval);
+      clearTimeout(reconnectTimeout);
+      if (eventSource) eventSource.close();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [assessmentId, sendHeartbeat, fetchPresence]);

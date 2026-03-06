@@ -86,6 +86,54 @@ export function CommentPanel({
     }
   }, [open, fetchComments]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout>;
+
+    const connectSSE = () => {
+      if (document.visibilityState === "hidden") return;
+      try {
+        eventSource = new EventSource(`/api/assessments/${assessmentId}/stream`);
+        eventSource.addEventListener("comments_updated", () => {
+          void fetchComments();
+        });
+        eventSource.addEventListener("ping", () => {
+          // If we receive a ping, we can also refresh comments to be safe
+          void fetchComments();
+        });
+        eventSource.onerror = () => {
+          eventSource?.close();
+          reconnectTimeout = setTimeout(connectSSE, 5000);
+        };
+      } catch {
+        // Silently fail if EventSource isn't supported
+      }
+    };
+
+    connectSSE();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void fetchComments();
+        if (!eventSource || eventSource.readyState === EventSource.CLOSED) {
+          connectSSE();
+        }
+      } else {
+        if (eventSource) eventSource.close();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearTimeout(reconnectTimeout);
+      if (eventSource) eventSource.close();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [open, assessmentId, fetchComments]);
+
   const handleCreate = async (content: string) => {
     const isHelpRequest = initialHelpRequest && comments.length === 0; // Only make the first comment the actual status flag
     const res = await fetch(`/api/assessments/${assessmentId}/comments`, {
