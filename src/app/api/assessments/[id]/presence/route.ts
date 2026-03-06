@@ -207,12 +207,15 @@ export async function GET(
     const staleTime = new Date(Date.now() - STALE_THRESHOLD_MS);
 
     // 1. Prune stale records for this assessment
-    await prisma.presenceRecord.deleteMany({
-      where: {
-        assessmentId,
-        lastSeenAt: { lt: staleTime },
-      },
-    });
+    // Performance Optimization: Only prune ~5% of the time to avoid DB transaction bloat from active polling
+    if (Math.random() < 0.05) {
+      await prisma.presenceRecord.deleteMany({
+        where: {
+          assessmentId,
+          lastSeenAt: { lt: staleTime },
+        },
+      });
+    }
 
     // 2. Fetch remaining active records
     const activeUsers = await listActivePresenceUsers(assessmentId);
