@@ -761,9 +761,11 @@ For EACH report endpoint discovered:
 ```
 If XLSX reports are generated, use a Node script to read and verify content:
 
-  // Using SheetJS to read XLSX
-  const XLSX = require('xlsx');
-  const wb = XLSX.readFile('/tmp/ABeam-reports/gap-register.xlsx');
+  // Using ExcelJS to read XLSX
+
+  const ExcelJS = require('exceljs');
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile('/tmp/ABeam-reports/gap-register.xlsx');
   
   For Gap Register XLSX:
     [ ] Has at least one sheet
