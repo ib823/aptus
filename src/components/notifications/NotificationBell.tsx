@@ -111,6 +111,7 @@ export function NotificationBell() {
     });
 
     const interval = setInterval(() => {
+      if (document.visibilityState === "hidden") return;
       void fetchCount().then((result) => {
         if (cancelled) return;
         if (result.unauthorized) {
@@ -121,9 +122,25 @@ export function NotificationBell() {
       });
     }, POLL_INTERVAL_MS);
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void fetchCount().then((result) => {
+          if (cancelled) return;
+          if (result.unauthorized) {
+            handleUnauthorized.current();
+            return;
+          }
+          setUnreadCount(result.count);
+        });
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       cancelled = true;
       clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [authFailed]);
 

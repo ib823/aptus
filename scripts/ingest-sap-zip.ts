@@ -203,7 +203,7 @@ async function main(): Promise<void> {
 
     const buffer = entry.getData();
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer as any);
+    await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
     const sheet = workbook.getWorksheet("Test Cases");
     if (!sheet) {
       console.warn(`  No 'Test Cases' sheet in ${filename}`);
@@ -537,7 +537,7 @@ async function main(): Promise<void> {
   if (configXlsm) {
     const buffer = configXlsm.getData();
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer as any);
+    await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
 
     // --- Main config sheet ---
     const mainSheet = workbook.getWorksheet("2508 S4H Cloud");
@@ -662,7 +662,7 @@ async function main(): Promise<void> {
   if (linksXlsx) {
     const buffer = linksXlsx.getData();
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer as any);
+    await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
 
     for (const sheetName of workbook.worksheets.map(ws => ws.name)) {
       const sheet = workbook.getWorksheet(sheetName);
@@ -939,7 +939,7 @@ async function main(): Promise<void> {
   if (configXlsm) {
     const cfgBuffer = configXlsm.getData();
     const cfgWorkbook = new ExcelJS.Workbook();
-    await cfgWorkbook.xlsx.load(cfgBuffer as any);
+    await cfgWorkbook.xlsx.load(cfgBuffer as unknown as ArrayBuffer);
     const cfgSheet = cfgWorkbook.getWorksheet("2508 S4H Cloud");
     if (cfgSheet) {
       const cfgRows: unknown[][] = [];

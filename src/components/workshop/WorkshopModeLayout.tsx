@@ -82,7 +82,8 @@ export function WorkshopModeLayout({
   useEffect(() => {
     if (status !== "in_progress") return;
 
-    const interval = setInterval(async () => {
+    const fetchAttendees = async () => {
+      if (document.visibilityState === "hidden") return;
       try {
         const res = await fetch(
           `/api/assessments/${assessmentId}/workshops/${sessionId}/attendees`,
@@ -94,9 +95,22 @@ export function WorkshopModeLayout({
       } catch {
         // silently fail
       }
-    }, POLL_INTERVAL);
+    };
 
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchAttendees, POLL_INTERVAL);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void fetchAttendees();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [assessmentId, sessionId, status]);
 
   const handleStart = useCallback(async () => {
