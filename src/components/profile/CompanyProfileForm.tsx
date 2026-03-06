@@ -553,7 +553,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
       </CollapsibleSection>
 
       {/* Sticky bottom bar — reactive with profile score */}
-      <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-10">
+      <div className="sticky bottom-0 bg-card border-t border-border z-10">
         <div className="max-w-5xl mx-auto flex items-center justify-between px-4 sm:px-6 py-3">
           <Link
             href="/assessments"
