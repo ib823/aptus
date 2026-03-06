@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { prisma } from "@/lib/db/prisma";
+import { calculateProfileCompleteness } from "@/lib/assessment/profile-completeness";
+import { PROFILE_COMPLETENESS_GATE } from "@/types/assessment";
 import { AssessmentTabNav } from "@/components/layout/AssessmentTabNav";
 import { MobileBottomTabBar } from "@/components/layout/MobileBottomTabBar";
 import { StatusTransitionBar } from "@/components/assessment/StatusTransitionBar";
@@ -33,12 +35,23 @@ export default async function AssessmentLayout({
 
   const assessment = await prisma.assessment.findUnique({
     where: { id: assessmentId, deletedAt: null },
-    select: { id: true, status: true, companyName: true },
+    select: {
+      id: true, status: true, companyName: true,
+      industry: true, country: true, companySize: true,
+      employeeCount: true, annualRevenue: true,
+      deploymentModel: true, sapModules: true,
+      migrationApproach: true, targetGoLiveDate: true,
+      keyProcesses: true, operatingCountries: true,
+      currentErpVersion: true, itLandscapeSummary: true,
+    },
   });
 
   if (!assessment) {
     notFound();
   }
+
+  const { score: profileScore } = calculateProfileCompleteness(assessment);
+  const scopeLocked = profileScore < PROFILE_COMPLETENESS_GATE;
 
   return (
     <div className="flex flex-col h-full">
@@ -62,6 +75,8 @@ export default async function AssessmentLayout({
         <AssessmentTabNav
           assessmentId={assessment.id}
           assessmentStatus={assessment.status}
+          scopeLocked={scopeLocked}
+          profileScore={profileScore}
         />
       </div>
       <div className="flex-1 min-h-0 overflow-auto pb-16 md:pb-0" role="region" aria-label="Assessment content" data-assessment-main>

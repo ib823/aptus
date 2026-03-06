@@ -1,13 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { HeatmapCell } from "@/types/dashboard";
 
 interface ProgressHeatmapProps {
   cells: HeatmapCell[];
+  assessmentId?: string | null;
 }
 
-export function ProgressHeatmap({ cells }: ProgressHeatmapProps) {
+export function ProgressHeatmap({ cells, assessmentId }: ProgressHeatmapProps) {
   return (
     <Card>
       <CardHeader className="pb-3 border-b border-slate-100">
@@ -17,18 +19,37 @@ export function ProgressHeatmap({ cells }: ProgressHeatmapProps) {
         {cells.length === 0 ? (
           <p className="text-sm text-muted-foreground">No scope items to display.</p>
         ) : (
-          <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1">
-            {cells.map((cell) => (
-              <div
-                key={cell.scopeItemId}
-                className={`aspect-square rounded ${cell.colorClass} flex items-center justify-center cursor-default group relative`}
-                title={`${cell.scopeItemName}: ${cell.completionPercent}% (${cell.completedSteps}/${cell.totalSteps})`}
-              >
-                <span className="text-[10px] font-medium text-foreground/70">
-                  {cell.completionPercent}%
-                </span>
-              </div>
-            ))}
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+            {cells.map((cell) => {
+              const content = (
+                <div className="flex flex-col items-center justify-center gap-0.5 p-1.5">
+                  <span className="text-sm font-semibold text-foreground/80">
+                    {cell.completionPercent}%
+                  </span>
+                  <span className="text-[9px] leading-tight text-foreground/60 text-center line-clamp-2">
+                    {cell.scopeItemName}
+                  </span>
+                </div>
+              );
+              return assessmentId ? (
+                <Link
+                  key={cell.scopeItemId}
+                  href={`/assessment/${assessmentId}/review?scopeItem=${cell.scopeItemId}`}
+                  className={`rounded-lg ${cell.colorClass} hover:ring-2 hover:ring-primary/30 transition-all cursor-pointer`}
+                  title={`${cell.scopeItemName}: ${cell.completionPercent}% (${cell.completedSteps}/${cell.totalSteps})`}
+                >
+                  {content}
+                </Link>
+              ) : (
+                <div
+                  key={cell.scopeItemId}
+                  className={`rounded-lg ${cell.colorClass}`}
+                  title={`${cell.scopeItemName}: ${cell.completionPercent}% (${cell.completedSteps}/${cell.totalSteps})`}
+                >
+                  {content}
+                </div>
+              );
+            })}
           </div>
         )}
         <div className="flex items-center gap-2 mt-4 text-xs text-muted-foreground">

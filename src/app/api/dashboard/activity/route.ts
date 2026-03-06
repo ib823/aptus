@@ -36,6 +36,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       summary: true,
       entityType: true,
       createdAt: true,
+      assessment: { select: { companyName: true } },
     },
   });
 

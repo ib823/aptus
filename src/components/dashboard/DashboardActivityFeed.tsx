@@ -11,12 +11,14 @@ interface ActivityEntry {
   actionType: string;
   summary: string;
   createdAt: string;
+  assessment?: { companyName: string };
 }
 
 interface GroupedEntry {
   key: string;
   actorName: string;
   summary: string;
+  assessmentName: string;
   count: number;
   latestId: string;
   latestCreatedAt: string;
@@ -29,7 +31,7 @@ interface DashboardActivityFeedProps {
 function groupConsecutiveEntries(entries: ActivityEntry[]): GroupedEntry[] {
   const groups: GroupedEntry[] = [];
   for (const entry of entries) {
-    const key = `${entry.actorName}::${entry.actionType}::${entry.summary}`;
+    const key = `${entry.actorName}::${entry.actionType}::${entry.summary}::${entry.assessment?.companyName ?? ""}`;
     const last = groups[groups.length - 1];
     if (last && last.key === key) {
       last.count += 1;
@@ -39,6 +41,7 @@ function groupConsecutiveEntries(entries: ActivityEntry[]): GroupedEntry[] {
         key,
         actorName: entry.actorName,
         summary: entry.summary,
+        assessmentName: entry.assessment?.companyName ?? "",
         count: 1,
         latestId: entry.id,
         latestCreatedAt: entry.createdAt,
@@ -70,6 +73,9 @@ export function DashboardActivityFeed({ entries }: DashboardActivityFeedProps) {
                     {group.summary}
                     {group.count > 1 && (
                       <span className="text-muted-foreground"> ({group.count}&times;)</span>
+                    )}
+                    {group.assessmentName && (
+                      <span className="text-muted-foreground"> &mdash; {group.assessmentName}</span>
                     )}
                   </p>
                   <p className="text-xs text-muted-foreground">

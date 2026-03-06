@@ -28,9 +28,22 @@ interface AssessmentsListProps {
 
 const STATUS_OPTIONS = ["All", "draft", "scoping", "in_review", "tracking", "completed"] as const;
 
+function statusDisplayLabel(status: string): string {
+  if (status === "All") return "All";
+  return status.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase());
+}
+
 export function AssessmentsList({ assessments }: AssessmentsListProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { All: assessments.length };
+    for (const a of assessments) {
+      counts[a.status] = (counts[a.status] ?? 0) + 1;
+    }
+    return counts;
+  }, [assessments]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -65,7 +78,10 @@ export function AssessmentsList({ assessments }: AssessmentsListProps) {
                   : "border-transparent text-muted-foreground hover:bg-muted"
               }`}
             >
-              {status === "All" ? "All" : status.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+              {statusDisplayLabel(status)}
+              <span className="ml-1 text-[10px] tabular-nums opacity-70">
+                {statusCounts[status] ?? 0}
+              </span>
             </button>
           ))}
         </div>

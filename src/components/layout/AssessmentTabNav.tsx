@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Lock } from "lucide-react";
 
 interface TabDef {
   label: string;
   href: string;
   segment: string;
   title?: string;
+  locked?: boolean;
 }
 
 interface TabStage {
@@ -18,9 +20,11 @@ interface TabStage {
 interface AssessmentTabNavProps {
   assessmentId: string;
   assessmentStatus: string;
+  scopeLocked?: boolean;
+  profileScore?: number;
 }
 
-export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentTabNavProps) {
+export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, profileScore }: AssessmentTabNavProps) {
   const pathname = usePathname();
   const base = `/assessment/${assessmentId}`;
   const activeSegment = (pathname ?? "").replace(base, "").split("/").filter(Boolean)[0] ?? "profile";
@@ -31,7 +35,12 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentT
       label: "Setup",
       tabs: [
         { label: "Profile", href: `${base}/profile`, segment: "profile" },
-        { label: "Scope", href: `${base}/scope`, segment: "scope" },
+        {
+          label: "Scope",
+          href: `${base}/scope`,
+          segment: "scope",
+          ...(scopeLocked ? { locked: true, title: `Profile ${profileScore ?? 0}% complete — reach 60% to unlock` } : {}),
+        },
       ],
     },
     {
@@ -169,6 +178,7 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus }: AssessmentT
                 }}
               >
                 {tab.label}
+                {tab.locked && <Lock className="inline w-3 h-3 ml-1 opacity-50" />}
               </Link>
             );
           })}

@@ -10,7 +10,7 @@ interface DashboardShellProps {
 }
 
 /** Fixed vertical order for the four primary dashboard sections */
-const PRIMARY_ORDER: WidgetType[] = ["attention", "kpi", "progress_heatmap", "activity_feed"];
+const PRIMARY_ORDER: WidgetType[] = ["attention", "kpi", "progress_heatmap", "activity_feed", "conflict_summary"];
 
 export function DashboardShell({ initialWidgets, assessmentId }: DashboardShellProps) {
   const [widgets] = useState<WidgetConfig[]>(initialWidgets);

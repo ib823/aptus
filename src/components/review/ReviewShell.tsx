@@ -1141,7 +1141,7 @@ function ReviewShellInner({
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-medium text-foreground">
-                        Step {(visiblePosition >= 0 ? visiblePosition : currentStepIndex) + 1} of {visibleStepIndices.length}
+                        Step {(visiblePosition >= 0 ? visiblePosition : currentStepIndex) + 1} of {visibleStepIndices.length || steps.length}
                       </span>
                       <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
                         currentStep.fitStatus === "FIT" ? "bg-green-50 text-green-700 border border-green-200"
@@ -1215,7 +1215,7 @@ function ReviewShellInner({
                     </Button>
                     <div className="hidden sm:flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">
-                        Step {(visiblePosition >= 0 ? visiblePosition : currentStepIndex) + 1} of {visibleStepIndices.length}
+                        Step {(visiblePosition >= 0 ? visiblePosition : currentStepIndex) + 1} of {visibleStepIndices.length || steps.length}
                       </span>
                       <Button
                         variant="ghost"
