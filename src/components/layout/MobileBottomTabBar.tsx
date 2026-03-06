@@ -17,8 +17,8 @@ interface MobileBottomTabBarProps {
 const stages = [
   { label: "Setup", icon: Settings2, segment: "profile", href: "/profile" },
   { label: "Review", icon: ClipboardCheck, segment: "review", href: "/review" },
-  { label: "Outputs", icon: BarChart3, segment: "config", href: "/config" },
-  { label: "Registers", icon: Database, segment: "integrations", href: "/integrations" },
+  { label: "Results", icon: BarChart3, segment: "config", href: "/config" },
+  { label: "Tracking", icon: Database, segment: "integrations", href: "/integrations" },
   { label: "Wrap-up", icon: CheckCircle2, segment: "activity", href: "/activity" },
 ];
 

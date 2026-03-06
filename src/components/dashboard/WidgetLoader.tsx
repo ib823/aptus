@@ -117,7 +117,7 @@ function HeatmapLoader({ assessmentId }: { assessmentId: string }) {
   );
   if (loading) return <CardSkeleton />;
   if (error) return <WidgetError message={error} onRetry={retry} />;
-  return <ProgressHeatmap cells={data ?? []} />;
+  return <ProgressHeatmap cells={data ?? []} assessmentId={assessmentId} />;
 }
 
 interface Deadline {

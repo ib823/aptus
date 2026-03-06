@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { WifiOffIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -26,9 +26,26 @@ function getServerSnapshot() {
 }
 
 export function OfflineIndicator({ pendingCount }: OfflineIndicatorProps) {
-  const isOnline = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const browserOnline = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  if (isOnline) return null;
+  // navigator.onLine can be unreliable (e.g., returns false in some dev environments)
+  // Only show the offline banner after a failed fetch confirms we're truly offline
+  const [confirmedOffline, setConfirmedOffline] = useState(false);
+
+  useEffect(() => {
+    if (browserOnline) {
+      setConfirmedOffline(false);
+      return;
+    }
+    // Double-check with a real fetch before showing the banner
+    let cancelled = false;
+    fetch("/api/health", { method: "HEAD", cache: "no-store" })
+      .then(() => { if (!cancelled) setConfirmedOffline(false); })
+      .catch(() => { if (!cancelled) setConfirmedOffline(true); });
+    return () => { cancelled = true; };
+  }, [browserOnline]);
+
+  if (!confirmedOffline) return null;
 
   return (
     <div
