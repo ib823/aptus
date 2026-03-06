@@ -15,6 +15,7 @@ const CreateCommentSchema = z.object({
   targetId: z.string().min(1),
   content: z.string().min(1).max(10000),
   parentCommentId: z.string().optional(),
+  isHelpRequest: z.boolean().optional(),
 });
 export async function GET(
   request: NextRequest,
@@ -156,11 +157,50 @@ export async function POST(
       contentHtml,
       mentions: mentionIds,
       parentCommentId: parentCommentId ?? null,
+      status: body.isHelpRequest ? "HELP_REQUEST" : "OPEN",
     },
     include: {
       author: { select: { id: true, name: true, email: true, avatarUrl: true, role: true } },
     },
   });
+
+  // Handle Notifications: Mentions OR Help Requests
+  const notifiedUserIds = new Set(mentionIds);
+  
+  if (body.isHelpRequest) {
+    // Look up consultants for this assessment to notify them
+    const consultants = await prisma.assessmentStakeholder.findMany({
+      where: { assessmentId, role: "consultant" },
+      select: { userId: true },
+    });
+    consultants.forEach((c) => notifiedUserIds.add(c.userId));
+  }
+
+  const uniqueUserIds = Array.from(notifiedUserIds).filter((id) => id !== user.id);
+
+  if (uniqueUserIds.length > 0) {
+    // For help requests, dispatch a specific notification type
+    const notificationType = body.isHelpRequest ? "help_request" : "mention";
+    const title = body.isHelpRequest ? `${user.name} requested help` : `${user.name} mentioned you`;
+    const bodyText = body.isHelpRequest 
+      ? `A help request was created on ${targetType}.`
+      : `You were mentioned in a comment on ${targetType}.`;
+      
+    for (const targetUserId of uniqueUserIds) {
+      dispatchNotification({
+        userId: targetUserId,
+        assessmentId,
+        type: notificationType,
+        title,
+        body: bodyText,
+        metadata: {
+          commentId: comment.id,
+          targetType,
+          targetId,
+        },
+      }).catch((e) => console.error("Mention/Help dispatch failed", e));
+    }
+  }
 
   // Log activity (fire-and-forget)
   logActivity({

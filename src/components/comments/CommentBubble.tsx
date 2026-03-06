@@ -78,7 +78,7 @@ export function CommentBubble({
   };
 
   return (
-    <div className={`border rounded-lg p-3 ${isResolved ? "opacity-60" : ""}`}>
+    <div className={`border rounded-lg p-3 ${isResolved ? "opacity-60" : ""} ${status === "HELP_REQUEST" ? "bg-purple-50/50 border-purple-200" : "bg-card"}`}>
       <div className="flex items-center gap-2 mb-1">
         <span className="text-sm font-medium">{author.name}</span>
         <span className="text-xs text-muted-foreground">{author.role}</span>
@@ -89,6 +89,11 @@ export function CommentBubble({
         {isResolved && (
           <Badge variant="secondary" className="text-xs">
             Resolved{resolvedBy ? ` by ${resolvedBy.name}` : ""}
+          </Badge>
+        )}
+        {status === "HELP_REQUEST" && !isResolved && (
+          <Badge variant="outline" className="text-xs bg-purple-100 text-purple-800 border-purple-300">
+            Help Request
           </Badge>
         )}
       </div>
