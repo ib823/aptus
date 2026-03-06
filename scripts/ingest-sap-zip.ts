@@ -18,7 +18,7 @@
 import { PrismaClient } from "@prisma/client";
 import { put } from "@vercel/blob";
 import AdmZip from "adm-zip";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import mammoth from "mammoth";
 import path from "path";
 
@@ -202,18 +202,18 @@ async function main(): Promise<void> {
     }
 
     const buffer = entry.getData();
-    const workbook = XLSX.read(buffer, { type: "buffer" });
-    const sheet = workbook.Sheets["Test Cases"];
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer as any);
+    const sheet = workbook.getWorksheet("Test Cases");
     if (!sheet) {
       console.warn(`  No 'Test Cases' sheet in ${filename}`);
       continue;
     }
-
-    // Read all rows as array of arrays
-    const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, {
-      header: 1,
-      raw: false,
-      defval: null,
+    
+    const rows: unknown[][] = [];
+    sheet.eachRow((row) => {
+      // ExcelJS rows are 1-indexed and first item is empty by default when accessed as array. We slice it to align with old sheetjs logic
+      rows.push((row.values as unknown[]).slice(1).map(v => v === undefined ? null : v));
     });
 
     // Header is at row index 4, data starts at row 5
@@ -536,15 +536,15 @@ async function main(): Promise<void> {
 
   if (configXlsm) {
     const buffer = configXlsm.getData();
-    const workbook = XLSX.read(buffer, { type: "buffer" });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer as any);
 
     // --- Main config sheet ---
-    const mainSheet = workbook.Sheets["2508 S4H Cloud"];
+    const mainSheet = workbook.getWorksheet("2508 S4H Cloud");
     if (mainSheet) {
-      const rows: unknown[][] = XLSX.utils.sheet_to_json(mainSheet, {
-        header: 1,
-        raw: false,
-        defval: null,
+      const rows: unknown[][] = [];
+      mainSheet.eachRow((row) => {
+        rows.push((row.values as unknown[]).slice(1).map(v => v === undefined ? null : v));
       });
 
       // Header at row 3, data rows 4+
@@ -592,12 +592,11 @@ async function main(): Promise<void> {
     }
 
     // --- IMG Activity sheet ---
-    const imgSheet = workbook.Sheets["IMG Activity TRAN in BC"];
+    const imgSheet = workbook.getWorksheet("IMG Activity TRAN in BC");
     if (imgSheet) {
-      const rows: unknown[][] = XLSX.utils.sheet_to_json(imgSheet, {
-        header: 1,
-        raw: false,
-        defval: null,
+      const rows: unknown[][] = [];
+      imgSheet.eachRow((row) => {
+        rows.push((row.values as unknown[]).slice(1).map(v => v === undefined ? null : v));
       });
 
       // Header at row 0, data starts at row 1
@@ -625,19 +624,18 @@ async function main(): Promise<void> {
     }
 
     // --- Expert config sheets (Tasks 3-15 in the XLSM, excluding Doc. Info) ---
-    const expertSheetNames = workbook.SheetNames.filter(
+    const expertSheetNames = workbook.worksheets.map(ws => ws.name).filter(
       (name: string) => name !== "2508 S4H Cloud" && name !== "IMG Activity TRAN in BC" && name !== "Doc. Info"
     );
     console.log(`  Expert config sheets: ${expertSheetNames.length}`);
 
     for (const sheetName of expertSheetNames) {
-      const sheet = workbook.Sheets[sheetName];
+      const sheet = workbook.getWorksheet(sheetName);
       if (!sheet) continue;
 
-      const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, {
-        header: 1,
-        raw: false,
-        defval: null,
+      const rows: unknown[][] = [];
+      sheet.eachRow((row) => {
+        rows.push((row.values as unknown[]).slice(1).map(v => v === undefined ? null : v));
       });
 
       // Find scope item ID for this expert config
@@ -663,16 +661,16 @@ async function main(): Promise<void> {
 
   if (linksXlsx) {
     const buffer = linksXlsx.getData();
-    const workbook = XLSX.read(buffer, { type: "buffer" });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer as any);
 
-    for (const sheetName of workbook.SheetNames) {
-      const sheet = workbook.Sheets[sheetName];
+    for (const sheetName of workbook.worksheets.map(ws => ws.name)) {
+      const sheet = workbook.getWorksheet(sheetName);
       if (!sheet) continue;
 
-      const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, {
-        header: 1,
-        raw: false,
-        defval: null,
+      const rows: unknown[][] = [];
+      sheet.eachRow((row) => {
+        rows.push((row.values as unknown[]).slice(1).map(v => v === undefined ? null : v));
       });
 
       // Header at row 0, data starts at row 1
@@ -940,13 +938,13 @@ async function main(): Promise<void> {
   // We need to go back to the raw XLSM data for this
   if (configXlsm) {
     const cfgBuffer = configXlsm.getData();
-    const cfgWorkbook = XLSX.read(cfgBuffer, { type: "buffer" });
-    const cfgSheet = cfgWorkbook.Sheets["2508 S4H Cloud"];
+    const cfgWorkbook = new ExcelJS.Workbook();
+    await cfgWorkbook.xlsx.load(cfgBuffer as any);
+    const cfgSheet = cfgWorkbook.getWorksheet("2508 S4H Cloud");
     if (cfgSheet) {
-      const cfgRows: unknown[][] = XLSX.utils.sheet_to_json(cfgSheet, {
-        header: 1,
-        raw: false,
-        defval: null,
+      const cfgRows: unknown[][] = [];
+      cfgSheet.eachRow((row) => {
+        cfgRows.push((row.values as unknown[]).slice(1).map(v => v === undefined ? null : v));
       });
       for (const row of cfgRows.slice(4)) {
         const rawScopeId = cellStr(row[9]).trim();
