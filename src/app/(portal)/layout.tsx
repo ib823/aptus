@@ -8,6 +8,7 @@ import { MFA_REQUIRED_ROLES } from "@/constants/config";
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { MobileBottomTabBar } from "@/components/pwa/MobileBottomTabBar";
 import { PasskeyEnrollmentPrompt } from "@/components/auth/PasskeyEnrollmentPrompt";
+import { GlobalHelpWidget } from "@/components/help/GlobalHelpWidget";
 import type { SubscriptionStatus } from "@/types/commercial";
 import type { ReactNode } from "react";
 
@@ -74,6 +75,7 @@ export default async function PortalLayout({
         <PasskeyEnrollmentPrompt hasWebAuthn={user.hasWebAuthn} />
         <OnboardingGuard>{children}</OnboardingGuard>
       </main>
+      <GlobalHelpWidget userRole={user.role} />
       <MobileBottomTabBar role={user.role} />
     </div>
   );
