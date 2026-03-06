@@ -33,6 +33,7 @@ export function ActiveEditors({
     let cancelled = false;
 
     async function fetchLocks() {
+      if (document.visibilityState === "hidden") return;
       try {
         const res = await fetch(`/api/assessments/${assessmentId}/locks`);
         if (res.ok) {
@@ -51,9 +52,18 @@ export function ActiveEditors({
     void fetchLocks();
     const interval = setInterval(fetchLocks, POLL_INTERVAL_MS);
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void fetchLocks();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       cancelled = true;
       clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [assessmentId, entityType, entityId]);
 

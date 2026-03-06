@@ -73,16 +73,31 @@ export function usePresence(assessmentId: string, entityId?: string) {
   useEffect(() => {
     if (!assessmentId) return;
 
-    // Initial sequence
-    void sendHeartbeat();
-    void fetchPresence();
-
-    const interval = setInterval(() => {
+    // We only want to ping if the user is actually looking at the tab
+    const performCycle = () => {
+      if (document.visibilityState === "hidden") return;
       void sendHeartbeat();
       void fetchPresence();
-    }, HEARTBEAT_INTERVAL);
+    };
 
-    return () => clearInterval(interval);
+    // Initial sequence
+    performCycle();
+
+    const interval = setInterval(performCycle, HEARTBEAT_INTERVAL);
+
+    // If the user comes back to the tab, fire immediately so it updates without waiting for the next interval tick.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        performCycle();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [assessmentId, sendHeartbeat, fetchPresence]);
 
   return { activeUsers };
