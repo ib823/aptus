@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useSSE } from "@/hooks/useSSE";
 
 export interface PresenceUser {
   userId: string;
@@ -70,6 +71,9 @@ export function usePresence(assessmentId: string, entityId?: string) {
     }
   }, [assessmentId, pathname, entityId, redirectToSessionBridge]);
 
+  // Use shared SSE manager for lock updates — triggers a presence refresh
+  useSSE(assessmentId, "locks_updated", fetchPresence);
+
   useEffect(() => {
     if (!assessmentId) return;
 
@@ -85,46 +89,11 @@ export function usePresence(assessmentId: string, entityId?: string) {
     // 2. Initial fetch for presence data
     void fetchPresence();
 
-    // 3. Connect to the Server-Sent Events stream for real-time updates
-    let eventSource: EventSource | null = null;
-    let reconnectTimeout: ReturnType<typeof setTimeout>;
-
-    const connectSSE = () => {
-      if (document.visibilityState === "hidden") return;
-      
-      try {
-        eventSource = new EventSource(`/api/assessments/${assessmentId}/stream`);
-
-        eventSource.addEventListener("ping", () => {
-          // When the server broadcasts a ping, it means there was generic activity or a heartbeat cycle
-          void fetchPresence();
-        });
-
-        eventSource.onerror = () => {
-          eventSource?.close();
-          // Attempt to reconnect if SSE fails, falling back on the standard heartbeat
-          reconnectTimeout = setTimeout(connectSSE, 5000);
-        };
-      } catch {
-        // Silently fail if EventSource isn't supported
-      }
-    };
-
-    connectSSE();
-
-    // Handle tab visibility to save resources
+    // Handle tab visibility for heartbeat
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         performHeartbeat();
         void fetchPresence();
-        if (!eventSource || eventSource.readyState === EventSource.CLOSED) {
-          connectSSE();
-        }
-      } else {
-        // Close SSE when tab is hidden to save Vercel connection limits
-        if (eventSource) {
-          eventSource.close();
-        }
       }
     };
 
@@ -132,8 +101,6 @@ export function usePresence(assessmentId: string, entityId?: string) {
 
     return () => {
       clearInterval(heartbeatInterval);
-      clearTimeout(reconnectTimeout);
-      if (eventSource) eventSource.close();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [assessmentId, sendHeartbeat, fetchPresence]);

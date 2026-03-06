@@ -104,6 +104,10 @@ function Select({
 /* ------------------------------------------------------------------ */
 /*  SelectTrigger — renders the native <select>                        */
 /* ------------------------------------------------------------------ */
+function hasDisplayName(type: unknown): type is { displayName: string } {
+  return typeof type === "function" && typeof (type as unknown as Record<string, unknown>).displayName === "string"
+}
+
 interface SelectValueProps {
   placeholder?: string;
   children?: React.ReactNode;
@@ -121,10 +125,9 @@ function SelectTrigger({
   // Find placeholder from children if SelectValue is present
   let placeholder: string | undefined
   React.Children.forEach(children, (child) => {
-    if (React.isValidElement<SelectValueProps>(child) && 
-        typeof child.type !== 'string' && 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (child.type as any).displayName === "SelectValue") {
+    if (React.isValidElement<SelectValueProps>(child) &&
+        typeof child.type !== 'string' &&
+        hasDisplayName(child.type) && child.type.displayName === "SelectValue") {
       placeholder = child.props.placeholder
     }
   })
@@ -145,8 +148,7 @@ function SelectTrigger({
           size === "sm" ? "h-8 text-xs" : "h-11 sm:h-9",
           className,
         )}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        {...(props as any)}
+        {...(props as React.ComponentProps<"select">)}
       >
         {placeholder && (
           <option value="" disabled={ctx.required}>

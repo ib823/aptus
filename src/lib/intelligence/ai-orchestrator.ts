@@ -4,6 +4,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
+import { decryptApiKey, isEncryptedKey } from "./ai-key-crypto";
 
 export type AIProvider = "openai" | "azure" | "gemini" | "anthropic";
 
@@ -23,6 +24,9 @@ export interface AIResponse {
   };
 }
 
+const AZURE_ENDPOINT_RE =
+  /^https:\/\/[a-zA-Z0-9-]+\.openai\.azure\.com\//;
+
 /**
  * Main AI Service Factory
  */
@@ -38,7 +42,7 @@ export class AIOrchestrator {
    */
   async generateText(prompt: string, systemPrompt?: string): Promise<AIResponse> {
     const config = await this.getEffectiveConfig();
-    
+
     switch (config.provider) {
       case "openai":
         return this.callOpenAI(config, prompt, systemPrompt);
@@ -46,6 +50,8 @@ export class AIOrchestrator {
         return this.callGemini(config, prompt, systemPrompt);
       case "azure":
         return this.callAzureOpenAI(config, prompt, systemPrompt);
+      case "anthropic":
+        throw new Error("Anthropic provider is not yet implemented.");
       default:
         throw new Error(`AI Provider ${config.provider} not supported`);
     }
@@ -61,7 +67,12 @@ export class AIOrchestrator {
     });
 
     if (org?.aiConfig && typeof org.aiConfig === 'object') {
-      return org.aiConfig as unknown as AIConfig;
+      const raw = org.aiConfig as unknown as AIConfig;
+      // Decrypt API key if it was encrypted at rest
+      if (raw.apiKey && isEncryptedKey(raw.apiKey)) {
+        raw.apiKey = decryptApiKey(raw.apiKey);
+      }
+      return raw;
     }
 
     // System Fallback (Environment Variables)
@@ -73,7 +84,6 @@ export class AIOrchestrator {
   }
 
   private async callOpenAI(config: AIConfig, prompt: string, system?: string): Promise<AIResponse> {
-    // Implementation for standard OpenAI API
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -89,28 +99,38 @@ export class AIOrchestrator {
       }),
     });
 
-    if (!response.ok) throw new Error(`OpenAI Error: ${await response.text()}`);
+    if (!response.ok) {
+      throw new Error(`OpenAI API returned status ${response.status}`);
+    }
     const data = await response.json();
 
+    const content = data?.choices?.[0]?.message?.content;
+    if (typeof content !== "string") {
+      throw new Error("OpenAI response missing expected content structure");
+    }
+
     return {
-      content: data.choices[0].message.content,
+      content,
       usage: {
-        promptTokens: data.usage.prompt_tokens,
-        completionTokens: data.usage.completion_tokens,
-        totalTokens: data.usage.total_tokens,
+        promptTokens: data.usage?.prompt_tokens ?? 0,
+        completionTokens: data.usage?.completion_tokens ?? 0,
+        totalTokens: data.usage?.total_tokens ?? 0,
       }
     };
   }
 
   private async callGemini(config: AIConfig, prompt: string, system?: string): Promise<AIResponse> {
-    // Implementation for Google Gemini API
     const baseUrl = "https://generativelanguage.googleapis.com/v1beta/models";
     const model = config.modelName || "gemini-1.5-pro";
-    const url = `${baseUrl}/${model}:generateContent?key=${config.apiKey}`;
+    // Use header-based auth instead of query string to avoid key leakage in logs
+    const url = `${baseUrl}/${model}:generateContent`;
 
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": config.apiKey,
+      },
       body: JSON.stringify({
         contents: [{
           parts: [{ text: `${system ? system + "\n\n" : ""}${prompt}` }]
@@ -118,24 +138,34 @@ export class AIOrchestrator {
       }),
     });
 
-    if (!response.ok) throw new Error(`Gemini Error: ${await response.text()}`);
+    if (!response.ok) {
+      throw new Error(`Gemini API returned status ${response.status}`);
+    }
     const data = await response.json();
 
+    const content = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (typeof content !== "string") {
+      throw new Error("Gemini response missing expected content structure");
+    }
+
     return {
-      content: data.candidates[0].content.parts[0].text,
+      content,
       usage: {
-        // Gemini API tokens mapping varies, using placeholder if not provided
-        promptTokens: data.usageMetadata?.promptTokenCount || 0,
-        completionTokens: data.usageMetadata?.candidatesTokenCount || 0,
-        totalTokens: data.usageMetadata?.totalTokenCount || 0,
+        promptTokens: data.usageMetadata?.promptTokenCount ?? 0,
+        completionTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
+        totalTokens: data.usageMetadata?.totalTokenCount ?? 0,
       }
     };
   }
 
   private async callAzureOpenAI(config: AIConfig, prompt: string, system?: string): Promise<AIResponse> {
     if (!config.endpoint) throw new Error("Azure OpenAI requires an endpoint URL");
-    
-    // Azure endpoint format: https://{resource}.openai.azure.com/openai/deployments/{deployment-id}/chat/completions?api-version=2023-05-15
+
+    // Validate Azure endpoint format to prevent SSRF
+    if (!AZURE_ENDPOINT_RE.test(config.endpoint)) {
+      throw new Error("Azure endpoint must match https://{name}.openai.azure.com/...");
+    }
+
     const response = await fetch(config.endpoint, {
       method: "POST",
       headers: {
@@ -150,15 +180,22 @@ export class AIOrchestrator {
       }),
     });
 
-    if (!response.ok) throw new Error(`Azure Error: ${await response.text()}`);
+    if (!response.ok) {
+      throw new Error(`Azure OpenAI API returned status ${response.status}`);
+    }
     const data = await response.json();
 
+    const content = data?.choices?.[0]?.message?.content;
+    if (typeof content !== "string") {
+      throw new Error("Azure OpenAI response missing expected content structure");
+    }
+
     return {
-      content: data.choices[0].message.content,
+      content,
       usage: {
-        promptTokens: data.usage.prompt_tokens,
-        completionTokens: data.usage.completion_tokens,
-        totalTokens: data.usage.total_tokens,
+        promptTokens: data.usage?.prompt_tokens ?? 0,
+        completionTokens: data.usage?.completion_tokens ?? 0,
+        totalTokens: data.usage?.total_tokens ?? 0,
       }
     };
   }

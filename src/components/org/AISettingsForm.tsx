@@ -85,7 +85,7 @@ export function AISettingsForm({ organizationId, initialConfig }: AISettingsForm
               className="font-mono"
             />
             <p className="text-[10px] text-muted-foreground">
-              Your key is encrypted at rest and never used for training.
+              Your key is AES-256 encrypted at rest and never used for training.
             </p>
           </div>
 

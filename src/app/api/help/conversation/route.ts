@@ -1,6 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+
+const PutMessageSchema = z.object({
+  sessionId: z.string().min(1),
+  message: z.object({
+    role: z.enum(["user", "assistant"]),
+    content: z.string().min(1).max(10000),
+  }),
+});
 
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
@@ -25,11 +34,6 @@ export async function POST(req: NextRequest) {
     });
 
     if (!session) {
-      // Create new session if none exists
-      // If assessmentId is missing, we must provide a fallback since it's required.
-      // In a real app, you might want to fetch their most recent active assessment.
-      // For now, we will require assessmentId to be passed or look up the first one.
-      
       let targetAssessmentId = assessmentId;
       if (!targetAssessmentId) {
         const firstAssessment = await prisma.assessmentStakeholder.findFirst({
@@ -52,9 +56,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({ 
-      sessionId: session.id, 
-      responses: session.responses 
+    return NextResponse.json({
+      sessionId: session.id,
+      responses: session.responses
     });
   } catch (error) {
     console.error("Init Help Session Error:", error);
@@ -67,21 +71,37 @@ export async function PUT(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const { sessionId, message } = await req.json();
+    const body = await req.json();
+    const parsed = PutMessageSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: parsed.error.flatten().fieldErrors },
+        { status: 400 },
+      );
+    }
 
-    const session = await prisma.conversationSession.findUnique({
-      where: { id: sessionId },
+    const { sessionId, message } = parsed.data;
+
+    // Ownership check: only the session owner can append messages
+    const session = await prisma.conversationSession.findFirst({
+      where: { id: sessionId, userId: user.id },
     });
 
     if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
 
-    const currentResponses = Array.isArray(session.responses) ? session.responses : [];
-    
-    await prisma.conversationSession.update({
-      where: { id: sessionId },
-      data: {
-        responses: [...currentResponses, message],
-      },
+    // Atomic read-append-write via transaction
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.conversationSession.findUnique({
+        where: { id: sessionId },
+        select: { responses: true },
+      });
+      const currentResponses = Array.isArray(current?.responses) ? current.responses : [];
+      await tx.conversationSession.update({
+        where: { id: sessionId },
+        data: {
+          responses: [...currentResponses, message],
+        },
+      });
     });
 
     return NextResponse.json({ success: true });
@@ -101,8 +121,9 @@ export async function GET(req: NextRequest) {
   if (!sessionId) return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });
 
   try {
-    const session = await prisma.conversationSession.findUnique({
-      where: { id: sessionId },
+    // Ownership check: only the session owner can read their messages
+    const session = await prisma.conversationSession.findFirst({
+      where: { id: sessionId, userId: user.id },
       select: { responses: true },
     });
 

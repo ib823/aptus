@@ -9,6 +9,7 @@ const HEARTBEAT_INTERVAL_MS = 45_000; // Send heartbeat every 45 seconds
 const MAX_DURATION_MS = 5 * 60 * 1_000; // 5-minute max stream (Vercel-compatible)
 const UNREAD_CACHE_TTL_MS = 30_000;
 
+const CACHE_MAX_ENTRIES = 500;
 const unreadCountCache = new Map<string, { count: number; fetchedAt: number }>();
 
 async function getUnreadCount(userId: string, forceRefresh = false): Promise<number> {
@@ -21,6 +22,12 @@ async function getUnreadCount(userId: string, forceRefresh = false): Promise<num
   const count = await prisma.notification.count({
     where: { userId, status: "unread" },
   });
+
+  // Bounded LRU: evict oldest entry if at capacity
+  if (unreadCountCache.size >= CACHE_MAX_ENTRIES) {
+    const firstKey = unreadCountCache.keys().next().value;
+    if (firstKey !== undefined) unreadCountCache.delete(firstKey);
+  }
   unreadCountCache.set(userId, { count, fetchedAt: now });
   return count;
 }
@@ -121,7 +128,6 @@ export async function GET(_request: NextRequest): Promise<Response> {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
       "X-Accel-Buffering": "no",
     },
   });

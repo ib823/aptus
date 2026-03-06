@@ -157,7 +157,7 @@ export async function POST(
       contentHtml,
       mentions: mentionIds,
       parentCommentId: parentCommentId ?? null,
-      status: body.isHelpRequest ? "HELP_REQUEST" : "OPEN",
+      status: parsed.data.isHelpRequest ? "HELP_REQUEST" : "OPEN",
     },
     include: {
       author: { select: { id: true, name: true, email: true, avatarUrl: true, role: true } },
@@ -167,7 +167,7 @@ export async function POST(
   // Handle Notifications: Mentions OR Help Requests
   const notifiedUserIds = new Set(mentionIds);
   
-  if (body.isHelpRequest) {
+  if (parsed.data.isHelpRequest) {
     // Look up consultants for this assessment to notify them
     const consultants = await prisma.assessmentStakeholder.findMany({
       where: { assessmentId, role: "consultant" },
@@ -180,9 +180,9 @@ export async function POST(
 
   if (uniqueUserIds.length > 0) {
     // For help requests, dispatch a specific notification type
-    const notificationType = body.isHelpRequest ? "help_request" : "comment_mention";
-    const title = body.isHelpRequest ? `${user.name} requested help` : `${user.name} mentioned you`;
-    const bodyText = body.isHelpRequest 
+    const notificationType = parsed.data.isHelpRequest ? "help_request" : "comment_mention";
+    const title = parsed.data.isHelpRequest ? `${user.name} requested help` : `${user.name} mentioned you`;
+    const bodyText = parsed.data.isHelpRequest 
       ? `A help request was created on ${targetType}.`
       : `You were mentioned in a comment on ${targetType}.`;
       
@@ -213,18 +213,6 @@ export async function POST(
     entityType: targetType,
     entityId: targetId,
   }).catch(() => { /* fire-and-forget */ });
-
-  // Notify mentioned users
-  if (mentionIds.length > 0) {
-    dispatchNotification({
-      type: "comment_mention",
-      assessmentId,
-      title: `${user.name} mentioned you in a comment`,
-      body: content.substring(0, 200),
-      deepLink: `/assessments/${assessmentId}?comment=${comment.id}`,
-      recipientUserIds: mentionIds.filter((id) => id !== user.id),
-    }).catch(() => { /* fire-and-forget */ });
-  }
 
   // Notify parent comment author for replies
   if (parentCommentId) {

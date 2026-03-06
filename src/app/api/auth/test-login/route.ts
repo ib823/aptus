@@ -8,9 +8,12 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/db/prisma";
 import { createSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { APP_CONFIG } from "@/constants/config";
+
+const ALLOWED_TEST_DOMAINS = ["abeam.test", "e2e.test"];
 
 const TEST_USER_EMAIL = "e2e-tester@abeam.test";
 const TEST_USER_NAME = "E2E Tester";
@@ -54,7 +57,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  if (body.secret !== secret) {
+  if (
+    !body.secret ||
+    body.secret.length !== secret.length ||
+    !timingSafeEqual(Buffer.from(body.secret), Buffer.from(secret))
+  ) {
     return NextResponse.json(
       { error: "Invalid secret" },
       { status: 403 },
@@ -62,6 +69,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const targetEmail = body.email ?? TEST_USER_EMAIL;
+
+  // Validate email domain against allowlist
+  const emailDomain = targetEmail.split("@")[1]?.toLowerCase();
+  if (!emailDomain || !ALLOWED_TEST_DOMAINS.includes(emailDomain)) {
+    return NextResponse.json(
+      { error: "Email domain not allowed for test login" },
+      { status: 400 },
+    );
+  }
   // Optional: allow specifying a role for the test user
   const role = body.role ?? TEST_USER_ROLE;
 

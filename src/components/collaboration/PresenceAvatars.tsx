@@ -23,7 +23,7 @@ export function PresenceAvatars({ assessmentId }: PresenceAvatarsProps) {
                 <Avatar className="size-7">
                   {user.userImage && <AvatarImage src={user.userImage} alt={user.userName} />}
                   <AvatarFallback className="bg-blue-600 text-[10px] text-white font-bold">
-                    {user.userName.substring(0, 2).toUpperCase()}
+                    {user.userName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 {/* Active pulse dot */}
@@ -32,10 +32,10 @@ export function PresenceAvatars({ assessmentId }: PresenceAvatarsProps) {
             </TooltipTrigger>
             <TooltipContent className="p-2 text-xs">
               <div className="font-bold">{user.userName}</div>
-              <div className="text-muted-foreground uppercase text-[9px] tracking-wider">{user.userRole.replace('_', ' ')}</div>
+              <div className="text-muted-foreground uppercase text-[9px] tracking-wider">{user.userRole.replaceAll('_', ' ')}</div>
               {user.currentPage && (
                 <div className="mt-1 pt-1 border-t border-border/50 italic opacity-80">
-                  Viewing: {user.currentPage.split('/').pop()?.replace('-', ' ')}
+                  Viewing: {user.currentPage.split('/').pop()?.replaceAll('-', ' ')}
                 </div>
               )}
             </TooltipContent>

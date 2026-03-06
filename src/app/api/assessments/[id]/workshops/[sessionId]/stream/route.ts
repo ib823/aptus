@@ -44,6 +44,12 @@ export async function GET(
   let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
   const stream = new ReadableStream({
+    cancel() {
+      if (closed) return;
+      closed = true;
+      if (pollTimeout) clearTimeout(pollTimeout);
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+    },
     async start(controller) {
       const startTime = Date.now();
 
@@ -158,7 +164,6 @@ export async function GET(
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
       "X-Accel-Buffering": "no",
     },
   });

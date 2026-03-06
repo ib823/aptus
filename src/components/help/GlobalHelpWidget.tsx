@@ -24,6 +24,7 @@ export function GlobalHelpWidget({ userRole, assessmentId }: GlobalHelpWidgetPro
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom of chat
@@ -74,7 +75,7 @@ export function GlobalHelpWidget({ userRole, assessmentId }: GlobalHelpWidgetPro
       }
     };
 
-    const interval = setInterval(fetchUpdates, 5000);
+    const interval = setInterval(fetchUpdates, 15000);
     
     const handleVisibility = () => {
       if (document.visibilityState === "visible") void fetchUpdates();
@@ -103,15 +104,24 @@ export function GlobalHelpWidget({ userRole, assessmentId }: GlobalHelpWidgetPro
     setMessages((prev) => [...prev, newMessage]);
     setMessage("");
     setLoading(true);
+    setSendError(null);
 
     try {
-      await fetch("/api/help/conversation", {
+      const res = await fetch("/api/help/conversation", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId, message: newMessage }),
       });
+      if (!res.ok) {
+        // Rollback optimistic update
+        setMessages((prev) => prev.filter((m) => m.id !== newMessage.id));
+        setSendError("Failed to send message. Please try again.");
+      }
     } catch (e) {
       console.error("Message send failed", e);
+      // Rollback optimistic update
+      setMessages((prev) => prev.filter((m) => m.id !== newMessage.id));
+      setSendError("Failed to send message. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -204,6 +214,9 @@ export function GlobalHelpWidget({ userRole, assessmentId }: GlobalHelpWidgetPro
 
           {/* Footer Input */}
           <div className="p-3 border-t bg-card">
+            {sendError && (
+              <p className="text-xs text-red-500 mb-2">{sendError}</p>
+            )}
             <form onSubmit={sendMessage} className="flex items-center gap-2">
               <Input
                 value={message}

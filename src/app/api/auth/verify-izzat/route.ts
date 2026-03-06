@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/db/prisma";
 import { createSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { APP_CONFIG } from "@/constants/config";
@@ -9,9 +10,9 @@ import { APP_CONFIG } from "@/constants/config";
  * This endpoint is intentionally disabled by default and requires:
  * - ENABLE_SIMULATION_BRIDGE=true
  * - SIMULATION_BRIDGE_SECRET to be configured
- * - secret query parameter that matches SIMULATION_BRIDGE_SECRET
+ * - secret in request body that matches SIMULATION_BRIDGE_SECRET
  */
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   const bridgeEnabled = process.env.ENABLE_SIMULATION_BRIDGE === "true";
   const bridgeSecret = process.env.SIMULATION_BRIDGE_SECRET;
 
@@ -19,8 +20,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Not available" }, { status: 404 });
   }
 
-  const providedSecret = request.nextUrl.searchParams.get("secret");
-  if (providedSecret !== bridgeSecret) {
+  let body: { secret?: string };
+  try {
+    body = await request.json() as { secret?: string };
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  const providedSecret = body.secret;
+  if (
+    !providedSecret ||
+    providedSecret.length !== bridgeSecret.length ||
+    !timingSafeEqual(Buffer.from(providedSecret), Buffer.from(bridgeSecret))
+  ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -53,7 +65,8 @@ export async function GET(request: NextRequest) {
   const destination = assessment?.id
     ? `/assessment/${assessment.id}/report`
     : "/dashboard";
-  const response = NextResponse.redirect(new URL(destination, request.nextUrl.origin));
+
+  const response = NextResponse.json({ redirectTo: destination });
 
   response.cookies.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,

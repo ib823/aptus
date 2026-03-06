@@ -1,7 +1,19 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { encryptApiKey } from "@/lib/intelligence/ai-key-crypto";
 import type { AIConfig } from "@/lib/intelligence/ai-orchestrator";
+
+const UpdateAIConfigSchema = z.object({
+  provider: z.enum(["openai", "azure", "gemini"]),
+  apiKey: z.string().optional(),
+  endpoint: z.string().url().optional(),
+  modelName: z.string().max(100).optional(),
+});
+
+const AZURE_ENDPOINT_RE =
+  /^https:\/\/[a-zA-Z0-9-]+\.openai\.azure\.com\//;
 
 export async function PUT(
   req: Request,
@@ -21,7 +33,23 @@ export async function PUT(
 
   try {
     const body = await req.json();
-    const { provider, apiKey, endpoint, modelName } = body;
+    const parsed = UpdateAIConfigSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: parsed.error.flatten().fieldErrors },
+        { status: 400 },
+      );
+    }
+
+    const { provider, apiKey, endpoint, modelName } = parsed.data;
+
+    // Validate Azure endpoint format server-side
+    if (provider === "azure" && endpoint && !AZURE_ENDPOINT_RE.test(endpoint)) {
+      return NextResponse.json(
+        { error: "Azure endpoint must match https://{name}.openai.azure.com/..." },
+        { status: 400 },
+      );
+    }
 
     const org = await prisma.organization.findUnique({
       where: { id: orgId },
@@ -29,19 +57,17 @@ export async function PUT(
     });
 
     const currentConfig = (org?.aiConfig as unknown as AIConfig) || {};
-    
+
     const newConfig: Partial<AIConfig> = {
       ...currentConfig,
       provider,
-      endpoint,
-      modelName,
     };
+    if (endpoint !== undefined) newConfig.endpoint = endpoint;
+    if (modelName !== undefined) newConfig.modelName = modelName;
 
     // Only update API key if provided (not masked)
     if (apiKey && apiKey !== "********") {
-      // In a real production app, we would encrypt this using a KMS or crypto library
-      // For this implementation, we store it in the JSON field.
-      newConfig.apiKey = apiKey;
+      newConfig.apiKey = encryptApiKey(apiKey);
     }
 
     await prisma.organization.update({
