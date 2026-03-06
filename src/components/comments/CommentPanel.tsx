@@ -49,6 +49,7 @@ interface CommentPanelProps {
   targetId: string;
   targetLabel: string;
   currentUserId: string;
+  initialHelpRequest?: boolean;
 }
 
 export function CommentPanel({
@@ -59,6 +60,7 @@ export function CommentPanel({
   targetId,
   targetLabel,
   currentUserId,
+  initialHelpRequest = false,
 }: CommentPanelProps) {
   const [comments, setComments] = useState<CommentData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,10 +87,11 @@ export function CommentPanel({
   }, [open, fetchComments]);
 
   const handleCreate = async (content: string) => {
+    const isHelpRequest = initialHelpRequest && comments.length === 0; // Only make the first comment the actual status flag
     const res = await fetch(`/api/assessments/${assessmentId}/comments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ targetType, targetId, content }),
+      body: JSON.stringify({ targetType, targetId, content, isHelpRequest }),
     });
     if (res.ok) {
       await fetchComments();

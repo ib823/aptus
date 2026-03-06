@@ -3,6 +3,7 @@ export type NotificationType =
   | "gap_created"
   | "comment_mention"
   | "comment_reply"
+  | "help_request"
   | "workshop_invite"
   | "workshop_starting"
   | "status_change"
@@ -19,7 +20,7 @@ export type NotificationChannel = "in_app" | "email" | "push";
 export type NotificationStatus = "unread" | "read" | "dismissed";
 
 export type CommentTargetType = "STEP" | "GAP" | "SCOPE_ITEM" | "INTEGRATION" | "DATA_MIGRATION" | "OCM";
-export type CommentStatus = "OPEN" | "RESOLVED";
+export type CommentStatus = "OPEN" | "RESOLVED" | "HELP_REQUEST";
 export type ConflictStatus = "OPEN" | "IN_DISCUSSION" | "ESCALATED" | "RESOLVED";
 
 export type ActivityActionType =
@@ -28,6 +29,7 @@ export type ActivityActionType =
   | "resolved_gap"
   | "commented"
   | "mentioned"
+  | "help_requested"
   | "conflict_detected"
   | "conflict_resolved"
   | "workshop_completed"
@@ -41,6 +43,7 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   gap_created: "Gap created",
   comment_mention: "@Mention in comment",
   comment_reply: "Comment reply",
+  help_request: "Help requested",
   workshop_invite: "Workshop invite",
   workshop_starting: "Workshop starting",
   status_change: "Status change",
@@ -59,6 +62,7 @@ export const FORCED_IN_APP_TYPES: NotificationType[] = [
   "sign_off_request",
   "conflict_detected",
   "stakeholder_removed",
+  "help_request",
 ];
 
 export const ALL_NOTIFICATION_TYPES: NotificationType[] = Object.keys(NOTIFICATION_TYPE_LABELS) as NotificationType[];
