@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { verifyAssessmentAccess } from "@/lib/auth/verify-assessment-access";
 
 export async function GET(
   req: Request,
@@ -13,17 +14,13 @@ export async function GET(
 
   const { id: assessmentId, stepId } = await params;
 
+  // Verify the user has access to this assessment
+  const hasAccess = await verifyAssessmentAccess(user, assessmentId);
+  if (!hasAccess) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
-    // Check if assessment exists
-    const assessment = await prisma.assessment.findUnique({
-      where: { id: assessmentId, deletedAt: null },
-      select: { id: true }
-    });
-
-    if (!assessment) {
-      return NextResponse.json({ error: "Assessment not found" }, { status: 404 });
-    }
-
     const history = await prisma.stepResponseHistory.findMany({
       where: {
         stepResponse: {

@@ -2,18 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { buildFunctionalAreaOverviewFromCounts } from "@/lib/assessment/functional-area-overview";
 import { ProcessMapClient } from "./ProcessMapClient";
-
-interface ResponseCountRow {
-  scopeItemId: string;
-  fitStatus: string;
-  count: number;
-}
-
-interface GapResolutionCountRow {
-  scopeItemId: string;
-  resolutionType: string;
-  count: number;
-}
+import type { ResponseCountRow, GapResolutionCountRow } from "@/types/assessment";
 
 interface ProcessMapPageProps {
   params: Promise<{ id: string }>;

@@ -21,27 +21,37 @@ export const AUTH_SECURITY_CONFIG = {
 
 /**
  * Validates if an email is allowed to register based on the current security policy.
+ * Reads env vars fresh on each call to avoid stale module-level values.
  */
 export function canRegister(email: string): { allowed: boolean; reason?: string } {
   const domain = email.split("@")[1]?.toLowerCase();
   if (!domain) return { allowed: false, reason: "Invalid email format" };
 
-  const isWhitelisted = AUTH_SECURITY_CONFIG.ALLOWED_DOMAINS.length === 0 || 
-                        AUTH_SECURITY_CONFIG.ALLOWED_DOMAINS.includes(domain);
+  // Read fresh env vars each call
+  const invitationOnly = process.env.AUTH_INVITATION_ONLY === "true";
+  const allowedDomains = (process.env.AUTH_ALLOWED_DOMAINS || "")
+    .split(",")
+    .map(d => d.trim())
+    .filter(Boolean);
+  const whitelistBypass = process.env.AUTH_WHITELIST_BYPASS === "true";
 
-  // Policy 1: Global Invitation Only (No bypass)
-  if (AUTH_SECURITY_CONFIG.INVITATION_ONLY && !AUTH_SECURITY_CONFIG.WHITELIST_BYPASS_INVITE) {
+  const isWhitelisted = allowedDomains.length === 0 ||
+                        allowedDomains.includes(domain);
+
+  // Policy 1: Hybrid (Invite only, but whitelisted domains can bypass)
+  if (invitationOnly && whitelistBypass) {
+    if (isWhitelisted) return { allowed: true };
+    return { allowed: false, reason: "Registration is not allowed for this email domain." };
+  }
+
+  // Policy 2: Global Invitation Only (No bypass)
+  if (invitationOnly) {
     return { allowed: false, reason: "Registration is restricted to invited users only." };
   }
 
-  // Policy 2: Domain Whitelist Check
+  // Policy 3: Domain Whitelist Check (no invitation-only mode)
   if (!isWhitelisted) {
-    return { allowed: false, reason: `Registration is not allowed for domain: ${domain}` };
-  }
-
-  // Policy 3: Hybrid (Invite only, but whitelisted domains can skip)
-  if (AUTH_SECURITY_CONFIG.INVITATION_ONLY && AUTH_SECURITY_CONFIG.WHITELIST_BYPASS_INVITE && !isWhitelisted) {
-    return { allowed: false, reason: "Please use an authorized company email or request an invitation." };
+    return { allowed: false, reason: "Registration is not allowed for this email domain." };
   }
 
   return { allowed: true };

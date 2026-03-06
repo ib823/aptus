@@ -79,6 +79,8 @@ export function NotificationBell() {
 
         eventSource.onerror = () => {
           eventSource?.close();
+          // Don't reconnect if auth has failed
+          if (authFailed) return;
           // Reconnect after a delay — SSE is additive, polling is fallback
           reconnectTimeout = setTimeout(connect, 5000);
         };

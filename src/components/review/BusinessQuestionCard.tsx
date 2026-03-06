@@ -276,15 +276,15 @@ export function BusinessQuestionCard({
         </div>
 
         {/* Temporal Audit Timeline */}
-        {showHistory && (
+        {showHistory && classifiableSteps.length > 0 && (
           <div className="mt-4 p-4 bg-background rounded-lg border border-blue-100 shadow-inner">
             <div className="flex items-center gap-2 mb-4">
               <HistoryIcon className="size-4 text-blue-600" />
               <h4 className="text-sm font-semibold text-foreground">Decision Timeline</h4>
             </div>
-            <DecisionTimeline 
-              assessmentId={assessmentId} 
-              processStepId={classifiableSteps[0]?.id || ""} 
+            <DecisionTimeline
+              assessmentId={assessmentId}
+              processStepId={classifiableSteps[0]!.id}
             />
             <p className="text-[10px] text-muted-foreground mt-4 text-center">
               Timeline shows the evolution of this decision across all versions.

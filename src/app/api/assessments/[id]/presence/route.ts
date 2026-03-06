@@ -25,35 +25,19 @@ function isMissingOptionalPresenceColumnsError(error: unknown): boolean {
   return combined.includes("userimage") || combined.includes("entityid");
 }
 
-function isRequestAbortError(error: unknown): boolean {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  const code = (error as Error & { code?: unknown }).code;
-  return code === "ECONNRESET" || error.message.toLowerCase() === "aborted";
-}
-
-function isUnexpectedEndOfJsonError(error: unknown): boolean {
-  return error instanceof SyntaxError && error.message.includes("Unexpected end of JSON input");
-}
-
 async function parsePresencePayload(req: Request): Promise<PresencePayload> {
-  try {
-    const body = (await req.json()) as { currentPage?: unknown; entityId?: unknown };
-    const payload: PresencePayload = {};
-    if (typeof body.currentPage === "string") {
-      payload.currentPage = body.currentPage;
-    }
-    if (typeof body.entityId === "string") {
-      payload.entityId = body.entityId;
-    }
-    return payload;
-  } catch (error) {
-    if (isRequestAbortError(error) || isUnexpectedEndOfJsonError(error)) {
-      return {};
-    }
-    throw error;
+  const { safeParseJsonBody } = await import("@/lib/http/safe-json-body");
+  const result = await safeParseJsonBody(req);
+  if (!result.ok) return {};
+  const body = result.data as { currentPage?: unknown; entityId?: unknown };
+  const payload: PresencePayload = {};
+  if (typeof body.currentPage === "string") {
+    payload.currentPage = body.currentPage;
   }
+  if (typeof body.entityId === "string") {
+    payload.entityId = body.entityId;
+  }
+  return payload;
 }
 
 async function upsertPresenceRecord(params: {
@@ -116,10 +100,10 @@ async function upsertPresenceRecord(params: {
   }
 }
 
-async function listActivePresenceUsers(assessmentId: string): Promise<PresenceResponseRow[]> {
+async function listActivePresenceUsers(assessmentId: string, staleThreshold: Date): Promise<PresenceResponseRow[]> {
   try {
     return await prisma.presenceRecord.findMany({
-      where: { assessmentId },
+      where: { assessmentId, lastSeenAt: { gte: staleThreshold } },
       orderBy: { lastSeenAt: "desc" },
       select: {
         userId: true,
@@ -137,7 +121,7 @@ async function listActivePresenceUsers(assessmentId: string): Promise<PresenceRe
     }
 
     const users = await prisma.presenceRecord.findMany({
-      where: { assessmentId },
+      where: { assessmentId, lastSeenAt: { gte: staleThreshold } },
       orderBy: { lastSeenAt: "desc" },
       select: {
         userId: true,
@@ -217,8 +201,8 @@ export async function GET(
       });
     }
 
-    // 2. Fetch remaining active records
-    const activeUsers = await listActivePresenceUsers(assessmentId);
+    // 2. Fetch remaining active records (filtered by stale threshold)
+    const activeUsers = await listActivePresenceUsers(assessmentId, staleTime);
 
     return NextResponse.json({ data: activeUsers });
   } catch (error) {

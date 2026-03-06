@@ -68,8 +68,8 @@ test.describe("T-A11Y-014: Minimum Touch Target Size (44x44px)", () => {
         console.warn(`[A11Y-014] Undersized targets on ${view.path}:\n`, violations.slice(0, 5));
       }
 
-      // We allow a small threshold for minor decorative icons, but enforce zero for primary controls
-      expect(violations.length).toBeLessThan(10); 
+      // Allow a few decorative/icon elements below 44px; primary controls must meet the floor
+      expect(violations.length).toBeLessThan(4);
     });
   }
 });

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Pencil } from "lucide-react";
+import { useSSE } from "@/hooks/useSSE";
 
 interface LockInfo {
   id: string;
@@ -12,7 +13,7 @@ interface LockInfo {
   expiresAt: string;
 }
 
-const POLL_INTERVAL_MS = 10_000;
+const FALLBACK_INTERVAL_MS = 60_000; // 60-second fallback (SSE handles real-time)
 
 interface ActiveEditorsProps {
   assessmentId: string;
@@ -29,72 +30,45 @@ export function ActiveEditors({
 }: ActiveEditorsProps) {
   const [lock, setLock] = useState<LockInfo | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchLocks() {
-      if (document.visibilityState === "hidden") return;
-      try {
-        const res = await fetch(`/api/assessments/${assessmentId}/locks`);
-        if (res.ok) {
-          const json = await res.json();
-          const locks: LockInfo[] = json.data ?? [];
-          const match = locks.find(
-            (l) => l.entityType === entityType && l.entityId === entityId,
-          );
-          if (!cancelled) setLock(match ?? null);
-        }
-      } catch {
-        // Silently fail
+  const fetchLocks = useCallback(async () => {
+    if (document.visibilityState === "hidden") return;
+    try {
+      const res = await fetch(`/api/assessments/${assessmentId}/locks`);
+      if (res.ok) {
+        const json = await res.json();
+        const locks: LockInfo[] = json.data ?? [];
+        const match = locks.find(
+          (l) => l.entityType === entityType && l.entityId === entityId,
+        );
+        setLock(match ?? null);
       }
+    } catch {
+      // Silently fail
     }
+  }, [assessmentId, entityType, entityId]);
 
+  // Use shared SSE manager for instant lock updates
+  useSSE(assessmentId, "locks_updated", fetchLocks);
+
+  useEffect(() => {
     void fetchLocks();
-    const interval = setInterval(fetchLocks, POLL_INTERVAL_MS);
 
-    // 2. Connect to the Server-Sent Events stream for instant lock updates
-    let eventSource: EventSource | null = null;
-    let reconnectTimeout: ReturnType<typeof setTimeout>;
-
-    const connectSSE = () => {
-      if (document.visibilityState === "hidden") return;
-      try {
-        eventSource = new EventSource(`/api/assessments/${assessmentId}/stream`);
-        eventSource.addEventListener("locks_updated", () => {
-          void fetchLocks();
-        });
-        eventSource.onerror = () => {
-          eventSource?.close();
-          reconnectTimeout = setTimeout(connectSSE, 5000);
-        };
-      } catch {
-        // Silently fail if EventSource isn't supported
-      }
-    };
-
-    connectSSE();
+    // Fallback polling at 60s (SSE handles the real-time path)
+    const interval = setInterval(fetchLocks, FALLBACK_INTERVAL_MS);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         void fetchLocks();
-        if (!eventSource || eventSource.readyState === EventSource.CLOSED) {
-          connectSSE();
-        }
-      } else {
-        if (eventSource) eventSource.close();
       }
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      cancelled = true;
       clearInterval(interval);
-      clearTimeout(reconnectTimeout);
-      if (eventSource) eventSource.close();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [assessmentId, entityType, entityId]);
+  }, [fetchLocks]);
 
   if (!lock || lock.lockedById === currentUserId) return null;
 

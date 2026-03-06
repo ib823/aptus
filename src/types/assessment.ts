@@ -258,6 +258,20 @@ export type DecisionAction =
   | "INVITATION_REVOKED"
   | "USER_REACTIVATED";
 
+/** Aggregated StepResponse fit status counts per scope item (from raw SQL) */
+export interface ResponseCountRow {
+  scopeItemId: string;
+  fitStatus: string;
+  count: number;
+}
+
+/** Aggregated GapResolution type counts per scope item (from raw SQL) */
+export interface GapResolutionCountRow {
+  scopeItemId: string;
+  resolutionType: string;
+  count: number;
+}
+
 export interface AssessmentSummary {
   id: string;
   companyName: string;

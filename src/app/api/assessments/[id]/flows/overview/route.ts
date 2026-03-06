@@ -6,18 +6,7 @@ import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { buildFunctionalAreaOverviewFromCounts } from "@/lib/assessment/functional-area-overview";
 import { ERROR_CODES } from "@/types/api";
-
-interface ResponseCountRow {
-  scopeItemId: string;
-  fitStatus: string;
-  count: number;
-}
-
-interface GapResolutionCountRow {
-  scopeItemId: string;
-  resolutionType: string;
-  count: number;
-}
+import type { ResponseCountRow, GapResolutionCountRow } from "@/types/assessment";
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },

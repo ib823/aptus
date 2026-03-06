@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { verifyAssessmentAccess } from "@/lib/auth/verify-assessment-access";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +15,18 @@ export async function GET(
 
   const { id: assessmentId } = await params;
 
+  // Verify the user has access to this assessment
+  const hasAccess = await verifyAssessmentAccess(user, assessmentId);
+  if (!hasAccess) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
   let lastChecked = new Date();
 
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
-      
+
       const sendEvent = (event: string, data: unknown) => {
         try {
           controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
@@ -77,7 +84,6 @@ export async function GET(
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
-      "Connection": "keep-alive",
       "X-Accel-Buffering": "no",
     },
   });
