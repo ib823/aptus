@@ -64,10 +64,11 @@ function CollapsibleSection({ title, complete, defaultOpen = false, children }: 
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="border rounded-lg">
+    <div className="border rounded-lg bg-card">
       <button
+        type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left"
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-accent/50 transition-colors rounded-t-lg"
       >
         <div className="flex items-center gap-2">
           {complete ? (
@@ -372,6 +373,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
                     return (
                       <button
                         key={m.code}
+                        type="button"
                         onClick={() => toggleArrayItem("sapModules", m.code)}
                         disabled={isReadOnly ?? false}
                         title={getModuleFullName(m.code)}
@@ -459,6 +461,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
                     return (
                       <button
                         key={lang}
+                        type="button"
                         onClick={() => toggleArrayItem("languageRequirements", lang)}
                         disabled={isReadOnly ?? false}
                         className={`px-2.5 py-1 text-xs rounded-md border transition-all ${
@@ -481,6 +484,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
                 return (
                   <button
                     key={lang}
+                    type="button"
                     onClick={() => toggleArrayItem("languageRequirements", lang)}
                     disabled={isReadOnly ?? false}
                     className={`px-2.5 py-1 text-xs rounded-md border transition-all ${
@@ -507,6 +511,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
                     return (
                       <button
                         key={fw}
+                        type="button"
                         onClick={() => toggleArrayItem("regulatoryFrameworks", fw)}
                         disabled={isReadOnly ?? false}
                         className={`px-2.5 py-1 text-xs rounded-md border transition-all ${
@@ -529,6 +534,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
                 return (
                   <button
                     key={fw}
+                    type="button"
                     onClick={() => toggleArrayItem("regulatoryFrameworks", fw)}
                     disabled={isReadOnly ?? false}
                     className={`px-2.5 py-1 text-xs rounded-md border transition-all ${
