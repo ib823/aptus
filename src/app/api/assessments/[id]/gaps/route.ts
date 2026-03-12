@@ -3,6 +3,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
+import { verifyAssessmentAccess } from "@/lib/auth/verify-assessment-access";
 import { getGapsForAssessment, getGapSummaryStats } from "@/lib/db/gap-resolutions";
 import { ERROR_CODES } from "@/types/api";
 export async function GET(
@@ -25,6 +26,14 @@ export async function GET(
   }
 
   const { id: assessmentId } = await params;
+
+  const hasAccess = await verifyAssessmentAccess(user, assessmentId);
+  if (!hasAccess) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "You do not have access to this assessment" } },
+      { status: 403 },
+    );
+  }
 
   const scopeItemId = request.nextUrl.searchParams.get("scopeItemId") ?? undefined;
   const resolutionType = request.nextUrl.searchParams.get("resolutionType") ?? undefined;
