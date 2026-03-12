@@ -1,9 +1,8 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Lock } from "lucide-react";
 import React, { type MouseEvent } from "react";
-import { navigateToDocument } from "@/lib/navigation/document-navigation";
 
 interface TabDef {
   label: string;
@@ -28,6 +27,7 @@ interface AssessmentTabNavProps {
 }
 
 export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, profileScore }: AssessmentTabNavProps) {
+  const router = useRouter();
   const pathname = usePathname();
   const base = `/assessment/${assessmentId}`;
   const activeSegment = (pathname ?? "").replace(base, "").split("/").filter(Boolean)[0] ?? "profile";
@@ -54,7 +54,7 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, 
     }
 
     event.preventDefault();
-    navigateToDocument(href);
+    router.push(href);
   };
 
   // Build stages with conditional tabs
@@ -154,21 +154,21 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, 
           return (
             <a
               key={stage.label}
-              href={stage.tabs[0]!.href}
+              href={isLocked ? undefined : stage.tabs[0]!.href}
               role="tab"
               aria-selected={isActive}
               aria-disabled={isLocked || undefined}
               title={stage.title}
               tabIndex={isLocked ? -1 : undefined}
               onClick={(event) => handleTabClick(event, stage.tabs[0]!.href, isLocked)}
-              className={`px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${
-                isActive ? "" : isLocked ? "" : "hover:opacity-80"
+              className={`px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap select-none ${
+                isActive ? "" : isLocked ? "pointer-events-none" : "hover:opacity-80"
               }`}
               style={{
                 color: isActive
                   ? "var(--sapSelectedColor, #0854a0)"
                   : isLocked
-                    ? "var(--sapContent_NonInteractiveIconColor, #89919a)"
+                    ? "var(--sapContent_NonInteractiveIconColor, #c2c5c8)"
                     : "var(--sapContent_LabelColor, #6a6d70)",
                 boxShadow: isActive
                   ? "inset 0 -2px 0 var(--sapSelectedColor, #0854a0)"
@@ -176,12 +176,11 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, 
                 background: isActive
                   ? "var(--sapList_Active_Background, #eaf6ff)"
                   : "transparent",
-                opacity: isLocked ? 0.65 : 1,
-                cursor: isLocked ? "not-allowed" : "pointer",
+                opacity: isLocked ? 0.45 : 1,
               }}
             >
+              <Lock className={`inline w-3 h-3 mr-1 ${isLocked ? "" : "hidden"}`} />
               {stage.label}
-              {isLocked && <Lock className="inline w-3 h-3 ml-1 opacity-70" />}
             </a>
           );
         })}
@@ -203,14 +202,16 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, 
             return (
               <a
                 key={tab.segment}
-                href={tab.href}
+                href={isLocked ? undefined : tab.href}
                 role="tab"
                 aria-selected={isActive}
                 aria-disabled={isLocked || undefined}
                 title={tab.title}
                 tabIndex={isLocked ? -1 : undefined}
                 onClick={(event) => handleTabClick(event, tab.href, isLocked)}
-                className="px-3 py-1.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors"
+                className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors select-none ${
+                  isLocked ? "pointer-events-none" : ""
+                }`}
                 style={{
                   borderColor: isActive
                     ? "var(--sapSelectedColor, #0854a0)"
@@ -218,17 +219,16 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, 
                   color: isActive
                     ? "var(--sapSelectedColor, #0854a0)"
                     : isLocked
-                      ? "var(--sapContent_NonInteractiveIconColor, #89919a)"
+                      ? "var(--sapContent_NonInteractiveIconColor, #c2c5c8)"
                       : "var(--sapContent_LabelColor, #6a6d70)",
                   background: isActive
                     ? "var(--sapList_Active_Background, #eaf6ff)"
                     : "transparent",
-                  opacity: isLocked ? 0.65 : 1,
-                  cursor: isLocked ? "not-allowed" : "pointer",
+                  opacity: isLocked ? 0.45 : 1,
                 }}
               >
+                <Lock className={`inline w-3 h-3 mr-1 ${isLocked ? "" : "hidden"}`} />
                 {tab.label}
-                {isLocked && <Lock className="inline w-3 h-3 ml-1 opacity-70" />}
               </a>
             );
           })}

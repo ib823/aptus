@@ -5,20 +5,17 @@ import { AssessmentTabNav } from "@/components/layout/AssessmentTabNav";
 import { MobileBottomTabBar } from "@/components/layout/MobileBottomTabBar";
 
 const mockUsePathname = vi.fn();
-const navigateToDocument = vi.fn();
+const mockPush = vi.fn();
 
 vi.mock("next/navigation", () => ({
   usePathname: () => mockUsePathname(),
-}));
-
-vi.mock("@/lib/navigation/document-navigation", () => ({
-  navigateToDocument: (...args: unknown[]) => navigateToDocument(...args),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 describe("assessment navigation", () => {
   beforeEach(() => {
     mockUsePathname.mockReset();
-    navigateToDocument.mockReset();
+    mockPush.mockReset();
   });
 
   it("marks a locked setup sub-tab as disabled and blocks navigation", () => {
@@ -33,13 +30,12 @@ describe("assessment navigation", () => {
       />,
     );
 
-    const scopeTab = screen.getByRole("tab", { name: /^scope$/i });
-    expect(scopeTab).toHaveAttribute("href", "/assessment/assessment-1/scope");
+    const scopeTab = screen.getByRole("tab", { name: /scope/i });
     expect(scopeTab).toHaveAttribute("aria-disabled", "true");
 
     fireEvent.click(scopeTab);
 
-    expect(navigateToDocument).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it("marks premature desktop stages as disabled during setup", () => {
@@ -57,7 +53,7 @@ describe("assessment navigation", () => {
 
     fireEvent.click(reviewTab);
 
-    expect(navigateToDocument).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it("navigates to unlocked desktop stages once the assessment is in progress", () => {
@@ -75,7 +71,7 @@ describe("assessment navigation", () => {
 
     fireEvent.click(reviewTab);
 
-    expect(navigateToDocument).toHaveBeenCalledWith("/assessment/assessment-1/review");
+    expect(mockPush).toHaveBeenCalledWith("/assessment/assessment-1/review");
   });
 
   it("marks premature mobile stages as disabled during setup", () => {
@@ -88,12 +84,14 @@ describe("assessment navigation", () => {
       />,
     );
 
-    const reviewLink = screen.getByRole("link", { name: /review/i });
-    expect(reviewLink).toHaveAttribute("aria-disabled", "true");
+    // Locked tabs no longer have href, so they're not "link" role — find by text
+    const reviewText = screen.getByText("Review");
+    const reviewTab = reviewText.closest("a")!;
+    expect(reviewTab).toHaveAttribute("aria-disabled", "true");
 
-    fireEvent.click(reviewLink);
+    fireEvent.click(reviewTab);
 
-    expect(navigateToDocument).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it("navigates to unlocked mobile stages once the assessment is in progress", () => {
@@ -111,6 +109,6 @@ describe("assessment navigation", () => {
 
     fireEvent.click(reviewLink);
 
-    expect(navigateToDocument).toHaveBeenCalledWith("/assessment/assessment-1/review");
+    expect(mockPush).toHaveBeenCalledWith("/assessment/assessment-1/review");
   });
 });
