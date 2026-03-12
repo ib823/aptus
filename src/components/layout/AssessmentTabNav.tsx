@@ -179,7 +179,7 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, 
                 opacity: isLocked ? 0.45 : 1,
               }}
             >
-              <Lock className={`inline w-3 h-3 mr-1 ${isLocked ? "" : "hidden"}`} />
+              {isLocked && <Lock className="inline w-3 h-3 mr-1" />}
               {stage.label}
             </a>
           );
@@ -233,7 +233,7 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, 
                   opacity: isLocked ? 0.45 : 1,
                 }}
               >
-                <Lock className={`inline w-3 h-3 mr-1 ${isLocked ? "" : "hidden"}`} />
+                {isLocked && <Lock className="inline w-3 h-3 mr-1" />}
                 {tab.label}
               </a>
             );
