@@ -36,14 +36,22 @@ export default function SubscriptionPage() {
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(false);
 
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     async function load() {
       try {
         const res = await fetch("/api/partner/settings/subscription");
         if (res.ok) {
           const json = await res.json() as { data: SubscriptionData };
-          setData(json.data);
+          setData(json.data ?? null);
+        } else if (res.status === 403) {
+          setError("You don't have permission to view subscription settings.");
+        } else {
+          setError(`Failed to load subscription data (${res.status}).`);
         }
+      } catch {
+        setError("Network error — please check your connection and try again.");
       } finally {
         setLoading(false);
       }
@@ -81,7 +89,7 @@ export default function SubscriptionPage() {
   }
 
   if (!data) {
-    return <div className="max-w-3xl mx-auto py-8"><p className="text-muted-foreground">Unable to load subscription data.</p></div>;
+    return <div className="max-w-3xl mx-auto py-8"><p className="text-muted-foreground">{error ?? "Unable to load subscription data."}</p></div>;
   }
 
   const isActive = data.subscriptionStatus === "ACTIVE" || data.subscriptionStatus === "TRIALING";

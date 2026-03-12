@@ -20,13 +20,14 @@ export const APP_CONFIG = {
   },
 } as const;
 
-/** Roles that require MFA (external / client-facing users) */
+/** Roles that require MFA (external / client-facing users + consultants) */
 export const MFA_REQUIRED_ROLES = [
   "process_owner", "it_lead", "data_migration_lead",
   "executive_sponsor", "project_manager", "viewer", "client_admin",
+  "consultant", "solution_architect",
 ] as const;
 
-/** Roles that can bypass MFA (internal users) */
+/** Roles that can bypass MFA (internal platform operators) */
 export const MFA_OPTIONAL_ROLES = [
-  "platform_admin", "partner_lead", "consultant", "solution_architect",
+  "platform_admin", "partner_lead",
 ] as const;

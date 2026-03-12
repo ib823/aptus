@@ -151,14 +151,14 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, 
         {stages.map((stage) => {
           const isActive = activeStage === stage;
           const isLocked = stage.locked ?? false;
-          return (
+          const tab = (
             <a
               key={stage.label}
               href={isLocked ? undefined : stage.tabs[0]!.href}
               role="tab"
               aria-selected={isActive}
               aria-disabled={isLocked || undefined}
-              title={stage.title}
+              title={isLocked ? undefined : stage.title}
               tabIndex={isLocked ? -1 : undefined}
               onClick={(event) => handleTabClick(event, stage.tabs[0]!.href, isLocked)}
               className={`px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap select-none ${
@@ -183,6 +183,12 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, 
               {stage.label}
             </a>
           );
+          // Wrap locked tabs so the parent span still receives hover for the native tooltip
+          return isLocked ? (
+            <span key={stage.label} title={stage.title} className="cursor-not-allowed">
+              {tab}
+            </span>
+          ) : tab;
         })}
       </div>
       {/* Sub-tabs for active stage (only if >1 tab) */}
@@ -199,14 +205,14 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, 
           {activeStage.tabs.map((tab) => {
             const isActive = tab.segment === activeSegment;
             const isLocked = tab.locked ?? false;
-            return (
+            const link = (
               <a
                 key={tab.segment}
                 href={isLocked ? undefined : tab.href}
                 role="tab"
                 aria-selected={isActive}
                 aria-disabled={isLocked || undefined}
-                title={tab.title}
+                title={isLocked ? undefined : tab.title}
                 tabIndex={isLocked ? -1 : undefined}
                 onClick={(event) => handleTabClick(event, tab.href, isLocked)}
                 className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors select-none ${
@@ -231,6 +237,11 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, 
                 {tab.label}
               </a>
             );
+            return isLocked ? (
+              <span key={tab.segment} title={tab.title} className="cursor-not-allowed">
+                {link}
+              </span>
+            ) : link;
           })}
         </div>
       )}

@@ -1,11 +1,19 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { ArrowRight, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+
+/** Ordered status indices — lower = earlier in lifecycle */
+const STATUS_ORDER: Record<string, number> = {
+  draft: 0, scoping: 1, in_progress: 2, workshop_active: 3,
+  review_cycle: 4, gap_resolution: 5, pending_validation: 6,
+  validated: 7, pending_sign_off: 8, signed_off: 9, handed_off: 10, archived: 11,
+};
 
 interface StatusTransitionBarProps {
   assessmentId: string;
@@ -92,25 +100,42 @@ export function StatusTransitionBar({
         <span className="text-sm text-muted-foreground">Status:</span>
         <Badge className={statusInfo.color}>{statusInfo.label}</Badge>
 
-        {availableTransitions.length > 0 && (
-          <>
-            <span className="text-xs text-muted-foreground ml-2">Next:</span>
-            {availableTransitions.map((target) => {
-              const targetInfo = STATUS_DISPLAY[target] ?? { label: target, color: "" };
-              return (
-                <Button
-                  key={target}
-                  variant="outline"
-                  size="sm"
-                  className="text-xs"
-                  onClick={() => setConfirmDialog(target)}
-                >
-                  {targetInfo.label}
-                </Button>
-              );
-            })}
-          </>
-        )}
+        {availableTransitions.length > 0 && (() => {
+          const currentOrder = STATUS_ORDER[currentStatus] ?? 0;
+          const forward = availableTransitions.filter((t) => (STATUS_ORDER[t] ?? 0) > currentOrder);
+          const backward = availableTransitions.filter((t) => (STATUS_ORDER[t] ?? 0) <= currentOrder);
+          return (
+            <>
+              {forward.length > 0 && (
+                <>
+                  <ArrowRight className="w-3.5 h-3.5 text-muted-foreground ml-2" />
+                  {forward.map((target) => {
+                    const targetInfo = STATUS_DISPLAY[target] ?? { label: target, color: "" };
+                    return (
+                      <Button key={target} size="sm" className="text-xs" onClick={() => setConfirmDialog(target)}>
+                        {targetInfo.label}
+                      </Button>
+                    );
+                  })}
+                </>
+              )}
+              {backward.length > 0 && (
+                <>
+                  <span className="border-l h-5 mx-1" />
+                  {backward.map((target) => {
+                    const targetInfo = STATUS_DISPLAY[target] ?? { label: target, color: "" };
+                    return (
+                      <Button key={target} variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setConfirmDialog(target)}>
+                        <Undo2 className="w-3 h-3 mr-1" />
+                        {targetInfo.label}
+                      </Button>
+                    );
+                  })}
+                </>
+              )}
+            </>
+          );
+        })()}
       </div>
 
       <Dialog open={!!confirmDialog} onOpenChange={(open) => { if (!open) { setConfirmDialog(null); setError(null); setReason(""); } }}>

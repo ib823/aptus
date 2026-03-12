@@ -33,8 +33,9 @@ export async function GET(): Promise<NextResponse> {
     }),
   ]);
   const total = assessments.length;
-  const active = assessments.filter((a) => a.status === "in_progress" || a.status === "completed").length;
-  const signedOff = assessments.filter((a) => a.status === "signed_off").length;
+  const terminalStatuses = ["signed_off", "handed_off", "archived"];
+  const active = assessments.filter((a) => !terminalStatuses.includes(a.status)).length;
+  const signedOff = assessments.filter((a) => terminalStatuses.includes(a.status)).length;
 
   return NextResponse.json({
     data: {
