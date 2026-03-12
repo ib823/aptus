@@ -1,11 +1,14 @@
 /** PUT: Update phase status/completionPct/blockedReason */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { ERROR_CODES } from "@/types/api";
 import { ASSESSMENT_PHASES } from "@/types/assessment";
 import type { UserRole } from "@/types/assessment";
@@ -22,20 +25,12 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; phase: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
+  const { id: assessmentId, phase } = await params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) {
+    return access;
   }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
+  const { user } = access;
 
   const role = mapLegacyRole(user.role);
   if (!PHASE_UPDATE_ROLES.includes(role)) {
@@ -45,8 +40,6 @@ export async function PUT(
     );
   }
 
-  const { id: assessmentId, phase } = await params;
-
   // Validate phase is one of the 8 valid phases
   if (!ASSESSMENT_PHASES.includes(phase as typeof ASSESSMENT_PHASES[number])) {
     return NextResponse.json(
@@ -55,8 +48,15 @@ export async function PUT(
     );
   }
 
-  const body: unknown = await request.json();
-  const parsed = phaseUpdateSchema.safeParse(body);
+  const bodyResult = await safeParseJsonBody(request);
+  if (!bodyResult.ok) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid request body" } },
+      { status: 400 },
+    );
+  }
+
+  const parsed = phaseUpdateSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Validation failed" } },

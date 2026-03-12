@@ -1,10 +1,14 @@
 /** POST: Bulk scope operations (select/deselect by area) */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
-import { prisma } from "@/lib/db/prisma";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
+import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { prisma } from "@/lib/db/prisma";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
@@ -18,32 +22,30 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
+  const { id: assessmentId } = await params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) {
+    return access;
   }
+  const { user } = access;
 
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
-  if (!["consultant", "admin", "platform_admin"].includes(user.role)) {
+  const role = mapLegacyRole(user.role);
+  if (!["consultant", "platform_admin"].includes(role)) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Only consultants and admins can perform bulk operations" } },
       { status: 403 },
     );
   }
 
-  const { id: assessmentId } = await params;
+  const bodyResult = await safeParseJsonBody(request);
+  if (!bodyResult.ok) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid request body" } },
+      { status: 400 },
+    );
+  }
 
-  const body: unknown = await request.json();
-  const parsed = bulkSchema.safeParse(body);
+  const parsed = bulkSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Validation failed" } },

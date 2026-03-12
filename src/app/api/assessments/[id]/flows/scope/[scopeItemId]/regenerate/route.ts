@@ -1,8 +1,10 @@
 /** POST: Force-regenerate flow data for a scope item */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
 import { hasPermission } from "@/lib/auth/permission-matrix";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
@@ -15,20 +17,12 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; scopeItemId: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
+  const { id: assessmentId, scopeItemId } = await params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) {
+    return access;
   }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
+  const { user } = access;
 
   if (!hasPermission(user.role, "assessment.edit")) {
     return NextResponse.json(
@@ -37,17 +31,15 @@ export async function POST(
     );
   }
 
-  const { id: assessmentId, scopeItemId } = await params;
-
-  const assessment = await prisma.assessment.findUnique({
-    where: { id: assessmentId, deletedAt: null },
+  const scopeSelection = await prisma.scopeSelection.findFirst({
+    where: { assessmentId, scopeItemId, selected: true },
     select: { id: true },
   });
 
-  if (!assessment) {
+  if (!scopeSelection) {
     return NextResponse.json(
-      { error: { code: ERROR_CODES.NOT_FOUND, message: "Assessment not found" } },
-      { status: 404 },
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "Scope item not selected in this assessment" } },
+      { status: 403 },
     );
   }
 

@@ -3,13 +3,16 @@
 /** DELETE: Soft-delete assessment */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired, canTransitionStatus } from "@/lib/auth/permissions";
+import { canTransitionStatus } from "@/lib/auth/permissions";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
-import { verifyAssessmentAccess } from "@/lib/auth/verify-assessment-access";
 import { getAssessment, updateAssessmentStatus, softDeleteAssessment } from "@/lib/db/assessments";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { ERROR_CODES } from "@/types/api";
 import type { AssessmentStatus } from "@/types/assessment";
 import { z } from "zod";
@@ -21,35 +24,15 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
   const { id } = await params;
+  const access = await requireAssessmentAccess(id);
+  if (isAssessmentAccessError(access)) return access;
+
   const assessment = await getAssessment(id);
   if (!assessment) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.NOT_FOUND, message: "Assessment not found" } },
       { status: 404 },
-    );
-  }
-
-  const hasAccess = await verifyAssessmentAccess(user, id);
-  if (!hasAccess) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.FORBIDDEN, message: "You do not have access to this assessment" } },
-      { status: 403 },
     );
   }
 
@@ -60,44 +43,24 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
   const { id } = await params;
-  const body: unknown = await request.json();
-  const parsed = updateSchema.safeParse(body);
-  if (!parsed.success) {
+  const access = await requireAssessmentAccess(id);
+  if (isAssessmentAccessError(access)) return access;
+
+  const { user, assessment } = access;
+  const bodyResult = await safeParseJsonBody(request);
+  if (!bodyResult.ok) {
     return NextResponse.json(
-      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Validation failed" } },
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid request body" } },
       { status: 400 },
     );
   }
 
-  const assessment = await getAssessment(id);
-  if (!assessment) {
+  const parsed = updateSchema.safeParse(bodyResult.data);
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: { code: ERROR_CODES.NOT_FOUND, message: "Assessment not found" } },
-      { status: 404 },
-    );
-  }
-
-  const hasAccess = await verifyAssessmentAccess(user, id);
-  if (!hasAccess) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.FORBIDDEN, message: "You do not have access to this assessment" } },
-      { status: 403 },
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Validation failed" } },
+      { status: 400 },
     );
   }
 
@@ -145,14 +108,11 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
+  const { id } = await params;
+  const access = await requireAssessmentAccess(id);
+  if (isAssessmentAccessError(access)) return access;
 
+  const { user } = access;
   const role = mapLegacyRole(user.role);
   if (role !== "platform_admin" && role !== "consultant" && role !== "partner_lead") {
     return NextResponse.json(
@@ -160,24 +120,6 @@ export async function DELETE(
       { status: 403 },
     );
   }
-
-  const { id } = await params;
-  const assessment = await getAssessment(id);
-  if (!assessment) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.NOT_FOUND, message: "Assessment not found" } },
-      { status: 404 },
-    );
-  }
-
-  const hasAccess = await verifyAssessmentAccess(user, id);
-  if (!hasAccess) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.FORBIDDEN, message: "You do not have access to this assessment" } },
-      { status: 403 },
-    );
-  }
-
   await softDeleteAssessment(id);
 
   return NextResponse.json({ data: { deleted: true } });

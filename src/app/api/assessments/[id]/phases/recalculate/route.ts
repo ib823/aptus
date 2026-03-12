@@ -1,8 +1,10 @@
 /** POST: Recalculate phase completion percentages from actual data */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
@@ -96,41 +98,18 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
+  const { id: assessmentId } = await params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) {
+    return access;
   }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
+  const { user } = access;
 
   const role = mapLegacyRole(user.role);
   if (!RECALCULATE_ROLES.includes(role)) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Insufficient permissions to recalculate phase progress" } },
       { status: 403 },
-    );
-  }
-
-  const { id: assessmentId } = await params;
-
-  // Verify assessment exists
-  const assessment = await prisma.assessment.findUnique({
-    where: { id: assessmentId, deletedAt: null },
-    select: { id: true },
-  });
-
-  if (!assessment) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.NOT_FOUND, message: "Assessment not found" } },
-      { status: 404 },
     );
   }
 

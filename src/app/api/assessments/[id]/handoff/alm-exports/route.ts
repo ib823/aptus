@@ -2,12 +2,15 @@
 /** POST: Create ALM export */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { Prisma } from "@prisma/client";
 import { getAlmAdapter } from "@/lib/alm/adapter-factory";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import type { AlmTarget, SnapshotData } from "@/types/signoff";
 import { z } from "zod";
 
@@ -20,22 +23,12 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
   const { id } = await params;
+  const access = await requireAssessmentAccess(id);
+  if (isAssessmentAccessError(access)) {
+    return access;
+  }
+
   const exports = await prisma.almExportRecord.findMany({
     where: { assessmentId: id },
     orderBy: { createdAt: "desc" },
@@ -48,20 +41,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
+  const { id } = await params;
+  const access = await requireAssessmentAccess(id);
+  if (isAssessmentAccessError(access)) {
+    return access;
   }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
+  const { user } = access;
 
   const allowedRoles = ["platform_admin", "partner_lead", "consultant", "it_lead"];
   if (!allowedRoles.includes(user.role)) {
@@ -71,9 +56,15 @@ export async function POST(
     );
   }
 
-  const { id } = await params;
-  const body: unknown = await request.json();
-  const parsed = createExportSchema.safeParse(body);
+  const bodyResult = await safeParseJsonBody(request);
+  if (!bodyResult.ok) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid request body" } },
+      { status: 400 },
+    );
+  }
+
+  const parsed = createExportSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: parsed.error.issues[0]?.message ?? "Validation failed" } },

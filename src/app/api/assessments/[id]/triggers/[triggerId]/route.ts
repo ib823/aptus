@@ -1,10 +1,15 @@
 /** PUT: Update trigger status */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
+import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { prisma } from "@/lib/db/prisma";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { ERROR_CODES } from "@/types/api";
+import type { UserRole } from "@/types/assessment";
 import { z } from "zod";
 
 const updateTriggerSchema = z.object({
@@ -12,36 +17,42 @@ const updateTriggerSchema = z.object({
   resolution: z.string().optional(),
   changeRequestId: z.string().optional(),
 });
+
+const TRIGGER_UPDATE_ROLES: UserRole[] = [
+  "platform_admin",
+  "partner_lead",
+  "consultant",
+  "project_manager",
+];
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; triggerId: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
+  const { id, triggerId } = await params;
+  const access = await requireAssessmentAccess(id);
+  if (isAssessmentAccessError(access)) {
+    return access;
   }
+  const { user } = access;
 
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
-  const allowedRoles = ["platform_admin", "partner_lead", "consultant", "project_manager"];
-  if (!allowedRoles.includes(user.role)) {
+  const role = mapLegacyRole(user.role);
+  if (!TRIGGER_UPDATE_ROLES.includes(role)) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Insufficient permissions to update triggers" } },
       { status: 403 },
     );
   }
 
-  const { triggerId } = await params;
-  const body: unknown = await request.json();
-  const parsed = updateTriggerSchema.safeParse(body);
+  const bodyResult = await safeParseJsonBody(request);
+  if (!bodyResult.ok) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid request body" } },
+      { status: 400 },
+    );
+  }
+
+  const parsed = updateTriggerSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: parsed.error.issues[0]?.message ?? "Validation failed" } },
@@ -49,8 +60,8 @@ export async function PUT(
     );
   }
 
-  const trigger = await prisma.reassessmentTrigger.findUnique({
-    where: { id: triggerId },
+  const trigger = await prisma.reassessmentTrigger.findFirst({
+    where: { id: triggerId, assessmentId: id },
   });
 
   if (!trigger) {
@@ -58,6 +69,19 @@ export async function PUT(
       { error: { code: ERROR_CODES.NOT_FOUND, message: "Trigger not found" } },
       { status: 404 },
     );
+  }
+
+  if (parsed.data.changeRequestId) {
+    const changeRequest = await prisma.changeRequest.findFirst({
+      where: { id: parsed.data.changeRequestId, assessmentId: id },
+      select: { id: true },
+    });
+    if (!changeRequest) {
+      return NextResponse.json(
+        { error: { code: ERROR_CODES.NOT_FOUND, message: "Change request not found" } },
+        { status: 404 },
+      );
+    }
   }
 
   const isResolved = parsed.data.status === "RESOLVED" || parsed.data.status === "DISMISSED";

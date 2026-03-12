@@ -2,8 +2,10 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
 import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/db/decision-log";
 import { detectCircularDependency } from "@/lib/assessment/dependency-graph";
@@ -37,34 +39,12 @@ export async function PUT(
   request: NextRequest,
   { params }: RouteParams,
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
   const { id: assessmentId, objectId } = await params;
-
-  const assessment = await prisma.assessment.findUnique({
-    where: { id: assessmentId, deletedAt: null },
-    select: { status: true },
-  });
-
-  if (!assessment) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.NOT_FOUND, message: "Assessment not found" } },
-      { status: 404 },
-    );
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) {
+    return access;
   }
+  const { user, assessment } = access;
 
   if (assessment.status === "signed_off") {
     return NextResponse.json(
@@ -73,11 +53,11 @@ export async function PUT(
     );
   }
 
-  const existing = await prisma.dataMigrationObject.findUnique({
-    where: { id: objectId },
+  const existing = await prisma.dataMigrationObject.findFirst({
+    where: { id: objectId, assessmentId },
   });
 
-  if (!existing || existing.assessmentId !== assessmentId) {
+  if (!existing) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.NOT_FOUND, message: "Data migration object not found" } },
       { status: 404 },
@@ -206,40 +186,25 @@ export async function DELETE(
   _request: NextRequest,
   { params }: RouteParams,
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
   const { id: assessmentId, objectId } = await params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) {
+    return access;
+  }
+  const { user, assessment } = access;
 
-  const assessment = await prisma.assessment.findUnique({
-    where: { id: assessmentId },
-    select: { status: true },
-  });
-
-  if (assessment?.status === "signed_off") {
+  if (assessment.status === "signed_off") {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Cannot delete records after sign-off" } },
       { status: 403 },
     );
   }
 
-  const existing = await prisma.dataMigrationObject.findUnique({
-    where: { id: objectId },
+  const existing = await prisma.dataMigrationObject.findFirst({
+    where: { id: objectId, assessmentId },
   });
 
-  if (!existing || existing.assessmentId !== assessmentId) {
+  if (!existing) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.NOT_FOUND, message: "Data migration object not found" } },
       { status: 404 },

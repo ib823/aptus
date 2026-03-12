@@ -1,10 +1,14 @@
 /** POST: Initiate sign-off process */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
+import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 import { randomBytes } from "crypto";
@@ -16,32 +20,30 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
+  const { id } = await params;
+  const access = await requireAssessmentAccess(id);
+  if (isAssessmentAccessError(access)) {
+    return access;
   }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
+  const { user } = access;
 
   const allowedRoles = ["platform_admin", "partner_lead", "consultant"];
-  if (!allowedRoles.includes(user.role)) {
+  if (!allowedRoles.includes(mapLegacyRole(user.role))) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Insufficient permissions to initiate sign-off" } },
       { status: 403 },
     );
   }
 
-  const { id } = await params;
-  const body: unknown = await request.json();
-  const parsed = startSchema.safeParse(body);
+  const bodyResult = await safeParseJsonBody(request);
+  if (!bodyResult.ok) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid request body" } },
+      { status: 400 },
+    );
+  }
+
+  const parsed = startSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: parsed.error.issues[0]?.message ?? "Validation failed" } },
@@ -61,10 +63,10 @@ export async function POST(
   }
 
   // Validate snapshot exists
-  const snapshot = await prisma.assessmentSnapshot.findUnique({
-    where: { id: parsed.data.snapshotId },
+  const snapshot = await prisma.assessmentSnapshot.findFirst({
+    where: { id: parsed.data.snapshotId, assessmentId: id },
   });
-  if (!snapshot || snapshot.assessmentId !== id) {
+  if (!snapshot) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.NOT_FOUND, message: "Snapshot not found or does not belong to this assessment" } },
       { status: 404 },

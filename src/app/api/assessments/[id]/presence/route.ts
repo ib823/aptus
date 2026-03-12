@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { getCurrentUser } from "@/lib/auth/session";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
 import { prisma } from "@/lib/db/prisma";
+import type { SessionUser } from "@/types/assessment";
 
 type PresencePayload = { currentPage?: string; entityId?: string };
-type AuthenticatedUser = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
+type AuthenticatedUser = SessionUser;
 type PresenceResponseRow = {
   userId: string;
   userName: string;
@@ -150,12 +154,12 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await getCurrentUser();
   const { id: assessmentId } = await params;
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) {
+    return access;
   }
+  const { user } = access;
 
   try {
     const { currentPage, entityId } = await parsePresencePayload(req);
@@ -179,11 +183,10 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await getCurrentUser();
   const { id: assessmentId } = await params;
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) {
+    return access;
   }
 
   try {

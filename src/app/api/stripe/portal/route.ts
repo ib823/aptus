@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { createCustomerPortalSession, isStripeConfigured } from "@/lib/commercial/stripe-client";
+import { getTrustedAppOrigin } from "@/lib/http/app-origin";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const origin = request.headers.get("origin") ?? "";
+  const origin = getTrustedAppOrigin(request);
   const result = await createCustomerPortalSession({
     stripeCustomerId: org.stripeCustomerId,
     returnUrl: `${origin}/settings/subscription`,

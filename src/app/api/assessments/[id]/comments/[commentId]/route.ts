@@ -2,11 +2,14 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { parseMentions } from "@/lib/collaboration/mention-parser";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 
 const UpdateCommentSchema = z.object({
   content: z.string().min(1).max(10000),
@@ -15,22 +18,12 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; commentId: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
   const { id: assessmentId, commentId } = await params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) {
+    return access;
+  }
+  const { user } = access;
 
   const comment = await prisma.comment.findFirst({
     where: { id: commentId, assessmentId },
@@ -51,8 +44,15 @@ export async function PUT(
     );
   }
 
-  const body = await request.json();
-  const parsed = UpdateCommentSchema.safeParse(body);
+  const bodyResult = await safeParseJsonBody(request);
+  if (!bodyResult.ok) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid request body" } },
+      { status: 400 },
+    );
+  }
+
+  const parsed = UpdateCommentSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Validation failed", details: parsed.error.flatten().fieldErrors as unknown as Record<string, string> } },
@@ -83,22 +83,12 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; commentId: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
   const { id: assessmentId, commentId } = await params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) {
+    return access;
+  }
+  const { user } = access;
 
   const comment = await prisma.comment.findFirst({
     where: { id: commentId, assessmentId },

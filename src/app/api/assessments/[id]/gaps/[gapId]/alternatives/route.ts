@@ -2,10 +2,13 @@
 /** POST: Create a new alternative for a gap resolution */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
 import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
@@ -31,25 +34,17 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; gapId: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
+  const { id: assessmentId, gapId } = await params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) {
+    return access;
   }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
-  const { gapId } = await params;
 
   const alternatives = await prisma.gapAlternative.findMany({
-    where: { gapResolutionId: gapId },
+    where: {
+      gapResolutionId: gapId,
+      gapResolution: { assessmentId },
+    },
     orderBy: { createdAt: "asc" },
   });
 
@@ -60,25 +55,22 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; gapId: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
   const { id: assessmentId, gapId } = await params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) {
+    return access;
+  }
+  const { user } = access;
 
-  const body: unknown = await request.json();
-  const parsed = alternativeSchema.safeParse(body);
+  const bodyResult = await safeParseJsonBody(request);
+  if (!bodyResult.ok) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid request body" } },
+      { status: 400 },
+    );
+  }
+
+  const parsed = alternativeSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: parsed.error.issues[0]?.message ?? "Validation failed" } },
@@ -87,12 +79,12 @@ export async function POST(
   }
 
   // Verify gap exists
-  const gap = await prisma.gapResolution.findUnique({
-    where: { id: gapId },
+  const gap = await prisma.gapResolution.findFirst({
+    where: { id: gapId, assessmentId },
     select: { assessmentId: true },
   });
 
-  if (!gap || gap.assessmentId !== assessmentId) {
+  if (!gap) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.NOT_FOUND, message: "Gap resolution not found" } },
       { status: 404 },

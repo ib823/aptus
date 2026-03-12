@@ -1,10 +1,25 @@
 /** In-memory sliding-window rate limiter for API endpoints */
 
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis/cloudflare";
+
 interface RateLimitEntry {
   timestamps: number[];
 }
 
 const store = new Map<string, RateLimitEntry>();
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+const hasSharedBackend = Boolean(redisUrl && redisToken);
+const redis = hasSharedBackend
+  ? new Redis({
+      url: redisUrl!,
+      token: redisToken!,
+    })
+  : null;
+const limiterCache = new Map<string, Ratelimit>();
+let warnedAboutFallback = false;
+let warnedAboutBackendFailure = false;
 
 // Clean up old entries every 5 minutes
 setInterval(() => {
@@ -30,10 +45,41 @@ interface RateLimitResult {
   resetMs: number;
 }
 
-/**
- * Check rate limit for a given key (typically IP or user ID).
- */
-export function checkRateLimit(
+function toWindowDuration(windowMs: number): `${number} s` {
+  const seconds = Math.max(1, Math.ceil(windowMs / 1000));
+  return `${seconds} s`;
+}
+
+function getLimiter(config: RateLimitConfig): Ratelimit | null {
+  if (!redis) {
+    return null;
+  }
+
+  const cacheKey = `${config.limit}:${config.windowMs}`;
+  const existing = limiterCache.get(cacheKey);
+  if (existing) {
+    return existing;
+  }
+
+  const limiter = new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(config.limit, toWindowDuration(config.windowMs)),
+    analytics: false,
+    ephemeralCache: false,
+    prefix: `abeam:ratelimit:${cacheKey}`,
+  });
+  limiterCache.set(cacheKey, limiter);
+  return limiter;
+}
+
+function warnFallback(message: string): void {
+  if (!warnedAboutFallback) {
+    warnedAboutFallback = true;
+    console.warn(message);
+  }
+}
+
+function checkRateLimitInMemory(
   key: string,
   config: RateLimitConfig,
 ): RateLimitResult {
@@ -62,6 +108,39 @@ export function checkRateLimit(
     remaining: config.limit - entry.timestamps.length,
     resetMs: config.windowMs,
   };
+}
+
+/**
+ * Check rate limit for a given key (typically IP or user ID).
+ */
+export async function checkRateLimit(
+  key: string,
+  config: RateLimitConfig,
+) : Promise<RateLimitResult> {
+  const limiter = getLimiter(config);
+  if (limiter) {
+    try {
+      const result = await limiter.limit(key);
+      return {
+        allowed: result.success,
+        remaining: result.remaining,
+        resetMs: Math.max(result.reset - Date.now(), 0),
+      };
+    } catch (error) {
+      if (!warnedAboutBackendFailure) {
+        warnedAboutBackendFailure = true;
+        console.error("[RATE LIMIT] Shared backend failed, falling back to in-memory limiter", error);
+      }
+    }
+  }
+
+  if (!hasSharedBackend && process.env.NODE_ENV === "production") {
+    warnFallback(
+      "[RATE LIMIT] UPSTASH_REDIS_REST_URL/TOKEN are not configured; using in-memory fallback in production.",
+    );
+  }
+
+  return checkRateLimitInMemory(key, config);
 }
 
 /** Pre-configured rate limits */

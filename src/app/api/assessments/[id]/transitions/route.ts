@@ -2,10 +2,13 @@
 /** POST: Execute a status transition */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { ERROR_CODES } from "@/types/api";
 import { canTransition, getAvailableTransitions } from "@/lib/assessment/status-machine";
 import { logActivity } from "@/lib/collaboration/activity-logger";
@@ -19,33 +22,12 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
   const { id } = await params;
-  const assessment = await prisma.assessment.findUnique({
-    where: { id, deletedAt: null },
-    select: { status: true },
-  });
-
-  if (!assessment) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.NOT_FOUND, message: "Assessment not found" } },
-      { status: 404 },
-    );
+  const access = await requireAssessmentAccess(id);
+  if (isAssessmentAccessError(access)) {
+    return access;
   }
+  const { user, assessment } = access;
 
   const available = getAvailableTransitions(assessment.status, user.role);
 
@@ -61,40 +43,26 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
   const { id } = await params;
-  const body: unknown = await request.json();
-  const parsed = transitionSchema.safeParse(body);
-  if (!parsed.success) {
+  const access = await requireAssessmentAccess(id);
+  if (isAssessmentAccessError(access)) {
+    return access;
+  }
+  const { user, assessment } = access;
+
+  const bodyResult = await safeParseJsonBody(request);
+  if (!bodyResult.ok) {
     return NextResponse.json(
-      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Validation failed" } },
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid request body" } },
       { status: 400 },
     );
   }
 
-  const assessment = await prisma.assessment.findUnique({
-    where: { id, deletedAt: null },
-    select: { id: true, status: true },
-  });
-
-  if (!assessment) {
+  const parsed = transitionSchema.safeParse(bodyResult.data);
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: { code: ERROR_CODES.NOT_FOUND, message: "Assessment not found" } },
-      { status: 404 },
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Validation failed" } },
+      { status: 400 },
     );
   }
 

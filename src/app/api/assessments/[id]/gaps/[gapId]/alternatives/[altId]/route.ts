@@ -1,10 +1,13 @@
 /** PUT: Update alternative | DELETE: Remove alternative */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
 import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
 
@@ -28,8 +31,12 @@ const updateAlternativeSchema = z.object({
 });
 
 async function verifyAlternative(assessmentId: string, gapId: string, altId: string) {
-  const alt = await prisma.gapAlternative.findUnique({
-    where: { id: altId },
+  const alt = await prisma.gapAlternative.findFirst({
+    where: {
+      id: altId,
+      gapResolutionId: gapId,
+      gapResolution: { assessmentId },
+    },
     select: {
       id: true,
       gapResolutionId: true,
@@ -41,7 +48,7 @@ async function verifyAlternative(assessmentId: string, gapId: string, altId: str
     },
   });
 
-  if (!alt || alt.gapResolutionId !== gapId || alt.gapResolution.assessmentId !== assessmentId) {
+  if (!alt) {
     return null;
   }
   return alt;
@@ -51,22 +58,12 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; gapId: string; altId: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
   const { id: assessmentId, gapId, altId } = await params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) {
+    return access;
+  }
+  const { user } = access;
 
   const existing = await verifyAlternative(assessmentId, gapId, altId);
   if (!existing) {
@@ -76,8 +73,15 @@ export async function PUT(
     );
   }
 
-  const body: unknown = await request.json();
-  const parsed = updateAlternativeSchema.safeParse(body);
+  const bodyResult = await safeParseJsonBody(request);
+  if (!bodyResult.ok) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid request body" } },
+      { status: 400 },
+    );
+  }
+
+  const parsed = updateAlternativeSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: parsed.error.issues[0]?.message ?? "Validation failed" } },
@@ -128,22 +132,12 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; gapId: string; altId: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
   const { id: assessmentId, gapId, altId } = await params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) {
+    return access;
+  }
+  const { user } = access;
 
   const existing = await verifyAlternative(assessmentId, gapId, altId);
   if (!existing) {

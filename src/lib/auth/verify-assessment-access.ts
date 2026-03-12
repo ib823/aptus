@@ -22,6 +22,7 @@ const CROSS_ORG_ROLES = ["platform_admin", "partner_lead", "consultant"];
 export async function verifyAssessmentAccess(
   user: MinimalUser,
   assessmentId: string,
+  assessmentOrganizationId?: string,
 ): Promise<boolean> {
   const role = mapLegacyRole(user.role);
 
@@ -29,14 +30,16 @@ export async function verifyAssessmentAccess(
   if (CROSS_ORG_ROLES.includes(role)) return true;
 
   // Check if the assessment belongs to the user's organization
-  const assessment = await prisma.assessment.findUnique({
-    where: { id: assessmentId, deletedAt: null },
-    select: { organizationId: true },
-  });
+  const organizationId = assessmentOrganizationId ?? (
+    await prisma.assessment.findUnique({
+      where: { id: assessmentId, deletedAt: null },
+      select: { organizationId: true },
+    })
+  )?.organizationId;
 
-  if (!assessment) return false;
+  if (!organizationId) return false;
 
-  if (user.organizationId && assessment.organizationId === user.organizationId) return true;
+  if (user.organizationId && organizationId === user.organizationId) return true;
 
   // Check if user is an assessment stakeholder
   const stakeholder = await prisma.assessmentStakeholder.findFirst({
