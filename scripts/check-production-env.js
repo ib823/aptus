@@ -9,6 +9,7 @@ const REQUIRED_VARS = [
   "NEXTAUTH_SECRET",
   "NEXTAUTH_URL",
   "TOTP_ENCRYPTION_KEY",
+  "CRON_SECRET",
 ];
 
 const RECOMMENDED_VARS = [
@@ -18,10 +19,14 @@ const RECOMMENDED_VARS = [
   "SMTP_PASS",
   "EMAIL_FROM",
   "BLOB_READ_WRITE_TOKEN",
+  "SENTRY_DSN",
+  "NEXT_PUBLIC_SENTRY_DSN",
 ];
 
 const DANGEROUS_IN_PRODUCTION = [
   { key: "ALLOW_TEST_LOGIN", reason: "Enables test-login endpoint in production" },
+  { key: "ENABLE_TEST_LOGIN_ENDPOINT", reason: "Enables test-login endpoint — must not be set in production" },
+  { key: "ALLOW_TEST_LOGIN_IN_PROD", reason: "Overrides production safety gate for test-login" },
 ];
 
 let exitCode = 0;
