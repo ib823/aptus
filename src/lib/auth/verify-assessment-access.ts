@@ -1,15 +1,19 @@
 /**
  * Shared utility for verifying user access to an assessment.
- * Checks: platform_admin OR matching organizationId OR AssessmentStakeholder membership.
+ * Checks: platform_admin OR partner_lead/consultant (cross-org) OR matching organizationId OR stakeholder.
  */
 
 import { prisma } from "@/lib/db/prisma";
+import { mapLegacyRole } from "@/lib/auth/role-migration";
 
 interface MinimalUser {
   id: string;
   role: string;
   organizationId: string | null;
 }
+
+/** Roles that can view all assessments across organizations */
+const CROSS_ORG_ROLES = ["platform_admin", "partner_lead", "consultant"];
 
 /**
  * Verifies that the given user has access to the specified assessment.
@@ -19,8 +23,10 @@ export async function verifyAssessmentAccess(
   user: MinimalUser,
   assessmentId: string,
 ): Promise<boolean> {
-  // Platform admins have access to all assessments
-  if (user.role === "platform_admin") return true;
+  const role = mapLegacyRole(user.role);
+
+  // Cross-org roles have access to all assessments
+  if (CROSS_ORG_ROLES.includes(role)) return true;
 
   // Check if the assessment belongs to the user's organization
   const assessment = await prisma.assessment.findUnique({
@@ -30,7 +36,7 @@ export async function verifyAssessmentAccess(
 
   if (!assessment) return false;
 
-  if (assessment.organizationId === user.organizationId) return true;
+  if (user.organizationId && assessment.organizationId === user.organizationId) return true;
 
   // Check if user is an assessment stakeholder
   const stakeholder = await prisma.assessmentStakeholder.findFirst({
