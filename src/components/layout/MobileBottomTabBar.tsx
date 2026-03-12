@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Settings2,
   ClipboardCheck,
@@ -10,7 +10,6 @@ import {
   Lock,
 } from "lucide-react";
 import React, { type MouseEvent } from "react";
-import { navigateToDocument } from "@/lib/navigation/document-navigation";
 
 interface MobileBottomTabBarProps {
   assessmentId: string;
@@ -32,6 +31,7 @@ const registerSegments = ["integrations", "data-migration", "ocm", "workshops"];
 const wrapupSegments = ["activity", "sign-off", "report", "snapshots", "change-requests", "triggers", "benchmarks", "cross-phase"];
 
 export function MobileBottomTabBar({ assessmentId, assessmentStatus }: MobileBottomTabBarProps) {
+  const router = useRouter();
   const pathname = usePathname();
   const base = `/assessment/${assessmentId}`;
   const preReviewStage = assessmentStatus === "draft" || assessmentStatus === "scoping";
@@ -57,7 +57,7 @@ export function MobileBottomTabBar({ assessmentId, assessmentStatus }: MobileBot
     }
 
     event.preventDefault();
-    navigateToDocument(href);
+    router.push(href);
   };
 
   const getActiveStage = () => {
@@ -88,25 +88,26 @@ export function MobileBottomTabBar({ assessmentId, assessmentStatus }: MobileBot
         return (
           <a
             key={stage.segment}
-            href={`${base}${stage.href}`}
+            href={isLocked ? undefined : `${base}${stage.href}`}
             aria-disabled={isLocked || undefined}
             title={isLocked ? lockedStageTitle : undefined}
             tabIndex={isLocked ? -1 : undefined}
             onClick={(event) => handleStageClick(event, `${base}${stage.href}`, isLocked)}
-            className="flex flex-col items-center gap-0.5 px-2 py-1 rounded-md text-[10px] font-medium transition-colors"
+            className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-md text-[10px] font-medium transition-colors select-none ${
+              isLocked ? "pointer-events-none" : ""
+            }`}
             style={{
               color: isActive
                 ? "var(--sapSelectedColor, #0854a0)"
                 : isLocked
-                  ? "var(--sapContent_NonInteractiveIconColor, #89919a)"
+                  ? "var(--sapContent_NonInteractiveIconColor, #c2c5c8)"
                   : "var(--sapContent_LabelColor, #6a6d70)",
-              opacity: isLocked ? 0.65 : 1,
-              cursor: isLocked ? "not-allowed" : "pointer",
+              opacity: isLocked ? 0.45 : 1,
             }}
           >
             <div className="relative">
               <Icon className="w-5 h-5" />
-              {isLocked && <Lock className="absolute -top-1 -right-1 w-2.5 h-2.5 opacity-80" />}
+              {isLocked && <Lock className="absolute -top-1 -right-1 w-2.5 h-2.5" />}
             </div>
             <span>{stage.label}</span>
           </a>
