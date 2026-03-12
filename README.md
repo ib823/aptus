@@ -24,7 +24,9 @@ pnpm install
 pnpm dev
 ```
 
-The repository enforces the exact Node.js version above through `package.json`, `.nvmrc`, `.node-version`, `.tool-versions`, Volta metadata, and `engine-strict`.
+Local development enforces the exact Node.js version above through `.nvmrc`, `.node-version`, `.tool-versions`, Volta metadata, and `scripts/check-node-version.mjs`.
+
+`package.json#engines.node` intentionally uses `22.x` instead of an exact patch so Vercel and other hosted builders can use the latest supported Node 22 runtime. For Vercel deployments, make sure the project Node.js version is set to `22.x`. The repo still pins local development to `22.22.1` so installs, CI, and production builds stay aligned with a known-good toolchain.
 
 Open [http://localhost:3003](http://localhost:3003) with your browser to see the result.
 
