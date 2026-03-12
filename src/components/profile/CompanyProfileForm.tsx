@@ -135,7 +135,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
         }
       }, 500);
     },
-    [assessmentId],
+    [assessmentId, router],
   );
 
   const updateField = useCallback(
