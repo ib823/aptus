@@ -6,6 +6,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired, canTransitionStatus } from "@/lib/auth/permissions";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
+import { verifyAssessmentAccess } from "@/lib/auth/verify-assessment-access";
 import { getAssessment, updateAssessmentStatus, softDeleteAssessment } from "@/lib/db/assessments";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
@@ -41,6 +42,14 @@ export async function GET(
     return NextResponse.json(
       { error: { code: ERROR_CODES.NOT_FOUND, message: "Assessment not found" } },
       { status: 404 },
+    );
+  }
+
+  const hasAccess = await verifyAssessmentAccess(user, id);
+  if (!hasAccess) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "You do not have access to this assessment" } },
+      { status: 403 },
     );
   }
 
@@ -81,6 +90,14 @@ export async function PATCH(
     return NextResponse.json(
       { error: { code: ERROR_CODES.NOT_FOUND, message: "Assessment not found" } },
       { status: 404 },
+    );
+  }
+
+  const hasAccess = await verifyAssessmentAccess(user, id);
+  if (!hasAccess) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "You do not have access to this assessment" } },
+      { status: 403 },
     );
   }
 
@@ -145,6 +162,22 @@ export async function DELETE(
   }
 
   const { id } = await params;
+  const assessment = await getAssessment(id);
+  if (!assessment) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.NOT_FOUND, message: "Assessment not found" } },
+      { status: 404 },
+    );
+  }
+
+  const hasAccess = await verifyAssessmentAccess(user, id);
+  if (!hasAccess) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "You do not have access to this assessment" } },
+      { status: 403 },
+    );
+  }
+
   await softDeleteAssessment(id);
 
   return NextResponse.json({ data: { deleted: true } });
