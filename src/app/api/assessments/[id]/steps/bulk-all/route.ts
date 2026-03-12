@@ -1,7 +1,10 @@
 /** POST: Bulk mark ALL unreviewed classifiable steps across ALL scope items as FIT */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
 import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { ERROR_CODES } from "@/types/api";
@@ -10,28 +13,12 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
   const { id: assessmentId } = await params;
-
-  // Verify assessment exists and user has access
-  const assessment = await prisma.assessment.findUnique({
-    where: { id: assessmentId },
-    select: { id: true, status: true, organizationId: true },
-  });
-
-  if (!assessment) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.NOT_FOUND, message: "Assessment not found" } },
-      { status: 404 },
-    );
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) {
+    return access;
   }
+  const { user, assessment } = access;
 
   if (assessment.status === "signed_off" || assessment.status === "reviewed") {
     return NextResponse.json(

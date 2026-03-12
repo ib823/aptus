@@ -5,9 +5,15 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { createCheckoutSession, isStripeConfigured } from "@/lib/commercial/stripe-client";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
+import { getTrustedAppOrigin } from "@/lib/http/app-origin";
 import type { PlanTier } from "@/types/commercial";
+import { z } from "zod";
 
-const VALID_PLANS: PlanTier[] = ["STARTER", "PROFESSIONAL", "ENTERPRISE"];
+const VALID_PLANS = ["STARTER", "PROFESSIONAL", "ENTERPRISE"] as const satisfies readonly PlanTier[];
+const checkoutSchema = z.object({
+  plan: z.enum(VALID_PLANS),
+});
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
@@ -39,21 +45,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const body = await request.json() as { plan?: string };
-  const plan = body.plan as PlanTier | undefined;
-  if (!plan || !VALID_PLANS.includes(plan)) {
+  const bodyResult = await safeParseJsonBody(request);
+  if (!bodyResult.ok) {
     return NextResponse.json(
-      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid plan tier" } },
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid request body" } },
       { status: 400 },
     );
   }
+
+  const parsed = checkoutSchema.safeParse(bodyResult.data);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: parsed.error.issues[0]?.message ?? "Invalid plan tier" } },
+      { status: 400 },
+    );
+  }
+
+  const plan = parsed.data.plan;
 
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: user.organizationId },
     select: { id: true, billingEmail: true },
   });
 
-  const origin = request.headers.get("origin") ?? "";
+  const origin = getTrustedAppOrigin(request);
   const result = await createCheckoutSession({
     organizationId: org.id,
     plan,

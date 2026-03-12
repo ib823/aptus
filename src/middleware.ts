@@ -31,7 +31,7 @@ const RATE_LIMIT_EXEMPT = [
   "/api/cron/",            // Cron jobs (protected by CRON_SECRET)
 ];
 
-export function middleware(request: NextRequest): NextResponse | undefined {
+export async function middleware(request: NextRequest): Promise<NextResponse | undefined> {
   const { pathname } = request.nextUrl;
 
   // ----- API rate limiting -----
@@ -57,7 +57,7 @@ export function middleware(request: NextRequest): NextResponse | undefined {
         ? `auth:${clientIp}`
         : `api:${request.method}:${clientIp}`;
 
-      const result = checkRateLimit(key, config);
+      const result = await checkRateLimit(key, config);
 
       if (!result.allowed) {
         return new NextResponse(

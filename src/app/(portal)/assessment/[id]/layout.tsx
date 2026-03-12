@@ -83,7 +83,10 @@ export default async function AssessmentLayout({
         {children}
       </div>
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-40">
-        <MobileBottomTabBar assessmentId={assessment.id} />
+        <MobileBottomTabBar
+          assessmentId={assessment.id}
+          assessmentStatus={assessment.status}
+        />
       </div>
     </div>
   );

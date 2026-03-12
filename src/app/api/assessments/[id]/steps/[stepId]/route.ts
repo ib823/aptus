@@ -1,8 +1,11 @@
 /** PUT: Upsert step response */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired, canEditStepResponse } from "@/lib/auth/permissions";
+import { canEditStepResponse } from "@/lib/auth/permissions";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
 import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { logStepResponseChange } from "@/lib/audit/temporal-logger";
@@ -11,6 +14,7 @@ import { logActivity } from "@/lib/collaboration/activity-logger";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { PropagationEngine } from "@/lib/dependency/propagation-engine";
 import type { DependencyEffects } from "@/lib/dependency/types";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { ERROR_CODES } from "@/types/api";
 import type { DecisionAction } from "@/types/assessment";
 import { z } from "zod";
@@ -32,25 +36,21 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; stepId: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
   const { id: assessmentId, stepId } = await params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) return access;
 
-  const body: unknown = await request.json();
-  const parsed = responseSchema.safeParse(body);
+  const { user } = access;
+
+  const bodyResult = await safeParseJsonBody(request);
+  if (!bodyResult.ok) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid request body" } },
+      { status: 400 },
+    );
+  }
+
+  const parsed = responseSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: parsed.error.issues[0]?.message ?? "Validation failed" } },

@@ -149,45 +149,45 @@ describe("Rate Limiting", () => {
     checkRateLimit = mod.checkRateLimit;
   });
 
-  test("allows requests within limit", () => {
+  test("allows requests within limit", async () => {
     const key = `test-allow-${Date.now()}`;
     const config = { limit: 5, windowMs: 60000 };
 
-    const result = checkRateLimit(key, config);
+    const result = await checkRateLimit(key, config);
     expect(result.allowed).toBe(true);
     expect(result.remaining).toBe(4);
   });
 
-  test("blocks requests exceeding limit", () => {
+  test("blocks requests exceeding limit", async () => {
     const key = `test-block-${Date.now()}`;
     const config = { limit: 3, windowMs: 60000 };
 
-    checkRateLimit(key, config);
-    checkRateLimit(key, config);
-    checkRateLimit(key, config);
+    await checkRateLimit(key, config);
+    await checkRateLimit(key, config);
+    await checkRateLimit(key, config);
 
-    const result = checkRateLimit(key, config);
+    const result = await checkRateLimit(key, config);
     expect(result.allowed).toBe(false);
     expect(result.remaining).toBe(0);
   });
 
-  test("different keys have independent limits", () => {
+  test("different keys have independent limits", async () => {
     const config = { limit: 1, windowMs: 60000 };
 
     const key1 = `test-key1-${Date.now()}`;
     const key2 = `test-key2-${Date.now()}`;
 
-    checkRateLimit(key1, config);
-    const result = checkRateLimit(key2, config);
+    await checkRateLimit(key1, config);
+    const result = await checkRateLimit(key2, config);
     expect(result.allowed).toBe(true);
   });
 
-  test("provides reset time when blocked", () => {
+  test("provides reset time when blocked", async () => {
     const key = `test-reset-${Date.now()}`;
     const config = { limit: 1, windowMs: 60000 };
 
-    checkRateLimit(key, config);
-    const result = checkRateLimit(key, config);
+    await checkRateLimit(key, config);
+    const result = await checkRateLimit(key, config);
     expect(result.allowed).toBe(false);
     expect(result.resetMs).toBeGreaterThan(0);
     expect(result.resetMs).toBeLessThanOrEqual(60000);

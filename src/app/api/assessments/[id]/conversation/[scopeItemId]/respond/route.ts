@@ -1,8 +1,12 @@
 /** POST: Submit an answer in a conversation session, get next question */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
 import { prisma } from "@/lib/db/prisma";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { ERROR_CODES } from "@/types/api";
 import { getNextQuestion } from "@/lib/conversation/tree-engine";
 import type { QuestionFlow, ConversationResponse } from "@/types/conversation";
@@ -19,18 +23,22 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; scopeItemId: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
+  const { id: assessmentId, scopeItemId } = await params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) {
+    return access;
+  }
+  const { user } = access;
+
+  const bodyResult = await safeParseJsonBody(request);
+  if (!bodyResult.ok) {
     return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid request body" } },
+      { status: 400 },
     );
   }
 
-  const { id: assessmentId, scopeItemId } = await params;
-
-  const body: unknown = await request.json();
-  const parsed = respondSchema.safeParse(body);
+  const parsed = respondSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: parsed.error.issues[0]?.message ?? "Validation failed" } },
@@ -41,11 +49,11 @@ export async function POST(
   const { sessionId, questionId, answerId, processStepId } = parsed.data;
 
   // Fetch session and template
-  const session = await prisma.conversationSession.findUnique({
-    where: { id: sessionId },
+  const session = await prisma.conversationSession.findFirst({
+    where: { id: sessionId, assessmentId, scopeItemId, userId: user.id },
   });
 
-  if (!session || session.assessmentId !== assessmentId || session.userId !== user.id) {
+  if (!session) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.NOT_FOUND, message: "Session not found" } },
       { status: 404 },

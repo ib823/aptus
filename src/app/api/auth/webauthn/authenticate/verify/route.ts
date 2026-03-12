@@ -27,7 +27,7 @@ const bodySchema = z.object({
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const clientIp = getClientIp(request.headers);
-  const rateCheck = checkRateLimit(`webauthn-verify:${clientIp}`, RATE_LIMITS.mfa);
+  const rateCheck = await checkRateLimit(`webauthn-verify:${clientIp}`, RATE_LIMITS.mfa);
   if (!rateCheck.allowed) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.RATE_LIMITED, message: "Too many attempts. Please try again later." } },

@@ -2,11 +2,14 @@
 /** PUT: Approve or reject change request */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { z } from "zod";
 
 const updateChangeRequestSchema = z.object({
@@ -17,24 +20,14 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; crId: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
+  const { id, crId } = await params;
+  const access = await requireAssessmentAccess(id);
+  if (isAssessmentAccessError(access)) {
+    return access;
   }
 
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
-  const { crId } = await params;
-  const changeRequest = await prisma.changeRequest.findUnique({
-    where: { id: crId },
+  const changeRequest = await prisma.changeRequest.findFirst({
+    where: { id: crId, assessmentId: id },
   });
 
   if (!changeRequest) {
@@ -51,20 +44,12 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; crId: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
+  const { id, crId } = await params;
+  const access = await requireAssessmentAccess(id);
+  if (isAssessmentAccessError(access)) {
+    return access;
   }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
+  const { user } = access;
 
   const allowedRoles = ["platform_admin", "partner_lead", "consultant"];
   if (!allowedRoles.includes(user.role)) {
@@ -74,9 +59,15 @@ export async function PUT(
     );
   }
 
-  const { id, crId } = await params;
-  const body: unknown = await request.json();
-  const parsed = updateChangeRequestSchema.safeParse(body);
+  const bodyResult = await safeParseJsonBody(request);
+  if (!bodyResult.ok) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid request body" } },
+      { status: 400 },
+    );
+  }
+
+  const parsed = updateChangeRequestSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: parsed.error.issues[0]?.message ?? "Validation failed" } },
@@ -84,8 +75,8 @@ export async function PUT(
     );
   }
 
-  const changeRequest = await prisma.changeRequest.findUnique({
-    where: { id: crId },
+  const changeRequest = await prisma.changeRequest.findFirst({
+    where: { id: crId, assessmentId: id },
   });
 
   if (!changeRequest) {

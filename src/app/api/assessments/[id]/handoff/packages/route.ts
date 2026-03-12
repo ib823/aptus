@@ -3,9 +3,12 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import archiver from "archiver";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
+import {
+  requireAssessmentAccess,
+  isAssessmentAccessError,
+} from "@/lib/auth/assessment-guard";
 import { prisma } from "@/lib/db/prisma";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { ERROR_CODES } from "@/types/api";
 import type { SnapshotData } from "@/types/signoff";
 import { z } from "zod";
@@ -19,22 +22,12 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
   const { id } = await params;
+  const access = await requireAssessmentAccess(id);
+  if (isAssessmentAccessError(access)) {
+    return access;
+  }
+
   const packages = await prisma.handoffPackage.findMany({
     where: { assessmentId: id },
     orderBy: { generatedAt: "desc" },
@@ -47,20 +40,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
+  const { id } = await params;
+  const access = await requireAssessmentAccess(id);
+  if (isAssessmentAccessError(access)) {
+    return access;
   }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
+  const { user, assessment } = access;
 
   const allowedRoles = ["platform_admin", "partner_lead", "consultant"];
   if (!allowedRoles.includes(user.role)) {
@@ -70,9 +55,15 @@ export async function POST(
     );
   }
 
-  const { id } = await params;
-  const body: unknown = await request.json();
-  const parsed = createPackageSchema.safeParse(body);
+  const bodyResult = await safeParseJsonBody(request);
+  if (!bodyResult.ok) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid request body" } },
+      { status: 400 },
+    );
+  }
+
+  const parsed = createPackageSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: parsed.error.issues[0]?.message ?? "Validation failed" } },
@@ -109,10 +100,6 @@ export async function POST(
   // Generate ZIP in background (fire-and-forget)
   void (async () => {
     try {
-      const assessment = await prisma.assessment.findUnique({
-        where: { id },
-        select: { companyName: true },
-      });
       const snapshotData = snapshot.snapshotData as unknown as SnapshotData;
 
       const archive = archiver("zip", { zlib: { level: 6 } });
@@ -126,7 +113,7 @@ export async function POST(
 
       // Add a summary README
       const readme = [
-        `Handoff Package — ${assessment?.companyName ?? "Assessment"}`,
+        `Handoff Package — ${assessment.companyName ?? "Assessment"}`,
         `Snapshot Version: ${parsed.data.snapshotVersion}`,
         `Package Type: ${parsed.data.packageType ?? "FULL"}`,
         `Generated: ${new Date().toISOString()}`,

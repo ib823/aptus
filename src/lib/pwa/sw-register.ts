@@ -1,7 +1,41 @@
 /** Service worker registration utility */
 
+const PWA_ENABLED = process.env.NEXT_PUBLIC_ENABLE_PWA === "true";
+
+async function clearAbeamCaches(): Promise<void> {
+  if (typeof window === "undefined" || !("caches" in window)) {
+    return;
+  }
+
+  const cacheKeys = await caches.keys();
+  await Promise.all(
+    cacheKeys
+      .filter((key) => key.startsWith("abeam-"))
+      .map((key) => caches.delete(key)),
+  );
+}
+
+async function unregisterExistingServiceWorkers(): Promise<void> {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
+    return;
+  }
+
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(
+    registrations
+      .filter((registration) => new URL(registration.scope).origin === window.location.origin)
+      .map((registration) => registration.unregister()),
+  );
+}
+
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
+    return null;
+  }
+
+  if (!PWA_ENABLED) {
+    await unregisterExistingServiceWorkers();
+    await clearAbeamCaches();
     return null;
   }
 

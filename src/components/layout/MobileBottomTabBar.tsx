@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Settings2,
@@ -8,10 +7,14 @@ import {
   BarChart3,
   Database,
   CheckCircle2,
+  Lock,
 } from "lucide-react";
+import React, { type MouseEvent } from "react";
+import { navigateToDocument } from "@/lib/navigation/document-navigation";
 
 interface MobileBottomTabBarProps {
   assessmentId: string;
+  assessmentStatus: string;
 }
 
 const stages = [
@@ -28,9 +31,34 @@ const outputSegments = ["config", "process-map", "flows", "gaps", "remaining"];
 const registerSegments = ["integrations", "data-migration", "ocm", "workshops"];
 const wrapupSegments = ["activity", "sign-off", "report", "snapshots", "change-requests", "triggers", "benchmarks", "cross-phase"];
 
-export function MobileBottomTabBar({ assessmentId }: MobileBottomTabBarProps) {
+export function MobileBottomTabBar({ assessmentId, assessmentStatus }: MobileBottomTabBarProps) {
   const pathname = usePathname();
   const base = `/assessment/${assessmentId}`;
+  const preReviewStage = assessmentStatus === "draft" || assessmentStatus === "scoping";
+  const lockedStageTitle = assessmentStatus === "draft"
+    ? "Complete setup and move the assessment into In Progress to unlock this stage."
+    : "Complete scope selection and move the assessment into In Progress to unlock this stage.";
+
+  const handleStageClick = (event: MouseEvent<HTMLAnchorElement>, href: string, locked?: boolean) => {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    if (locked) {
+      event.preventDefault();
+      return;
+    }
+
+    event.preventDefault();
+    navigateToDocument(href);
+  };
 
   const getActiveStage = () => {
     const currentSegment = (pathname ?? "").replace(base + "/", "").split("/")[0];
@@ -56,20 +84,32 @@ export function MobileBottomTabBar({ assessmentId }: MobileBottomTabBarProps) {
       {stages.map((stage) => {
         const isActive = stage.segment === activeStage;
         const Icon = stage.icon;
+        const isLocked = preReviewStage && stage.segment !== "profile";
         return (
-          <Link
+          <a
             key={stage.segment}
             href={`${base}${stage.href}`}
+            aria-disabled={isLocked || undefined}
+            title={isLocked ? lockedStageTitle : undefined}
+            tabIndex={isLocked ? -1 : undefined}
+            onClick={(event) => handleStageClick(event, `${base}${stage.href}`, isLocked)}
             className="flex flex-col items-center gap-0.5 px-2 py-1 rounded-md text-[10px] font-medium transition-colors"
             style={{
               color: isActive
                 ? "var(--sapSelectedColor, #0854a0)"
-                : "var(--sapContent_LabelColor, #6a6d70)",
+                : isLocked
+                  ? "var(--sapContent_NonInteractiveIconColor, #89919a)"
+                  : "var(--sapContent_LabelColor, #6a6d70)",
+              opacity: isLocked ? 0.65 : 1,
+              cursor: isLocked ? "not-allowed" : "pointer",
             }}
           >
-            <Icon className="w-5 h-5" />
+            <div className="relative">
+              <Icon className="w-5 h-5" />
+              {isLocked && <Lock className="absolute -top-1 -right-1 w-2.5 h-2.5 opacity-80" />}
+            </div>
             <span>{stage.label}</span>
-          </Link>
+          </a>
         );
       })}
     </nav>
