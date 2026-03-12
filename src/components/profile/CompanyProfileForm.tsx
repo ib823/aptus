@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -86,11 +87,13 @@ function CollapsibleSection({ title, complete, defaultOpen = false, children }: 
 }
 
 export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, userRole }: CompanyProfileFormProps) {
+  const router = useRouter();
   const [profile, setProfile] = useState<ProfileData>(initialProfile);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [currencyManuallySet, setCurrencyManuallySet] = useState(false);
   const pendingSave = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevScore = useRef(initialProfile.completenessScore);
 
   useEffect(() => {
     return () => {
@@ -112,11 +115,17 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
           });
           if (res.ok) {
             const json = await res.json();
+            const newScore = json.data.completenessScore as number;
             setProfile((prev) => ({
               ...prev,
-              completenessScore: json.data.completenessScore,
+              completenessScore: newScore,
               completenessBreakdown: json.data.completenessBreakdown,
             }));
+            // Refresh server layout when score crosses the gate so Scope tab unlocks
+            if (newScore >= PROFILE_COMPLETENESS_GATE && prevScore.current < PROFILE_COMPLETENESS_GATE) {
+              router.refresh();
+            }
+            prevScore.current = newScore;
             setSaveStatus("saved");
             if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current);
             saveStatusTimer.current = setTimeout(() => setSaveStatus("idle"), 2000);
