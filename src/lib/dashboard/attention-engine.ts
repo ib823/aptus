@@ -98,21 +98,19 @@ export function computeAttentionItems(
     });
   }
 
-  // Unresolved gaps > 7 days are warnings
+  // Unresolved gaps: >7 days = warning, ≤7 days = info
   for (const gap of unresolvedGaps) {
     const ageMs = Date.now() - new Date(gap.createdAt).getTime();
     const ageDays = ageMs / (1000 * 60 * 60 * 24);
-    if (ageDays > 7) {
-      items.push({
-        id: `gap-${gap.id}`,
-        severity: "warning",
-        title: "Unresolved Gap",
-        description: gap.gapDescription.slice(0, 100),
-        entityType: "gap",
-        entityId: gap.id,
-        createdAt: gap.createdAt,
-      });
-    }
+    items.push({
+      id: `gap-${gap.id}`,
+      severity: ageDays > 7 ? "warning" : "info",
+      title: "Unresolved Gap",
+      description: gap.gapDescription.slice(0, 100),
+      entityType: "gap",
+      entityId: gap.id,
+      createdAt: gap.createdAt,
+    });
   }
 
   // Stale assessments are info/warning based on days

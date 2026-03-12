@@ -54,15 +54,27 @@ export async function GET(
     );
   }
 
+  // Only count steps/gaps for scope items the user actually selected
+  const selectedScopeIds = (
+    await prisma.scopeSelection.findMany({
+      where: { assessmentId, selected: true },
+      select: { scopeItemId: true },
+    })
+  ).map((s) => s.scopeItemId);
+
+  const scopeFilter = selectedScopeIds.length > 0
+    ? { processStep: { scopeItemId: { in: selectedScopeIds } } }
+    : { id: "__none__" as string }; // no scope selected → zero results
+
   const [stepStats, gapStats, integrationStats, migrationStats, ocmStats] = await Promise.all([
     prisma.stepResponse.groupBy({
       by: ["fitStatus"],
-      where: { assessmentId },
+      where: { assessmentId, ...scopeFilter },
       _count: { _all: true },
     }),
     prisma.gapResolution.groupBy({
       by: ["resolutionType"],
-      where: { assessmentId },
+      where: { assessmentId, scopeItemId: selectedScopeIds.length > 0 ? { in: selectedScopeIds } : "__none__" },
       _count: { _all: true },
     }),
     prisma.integrationPoint.groupBy({
