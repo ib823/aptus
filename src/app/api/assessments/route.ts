@@ -13,6 +13,7 @@ import {
   listAssessmentsPaginated,
 } from "@/lib/db/assessments";
 import { prisma } from "@/lib/db/prisma";
+import { ensureOrganization } from "@/lib/db/organizations";
 import { ERROR_CODES } from "@/types/api";
 import { checkAssessmentLimit, recordUsageEvent } from "@/lib/commercial/usage-metering";
 import { safeParseJsonBody } from "@/lib/http/safe-json-body";
@@ -184,23 +185,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    // Ensure organization exists or create one
-    let organizationId = user.organizationId;
-    if (!organizationId) {
-      const org = await prisma.organization.create({
-        data: {
-          name: parsed.data.companyName,
-          type: "client",
-        },
-      });
-      organizationId = org.id;
-
-      // Link user to org
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { organizationId },
-      });
-    }
+    const organizationId = await ensureOrganization(user.id, user.organizationId, parsed.data.companyName);
 
     // Check assessment limit before creating
     const limitCheck = await checkAssessmentLimit(organizationId);
@@ -218,7 +203,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
 
     // Record usage event (fire-and-forget)
-    recordUsageEvent(organizationId, "assessment_created", assessment.id).catch(() => {});
+    recordUsageEvent(organizationId, "assessment_created", assessment.id).catch((err) => console.error("[USAGE] Failed to record assessment_created event:", err));
 
     // Add the creating user as a consultant stakeholder
     await prisma.assessmentStakeholder.create({

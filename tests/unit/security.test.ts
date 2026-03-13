@@ -2,6 +2,7 @@
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import type { UserRole } from "@/types/assessment";
+import type { checkRateLimit as CheckRateLimitFn, getClientIp as GetClientIpFn } from "@/lib/security/rate-limit";
 
 // ── HTML Sanitization ─────────────────────────────────────────────────────
 describe("HTML Sanitization", () => {
@@ -142,7 +143,7 @@ describe("HTML Sanitization", () => {
 
 // ── Rate Limiting ─────────────────────────────────────────────────────────
 describe("Rate Limiting", () => {
-  let checkRateLimit: typeof import("@/lib/security/rate-limit").checkRateLimit;
+  let checkRateLimit: typeof CheckRateLimitFn;
 
   beforeEach(async () => {
     const mod = await import("@/lib/security/rate-limit");
@@ -196,7 +197,7 @@ describe("Rate Limiting", () => {
 
 // ── Client IP Extraction ──────────────────────────────────────────────────
 describe("Client IP Extraction", () => {
-  let getClientIp: typeof import("@/lib/security/rate-limit").getClientIp;
+  let getClientIp: typeof GetClientIpFn;
 
   beforeEach(async () => {
     const mod = await import("@/lib/security/rate-limit");

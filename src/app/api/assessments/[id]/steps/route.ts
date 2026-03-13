@@ -1,7 +1,7 @@
 /** GET: Step responses for an assessment */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { Prisma } from "@prisma/client";
+import { type Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";

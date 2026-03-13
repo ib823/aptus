@@ -31,7 +31,13 @@ function getAdapter(): Adapter {
         },
       });
     },
-    // Override session methods to no-ops
+    /**
+     * Session methods are intentionally no-ops because we use a custom session
+     * system (src/lib/auth/session.ts) instead of NextAuth's built-in sessions.
+     * NextAuth is used only for the magic-link email flow and user creation.
+     * Our custom sessions provide: concurrent session limits, MFA tracking,
+     * session rotation, IP tracking, and revocation.
+     */
     createSession: () => Promise.resolve(null!),
     getSessionAndUser: () => Promise.resolve(null),
     updateSession: () => Promise.resolve(null),
@@ -51,7 +57,7 @@ export const authOptions: NextAuthOptions = {
       from: process.env.EMAIL_FROM ?? "no-reply@brevo.com",
       sendVerificationRequest: async ({ identifier: email, url }) => {
         if (!process.env.SMTP_USER) {
-          console.log(`\n[MAGIC LINK] For ${email}:\n${url}\n`);
+          console.warn(`\n[MAGIC LINK] For ${email}:\n${url}\n`);
           return;
         }
 
@@ -119,12 +125,11 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
-        delete (session.user as Record<string, unknown>).email;
-        delete (session.user as Record<string, unknown>).image;
-        if (token.userId) {
-          (session.user as Record<string, unknown>).id = token.userId;
-          (session.user as Record<string, unknown>).role = token.role;
-        }
+        const { email: _email, image: _image, ...safeUser } = session.user;
+        session.user = {
+          ...safeUser,
+          ...(token.userId ? { id: token.userId, role: token.role } : {}),
+        };
       }
       return session;
     },

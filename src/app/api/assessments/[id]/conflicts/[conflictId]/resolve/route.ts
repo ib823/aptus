@@ -93,7 +93,7 @@ export async function PUT(
       body: `${user.name} resolved a conflict on ${conflict.entityType} ${conflict.entityId}`,
       deepLink: `/assessments/${assessmentId}/conflicts`,
       recipientUserIds: recipientIds,
-    }).catch(() => { /* fire-and-forget */ });
+    }).catch((err) => console.error("[NOTIFY] Failed to dispatch conflict resolved notification:", err));
   }
 
   // Log activity (fire-and-forget)
@@ -106,7 +106,7 @@ export async function PUT(
     summary: `resolved conflict on ${conflict.entityType}`,
     entityType: conflict.entityType,
     entityId: conflict.entityId,
-  }).catch(() => { /* fire-and-forget */ });
+  }).catch((err) => console.error("[ACTIVITY] Failed to log conflict resolution:", err));
 
   return NextResponse.json({ data: updated });
 }

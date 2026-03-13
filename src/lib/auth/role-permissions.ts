@@ -29,8 +29,8 @@ export interface RoleCapabilities {
   isAreaLocked: boolean;
 }
 
-/** Role capability matrix */
-export const ROLE_CAPABILITIES: Record<UserRole, RoleCapabilities> = {
+/** Role capability matrix — `satisfies` ensures compile-time exhaustiveness */
+export const ROLE_CAPABILITIES = {
   platform_admin: {
     canCreateAssessment: true,
     canEditAssessment: true,
@@ -207,7 +207,7 @@ export const ROLE_CAPABILITIES: Record<UserRole, RoleCapabilities> = {
     canViewAllAssessments: false,
     isAreaLocked: false,
   },
-};
+} as const satisfies Record<UserRole, RoleCapabilities>;
 
 /**
  * Get capabilities for a role, supporting legacy role names.

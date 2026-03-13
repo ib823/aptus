@@ -120,7 +120,7 @@ export const ScopeItemCard = memo(function ScopeItemCard({ item, assessmentId, o
           setHtmlContent(json.data);
         }
       })
-      .catch(() => {})
+      .catch((err) => console.error("[SCOPE] Failed to load scope item HTML:", err))
       .finally(() => {
         if (!cancelled) setLoadingHtml(false);
       });

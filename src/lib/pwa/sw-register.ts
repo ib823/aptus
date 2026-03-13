@@ -54,7 +54,7 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
           navigator.serviceWorker.controller
         ) {
           // New version available — user will get it on next navigation
-          console.info("[SW] New version activated");
+          console.warn("[SW] New version activated");
         }
       });
     });

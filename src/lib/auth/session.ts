@@ -109,7 +109,7 @@ export async function validateSession(
     prisma.session.update({
       where: { id: session.id },
       data: { lastActiveAt: new Date() },
-    }).catch(() => {/* fire-and-forget */});
+    }).catch((err) => console.error("[SESSION] Failed to update lastActiveAt:", err));
   }
 
   return {
