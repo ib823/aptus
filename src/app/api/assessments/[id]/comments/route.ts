@@ -190,7 +190,7 @@ export async function POST(
     summary: parentCommentId ? "replied to a comment" : `commented on ${targetType.toLowerCase()}`,
     entityType: targetType,
     entityId: targetId,
-  }).catch(() => { /* fire-and-forget */ });
+  }).catch((err) => console.error("[ACTIVITY] Failed to log comment activity:", err));
 
   // Notify parent comment author for replies
   if (parentCommentId) {
@@ -206,7 +206,7 @@ export async function POST(
         body: content.substring(0, 200),
         deepLink: `/assessments/${assessmentId}?comment=${comment.id}`,
         recipientUserIds: [parentComment.authorId],
-      }).catch(() => { /* fire-and-forget */ });
+      }).catch((err) => console.error("[NOTIFY] Failed to dispatch comment reply notification:", err));
     }
   }
 

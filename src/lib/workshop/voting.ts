@@ -149,7 +149,7 @@ export async function finalizeVote(
     summary: `finalized workshop vote for "${step.actionTitle}" as ${classification}`,
     entityType: "process_step",
     entityId: processStepId,
-  }).catch(() => { /* fire-and-forget */ });
+  }).catch((err) => console.error("[ACTIVITY] Failed to log workshop vote finalization:", err));
 
   return response;
 }
