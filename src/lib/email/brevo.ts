@@ -44,10 +44,10 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ messageId:
 
   // In development without SMTP credentials, log instead of sending
   if (!process.env.SMTP_USER) {
-    console.log(`[EMAIL] Would send to: ${recipients.map(r => r.email).join(", ")}`);
-    console.log(`[EMAIL] Subject: ${options.subject}`);
+    console.warn(`[EMAIL] Would send to: ${recipients.map(r => r.email).join(", ")}`);
+    console.warn(`[EMAIL] Subject: ${options.subject}`);
     if (process.env.NODE_ENV === "development") {
-      console.log(`[EMAIL] Content preview: ${options.htmlContent.substring(0, 200)}...`);
+      console.warn(`[EMAIL] Content preview: ${options.htmlContent.substring(0, 200)}...`);
     }
     return { messageId: `dev-${Date.now()}` };
   }

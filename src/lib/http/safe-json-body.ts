@@ -1,4 +1,4 @@
-type JsonBodyParseFailure = "invalid_json" | "aborted";
+type JsonBodyParseFailure = "invalid_json" | "aborted" | "unknown";
 
 export type SafeJsonBodyResult =
   | { ok: true; data: unknown }
@@ -18,6 +18,7 @@ function isInvalidJsonBodyError(error: unknown): boolean {
 
 /**
  * Parse JSON request bodies without throwing on malformed/truncated payloads.
+ * Returns a discriminated union so callers never need to catch.
  */
 export async function safeParseJsonBody(request: Request): Promise<SafeJsonBodyResult> {
   try {
@@ -30,6 +31,7 @@ export async function safeParseJsonBody(request: Request): Promise<SafeJsonBodyR
     if (isInvalidJsonBodyError(error)) {
       return { ok: false, reason: "invalid_json" };
     }
-    throw error;
+    console.error("[HTTP] Unexpected error parsing JSON body:", error);
+    return { ok: false, reason: "unknown" };
   }
 }

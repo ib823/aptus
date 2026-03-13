@@ -27,12 +27,24 @@ const eslintConfig = [
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", destructuredArrayIgnorePattern: "^_" },
       ],
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        { prefer: "type-imports", fixStyle: "inline-type-imports" },
+      ],
+      "no-console": ["warn", { allow: ["warn", "error"] }],
     },
   },
   {
     files: ["tests/**/*.ts", "tests/**/*.spec.ts"],
     rules: {
       "@typescript-eslint/no-unused-vars": "off",
+      "no-console": "off",
+    },
+  },
+  {
+    files: ["scripts/**/*.ts", "scripts/**/*.mjs", "scripts/**/*.js"],
+    rules: {
+      "no-console": "off",
     },
   },
 ];

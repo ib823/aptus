@@ -4,7 +4,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
-import { Prisma } from "@prisma/client";
+import { type Prisma } from "@prisma/client";
 
 interface LogParams {
   stepResponseId: string;

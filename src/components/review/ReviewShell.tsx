@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import type { StepCategory } from "@/types/assessment";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -559,7 +560,7 @@ function ReviewShellInner({
       activityTitle: s.activityTitle,
       fitStatus: s.fitStatus,
       isClassifiable: s.isClassifiable !== false,
-      stepCategory: (s.stepCategory ?? "BUSINESS_PROCESS") as import("@/types/assessment").StepCategory,
+      stepCategory: (s.stepCategory ?? "BUSINESS_PROCESS") as StepCategory,
     })),
   [steps]);
 

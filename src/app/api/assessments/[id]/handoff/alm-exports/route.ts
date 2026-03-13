@@ -121,7 +121,7 @@ export async function POST(
             status: "FAILED",
             errorMessage: err instanceof Error ? err.message : "Unknown error",
           },
-        }).catch(() => {});
+        }).catch((updateErr) => console.error("[ALM-EXPORT] Failed to update export record status:", updateErr));
       }
     })();
   }

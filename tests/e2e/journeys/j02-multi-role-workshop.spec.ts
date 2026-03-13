@@ -1,4 +1,4 @@
-import { test, expect, BrowserContext, Page } from "@playwright/test";
+import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { WorkshopPage } from "../pages/workshop.page";
 import { AssessmentPage } from "../pages/assessment.page";
 import path from "path";

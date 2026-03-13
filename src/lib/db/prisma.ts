@@ -1,5 +1,13 @@
 import { PrismaClient } from "@prisma/client";
 
+/**
+ * Singleton Prisma client with global caching for Next.js hot-reload.
+ *
+ * Connection pool sizing: Prisma defaults to `num_cpus * 2 + 1` connections.
+ * For Vercel serverless, set `?connection_limit=5&pool_timeout=10` on
+ * DATABASE_URL to avoid exhausting the database connection limit across
+ * concurrent function invocations. See .env.example for guidance.
+ */
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };

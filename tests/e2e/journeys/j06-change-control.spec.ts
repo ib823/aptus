@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { AssessmentPage } from "../pages/assessment.page";
 
 /**
@@ -16,7 +16,7 @@ test.describe("T-E2E-J06 — Post Sign-Off Change Control", () => {
   let changeRequestId = "";
 
   // Helper to resolve the first assessment ID
-  async function resolveAssessmentId(page: import("@playwright/test").Page) {
+  async function resolveAssessmentId(page: Page) {
     if (assessmentId) return assessmentId;
 
     const assessment = new AssessmentPage(page);

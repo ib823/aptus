@@ -2,13 +2,18 @@
 
 /**
  * Build the Content-Security-Policy directive string.
+ *
+ * Note on 'unsafe-inline': Next.js App Router injects inline scripts for
+ * hydration and route prefetching. Until Next.js supports nonce-based CSP
+ * in the App Router (tracked upstream), 'unsafe-inline' is required.
+ * We add 'strict-dynamic' so that browsers supporting CSP Level 3 will
+ * ignore 'unsafe-inline' when a nonce/hash is eventually provided.
  */
 export function getCspDirectives(): string {
   const isDev = process.env.NODE_ENV === "development";
   return [
     "default-src 'self'",
-    // 'unsafe-inline' needed for Next.js inline scripts; 'unsafe-eval' only in dev (HMR)
-    `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'unsafe-inline' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://api.qrserver.com",
     "font-src 'self' data:",
@@ -51,8 +56,10 @@ export function getSecurityHeaders(): Array<{ key: string; value: string }> {
       value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
     },
     {
+      // Disabled per OWASP guidance: modern browsers have removed XSS auditor;
+      // CSP script-src provides equivalent (and superior) protection.
       key: "X-XSS-Protection",
-      value: "1; mode=block",
+      value: "0",
     },
     {
       key: "X-DNS-Prefetch-Control",
