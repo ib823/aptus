@@ -1,5 +1,6 @@
 /** Stripe client — graceful no-op when STRIPE_SECRET_KEY is not set */
 
+import type Stripe from "stripe";
 import type { PlanTier } from "@/types/commercial";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY ?? "";
@@ -18,8 +19,7 @@ function isConfigured(): boolean {
 
 async function getStripe() {
   const { default: Stripe } = await import("stripe");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2025-01-27.acacia" as any });
+  return new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2025-01-27.acacia" as Stripe.LatestApiVersion });
 }
 
 export async function createCheckoutSession(params: {

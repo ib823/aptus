@@ -1,7 +1,7 @@
 /** PUT: Update gap resolution */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { Prisma } from "@prisma/client";
+import { type Prisma } from "@prisma/client";
 import {
   requireAssessmentAccess,
   isAssessmentAccessError,

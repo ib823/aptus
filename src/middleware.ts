@@ -3,6 +3,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/security/rate-limit";
 
+/** Attach observability headers to all responses */
+function withObservabilityHeaders(
+  response: NextResponse,
+  requestId: string,
+  requestStart: number,
+): NextResponse {
+  response.headers.set("X-Request-Id", requestId);
+  response.headers.set("Server-Timing", `middleware;dur=${Date.now() - requestStart}`);
+  return response;
+}
+
 const SESSION_COOKIE = "abeam-session";
 const BRIDGE_PATH = "/api/auth/bridge";
 const NEXTAUTH_SESSION_COOKIE_PREFIXES = [
@@ -33,6 +44,8 @@ const RATE_LIMIT_EXEMPT = [
 
 export async function middleware(request: NextRequest): Promise<NextResponse | undefined> {
   const { pathname } = request.nextUrl;
+  const requestId = crypto.randomUUID();
+  const requestStart = Date.now();
 
   // ----- API rate limiting -----
   if (pathname.startsWith("/api/")) {
@@ -60,7 +73,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
       const result = await checkRateLimit(key, config);
 
       if (!result.allowed) {
-        return new NextResponse(
+        const rateLimitResponse = new NextResponse(
           JSON.stringify({
             error: {
               code: "RATE_LIMIT_EXCEEDED",
@@ -76,6 +89,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
             },
           },
         );
+        return withObservabilityHeaders(rateLimitResponse, requestId, requestStart);
       }
 
       // Non-auth API routes: return immediately with rate limit headers
@@ -85,7 +99,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
           "X-RateLimit-Remaining",
           String(result.remaining),
         );
-        return response;
+        return withObservabilityHeaders(response, requestId, requestStart);
       }
     }
   }
@@ -118,7 +132,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
   // Set pathname header for server components (used by OnboardingGuard)
   const response = NextResponse.next();
   response.headers.set("x-pathname", pathname);
-  return response;
+  return withObservabilityHeaders(response, requestId, requestStart);
 }
 
 export const config = {

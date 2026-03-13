@@ -6,7 +6,7 @@ import { PROFILE_COMPLETENESS_GATE } from "@/types/assessment";
 import { calculateProfileCompleteness } from "@/lib/assessment/profile-completeness";
 import { ERROR_CODES } from "@/types/api";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
-// ROLE_CAPABILITIES from "@/lib/auth/role-permissions" available for future capability checks
+import { TRANSITION_ROLES_V2 } from "@/lib/assessment/status-machine";
 
 export interface PermissionResult {
   allowed: boolean;
@@ -104,8 +104,9 @@ export async function canEditStepResponse(
   }
 
   if (role === "it_lead") {
-    // IT leads can add notes but NOT change fitStatus
-    // This is enforced at the API handler level, not here
+    // IT leads can add notes but NOT change fitStatus.
+    // Enforced in src/app/api/assessments/[id]/steps/[stepId]/route.ts —
+    // the POST handler strips fitStatus changes for IT lead role.
     return { allowed: true };
   }
 
@@ -196,14 +197,7 @@ export async function canEditScopeSelection(
  * Check if a user can manage stakeholders.
  */
 export function canManageStakeholders(user: SessionUser): PermissionResult {
-  const role = normalizeRole(user.role);
-
   if (hasRole(user, ["platform_admin" as UserRole, "partner_lead" as UserRole, "consultant" as UserRole, "project_manager" as UserRole])) {
-    return { allowed: true };
-  }
-
-  // Backward compat: "admin" maps to platform_admin via hasRole
-  if (role === "platform_admin" || role === "partner_lead" || role === "consultant" || role === "project_manager") {
     return { allowed: true };
   }
 
@@ -262,7 +256,7 @@ export async function canTransitionStatus(
   const role = normalizeRole(user.role);
   const transitionKey = `${fromStatus}->${toStatus}`;
 
-  // V1 transitions (backward compatibility)
+  // V1 transitions (backward compatibility for legacy status flow)
   const v1Roles: Record<string, UserRole[]> = {
     "draft->in_progress": ["consultant", "platform_admin"],
     "in_progress->completed": ["consultant", "platform_admin"],
@@ -270,31 +264,8 @@ export async function canTransitionStatus(
     "reviewed->signed_off": ["consultant", "platform_admin", "executive_sponsor"],
   };
 
-  // V2 transitions (Phase 18)
-  const v2Roles: Record<string, UserRole[]> = {
-    "draft->scoping": ["platform_admin", "partner_lead", "consultant"],
-    "scoping->in_progress": ["platform_admin", "partner_lead", "consultant"],
-    "scoping->draft": ["platform_admin", "partner_lead", "consultant"],
-    "in_progress->workshop_active": ["platform_admin", "consultant", "solution_architect"],
-    "in_progress->review_cycle": ["platform_admin", "consultant"],
-    "in_progress->gap_resolution": ["platform_admin", "consultant"],
-    "in_progress->scoping": ["platform_admin", "partner_lead"],
-    "workshop_active->in_progress": ["platform_admin", "consultant", "solution_architect"],
-    "review_cycle->in_progress": ["platform_admin", "consultant"],
-    "gap_resolution->pending_validation": ["platform_admin", "consultant"],
-    "gap_resolution->in_progress": ["platform_admin", "consultant"],
-    "pending_validation->validated": ["platform_admin", "consultant", "partner_lead"],
-    "pending_validation->gap_resolution": ["platform_admin", "consultant"],
-    "validated->pending_sign_off": ["platform_admin", "consultant", "partner_lead"],
-    "pending_sign_off->signed_off": ["platform_admin", "executive_sponsor", "partner_lead"],
-    "pending_sign_off->validated": ["platform_admin", "partner_lead"],
-    "signed_off->handed_off": ["platform_admin", "partner_lead"],
-    "signed_off->archived": ["platform_admin"],
-    "handed_off->archived": ["platform_admin"],
-  };
-
-  // Merge both transition maps; V2 takes precedence
-  const allRoles = { ...v1Roles, ...v2Roles };
+  // Merge V1 with V2 (from status-machine.ts single source of truth); V2 takes precedence
+  const allRoles: Record<string, UserRole[]> = { ...v1Roles, ...TRANSITION_ROLES_V2 };
   const allowedRoles = allRoles[transitionKey];
 
   if (!allowedRoles) {

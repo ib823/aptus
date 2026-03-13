@@ -130,7 +130,7 @@ export async function PUT(
     entityType: "scope_item",
     entityId: scopeItemId,
     areaCode: scopeItem.functionalArea,
-  }).catch(() => { /* fire-and-forget */ });
+  }).catch((err) => console.error("[ACTIVITY] Failed to log scope change:", err));
 
   // Check for cross-scope dependency warnings after deselection
   const scopeWarnings: Array<{ missingScopeCode: string; missingScopeName: string; businessReason: string }> = [];
