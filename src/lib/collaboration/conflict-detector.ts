@@ -88,7 +88,7 @@ export async function detectConflict(params: {
           deepLink: `/assessment/${assessmentId}/review?conflict=${entityId}`,
           recipientUserIds: recipientIds,
           priority: "high",
-        }).catch(() => { /* fire-and-forget */ });
+        }).catch((err) => console.error("[NOTIFY] Failed to dispatch conflict notification:", err));
       }
     }
   } else if (uniqueClassifications.length <= 1 && existing) {

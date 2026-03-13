@@ -127,7 +127,7 @@ export async function dispatchNotification(payload: DispatchPayload): Promise<Di
             htmlContent: html,
             textContent: text,
             tags: ["notification", type],
-          }).catch(() => { /* fire-and-forget */ });
+          }).catch((err) => console.error("[EMAIL] Failed to send notification email:", err));
         }
       } catch {
         // Silently fail — email is best-effort
@@ -152,7 +152,7 @@ export async function dispatchNotification(payload: DispatchPayload): Promise<Di
           sendPushNotification(
             { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
             { title, body, deepLink: deepLink ?? undefined },
-          ).catch(() => { /* fire-and-forget */ });
+          ).catch((err) => console.error("[PUSH] Failed to send push notification:", err));
         }
       } catch {
         // Silently fail — push is best-effort

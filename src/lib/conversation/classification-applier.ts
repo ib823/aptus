@@ -114,7 +114,7 @@ export async function applyClassifications(
       actor: userName,
       actorRole: userRole,
       reason: `Classification derived from conversation session ${sessionId}`,
-    }).catch(() => { /* fire-and-forget */ });
+    }).catch((err) => console.error("[DECISION] Failed to log conversation classification decision:", err));
   }
 
   if (applied > 0) {
@@ -127,7 +127,7 @@ export async function applyClassifications(
       summary: `Applied ${applied} conversation-derived classifications (${skipped} skipped, ${gapsCreated} gaps created)`,
       entityType: "conversation_session",
       entityId: sessionId,
-    }).catch(() => { /* fire-and-forget */ });
+    }).catch((err) => console.error("[ACTIVITY] Failed to log conversation classification activity:", err));
   }
 
   return { applied, skipped, gapsCreated };

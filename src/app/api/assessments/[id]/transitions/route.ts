@@ -150,7 +150,7 @@ export async function POST(
     summary: `changed status from ${previousStatus} to ${parsed.data.toStatus}`,
     entityType: "assessment",
     entityId: id,
-  }).catch(() => { /* fire-and-forget */ });
+  }).catch((err) => console.error("[ACTIVITY] Failed to log status transition:", err));
 
   return NextResponse.json({
     data: {

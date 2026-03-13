@@ -191,7 +191,7 @@ export async function PUT(
     userId: user.id,
     userName: user.name ?? user.email,
     classification: parsed.data.fitStatus,
-  }).catch(() => { /* fire-and-forget */ });
+  }).catch((err) => console.error("[CONFLICT] Failed to detect conflict:", err));
 
   logActivity({
     assessmentId,
@@ -203,7 +203,7 @@ export async function PUT(
     entityType: "process_step",
     entityId: stepId,
     areaCode: step.scopeItem.functionalArea,
-  }).catch(() => { /* fire-and-forget */ });
+  }).catch((err) => console.error("[ACTIVITY] Failed to log step classification:", err));
 
   // If GAP, auto-create GapResolution if not exists
   if (parsed.data.fitStatus === "GAP") {
