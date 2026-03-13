@@ -34,11 +34,12 @@ describe("safeParseJsonBody", () => {
     expect(result).toEqual({ ok: false, reason: "aborted" });
   });
 
-  it("rethrows unknown parsing errors", async () => {
+  it("returns unknown for unrecognized parsing errors", async () => {
     const request = {
       json: async () => Promise.reject(new Error("boom")),
     } as unknown as Request;
 
-    await expect(safeParseJsonBody(request)).rejects.toThrow("boom");
+    const result = await safeParseJsonBody(request);
+    expect(result).toEqual({ ok: false, reason: "unknown" });
   });
 });

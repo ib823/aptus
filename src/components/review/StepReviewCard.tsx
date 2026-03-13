@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { sanitizeHtmlContent } from "@/lib/security/sanitize";
-import { parseStepContent } from "@/lib/assessment/content-parser";
+import { parseStepContent, type ParsedStepContent } from "@/lib/assessment/content-parser";
 import { ParsedContentView } from "@/components/review/ParsedContentView";
 import { ActiveEditors } from "@/components/collaboration/ActiveEditors";
 import { getBusinessContextHint } from "@/lib/assessment/business-context";
@@ -272,7 +272,7 @@ export function StepReviewCard({
         {(() => {
           const hint = getBusinessContextHint(step.actionTitle, step.stepCategory);
           const parsed = step.parsedContent
-            ? (step.parsedContent as unknown as import("@/lib/assessment/content-parser").ParsedStepContent)
+            ? (step.parsedContent as unknown as ParsedStepContent)
             : parseStepContent(step.actionInstructionsHtml);
           const purpose = parsed?.purpose;
           if (hint) {
@@ -414,7 +414,7 @@ export function StepReviewCard({
             <div className="bg-muted/50 rounded-md p-3 prose prose-sm max-w-none font-mono text-xs text-muted-foreground [&_table]:max-w-full [&_table]:table-auto [&_table]:overflow-x-auto [&_img]:max-w-full">
               <ParsedContentView
                 content={step.parsedContent
-                  ? step.parsedContent as unknown as import("@/lib/assessment/content-parser").ParsedStepContent
+                  ? step.parsedContent as unknown as ParsedStepContent
                   : parseStepContent(step.actionInstructionsHtml)}
                 fallbackHtml={step.actionInstructionsHtml}
               />

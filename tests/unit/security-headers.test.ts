@@ -53,7 +53,7 @@ describe("getSecurityHeaders", () => {
   it("includes X-XSS-Protection", () => {
     const xss = headers.find((h) => h.key === "X-XSS-Protection");
     expect(xss).toBeDefined();
-    expect(xss!.value).toBe("1; mode=block");
+    expect(xss!.value).toBe("0");
   });
 
   it("each header has both key and value as strings", () => {

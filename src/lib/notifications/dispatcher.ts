@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { NotificationType } from "@/types/notification";
 import { FORCED_IN_APP_TYPES } from "@/types/notification";

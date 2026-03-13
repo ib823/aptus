@@ -131,8 +131,8 @@ describe("Role Permissions (Phase 17)", () => {
       expect(mapLegacyRole("solution_architect")).toBe("solution_architect");
     });
 
-    it("should pass through unknown roles as-is", () => {
-      expect(mapLegacyRole("unknown_role")).toBe("unknown_role");
+    it("should default unknown roles to viewer for safety", () => {
+      expect(mapLegacyRole("unknown_role")).toBe("viewer");
     });
   });
 

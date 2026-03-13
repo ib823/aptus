@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/db/prisma";
+import { getOrganizationSubscription } from "@/lib/db/organizations";
 import { PortalNav } from "@/components/layout/PortalNav";
 import { OnboardingGuard } from "@/components/onboarding/OnboardingGuard";
 import { SubscriptionStatusBanner } from "@/components/commercial/SubscriptionStatusBanner";
@@ -9,7 +9,6 @@ import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { MobileBottomTabBar } from "@/components/pwa/MobileBottomTabBar";
 import { PasskeyEnrollmentPrompt } from "@/components/auth/PasskeyEnrollmentPrompt";
 import { GlobalHelpWidget } from "@/components/help/GlobalHelpWidget";
-import type { SubscriptionStatus } from "@/types/commercial";
 import type { ReactNode } from "react";
 
 export const dynamic = "force-dynamic";
@@ -45,18 +44,10 @@ export default async function PortalLayout({
   }
 
   // Fetch org subscription status for banner
-  let subscriptionStatus: SubscriptionStatus = "ACTIVE";
-  let trialEndsAt: string | null = null;
-  if (user.organizationId) {
-    const org = await prisma.organization.findUnique({
-      where: { id: user.organizationId },
-      select: { subscriptionStatus: true, trialEndsAt: true },
-    });
-    if (org) {
-      subscriptionStatus = org.subscriptionStatus as SubscriptionStatus;
-      trialEndsAt = org.trialEndsAt?.toISOString() ?? null;
-    }
-  }
+  const subscription = user.organizationId
+    ? await getOrganizationSubscription(user.organizationId)
+    : { status: "ACTIVE" as const, trialEndsAt: null };
+  const { status: subscriptionStatus, trialEndsAt } = subscription;
 
   return (
     <div className="min-h-screen" style={{ background: "var(--sapBackgroundColor, #f5f6f7)" }}>

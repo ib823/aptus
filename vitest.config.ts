@@ -21,12 +21,12 @@ export default defineConfig({
         "src/app/**/not-found.tsx",
         "src/components/ui/**",
       ],
-      // Thresholds will be raised progressively as integration tests are added
+      // Target: raise to 80%+ as test coverage expands
       thresholds: {
-        lines: 1,
-        branches: 0,
-        functions: 1,
-        statements: 1,
+        lines: 25,
+        branches: 15,
+        functions: 25,
+        statements: 25,
       },
     },
   },

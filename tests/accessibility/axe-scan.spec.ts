@@ -7,7 +7,7 @@
  *        /assessment/[id]/sign-off, /settings, /admin
  */
 
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 // ── Test configuration ──────────────────────────────────────────────────
@@ -27,7 +27,7 @@ const VIEWS = [
 ];
 
 /** Helper to run axe scan on a page and return violations */
-async function runAxeScan(page: import("@playwright/test").Page) {
+async function runAxeScan(page: Page) {
   return new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
     .analyze();
@@ -76,7 +76,7 @@ test.describe("T-A11Y-014: Minimum Touch Target Size (44x44px)", () => {
 
 /** Helper to navigate and wait for page to settle */
 async function navigateAndWait(
-  page: import("@playwright/test").Page,
+  page: Page,
   path: string,
 ) {
   await page.goto(path);
