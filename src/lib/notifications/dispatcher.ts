@@ -129,8 +129,9 @@ export async function dispatchNotification(payload: DispatchPayload): Promise<Di
             tags: ["notification", type],
           }).catch((err) => console.error("[EMAIL] Failed to send notification email:", err));
         }
-      } catch {
-        // Silently fail — email is best-effort
+      } catch (err) {
+        // Email delivery is best-effort — do not block notification dispatch
+        console.warn("[Dispatcher] Email channel failed:", err);
       }
     })();
   }
@@ -154,8 +155,9 @@ export async function dispatchNotification(payload: DispatchPayload): Promise<Di
             { title, body, deepLink: deepLink ?? undefined },
           ).catch((err) => console.error("[PUSH] Failed to send push notification:", err));
         }
-      } catch {
-        // Silently fail — push is best-effort
+      } catch (err) {
+        // Push delivery is best-effort — do not block notification dispatch
+        console.warn("[Dispatcher] Push channel failed:", err);
       }
     })();
   }

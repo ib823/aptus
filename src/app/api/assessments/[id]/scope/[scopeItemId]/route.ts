@@ -185,8 +185,9 @@ export async function PUT(
           }
         }
       }
-    } catch {
-      // Non-critical — don't fail the selection save
+    } catch (err) {
+      // Non-critical — scope dependency warnings should not block selection save
+      console.error("[ScopeSelection] Dependency check failed:", err);
     }
   }
 
