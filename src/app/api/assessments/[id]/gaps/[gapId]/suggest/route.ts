@@ -12,7 +12,6 @@ export async function GET(
   const { id: assessmentId, gapId } = await params;
   const access = await requireAssessmentAccess(assessmentId);
   if (isAssessmentAccessError(access)) return access;
-  const { user } = access;
 
   // Get the gap description
   const gap = await prisma.gapResolution.findUnique({

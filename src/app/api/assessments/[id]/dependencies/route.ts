@@ -25,7 +25,6 @@ export async function GET(
   const { id: assessmentId } = await params;
   const access = await requireAssessmentAccess(assessmentId);
   if (isAssessmentAccessError(access)) return access;
-  const { user } = access;
 
   if (!isFeatureEnabled("DEPENDENCY_ENGINE")) {
     return NextResponse.json(
