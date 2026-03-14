@@ -6,13 +6,13 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { getDependencyGraph, getCrossScopeDependencies } from "@/lib/dependency/dependency-loader";
 import { evaluateWarnings } from "@/lib/dependency/dependency-warnings";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
+import { requireAssessmentAccess, isAssessmentAccessError } from "@/lib/auth/assessment-guard";
 
 const querySchema = z.object({
   activityId: z.string().min(1),
@@ -22,13 +22,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
+  const { id: assessmentId } = await params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) return access;
+  const { user } = access;
 
   if (!isFeatureEnabled("DEPENDENCY_ENGINE")) {
     return NextResponse.json(
@@ -36,8 +33,6 @@ export async function GET(
       { status: 403 },
     );
   }
-
-  const { id: assessmentId } = await params;
   const { searchParams } = new URL(request.url);
   const parsed = querySchema.safeParse({ activityId: searchParams.get("activityId") });
 

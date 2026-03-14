@@ -23,10 +23,17 @@ async function getUnreadCount(userId: string, forceRefresh = false): Promise<num
     where: { userId, status: "unread" },
   });
 
-  // Bounded LRU: evict oldest entry if at capacity
+  // Bounded LRU: sweep stale entries first, then evict oldest if still at capacity
   if (unreadCountCache.size >= CACHE_MAX_ENTRIES) {
-    const firstKey = unreadCountCache.keys().next().value;
-    if (firstKey !== undefined) unreadCountCache.delete(firstKey);
+    for (const [key, entry] of unreadCountCache) {
+      if (now - entry.fetchedAt > UNREAD_CACHE_TTL_MS) {
+        unreadCountCache.delete(key);
+      }
+    }
+    if (unreadCountCache.size >= CACHE_MAX_ENTRIES) {
+      const firstKey = unreadCountCache.keys().next().value;
+      if (firstKey !== undefined) unreadCountCache.delete(firstKey);
+    }
   }
   unreadCountCache.set(userId, { count, fetchedAt: now });
   return count;

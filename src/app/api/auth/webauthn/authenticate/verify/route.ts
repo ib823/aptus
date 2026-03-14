@@ -14,9 +14,9 @@ import {
   createSession,
   markSessionMfaVerified,
   SESSION_COOKIE_NAME,
+  getSessionCookieOptions,
 } from "@/lib/auth/session";
 import { notifyNewLogin, notifySessionDisplaced } from "@/lib/auth/login-notify";
-import { APP_CONFIG } from "@/constants/config";
 import { ERROR_CODES } from "@/types/api";
 import { checkRateLimit, RATE_LIMITS, getClientIp } from "@/lib/security/rate-limit";
 import { z } from "zod";
@@ -127,11 +127,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       data: { success: true, redirectUrl: "/assessments" },
     });
     response.cookies.set(SESSION_COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: APP_CONFIG.sessionMaxAgeHours * 60 * 60,
+      ...getSessionCookieOptions(),
     });
 
     return response;

@@ -203,3 +203,23 @@ async function _getCurrentUser(): Promise<SessionUser | null> {
 }
 
 export const getCurrentUser = cache(_getCurrentUser);
+
+/**
+ * Standard cookie options for session cookies.
+ * Centralized to prevent drift across auth endpoints.
+ */
+export function getSessionCookieOptions(): {
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: "lax";
+  path: string;
+  maxAge: number;
+} {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: APP_CONFIG.sessionMaxAgeHours * 60 * 60,
+  };
+}
