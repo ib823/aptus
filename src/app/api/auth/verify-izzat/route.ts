@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/db/prisma";
-import { createSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
-import { APP_CONFIG } from "@/constants/config";
+import { createSession, SESSION_COOKIE_NAME, getSessionCookieOptions } from "@/lib/auth/session";
 
 /**
  * Simulation bridge.
@@ -69,11 +68,7 @@ export async function POST(request: NextRequest) {
   const response = NextResponse.json({ redirectTo: destination });
 
   response.cookies.set(SESSION_COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: APP_CONFIG.sessionMaxAgeHours * 60 * 60,
+    ...getSessionCookieOptions(),
   });
 
   return response;

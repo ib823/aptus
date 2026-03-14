@@ -23,10 +23,10 @@ export default defineConfig({
       ],
       // Target: raise to 80%+ as test coverage expands
       thresholds: {
-        lines: 25,
-        branches: 15,
-        functions: 25,
-        statements: 25,
+        lines: 35,
+        branches: 25,
+        functions: 35,
+        statements: 35,
       },
     },
   },

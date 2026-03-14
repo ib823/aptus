@@ -170,7 +170,7 @@ test.describe("Responsive — Assessment Sub-Pages", () => {
           assessmentId = await getFirstAssessmentId(page);
         }
         if (!assessmentId) {
-          test.skip();
+          test.skip(true, 'No assessment data available — seed required');
           return;
         }
 

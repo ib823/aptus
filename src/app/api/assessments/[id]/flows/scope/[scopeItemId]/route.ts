@@ -1,8 +1,7 @@
 /** GET: Flow data for a scope item (SVG + interactive + thumbnail + risk overlay) */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
+import { requireAssessmentAccess, isAssessmentAccessError } from "@/lib/auth/assessment-guard";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { generateInteractiveFlowData } from "@/lib/flow/interactive-flow";
@@ -15,22 +14,10 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; scopeItemId: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
   const { id: assessmentId, scopeItemId } = await params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) return access;
+  const { user } = access;
 
   // Find existing flow diagram(s) for this scope item
   const diagrams = await prisma.processFlowDiagram.findMany({

@@ -57,7 +57,11 @@ export const authOptions: NextAuthOptions = {
       from: process.env.EMAIL_FROM ?? "no-reply@brevo.com",
       sendVerificationRequest: async ({ identifier: email, url }) => {
         if (!process.env.SMTP_USER) {
-          console.warn(`\n[MAGIC LINK] For ${email}:\n${url}\n`);
+          if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
+            console.warn(`\n[MAGIC LINK] For ${email}:\n${url}\n`);
+          } else {
+            console.error(`[AUTH] SMTP_USER not configured — cannot send magic link to ${email}`);
+          }
           return;
         }
 
