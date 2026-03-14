@@ -1,11 +1,14 @@
 "use client";
 
+import { WifiOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
 export default function OfflinePage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">
       <div className="max-w-md text-center space-y-4">
-        <div className="text-6xl">📡</div>
-        <h1 className="text-2xl font-bold tracking-tight">
+        <WifiOff className="w-12 h-12 text-muted-foreground mx-auto" />
+        <h1 className="text-2xl font-semibold tracking-tight">
           You&apos;re offline
         </h1>
         <p className="text-muted-foreground">
@@ -13,12 +16,9 @@ export default function OfflinePage() {
           you made while offline will be synced automatically when you&apos;re
           back online.
         </p>
-        <button
-          onClick={() => window.location.reload()}
-          className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
+        <Button onClick={() => window.location.reload()}>
           Try again
-        </button>
+        </Button>
       </div>
     </div>
   );

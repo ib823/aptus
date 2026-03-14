@@ -65,7 +65,7 @@ export default async function OrgDetailPage({ params }: OrgDetailPageProps) {
       </div>
 
       <div className="flex items-center gap-3 mb-1">
-        <h1 className="text-3xl font-bold text-foreground tracking-tight">{organization.name}</h1>
+        <h1 className="text-3xl font-semibold text-foreground tracking-tight">{organization.name}</h1>
         <Badge className={getOrgTypeColor(organization.type)}>
           {getOrgTypeLabel(organization.type)}
         </Badge>
