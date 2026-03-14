@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ABeamLogo } from "@/components/shared/ABeamLogo";
 import { TotpSetupForm } from "@/components/mfa/TotpSetupForm";
 import { LoadingSkeleton } from "@/components/shared/LoadingSkeleton";
@@ -70,31 +69,29 @@ export default function MfaSetupPage() {
   }, [router]);
 
   return (
-    <Card className="shadow-md">
-      <CardHeader className="text-center pb-2">
-        <ABeamLogo size="lg" className="mb-6 justify-center" />
-        <h1 className="text-2xl font-bold">
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <ABeamLogo size="lg" className="mb-6 justify-center lg:hidden" />
+      <div className="text-center mb-6">
+        <h1 className="text-2xl font-semibold text-foreground">
           {UI_TEXT.auth.mfaSetupTitle}
         </h1>
-        <p className="text-base text-muted-foreground mt-1">
+        <p className="text-sm text-muted-foreground mt-1">
           {UI_TEXT.auth.mfaSetupDescription}
         </p>
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <LoadingSkeleton lines={4} />
-        ) : setupData ? (
-          <TotpSetupForm
-            qrUri={setupData.uri}
-            secret={setupData.secret}
-            onVerified={handleVerified}
-          />
-        ) : (
-          <p className="text-sm text-red-500 text-center">
-            {UI_TEXT.errors.generic}
-          </p>
-        )}
-      </CardContent>
-    </Card>
+      </div>
+      {loading ? (
+        <LoadingSkeleton lines={4} />
+      ) : setupData ? (
+        <TotpSetupForm
+          qrUri={setupData.uri}
+          secret={setupData.secret}
+          onVerified={handleVerified}
+        />
+      ) : (
+        <p className="text-sm text-destructive text-center">
+          {UI_TEXT.errors.generic}
+        </p>
+      )}
+    </div>
   );
 }

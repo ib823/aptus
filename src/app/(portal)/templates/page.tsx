@@ -34,7 +34,7 @@ export default async function TemplatesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">
+        <h1 className="text-2xl font-semibold tracking-tight">
           Assessment Templates
         </h1>
         <p className="text-muted-foreground">

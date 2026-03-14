@@ -43,7 +43,7 @@ export default async function VerifyPage({ params }: VerifyPageProps) {
   return (
     <div className="max-w-2xl mx-auto py-12 px-4">
       <div className="text-center mb-8">
-        <h1 className="text-2xl font-bold mb-2">Certificate Verification</h1>
+        <h1 className="text-2xl font-semibold mb-2">Certificate Verification</h1>
         <p className="text-muted-foreground">SAP Fit Assessment Platform</p>
       </div>
 

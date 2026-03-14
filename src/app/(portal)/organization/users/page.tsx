@@ -10,7 +10,7 @@ export default async function OrganizationUsersPage() {
   if (!user.organizationId) {
     return (
       <div className="p-8">
-        <h1 className="text-2xl font-bold mb-4">User Management</h1>
+        <h1 className="text-2xl font-semibold mb-4">User Management</h1>
         <p className="text-muted-foreground">You are not currently assigned to an organization.</p>
       </div>
     );
@@ -21,7 +21,7 @@ export default async function OrganizationUsersPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold mb-6">User Management</h1>
+      <h1 className="text-2xl font-semibold mb-6">User Management</h1>
       <UserManagementTable
         organizationId={user.organizationId}
         canManageUsers={canManageUsers}

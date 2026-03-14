@@ -73,7 +73,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   return (
     <div className="max-w-5xl mx-auto pb-24">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Company Profile</h1>
+        <h1 className="text-2xl font-semibold text-foreground">Company Profile</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Complete your company profile to enable scope selection and assessment workflow.
         </p>

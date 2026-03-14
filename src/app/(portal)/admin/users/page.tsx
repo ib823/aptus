@@ -39,7 +39,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
 
   return (
     <div className="max-w-5xl mx-auto pb-12">
-      <h1 className="text-3xl font-bold text-foreground tracking-tight mb-1">Users</h1>
+      <h1 className="text-3xl font-semibold text-foreground tracking-tight mb-1">Users</h1>
       <p className="text-base text-muted-foreground mb-8">
         All registered users ({totalCount})
       </p>
