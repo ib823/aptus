@@ -90,8 +90,9 @@ class SSEManager {
           }, 5000);
         }
       };
-    } catch {
-      // EventSource not supported
+    } catch (err) {
+      // EventSource may not be available in all environments (e.g. SSR, older browsers)
+      console.warn("[SSEManager] Failed to establish EventSource connection:", err);
     }
   }
 
