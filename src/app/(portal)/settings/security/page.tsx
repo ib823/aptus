@@ -17,7 +17,7 @@ export default function SecuritySettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Security</h1>
+        <h1 className="text-2xl font-semibold">Security</h1>
         <p className="text-muted-foreground">
           Manage your authentication methods and security settings.
         </p>

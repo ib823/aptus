@@ -195,7 +195,7 @@ function UsageBar({ label, current, limit }: { label: string; current: number; l
       </div>
       <div className="h-2 bg-muted rounded-full overflow-hidden">
         <div
-          className={`h-full rounded-full transition-all ${isNearLimit ? "bg-amber-500" : "bg-blue-500"}`}
+          className={`h-full rounded-full transition-all ${isNearLimit ? "bg-amber-500" : "bg-primary"}`}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -219,7 +219,7 @@ function PlanCard({
   highlighted?: boolean | undefined;
 }) {
   return (
-    <div className={`border rounded-lg p-4 ${highlighted ? "border-blue-500 ring-1 ring-blue-500" : ""}`}>
+    <div className={`border rounded-lg p-4 ${highlighted ? "border-primary ring-1 ring-primary" : ""}`}>
       <h4 className="font-semibold">{name}</h4>
       <p className="text-2xl font-bold mt-1">{price}</p>
       <ul className="mt-3 space-y-1 text-sm text-muted-foreground">

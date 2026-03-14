@@ -71,7 +71,7 @@ export default async function PersonalProfilePage() {
           </div>
           <div>
             <label className="text-sm font-medium text-muted-foreground">Platform Role</label>
-            <p className="text-base font-medium uppercase text-blue-600">{user.role.replace('_', ' ')}</p>
+            <p className="text-base font-medium uppercase text-primary">{user.role.replace('_', ' ')}</p>
           </div>
         </div>
         
