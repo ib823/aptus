@@ -41,7 +41,7 @@ export default function RolesPage() {
 
   return (
     <div className="max-w-7xl">
-      <h1 className="text-3xl font-bold text-foreground tracking-tight mb-1">Roles &amp; Permissions</h1>
+      <h1 className="text-3xl font-semibold text-foreground tracking-tight mb-1">Roles &amp; Permissions</h1>
       <p className="text-base text-muted-foreground mb-8">
         View all {roles.length} platform roles and their permission assignments across {Object.keys(serializedMatrix.platform_admin ?? {}).length || Array.from(PERMISSION_MATRIX.platform_admin).length} actions
       </p>

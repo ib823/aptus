@@ -41,7 +41,7 @@ export default async function VerifyPage() {
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-3xl font-bold text-foreground tracking-tight mb-1">Data Verification</h1>
+      <h1 className="text-3xl font-semibold text-foreground tracking-tight mb-1">Data Verification</h1>
       <p className="text-base text-muted-foreground mb-8">
         {passed}/{checks.length} checks passed
       </p>
