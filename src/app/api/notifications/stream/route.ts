@@ -58,7 +58,7 @@ export async function GET(_request: NextRequest): Promise<Response> {
         try {
           controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
         } catch {
-          // Stream closed
+          // Stream closed by client — safe to ignore
         }
       }
 
@@ -114,8 +114,8 @@ export async function GET(_request: NextRequest): Promise<Response> {
             send("unread_count", { count });
             lastSentCount = count;
           }
-        } catch {
-          // DB error — skip this cycle
+        } catch (err) {
+          console.error("[NotificationStream] DB poll error, skipping cycle:", err);
         }
       }, POLL_INTERVAL_MS);
 
@@ -125,7 +125,7 @@ export async function GET(_request: NextRequest): Promise<Response> {
         try {
           controller.close();
         } catch {
-          // Already closed
+          // Stream closed by client — safe to ignore
         }
       });
     },

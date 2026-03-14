@@ -174,8 +174,9 @@ export async function POST(
           where: { id: signOff.id },
           data: { certificatePdfUrl: pdfUri },
         });
-      } catch {
-        // Certificate generation is non-blocking
+      } catch (err) {
+        // Certificate generation is best-effort — sign-off succeeds regardless
+        console.error("[SignOff] Certificate PDF generation failed:", err);
       }
     })();
   }

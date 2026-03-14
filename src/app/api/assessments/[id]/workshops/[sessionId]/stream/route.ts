@@ -56,7 +56,7 @@ export async function GET(
         try {
           controller.close();
         } catch {
-          // Already closed
+          // Stream closed by client — safe to ignore
         }
       }
 
