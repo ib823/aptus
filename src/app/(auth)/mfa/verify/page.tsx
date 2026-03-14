@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ABeamLogo } from "@/components/shared/ABeamLogo";
 import { TotpVerifyForm } from "@/components/mfa/TotpVerifyForm";
 import { LoadingSkeleton } from "@/components/shared/LoadingSkeleton";
@@ -38,14 +37,10 @@ export default function MfaVerifyPage() {
 
   if (loading) {
     return (
-      <Card className="shadow-md">
-        <CardHeader className="text-center pb-2">
-          <ABeamLogo size="lg" className="mb-6 justify-center" />
-        </CardHeader>
-        <CardContent>
-          <LoadingSkeleton lines={3} />
-        </CardContent>
-      </Card>
+      <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <ABeamLogo size="lg" className="mb-6 justify-center lg:hidden" />
+        <LoadingSkeleton lines={3} />
+      </div>
     );
   }
 
@@ -54,19 +49,17 @@ export default function MfaVerifyPage() {
   }
 
   return (
-    <Card className="shadow-md">
-      <CardHeader className="text-center pb-2">
-        <ABeamLogo size="lg" className="mb-6 justify-center" />
-        <h1 className="text-2xl font-bold">
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <ABeamLogo size="lg" className="mb-6 justify-center lg:hidden" />
+      <div className="text-center mb-6">
+        <h1 className="text-2xl font-semibold text-foreground">
           {UI_TEXT.auth.mfaVerifyTitle}
         </h1>
-        <p className="text-base text-muted-foreground mt-1">
+        <p className="text-sm text-muted-foreground mt-1">
           {UI_TEXT.auth.mfaVerifyDescription}
         </p>
-      </CardHeader>
-      <CardContent>
-        <TotpVerifyForm onVerified={handleVerified} />
-      </CardContent>
-    </Card>
+      </div>
+      <TotpVerifyForm onVerified={handleVerified} />
+    </div>
   );
 }

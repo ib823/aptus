@@ -34,7 +34,7 @@ export default async function OrganizationPage() {
 
   return (
     <div className="p-8 max-w-5xl pb-20">
-      <h1 className="text-3xl font-bold mb-8">Organization Settings</h1>
+      <h1 className="text-3xl font-semibold mb-8">Organization Settings</h1>
       
       <div className="grid grid-cols-1 gap-8">
         {/* Core Settings and AI Side-by-Side */}
@@ -90,17 +90,17 @@ export default async function OrganizationPage() {
               </a>
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-6">
+            <div className="bg-muted border border-border rounded-lg p-6">
               <div className="flex items-center gap-2 mb-2">
-                <CreditCard className="size-5 text-slate-600" />
+                <CreditCard className="size-5 text-muted-foreground" />
                 <h3 className="text-lg font-semibold">Billing & Subscription</h3>
               </div>
-              <p className="text-sm text-slate-600 mb-6">
+              <p className="text-sm text-muted-foreground mb-6">
                 View your current plan, usage metrics, and manage your billing details.
               </p>
               <a
                 href="/settings/subscription"
-                className="inline-block px-4 py-2 bg-slate-800 text-white text-sm font-medium rounded-md hover:bg-slate-900 transition-colors"
+                className="inline-block px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-md hover:bg-primary/90 transition-colors"
               >
                 Manage Subscription
               </a>

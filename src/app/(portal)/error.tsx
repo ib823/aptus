@@ -12,9 +12,9 @@ export default function PortalError({
 }) {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
-      <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
-      <h2 className="text-xl font-semibold text-slate-950 mb-2">Something went wrong</h2>
-      <p className="text-base text-slate-600 mb-6 max-w-md">
+      <AlertCircle className="w-12 h-12 text-destructive mb-4" />
+      <h2 className="text-xl font-semibold text-foreground mb-2">Something went wrong</h2>
+      <p className="text-base text-muted-foreground mb-6 max-w-md">
         An unexpected error occurred. Please try again.
       </p>
       <div className="flex gap-3">
