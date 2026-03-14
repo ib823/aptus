@@ -1,7 +1,7 @@
 import Image from "next/image";
 
 interface ABeamLogoProps {
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   className?: string;
 }
 
@@ -9,6 +9,7 @@ const sizeMap = {
   sm: 24,
   md: 32,
   lg: 40,
+  xl: 56,
 } as const;
 
 /** ABeam "ab" swoosh logomark */
