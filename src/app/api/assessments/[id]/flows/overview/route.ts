@@ -13,7 +13,6 @@ export async function GET(
   const { id: assessmentId } = await params;
   const access = await requireAssessmentAccess(assessmentId);
   if (isAssessmentAccessError(access)) return access;
-  const { user } = access;
 
   const assessment = await prisma.assessment.findUnique({
     where: { id: assessmentId, deletedAt: null },

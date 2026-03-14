@@ -15,7 +15,6 @@ export async function GET(
   const { id: assessmentId, flowId } = await params;
   const access = await requireAssessmentAccess(assessmentId);
   if (isAssessmentAccessError(access)) return access;
-  const { user } = access;
 
   const flow = await prisma.processFlowDiagram.findFirst({
     where: { id: flowId, assessmentId },
