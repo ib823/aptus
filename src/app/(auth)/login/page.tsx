@@ -5,8 +5,13 @@ import { useSearchParams } from "next/navigation";
 import { Mail, CheckCircle, AlertCircle, ArrowLeft, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ABeamLogo } from "@/components/shared/ABeamLogo";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { UI_TEXT } from "@/constants/ui-text";
 import { signIn } from "next-auth/react";
 import { useWebAuthnLogin } from "@/hooks/useWebAuthnLogin";
@@ -105,27 +110,17 @@ function LoginForm() {
   }, []);
 
   return (
-    <Card className="rounded-xl shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <CardHeader className="text-center pb-2">
-        <ABeamLogo size="lg" className="mb-2 justify-center" />
-        <p className="text-xs text-muted-foreground mb-1">
-          {UI_TEXT.app.tagline}
-        </p>
-        <p className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto">
-          Compare your business processes with SAP to plan your implementation.
-        </p>
-        <h1 className="text-xl font-semibold text-foreground">
-          {sent ? UI_TEXT.auth.magicLinkSent : UI_TEXT.auth.loginTitle}
-        </h1>
-        {!sent && (
-          <p className="text-base text-muted-foreground mt-1">
-            {UI_TEXT.auth.loginSubtitle}
-          </p>
-        )}
-      </CardHeader>
-      <CardContent>
-        {sent ? (
-          <div className="flex flex-col items-center py-4">
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+      {/* Mobile-only logo */}
+      <ABeamLogo size="lg" className="mb-6 justify-center lg:hidden" />
+
+      {sent ? (
+        /* Magic link sent confirmation */
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground text-center mb-2">
+            {UI_TEXT.auth.magicLinkSent}
+          </h1>
+          <div className="flex flex-col items-center py-6">
             <CheckCircle className="w-12 h-12 text-green-500 mb-4" />
             {sentEmail && (
               <p className="text-sm font-medium text-foreground text-center mb-2">
@@ -157,63 +152,96 @@ function LoginForm() {
               </button>
             </div>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>{error}</span>
+        </div>
+      ) : (
+        /* Sign-in form */
+        <div>
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-semibold text-foreground">
+              {UI_TEXT.auth.loginTitle}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {UI_TEXT.auth.loginSubtitle}
+            </p>
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive mb-6">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {/* Passkey — always visible, primary CTA */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="block w-full">
+                    <Button
+                      type="button"
+                      className="w-full h-11"
+                      onClick={handlePasskeyLogin}
+                      disabled={passkeyPending || !passkeySupported}
+                    >
+                      <KeyRound className="w-4 h-4 mr-2" />
+                      {passkeyPending ? "Authenticating..." : "Sign in with passkey"}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!passkeySupported && (
+                  <TooltipContent>
+                    Your browser does not support passkeys. Use a modern browser like Chrome, Safari, or Edge.
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Divider */}
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
               </div>
-            )}
-            <div>
-              <label htmlFor="login-email" className="block text-sm font-medium mb-1 text-left">
-                Email address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  id="login-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder={UI_TEXT.auth.emailPlaceholder}
-                  className="pl-10 h-11"
-                  required
-                  autoFocus
-                />
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  or continue with email
+                </span>
               </div>
             </div>
-            <Button
-              type="submit"
-              className="w-full h-11"
-              disabled={!email || loading}
-              aria-disabled={!email || loading}
-            >
-              {loading ? "Sending..." : UI_TEXT.auth.sendMagicLink}
-            </Button>
-            {passkeySupported && (
-              <>
+
+            {/* Email magic link form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="login-email" className="block text-sm font-medium mb-1 text-left">
+                  Email address
+                </label>
                 <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-card px-2 text-muted-foreground">or</span>
-                  </div>
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    id="login-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder={UI_TEXT.auth.emailPlaceholder}
+                    className="pl-10 h-11"
+                    required
+                    autoFocus
+                  />
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full h-11"
-                  onClick={handlePasskeyLogin}
-                  disabled={passkeyPending}
-                >
-                  <KeyRound className="w-4 h-4 mr-2" />
-                  {passkeyPending ? "Authenticating..." : "Sign in with passkey"}
-                </Button>
-              </>
-            )}
-            <p className="text-center text-sm text-muted-foreground">
+              </div>
+              <Button
+                type="submit"
+                variant="outline"
+                className="w-full h-11"
+                disabled={!email || loading}
+                aria-disabled={!email || loading}
+              >
+                {loading ? "Sending..." : UI_TEXT.auth.sendMagicLink}
+              </Button>
+            </form>
+
+            {/* Sign up link */}
+            <p className="text-center text-sm text-muted-foreground pt-2">
               Don&apos;t have an account?{" "}
               <a
                 href="/signup"
@@ -222,10 +250,10 @@ function LoginForm() {
                 Sign up
               </a>
             </p>
-          </form>
-        )}
-      </CardContent>
-    </Card>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
