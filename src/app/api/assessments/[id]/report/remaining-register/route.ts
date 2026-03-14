@@ -1,7 +1,7 @@
 /** GET: Remaining Items Register XLSX */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { authenticateForReport, isErrorResponse } from "@/lib/report/report-auth";
+import { authenticateForReport, isErrorResponse, sanitizeFilename } from "@/lib/report/report-auth";
 import { prisma } from "@/lib/db/prisma";
 import { generateXlsx, remainingItemsSheet } from "@/lib/report/xlsx-generator";
 export async function GET(
@@ -38,7 +38,7 @@ export async function GET(
   return new NextResponse(xlsx as unknown as BodyInit, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="${auth.assessment.companyName}_Remaining_Items_Register.xlsx"`,
+      "Content-Disposition": `attachment; filename="${sanitizeFilename(auth.assessment.companyName)}_Remaining_Items_Register.xlsx"`,
     },
   });
 }

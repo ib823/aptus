@@ -1,22 +1,16 @@
 /** GET: Fetch conversation templates + session state for a scope item */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { ERROR_CODES } from "@/types/api";
+import { requireAssessmentAccess, isAssessmentAccessError } from "@/lib/auth/assessment-guard";
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; scopeItemId: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
   const { id: assessmentId, scopeItemId } = await params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) return access;
+  const { user } = access;
 
   const [templates, session] = await Promise.all([
     prisma.conversationTemplate.findMany({

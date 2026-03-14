@@ -1,7 +1,7 @@
 /** GET: Config Workbook XLSX */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { authenticateForReport, isErrorResponse } from "@/lib/report/report-auth";
+import { authenticateForReport, isErrorResponse, sanitizeFilename } from "@/lib/report/report-auth";
 import { getConfigDataForReport } from "@/lib/report/report-data";
 import { generateXlsx, configWorkbookSheet } from "@/lib/report/xlsx-generator";
 export async function GET(
@@ -18,7 +18,7 @@ export async function GET(
   return new NextResponse(xlsx as unknown as BodyInit, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="${auth.assessment.companyName}_Config_Workbook.xlsx"`,
+      "Content-Disposition": `attachment; filename="${sanitizeFilename(auth.assessment.companyName)}_Config_Workbook.xlsx"`,
     },
   });
 }

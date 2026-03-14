@@ -104,7 +104,7 @@ test.describe("T-E2E-J02 — Multi-Role Workshop (5 concurrent users)", () => {
   // Step 2: Consultant opens workshop session page
   test("Step 02 — Consultant opens workshop session", async () => {
     if (!workshopSessionId) {
-      test.skip();
+      test.skip(true, 'No workshop session available — seed required');
       return;
     }
 
@@ -117,7 +117,7 @@ test.describe("T-E2E-J02 — Multi-Role Workshop (5 concurrent users)", () => {
   // Step 3: Consultant starts the workshop
   test("Step 03 — Consultant starts the workshop", async () => {
     if (!workshopSessionId) {
-      test.skip();
+      test.skip(true, 'No workshop session available — seed required');
       return;
     }
 
@@ -130,7 +130,7 @@ test.describe("T-E2E-J02 — Multi-Role Workshop (5 concurrent users)", () => {
   // Step 4: All 3 POs join concurrently
   test("Step 04 — Three Process Owners join concurrently", async () => {
     if (!workshopSessionId) {
-      test.skip();
+      test.skip(true, 'No workshop session available — seed required');
       return;
     }
 
@@ -159,7 +159,7 @@ test.describe("T-E2E-J02 — Multi-Role Workshop (5 concurrent users)", () => {
   // Step 5: Executive joins
   test("Step 05 — Executive joins workshop", async () => {
     if (!workshopSessionId) {
-      test.skip();
+      test.skip(true, 'No workshop session available — seed required');
       return;
     }
 
@@ -172,7 +172,7 @@ test.describe("T-E2E-J02 — Multi-Role Workshop (5 concurrent users)", () => {
   // Step 6: Verify attendee list shows all 5 users
   test("Step 06 — Verify all 5 attendees are visible", async () => {
     if (!workshopSessionId) {
-      test.skip();
+      test.skip(true, 'No workshop session available — seed required');
       return;
     }
 
@@ -191,7 +191,7 @@ test.describe("T-E2E-J02 — Multi-Role Workshop (5 concurrent users)", () => {
   // Step 7: Consultant navigates to first process step for voting
   test("Step 07 — Consultant navigates to first step", async () => {
     if (!workshopSessionId) {
-      test.skip();
+      test.skip(true, 'No workshop session available — seed required');
       return;
     }
 
@@ -204,7 +204,7 @@ test.describe("T-E2E-J02 — Multi-Role Workshop (5 concurrent users)", () => {
   // Step 8: All users vote concurrently on a step
   test("Step 08 — All users cast votes concurrently", async () => {
     if (!workshopSessionId) {
-      test.skip();
+      test.skip(true, 'No workshop session available — seed required');
       return;
     }
 
@@ -236,7 +236,7 @@ test.describe("T-E2E-J02 — Multi-Role Workshop (5 concurrent users)", () => {
   // Step 9: Consultant finalizes the vote
   test("Step 09 — Consultant finalizes vote", async () => {
     if (!workshopSessionId) {
-      test.skip();
+      test.skip(true, 'No workshop session available — seed required');
       return;
     }
 
@@ -249,7 +249,7 @@ test.describe("T-E2E-J02 — Multi-Role Workshop (5 concurrent users)", () => {
   // Step 10: PO1 adds a discussion comment
   test("Step 10 — PO adds discussion comment", async () => {
     if (!workshopSessionId) {
-      test.skip();
+      test.skip(true, 'No workshop session available — seed required');
       return;
     }
 
@@ -264,7 +264,7 @@ test.describe("T-E2E-J02 — Multi-Role Workshop (5 concurrent users)", () => {
   // Step 11: Consultant adds action item
   test("Step 11 — Consultant adds action item", async () => {
     if (!workshopSessionId) {
-      test.skip();
+      test.skip(true, 'No workshop session available — seed required');
       return;
     }
 
@@ -279,7 +279,7 @@ test.describe("T-E2E-J02 — Multi-Role Workshop (5 concurrent users)", () => {
   // Step 12: Consultant ends workshop
   test("Step 12 — Consultant ends workshop session", async () => {
     if (!workshopSessionId) {
-      test.skip();
+      test.skip(true, 'No workshop session available — seed required');
       return;
     }
 
@@ -292,7 +292,7 @@ test.describe("T-E2E-J02 — Multi-Role Workshop (5 concurrent users)", () => {
   // Step 13: Generate and verify minutes
   test("Step 13 — Generate and verify workshop minutes", async () => {
     if (!workshopSessionId) {
-      test.skip();
+      test.skip(true, 'No workshop session available — seed required');
       return;
     }
 

@@ -1,4 +1,9 @@
-/** In-memory sliding-window rate limiter for API endpoints */
+/**
+ * Sliding-window rate limiter for API endpoints.
+ * Uses Upstash Redis when configured (recommended for production/serverless).
+ * Falls back to in-memory Map which is per-invocation in serverless — ineffective
+ * for distributed rate limiting but provides basic protection in single-instance mode.
+ */
 
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis/cloudflare";
@@ -18,19 +23,8 @@ const redis = hasSharedBackend
     })
   : null;
 const limiterCache = new Map<string, Ratelimit>();
-let warnedAboutFallback = false;
 let warnedAboutBackendFailure = false;
-
-// Clean up old entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of store) {
-    entry.timestamps = entry.timestamps.filter((t) => now - t < 600_000);
-    if (entry.timestamps.length === 0) {
-      store.delete(key);
-    }
-  }
-}, 300_000);
+let warnedAboutMissingBackend = false;
 
 interface RateLimitConfig {
   /** Max requests allowed in the window */
@@ -72,12 +66,6 @@ function getLimiter(config: RateLimitConfig): Ratelimit | null {
   return limiter;
 }
 
-function warnFallback(message: string): void {
-  if (!warnedAboutFallback) {
-    warnedAboutFallback = true;
-    console.warn(message);
-  }
-}
 
 function checkRateLimitInMemory(
   key: string,
@@ -134,9 +122,10 @@ export async function checkRateLimit(
     }
   }
 
-  if (!hasSharedBackend && process.env.NODE_ENV === "production") {
-    warnFallback(
-      "[RATE LIMIT] UPSTASH_REDIS_REST_URL/TOKEN are not configured; using in-memory fallback in production.",
+  if (!hasSharedBackend && process.env.NODE_ENV === "production" && !warnedAboutMissingBackend) {
+    warnedAboutMissingBackend = true;
+    console.error(
+      "[RATE LIMIT] UPSTASH_REDIS_REST_URL/TOKEN are not configured; in-memory fallback is ineffective in serverless.",
     );
   }
 

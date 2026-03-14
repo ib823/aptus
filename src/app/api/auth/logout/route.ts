@@ -1,7 +1,7 @@
 /** GET: Sign out — revokes custom session, clears all auth cookies, redirects to login */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { revokeSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
+import { revokeSession, SESSION_COOKIE_NAME, getSessionCookieOptions } from "@/lib/auth/session";
 export async function GET(request: NextRequest): Promise<NextResponse> {
   // Revoke the custom session in the database
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
@@ -17,19 +17,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // Clear the custom session cookie
   response.cookies.set(SESSION_COOKIE_NAME, "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
+    ...getSessionCookieOptions(),
     maxAge: 0,
   });
 
   // Clear NextAuth cookies with proper security flags
   const cookieClearOptions = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax" as const,
-    path: "/",
+    ...getSessionCookieOptions(),
     maxAge: 0,
   };
   response.cookies.set("next-auth.session-token", "", cookieClearOptions);

@@ -1,48 +1,18 @@
 /** GET: Calculate readiness scorecard for an assessment */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired, hasRole } from "@/lib/auth/permissions";
+import { authenticateForReport, isErrorResponse, sanitizeFilename } from "@/lib/report/report-auth";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { calculateReadinessScorecard } from "@/lib/report/readiness-calculator";
 import { generateReadinessScorecardPdf } from "@/lib/report/pdf-generator";
-import type { UserRole } from "@/types/assessment";
-
-const ALLOWED_ROLES: UserRole[] = [
-  "consultant",
-  "project_manager",
-  "partner_lead",
-  "platform_admin",
-  "executive_sponsor",
-];
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
-
-  if (isMfaRequired(user)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
-      { status: 403 },
-    );
-  }
-
-  if (!hasRole(user, ALLOWED_ROLES)) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.FORBIDDEN, message: "Insufficient permissions" } },
-      { status: 403 },
-    );
-  }
-
   const { id } = await params;
+  const auth = await authenticateForReport(id);
+  if (isErrorResponse(auth)) return auth;
 
   const assessment = await prisma.assessment.findUnique({
     where: { id, deletedAt: null },
@@ -118,7 +88,7 @@ export async function GET(
     return new NextResponse(pdf as unknown as BodyInit, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${assessment.companyName}_Readiness_Scorecard.pdf"`,
+        "Content-Disposition": `attachment; filename="${sanitizeFilename(assessment.companyName)}_Readiness_Scorecard.pdf"`,
       },
     });
   }
