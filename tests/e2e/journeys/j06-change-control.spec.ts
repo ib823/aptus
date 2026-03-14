@@ -38,7 +38,7 @@ test.describe("T-E2E-J06 — Post Sign-Off Change Control", () => {
   test("Step 01 — Verify assessment is signed off", async ({ page, request }) => {
     const id = await resolveAssessmentId(page);
     if (!id) {
-      test.skip();
+      test.skip(true, 'No assessment data available — seed required');
       return;
     }
 
@@ -57,7 +57,7 @@ test.describe("T-E2E-J06 — Post Sign-Off Change Control", () => {
   test("Step 02 — Stakeholder creates change request", async ({ page, request }) => {
     const id = await resolveAssessmentId(page);
     if (!id) {
-      test.skip();
+      test.skip(true, 'No assessment data available — seed required');
       return;
     }
 
@@ -85,7 +85,7 @@ test.describe("T-E2E-J06 — Post Sign-Off Change Control", () => {
   test("Step 03 — Verify change request is listed", async ({ page, request }) => {
     const id = await resolveAssessmentId(page);
     if (!id) {
-      test.skip();
+      test.skip(true, 'No assessment data available — seed required');
       return;
     }
 
@@ -103,7 +103,7 @@ test.describe("T-E2E-J06 — Post Sign-Off Change Control", () => {
   test("Step 04 — Reviewer approves change request", async ({ page, request }) => {
     const id = await resolveAssessmentId(page);
     if (!id || !changeRequestId) {
-      test.skip();
+      test.skip(true, 'No assessment or change request available — seed required');
       return;
     }
 
@@ -124,7 +124,7 @@ test.describe("T-E2E-J06 — Post Sign-Off Change Control", () => {
   test("Step 05 — Assessment unlocked for targeted changes", async ({ page, request }) => {
     const id = await resolveAssessmentId(page);
     if (!id) {
-      test.skip();
+      test.skip(true, 'No assessment data available — seed required');
       return;
     }
 
@@ -143,7 +143,7 @@ test.describe("T-E2E-J06 — Post Sign-Off Change Control", () => {
   test("Step 06 — Consultant modifies the affected gap", async ({ page, request }) => {
     const id = await resolveAssessmentId(page);
     if (!id) {
-      test.skip();
+      test.skip(true, 'No assessment data available — seed required');
       return;
     }
 
@@ -179,7 +179,7 @@ test.describe("T-E2E-J06 — Post Sign-Off Change Control", () => {
   }) => {
     const id = await resolveAssessmentId(page);
     if (!id) {
-      test.skip();
+      test.skip(true, 'No assessment data available — seed required');
       return;
     }
 
@@ -201,7 +201,7 @@ test.describe("T-E2E-J06 — Post Sign-Off Change Control", () => {
   test("Step 08 — Re-initiate sign-off after changes", async ({ page, request }) => {
     const id = await resolveAssessmentId(page);
     if (!id) {
-      test.skip();
+      test.skip(true, 'No assessment data available — seed required');
       return;
     }
 
@@ -218,7 +218,7 @@ test.describe("T-E2E-J06 — Post Sign-Off Change Control", () => {
   test("Step 09 — Area re-validation after changes", async ({ page, request }) => {
     const id = await resolveAssessmentId(page);
     if (!id) {
-      test.skip();
+      test.skip(true, 'No assessment data available — seed required');
       return;
     }
 
@@ -240,7 +240,7 @@ test.describe("T-E2E-J06 — Post Sign-Off Change Control", () => {
   test("Step 10 — Executive re-sign-off", async ({ page, request }) => {
     const id = await resolveAssessmentId(page);
     if (!id) {
-      test.skip();
+      test.skip(true, 'No assessment data available — seed required');
       return;
     }
 
@@ -264,7 +264,7 @@ test.describe("T-E2E-J06 — Post Sign-Off Change Control", () => {
   }) => {
     const id = await resolveAssessmentId(page);
     if (!id) {
-      test.skip();
+      test.skip(true, 'No assessment data available — seed required');
       return;
     }
 

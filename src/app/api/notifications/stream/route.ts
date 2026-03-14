@@ -23,10 +23,17 @@ async function getUnreadCount(userId: string, forceRefresh = false): Promise<num
     where: { userId, status: "unread" },
   });
 
-  // Bounded LRU: evict oldest entry if at capacity
+  // Bounded LRU: sweep stale entries first, then evict oldest if still at capacity
   if (unreadCountCache.size >= CACHE_MAX_ENTRIES) {
-    const firstKey = unreadCountCache.keys().next().value;
-    if (firstKey !== undefined) unreadCountCache.delete(firstKey);
+    for (const [key, entry] of unreadCountCache) {
+      if (now - entry.fetchedAt > UNREAD_CACHE_TTL_MS) {
+        unreadCountCache.delete(key);
+      }
+    }
+    if (unreadCountCache.size >= CACHE_MAX_ENTRIES) {
+      const firstKey = unreadCountCache.keys().next().value;
+      if (firstKey !== undefined) unreadCountCache.delete(firstKey);
+    }
   }
   unreadCountCache.set(userId, { count, fetchedAt: now });
   return count;
@@ -51,7 +58,7 @@ export async function GET(_request: NextRequest): Promise<Response> {
         try {
           controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
         } catch {
-          // Stream closed
+          // Stream closed by client — safe to ignore
         }
       }
 
@@ -107,8 +114,8 @@ export async function GET(_request: NextRequest): Promise<Response> {
             send("unread_count", { count });
             lastSentCount = count;
           }
-        } catch {
-          // DB error — skip this cycle
+        } catch (err) {
+          console.error("[NotificationStream] DB poll error, skipping cycle:", err);
         }
       }, POLL_INTERVAL_MS);
 
@@ -118,7 +125,7 @@ export async function GET(_request: NextRequest): Promise<Response> {
         try {
           controller.close();
         } catch {
-          // Already closed
+          // Stream closed by client — safe to ignore
         }
       });
     },

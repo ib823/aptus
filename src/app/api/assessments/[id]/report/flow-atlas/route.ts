@@ -1,7 +1,7 @@
 /** GET: Process Flow Atlas PDF — all flow diagrams compiled into single PDF */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { authenticateForReport, isErrorResponse } from "@/lib/report/report-auth";
+import { authenticateForReport, isErrorResponse, sanitizeFilename } from "@/lib/report/report-auth";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { jsPDF } from "jspdf";
@@ -133,7 +133,7 @@ export async function GET(
   return new NextResponse(pdf as unknown as BodyInit, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${auth.assessment.companyName}_Process_Flow_Atlas.pdf"`,
+      "Content-Disposition": `attachment; filename="${sanitizeFilename(auth.assessment.companyName)}_Process_Flow_Atlas.pdf"`,
     },
   });
 }

@@ -3,10 +3,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/auth-options";
-import { createSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
+import { createSession, SESSION_COOKIE_NAME, getSessionCookieOptions } from "@/lib/auth/session";
 import { notifyNewLogin, notifySessionDisplaced } from "@/lib/auth/login-notify";
 import { prisma } from "@/lib/db/prisma";
-import { APP_CONFIG } from "@/constants/config";
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rawCallback = request.nextUrl.searchParams.get("callbackUrl") ?? "/assessments";
   // Prevent open redirect — only allow relative paths
@@ -50,11 +49,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // Set the session cookie and redirect
   const response = NextResponse.redirect(new URL(redirectTo, request.url));
   response.cookies.set(SESSION_COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: APP_CONFIG.sessionMaxAgeHours * 60 * 60,
+    ...getSessionCookieOptions(),
   });
 
   return response;

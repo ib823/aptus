@@ -2,7 +2,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import archiver from "archiver";
-import { authenticateForReport, isErrorResponse } from "@/lib/report/report-auth";
+import { authenticateForReport, isErrorResponse, sanitizeFilename } from "@/lib/report/report-auth";
 import {
   getReportSummary,
   getScopeDataForReport,
@@ -121,7 +121,7 @@ export async function GET(
   const scorecard = calculateReadinessScorecard(readinessInput);
 
   // Generate all 13 report files in parallel
-  const prefix = auth.assessment.companyName.replace(/[^a-zA-Z0-9]/g, "_");
+  const prefix = sanitizeFilename(auth.assessment.companyName);
   const [
     execPdf,
     effortPdf,

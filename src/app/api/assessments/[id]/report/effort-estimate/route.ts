@@ -1,7 +1,7 @@
 /** GET: Effort Estimate PDF */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { authenticateForReport, isErrorResponse } from "@/lib/report/report-auth";
+import { authenticateForReport, isErrorResponse, sanitizeFilename } from "@/lib/report/report-auth";
 import { getReportSummary } from "@/lib/report/report-data";
 import { generateEffortEstimatePdf } from "@/lib/report/pdf-generator";
 import { prisma } from "@/lib/db/prisma";
@@ -31,7 +31,7 @@ export async function GET(
   return new NextResponse(pdf as unknown as BodyInit, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${auth.assessment.companyName}_Effort_Estimate.pdf"`,
+      "Content-Disposition": `attachment; filename="${sanitizeFilename(auth.assessment.companyName)}_Effort_Estimate.pdf"`,
     },
   });
 }

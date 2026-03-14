@@ -176,8 +176,9 @@ export async function POST(
           fileSize: zipBuffer.length,
         },
       });
-    } catch {
-      // ZIP generation is non-blocking
+    } catch (err) {
+      // ZIP generation is best-effort — handoff package record was already created
+      console.error("[Handoff] ZIP package generation failed:", err);
     }
   })();
 

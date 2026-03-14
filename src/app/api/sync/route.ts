@@ -73,7 +73,8 @@ async function processClassifyStep(
     }
 
     return { clientId: item.clientId, status: "synced" };
-  } catch {
+  } catch (err) {
+    console.error(`[Sync] classifyStep failed for clientId=${item.clientId}:`, err);
     return { clientId: item.clientId, status: "failed" };
   }
 }
@@ -127,7 +128,8 @@ async function processAddNote(
     }
 
     return { clientId: item.clientId, status: "synced" };
-  } catch {
+  } catch (err) {
+    console.error(`[Sync] addNote failed for clientId=${item.clientId}:`, err);
     return { clientId: item.clientId, status: "failed" };
   }
 }

@@ -31,7 +31,7 @@ export async function GET(
         try {
           controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
         } catch {
-          // ignore closed streams
+          // Stream closed by client — safe to ignore
         }
       };
 
@@ -69,8 +69,8 @@ export async function GET(
           sendEvent("ping", { time: Date.now() });
 
           lastChecked = now;
-        } catch {
-          // Ignore
+        } catch (err) {
+          console.error("[AssessmentStream] DB poll error, skipping cycle:", err);
         }
       }, 5000);
 

@@ -1,7 +1,7 @@
 /** POST: Verify TOTP code for session MFA */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getSessionToken, getCurrentUser, markSessionMfaVerified, rotateSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth/session";
+import { getSessionToken, getCurrentUser, markSessionMfaVerified, rotateSessionToken, SESSION_COOKIE_NAME, getSessionCookieOptions } from "@/lib/auth/session";
 import { verifyTotpCode } from "@/lib/auth/mfa";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
@@ -124,11 +124,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         data: { success: true, mfaVerified: true },
       });
       response.cookies.set(SESSION_COOKIE_NAME, newToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: APP_CONFIG.sessionMaxAgeHours * 60 * 60,
+        ...getSessionCookieOptions(),
       });
       return response;
     }
