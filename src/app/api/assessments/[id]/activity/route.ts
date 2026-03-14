@@ -10,7 +10,6 @@ export async function GET(
   const { id: assessmentId } = await params;
   const access = await requireAssessmentAccess(assessmentId);
   if (isAssessmentAccessError(access)) return access;
-  const { user } = access;
   const sp = request.nextUrl.searchParams;
   const actionType = sp.get("actionType") ?? undefined;
   const actorId = sp.get("actorId") ?? undefined;

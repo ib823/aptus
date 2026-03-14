@@ -13,7 +13,6 @@ export async function GET(
   const { id: assessmentId, scopeItemId } = await params;
   const access = await requireAssessmentAccess(assessmentId);
   if (isAssessmentAccessError(access)) return access;
-  const { user } = access;
   const format = request.nextUrl.searchParams.get("format") ?? "svg";
 
   const diagram = await prisma.processFlowDiagram.findFirst({
