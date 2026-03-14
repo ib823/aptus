@@ -17,7 +17,6 @@ export async function GET(
   const { id: assessmentId, scopeItemId } = await params;
   const access = await requireAssessmentAccess(assessmentId);
   if (isAssessmentAccessError(access)) return access;
-  const { user } = access;
 
   // Find existing flow diagram(s) for this scope item
   const diagrams = await prisma.processFlowDiagram.findMany({

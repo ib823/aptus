@@ -10,7 +10,6 @@ export async function GET(
   const { id } = await params;
   const access = await requireAssessmentAccess(id);
   if (isAssessmentAccessError(access)) return access;
-  const { user } = access;
   const scopeItems = await getScopeItemsWithSelections(id);
 
   return NextResponse.json({ data: scopeItems });

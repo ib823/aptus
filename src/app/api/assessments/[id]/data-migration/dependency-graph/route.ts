@@ -12,7 +12,6 @@ export async function GET(
   const { id: assessmentId } = await params;
   const access = await requireAssessmentAccess(assessmentId);
   if (isAssessmentAccessError(access)) return access;
-  const { user } = access;
 
   const objects = await prisma.dataMigrationObject.findMany({
     where: { assessmentId },
