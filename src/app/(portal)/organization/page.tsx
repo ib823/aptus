@@ -19,16 +19,33 @@ export default async function OrganizationPage() {
 
   if (!user.organizationId) {
     return (
-      <div className="p-8">
-        <h1 className="text-2xl font-semibold mb-4">Organization</h1>
-        <p className="text-muted-foreground">You are not currently assigned to an organization.</p>
+      <div className="p-8 max-w-2xl">
+        <h1 className="text-3xl font-semibold mb-4">Organization</h1>
+        <div className="bg-card border rounded-lg p-6 space-y-3">
+          <p className="text-foreground font-medium">No organization assigned</p>
+          <p className="text-sm text-muted-foreground">
+            Your account is not linked to an organization yet. An organization is created automatically
+            when you set up your first assessment, or an admin can assign you to one.
+          </p>
+          <a
+            href="/assessments"
+            className="inline-block px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-md hover:bg-primary/90 transition-colors"
+          >
+            Go to Assessments
+          </a>
+        </div>
       </div>
     );
   }
 
-  const org = await prisma.organization.findUnique({
-    where: { id: user.organizationId },
-  });
+  let org;
+  try {
+    org = await prisma.organization.findUnique({
+      where: { id: user.organizationId },
+    });
+  } catch {
+    // Prisma error — org doesn't exist or DB issue
+  }
 
   if (!org) redirect("/dashboard");
 
