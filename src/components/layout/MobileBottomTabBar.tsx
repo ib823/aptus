@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   Settings2,
   ClipboardCheck,
@@ -31,7 +31,6 @@ const registerSegments = ["integrations", "data-migration", "ocm", "workshops"];
 const wrapupSegments = ["activity", "sign-off", "report", "snapshots", "change-requests", "triggers", "benchmarks", "cross-phase"];
 
 export function MobileBottomTabBar({ assessmentId, assessmentStatus }: MobileBottomTabBarProps) {
-  const router = useRouter();
   const pathname = usePathname();
   const base = `/assessment/${assessmentId}`;
   const preReviewStage = assessmentStatus === "draft" || assessmentStatus === "scoping";
@@ -39,25 +38,8 @@ export function MobileBottomTabBar({ assessmentId, assessmentStatus }: MobileBot
     ? "Complete setup and move the assessment into In Progress to unlock this stage."
     : "Complete scope selection and move the assessment into In Progress to unlock this stage.";
 
-  const handleStageClick = (event: MouseEvent<HTMLAnchorElement>, href: string, locked?: boolean) => {
-    if (
-      event.defaultPrevented ||
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
-    ) {
-      return;
-    }
-
-    if (locked) {
-      event.preventDefault();
-      return;
-    }
-
+  const handleLockedClick = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
-    router.push(href);
   };
 
   const getActiveStage = () => {
@@ -92,7 +74,7 @@ export function MobileBottomTabBar({ assessmentId, assessmentStatus }: MobileBot
             aria-disabled={isLocked || undefined}
             title={isLocked ? lockedStageTitle : undefined}
             tabIndex={isLocked ? -1 : undefined}
-            onClick={(event) => handleStageClick(event, `${base}${stage.href}`, isLocked)}
+            onClick={isLocked ? handleLockedClick : undefined}
             className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-md text-[10px] font-medium transition-colors select-none ${
               isLocked ? "pointer-events-none" : ""
             }`}
