@@ -25,7 +25,6 @@ import {
   setPendingTour,
   consumePendingTour,
 } from "@/lib/tour/storage";
-import { TOURS } from "@/lib/tour/tours";
 import type { UserRole } from "@/types/assessment";
 
 interface TourContextValue {
