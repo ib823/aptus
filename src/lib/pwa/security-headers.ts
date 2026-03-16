@@ -6,14 +6,16 @@
  * Note on 'unsafe-inline': Next.js App Router injects inline scripts for
  * hydration and route prefetching. Until Next.js supports nonce-based CSP
  * in the App Router (tracked upstream), 'unsafe-inline' is required.
- * We add 'strict-dynamic' so that browsers supporting CSP Level 3 will
- * ignore 'unsafe-inline' when a nonce/hash is eventually provided.
+ *
+ * DO NOT add 'strict-dynamic' without also implementing nonce-based scripts.
+ * Per CSP Level 3, 'strict-dynamic' causes 'self' and 'unsafe-inline' to be
+ * ignored — which blocks ALL scripts and breaks React hydration entirely.
  */
 export function getCspDirectives(): string {
   const isDev = process.env.NODE_ENV === "development";
   return [
     "default-src 'self'",
-    `script-src 'self' 'unsafe-inline' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://api.qrserver.com",
     "font-src 'self' data:",
