@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { getCatalogStats, getIntelligenceStats } from "@/lib/db/cached-queries";
 import { Building2, BarChart3, Puzzle, ArrowLeftRight, Database, FileText, Settings, Activity } from "lucide-react";
@@ -52,26 +53,26 @@ export async function AdminStatsSection() {
           Intelligence Layer
         </h3>
         <div className="grid grid-cols-4 gap-4">
-          <a href="/admin/industries" className="block bg-muted rounded-lg p-4 hover:bg-muted/80 transition-colors">
+          <Link href="/admin/industries" className="block bg-muted rounded-lg p-4 hover:bg-muted/80 transition-colors">
             <Building2 className="w-5 h-5 text-muted-foreground/60 mb-2" />
             <p className="text-xl font-bold text-foreground">{industryCount}</p>
             <p className="text-xs text-muted-foreground">Industry Profiles</p>
-          </a>
-          <a href="/admin/baselines" className="block bg-muted rounded-lg p-4 hover:bg-muted/80 transition-colors">
+          </Link>
+          <Link href="/admin/baselines" className="block bg-muted rounded-lg p-4 hover:bg-muted/80 transition-colors">
             <BarChart3 className="w-5 h-5 text-muted-foreground/60 mb-2" />
             <p className="text-xl font-bold text-foreground">{baselineCount}</p>
             <p className="text-xs text-muted-foreground">Effort Baselines</p>
-          </a>
-          <a href="/admin/extensibility-patterns" className="block bg-muted rounded-lg p-4 hover:bg-muted/80 transition-colors">
+          </Link>
+          <Link href="/admin/extensibility-patterns" className="block bg-muted rounded-lg p-4 hover:bg-muted/80 transition-colors">
             <Puzzle className="w-5 h-5 text-muted-foreground/60 mb-2" />
             <p className="text-xl font-bold text-foreground">{extPatternCount}</p>
             <p className="text-xs text-muted-foreground">Extensibility Patterns</p>
-          </a>
-          <a href="/admin/adaptation-patterns" className="block bg-muted rounded-lg p-4 hover:bg-muted/80 transition-colors">
+          </Link>
+          <Link href="/admin/adaptation-patterns" className="block bg-muted rounded-lg p-4 hover:bg-muted/80 transition-colors">
             <ArrowLeftRight className="w-5 h-5 text-muted-foreground/60 mb-2" />
             <p className="text-xl font-bold text-foreground">{adaptPatternCount}</p>
             <p className="text-xs text-muted-foreground">Adaptation Patterns</p>
-          </a>
+          </Link>
         </div>
       </div>
     </>

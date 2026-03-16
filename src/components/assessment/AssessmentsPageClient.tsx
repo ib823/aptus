@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -91,12 +92,12 @@ export function AssessmentsPageClient({
                 <Zap className="w-4 h-4 mr-1.5" />
                 ABeam CoreEdge
               </Button>
-              <a href="/assessments/new">
+              <Link href="/assessments/new">
                 <Button>
                   <Plus className="w-4 h-4 mr-1.5" />
                   {UI_TEXT.assessment.createNew}
                 </Button>
-              </a>
+              </Link>
             </>
           ) : undefined
         }

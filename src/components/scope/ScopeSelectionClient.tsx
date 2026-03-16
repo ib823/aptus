@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search, ArrowLeft, ArrowRight, Map as MapIcon, List } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -749,12 +750,12 @@ export function ScopeSelectionClient({
       {/* Action bar */}
       <div className="sticky bottom-0 bg-background border-t border -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-4 mt-8">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <a href={`/assessments`}>
+          <Link href="/assessments">
             <Button variant="outline">
               <ArrowLeft className="w-4 h-4 mr-1.5" />
               {UI_TEXT.scope.backButton.replace("\u2190 ", "")}
             </Button>
-          </a>
+          </Link>
 
           <div className="text-center">
             <p className="text-base font-semibold text-foreground">
@@ -765,12 +766,12 @@ export function ScopeSelectionClient({
             </p>
           </div>
 
-          <a href={`/assessment/${assessmentId}/review`}>
+          <Link href={`/assessment/${assessmentId}/review`}>
             <Button>
               {UI_TEXT.scope.continueButton.replace(" \u2192", "")}
               <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
-          </a>
+          </Link>
         </div>
       </div>
     </div>

@@ -193,7 +193,7 @@ export function PortalNav({ user }: PortalNavProps) {
                   currentPath === item.href ||
                   currentPath.startsWith(item.href + "/");
                 return (
-                  <a
+                  <Link
                     key={item.href}
                     href={item.href}
                     aria-current={isActive ? "page" : undefined}
@@ -210,7 +210,7 @@ export function PortalNav({ user }: PortalNavProps) {
                     }}
                   >
                     {item.label}
-                  </a>
+                  </Link>
                 );
               })}
           </nav>
