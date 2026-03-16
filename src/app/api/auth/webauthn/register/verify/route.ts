@@ -1,7 +1,7 @@
 /** POST: Verify WebAuthn registration response and store credential */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUser, getSessionToken, markSessionMfaVerified, rotateSessionToken, SESSION_COOKIE_NAME, getSessionCookieOptions } from "@/lib/auth/session";
 import { verifyRegistrationResponse, getChallengeFromCookie } from "@/lib/auth/webauthn";
 import { saveCredential } from "@/lib/auth/webauthn-db";
 import { prisma } from "@/lib/db/prisma";
@@ -84,6 +84,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         actor: user.email,
         actorRole: user.role,
       });
+    }
+
+    // Passkey registration satisfies MFA — mark session as verified
+    const token = await getSessionToken();
+    if (token) {
+      await markSessionMfaVerified(token);
+      const newToken = await rotateSessionToken(token);
+      if (newToken) {
+        const response = NextResponse.json({
+          data: { success: true, credentialId: credential.credentialId },
+        });
+        response.cookies.set(SESSION_COOKIE_NAME, newToken, {
+          ...getSessionCookieOptions(),
+        });
+        return response;
+      }
     }
 
     return NextResponse.json({

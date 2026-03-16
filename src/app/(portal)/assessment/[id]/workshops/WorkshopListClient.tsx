@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { WorkshopScheduleDialog } from "@/components/workshop/WorkshopScheduleDialog";
 
@@ -68,7 +67,7 @@ export function WorkshopListClient({ assessmentId, sessions }: WorkshopListClien
           {sessions.map((s) => {
             const badge = STATUS_BADGES[s.status] ?? { label: s.status, className: "bg-slate-50 text-slate-600" };
             return (
-              <Link
+              <a
                 key={s.id}
                 href={`/assessment/${assessmentId}/workshops/${s.id}`}
                 className="block border rounded-lg p-4 bg-card hover:bg-accent hover:shadow-sm transition-all"
@@ -95,7 +94,7 @@ export function WorkshopListClient({ assessmentId, sessions }: WorkshopListClien
                   {s.voteCount > 0 && <span>{s.voteCount} votes</span>}
                   {s.hasMinutes && <span className="text-blue-600">Minutes</span>}
                 </div>
-              </Link>
+              </a>
             );
           })}
         </div>

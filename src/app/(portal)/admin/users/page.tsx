@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { User, ShieldCheck, Clock, Mail, Calendar } from "lucide-react";
 
@@ -148,12 +147,12 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
         </span>
         <div className="flex items-center gap-2">
           {clampedPage > 1 ? (
-            <Link
+            <a
               href={`/admin/users?page=${clampedPage - 1}`}
               className="px-3 py-1.5 border rounded-md hover:bg-accent text-foreground"
             >
               Previous
-            </Link>
+            </a>
           ) : (
             <span className="px-3 py-1.5 border rounded-md opacity-40 cursor-not-allowed">
               Previous
@@ -163,12 +162,12 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
             Page {clampedPage} of {totalPages}
           </span>
           {clampedPage < totalPages ? (
-            <Link
+            <a
               href={`/admin/users?page=${clampedPage + 1}`}
               className="px-3 py-1.5 border rounded-md hover:bg-accent text-foreground"
             >
               Next
-            </Link>
+            </a>
           ) : (
             <span className="px-3 py-1.5 border rounded-md opacity-40 cursor-not-allowed">
               Next

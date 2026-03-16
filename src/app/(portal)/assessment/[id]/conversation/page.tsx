@@ -1,5 +1,4 @@
 import { redirect, notFound } from "next/navigation";
-import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -56,12 +55,12 @@ export default async function ConversationPage({ params }: ConversationPageProps
               Start a conversation by toggling Conversation Mode on any scope item
               during the Review phase.
             </p>
-            <Link
+            <a
               href={`/assessment/${assessmentId}/review`}
               className="inline-flex items-center gap-1.5 mt-4 text-sm font-medium text-primary hover:underline"
             >
               Go to Review <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
+            </a>
           </CardContent>
         </Card>
       ) : (
@@ -70,7 +69,7 @@ export default async function ConversationPage({ params }: ConversationPageProps
             const scopeItem = scopeMap.get(session.scopeItemId);
             const isComplete = session.status === "completed";
             return (
-              <Link
+              <a
                 key={session.id}
                 href={`/assessment/${assessmentId}/review?scopeItem=${session.scopeItemId}&mode=conversation`}
               >
@@ -94,7 +93,7 @@ export default async function ConversationPage({ params }: ConversationPageProps
                     </p>
                   </CardContent>
                 </Card>
-              </Link>
+              </a>
             );
           })}
         </div>

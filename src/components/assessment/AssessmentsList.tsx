@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import Link from "next/link";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -99,7 +98,7 @@ export function AssessmentsList({ assessments }: AssessmentsListProps) {
               ? Math.min(100, Math.round((assessment._count.stepResponses / (assessment._count.scopeSelections * 15)) * 100))
               : 0;
           return (
-            <Link
+            <a
               key={assessment.id}
               href={assessment.status === "draft" ? `/assessment/${assessment.id}/profile` : `/assessment/${assessment.id}/scope`}
               className="block"
@@ -137,7 +136,7 @@ export function AssessmentsList({ assessments }: AssessmentsListProps) {
                   </div>
                 </CardContent>
               </Card>
-            </Link>
+            </a>
           );
         })
       )}
