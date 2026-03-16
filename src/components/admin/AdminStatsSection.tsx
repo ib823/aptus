@@ -18,7 +18,7 @@ export async function AdminStatsSection() {
   return (
     <>
       {/* Assessment metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div data-tour="admin-stats" className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <MetricCard icon={FileText} label="Total Assessments" value={totalAssessments} />
         <MetricCard icon={Activity} label="Active" value={activeAssessments} color="text-blue-600" />
         <MetricCard icon={Settings} label="Signed Off" value={signedOffAssessments} color="text-green-600" />

@@ -115,7 +115,7 @@ export function AdminUsersClient({ initialUsers, currentUserId }: AdminUsersClie
   return (
     <>
       {/* Desktop Table */}
-      <div className="hidden md:block bg-card rounded-lg border overflow-hidden">
+      <div data-tour="user-table" className="hidden md:block bg-card rounded-lg border overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-50 border-b">
@@ -125,7 +125,7 @@ export function AdminUsersClient({ initialUsers, currentUserId }: AdminUsersClie
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">MFA</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">Last Login</th>
-              <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
+              <th data-tour="user-actions" className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
             </tr>
           </thead>
           <tbody>
