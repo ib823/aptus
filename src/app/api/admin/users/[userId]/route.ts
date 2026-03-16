@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin, isAdminError } from "@/lib/auth/admin-guard";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
-import { ROLE_LABELS, type UserRole } from "@/types/assessment";
+import { ROLE_LABELS } from "@/types/assessment";
 import { z } from "zod";
 
 const validRoles = Object.keys(ROLE_LABELS) as [string, ...string[]];
