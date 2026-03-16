@@ -23,6 +23,8 @@ export interface TourDefinition {
   pathMatch: string;
   /** Only show on exact path match (not prefix) */
   exactPath?: boolean;
+  /** URL to navigate to when starting this tour from a different page. Use {assessmentId} as placeholder. */
+  navigateTo?: string;
   steps: TourStep[];
 }
 
@@ -35,6 +37,7 @@ export const TOURS: TourDefinition[] = [
     roles: "all",
     pathMatch: "/assessments",
     exactPath: true,
+    navigateTo: "/assessments",
     steps: [
       {
         element: '[aria-label="Main navigation"]',
@@ -64,6 +67,7 @@ export const TOURS: TourDefinition[] = [
     description: "How to complete the company profile",
     roles: ["consultant", "solution_architect", "platform_admin", "partner_lead"],
     pathMatch: "/profile",
+    navigateTo: "/assessment/{assessmentId}/profile",
     steps: [
       {
         element: '[data-tour="profile-progress"]',
@@ -87,6 +91,7 @@ export const TOURS: TourDefinition[] = [
     description: "How to select SAP scope items",
     roles: ["consultant", "solution_architect", "platform_admin", "partner_lead"],
     pathMatch: "/scope",
+    navigateTo: "/assessment/{assessmentId}/scope",
     steps: [
       {
         element: '[data-tour="scope-tree"]',
@@ -110,6 +115,7 @@ export const TOURS: TourDefinition[] = [
     description: "How to review process steps",
     roles: ["consultant", "solution_architect", "process_owner", "it_lead", "platform_admin"],
     pathMatch: "/review",
+    navigateTo: "/assessment/{assessmentId}/review",
     steps: [
       {
         element: '[data-tour="review-sidebar"]',
@@ -133,6 +139,7 @@ export const TOURS: TourDefinition[] = [
     description: "How to resolve identified gaps",
     roles: ["consultant", "solution_architect", "platform_admin"],
     pathMatch: "/gaps",
+    navigateTo: "/assessment/{assessmentId}/gaps",
     steps: [
       {
         element: '[data-tour="gap-list"]',
@@ -157,6 +164,7 @@ export const TOURS: TourDefinition[] = [
     roles: ["consultant", "platform_admin", "partner_lead", "project_manager", "executive_sponsor"],
     pathMatch: "/dashboard",
     exactPath: true,
+    navigateTo: "/dashboard",
     steps: [
       {
         element: '[data-tour="dashboard-kpis"]',
@@ -181,6 +189,7 @@ export const TOURS: TourDefinition[] = [
     roles: ["platform_admin"],
     pathMatch: "/admin",
     exactPath: true,
+    navigateTo: "/admin",
     steps: [
       {
         element: '[aria-label="Admin navigation"]',
@@ -205,6 +214,7 @@ export const TOURS: TourDefinition[] = [
     roles: ["platform_admin"],
     pathMatch: "/admin/users",
     exactPath: true,
+    navigateTo: "/admin/users",
     steps: [
       {
         element: '[data-tour="user-table"]',
@@ -229,6 +239,7 @@ export const TOURS: TourDefinition[] = [
     roles: ["platform_admin", "partner_lead", "client_admin"],
     pathMatch: "/organization",
     exactPath: true,
+    navigateTo: "/organization",
     steps: [
       {
         element: '[data-tour="org-info"]',
@@ -252,6 +263,7 @@ export const TOURS: TourDefinition[] = [
     description: "How to review SAP configuration activities",
     roles: ["consultant", "solution_architect", "platform_admin", "partner_lead"],
     pathMatch: "/config",
+    navigateTo: "/assessment/{assessmentId}/config",
     steps: [
       {
         element: '[data-tour="config-summary"]',
@@ -275,6 +287,7 @@ export const TOURS: TourDefinition[] = [
     description: "How to view process flow diagrams",
     roles: ["consultant", "solution_architect", "process_owner", "platform_admin"],
     pathMatch: "/flows",
+    navigateTo: "/assessment/{assessmentId}/flows",
     steps: [
       {
         element: '[data-tour="flows-sidebar"]',
@@ -298,6 +311,7 @@ export const TOURS: TourDefinition[] = [
     description: "How to navigate the process map",
     roles: ["consultant", "solution_architect", "process_owner", "platform_admin"],
     pathMatch: "/process-map",
+    navigateTo: "/assessment/{assessmentId}/process-map",
     steps: [
       {
         element: '[data-tour="process-map-areas"]',
@@ -315,6 +329,7 @@ export const TOURS: TourDefinition[] = [
     description: "How to document integration points",
     roles: ["consultant", "solution_architect", "it_lead", "platform_admin"],
     pathMatch: "/integrations",
+    navigateTo: "/assessment/{assessmentId}/integrations",
     steps: [
       {
         element: '[data-tour="integrations-stats"]',
@@ -338,6 +353,7 @@ export const TOURS: TourDefinition[] = [
     description: "How to manage data migration objects",
     roles: ["consultant", "data_migration_lead", "it_lead", "platform_admin"],
     pathMatch: "/data-migration",
+    navigateTo: "/assessment/{assessmentId}/data-migration",
     steps: [
       {
         element: '[data-tour="data-migration-stats"]',
@@ -361,6 +377,7 @@ export const TOURS: TourDefinition[] = [
     description: "How to assess organizational change impacts",
     roles: ["consultant", "project_manager", "platform_admin"],
     pathMatch: "/ocm",
+    navigateTo: "/assessment/{assessmentId}/ocm",
     steps: [
       {
         element: '[data-tour="ocm-stats"]',
@@ -384,6 +401,7 @@ export const TOURS: TourDefinition[] = [
     description: "How to manage workshop sessions",
     roles: ["consultant", "project_manager", "platform_admin"],
     pathMatch: "/workshops",
+    navigateTo: "/assessment/{assessmentId}/workshops",
     steps: [
       {
         element: '[data-tour="workshops-grid"]',
@@ -401,6 +419,7 @@ export const TOURS: TourDefinition[] = [
     description: "How to track assessment changes",
     roles: ["consultant", "project_manager", "platform_admin", "partner_lead"],
     pathMatch: "/activity",
+    navigateTo: "/assessment/{assessmentId}/activity",
     steps: [
       {
         element: '[data-tour="activity-filter"]',
@@ -425,6 +444,7 @@ export const TOURS: TourDefinition[] = [
     roles: "all",
     pathMatch: "/settings/security",
     exactPath: true,
+    navigateTo: "/settings/security",
     steps: [
       {
         element: '[data-tour="passkey-section"]',
