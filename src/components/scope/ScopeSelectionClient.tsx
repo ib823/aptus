@@ -623,7 +623,7 @@ export function ScopeSelectionClient({
 
       {/* Impact summary bar */}
       {stats.selectedCount > 0 && (
-        <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div data-tour="scope-summary" className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatCard label="Business Processes" value={stats.selectedCount} />
           <StatCard label="Steps to Review" value={stats.totalClassifiable} />
           <StatCard label="Total Steps" value={stats.totalStepsInScope} />
@@ -660,6 +660,7 @@ export function ScopeSelectionClient({
       )}
 
       {/* Scope items — landscape or list view */}
+      <div data-tour="scope-tree">
       {viewMode === "landscape" ? (
         // REM-32: Process Landscape Map view
         <>
@@ -745,6 +746,7 @@ export function ScopeSelectionClient({
           )}
         </>
       )}
+      </div>
 
       {/* Action bar */}
       <div className="sticky bottom-0 bg-background border-t border -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-4 mt-8">

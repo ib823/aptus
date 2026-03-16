@@ -12,6 +12,12 @@ interface DashboardShellProps {
 /** Fixed vertical order for the four primary dashboard sections */
 const PRIMARY_ORDER: WidgetType[] = ["attention", "kpi", "progress_heatmap", "activity_feed", "conflict_summary"];
 
+/** Map widget types to data-tour selectors for guided tour targeting */
+const TOUR_ATTRS: Partial<Record<WidgetType, string>> = {
+  kpi: "dashboard-kpis",
+  progress_heatmap: "dashboard-assessments",
+};
+
 export function DashboardShell({ initialWidgets, assessmentId }: DashboardShellProps) {
   const [widgets] = useState<WidgetConfig[]>(initialWidgets);
   const visibleWidgets = widgets
@@ -30,6 +36,7 @@ export function DashboardShell({ initialWidgets, assessmentId }: DashboardShellP
       {primaryWidgets.map((widgetType) => (
         <div
           key={widgetType}
+          data-tour={TOUR_ATTRS[widgetType]}
           className={widgetType === "attention" ? "border-l-[3px] rounded-lg" : ""}
           style={widgetType === "attention" ? { borderColor: "var(--sapCriticalColor, #e9730c)" } : undefined}
         >

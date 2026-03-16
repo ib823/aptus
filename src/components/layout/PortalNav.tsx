@@ -7,6 +7,7 @@ import { LogOut, User, Settings, ChevronDown, Menu } from "lucide-react";
 import { ABeamLogo } from "@/components/shared/ABeamLogo";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { CommandMenu } from "@/components/shared/CommandMenu";
+import { TourReplayMenu } from "@/components/tour/TourReplayMenu";
 import { UI_TEXT } from "@/constants/ui-text";
 import { 
   Sheet, 
@@ -218,6 +219,7 @@ export function PortalNav({ user }: PortalNavProps) {
           {/* Right: Notification + User Menu */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0 relative ml-auto" ref={menuRef}>
             <CommandMenu />
+            <TourReplayMenu />
             <NotificationBell />
             <button
               onClick={() => setMenuOpen((prev) => !prev)}

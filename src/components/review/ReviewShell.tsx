@@ -795,7 +795,7 @@ function ReviewShellInner({
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
-      <div className="hidden sm:flex sm:w-[280px] shrink-0 bg-card border-r border-border flex-col h-screen sticky top-0 overflow-hidden">
+      <div data-tour="review-sidebar" className="hidden sm:flex sm:w-[280px] shrink-0 bg-card border-r border-border flex-col h-screen sticky top-0 overflow-hidden">
         {/* Section 1: Current Scope Item */}
         <div className="p-4 border-b">
           <Link
@@ -884,7 +884,7 @@ function ReviewShellInner({
       </div>
 
       {/* Main content */}
-      <div className="flex-1 min-w-0 p-4 sm:p-8 overflow-y-auto overscroll-contain">
+      <div data-tour="review-steps" className="flex-1 min-w-0 p-4 sm:p-8 overflow-y-auto overscroll-contain">
         <div className="max-w-3xl mx-auto">
           {/* Mobile nav */}
           <div className="sm:hidden mb-4 flex items-center gap-2">

@@ -191,7 +191,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div data-tour="profile-progress" className="flex items-center justify-between">
         <ProfileCompletenessBar score={profile.completenessScore} breakdown={bd} />
         <span className={`text-xs transition-opacity ${saveStatus === "idle" ? "opacity-0" : "opacity-100"} ${saveStatus === "saving" ? "text-muted-foreground" : "text-green-600"}`}>
           {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : ""}
@@ -199,7 +199,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
       </div>
 
       {/* Two-column card layout */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div data-tour="profile-sections" className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Left column: Identity & Scale */}
         <div className="space-y-3">
           {/* Section 1: Basic Info */}
