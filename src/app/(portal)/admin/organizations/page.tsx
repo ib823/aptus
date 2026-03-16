@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { Badge } from "@/components/ui/badge";
 import { getOrgTypeLabel, getOrgTypeColor } from "@/lib/utils/org-type";
@@ -46,12 +45,12 @@ export default async function OrganizationsPage() {
             {organizations.map((org) => (
               <tr key={org.id} className="border-b border-slate-100 hover:bg-slate-50">
                 <td className="px-4 py-2.5">
-                  <Link
+                  <a
                     href={`/admin/organizations/${org.id}`}
                     className="font-medium text-foreground hover:underline"
                   >
                     {org.name}
-                  </Link>
+                  </a>
                   <div className="text-xs text-muted-foreground">{org.slug}</div>
                 </td>
                 <td className="px-4 py-2.5">

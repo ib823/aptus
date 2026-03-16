@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -92,12 +91,12 @@ export function AssessmentsPageClient({
                 <Zap className="w-4 h-4 mr-1.5" />
                 ABeam CoreEdge
               </Button>
-              <Link href="/assessments/new">
+              <a href="/assessments/new">
                 <Button>
                   <Plus className="w-4 h-4 mr-1.5" />
                   {UI_TEXT.assessment.createNew}
                 </Button>
-              </Link>
+              </a>
             </>
           ) : undefined
         }
@@ -146,12 +145,12 @@ export function AssessmentsPageClient({
                     <Zap className="w-4 h-4 mr-1.5" />
                     Quick Start — ABeam CoreEdge
                   </Button>
-                  <Link href="/assessments/new">
+                  <a href="/assessments/new">
                     <Button>
                       <Plus className="w-4 h-4 mr-1.5" />
                       {UI_TEXT.assessment.createNew}
                     </Button>
-                  </Link>
+                  </a>
                 </div>
               ) : undefined
             }
@@ -166,12 +165,12 @@ export function AssessmentsPageClient({
             </span>
             <div className="flex items-center gap-2">
               {pagination.page > 1 ? (
-                <Link
+                <a
                   href={`/assessments?page=${pagination.page - 1}`}
                   className="px-3 py-1.5 border rounded-md hover:bg-accent text-foreground"
                 >
                   Previous
-                </Link>
+                </a>
               ) : (
                 <span className="px-3 py-1.5 border rounded-md opacity-40 cursor-not-allowed">
                   Previous
@@ -181,12 +180,12 @@ export function AssessmentsPageClient({
                 Page {pagination.page} of {totalPages}
               </span>
               {pagination.page < totalPages ? (
-                <Link
+                <a
                   href={`/assessments?page=${pagination.page + 1}`}
                   className="px-3 py-1.5 border rounded-md hover:bg-accent text-foreground"
                 >
                   Next
-                </Link>
+                </a>
               ) : (
                 <span className="px-3 py-1.5 border rounded-md opacity-40 cursor-not-allowed">
                   Next

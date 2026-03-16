@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import { AlertCircle, Clock, CreditCard, X, XCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -79,9 +78,9 @@ export function SubscriptionStatusBanner({
               </div>
               {(onUpgrade || upgradeHref) ? (
                 upgradeHref ? (
-                  <Link href={upgradeHref}>
+                  <a href={upgradeHref}>
                     <Button size="sm">Upgrade</Button>
-                  </Link>
+                  </a>
                 ) : (
                   <Button size="sm" onClick={onUpgrade}>
                     Upgrade
@@ -115,9 +114,9 @@ export function SubscriptionStatusBanner({
               </div>
               {(onUpgrade || upgradeHref) ? (
                 upgradeHref ? (
-                  <Link href={upgradeHref}>
+                  <a href={upgradeHref}>
                     <Button size="sm">Upgrade Now</Button>
-                  </Link>
+                  </a>
                 ) : (
                   <Button size="sm" onClick={onUpgrade}>
                     Upgrade Now

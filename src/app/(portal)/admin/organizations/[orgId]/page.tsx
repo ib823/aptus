@@ -1,5 +1,4 @@
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth/session";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { prisma } from "@/lib/db/prisma";
@@ -59,9 +58,9 @@ export default async function OrgDetailPage({ params }: OrgDetailPageProps) {
   return (
     <div className="max-w-5xl">
       <div className="mb-6">
-        <Link href="/admin/organizations" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <a href="/admin/organizations" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
           &larr; All Organizations
-        </Link>
+        </a>
       </div>
 
       <div className="flex items-center gap-3 mb-1">

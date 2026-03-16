@@ -1,5 +1,4 @@
 import { redirect, notFound } from "next/navigation";
-import Link from "next/link";
 import { AlertCircle } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getScopeItemsWithSelections, getIndustryPreSelections } from "@/lib/db/scope-items";
@@ -62,9 +61,9 @@ export default async function ScopePage({ params }: ScopePageProps) {
             <p className="text-sm text-muted-foreground mb-6">
               Reach {PROFILE_COMPLETENESS_GATE}% to unlock scope selection.
             </p>
-            <Link href={`/assessment/${assessmentId}/profile`}>
+            <a href={`/assessment/${assessmentId}/profile`}>
               <Button>Go to Profile</Button>
-            </Link>
+            </a>
           </CardContent>
         </Card>
       </div>

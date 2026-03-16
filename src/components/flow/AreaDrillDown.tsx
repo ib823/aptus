@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import type { FunctionalAreaOverviewData } from "@/types/flow";
 
@@ -69,12 +68,12 @@ export function AreaDrillDown({ area, assessmentId, onBack }: AreaDrillDownProps
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Link
+                    <a
                       href={`/assessment/${assessmentId}/process-map?scopeItem=${si.scopeItemId}`}
                       className="text-xs text-blue-500 hover:text-blue-600"
                     >
                       View Flow &rarr;
-                    </Link>
+                    </a>
                   </td>
                 </tr>
               );

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { CreditCard, ShieldCheck, Bell } from "lucide-react";
 
 export default function SettingsPage() {
@@ -18,7 +17,7 @@ export default function SettingsPage() {
         {links.map((link) => {
           const Icon = link.icon;
           return (
-            <Link
+            <a
               key={link.href}
               href={link.href}
               className="flex items-start gap-3 rounded-lg border p-4 hover:bg-accent transition-colors"
@@ -28,7 +27,7 @@ export default function SettingsPage() {
                 <p className="font-medium text-sm">{link.label}</p>
                 <p className="text-xs text-muted-foreground">{link.description}</p>
               </div>
-            </Link>
+            </a>
           );
         })}
       </div>

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { HeatmapCell } from "@/types/dashboard";
 
@@ -32,14 +31,14 @@ export function ProgressHeatmap({ cells, assessmentId }: ProgressHeatmapProps) {
                 </div>
               );
               return assessmentId ? (
-                <Link
+                <a
                   key={cell.scopeItemId}
                   href={`/assessment/${assessmentId}/review?scopeItem=${cell.scopeItemId}`}
                   className={`rounded-lg ${cell.colorClass} hover:ring-2 hover:ring-primary/30 transition-all cursor-pointer`}
                   title={`${cell.scopeItemName}: ${cell.completionPercent}% (${cell.completedSteps}/${cell.totalSteps})`}
                 >
                   {content}
-                </Link>
+                </a>
               ) : (
                 <div
                   key={cell.scopeItemId}
