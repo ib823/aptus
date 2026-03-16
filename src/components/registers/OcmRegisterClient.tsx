@@ -203,7 +203,7 @@ export function OcmRegisterClient({
         </div>
 
         {/* Summary stat cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
+        <div data-tour="ocm-stats" className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
           <StatCard label="Total Impacts" value={summary.total} />
           <StatCard label="Readiness" value={`${Math.round(summary.weightedReadiness * 100)}%`} valueClass={summary.weightedReadiness < 0.5 ? "text-amber-600" : "text-foreground"} />
           <StatCard label="Training Required" value={summary.trainingCount} valueClass={summary.trainingCount > 0 ? "text-blue-600" : "text-foreground"} />
@@ -224,7 +224,7 @@ export function OcmRegisterClient({
                   : "No impacts match your current filters."}
               />
             ) : (
-              <div className="border rounded-lg overflow-hidden">
+              <div data-tour="ocm-table" className="border rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-muted">
                     <tr>

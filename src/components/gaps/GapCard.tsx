@@ -177,7 +177,7 @@ export function GapCard({ gap, assessmentId, onCommentClick, commentCount, onUpd
       </div>
 
       {/* Resolution options */}
-      <div className="px-5 py-4">
+      <div className="px-5 py-4" data-tour="gap-resolution">
         <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
           Resolution Approach
         </span>

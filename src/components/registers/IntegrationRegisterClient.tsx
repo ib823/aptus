@@ -171,7 +171,7 @@ export function IntegrationRegisterClient({
         </div>
 
         {/* Summary stat cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
+        <div data-tour="integrations-stats" className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
           <StatCard label="Total Integrations" value={summary.total} />
           <StatCard label="Inbound" value={summary.byDirection["INBOUND"] ?? 0} valueClass="text-blue-600" />
           <StatCard label="Outbound" value={summary.byDirection["OUTBOUND"] ?? 0} valueClass="text-green-600" />
@@ -186,7 +186,7 @@ export function IntegrationRegisterClient({
               : "No integration points match your current filters."}
           />
         ) : (
-          <div className="border rounded-lg overflow-hidden">
+          <div data-tour="integrations-table" className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>

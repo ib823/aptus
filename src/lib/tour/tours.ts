@@ -245,6 +245,178 @@ export const TOURS: TourDefinition[] = [
     ],
   },
 
+  // ─── Configuration Matrix (Results) ───
+  {
+    id: "config-matrix",
+    title: "Configuration Matrix",
+    description: "How to review SAP configuration activities",
+    roles: ["consultant", "solution_architect", "platform_admin", "partner_lead"],
+    pathMatch: "/config",
+    steps: [
+      {
+        element: '[data-tour="config-summary"]',
+        title: "Configuration Summary",
+        description: "Overview of mandatory, recommended, and optional configuration activities across your selected scope items.",
+        side: "bottom",
+      },
+      {
+        element: '[data-tour="config-table"]',
+        title: "Configuration Table",
+        description: "Review each configuration activity. Toggle the Include checkbox to add or remove activities from your implementation plan.",
+        side: "top",
+      },
+    ],
+  },
+
+  // ─── Process Flows ───
+  {
+    id: "process-flows",
+    title: "Process Flows",
+    description: "How to view process flow diagrams",
+    roles: ["consultant", "solution_architect", "process_owner", "platform_admin"],
+    pathMatch: "/flows",
+    steps: [
+      {
+        element: '[data-tour="flows-sidebar"]',
+        title: "Scope Item List",
+        description: "Select a scope item to view its process flow diagram. Items are grouped by functional area.",
+        side: "right",
+      },
+      {
+        element: '[data-tour="flows-viewer"]',
+        title: "Flow Diagram",
+        description: "Interactive process flow with color-coded status badges: green (Fit), blue (Configure), red (Gap), and gray (N/A).",
+        side: "left",
+      },
+    ],
+  },
+
+  // ─── Process Map ───
+  {
+    id: "process-map",
+    title: "Process Map",
+    description: "How to navigate the process map",
+    roles: ["consultant", "solution_architect", "process_owner", "platform_admin"],
+    pathMatch: "/process-map",
+    steps: [
+      {
+        element: '[data-tour="process-map-areas"]',
+        title: "Functional Areas",
+        description: "Click any functional area card to drill down into its process flows and see the fit analysis for each scope item.",
+        side: "bottom",
+      },
+    ],
+  },
+
+  // ─── Integrations Register ───
+  {
+    id: "integrations-register",
+    title: "System Connections",
+    description: "How to document integration points",
+    roles: ["consultant", "solution_architect", "it_lead", "platform_admin"],
+    pathMatch: "/integrations",
+    steps: [
+      {
+        element: '[data-tour="integrations-stats"]',
+        title: "Integration Summary",
+        description: "Overview of total integration points, broken down by direction: inbound, outbound, and bidirectional.",
+        side: "bottom",
+      },
+      {
+        element: '[data-tour="integrations-table"]',
+        title: "Integration Points",
+        description: "Document each system connection: name, direction, type, status, and priority. Click Add Integration to create new entries.",
+        side: "top",
+      },
+    ],
+  },
+
+  // ─── Data Migration ───
+  {
+    id: "data-migration",
+    title: "Data Transfer",
+    description: "How to manage data migration objects",
+    roles: ["consultant", "data_migration_lead", "it_lead", "platform_admin"],
+    pathMatch: "/data-migration",
+    steps: [
+      {
+        element: '[data-tour="data-migration-stats"]',
+        title: "Migration Summary",
+        description: "Total data objects, record volumes, and cleansing requirements at a glance.",
+        side: "bottom",
+      },
+      {
+        element: '[data-tour="data-migration-table"]',
+        title: "Migration Objects",
+        description: "Catalog each data object: source system, volume, cleansing needs, mapping complexity, and dependencies.",
+        side: "top",
+      },
+    ],
+  },
+
+  // ─── OCM (Change Management) ───
+  {
+    id: "ocm-register",
+    title: "Change Impact",
+    description: "How to assess organizational change impacts",
+    roles: ["consultant", "project_manager", "platform_admin"],
+    pathMatch: "/ocm",
+    steps: [
+      {
+        element: '[data-tour="ocm-stats"]',
+        title: "Impact Overview",
+        description: "Total change impacts, overall readiness percentage, and number of areas requiring training.",
+        side: "bottom",
+      },
+      {
+        element: '[data-tour="ocm-table"]',
+        title: "Impact Register",
+        description: "Document change impacts per role and area. Track severity, training needs, and readiness status.",
+        side: "top",
+      },
+    ],
+  },
+
+  // ─── Workshops ───
+  {
+    id: "workshops",
+    title: "Workshops",
+    description: "How to manage workshop sessions",
+    roles: ["consultant", "project_manager", "platform_admin"],
+    pathMatch: "/workshops",
+    steps: [
+      {
+        element: '[data-tour="workshops-grid"]',
+        title: "Workshop Sessions",
+        description: "View all scheduled workshops with status, facilitator, attendees, and action items. Click a card to open the session details.",
+        side: "bottom",
+      },
+    ],
+  },
+
+  // ─── Activity Feed ───
+  {
+    id: "activity-feed",
+    title: "Activity Log",
+    description: "How to track assessment changes",
+    roles: ["consultant", "project_manager", "platform_admin", "partner_lead"],
+    pathMatch: "/activity",
+    steps: [
+      {
+        element: '[data-tour="activity-filter"]',
+        title: "Activity Filters",
+        description: "Filter by action type: step classifications, gaps, comments, conflicts, or status changes.",
+        side: "bottom",
+      },
+      {
+        element: '[data-tour="activity-timeline"]',
+        title: "Activity Timeline",
+        description: "Chronological log of all assessment changes. Each entry shows who did what, when, and on which item.",
+        side: "top",
+      },
+    ],
+  },
+
   // ─── Settings & Security ───
   {
     id: "settings-security",

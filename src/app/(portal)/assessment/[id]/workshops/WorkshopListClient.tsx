@@ -63,7 +63,7 @@ export function WorkshopListClient({ assessmentId, sessions }: WorkshopListClien
           <p className="text-sm mt-1">Schedule a workshop to get started.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div data-tour="workshops-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {sessions.map((s) => {
             const badge = STATUS_BADGES[s.status] ?? { label: s.status, className: "bg-slate-50 text-slate-600" };
             return (

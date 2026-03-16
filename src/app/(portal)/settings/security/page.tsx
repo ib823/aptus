@@ -23,7 +23,7 @@ export default function SecuritySettingsPage() {
         </p>
       </div>
 
-      <Card>
+      <Card data-tour="passkey-section">
         <CardHeader>
           <div className="flex items-center gap-2">
             <KeyRound className="w-5 h-5" />
@@ -39,7 +39,7 @@ export default function SecuritySettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card data-tour="mfa-section">
         <CardHeader>
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5" />

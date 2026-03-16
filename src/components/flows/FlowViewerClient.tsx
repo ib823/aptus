@@ -164,7 +164,7 @@ export function FlowViewerClient({ assessmentId, diagrams: initialDiagrams }: Fl
       ) : (
         <div className="flex gap-6">
           {/* Sidebar */}
-          <div className="hidden sm:block w-72 shrink-0">
+          <div data-tour="flows-sidebar" className="hidden sm:block w-72 shrink-0">
             <div className="mb-3">
               <select
                 value={scopeFilter}
@@ -211,7 +211,7 @@ export function FlowViewerClient({ assessmentId, diagrams: initialDiagrams }: Fl
           </div>
 
           {/* Main area */}
-          <div className="flex-1 min-w-0">
+          <div data-tour="flows-viewer" className="flex-1 min-w-0">
             {selectedDiagram && (
               <>
                 {/* Diagram header */}

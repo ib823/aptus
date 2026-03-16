@@ -41,7 +41,7 @@ export default async function OrganizationPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Left: General Settings */}
           <div className="space-y-6">
-            <div className="bg-card border border-border rounded-lg p-6">
+            <div className="bg-card border border-border rounded-lg p-6" data-tour="org-info">
               <h3 className="text-lg font-semibold mb-4 border-b pb-2">Profile & Security</h3>
               {canManage ? (
                 <OrgSettingsForm organization={{
@@ -77,7 +77,7 @@ export default async function OrganizationPage() {
               />
             )}
 
-            <div className="bg-card border border-border rounded-lg p-6">
+            <div className="bg-card border border-border rounded-lg p-6" data-tour="org-members">
               <h3 className="text-lg font-semibold mb-2">User Management</h3>
               <p className="text-sm text-muted-foreground mb-6">
                 Manage team members, roles, and access permissions for {org.name}.
