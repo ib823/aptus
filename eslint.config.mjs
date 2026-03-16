@@ -32,7 +32,6 @@ const eslintConfig = [
         { prefer: "type-imports", fixStyle: "inline-type-imports" },
       ],
       "no-console": ["warn", { allow: ["warn", "error"] }],
-      "@next/next/no-html-link-for-pages": "off",
     },
   },
   {
