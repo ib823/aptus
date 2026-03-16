@@ -91,7 +91,7 @@ export function AdminAssessmentsClient({ assessments, pagination }: AdminAssessm
           onValueChange={(val) => setStatusFilter(val)}
         >
           <SelectTrigger className="w-[180px] h-9">
-            <SelectValue placeholder={`All Status (${assessments.length})`} />
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{`All Status (${assessments.length})`}</SelectItem>
