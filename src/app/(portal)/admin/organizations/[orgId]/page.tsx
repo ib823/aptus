@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
@@ -58,9 +59,9 @@ export default async function OrgDetailPage({ params }: OrgDetailPageProps) {
   return (
     <div className="max-w-5xl">
       <div className="mb-6">
-        <a href="/admin/organizations" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <Link href="/admin/organizations" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
           &larr; All Organizations
-        </a>
+        </Link>
       </div>
 
       <div className="flex items-center gap-3 mb-1">

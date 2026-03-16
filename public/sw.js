@@ -44,6 +44,18 @@ self.addEventListener("fetch", (event) => {
   // Skip cross-origin requests
   if (url.origin !== self.location.origin) return;
 
+  // Let Next.js client-side navigation (RSC) requests pass through to the network.
+  // These use fetch() with RSC headers, not navigation mode — without explicit
+  // handling they fall through the SW and can break App Router soft navigation.
+  const isRSC =
+    request.headers.get("RSC") === "1" ||
+    request.headers.get("Next-Router-Prefetch") === "1" ||
+    request.headers.get("Next-Router-State-Tree");
+  if (isRSC) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
   // Skip auth and streaming endpoints
   if (
     url.pathname.startsWith("/api/auth") ||
@@ -75,6 +87,9 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(cacheFirst(request, STATIC_CACHE));
     return;
   }
+
+  // Default: pass through to network for any unmatched requests
+  event.respondWith(fetch(request));
 });
 
 // NetworkFirst: try network, fallback to cache
