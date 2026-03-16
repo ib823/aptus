@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Map } from "lucide-react";
 import { FunctionalAreaMap } from "@/components/flow/FunctionalAreaMap";
 import { FlowViewerClient } from "@/components/flow/FlowViewerClient";
@@ -121,9 +122,9 @@ export function ProcessMapClient({ assessmentId, initialScopeItemId, initialArea
         <p className="text-sm text-muted-foreground mb-6 max-w-md">
           Select scope items first to generate the process map. Each selected scope item contributes functional areas to this view.
         </p>
-        <a href={`/assessment/${assessmentId}/scope`}>
+        <Link href={`/assessment/${assessmentId}/scope`}>
           <Button variant="outline">Go to Scope Selection</Button>
-        </a>
+        </Link>
       </div>
     );
   }
