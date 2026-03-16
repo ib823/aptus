@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { FileQuestion } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -9,9 +10,9 @@ export default function NotFound() {
       <p className="text-base text-muted-foreground mb-6 max-w-md">
         The page you&apos;re looking for doesn&apos;t exist or has been moved.
       </p>
-      <a href="/assessments">
+      <Link href="/assessments">
         <Button>Back to Assessments</Button>
-      </a>
+      </Link>
     </div>
   );
 }
