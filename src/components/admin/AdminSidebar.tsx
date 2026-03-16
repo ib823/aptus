@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+// Use native <a> tags instead of Next.js Link to avoid silent router.push failures
 import { usePathname } from "next/navigation";
 import {
   Home, Building2, BarChart3, Puzzle, ArrowLeftRight,
@@ -82,7 +82,7 @@ export function AdminSidebar() {
                   : currentPath === item.href || currentPath.startsWith(item.href + "/");
               const Icon = item.icon;
               return (
-                <Link
+                <a
                   key={item.href}
                   href={item.href}
                   aria-current={isActive ? "page" : undefined}
@@ -105,7 +105,7 @@ export function AdminSidebar() {
                 >
                   <Icon className="size-4 shrink-0" />
                   <span className="truncate" title={item.label}>{item.label}</span>
-                </Link>
+                </a>
               );
             })}
           </div>

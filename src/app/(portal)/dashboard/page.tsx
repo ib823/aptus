@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -75,12 +74,12 @@ export default async function DashboardPage() {
           description={UI_TEXT.assessment.noAssessmentsDescription}
           action={
             canCreate ? (
-              <Link href="/assessments/new">
+              <a href="/assessments/new">
                 <Button>
                   <Plus className="w-4 h-4 mr-1.5" />
                   Create your first assessment
                 </Button>
-              </Link>
+              </a>
             ) : undefined
           }
         />
