@@ -44,17 +44,15 @@ self.addEventListener("fetch", (event) => {
   // Skip cross-origin requests
   if (url.origin !== self.location.origin) return;
 
-  // Let Next.js client-side navigation (RSC) requests pass through to the network.
-  // These use fetch() with RSC headers, not navigation mode — without explicit
-  // handling they fall through the SW and can break App Router soft navigation.
+  // Let Next.js RSC requests pass through to the network WITHOUT interception.
+  // Using event.respondWith(fetch()) here would convert network errors into
+  // unhandled rejections that crash the page. Returning without respondWith
+  // lets the browser handle the fetch natively with proper error handling.
   const isRSC =
     request.headers.get("RSC") === "1" ||
     request.headers.get("Next-Router-Prefetch") === "1" ||
     request.headers.get("Next-Router-State-Tree");
-  if (isRSC) {
-    event.respondWith(fetch(request));
-    return;
-  }
+  if (isRSC) return;
 
   // Skip auth and streaming endpoints
   if (
@@ -88,8 +86,10 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Default: pass through to network for any unmatched requests
-  event.respondWith(fetch(request));
+  // Default: let the browser handle any unmatched requests natively.
+  // Do NOT use event.respondWith here — wrapping fetch() in respondWith
+  // converts transient network errors into hard failures (503) that can
+  // trigger infinite reload loops in Next.js.
 });
 
 // NetworkFirst: try network, fallback to cache
