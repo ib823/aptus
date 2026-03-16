@@ -1,6 +1,7 @@
 /** Tour completion state — persisted in localStorage */
 
 const STORAGE_KEY = "abeam-tours";
+const PENDING_TOUR_KEY = "abeam-tour-pending";
 
 interface TourState {
   [tourId: string]: {
@@ -57,5 +58,27 @@ export function resetAllTours(): void {
     localStorage.removeItem(STORAGE_KEY);
   } catch {
     // Silently ignore
+  }
+}
+
+/** Set a tour to start after page navigation */
+export function setPendingTour(tourId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(PENDING_TOUR_KEY, tourId);
+  } catch {
+    // Silently ignore
+  }
+}
+
+/** Get and clear the pending tour (one-time read) */
+export function consumePendingTour(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const tourId = localStorage.getItem(PENDING_TOUR_KEY);
+    if (tourId) localStorage.removeItem(PENDING_TOUR_KEY);
+    return tourId;
+  } catch {
+    return null;
   }
 }

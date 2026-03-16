@@ -22,7 +22,10 @@ import {
   markTourComplete,
   markTourDismissed,
   resetTour as resetTourStorage,
+  setPendingTour,
+  consumePendingTour,
 } from "@/lib/tour/storage";
+import { TOURS } from "@/lib/tour/tours";
 import type { UserRole } from "@/types/assessment";
 
 interface TourContextValue {
@@ -89,7 +92,23 @@ export function TourProvider({ children, userRole }: TourProviderProps) {
         }
       }
 
-      if (validSteps.length === 0) return;
+      if (validSteps.length === 0) {
+        // Elements not on this page — navigate to the right page
+        if (tourDef.navigateTo) {
+          const currentPath = window.location.pathname;
+          // Extract assessmentId from current URL if needed
+          const assessmentMatch = currentPath.match(/\/assessment\/([^/]+)/);
+          const assessmentId = assessmentMatch?.[1];
+          let targetUrl = tourDef.navigateTo;
+          if (targetUrl.includes("{assessmentId}")) {
+            if (!assessmentId) return; // No assessment context, can't navigate
+            targetUrl = targetUrl.replace("{assessmentId}", assessmentId);
+          }
+          setPendingTour(tourId);
+          window.location.href = targetUrl;
+        }
+        return;
+      }
 
       // Destroy any existing tour
       driverRef.current?.destroy();
@@ -147,24 +166,29 @@ export function TourProvider({ children, userRole }: TourProviderProps) {
     return isTourComplete(tourId);
   }, []);
 
-  // Auto-trigger tours for the current page (first visit only)
+  // Auto-trigger tours: check for pending tour (from cross-page navigation) or first-visit
   useEffect(() => {
     if (!mounted || !pathname) return;
 
-    // Small delay to let the page render and DOM elements appear
     const timer = setTimeout(() => {
+      // Priority 1: Check for a pending tour (user clicked play from another page)
+      const pendingTourId = consumePendingTour();
+      if (pendingTourId) {
+        startTour(pendingTourId);
+        return;
+      }
+
+      // Priority 2: Auto-trigger first uncompleted tour for this page
       const pageTours = getAvailableTours(userRole, pathname);
       for (const tour of pageTours) {
-        // Skip if already completed, dismissed, or was auto-triggered this session
         if (isTourComplete(tour.id)) continue;
         if (autoTourTriggeredRef.current === tour.id) continue;
 
-        // Only auto-trigger the first matching uncompleted tour
         autoTourTriggeredRef.current = tour.id;
         startTour(tour.id);
         break;
       }
-    }, 1500); // 1.5s delay for DOM to stabilize
+    }, 1500);
 
     return () => clearTimeout(timer);
   }, [mounted, pathname, userRole, startTour]);
