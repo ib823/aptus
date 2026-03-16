@@ -93,15 +93,19 @@ export function TourProvider({ children, userRole }: TourProviderProps) {
 
       if (validSteps.length === 0) {
         // Elements not on this page — navigate to the right page
+        // But ONLY if we're not already on the target page (prevents infinite reload loop)
         if (tourDef.navigateTo) {
           const currentPath = window.location.pathname;
-          // Extract assessmentId from current URL if needed
           const assessmentMatch = currentPath.match(/\/assessment\/([^/]+)/);
           const assessmentId = assessmentMatch?.[1];
           let targetUrl = tourDef.navigateTo;
           if (targetUrl.includes("{assessmentId}")) {
-            if (!assessmentId) return; // No assessment context, can't navigate
+            if (!assessmentId) return;
             targetUrl = targetUrl.replace("{assessmentId}", assessmentId);
+          }
+          // Don't navigate if already on the target page — elements just don't exist
+          if (currentPath === targetUrl || currentPath.startsWith(targetUrl + "/")) {
+            return;
           }
           setPendingTour(tourId);
           window.location.href = targetUrl;
