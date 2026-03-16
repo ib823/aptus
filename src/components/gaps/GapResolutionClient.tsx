@@ -290,7 +290,7 @@ export function GapResolutionClient({
             }
           />
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-4" data-tour="gap-list">
             {filteredGaps.map((gap) => (
               <GapCard
                 key={gap.id}

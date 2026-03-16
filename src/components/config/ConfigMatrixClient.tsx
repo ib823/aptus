@@ -203,7 +203,7 @@ export function ConfigMatrixClient({
       />
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div data-tour="config-summary" className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <SummaryCard label="Mandatory" count={summary.mandatory} color="bg-red-500" description="Always included" />
         <SummaryCard label="Recommended" count={summary.recommended} color="bg-amber-500" description="Included by default" />
         <SummaryCard label="Optional" count={summary.optional} color="bg-slate-400" description="Excluded by default" />
@@ -257,7 +257,7 @@ export function ConfigMatrixClient({
       </div>
 
       {/* Config table */}
-      <div className="border rounded-lg overflow-x-auto">
+      <div data-tour="config-table" className="border rounded-lg overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="bg-muted border-b">

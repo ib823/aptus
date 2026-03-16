@@ -129,9 +129,11 @@ export function ProcessMapClient({ assessmentId, initialScopeItemId, initialArea
   }
 
   return (
-    <FunctionalAreaMap
-      areas={areas}
-      assessmentId={assessmentId}
-    />
+    <div data-tour="process-map-areas">
+      <FunctionalAreaMap
+        areas={areas}
+        assessmentId={assessmentId}
+      />
+    </div>
   );
 }

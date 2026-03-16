@@ -99,7 +99,7 @@ export function ActivityFeed({ assessmentId }: ActivityFeedProps) {
       <div className="flex items-center justify-between p-3 border-b">
         <h3 className="font-semibold text-sm">Activity</h3>
         <Select value={actionFilter} onValueChange={setActionFilter}>
-          <SelectTrigger className="w-[180px] h-8 text-xs">
+          <SelectTrigger data-tour="activity-filter" className="w-[180px] h-8 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -130,7 +130,7 @@ export function ActivityFeed({ assessmentId }: ActivityFeedProps) {
             No activity recorded yet.
           </div>
         ) : (
-          <div className="space-y-0 px-3">
+          <div data-tour="activity-timeline" className="space-y-0 px-3">
             {entries.map((entry, i) => {
               const ts = new Date(entry.createdAt);
               return (

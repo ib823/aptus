@@ -159,7 +159,7 @@ export function DataMigrationRegisterClient({
         </div>
 
         {/* Summary stat cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
+        <div data-tour="data-migration-stats" className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
           <StatCard label="Total Objects" value={summary.total} />
           <StatCard label="Total Records" value={summary.totalRecordCount.toLocaleString()} />
           <StatCard label="Cleansing Required" value={items.filter((i) => i.cleansingRequired).length} valueClass={items.some((i) => i.cleansingRequired) ? "text-amber-600" : "text-foreground"} />
@@ -173,7 +173,7 @@ export function DataMigrationRegisterClient({
               : "No objects match your current filters."}
           />
         ) : (
-          <div className="border rounded-lg overflow-hidden">
+          <div data-tour="data-migration-table" className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>
