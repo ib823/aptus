@@ -256,7 +256,9 @@ export type DecisionAction =
   | "BULK_MARK_ALL_FIT"
   | "INVITATION_ACCEPTED"
   | "INVITATION_REVOKED"
-  | "USER_REACTIVATED";
+  | "USER_REACTIVATED"
+  | "USER_DELETED"
+  | "MFA_RESET";
 
 /** Aggregated StepResponse fit status counts per scope item (from raw SQL) */
 export interface ResponseCountRow {
