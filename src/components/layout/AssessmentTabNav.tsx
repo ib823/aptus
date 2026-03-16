@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Lock } from "lucide-react";
 import React, { type MouseEvent } from "react";
 
@@ -27,7 +27,6 @@ interface AssessmentTabNavProps {
 }
 
 export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, profileScore }: AssessmentTabNavProps) {
-  const router = useRouter();
   const pathname = usePathname();
   const base = `/assessment/${assessmentId}`;
   const activeSegment = (pathname ?? "").replace(base, "").split("/").filter(Boolean)[0] ?? "profile";
@@ -36,25 +35,8 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, 
     ? "Complete setup and move the assessment into In Progress to unlock this stage."
     : "Complete scope selection and move the assessment into In Progress to unlock this stage.";
 
-  const handleTabClick = (event: MouseEvent<HTMLAnchorElement>, href: string, locked?: boolean) => {
-    if (
-      event.defaultPrevented ||
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
-    ) {
-      return;
-    }
-
-    if (locked) {
-      event.preventDefault();
-      return;
-    }
-
+  const handleLockedClick = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
-    router.push(href);
   };
 
   // Build stages with conditional tabs
@@ -160,7 +142,7 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, 
               aria-disabled={isLocked || undefined}
               title={isLocked ? undefined : stage.title}
               tabIndex={isLocked ? -1 : undefined}
-              onClick={(event) => handleTabClick(event, stage.tabs[0]!.href, isLocked)}
+              onClick={isLocked ? handleLockedClick : undefined}
               className={`px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap select-none ${
                 isActive ? "" : isLocked ? "pointer-events-none" : "hover:opacity-80"
               }`}
@@ -214,7 +196,7 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, 
                 aria-disabled={isLocked || undefined}
                 title={isLocked ? undefined : tab.title}
                 tabIndex={isLocked ? -1 : undefined}
-                onClick={(event) => handleTabClick(event, tab.href, isLocked)}
+                onClick={isLocked ? handleLockedClick : undefined}
                 className={`px-3 py-1.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors select-none ${
                   isLocked ? "pointer-events-none" : ""
                 }`}
