@@ -230,6 +230,15 @@ describe("Permission Utilities", () => {
     it("should treat partner_lead as internal role", () => {
       expect(isMfaRequired(makeUser({ role: "partner_lead" as UserRole, mfaEnabled: false, mfaVerified: false }))).toBe(false);
     });
+
+    it("should never require MFA for users with a passkey (hasWebAuthn)", () => {
+      // External role, not verified, but has passkey → no MFA needed
+      expect(isMfaRequired(makeUser({ role: "process_owner", mfaVerified: false, hasWebAuthn: true }))).toBe(false);
+      // Internal role, MFA enabled, not verified, but has passkey → no MFA needed
+      expect(isMfaRequired(makeUser({ role: "platform_admin" as UserRole, mfaEnabled: true, mfaVerified: false, hasWebAuthn: true }))).toBe(false);
+      // Consultant with passkey → no MFA needed regardless of verification state
+      expect(isMfaRequired(makeUser({ role: "consultant", mfaEnabled: true, mfaVerified: false, hasWebAuthn: true }))).toBe(false);
+    });
   });
 
   describe("isAdminRole", () => {

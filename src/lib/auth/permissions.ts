@@ -344,20 +344,29 @@ export async function canTransitionStatus(
  * Updated for 11-role system.
  */
 export function isMfaRequired(user: SessionUser): boolean {
+  // Passkey = full trust. Users with a registered passkey are considered
+  // MFA-verified regardless of how they logged in (magic link, etc.).
+  // Passkeys are phishing-resistant, device-bound, and biometric-gated —
+  // strictly stronger than TOTP.
+  if (user.hasWebAuthn) return false;
+
+  // Already verified this session (TOTP or passkey login)
+  if (user.mfaVerified) return false;
+
   const role = normalizeRole(user.role);
 
-  // Roles that require MFA by default (external / client-facing)
+  // External / client-facing roles: MFA required (TOTP if no passkey)
   const mfaRequiredRoles: UserRole[] = [
     "process_owner", "it_lead", "data_migration_lead",
     "executive_sponsor", "project_manager", "viewer", "client_admin",
   ];
 
   if (mfaRequiredRoles.includes(role)) {
-    return !user.mfaVerified;
+    return true;
   }
 
-  // Internal roles: MFA required only if they've enabled it
-  return user.mfaEnabled && !user.mfaVerified;
+  // Internal roles: MFA required only if they've opted in
+  return user.mfaEnabled;
 }
 
 /**
