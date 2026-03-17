@@ -1,139 +1,179 @@
-# ABeam — Internal Test Guide
+# ABeam — User Guide (Internal Team)
 
-**Date:** 2026-03-16
-**Environment:** https://aptus-sandy.vercel.app
-
----
-
-## Prerequisites
-
-- A Vercel deployment in READY state
-- Access to the Neon database (console.neon.tech) for emergency recovery
-- A modern browser (Chrome, Edge, Safari, Firefox)
+**Platform:** https://aptus-sandy.vercel.app
+**Last updated:** 2026-03-17
 
 ---
 
-## 1. Login — Magic Link
+## Getting Started
 
-| Step | Action | Expected Result |
-|------|--------|-----------------|
-| 1.1 | Go to `/login` | Login page loads with split-panel layout. Passkey button + email form visible |
-| 1.2 | Enter your email, click **Continue** | "Check your email" confirmation appears |
-| 1.3 | Open email, click the magic link | Redirected to `/assessments` (or `/mfa/setup` if first-time consultant) |
+### Step 1: Sign In
 
-**If email doesn't arrive:** Check that `SMTP_USER`, `SMTP_PASS`, `SMTP_HOST`, `EMAIL_FROM` are set in Vercel env vars.
+1. Go to https://aptus-sandy.vercel.app/login
+2. Enter your work email address and click **Continue**
+3. Check your inbox for a sign-in email from ABeam
+4. Click the **Sign In** link in the email — you'll be logged in automatically
 
----
+> **Tip:** If the email doesn't arrive within a minute, check your spam folder.
 
-## 2. MFA Setup — New Consultant Users
+### Step 2: Set Up Two-Factor Authentication (First Time Only)
 
-New users with `consultant` role are required to set up MFA before accessing the portal.
+On your first login, you'll be asked to secure your account. Choose one:
 
-| Step | Action | Expected Result |
-|------|--------|-----------------|
-| 2.1 | Log in as a new consultant user | Redirected to `/mfa/setup` |
-| 2.2 | Page shows two options: **Passkey** and **Authenticator App** | Both cards visible (passkey hidden if browser doesn't support WebAuthn) |
-| **Path A — Passkey** | | |
-| 2.3a | Click **Passkey** card | "Register a Passkey" screen with **Add passkey** button |
-| 2.4a | Click **Add passkey** | Browser prompts for fingerprint/face/PIN |
-| 2.5a | Complete biometric prompt | Toast: "Passkey registered successfully". Redirected to `/assessments` |
-| **Path B — Authenticator App** | | |
-| 2.3b | Click **Authenticator App** card | QR code + manual entry secret displayed |
-| 2.4b | Scan QR with Google Authenticator / Authy | 6-digit code appears in app |
-| 2.5b | Enter code, click **Verify & Enable** | Redirected to `/mfa/verify`, enter code again, then `/assessments` |
+**Option A — Passkey (Recommended)**
+- Click the **Passkey** card
+- Click **Add passkey**
+- Use your fingerprint, face scan, or device PIN when prompted
+- Done — you're in
 
----
+**Option B — Authenticator App**
+- Click the **Authenticator App** card
+- Scan the QR code with Google Authenticator, Microsoft Authenticator, or Authy
+- Enter the 6-digit code shown in your app
+- Click **Verify & Enable**
 
-## 3. Login — Passkey (Returning Users)
+### Step 3: Returning Login
 
-| Step | Action | Expected Result |
-|------|--------|-----------------|
-| 3.1 | Go to `/login` | Login page loads |
-| 3.2 | Click **Sign in with passkey** | Browser prompts for fingerprint/face/PIN |
-| 3.3 | Complete biometric prompt | Redirected to `/assessments`. No MFA verify step (passkey satisfies MFA) |
+After your first setup, future logins are faster:
+- **With passkey:** Click **Sign in with passkey** on the login page — one tap and you're in
+- **With authenticator:** Sign in via email link, then enter your 6-digit code
 
 ---
 
-## 4. Navigation
+## Creating Your First Assessment
 
-All navigation links should work on every page.
+### Quick Start — ABeam CoreEdge
 
-| Step | Action | Expected Result |
-|------|--------|-----------------|
-| 4.1 | Click **Dashboard** in header | Navigates to `/dashboard` |
-| 4.2 | Click **Assessments** in header | Navigates to `/assessments` |
-| 4.3 | Click **Analytics** in header | Navigates to `/analytics` |
-| 4.4 | Click **Organization** in header | Navigates to `/organization` |
-| 4.5 | Click **Admin** in header (admin only) | Navigates to `/admin` |
-| 4.6 | Open an assessment, click **Review** tab | Navigates to review page |
-| 4.7 | Click **Results** tab | Navigates to config page |
-| 4.8 | Click **Tracking** tab | Navigates to integrations page |
-| 4.9 | Click **Wrap-up** tab | Navigates to activity page |
-| 4.10 | On profile page, click **Continue to Scope Selection** | Navigates to scope page (only if profile >= 60% complete) |
+1. Go to **Assessments** (click "Assessments" in the top navigation)
+2. Click the **ABeam CoreEdge** button
+3. You'll see the scope items pre-selected for a basic finance assessment:
 
----
+   | Default (pre-selected) | Description |
+   |------------------------|-------------|
+   | J58 — Accounting and Financial Close | Month-end/year-end close, journals, reconciliation |
+   | J60 — Accounts Payable | Supplier invoices, payment runs, AP reporting |
+   | BFA — Basic Bank Account Management | Bank account lifecycle, master data setup |
+   | J62 — Asset Accounting | Fixed asset acquisition, depreciation, retirement |
 
-## 5. Admin — User Management
+   You can also toggle on these optional add-ons:
 
-Requires `platform_admin` role. Go to **Admin > Users**.
+   | Optional | Description |
+   |----------|-------------|
+   | BFB — Basic Cash Operations | Cash position, bank statements, value date |
+   | 1EG — Bank Integration with File Interface | Payment file generation, statement import |
+   | J54 — Overhead Cost Accounting | Cost center planning, internal allocations |
 
-| Step | Action | Expected Result |
-|------|--------|-----------------|
-| 5.1 | Navigate to `/admin/users` | User table with Name, Email, Role, Status, MFA, Last Login, Actions |
-| 5.2 | Click role dropdown on another user | Dropdown shows all roles |
-| 5.3 | Select a different role | Confirmation dialog appears. Click **Confirm** — role changes, toast shown |
-| 5.4 | Click person icon (orange) on an active user | User deactivated, row dims. Toast: "user deactivated" |
-| 5.5 | Click refresh icon (green) on an inactive user | User reactivated. Toast: "user reactivated" |
-| 5.6 | Click shield icon on a user with MFA enabled | MFA reset. Toast: "MFA reset for user". MFA column shows "Off" |
-| 5.7 | Click trash icon on a user | Confirmation dialog: "Delete user permanently?" Click **Delete** — user removed |
-| 5.8 | Verify your own row has no action buttons | Actions disabled for self (prevents lockout) |
-| 5.9 | Try deactivating the last platform_admin | Error toast: "Cannot deactivate the last platform admin" |
+4. Click items to add/remove them from your assessment
+5. Fill in your **Company Name** (required), industry, and country
+6. Click **Create Assessment**
+
+### Custom Assessment
+
+If you need a different scope, click **New Assessment** instead. Fill in company details and you'll configure your scope manually in the next step.
 
 ---
 
-## 6. Admin — Assessments Filter
+## Assessment Workflow
 
-| Step | Action | Expected Result |
-|------|--------|-----------------|
-| 6.1 | Go to `/admin/assessments` | Page loads with status filter dropdown |
-| 6.2 | Open the status dropdown | Single "All Status" entry (no duplicate) |
-| 6.3 | Select "Draft", "In Progress", etc. | Table filters to matching assessments |
+Once your assessment is created, you'll work through these stages:
+
+### Setup
+- **Profile** — Fill in company details (industry, size, revenue, SAP modules). Reach 60% completion to unlock the next step.
+- **Scope** — Select which SAP process areas to include in your assessment. Browse the catalog and check/uncheck items.
+
+### Review
+- **Step Review** — For each selected scope item, review the SAP process steps. Mark each as **Fit** (matches your business), **Configure** (needs SAP configuration), or **Gap** (doesn't fit). Add notes to explain your decisions.
+- **Conversation** — Collaborative discussion threads linked to scope items.
+
+### Results
+- **Config Matrix** — Review configuration activities (mandatory, recommended, optional). Toggle which ones to include in your implementation plan.
+- **Process Flows** — View auto-generated process flow diagrams with color-coded status (green = Fit, blue = Configure, red = Gap).
+- **Process Map** — Interactive overview of functional areas. Click any area to drill down.
+- **Gaps** — All identified gaps in one place. Choose a resolution for each: Extend, Configure, Adapt, or Accept.
+- **Action Items** — Remaining items that need attention before the assessment can proceed.
+
+### Tracking
+- **System Connections** — Document integration points between SAP and other systems (inbound, outbound, bidirectional).
+- **Data Transfer** — Catalog data objects being migrated: volumes, cleansing needs, mapping complexity.
+- **Change Impact** — Assess organizational change impacts per role and area. Track severity and training needs.
+- **Workshops** — Schedule and manage workshop sessions with attendees and action items.
+
+### Wrap-up
+- **Activity Log** — Timeline of all assessment changes: who did what, when.
+- **Report** — Generate the assessment report (available after review completion).
+- **Sign-Off** — Formal sign-off process for stakeholders.
 
 ---
 
-## 7. Security Checks
+## Navigation
 
-| Step | Action | Expected Result |
-|------|--------|-----------------|
-| 7.1 | Open browser DevTools (F12) > Console | No red errors on page load (browser extension warnings OK) |
-| 7.2 | Check the **Network** tab response headers | `Content-Security-Policy` header present, NO `strict-dynamic` in script-src |
-| 7.3 | Try accessing `/assessments` without logging in | Redirected to `/login` |
-| 7.4 | Try calling `POST /api/admin/users/{id}` as non-admin | Returns 403 Forbidden |
+| Location | What you'll find |
+|----------|-----------------|
+| **Dashboard** | Your KPIs, active assessments at a glance |
+| **Assessments** | List of all assessments. Create new ones here. |
+| **Analytics** | Cross-assessment benchmarks and comparisons |
+| **Organization** | Organization settings, team management, subscription |
+| **Admin** | Platform administration (admin users only) |
+| **Settings** (user menu) | Your profile, security (passkeys/MFA), notifications |
+
+### Guided Tours
+
+Click the **Tours** button in the top navigation bar to access interactive walkthroughs. Each tour highlights key UI elements with step-by-step explanations. Tours are available for every major page.
+
+---
+
+## User Roles
+
+| Role | Access |
+|------|--------|
+| **Platform Admin** | Full access. Manage users, organizations, SAP catalog, and all assessments. |
+| **Partner Lead** | Manage assessments across organizations. |
+| **Consultant** | Create and run assessments. Primary assessment workflow role. |
+| **Solution Architect** | Technical review of process steps and configurations. |
+| **Project Manager** | Oversight of assessment progress, workshops, and change management. |
+| **Process Owner** | Review and validate process steps for their functional area. |
+| **IT Lead** | Review integrations, data migration, and IT landscape. |
+| **Data Migration Lead** | Manage data transfer planning and execution. |
+| **Executive Sponsor** | High-level review and sign-off. |
+| **Client Admin** | Manage their organization's users and settings. |
+| **Viewer** | Read-only access to assessments. |
+
+---
+
+## Admin Functions
+
+If you have the **Platform Admin** role:
+
+### Managing Users (Admin > Users)
+
+| Action | How |
+|--------|-----|
+| Change a user's role | Click the role dropdown on their row, select new role, confirm |
+| Deactivate a user | Click the person icon (orange) — blocks their access immediately |
+| Reactivate a user | Click the refresh icon (green) on an inactive user |
+| Reset someone's MFA | Click the shield icon — clears their passkeys and authenticator setup |
+| Delete a user | Click the trash icon — permanent, cannot be undone |
+
+> **Safety:** You cannot modify your own account from the admin panel. The last Platform Admin cannot be deactivated or deleted.
 
 ---
 
 ## Troubleshooting
 
-| Symptom | Fix |
-|---------|-----|
-| Login button greyed out | Hard refresh (`Ctrl+Shift+R`). Check browser supports JS |
-| Magic link email not arriving | Verify SMTP env vars in Vercel dashboard |
-| Stuck on MFA verify page | Admin can reset MFA from `/admin/users` (shield icon) |
-| Navigation links don't work | Hard refresh. If persists, clear service worker: DevTools > Application > Service Workers > Unregister |
-| "Cannot deactivate last platform admin" | At least one other platform_admin must exist |
+| Problem | Solution |
+|---------|----------|
+| Can't click buttons or links | Hard refresh: `Ctrl+Shift+R` (Windows) or `Cmd+Shift+R` (Mac) |
+| Sign-in email not arriving | Check spam folder. Ask admin to verify SMTP is configured. |
+| Stuck on MFA verification | Ask a Platform Admin to reset your MFA from Admin > Users |
+| Page shows "Something went wrong" | Click **Try Again**. If it persists, go to Dashboard and try again. |
+| Passkey button is disabled | Your browser may not support passkeys. Use Chrome, Edge, or Safari. |
+| Assessment won't proceed past Profile | Complete at least 60% of the profile fields to unlock Scope Selection. |
 
 ---
 
-## Environment Variables Required
+## Quick Reference
 
-```
-NEXTAUTH_SECRET          — openssl rand -base64 32
-NEXTAUTH_URL             — https://aptus-sandy.vercel.app
-TOTP_ENCRYPTION_KEY      — 64-char hex key
-DATABASE_URL             — Neon connection string
-SMTP_HOST                — smtp-relay.brevo.com
-SMTP_PORT                — 587
-SMTP_USER                — Brevo SMTP login
-SMTP_PASS                — Brevo SMTP password
-EMAIL_FROM               — verified sender email
-```
+- **Login URL:** https://aptus-sandy.vercel.app/login
+- **Supported browsers:** Chrome, Edge, Safari, Firefox (latest versions)
+- **Mobile:** Responsive design — works on phones and tablets
+- **Keyboard shortcut:** `Cmd+K` / `Ctrl+K` for quick search from anywhere
