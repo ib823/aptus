@@ -21,10 +21,10 @@ import { z } from "zod";
 
 const createSchema = z.object({
   companyName: z.string().min(1).max(200),
-  industry: z.string().min(1),
-  country: z.string().min(2).max(10),
+  industry: z.string().default("General"),
+  country: z.string().default("XX"),
   operatingCountries: z.array(z.string()).default([]),
-  companySize: z.enum(["small", "midsize", "large", "enterprise"]),
+  companySize: z.enum(["small", "midsize", "large", "enterprise"]).default("midsize"),
   revenueBand: z.string().optional(),
   currentErp: z.string().optional(),
 });
