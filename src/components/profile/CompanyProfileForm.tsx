@@ -206,7 +206,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
           <CollapsibleSection title="Basic Information" complete={bd.basic} defaultOpen>
             <div className="grid grid-cols-2 gap-4 pt-3">
               <div>
-                <label htmlFor="profile-company-name" className="text-xs font-medium text-muted-foreground">Company Name</label>
+                <label htmlFor="profile-company-name" className="text-sm font-medium text-foreground">Company Name</label>
                 <Input
                   id="profile-company-name"
                   value={profile.companyName}
@@ -216,7 +216,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
                 />
               </div>
               <div>
-                <label htmlFor="profile-industry" className="text-xs font-medium text-muted-foreground">Industry</label>
+                <label htmlFor="profile-industry" className="text-sm font-medium text-foreground">Industry</label>
                 <Input
                   id="profile-industry"
                   value={profile.industry}
@@ -227,7 +227,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
               </div>
               <div>
                 {/* REM-07: Country name display */}
-                <label htmlFor="profile-country" className="text-xs font-medium text-muted-foreground">Country</label>
+                <label htmlFor="profile-country" className="text-sm font-medium text-foreground">Country</label>
                 <Select
                   value={profile.country}
                   onValueChange={handleCountryChange}
@@ -248,7 +248,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
                 </Select>
               </div>
               <div>
-                <label htmlFor="profile-company-size" className="text-xs font-medium text-muted-foreground">Company Size</label>
+                <label htmlFor="profile-company-size" className="text-sm font-medium text-foreground">Company Size</label>
                 <Select value={profile.companySize} onValueChange={(v) => updateField("companySize", v)} disabled={isReadOnly ?? false}>
                   <SelectTrigger id="profile-company-size" className="mt-1"><SelectValue placeholder="Select size" /></SelectTrigger>
                   <SelectContent>
@@ -266,7 +266,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
           <CollapsibleSection title="Financial & Scale" complete={bd.financial}>
             <div className="grid grid-cols-2 gap-4 pt-3">
               <div>
-                <label htmlFor="profile-employee-count" className="text-xs font-medium text-muted-foreground">Employee Count</label>
+                <label htmlFor="profile-employee-count" className="text-sm font-medium text-foreground">Employee Count</label>
                 <Input
                   id="profile-employee-count"
                   type="number"
@@ -278,8 +278,8 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
               </div>
               <div>
                 {/* REM-08: Revenue field guidance */}
-                <label htmlFor="profile-annual-revenue" className="text-xs font-medium text-muted-foreground">Annual Revenue</label>
-                <div className="flex gap-2 mt-1">
+                <label htmlFor="profile-annual-revenue" className="text-sm font-medium text-foreground">Annual Revenue</label>
+                <div className="flex gap-2 mt-1.5">
                   <Input
                     id="profile-annual-revenue"
                     type="number"
@@ -305,13 +305,13 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
                     </SelectContent>
                   </Select>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-sm text-muted-foreground mt-1.5">
                   Enter your annual revenue in absolute numbers (e.g., 2,500,000 for 2.5 million). Select your local currency.
                 </p>
               </div>
               {/* REM-16: Number of operational sites */}
               <div>
-                <label htmlFor="profile-operational-sites" className="text-xs font-medium text-muted-foreground">
+                <label htmlFor="profile-operational-sites" className="text-sm font-medium text-foreground">
                   Number of Operational Sites
                 </label>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -340,7 +340,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
             <div className="space-y-4 pt-3">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="profile-deployment-model" className="text-xs font-medium text-muted-foreground">Deployment Model</label>
+                  <label htmlFor="profile-deployment-model" className="text-sm font-medium text-foreground">Deployment Model</label>
                   <Select value={profile.deploymentModel ?? ""} onValueChange={(v) => updateField("deploymentModel", v)} disabled={isReadOnly ?? false}>
                     <SelectTrigger id="profile-deployment-model" className="mt-1"><SelectValue placeholder="Select model" /></SelectTrigger>
                     <SelectContent>
@@ -351,7 +351,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
                   </Select>
                 </div>
                 <div>
-                  <label htmlFor="profile-migration-approach" className="text-xs font-medium text-muted-foreground">Migration Approach</label>
+                  <label htmlFor="profile-migration-approach" className="text-sm font-medium text-foreground">Migration Approach</label>
                   <Select value={profile.migrationApproach ?? ""} onValueChange={(v) => updateField("migrationApproach", v)} disabled={isReadOnly ?? false}>
                     <SelectTrigger id="profile-migration-approach" className="mt-1"><SelectValue placeholder="Select approach" /></SelectTrigger>
                     <SelectContent>
@@ -363,7 +363,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
                 </div>
               </div>
               <div>
-                <label htmlFor="profile-go-live-date" className="text-xs font-medium text-muted-foreground">Target Go-Live Date</label>
+                <label htmlFor="profile-go-live-date" className="text-sm font-medium text-foreground">Target Go-Live Date</label>
                 <Input
                   id="profile-go-live-date"
                   type="date"
@@ -375,7 +375,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
               </div>
               <div>
                 {/* REM-09: SAP Module full-name tooltips */}
-                <label className="text-xs font-medium text-muted-foreground mb-2 block">SAP Modules</label>
+                <label className="text-sm font-medium text-foreground mb-2 block">SAP Modules</label>
                 <div className="flex flex-wrap gap-1.5">
                   {SAP_MODULES.map((m) => {
                     const selected = profile.sapModules.includes(m.code);
@@ -406,7 +406,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
           <CollapsibleSection title="IT Landscape" complete={bd.itLandscape}>
             <div className="space-y-4 pt-3">
               <div>
-                <label htmlFor="profile-erp-version" className="text-xs font-medium text-muted-foreground">Current ERP Version</label>
+                <label htmlFor="profile-erp-version" className="text-sm font-medium text-foreground">Current ERP Version</label>
                 <Input
                   id="profile-erp-version"
                   value={profile.currentErpVersion ?? ""}
@@ -417,7 +417,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
                 />
               </div>
               <div>
-                <label htmlFor="profile-it-landscape" className="text-xs font-medium text-muted-foreground">IT Landscape Summary</label>
+                <label htmlFor="profile-it-landscape" className="text-sm font-medium text-foreground">IT Landscape Summary</label>
                 <Textarea
                   id="profile-it-landscape"
                   value={profile.itLandscapeSummary ?? ""}
@@ -437,7 +437,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
       <CollapsibleSection title="Operational Context" complete={bd.operational}>
         <div className="space-y-4 pt-3">
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Key Business Processes</label>
+            <label className="text-sm font-medium text-foreground">Key Business Processes</label>
             <Textarea
               value={profile.keyProcesses.join(", ")}
               onChange={(e) => updateField("keyProcesses", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
@@ -448,7 +448,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Operating Countries</label>
+            <label className="text-sm font-medium text-foreground">Operating Countries</label>
             <Textarea
               value={profile.operatingCountries.join(", ")}
               onChange={(e) => updateField("operatingCountries", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
@@ -460,10 +460,10 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
           </div>
           <div>
             {/* REM-14: Language suggestion by country */}
-            <label className="text-xs font-medium text-muted-foreground mb-2 block">Language Requirements</label>
+            <label className="text-sm font-medium text-foreground mb-2 block">Language Requirements</label>
             {suggestedLanguages.length > 0 && (
               <>
-                <p className="text-xs font-medium text-muted-foreground mb-2">Suggested for your country:</p>
+                <p className="text-sm font-medium text-foreground mb-2">Suggested for your country:</p>
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {suggestedLanguages.map((lang) => {
                     const selected = profile.languageRequirements.includes(lang);
@@ -484,7 +484,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
                     );
                   })}
                 </div>
-                <p className="text-xs font-medium text-muted-foreground mb-2">Other languages:</p>
+                <p className="text-sm font-medium text-foreground mb-2">Other languages:</p>
               </>
             )}
             <div className="flex flex-wrap gap-1.5">
@@ -510,10 +510,10 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
           </div>
           <div>
             {/* REM-13: Regulatory framework country filtering */}
-            <label className="text-xs font-medium text-muted-foreground mb-2 block">Regulatory Frameworks</label>
+            <label className="text-sm font-medium text-foreground mb-2 block">Regulatory Frameworks</label>
             {suggestedFrameworks.length > 0 && (
               <>
-                <p className="text-xs font-medium text-muted-foreground mb-2">Suggested for your country:</p>
+                <p className="text-sm font-medium text-foreground mb-2">Suggested for your country:</p>
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {suggestedFrameworks.map((fw) => {
                     const selected = profile.regulatoryFrameworks.includes(fw);
@@ -534,7 +534,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
                     );
                   })}
                 </div>
-                <p className="text-xs font-medium text-muted-foreground mb-2">Other frameworks:</p>
+                <p className="text-sm font-medium text-foreground mb-2">Other frameworks:</p>
               </>
             )}
             <div className="flex flex-wrap gap-1.5">
