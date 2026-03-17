@@ -27,22 +27,23 @@ export default async function PortalLayout({
     redirect("/login");
   }
 
-  // Check MFA status for external users
+  // MFA enforcement — passkey users skip entirely (passkey = full trust)
   const requiresMfa = (MFA_REQUIRED_ROLES as readonly string[]).includes(user.role);
 
-  // Passkey login already satisfies MFA (sets mfaVerified=true on session)
-  // so we only redirect for TOTP setup/verify when user hasn't used a passkey
-  if (requiresMfa && !user.hasWebAuthn && !user.totpVerified) {
-    redirect("/mfa/setup");
-  }
+  if (!user.hasWebAuthn) {
+    // No passkey — enforce MFA setup/verify for required roles
+    if (requiresMfa && !user.totpVerified) {
+      redirect("/mfa/setup");
+    }
 
-  if (requiresMfa && !user.mfaVerified) {
-    redirect("/mfa/verify");
-  }
+    if (requiresMfa && !user.mfaVerified) {
+      redirect("/mfa/verify");
+    }
 
-  // Internal users with MFA enabled but not verified this session
-  if (!requiresMfa && user.mfaEnabled && !user.mfaVerified) {
-    redirect("/mfa/verify");
+    // Internal users who opted into MFA but haven't verified this session
+    if (!requiresMfa && user.mfaEnabled && !user.mfaVerified) {
+      redirect("/mfa/verify");
+    }
   }
 
   // Fetch org subscription status for banner
