@@ -47,7 +47,25 @@ export default async function OrganizationPage() {
     // Prisma error — org doesn't exist or DB issue
   }
 
-  if (!org) redirect("/dashboard");
+  if (!org) {
+    return (
+      <div className="p-8 max-w-2xl">
+        <h1 className="text-3xl font-semibold mb-4">Organization</h1>
+        <div className="bg-card border rounded-lg p-6 space-y-3">
+          <p className="text-foreground font-medium">Organization not found</p>
+          <p className="text-sm text-muted-foreground">
+            The organization linked to your account could not be loaded. Please contact your administrator.
+          </p>
+          <a
+            href="/assessments"
+            className="inline-block px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-md hover:bg-primary/90 transition-colors"
+          >
+            Go to Assessments
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 max-w-5xl pb-20">
