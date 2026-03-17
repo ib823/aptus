@@ -279,16 +279,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
               <div>
                 {/* REM-08: Revenue field guidance */}
                 <label htmlFor="profile-annual-revenue" className="text-sm font-medium text-foreground">Annual Revenue</label>
-                <div className="flex gap-2 mt-1.5">
-                  <Input
-                    id="profile-annual-revenue"
-                    type="number"
-                    placeholder="e.g., 2500000"
-                    value={profile.annualRevenue ?? ""}
-                    onChange={(e) => updateField("annualRevenue", e.target.value ? Number(e.target.value) : null)}
-                    disabled={isReadOnly ?? false}
-                    className="flex-1"
-                  />
+                <div className="mt-1.5 space-y-2">
                   <Select
                     value={profile.currencyCode ?? "USD"}
                     onValueChange={(v) => {
@@ -297,13 +288,22 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
                     }}
                     disabled={isReadOnly ?? false}
                   >
-                    <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {CURRENCY_CODES.map((c) => (
                         <SelectItem key={c} value={c}>{c}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <Input
+                    id="profile-annual-revenue"
+                    type="number"
+                    placeholder="e.g., 2,500,000"
+                    value={profile.annualRevenue ?? ""}
+                    onChange={(e) => updateField("annualRevenue", e.target.value ? Number(e.target.value) : null)}
+                    disabled={isReadOnly ?? false}
+                    className="w-full"
+                  />
                 </div>
                 <p className="text-sm text-muted-foreground mt-1.5">
                   Enter your annual revenue in absolute numbers (e.g., 2,500,000 for 2.5 million). Select your local currency.
