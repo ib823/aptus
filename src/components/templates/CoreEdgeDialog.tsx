@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Check, Plus } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PRESETS } from "@/constants/presets";
 
-const preset = PRESETS.coreedge;
+const preset = PRESETS.coreedge!;
 
 interface CoreEdgeDialogProps {
   open: boolean;
@@ -24,6 +25,7 @@ interface CoreEdgeDialogProps {
     industry: string;
     country: string;
     companySize: string;
+    scopeItemIds: string[];
   }) => void;
   isSubmitting?: boolean | undefined;
 }
@@ -39,65 +41,120 @@ export function CoreEdgeDialog({
   const [country, setCountry] = useState("");
   const [companySize, setCompanySize] = useState("midsize");
 
+  // Track selected scope items — defaults are pre-selected
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    new Set(preset.scopeItems.filter((s) => s.defaultSelected).map((s) => s.id)),
+  );
+
+  const toggleItem = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!companyName) return;
-    onSubmit({ companyName, industry, country, companySize });
+    if (!companyName || selectedIds.size === 0) return;
+    onSubmit({
+      companyName,
+      industry,
+      country,
+      companySize,
+      scopeItemIds: Array.from(selectedIds),
+    });
   };
+
+  const defaultItems = preset.scopeItems.filter((s) => s.defaultSelected);
+  const optionalItems = preset.scopeItems.filter((s) => !s.defaultSelected);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Quick Start — {preset.name}</DialogTitle>
+          <DialogTitle>{preset.name}</DialogTitle>
           <DialogDescription>{preset.description}</DialogDescription>
         </DialogHeader>
 
-        <div className="rounded-md border p-3 bg-muted/30">
-          <p className="text-xs font-medium text-muted-foreground mb-2">
-            {preset.scopeItemIds.length} scope items will be pre-selected:
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {preset.scopeItemIds.map((id) => (
-              <span
-                key={id}
-                className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium bg-background"
-              >
-                {id}
-              </span>
-            ))}
+        {/* Scope Items Selection */}
+        <div className="space-y-4">
+          {/* Default scope items */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              Core Scope ({defaultItems.length} items)
+            </p>
+            <div className="space-y-2">
+              {defaultItems.map((item) => (
+                <ScopeItemRow
+                  key={item.id}
+                  item={item}
+                  selected={selectedIds.has(item.id)}
+                  onToggle={() => toggleItem(item.id)}
+                />
+              ))}
+            </div>
           </div>
+
+          {/* Optional scope items */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              Optional Add-ons ({optionalItems.length} items)
+            </p>
+            <div className="space-y-2">
+              {optionalItems.map((item) => (
+                <ScopeItemRow
+                  key={item.id}
+                  item={item}
+                  selected={selectedIds.has(item.id)}
+                  onToggle={() => toggleItem(item.id)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            {selectedIds.size} scope item{selectedIds.size !== 1 ? "s" : ""} selected
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="ce-company-name">Company Name</Label>
-            <Input
-              id="ce-company-name"
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              placeholder="Enter company name..."
-            />
-          </div>
+        {/* Company details form */}
+        <form onSubmit={handleSubmit} className="space-y-4 border-t pt-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2 col-span-2">
+              <Label htmlFor="ce-company-name">Company Name *</Label>
+              <Input
+                id="ce-company-name"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="Enter company name..."
+                required
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="ce-industry">Industry (optional)</Label>
-            <Input
-              id="ce-industry"
-              value={industry}
-              onChange={(e) => setIndustry(e.target.value)}
-              placeholder="e.g., Manufacturing"
-            />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="ce-industry">Industry</Label>
+              <Input
+                id="ce-industry"
+                value={industry}
+                onChange={(e) => setIndustry(e.target.value)}
+                placeholder="e.g., Manufacturing"
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="ce-country">Country (optional)</Label>
-            <Input
-              id="ce-country"
-              value={country}
-              onChange={(e) => setCountry(e.target.value)}
-              placeholder="e.g., US"
-            />
+            <div className="space-y-2">
+              <Label htmlFor="ce-country">Country</Label>
+              <Input
+                id="ce-country"
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                placeholder="e.g., MY"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -125,13 +182,59 @@ export function CoreEdgeDialog({
             </Button>
             <Button
               type="submit"
-              disabled={!companyName || (isSubmitting ?? false)}
+              disabled={!companyName || selectedIds.size === 0 || (isSubmitting ?? false)}
             >
-              {isSubmitting ? "Creating..." : "Create Assessment"}
+              {isSubmitting ? "Creating..." : `Create Assessment (${selectedIds.size} items)`}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ScopeItemRow({
+  item,
+  selected,
+  onToggle,
+}: {
+  item: { id: string; name: string; description: string; totalSteps: number; effortTier: string; defaultSelected: boolean };
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  const tierColors: Record<string, string> = {
+    "Very High": "bg-red-100 text-red-700",
+    "High": "bg-amber-100 text-amber-700",
+    "Medium": "bg-blue-100 text-blue-700",
+    "Low": "bg-green-100 text-green-700",
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-colors ${
+        selected
+          ? "border-primary/40 bg-primary/5"
+          : "border-border hover:border-muted-foreground/30 hover:bg-muted/30"
+      }`}
+    >
+      <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border mt-0.5 ${
+        selected ? "bg-primary border-primary text-primary-foreground" : "border-input"
+      }`}>
+        {selected ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3 text-muted-foreground" />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-mono text-muted-foreground">{item.id}</span>
+          <span className="text-sm font-medium text-foreground">{item.name}</span>
+          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${tierColors[item.effortTier] ?? "bg-muted text-muted-foreground"}`}>
+            {item.effortTier}
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{item.description}</p>
+      </div>
+      <span className="text-[10px] text-muted-foreground shrink-0 mt-1">{item.totalSteps} steps</span>
+    </button>
   );
 }

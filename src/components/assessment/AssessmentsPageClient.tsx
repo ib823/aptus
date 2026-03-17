@@ -56,6 +56,7 @@ export function AssessmentsPageClient({
     industry: string;
     country: string;
     companySize: string;
+    scopeItemIds: string[];
   }) => {
     setIsSubmitting(true);
     try {

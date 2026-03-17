@@ -18,6 +18,7 @@ const createFromPresetSchema = z.object({
   industry: z.string().optional(),
   country: z.string().optional(),
   companySize: z.string().optional(),
+  scopeItemIds: z.array(z.string()).optional(),
 });
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -73,6 +74,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const preset = PRESETS[parsed.data.preset];
+  if (!preset) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Unknown preset" } },
+      { status: 400 },
+    );
+  }
 
   const assessment = await prisma.assessment.create({
     data: {
@@ -87,9 +94,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     },
   });
 
-  if (preset.scopeItemIds.length > 0) {
+  // Use client-selected scope items, or fall back to preset defaults
+  const scopeItemIds = parsed.data.scopeItemIds?.length
+    ? parsed.data.scopeItemIds
+    : preset.scopeItems.filter((s) => s.defaultSelected).map((s) => s.id);
+
+  if (scopeItemIds.length > 0) {
     await prisma.scopeSelection.createMany({
-      data: preset.scopeItemIds.map((scopeItemId) => ({
+      data: scopeItemIds.map((scopeItemId) => ({
         assessmentId: assessment.id,
         scopeItemId,
         selected: true,
@@ -107,7 +119,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     newValue: {
       preset: parsed.data.preset,
       presetName: preset.name,
-      scopeItemCount: preset.scopeItemIds.length,
+      scopeItemCount: scopeItemIds.length,
     },
     actor: user.email,
     actorRole: user.role,
