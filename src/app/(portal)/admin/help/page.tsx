@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  MessageCircleQuestion, Send, CheckCircle, Clock,
-  User, MapPin, Star, RefreshCw,
+  MessageCircleQuestion, Send, CheckCircle,
+  User, MapPin, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

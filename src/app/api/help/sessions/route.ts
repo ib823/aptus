@@ -19,7 +19,7 @@ const createSchema = z.object({
 
 const CONSULTANT_ROLES = ["consultant", "solution_architect", "platform_admin", "partner_lead"];
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export async function GET(_request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json(
