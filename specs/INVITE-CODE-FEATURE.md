@@ -1,218 +1,266 @@
-# Feature Spec: 6-Digit Invite Code System
+# Feature Spec: 6-Digit Invite Code + Mandatory Passkey Enrollment
 
 **Status:** Not started
 **Priority:** High
-**Date:** 2026-03-17
+**Date:** 2026-03-18
 
 ---
 
 ## Overview
 
-Admin can issue 6-digit invite codes to new users as an alternative to magic link email. Codes are valid for 48 hours. Once a user onboards and registers a passkey, the code becomes irrelevant.
+Two onboarding paths for new users, both ending with mandatory passkey registration:
+
+1. **Default (Magic Link)** — user receives email, clicks link, registers passkey
+2. **Invite Code** — admin issues 6-digit code, shares manually, user enters code on login, registers passkey
+
+The invite code path exists for early testers where magic link delivery is unreliable (junk inbox). Both paths require passkey registration before accessing the portal.
 
 ---
 
-## Context
+## Key Rules
 
-- Existing auth: magic link via NextAuth EmailProvider + passkey/TOTP MFA
-- Existing invitation model: `OrgInvitation` in `prisma/schema.prisma` (line 1156)
-- Admin user management at: `/admin/users` (`src/components/admin/AdminUsersClient.tsx`)
-- Login page at: `src/app/(auth)/login/page.tsx`
-- Passkey = full trust policy: `src/lib/auth/permissions.ts` (`isMfaRequired()` returns false if `hasWebAuthn`)
-- Native `<a>` tags used for navigation (not Next.js `Link`)
-- ESLint rule `@next/next/no-html-link-for-pages` is disabled
+- **6-digit code is single-use** — once successfully used, it's consumed
+- **48-hour expiry** — fixed, cannot be changed
+- **Admin controls**: issue code, reset (regenerate), or delete (reverts user to magic link default)
+- **Mandatory passkey**: ALL new users (both paths) must register a passkey immediately after first login, before reaching the dashboard
+- **Code is NOT TOTP** — it's a one-time invite code issued by the system, shared manually by admin
 
 ---
 
-## Requirements
+## User Flows
 
-### 1. Database — Invite Code Model
+### Flow A: Magic Link (Default)
+```
+Admin creates user → User goes to /login → enters email → clicks Continue
+→ receives magic link email → clicks link → redirected to /mfa/setup
+→ must register passkey → lands on /assessments
+```
 
-Add to Prisma schema:
+### Flow B: Invite Code
+```
+Admin creates user → Admin clicks "Issue Code" → system generates 6-digit code
+→ Admin copies code and shares with user (chat, email, in person)
+→ User goes to /login → clicks "Sign in with invite code"
+→ enters email + 6-digit code → verified → redirected to /mfa/setup
+→ must register passkey → lands on /assessments
+```
+
+### After Onboarding (Both Paths)
+```
+User goes to /login → clicks "Sign in with passkey" → fingerprint/face
+→ straight into portal (no MFA step needed)
+```
+
+---
+
+## Database Changes
+
+### New Model: InviteCode
+
+Add to `prisma/schema.prisma`:
 
 ```prisma
 model InviteCode {
   id        String    @id @default(cuid())
   email     String
-  code      String    // 6-digit numeric, cryptographically random
+  code      String    // 6-digit numeric
   status    String    @default("pending") // pending, used, expired, revoked
-  expiresAt DateTime  // 48 hours from creation
+  expiresAt DateTime  // exactly 48 hours from creation
   usedAt    DateTime?
-  issuedBy  String    // admin user ID who generated it
-  userId    String?   // linked user ID (if user already exists)
+  issuedBy  String    // admin user ID
   createdAt DateTime  @default(now())
 
-  @@unique([email, status]) // one active code per email
+  @@index([email, status])
   @@index([code])
-  @@index([email])
   @@index([expiresAt])
 }
 ```
 
-After schema change, run `prisma db push` or create a migration.
-
-### 2. Admin UI — Extend `/admin/users`
-
-#### Onboarding Status Column
-
-Add a new column to the user table showing onboarding status:
-
-| Status | Condition | Badge Color |
-|--------|-----------|-------------|
-| Active (Passkey) | `hasWebAuthn = true` | Green |
-| Active (TOTP) | `totpVerified = true`, no passkey | Blue |
-| Active (No MFA) | Logged in at least once, no MFA | Gray |
-| Code Issued | Active `InviteCode` exists with `status=pending` | Amber |
-| Invited | `invitedAt` set but never logged in (`loginCount=0`) | Yellow |
-| Not Invited | No invitation, never logged in | Red/Gray |
-
-Query: join `User` with `InviteCode` (where `status='pending'`) and check `webauthnCredentials` count, `totpVerified`, `loginCount`, `invitedAt`.
-
-#### Admin Actions
-
-Add to each user row (in the Actions column):
-
-- **Issue Code** button — generates a 6-digit code for the user's email
-  - Opens a dialog showing the code in large text for the admin to share
-  - Code format: `XXX-XXX` (e.g., `482-917`) for readability
-  - Shows expiry: "Valid for 48 hours (expires {date/time})"
-  - Copy button to copy code to clipboard
-- **Reset Code** button — visible when a pending code exists
-  - Revokes old code, generates new one
-  - Shows new code in dialog
-- **Revoke Code** button — visible when a pending code exists
-  - Deletes/revokes the code
-  - Toast: "Invite code revoked"
-
-### 3. Login Flow — Code Entry
-
-Add a third option to the login page (`src/app/(auth)/login/page.tsx`):
-
-```
-[Sign in with passkey]        ← primary
-── or continue with email ──
-[Email field] [Continue]      ← magic link
-── or ──
-[Sign in with invite code]    ← new option
-```
-
-When "Sign in with invite code" is clicked:
-- Show email input + 6-digit code input
-- Code input: 6 separate digit boxes (OTP-style) or a single input with mask `XXX-XXX`
-- Submit button: "Verify Code"
-- On success: create session, redirect to portal (→ MFA setup if required)
-- On failure: show error "Invalid or expired code. Contact your administrator."
-
-### 4. Auth API — Code Verification
-
-#### `POST /api/auth/invite-code/verify`
-
-```typescript
-// Request body
-{ email: string, code: string }
-
-// Success: creates user (if not exists), creates session, sets cookie
-// Returns: { data: { success: true, redirectUrl: "/assessments" } }
-
-// Failure cases:
-// - Code not found or wrong email → 401
-// - Code expired → 401 "Code expired. Contact your administrator."
-// - Code already used → 401 "Code already used."
-// - Code revoked → 401 "Code revoked. Contact your administrator."
-```
-
-Flow:
-1. Look up `InviteCode` by email + code where `status = 'pending'`
-2. Check `expiresAt > now()`
-3. If user doesn't exist: create user with role from admin assignment (or default `consultant`)
-4. Mark code as `used`, set `usedAt`
-5. Create session (`createSession()` from `src/lib/auth/session.ts`)
-6. Set `abeam-session` cookie
-7. Return redirect URL
-
-### 5. Admin API — Code Management
-
-#### `POST /api/admin/users/[userId]/invite-code`
-
-Generate a new 6-digit code for the user.
-
-```typescript
-// Requires admin auth (requireAdmin())
-// Generates cryptographically random 6-digit code
-// Revokes any existing pending code for the same email
-// Creates InviteCode record with 48-hour expiry
-// Returns: { data: { code: "482917", expiresAt: "2026-03-19T..." } }
-```
-
-Code generation: `crypto.randomInt(100000, 999999).toString()`
-
-#### `DELETE /api/admin/users/[userId]/invite-code`
-
-Revoke the user's pending invite code.
-
-```typescript
-// Requires admin auth
-// Updates InviteCode status to 'revoked' where email matches and status = 'pending'
-// Returns: { data: { success: true } }
-```
-
-### 6. Code Expiry
-
-- Codes expire after 48 hours (checked at verification time)
-- No background job needed — just check `expiresAt` during verification
-- Optionally: update `status` to `expired` during verification if expired (for reporting)
+Run `pnpm prisma db push` after adding.
 
 ---
 
-## Security Considerations
+## Admin UI Changes (`/admin/users`)
 
-- Codes are 6 digits (1M combinations) — acceptable for time-limited, admin-issued codes
-- Rate limit code verification: max 5 attempts per email per 15 minutes
-- Codes are single-use — cannot be reused after successful login
-- Admin must be `platform_admin` to issue/manage codes
-- Code verification does NOT bypass MFA setup — new users still go through passkey/TOTP enrollment after first login
+### Add User Dialog — Add "Onboarding Method" Field
+
+In the existing "Add User" dialog (`AdminUsersClient.tsx`), add a toggle:
+
+```
+Onboarding Method:
+  ○ Magic Link (default) — user receives sign-in email
+  ● Invite Code — issue a 6-digit code for the user
+```
+
+If "Invite Code" is selected:
+- After creating the user, immediately generate a 6-digit code
+- Show a dialog with the code in large text: `4 8 2 - 9 1 7`
+- Show expiry: "Valid until {date/time} (48 hours)"
+- Copy button to clipboard
+- Message: "Share this code with the user. They enter it at the login page."
+
+### User Table — Onboarding Status Column
+
+Add between "MFA" and "Last Login" columns:
+
+| Status | Condition | Badge |
+|--------|-----------|-------|
+| Onboarded | `hasWebAuthn = true` (passkey registered) | Green "Passkey" |
+| Code Issued | Active `InviteCode` with `status=pending` | Amber "Code Issued" |
+| Pending | Created but no code, no login yet (`loginCount=0`) | Gray "Pending" |
+| Active (No Passkey) | Has logged in but no passkey | Yellow "No Passkey" |
+
+### User Row Actions — Code Management
+
+For users with a pending invite code:
+- **View Code** — shows the code again in a dialog
+- **Reset Code** — revokes old, generates new, shows new code
+- **Delete Code** — revokes code, user reverts to magic link only
+
+These buttons only appear when a pending code exists.
 
 ---
 
-## Files to Create/Modify
+## Login Page Changes (`/login`)
 
-### New Files
-- `prisma/schema.prisma` — add `InviteCode` model
-- `src/app/api/admin/users/[userId]/invite-code/route.ts` — generate & revoke codes
+Add a third option below the existing email form:
+
+```
+[Sign in with passkey]           ← primary CTA
+─── or continue with email ───
+[Email field] [Continue]         ← magic link
+─── or ───
+[Sign in with invite code]       ← new, text link style
+```
+
+When "Sign in with invite code" is clicked, show:
+- Email input
+- 6-digit code input (single field, placeholder: "000-000")
+- "Verify" button
+
+On submit:
+- POST `/api/auth/invite-code/verify` with `{ email, code }`
+- Success → set session cookie → redirect to `/mfa/setup` (for passkey enrollment)
+- Failure → show error: "Invalid or expired code. Contact your administrator."
+
+---
+
+## API Routes
+
+### `POST /api/admin/users/[userId]/invite-code`
+
+Generate a 6-digit invite code.
+
+- Requires `platform_admin` auth
+- Generates code: `crypto.randomInt(100000, 999999).toString()`
+- Revokes any existing pending code for the user
+- Creates `InviteCode` with 48-hour expiry
+- Returns: `{ data: { code: "482917", expiresAt: "..." } }`
+
+### `DELETE /api/admin/users/[userId]/invite-code`
+
+Revoke the user's pending code.
+
+- Updates `InviteCode.status` to `"revoked"`
+- Returns: `{ data: { success: true } }`
+
+### `POST /api/auth/invite-code/verify`
+
+Verify code and create session.
+
+- Public endpoint (no auth required — user is logging in)
+- Rate limit: 5 attempts per email per 15 minutes
+- Validates: code exists, matches email, status=pending, not expired
+- On success:
+  - Mark code as `used`, set `usedAt`
+  - Create user if doesn't exist (shouldn't happen since admin creates first)
+  - Create session via `createSession()`
+  - Set `abeam-session` cookie
+  - Return `{ data: { success: true, redirectUrl: "/mfa/setup" } }`
+- On failure: return 401 with clear message
+
+---
+
+## Mandatory Passkey Enrollment
+
+### Portal Layout Gate (MODIFY `src/app/(portal)/layout.tsx`)
+
+After existing MFA checks, add:
+
+```typescript
+// ALL new users must register a passkey before accessing the portal
+if (!user.hasWebAuthn && user.loginCount <= 1) {
+  redirect("/mfa/setup");
+}
+```
+
+This ensures:
+- Magic link users → land on `/mfa/setup` → register passkey → portal
+- Invite code users → land on `/mfa/setup` → register passkey → portal
+- Returning users with passkey → skip entirely
+
+### MFA Setup Page (`/mfa/setup`)
+
+Already shows passkey option (implemented earlier). For first-time users:
+- Show passkey as the ONLY option (hide TOTP for first login)
+- Or show passkey as "Recommended" with TOTP as fallback
+- After passkey registration → redirect to `/assessments`
+
+---
+
+## Security
+
+- 6-digit = 1M combinations, acceptable for 48-hour admin-issued codes
+- Rate limit code verification: 5 attempts per email per 15 minutes
+- Codes are single-use
+- Only `platform_admin` can issue/manage codes
+- Code verification does NOT bypass passkey enrollment
+
+---
+
+## Files to Create
+
+- `src/app/api/admin/users/[userId]/invite-code/route.ts` — generate & revoke
 - `src/app/api/auth/invite-code/verify/route.ts` — verify code & create session
 
-### Modified Files
-- `src/app/(auth)/login/page.tsx` — add "Sign in with invite code" option
-- `src/components/admin/AdminUsersClient.tsx` — add onboarding status column + code management actions
-- `src/app/(portal)/admin/users/page.tsx` — pass invite code data to client component
+## Files to Modify
 
-### Reference Files (read for patterns)
-- `src/lib/auth/session.ts` — session creation pattern
-- `src/app/api/auth/bridge/route.ts` — session cookie setting pattern
-- `src/app/api/admin/users/[userId]/route.ts` — admin API guard pattern
-- `src/components/admin/AdminUsersClient.tsx` — admin table UI pattern
+- `prisma/schema.prisma` — add `InviteCode` model
+- `src/app/(auth)/login/page.tsx` — add "Sign in with invite code" option
+- `src/components/admin/AdminUsersClient.tsx` — onboarding status column, code actions, onboarding method in add dialog
+- `src/app/(portal)/admin/users/page.tsx` — pass invite code data to client
+- `src/app/(portal)/layout.tsx` — mandatory passkey gate for new users
+
+## Reference Files
+
+- `src/lib/auth/session.ts` — `createSession()`, cookie pattern
+- `src/app/api/auth/bridge/route.ts` — session cookie setting
+- `src/app/api/admin/users/[userId]/route.ts` — admin guard pattern
+- `src/app/api/admin/users/route.ts` — user creation pattern
+- `src/app/(auth)/mfa/setup/page.tsx` — passkey enrollment page
 
 ---
 
 ## Testing
 
-- Admin generates code → code shown in dialog
-- Admin copies code → shares with user
-- User enters email + code on login page → logged in
-- User enters expired code → clear error message
-- User enters wrong code → error, rate limited after 5 attempts
-- Admin resets code → old code invalidated, new code works
-- Admin revokes code → code no longer works
-- User with passkey → code column shows "Active (Passkey)", no code actions needed
-- User table shows correct onboarding status for all states
+1. Admin creates user with "Invite Code" → code shown in dialog
+2. Admin copies code → shares with tester
+3. Tester goes to `/login` → "Sign in with invite code" → enters email + code → logged in
+4. Tester forced to register passkey at `/mfa/setup` → registers → lands on `/assessments`
+5. Tester logs out → logs in with passkey → straight to portal
+6. Admin creates user with "Magic Link" (default) → user gets email → clicks link → forced passkey → portal
+7. Admin resets code → old code fails, new code works
+8. Admin deletes code → user must use magic link instead
+9. Expired code (48h) → clear error: "Code expired. Contact your administrator."
+10. Wrong code 5 times → rate limited
+11. User table shows correct onboarding status for all states
 
 ---
 
-## Constraints
+## Prompt for Claude Code
 
-- Don't modify the existing magic link flow
-- Use native `<a>` tags for navigation (not Next.js `Link`)
-- Use existing UI components (Button, Dialog, Input, toast from sonner)
-- Follow existing API patterns (admin-guard, error codes, Zod validation)
-- Run `pnpm tsc --noEmit` before committing — must pass
-- ESLint rule `@next/next/no-html-link-for-pages` is disabled (intentional)
+```
+Read specs/INVITE-CODE-FEATURE.md and implement the full feature.
+After implementation, run pnpm tsc --noEmit to verify no type errors.
+Push to main when complete.
+```
