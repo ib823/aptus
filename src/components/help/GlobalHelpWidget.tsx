@@ -1,23 +1,39 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { MessageCircleQuestion, X, Send, Minus } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { usePathname } from "next/navigation";
+import {
+  MessageCircleQuestion, X, Send, Minus,
+  HelpCircle, Bug, BookOpen, MessageSquare, Star,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 interface ChatMessage {
   id: string;
-  sender: "client" | "consultant";
-  text: string;
-  timestamp: string;
+  senderId: string;
+  senderRole: "client" | "consultant";
+  content: string;
+  createdAt: string;
+  readAt: string | null;
 }
 
 interface GlobalHelpWidgetProps {
   userRole: string;
-  assessmentId?: string; // Optional: bind to assessment context if available
+  assessmentId?: string;
 }
 
+const CONSULTANT_ROLES = ["consultant", "solution_architect", "platform_admin", "partner_lead"];
+
+const STARTERS = [
+  { icon: HelpCircle, label: "Question about this page", category: "question" as const },
+  { icon: BookOpen, label: "I'm stuck on a step", category: "stuck" as const },
+  { icon: Bug, label: "Report an issue", category: "bug" as const },
+  { icon: MessageSquare, label: "General question", category: "general" as const },
+];
+
 export function GlobalHelpWidget({ userRole, assessmentId }: GlobalHelpWidgetProps) {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [message, setMessage] = useState("");
@@ -25,60 +41,39 @@ export function GlobalHelpWidget({ userRole, assessmentId }: GlobalHelpWidgetPro
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [showStarters, setShowStarters] = useState(true);
+  const [resolved, setResolved] = useState(false);
+  const [rating, setRating] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isConsultant = CONSULTANT_ROLES.includes(userRole);
 
-  // Auto-scroll to bottom of chat
+  // Auto-scroll to bottom
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Load existing session on open
+  // Poll for new messages when session active
   useEffect(() => {
-    if (isOpen && !sessionId) {
-      const initSession = async () => {
-        try {
-          const res = await fetch("/api/help/conversation", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ assessmentId }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            setSessionId(data.sessionId);
-            setMessages(data.responses || []);
-          }
-        } catch (e) {
-          console.error("Failed to init help session", e);
-        }
-      };
-      void initSession();
-    }
-  }, [isOpen, sessionId, assessmentId]);
-
-  // Polling for updates (respects visibility)
-  useEffect(() => {
-    if (!isOpen || !sessionId || isMinimized) return;
+    if (!isOpen || !sessionId || isMinimized || resolved) return;
 
     let cancelled = false;
-    const fetchUpdates = async () => {
+    const fetchMessages = async () => {
       if (document.visibilityState === "hidden") return;
       try {
-        const res = await fetch(`/api/help/conversation?sessionId=${sessionId}`);
+        const res = await fetch(`/api/help/sessions/${sessionId}/messages`);
         if (res.ok && !cancelled) {
-          const data = await res.json();
-          setMessages(data.responses || []);
+          const json = await res.json();
+          setMessages(json.data ?? []);
         }
       } catch {
-        // fail silently
+        // Silent fail
       }
     };
 
-    const interval = setInterval(fetchUpdates, 15000);
-    
+    void fetchMessages();
+    const interval = setInterval(fetchMessages, 5000);
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") void fetchUpdates();
+      if (document.visibilityState === "visible") void fetchMessages();
     };
     document.addEventListener("visibilitychange", handleVisibility);
 
@@ -87,48 +82,122 @@ export function GlobalHelpWidget({ userRole, assessmentId }: GlobalHelpWidgetPro
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [isOpen, sessionId, isMinimized]);
+  }, [isOpen, sessionId, isMinimized, resolved]);
 
-  const sendMessage = async (e: React.FormEvent) => {
+  const startSession = useCallback(async (category: string, firstMessage: string) => {
+    setLoading(true);
+    setSendError(null);
+    try {
+      const res = await fetch("/api/help/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assessmentId,
+          currentPage: pathname,
+          category,
+          message: firstMessage,
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setSessionId(json.data.sessionId);
+        setShowStarters(false);
+        // Fetch messages
+        const msgRes = await fetch(`/api/help/sessions/${json.data.sessionId}/messages`);
+        if (msgRes.ok) {
+          const msgJson = await msgRes.json();
+          setMessages(msgJson.data ?? []);
+        }
+      } else {
+        setSendError("Failed to start help session");
+      }
+    } catch {
+      setSendError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [assessmentId, pathname]);
+
+  const sendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim() || !sessionId) return;
 
-    const newMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      sender: userRole === "consultant" ? "consultant" : "client",
-      text: message.trim(),
-      timestamp: new Date().toISOString(),
-    };
-
-    // Optimistic update
-    setMessages((prev) => [...prev, newMessage]);
+    const content = message.trim();
     setMessage("");
     setLoading(true);
     setSendError(null);
 
+    // Optimistic update
+    const optimisticMsg: ChatMessage = {
+      id: `temp-${Date.now()}`,
+      senderId: "me",
+      senderRole: isConsultant ? "consultant" : "client",
+      content,
+      createdAt: new Date().toISOString(),
+      readAt: null,
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
+
     try {
-      const res = await fetch("/api/help/conversation", {
-        method: "PUT",
+      const res = await fetch(`/api/help/sessions/${sessionId}/messages`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, message: newMessage }),
+        body: JSON.stringify({ content }),
       });
       if (!res.ok) {
-        // Rollback optimistic update
-        setMessages((prev) => prev.filter((m) => m.id !== newMessage.id));
-        setSendError("Failed to send message. Please try again.");
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+        setSendError("Failed to send. Please try again.");
       }
-    } catch (e) {
-      console.error("Message send failed", e);
-      // Rollback optimistic update
-      setMessages((prev) => prev.filter((m) => m.id !== newMessage.id));
-      setSendError("Failed to send message. Please try again.");
+    } catch {
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+      setSendError("Network error. Please try again.");
     } finally {
       setLoading(false);
     }
+  }, [message, sessionId, isConsultant]);
+
+  const handleResolve = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      await fetch(`/api/help/sessions/${sessionId}/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resolve" }),
+      });
+      setResolved(true);
+    } catch {
+      // Silent
+    }
+  }, [sessionId]);
+
+  const handleRate = useCallback(async (stars: number) => {
+    if (!sessionId) return;
+    setRating(stars);
+    try {
+      await fetch(`/api/help/sessions/${sessionId}/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "rate", rating: stars }),
+      });
+      setTimeout(() => {
+        setIsOpen(false);
+        setSessionId(null);
+        setMessages([]);
+        setShowStarters(true);
+        setResolved(false);
+        setRating(0);
+      }, 1500);
+    } catch {
+      // Silent
+    }
+  }, [sessionId]);
+
+  const handleStarterClick = (category: string, label: string) => {
+    startSession(category, label);
   };
 
-  // Only show the trigger button to non-consultants, unless they are already in an active session
-  if (!isOpen && userRole === "consultant") return null;
+  // Consultants: hide trigger button (they use /admin/help queue instead)
+  if (!isOpen && isConsultant) return null;
 
   if (!isOpen) {
     return (
@@ -143,34 +212,34 @@ export function GlobalHelpWidget({ userRole, assessmentId }: GlobalHelpWidgetPro
   }
 
   return (
-    <div 
+    <div
       className={`fixed right-4 lg:right-8 z-50 flex flex-col bg-card border shadow-xl transition-all duration-300 ${
-        isMinimized 
-          ? "bottom-0 w-72 h-12 rounded-t-lg" 
+        isMinimized
+          ? "bottom-0 w-72 h-12 rounded-t-lg"
           : "bottom-20 lg:bottom-24 w-80 sm:w-[350px] h-[500px] max-h-[calc(100vh-120px)] rounded-xl"
       }`}
     >
       {/* Header */}
-      <div 
+      <div
         className="flex items-center justify-between px-4 py-3 border-b bg-primary text-primary-foreground cursor-pointer rounded-t-xl"
         onClick={() => setIsMinimized(!isMinimized)}
       >
         <div className="flex items-center gap-2">
           <MessageCircleQuestion className="w-4 h-4" />
-          <span className="text-sm font-semibold">Live Support</span>
+          <span className="text-sm font-semibold">Help & Support</span>
         </div>
         <div className="flex items-center gap-1">
-          <Button 
-            variant="ghost" 
-            size="icon" 
+          <Button
+            variant="ghost"
+            size="icon"
             className="w-6 h-6 text-primary-foreground hover:bg-primary-foreground/20 hover:text-white"
             onClick={(e) => { e.stopPropagation(); setIsMinimized(!isMinimized); }}
           >
             <Minus className="w-4 h-4" />
           </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
+          <Button
+            variant="ghost"
+            size="icon"
             className="w-6 h-6 text-primary-foreground hover:bg-primary-foreground/20 hover:text-white"
             onClick={(e) => { e.stopPropagation(); setIsOpen(false); }}
           >
@@ -183,53 +252,129 @@ export function GlobalHelpWidget({ userRole, assessmentId }: GlobalHelpWidgetPro
       {!isMinimized && (
         <>
           <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/20">
-            {messages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center space-y-2 opacity-60">
-                <MessageCircleQuestion className="w-8 h-8 mx-auto" />
-                <p className="text-sm">Ask a question and an ABeam consultant will assist you.</p>
+            {/* Conversation starters */}
+            {showStarters && !sessionId && (
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-foreground text-center">How can we help?</p>
+                <p className="text-xs text-muted-foreground text-center">
+                  Choose a topic or type your question below.
+                </p>
+                <div className="space-y-2">
+                  {STARTERS.map((s) => (
+                    <button
+                      key={s.category}
+                      onClick={() => handleStarterClick(s.category, s.label)}
+                      disabled={loading}
+                      className="w-full flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors text-left disabled:opacity-50"
+                    >
+                      <s.icon className="w-4 h-4 text-primary shrink-0" />
+                      <span className="text-sm text-foreground">{s.label}</span>
+                    </button>
+                  ))}
+                </div>
+                {pathname && (
+                  <p className="text-[10px] text-muted-foreground text-center">
+                    Context: {pathname}
+                  </p>
+                )}
               </div>
-            ) : (
-              messages.map((msg) => {
-                const isMe = (userRole === "consultant" && msg.sender === "consultant") || 
-                             (userRole !== "consultant" && msg.sender === "client");
-                
-                return (
-                  <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
-                      isMe 
-                        ? 'bg-primary text-primary-foreground' 
-                        : 'bg-muted border'
-                    }`}>
-                      <p>{msg.text}</p>
-                      <span className={`text-[10px] mt-1 block ${isMe ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })
             )}
+
+            {/* Messages */}
+            {messages.map((msg) => {
+              const isMe = (isConsultant && msg.senderRole === "consultant") ||
+                           (!isConsultant && msg.senderRole === "client");
+              return (
+                <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                    isMe
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted border"
+                  }`}>
+                    <p>{msg.content}</p>
+                    <span className={`text-[10px] mt-1 block ${isMe ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                      {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Resolved + CSAT */}
+            {resolved && (
+              <div className="text-center space-y-3 py-4">
+                <p className="text-sm font-medium text-foreground">Session resolved</p>
+                {!rating && (
+                  <>
+                    <p className="text-xs text-muted-foreground">How was your experience?</p>
+                    <div className="flex justify-center gap-1">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <button
+                          key={n}
+                          onClick={() => handleRate(n)}
+                          className="p-1 hover:scale-110 transition-transform"
+                        >
+                          <Star className={`w-6 h-6 ${n <= rating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`} />
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {rating > 0 && (
+                  <p className="text-xs text-green-600 font-medium">Thank you for your feedback!</p>
+                )}
+              </div>
+            )}
+
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Footer Input */}
-          <div className="p-3 border-t bg-card">
-            {sendError && (
-              <p className="text-xs text-red-500 mb-2">{sendError}</p>
-            )}
-            <form onSubmit={sendMessage} className="flex items-center gap-2">
-              <Input
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Type your message..."
-                className="flex-1"
-                disabled={loading || !sessionId}
-              />
-              <Button type="submit" size="icon" disabled={!message.trim() || loading || !sessionId}>
-                <Send className="w-4 h-4" />
-              </Button>
-            </form>
-          </div>
+          {/* Footer */}
+          {!resolved && (
+            <div className="p-3 border-t bg-card">
+              {sendError && (
+                <p className="text-xs text-red-500 mb-2">{sendError}</p>
+              )}
+              {sessionId ? (
+                <div className="space-y-2">
+                  <form onSubmit={sendMessage} className="flex items-center gap-2">
+                    <Input
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      placeholder="Type your message..."
+                      className="flex-1"
+                      disabled={loading}
+                    />
+                    <Button type="submit" size="icon" disabled={!message.trim() || loading}>
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </form>
+                  {isConsultant && (
+                    <button
+                      onClick={handleResolve}
+                      className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Mark as resolved
+                    </button>
+                  )}
+                </div>
+              ) : !showStarters ? (
+                <form onSubmit={(e) => { e.preventDefault(); if (message.trim()) startSession("general", message.trim()); }} className="flex items-center gap-2">
+                  <Input
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder="Type your question..."
+                    className="flex-1"
+                    disabled={loading}
+                    autoFocus
+                  />
+                  <Button type="submit" size="icon" disabled={!message.trim() || loading}>
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </form>
+              ) : null}
+            </div>
+          )}
         </>
       )}
     </div>

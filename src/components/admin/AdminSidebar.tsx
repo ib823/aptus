@@ -4,7 +4,7 @@
 import { usePathname } from "next/navigation";
 import {
   Home, Building2, BarChart3, Puzzle, ArrowLeftRight,
-  Database, Upload, CheckCircle, Landmark, Users, Shield, List,
+  Database, Upload, CheckCircle, Landmark, Users, Shield, List, MessageCircleQuestion,
 } from "lucide-react";
 
 const NAV_SECTIONS = [
@@ -38,6 +38,7 @@ const NAV_SECTIONS = [
       { href: "/admin/users", label: "Users", icon: Users },
       { href: "/admin/roles", label: "Roles & Permissions", icon: Shield },
       { href: "/admin/assessments", label: "All Assessments", icon: List },
+      { href: "/admin/help", label: "Help Queue", icon: MessageCircleQuestion },
     ],
   },
 ] as const;
