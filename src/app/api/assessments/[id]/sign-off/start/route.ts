@@ -7,6 +7,8 @@ import {
 } from "@/lib/auth/assessment-guard";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { dispatchNotification } from "@/lib/notifications/dispatcher";
+import { resolveRecipients } from "@/lib/notifications/recipient-resolver";
 import { prisma } from "@/lib/db/prisma";
 import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { ERROR_CODES } from "@/types/api";
@@ -94,6 +96,22 @@ export async function POST(
     actor: user.email,
     actorRole: user.role,
   });
+
+  // Notify stakeholders of sign-off request (forced in-app)
+  resolveRecipients(id, "sign_off_request", { excludeUserId: user.id }).then(recipients => {
+    if (recipients.length > 0) {
+      dispatchNotification({
+        type: "sign_off_request",
+        assessmentId: id,
+        title: "Sign-off process initiated",
+        body: "The assessment sign-off process has been started. Your review is required.",
+        deepLink: `/assessment/${id}/sign-off`,
+        metadata: { signOffId: signOff.id },
+        recipientUserIds: recipients,
+        priority: "high",
+      }).catch(err => console.error("[NOTIFY] sign_off_request failed:", err));
+    }
+  }).catch(err => console.error("[NOTIFY] resolve sign_off_request failed:", err));
 
   return NextResponse.json({ data: signOff }, { status: 201 });
 }

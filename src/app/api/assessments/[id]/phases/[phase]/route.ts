@@ -7,6 +7,8 @@ import {
 } from "@/lib/auth/assessment-guard";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { dispatchNotification } from "@/lib/notifications/dispatcher";
+import { resolveRecipients } from "@/lib/notifications/recipient-resolver";
 import { prisma } from "@/lib/db/prisma";
 import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { ERROR_CODES } from "@/types/api";
@@ -110,6 +112,39 @@ export async function PUT(
     actor: user.email,
     actorRole: user.role,
   });
+
+  if (parsed.data.status === "completed") {
+    resolveRecipients(assessmentId, "phase_completed", { excludeUserId: user.id }).then(recipients => {
+      if (recipients.length > 0) {
+        dispatchNotification({
+          type: "phase_completed",
+          assessmentId,
+          title: "Phase completed",
+          body: `The ${phase} phase has been completed`,
+          deepLink: `/assessment/${assessmentId}/profile`,
+          metadata: { phase },
+          recipientUserIds: recipients,
+        }).catch(err => console.error("[NOTIFY] phase_completed failed:", err));
+      }
+    }).catch(err => console.error("[NOTIFY] resolve phase_completed failed:", err));
+  }
+
+  if (parsed.data.status === "blocked") {
+    resolveRecipients(assessmentId, "phase_blocked", { excludeUserId: user.id }).then(recipients => {
+      if (recipients.length > 0) {
+        dispatchNotification({
+          type: "phase_blocked",
+          assessmentId,
+          title: "Phase blocked",
+          body: `The ${phase} phase has been blocked${parsed.data.blockedReason ? ": " + parsed.data.blockedReason : ""}`,
+          deepLink: `/assessment/${assessmentId}/profile`,
+          metadata: { phase, blockedReason: parsed.data.blockedReason },
+          recipientUserIds: recipients,
+          priority: "high",
+        }).catch(err => console.error("[NOTIFY] phase_blocked failed:", err));
+      }
+    }).catch(err => console.error("[NOTIFY] resolve phase_blocked failed:", err));
+  }
 
   return NextResponse.json({ data: updated });
 }

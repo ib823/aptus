@@ -14,6 +14,8 @@ import { logActivity } from "@/lib/collaboration/activity-logger";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { PropagationEngine } from "@/lib/dependency/propagation-engine";
 import type { DependencyEffects } from "@/lib/dependency/types";
+import { dispatchNotification } from "@/lib/notifications/dispatcher";
+import { resolveRecipients } from "@/lib/notifications/recipient-resolver";
 import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { ERROR_CODES } from "@/types/api";
 import type { DecisionAction } from "@/types/assessment";
@@ -205,6 +207,23 @@ export async function PUT(
     areaCode: step.scopeItem.functionalArea,
   }).catch((err) => console.error("[ACTIVITY] Failed to log step classification:", err));
 
+  // Notify stakeholders of step classification (only for GAPs to avoid spam)
+  if (parsed.data.fitStatus === "GAP") {
+    resolveRecipients(assessmentId, "step_classified", { excludeUserId: user.id }).then(recipients => {
+      if (recipients.length > 0) {
+        dispatchNotification({
+          type: "step_classified",
+          assessmentId,
+          title: "Step classified",
+          body: `${user.name ?? user.email} classified a step as ${parsed.data.fitStatus}`,
+          deepLink: `/assessment/${assessmentId}/review`,
+          metadata: { fitStatus: parsed.data.fitStatus, stepId },
+          recipientUserIds: recipients,
+        }).catch(err => console.error("[NOTIFY] step_classified failed:", err));
+      }
+    }).catch(err => console.error("[NOTIFY] resolve step_classified failed:", err));
+  }
+
   // If GAP, auto-create GapResolution if not exists
   if (parsed.data.fitStatus === "GAP") {
     const existingGap = await prisma.gapResolution.findFirst({
@@ -222,6 +241,21 @@ export async function PUT(
           resolutionDescription: "",
         },
       });
+
+      // Notify about new gap
+      resolveRecipients(assessmentId, "gap_created", { excludeUserId: user.id }).then(recipients => {
+        if (recipients.length > 0) {
+          dispatchNotification({
+            type: "gap_created",
+            assessmentId,
+            title: "Gap identified",
+            body: `A new gap has been identified${parsed.data.clientNote ? ": " + parsed.data.clientNote.substring(0, 80) : ""}`,
+            deepLink: `/assessment/${assessmentId}/gaps`,
+            metadata: { stepId },
+            recipientUserIds: recipients,
+          }).catch(err => console.error("[NOTIFY] gap_created failed:", err));
+        }
+      }).catch(err => console.error("[NOTIFY] resolve gap_created failed:", err));
     }
   }
 

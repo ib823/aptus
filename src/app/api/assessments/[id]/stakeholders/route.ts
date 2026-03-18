@@ -10,6 +10,8 @@ import { canManageStakeholders } from "@/lib/auth/permissions";
 import { addStakeholder, getStakeholders } from "@/lib/db/assessments";
 import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { dispatchNotification } from "@/lib/notifications/dispatcher";
+import { resolveRecipients } from "@/lib/notifications/recipient-resolver";
 import { sendEmail } from "@/lib/email/brevo";
 import { stakeholderInviteEmail } from "@/lib/email/templates";
 import { safeParseJsonBody } from "@/lib/http/safe-json-body";
@@ -137,6 +139,21 @@ export async function POST(
     actor: user.email,
     actorRole: user.role,
   });
+
+  // Notify admins of new stakeholder
+  resolveRecipients(assessmentId, "stakeholder_added", { excludeUserId: user.id }).then(recipients => {
+    if (recipients.length > 0) {
+      dispatchNotification({
+        type: "stakeholder_added",
+        assessmentId,
+        title: "Stakeholder added",
+        body: `${parsed.data.name ?? parsed.data.email} (${parsed.data.role}) has been added`,
+        deepLink: `/assessment/${assessmentId}/stakeholders`,
+        metadata: { email: parsed.data.email, role: parsed.data.role },
+        recipientUserIds: recipients,
+      }).catch(err => console.error("[NOTIFY] stakeholder_added failed:", err));
+    }
+  }).catch(err => console.error("[NOTIFY] resolve stakeholder_added failed:", err));
 
   // Send stakeholder invitation email (fire-and-forget)
   const assessmentForEmail = await prisma.assessment.findUnique({

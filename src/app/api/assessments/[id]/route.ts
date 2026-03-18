@@ -11,6 +11,8 @@ import {
 import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { getAssessment, updateAssessmentStatus, softDeleteAssessment } from "@/lib/db/assessments";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { dispatchNotification } from "@/lib/notifications/dispatcher";
+import { resolveRecipients } from "@/lib/notifications/recipient-resolver";
 import { prisma } from "@/lib/db/prisma";
 import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { ERROR_CODES } from "@/types/api";
@@ -97,6 +99,22 @@ export async function PATCH(
       actor: user.email,
       actorRole: user.role,
     });
+
+    // Notify stakeholders of status change
+    resolveRecipients(id, "status_change", { excludeUserId: user.id }).then(recipients => {
+      if (recipients.length > 0) {
+        dispatchNotification({
+          type: "status_change",
+          assessmentId: id,
+          title: "Assessment status changed",
+          body: `Status changed from ${oldStatus} to ${parsed.data.status}`,
+          deepLink: `/assessment/${id}/profile`,
+          metadata: { oldStatus, newStatus: parsed.data.status },
+          recipientUserIds: recipients,
+          priority: "high",
+        }).catch(err => console.error("[NOTIFY] status_change failed:", err));
+      }
+    }).catch(err => console.error("[NOTIFY] resolve status_change failed:", err));
 
     return NextResponse.json({ data: updated });
   }
