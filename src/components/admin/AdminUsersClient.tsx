@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import {
   User, Mail, ShieldCheck, Clock, Calendar,
-  Trash2, ShieldOff, RotateCcw, MoreHorizontal, UserPlus,
+  Trash2, ShieldOff, RotateCcw, MoreHorizontal, UserPlus, Hash, Copy, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -123,13 +123,16 @@ export function AdminUsersClient({ initialUsers, currentUserId }: AdminUsersClie
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [addUserSubmitting, setAddUserSubmitting] = useState(false);
 
-  const handleAddUser = useCallback(async (data: { email: string; name: string; role: string }) => {
+  const [codeDialog, setCodeDialog] = useState<{ code: string; email: string; expiresAt: string } | null>(null);
+
+  const handleAddUser = useCallback(async (data: { email: string; name: string; role: string; issueCode: boolean }) => {
     setAddUserSubmitting(true);
     try {
+      // Create user
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ email: data.email, name: data.name, role: data.role }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -138,11 +141,58 @@ export function AdminUsersClient({ initialUsers, currentUserId }: AdminUsersClie
       }
       setUsers((prev) => [json.data, ...prev]);
       setAddUserOpen(false);
-      toast.success(`User ${data.email} created`);
+
+      // Issue invite code if requested
+      if (data.issueCode) {
+        const codeRes = await fetch(`/api/admin/users/${json.data.id}/invite-code`, {
+          method: "POST",
+        });
+        const codeJson = await codeRes.json();
+        if (codeRes.ok) {
+          setCodeDialog(codeJson.data);
+        } else {
+          toast.error("User created, but failed to generate invite code");
+        }
+      } else {
+        toast.success(`User ${data.email} created — they can sign in via magic link`);
+      }
     } catch {
       toast.error("Network error. Please try again.");
     } finally {
       setAddUserSubmitting(false);
+    }
+  }, []);
+
+  const handleIssueCode = useCallback(async (userId: string) => {
+    setLoading(userId);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/invite-code`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error?.message ?? "Failed to generate code");
+        return;
+      }
+      setCodeDialog(json.data);
+    } catch {
+      toast.error("Network error. Please try again.");
+    } finally {
+      setLoading(null);
+    }
+  }, []);
+
+  const handleRevokeCode = useCallback(async (userId: string) => {
+    setLoading(userId);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/invite-code`, { method: "DELETE" });
+      if (!res.ok) {
+        toast.error("Failed to revoke code");
+        return;
+      }
+      toast.success("Invite code revoked");
+    } catch {
+      toast.error("Network error. Please try again.");
+    } finally {
+      setLoading(null);
     }
   }, []);
 
@@ -211,6 +261,18 @@ export function AdminUsersClient({ initialUsers, currentUserId }: AdminUsersClie
                 <td className="px-4 py-3 text-right">
                   {!isSelf(u.id) && (
                     <div className="flex items-center justify-end gap-1">
+                      {!u.lastLoginAt && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="Issue invite code"
+                          onClick={() => handleIssueCode(u.id)}
+                          disabled={isLoading(u.id)}
+                        >
+                          <Hash className="h-4 w-4 text-amber-600" />
+                        </Button>
+                      )}
                       {u.mfaEnabled && (
                         <Button
                           variant="ghost"
@@ -399,6 +461,12 @@ export function AdminUsersClient({ initialUsers, currentUserId }: AdminUsersClie
         onSubmit={handleAddUser}
         isSubmitting={addUserSubmitting}
       />
+
+      {/* Invite Code Display Dialog */}
+      <InviteCodeDialog
+        data={codeDialog}
+        onClose={() => setCodeDialog(null)}
+      />
     </>
   );
 }
@@ -411,25 +479,26 @@ function AddUserDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: { email: string; name: string; role: string }) => void;
+  onSubmit: (data: { email: string; name: string; role: string; issueCode: boolean }) => void;
   isSubmitting: boolean;
 }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState("consultant");
+  const [issueCode, setIssueCode] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !name) return;
-    onSubmit({ email, name, role });
+    onSubmit({ email, name, role, issueCode });
   };
 
-  // Reset form when dialog opens
   const handleOpenChange = (v: boolean) => {
     if (v) {
       setEmail("");
       setName("");
       setRole("consultant");
+      setIssueCode(false);
     }
     onOpenChange(v);
   };
@@ -440,7 +509,7 @@ function AddUserDialog({
         <DialogHeader>
           <DialogTitle>Add New User</DialogTitle>
           <DialogDescription>
-            Create a user account. They can sign in via magic link or passkey.
+            Create a user account. Choose how they will sign in for the first time.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -478,15 +547,101 @@ function AddUserDialog({
               ))}
             </select>
           </div>
+
+          {/* Onboarding method */}
+          <div className="space-y-2">
+            <Label>First-Time Sign In</Label>
+            <div className="space-y-2">
+              <label className="flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted/30 transition-colors">
+                <input
+                  type="radio"
+                  name="onboard"
+                  checked={!issueCode}
+                  onChange={() => setIssueCode(false)}
+                  className="mt-0.5"
+                />
+                <div>
+                  <p className="text-sm font-medium">Magic Link (default)</p>
+                  <p className="text-xs text-muted-foreground">User receives a sign-in link via email</p>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted/30 transition-colors">
+                <input
+                  type="radio"
+                  name="onboard"
+                  checked={issueCode}
+                  onChange={() => setIssueCode(true)}
+                  className="mt-0.5"
+                />
+                <div>
+                  <p className="text-sm font-medium">Invite Code</p>
+                  <p className="text-xs text-muted-foreground">Generate a 6-digit code you share manually. Valid for 48 hours, single-use.</p>
+                </div>
+              </label>
+            </div>
+          </div>
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={!email || !name || isSubmitting}>
-              {isSubmitting ? "Creating..." : "Create User"}
+              {isSubmitting ? "Creating..." : issueCode ? "Create & Generate Code" : "Create User"}
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InviteCodeDialog({
+  data,
+  onClose,
+}: {
+  data: { code: string; email: string; expiresAt: string } | null;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  if (!data) return null;
+
+  const formatted = data.code.slice(0, 3) + "-" + data.code.slice(3);
+  const expiryDate = new Date(data.expiresAt);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(data.code).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <Dialog open={!!data} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Invite Code Generated</DialogTitle>
+          <DialogDescription>
+            Share this code with <strong>{data.email}</strong>. They enter it at the login page.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col items-center py-6">
+          <p className="text-4xl font-mono font-bold tracking-[0.3em] text-foreground mb-2">
+            {formatted}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Valid until {expiryDate.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">48 hours — single use only</p>
+        </div>
+
+        <DialogFooter className="sm:justify-center">
+          <Button variant="outline" onClick={handleCopy} className="gap-2">
+            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            {copied ? "Copied!" : "Copy Code"}
+          </Button>
+          <Button onClick={onClose}>Done</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
