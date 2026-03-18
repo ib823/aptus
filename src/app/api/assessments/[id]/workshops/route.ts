@@ -4,6 +4,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { dispatchNotification } from "@/lib/notifications/dispatcher";
+import { resolveRecipients } from "@/lib/notifications/recipient-resolver";
 import { generateSessionCode } from "@/lib/assessment/session-code";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
@@ -125,6 +127,21 @@ export async function POST(
     actor: user.email,
     actorRole: user.role,
   });
+
+  // Notify stakeholders of new workshop
+  resolveRecipients(assessmentId, "workshop_invite", { excludeUserId: user.id }).then(recipients => {
+    if (recipients.length > 0) {
+      dispatchNotification({
+        type: "workshop_invite",
+        assessmentId,
+        title: "Workshop scheduled",
+        body: `Workshop "${workshop.title}" has been scheduled`,
+        deepLink: `/assessment/${assessmentId}/workshops/${workshop.id}`,
+        metadata: { workshopId: workshop.id },
+        recipientUserIds: recipients,
+      }).catch(err => console.error("[NOTIFY] workshop_invite failed:", err));
+    }
+  }).catch(err => console.error("[NOTIFY] resolve workshop_invite failed:", err));
 
   return NextResponse.json({ data: workshop }, { status: 201 });
 }

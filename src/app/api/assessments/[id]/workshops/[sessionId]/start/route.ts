@@ -6,6 +6,8 @@ import {
   isAssessmentAccessError,
 } from "@/lib/auth/assessment-guard";
 import { logDecision } from "@/lib/audit/decision-logger";
+import { dispatchNotification } from "@/lib/notifications/dispatcher";
+import { resolveRecipients } from "@/lib/notifications/recipient-resolver";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { generateWorkshopQR } from "@/lib/workshop/qr-code";
@@ -70,6 +72,22 @@ export async function POST(
     actor: user.email,
     actorRole: user.role,
   });
+
+  // Notify stakeholders workshop is starting
+  resolveRecipients(assessmentId, "workshop_starting", { excludeUserId: user.id }).then(recipients => {
+    if (recipients.length > 0) {
+      dispatchNotification({
+        type: "workshop_starting",
+        assessmentId,
+        title: "Workshop starting now",
+        body: `The workshop is now live`,
+        deepLink: `/assessment/${assessmentId}/workshops/${sessionId}`,
+        metadata: { sessionId },
+        recipientUserIds: recipients,
+        priority: "high",
+      }).catch(err => console.error("[NOTIFY] workshop_starting failed:", err));
+    }
+  }).catch(err => console.error("[NOTIFY] resolve workshop_starting failed:", err));
 
   return NextResponse.json({ data: { id: updated.id, status: updated.status, startedAt: updated.startedAt, qrCodeUrl } });
 }
