@@ -1169,6 +1169,47 @@ model InviteCode {
 }
 
 // =============================================================
+// Layer 4c: Live Support (help chat between client and consultant)
+// =============================================================
+
+model HelpSession {
+  id               String    @id @default(cuid())
+  clientUserId     String
+  consultantUserId String?
+  assessmentId     String?
+  currentPage      String?   // URL path where help was requested
+  category         String    @default("general") // question, stuck, bug, general
+  status           String    @default("open") // open, active, resolved, closed
+  rating           Int?      // CSAT 1-5
+  ratingComment    String?   @db.Text
+  createdAt        DateTime  @default(now())
+  resolvedAt       DateTime?
+  closedAt         DateTime?
+
+  messages HelpMessage[]
+
+  @@index([clientUserId])
+  @@index([consultantUserId])
+  @@index([status])
+  @@index([assessmentId])
+}
+
+model HelpMessage {
+  id         String   @id @default(cuid())
+  sessionId  String
+  senderId   String
+  senderRole String   // client, consultant
+  content    String   @db.Text
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  session HelpSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@index([senderId])
+}
+
+// =============================================================
 // Layer 5: Phase 17 — Organization Invitations
 // =============================================================
 
