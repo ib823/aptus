@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import {
   User, Mail, ShieldCheck, Clock, Calendar,
-  Trash2, ShieldOff, RotateCcw, MoreHorizontal,
+  Trash2, ShieldOff, RotateCcw, MoreHorizontal, UserPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +16,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { ROLE_LABELS, type UserRole } from "@/types/assessment";
 
@@ -109,11 +119,46 @@ export function AdminUsersClient({ initialUsers, currentUserId }: AdminUsersClie
     setPendingAction(null);
   }, [apiCall]);
 
+  // ─── Add User ───
+  const [addUserOpen, setAddUserOpen] = useState(false);
+  const [addUserSubmitting, setAddUserSubmitting] = useState(false);
+
+  const handleAddUser = useCallback(async (data: { email: string; name: string; role: string }) => {
+    setAddUserSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error?.message ?? "Failed to create user");
+        return;
+      }
+      setUsers((prev) => [json.data, ...prev]);
+      setAddUserOpen(false);
+      toast.success(`User ${data.email} created`);
+    } catch {
+      toast.error("Network error. Please try again.");
+    } finally {
+      setAddUserSubmitting(false);
+    }
+  }, []);
+
   const isSelf = (id: string) => id === currentUserId;
   const isLoading = (id: string) => loading === id;
 
   return (
     <>
+      {/* Add User Button */}
+      <div className="flex justify-end mb-4">
+        <Button onClick={() => setAddUserOpen(true)}>
+          <UserPlus className="w-4 h-4 mr-1.5" />
+          Add User
+        </Button>
+      </div>
+
       {/* Desktop Table */}
       <div data-tour="user-table" className="hidden md:block bg-card rounded-lg border overflow-hidden">
         <table className="w-full text-sm">
@@ -346,7 +391,104 @@ export function AdminUsersClient({ initialUsers, currentUserId }: AdminUsersClie
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Add User Dialog */}
+      <AddUserDialog
+        open={addUserOpen}
+        onOpenChange={setAddUserOpen}
+        onSubmit={handleAddUser}
+        isSubmitting={addUserSubmitting}
+      />
     </>
+  );
+}
+
+function AddUserDialog({
+  open,
+  onOpenChange,
+  onSubmit,
+  isSubmitting,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (data: { email: string; name: string; role: string }) => void;
+  isSubmitting: boolean;
+}) {
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("consultant");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !name) return;
+    onSubmit({ email, name, role });
+  };
+
+  // Reset form when dialog opens
+  const handleOpenChange = (v: boolean) => {
+    if (v) {
+      setEmail("");
+      setName("");
+      setRole("consultant");
+    }
+    onOpenChange(v);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add New User</DialogTitle>
+          <DialogDescription>
+            Create a user account. They can sign in via magic link or passkey.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="add-user-name">Full Name</Label>
+            <Input
+              id="add-user-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., John Smith"
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="add-user-email">Email Address</Label>
+            <Input
+              id="add-user-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="e.g., john@company.com"
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="add-user-role">Role</Label>
+            <select
+              id="add-user-role"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
+            >
+              {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!email || !name || isSubmitting}>
+              {isSubmitting ? "Creating..." : "Create User"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
