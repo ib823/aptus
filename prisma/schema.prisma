@@ -1150,6 +1150,25 @@ model MagicLinkToken {
 }
 
 // =============================================================
+// Layer 4b: Admin-issued invite codes (6-digit, 48h, single-use)
+// =============================================================
+
+model InviteCode {
+  id        String    @id @default(cuid())
+  email     String
+  code      String
+  status    String    @default("pending") // pending, used, expired, revoked
+  expiresAt DateTime
+  usedAt    DateTime?
+  issuedBy  String    // admin user ID
+  createdAt DateTime  @default(now())
+
+  @@index([email, status])
+  @@index([code])
+  @@index([expiresAt])
+}
+
+// =============================================================
 // Layer 5: Phase 17 — Organization Invitations
 // =============================================================
 

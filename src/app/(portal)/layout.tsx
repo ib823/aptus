@@ -4,7 +4,7 @@ import { getOrganizationSubscription } from "@/lib/db/organizations";
 import { PortalNav } from "@/components/layout/PortalNav";
 import { OnboardingGuard } from "@/components/onboarding/OnboardingGuard";
 import { SubscriptionStatusBanner } from "@/components/commercial/SubscriptionStatusBanner";
-import { MFA_REQUIRED_ROLES } from "@/constants/config";
+// MFA_REQUIRED_ROLES no longer needed — all users must register passkey
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { MobileBottomTabBar } from "@/components/pwa/MobileBottomTabBar";
 import { PasskeyEnrollmentPrompt } from "@/components/auth/PasskeyEnrollmentPrompt";
@@ -27,23 +27,9 @@ export default async function PortalLayout({
     redirect("/login");
   }
 
-  // MFA enforcement — passkey users skip entirely (passkey = full trust)
-  const requiresMfa = (MFA_REQUIRED_ROLES as readonly string[]).includes(user.role);
-
+  // All new users must register a passkey before accessing the portal
   if (!user.hasWebAuthn) {
-    // No passkey — enforce MFA setup/verify for required roles
-    if (requiresMfa && !user.totpVerified) {
-      redirect("/mfa/setup");
-    }
-
-    if (requiresMfa && !user.mfaVerified) {
-      redirect("/mfa/verify");
-    }
-
-    // Internal users who opted into MFA but haven't verified this session
-    if (!requiresMfa && user.mfaEnabled && !user.mfaVerified) {
-      redirect("/mfa/verify");
-    }
+    redirect("/mfa/setup");
   }
 
   // Fetch org subscription status for banner
