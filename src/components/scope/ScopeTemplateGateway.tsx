@@ -1,7 +1,6 @@
 "use client";
 
 import { Zap, Building2, List, ArrowRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { PRESETS } from "@/constants/presets";
 
 const coreEdge = PRESETS.coreedge;
