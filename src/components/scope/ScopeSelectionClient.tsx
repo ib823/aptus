@@ -13,7 +13,9 @@ import { StatCard } from "@/components/shared/StatCard";
 import { ProcessLandscapeMap } from "@/components/scope/ProcessLandscapeMap";
 import { ScopeItemBriefing } from "@/components/scope/ScopeItemBriefing";
 import { ScopeDependencyWarnings, type ScopeDependencyWarning } from "@/components/scope/ScopeDependencyWarnings";
+import { ScopeTemplateGateway } from "@/components/scope/ScopeTemplateGateway";
 import { UI_TEXT } from "@/constants/ui-text";
+import { PRESETS } from "@/constants/presets";
 import {
   getLandscape,
   getAreaScopeItemIds,
@@ -91,7 +93,8 @@ export function ScopeSelectionClient({
   const [areaFilter, setAreaFilter] = useState<string>("all");
   const [subAreaFilter, setSubAreaFilter] = useState<string>("all");
   const [applyingTemplate, setApplyingTemplate] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("landscape");
+  const [gatewayDismissed, setGatewayDismissed] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [briefingItemId, setBriefingItemId] = useState<string | null>(null);
   const [briefingHierarchy, setBriefingHierarchy] = useState<ProcessAreaInfo[] | null>(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
@@ -400,6 +403,34 @@ export function ScopeSelectionClient({
     }
   }, [assessmentId, industry, industryPreSelections, applyingTemplate]);
 
+  // Apply CoreEdge preset via bulk selection
+  const handleApplyCoreEdge = useCallback(async () => {
+    if (applyingTemplate) return;
+    setApplyingTemplate(true);
+    try {
+      const coreEdge = PRESETS.coreedge;
+      if (!coreEdge) return;
+      const defaultIds = coreEdge.scopeItems.filter((s) => s.defaultSelected).map((s) => s.id);
+      const res = await fetch(`/api/assessments/${assessmentId}/scope/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "select_all", scopeItemIds: defaultIds }),
+      });
+      if (res.ok) {
+        setItems((prev) =>
+          prev.map((item) =>
+            defaultIds.includes(item.id) && !item.selected
+              ? { ...item, selected: true, relevance: "YES" }
+              : item,
+          ),
+        );
+      }
+    } finally {
+      setApplyingTemplate(false);
+      setGatewayDismissed(true);
+    }
+  }, [assessmentId, applyingTemplate]);
+
   // REM-33: Open briefing for a scope item
   const handleOpenBriefing = useCallback(
     async (itemId: string) => {
@@ -496,6 +527,26 @@ export function ScopeSelectionClient({
         </div>
       );
     }
+  }
+
+  // Show template gateway for first-time users (no items selected, gateway not dismissed)
+  const showGateway = stats.selectedCount === 0 && !gatewayDismissed && !isReadOnly;
+
+  if (showGateway) {
+    return (
+      <ScopeTemplateGateway
+        industry={industry}
+        industryPreSelectCount={industryPreSelections.length}
+        totalScopeItems={stats.totalCount}
+        onApplyIndustryTemplate={() => {
+          handleApplyTemplate();
+          setGatewayDismissed(true);
+        }}
+        onApplyCoreEdge={handleApplyCoreEdge}
+        onSkipToFullCatalog={() => setGatewayDismissed(true)}
+        isApplying={applyingTemplate}
+      />
+    );
   }
 
   return (

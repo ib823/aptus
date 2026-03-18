@@ -75,7 +75,7 @@ export const ScopeAreaGroup = memo(function ScopeAreaGroup({
   );
 
   return (
-    <Accordion type="multiple" defaultValue={[area]}>
+    <Accordion type="multiple" defaultValue={selectedCount > 0 ? [area] : []}>
       <AccordionItem value={area} className="border rounded-lg bg-card">
         <AccordionTrigger className="px-5 hover:no-underline">
           <div className="flex items-center gap-4 flex-1 min-w-0">
