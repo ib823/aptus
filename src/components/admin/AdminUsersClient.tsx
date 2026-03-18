@@ -180,7 +180,7 @@ export function AdminUsersClient({ initialUsers, currentUserId }: AdminUsersClie
     }
   }, []);
 
-  const handleRevokeCode = useCallback(async (userId: string) => {
+  const _handleRevokeCode = useCallback(async (userId: string) => {
     setLoading(userId);
     try {
       const res = await fetch(`/api/admin/users/${userId}/invite-code`, { method: "DELETE" });
