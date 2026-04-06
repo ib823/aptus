@@ -68,10 +68,7 @@ describe("assessment navigation", () => {
 
     const reviewTab = screen.getByRole("tab", { name: /^review$/i });
     expect(reviewTab).not.toHaveAttribute("aria-disabled");
-
-    fireEvent.click(reviewTab);
-
-    expect(mockPush).toHaveBeenCalledWith("/assessment/assessment-1/review");
+    expect(reviewTab).toHaveAttribute("href", "/assessment/assessment-1/review");
   });
 
   it("marks premature mobile stages as disabled during setup", () => {
@@ -106,9 +103,6 @@ describe("assessment navigation", () => {
 
     const reviewLink = screen.getByRole("link", { name: /review/i });
     expect(reviewLink).not.toHaveAttribute("aria-disabled");
-
-    fireEvent.click(reviewLink);
-
-    expect(mockPush).toHaveBeenCalledWith("/assessment/assessment-1/review");
+    expect(reviewLink).toHaveAttribute("href", "/assessment/assessment-1/review");
   });
 });
