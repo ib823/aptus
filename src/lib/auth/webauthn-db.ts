@@ -80,7 +80,6 @@ export async function getUserByCredentialId(
   name: string;
   role: string;
   isActive: boolean;
-  mfaMethod: string;
 } | null> {
   const credential = await prisma.webAuthnCredential.findUnique({
     where: { credentialId },
@@ -92,7 +91,6 @@ export async function getUserByCredentialId(
           name: true,
           role: true,
           isActive: true,
-          mfaMethod: true,
         },
       },
     },

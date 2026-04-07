@@ -31,7 +31,6 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
       role: true,
       isActive: true,
       mfaEnabled: true,
-      totpVerified: true,
       lastLoginAt: true,
       createdAt: true,
     },

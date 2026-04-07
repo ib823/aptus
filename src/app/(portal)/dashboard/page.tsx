@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
+import { OnboardingChecklistBanner } from "@/components/dashboard/OnboardingChecklistBanner";
 import { getDefaultWidgets } from "@/lib/dashboard/widgets";
 import { UI_TEXT } from "@/constants/ui-text";
 import type { UserRole } from "@/types/assessment";
@@ -69,6 +70,7 @@ export default async function DashboardPage() {
     return (
       <>
         <PageHeader title={UI_TEXT.nav.dashboard} />
+        <OnboardingChecklistBanner />
         <EmptyState
           title={UI_TEXT.assessment.noAssessments}
           description={UI_TEXT.assessment.noAssessmentsDescription}
@@ -90,6 +92,7 @@ export default async function DashboardPage() {
   return (
     <>
       <PageHeader title={UI_TEXT.nav.dashboard} />
+      <OnboardingChecklistBanner />
       <DashboardShell initialWidgets={widgets} assessmentId={primaryAssessmentId} />
     </>
   );

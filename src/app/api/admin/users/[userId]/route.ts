@@ -61,7 +61,7 @@ export async function PATCH(
     const updated = await prisma.user.update({
       where: { id: userId },
       data: { role },
-      select: { id: true, email: true, name: true, role: true, isActive: true, mfaEnabled: true, lastLoginAt: true, createdAt: true, totpVerified: true },
+      select: { id: true, email: true, name: true, role: true, isActive: true, mfaEnabled: true, lastLoginAt: true, createdAt: true },
     });
 
     // Revoke sessions so new role takes effect
@@ -91,7 +91,7 @@ export async function PATCH(
     const updated = await prisma.user.update({
       where: { id: userId },
       data: { isActive },
-      select: { id: true, email: true, name: true, role: true, isActive: true, mfaEnabled: true, lastLoginAt: true, createdAt: true, totpVerified: true },
+      select: { id: true, email: true, name: true, role: true, isActive: true, mfaEnabled: true, lastLoginAt: true, createdAt: true },
     });
 
     if (!isActive) {
@@ -104,17 +104,14 @@ export async function PATCH(
     return NextResponse.json({ data: updated });
   }
 
-  // --- MFA Reset ---
+  // --- MFA Reset (clears the user's enrolled passkeys) ---
   if (resetMfa) {
     const updated = await prisma.user.update({
       where: { id: userId },
       data: {
         mfaEnabled: false,
-        mfaMethod: "none",
-        totpSecret: null,
-        totpVerified: false,
       },
-      select: { id: true, email: true, name: true, role: true, isActive: true, mfaEnabled: true, lastLoginAt: true, createdAt: true, totpVerified: true },
+      select: { id: true, email: true, name: true, role: true, isActive: true, mfaEnabled: true, lastLoginAt: true, createdAt: true },
     });
 
     // Delete passkey credentials
@@ -175,7 +172,6 @@ export async function DELETE(
   // Delete user and all non-cascaded relations in a transaction
   await prisma.$transaction([
     prisma.session.deleteMany({ where: { userId } }),
-    prisma.mfaChallenge.deleteMany({ where: { userId } }),
     prisma.webAuthnCredential.deleteMany({ where: { userId } }),
     prisma.assessmentStakeholder.deleteMany({ where: { userId } }),
     prisma.workshopAttendee.deleteMany({ where: { userId } }),

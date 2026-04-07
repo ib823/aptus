@@ -37,21 +37,12 @@ export async function DELETE(
     );
   }
 
-  // If this was the last credential, revert mfaMethod
+  // If this was the last credential, clear the mfaEnabled flag
   const remaining = await getUserCredentialCount(user.id);
   if (remaining === 0) {
-    // Check if TOTP is still active
-    const dbUser = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { totpVerified: true },
-    });
-
     await prisma.user.update({
       where: { id: user.id },
-      data: {
-        mfaMethod: dbUser?.totpVerified ? "totp" : "none",
-        mfaEnabled: dbUser?.totpVerified ? true : false,
-      },
+      data: { mfaEnabled: false },
     });
   }
 

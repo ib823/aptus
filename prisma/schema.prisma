@@ -904,11 +904,8 @@ model User {
   isActive       Boolean   @default(true)
   avatarUrl      String?
 
-  totpSecret     String?
-  totpVerified   Boolean   @default(false)
-  totpVerifiedAt DateTime?
+  // mfaEnabled is kept as a soft preference flag; the only second factor is now passkey/WebAuthn
   mfaEnabled     Boolean   @default(false)
-  mfaMethod      String    @default("none")
 
   webauthnCredentials WebAuthnCredential[]
 
@@ -933,7 +930,6 @@ model User {
 
   organization      Organization?          @relation(fields: [organizationId], references: [id])
   sessions          Session[]
-  mfaChallenges     MfaChallenge[]
   stakeholderEntries AssessmentStakeholder[]
   accounts          Account[]
 
@@ -1097,25 +1093,6 @@ model Session {
   @@index([expiresAt])
 }
 
-model MfaChallenge {
-  id            String    @id @default(cuid())
-  userId        String
-  challengeType String
-  code          String?
-  attempts      Int       @default(0)
-  maxAttempts   Int       @default(5)
-  expiresAt     DateTime
-  completedAt   DateTime?
-  ipAddress     String?
-
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@index([userId])
-  @@index([expiresAt])
-}
-
 model WebAuthnCredential {
   id           String    @id @default(cuid())
   userId       String
@@ -1146,25 +1123,6 @@ model MagicLinkToken {
 
   @@index([email])
   @@index([token])
-  @@index([expiresAt])
-}
-
-// =============================================================
-// Layer 4b: Admin-issued invite codes (6-digit, 48h, single-use)
-// =============================================================
-
-model InviteCode {
-  id        String    @id @default(cuid())
-  email     String
-  code      String
-  status    String    @default("pending") // pending, used, expired, revoked
-  expiresAt DateTime
-  usedAt    DateTime?
-  issuedBy  String    // admin user ID
-  createdAt DateTime  @default(now())
-
-  @@index([email, status])
-  @@index([code])
   @@index([expiresAt])
 }
 

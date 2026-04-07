@@ -3,6 +3,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
+import { sendMagicLink } from "@/lib/auth/send-magic-link";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
@@ -146,6 +147,14 @@ export async function POST(
     actorRole: mapLegacyRole(invitation.role),
   });
 
+  // If the user is not currently signed in, send a magic-link sign-in email
+  // so they can land in the portal in one click rather than bouncing through /login.
+  let emailSent = false;
+  if (!currentUser) {
+    const result = await sendMagicLink(invitation.email);
+    emailSent = result.sent;
+  }
+
   return NextResponse.json({
     data: {
       user,
@@ -153,6 +162,7 @@ export async function POST(
         id: invitation.organization.id,
         name: invitation.organization.name,
       },
+      emailSent,
     },
   });
 }

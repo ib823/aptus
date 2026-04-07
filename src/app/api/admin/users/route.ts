@@ -2,6 +2,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin, isAdminError } from "@/lib/auth/admin-guard";
+import { sendMagicLink } from "@/lib/auth/send-magic-link";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { ROLE_LABELS } from "@/types/assessment";
@@ -66,17 +67,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       role: true,
       isActive: true,
       mfaEnabled: true,
-      totpVerified: true,
       lastLoginAt: true,
       createdAt: true,
     },
   });
+
+  // Email the new user a magic-link sign-in URL
+  const { sent } = await sendMagicLink(email);
 
   return NextResponse.json({
     data: {
       ...user,
       lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
       createdAt: user.createdAt.toISOString(),
+      emailSent: sent,
     },
   }, { status: 201 });
 }

@@ -5,10 +5,6 @@ export const APP_CONFIG = {
   sessionMaxAgeHours: 24,
   sessionConcurrentLimit: 1,
   magicLinkExpiryMinutes: 15,
-  mfaChallengeExpiryMinutes: 5,
-  mfaMaxAttempts: 5,
-  totpWindow: 1, // allows 1 step before/after current for clock skew
-  totpIssuer: process.env.TOTP_ISSUER ?? "ABeam",
   sapVersion: "2508",
   pagination: {
     defaultLimit: 50,
@@ -19,15 +15,3 @@ export const APP_CONFIG = {
     allowedTypes: ["image/png", "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
   },
 } as const;
-
-/** Roles that require MFA (external / client-facing users + consultants) */
-export const MFA_REQUIRED_ROLES = [
-  "process_owner", "it_lead", "data_migration_lead",
-  "executive_sponsor", "project_manager", "viewer", "client_admin",
-  "consultant", "solution_architect",
-] as const;
-
-/** Roles that can bypass MFA (internal platform operators) */
-export const MFA_OPTIONAL_ROLES = [
-  "platform_admin", "partner_lead",
-] as const;

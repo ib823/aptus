@@ -11,7 +11,6 @@ function makeUser(overrides: Partial<SessionUser> = {}): SessionUser {
     organizationId: "test-org",
     mfaEnabled: true,
     mfaVerified: true,
-    totpVerified: true,
     hasWebAuthn: false,
     ...overrides,
   };
@@ -198,33 +197,17 @@ describe("Permission Utilities", () => {
   });
 
   describe("isMfaRequired", () => {
-    it("should require MFA for external/client roles without verification", () => {
-      expect(isMfaRequired(makeUser({ role: "process_owner", mfaVerified: false }))).toBe(true);
-      expect(isMfaRequired(makeUser({ role: "it_lead", mfaVerified: false }))).toBe(true);
-      expect(isMfaRequired(makeUser({ role: "executive_sponsor" as UserRole, mfaVerified: false }))).toBe(true);
-      expect(isMfaRequired(makeUser({ role: "data_migration_lead" as UserRole, mfaVerified: false }))).toBe(true);
-      expect(isMfaRequired(makeUser({ role: "project_manager" as UserRole, mfaVerified: false }))).toBe(true);
-      expect(isMfaRequired(makeUser({ role: "viewer" as UserRole, mfaVerified: false }))).toBe(true);
-      expect(isMfaRequired(makeUser({ role: "client_admin" as UserRole, mfaVerified: false }))).toBe(true);
-    });
-
-    it("should require MFA for legacy executive (maps to executive_sponsor)", () => {
-      expect(isMfaRequired(makeUser({ role: "executive" as UserRole, mfaVerified: false }))).toBe(true);
-    });
-
-    it("should not require MFA for external users with verification", () => {
-      expect(isMfaRequired(makeUser({ role: "process_owner", mfaVerified: true }))).toBe(false);
-    });
-
-    it("should require MFA for internal users only if enabled and not verified", () => {
-      expect(isMfaRequired(makeUser({ role: "consultant", mfaEnabled: true, mfaVerified: false }))).toBe(true);
-      expect(isMfaRequired(makeUser({ role: "consultant", mfaEnabled: false, mfaVerified: false }))).toBe(false);
-      expect(isMfaRequired(makeUser({ role: "consultant", mfaEnabled: true, mfaVerified: true }))).toBe(false);
-    });
-
-    it("should treat platform_admin as internal role", () => {
-      expect(isMfaRequired(makeUser({ role: "platform_admin" as UserRole, mfaEnabled: false, mfaVerified: false }))).toBe(false);
-      expect(isMfaRequired(makeUser({ role: "platform_admin" as UserRole, mfaEnabled: true, mfaVerified: false }))).toBe(true);
+    // Post-simplification contract: magic link is sufficient on its own, passkey is
+    // an optional upgrade. isMfaRequired() always returns false regardless of role,
+    // mfaEnabled, mfaVerified, or hasWebAuthn — there is no role-gated TOTP path.
+    it("never requires MFA — magic link is sufficient on its own", () => {
+      expect(isMfaRequired(makeUser({ role: "process_owner", mfaVerified: false }))).toBe(false);
+      expect(isMfaRequired(makeUser({ role: "it_lead", mfaVerified: false }))).toBe(false);
+      expect(isMfaRequired(makeUser({ role: "executive_sponsor" as UserRole, mfaVerified: false }))).toBe(false);
+      expect(isMfaRequired(makeUser({ role: "viewer" as UserRole, mfaVerified: false }))).toBe(false);
+      expect(isMfaRequired(makeUser({ role: "client_admin" as UserRole, mfaVerified: false }))).toBe(false);
+      expect(isMfaRequired(makeUser({ role: "consultant", mfaEnabled: true, mfaVerified: false }))).toBe(false);
+      expect(isMfaRequired(makeUser({ role: "platform_admin" as UserRole, mfaEnabled: true, mfaVerified: false }))).toBe(false);
     });
 
     it("should treat partner_lead as internal role", () => {

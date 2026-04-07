@@ -59,12 +59,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       parsed.data.deviceName,
     );
 
-    // Update user MFA status
+    // Mark user as MFA-enabled (passkey is the only second factor)
     await prisma.user.update({
       where: { id: user.id },
       data: {
         mfaEnabled: true,
-        mfaMethod: "webauthn",
       },
     });
 
