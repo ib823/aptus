@@ -340,33 +340,14 @@ export async function canTransitionStatus(
 }
 
 /**
- * Check if MFA is required for a user's role but not yet verified.
- * Updated for 11-role system.
+ * Check if MFA is required for a user. After the auth simplification, the only
+ * second factor is passkey/WebAuthn — there is no TOTP. Magic-link sign-in is
+ * sufficient on its own; passkey is offered as an optional upgrade for faster
+ * subsequent logins. This function therefore always returns false and is kept
+ * only as a stable shape for legacy callers.
  */
-export function isMfaRequired(user: SessionUser): boolean {
-  // Passkey = full trust. Users with a registered passkey are considered
-  // MFA-verified regardless of how they logged in (magic link, etc.).
-  // Passkeys are phishing-resistant, device-bound, and biometric-gated —
-  // strictly stronger than TOTP.
-  if (user.hasWebAuthn) return false;
-
-  // Already verified this session (TOTP or passkey login)
-  if (user.mfaVerified) return false;
-
-  const role = normalizeRole(user.role);
-
-  // External / client-facing roles: MFA required (TOTP if no passkey)
-  const mfaRequiredRoles: UserRole[] = [
-    "process_owner", "it_lead", "data_migration_lead",
-    "executive_sponsor", "project_manager", "viewer", "client_admin",
-  ];
-
-  if (mfaRequiredRoles.includes(role)) {
-    return true;
-  }
-
-  // Internal roles: MFA required only if they've opted in
-  return user.mfaEnabled;
+export function isMfaRequired(_user: SessionUser): boolean {
+  return false;
 }
 
 /**

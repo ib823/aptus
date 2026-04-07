@@ -25,11 +25,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // Verify the user is still active
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, isActive: true },
+    select: { id: true, isActive: true, emailVerified: true },
   });
 
   if (!user || !user.isActive) {
     return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // Clicking a magic link proves the user controls the inbox — record it
+  if (!user.emailVerified) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerified: new Date() },
+    });
   }
 
   // Create a custom session — use first IP from X-Forwarded-For (leftmost = client)

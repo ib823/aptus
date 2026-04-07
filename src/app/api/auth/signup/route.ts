@@ -6,6 +6,7 @@ import { ERROR_CODES } from "@/types/api";
 import { generateSlug } from "@/lib/commercial/plan-engine";
 import { createTrial } from "@/lib/commercial/trial-manager";
 import { canRegister } from "@/lib/auth/auth-config";
+import { sendMagicLink } from "@/lib/auth/send-magic-link";
 import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { z } from "zod";
 
@@ -98,12 +99,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // Start trial for the new org
   await createTrial(result.org.id);
 
+  // Send the magic-link email so the user can sign in immediately
+  const { sent } = await sendMagicLink(email);
+
   return NextResponse.json(
     {
       data: {
         organizationId: result.org.id,
         userId: result.user.id,
-        message: "Account created. Sign in with your email to get started.",
+        emailSent: sent,
+        message: sent
+          ? "Account created. Check your email for a sign-in link."
+          : "Account created. Visit the login page to request a sign-in link.",
       },
     },
     { status: 201 },

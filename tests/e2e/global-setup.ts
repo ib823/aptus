@@ -41,7 +41,7 @@ async function createUserAndSession(
     where: { user: { email: user.email } },
   });
 
-  // External roles need MFA/TOTP marked as verified for E2E testing
+  // mfaEnabled is now a soft preference; mark external roles as enrolled for parity with prod
   const externalRoles = ["process_owner", "it_lead", "executive"];
   const isExternal = externalRoles.includes(user.role);
 
@@ -49,11 +49,11 @@ async function createUserAndSession(
     where: { email: user.email },
     update: {
       name: user.name, role: user.role, isActive: true,
-      mfaEnabled: isExternal, totpVerified: isExternal,
+      mfaEnabled: isExternal,
     },
     create: {
       email: user.email, name: user.name, role: user.role, isActive: true,
-      mfaEnabled: isExternal, totpVerified: isExternal,
+      mfaEnabled: isExternal,
     },
   });
 

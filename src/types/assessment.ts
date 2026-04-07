@@ -310,7 +310,6 @@ export interface SessionUser {
   organizationId: string | null;
   mfaEnabled: boolean;
   mfaVerified: boolean;
-  totpVerified: boolean;
   hasWebAuthn: boolean;
 }
 

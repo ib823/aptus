@@ -312,55 +312,7 @@ describe("Input Validation", () => {
   });
 });
 
-// ── TOTP Encryption ──────────────────────────────────────────────────────
-describe("TOTP Encryption", () => {
-  const MOCK_KEY = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6";
-
-  beforeEach(() => {
-    vi.stubEnv("TOTP_ENCRYPTION_KEY", MOCK_KEY);
-  });
-
-  test("encrypts and decrypts a secret round-trip", async () => {
-    const { encryptTotpSecret, decryptTotpSecret } = await import("@/lib/auth/mfa");
-    const secret = "JBSWY3DPEHPK3PXP";
-    const encrypted = encryptTotpSecret(secret);
-    const decrypted = decryptTotpSecret(encrypted);
-    expect(decrypted).toBe(secret);
-  });
-
-  test("encrypted output contains iv:tag:ciphertext format", async () => {
-    const { encryptTotpSecret } = await import("@/lib/auth/mfa");
-    const encrypted = encryptTotpSecret("test-secret");
-    const parts = encrypted.split(":");
-    expect(parts).toHaveLength(3);
-    // IV should be 32 hex chars (16 bytes)
-    expect(parts[0]).toMatch(/^[a-f0-9]{32}$/);
-    // Auth tag should be 32 hex chars (16 bytes)
-    expect(parts[1]).toMatch(/^[a-f0-9]{32}$/);
-  });
-
-  test("different encryptions produce different ciphertexts (random IV)", async () => {
-    const { encryptTotpSecret } = await import("@/lib/auth/mfa");
-    const secret = "JBSWY3DPEHPK3PXP";
-    const enc1 = encryptTotpSecret(secret);
-    const enc2 = encryptTotpSecret(secret);
-    expect(enc1).not.toBe(enc2);
-  });
-
-  test("rejects tampered ciphertext", async () => {
-    const { encryptTotpSecret, decryptTotpSecret } = await import("@/lib/auth/mfa");
-    const encrypted = encryptTotpSecret("test-secret");
-    const parts = encrypted.split(":");
-    // Tamper with ciphertext
-    const tampered = `${parts[0]}:${parts[1]}:ff${parts[2]?.slice(2)}`;
-    expect(() => decryptTotpSecret(tampered)).toThrow();
-  });
-
-  test("rejects invalid format", async () => {
-    const { decryptTotpSecret } = await import("@/lib/auth/mfa");
-    expect(() => decryptTotpSecret("invalid")).toThrow("Invalid encrypted secret format");
-  });
-});
+// TOTP encryption tests removed — TOTP support deleted in favor of passkey-only second factor.
 
 // ── Session Security ──────────────────────────────────────────────────────
 describe("Session Token Generation", () => {
@@ -379,44 +331,24 @@ describe("Session Token Generation", () => {
 
 // ── Permission Boundaries ─────────────────────────────────────────────────
 describe("Permission Boundaries", () => {
-  test("MFA is required for external roles when unverified", async () => {
+  // Post-simplification: there is no role-gated TOTP. Magic link is sufficient
+  // on its own; passkey is an optional upgrade. isMfaRequired() always returns false.
+  test("isMfaRequired always returns false (magic link is sufficient)", async () => {
     const { isMfaRequired } = await import("@/lib/auth/permissions");
 
     const externalUser = {
       id: "1", email: "test@test.com", name: "Test",
       role: "process_owner" as const,
-      organizationId: null, mfaEnabled: true, mfaVerified: false, totpVerified: true, hasWebAuthn: false,
+      organizationId: null, mfaEnabled: true, mfaVerified: false, hasWebAuthn: false,
     };
-    expect(isMfaRequired(externalUser)).toBe(true);
-  });
-
-  test("MFA is not required when already verified", async () => {
-    const { isMfaRequired } = await import("@/lib/auth/permissions");
-
-    const verifiedUser = {
-      id: "1", email: "test@test.com", name: "Test",
-      role: "executive" as unknown as UserRole,
-      organizationId: null, mfaEnabled: true, mfaVerified: true, totpVerified: true, hasWebAuthn: false,
-    };
-    expect(isMfaRequired(verifiedUser)).toBe(false);
-  });
-
-  test("internal roles only need MFA if they opted in", async () => {
-    const { isMfaRequired } = await import("@/lib/auth/permissions");
+    expect(isMfaRequired(externalUser)).toBe(false);
 
     const adminNoMfa = {
-      id: "1", email: "admin@test.com", name: "Admin",
+      id: "2", email: "admin@test.com", name: "Admin",
       role: "admin" as unknown as UserRole,
-      organizationId: null, mfaEnabled: false, mfaVerified: false, totpVerified: false, hasWebAuthn: false,
+      organizationId: null, mfaEnabled: false, mfaVerified: false, hasWebAuthn: false,
     };
     expect(isMfaRequired(adminNoMfa)).toBe(false);
-
-    const adminWithMfa = {
-      id: "1", email: "admin@test.com", name: "Admin",
-      role: "admin" as unknown as UserRole,
-      organizationId: null, mfaEnabled: true, mfaVerified: false, totpVerified: true, hasWebAuthn: false,
-    };
-    expect(isMfaRequired(adminWithMfa)).toBe(true);
   });
 
   test("executives cannot edit step responses", async () => {

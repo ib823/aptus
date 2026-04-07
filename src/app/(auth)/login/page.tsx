@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useCallback, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Mail, CheckCircle, AlertCircle, ArrowLeft, KeyRound, Hash } from "lucide-react";
+import { Mail, CheckCircle, AlertCircle, ArrowLeft, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ABeamLogo } from "@/components/shared/ABeamLogo";
@@ -16,14 +16,11 @@ import { UI_TEXT } from "@/constants/ui-text";
 import { signIn } from "next-auth/react";
 import { useWebAuthnLogin } from "@/hooks/useWebAuthnLogin";
 
-type LoginMode = "default" | "invite-code";
-
 function LoginForm() {
   const searchParams = useSearchParams();
   const isVerify = searchParams?.get("verify") === "true";
   const isError = searchParams?.get("error") === "true";
 
-  const [mode, setMode] = useState<LoginMode>("default");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(isVerify);
@@ -38,10 +35,6 @@ function LoginForm() {
   });
   const [resendCooldown, setResendCooldown] = useState(0);
   const { isSupported: passkeySupported, authenticate: passkeyAuth, isPending: passkeyPending } = useWebAuthnLogin();
-
-  // Invite code state
-  const [inviteCode, setInviteCode] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
 
   // Countdown timer for resend cooldown
   useEffect(() => {
@@ -116,37 +109,6 @@ function LoginForm() {
     setError("");
   }, []);
 
-  const handleInviteCodeSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      setLoading(true);
-      setError("");
-
-      try {
-        const res = await fetch("/api/auth/invite-code/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: inviteEmail, code: inviteCode.replace(/\D/g, "") }),
-        });
-
-        const json = await res.json();
-
-        if (!res.ok) {
-          setError(json.error?.message ?? "Invalid code. Please try again.");
-          setLoading(false);
-          return;
-        }
-
-        // Session cookie set by API — redirect
-        window.location.href = json.data.redirectUrl ?? "/assessments";
-      } catch {
-        setError("Something went wrong. Please check your connection and try again.");
-        setLoading(false);
-      }
-    },
-    [inviteEmail, inviteCode],
-  );
-
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
       {/* Mobile-only logo */}
@@ -190,88 +152,6 @@ function LoginForm() {
               </button>
             </div>
           </div>
-        </div>
-      ) : mode === "invite-code" ? (
-        /* Invite code form */
-        <div>
-          <button
-            onClick={() => { setMode("default"); setError(""); }}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </button>
-
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-semibold text-foreground">
-              Sign in with invite code
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Enter your email and the 6-digit code from your administrator.
-            </p>
-          </div>
-
-          {error && (
-            <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive mb-6">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleInviteCodeSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="invite-email" className="block text-sm font-medium mb-1 text-left">
-                Email address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  id="invite-email"
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="you@company.com"
-                  className="pl-10 h-11"
-                  required
-                  autoFocus
-                />
-              </div>
-            </div>
-            <div>
-              <label htmlFor="invite-code" className="block text-sm font-medium mb-1 text-left">
-                Invite code
-              </label>
-              <div className="relative">
-                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  id="invite-code"
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={7}
-                  value={inviteCode}
-                  onChange={(e) => {
-                    // Allow digits and auto-format as XXX-XXX
-                    const digits = e.target.value.replace(/\D/g, "").slice(0, 6);
-                    if (digits.length > 3) {
-                      setInviteCode(digits.slice(0, 3) + "-" + digits.slice(3));
-                    } else {
-                      setInviteCode(digits);
-                    }
-                  }}
-                  placeholder="000-000"
-                  className="pl-10 h-11 text-lg tracking-widest font-mono"
-                  required
-                />
-              </div>
-            </div>
-            <Button
-              type="submit"
-              className="w-full h-11"
-              disabled={!inviteEmail || inviteCode.replace(/\D/g, "").length !== 6 || loading}
-            >
-              {loading ? "Verifying..." : "Verify & Sign In"}
-            </Button>
-          </form>
         </div>
       ) : (
         /* Default sign-in form */
@@ -359,25 +239,6 @@ function LoginForm() {
                 {loading ? "Sending..." : UI_TEXT.auth.sendMagicLink}
               </Button>
             </form>
-
-            {/* Invite code option */}
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">or</span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => { setMode("invite-code"); setError(""); }}
-              className="w-full flex items-center justify-center gap-2 h-11 text-sm text-muted-foreground hover:text-foreground border border-dashed border-border rounded-md transition-colors hover:bg-muted/30"
-            >
-              <Hash className="w-4 h-4" />
-              Sign in with invite code
-            </button>
 
             {/* Sign up link */}
             <p className="text-center text-sm text-muted-foreground pt-2">

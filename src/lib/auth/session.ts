@@ -90,7 +90,6 @@ export async function validateSession(
           role: true,
           organizationId: true,
           mfaEnabled: true,
-          totpVerified: true,
           isActive: true,
           _count: { select: { webauthnCredentials: true } },
         },
@@ -121,7 +120,6 @@ export async function validateSession(
     organizationId: session.user.organizationId,
     mfaEnabled: session.user.mfaEnabled,
     mfaVerified: session.mfaVerified,
-    totpVerified: session.user.totpVerified,
     hasWebAuthn: session.user._count.webauthnCredentials > 0,
   };
 }

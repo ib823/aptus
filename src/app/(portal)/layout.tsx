@@ -4,7 +4,7 @@ import { getOrganizationSubscription } from "@/lib/db/organizations";
 import { PortalNav } from "@/components/layout/PortalNav";
 import { OnboardingGuard } from "@/components/onboarding/OnboardingGuard";
 import { SubscriptionStatusBanner } from "@/components/commercial/SubscriptionStatusBanner";
-// MFA_REQUIRED_ROLES no longer needed — all users must register passkey
+// Passkey enrollment is offered as a soft, dismissable prompt below — never a hard gate
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { MobileBottomTabBar } from "@/components/pwa/MobileBottomTabBar";
 import { PasskeyEnrollmentPrompt } from "@/components/auth/PasskeyEnrollmentPrompt";
@@ -25,11 +25,6 @@ export default async function PortalLayout({
 
   if (!user) {
     redirect("/login");
-  }
-
-  // All new users must register a passkey before accessing the portal
-  if (!user.hasWebAuthn) {
-    redirect("/mfa/setup");
   }
 
   // Fetch org subscription status for banner
