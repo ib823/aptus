@@ -1,6 +1,6 @@
-// ABeam Service Worker — Push notifications + offline caching
+// Aptus Service Worker — Push notifications + offline caching
 
-const CACHE_VERSION = "abeam-v1";
+const CACHE_VERSION = "aptus-v2";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 
