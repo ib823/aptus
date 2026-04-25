@@ -33,6 +33,8 @@ export default async function GranularityPage({ params }: PageProps) {
     notFound();
   }
 
+  // ScopeSelection has no Prisma @relation back to ScopeItem (just the
+  // scopeItemId FK), so we do two queries and join in memory.
   const selections = await prisma.scopeSelection.findMany({
     where: { assessmentId, selected: true },
     select: {
@@ -42,28 +44,34 @@ export default async function GranularityPage({ params }: PageProps) {
       assessmentVerdict: true,
       notes: true,
       upgradedAt: true,
-      scopeItem: {
-        select: {
-          name: true,
-          functionalArea: true,
-          totalSteps: true,
-        },
-      },
     },
-    orderBy: [{ scopeItem: { functionalArea: "asc" } }, { scopeItemId: "asc" }],
   });
 
-  const rows = selections.map((s) => ({
-    id: s.id,
-    scopeItemId: s.scopeItemId,
-    name: s.scopeItem.name,
-    functionalArea: s.scopeItem.functionalArea,
-    totalSteps: s.scopeItem.totalSteps,
-    granularity: s.granularity,
-    assessmentVerdict: s.assessmentVerdict,
-    notes: s.notes,
-    upgradedAt: s.upgradedAt?.toISOString() ?? null,
-  }));
+  const scopeItems = await prisma.scopeItem.findMany({
+    where: { id: { in: selections.map((s) => s.scopeItemId) } },
+    select: { id: true, name: true, functionalArea: true, totalSteps: true },
+  });
+  const scopeMap = new Map(scopeItems.map((s) => [s.id, s]));
+
+  const rows = selections
+    .map((s) => {
+      const item = scopeMap.get(s.scopeItemId);
+      return {
+        id: s.id,
+        scopeItemId: s.scopeItemId,
+        name: item?.name ?? s.scopeItemId,
+        functionalArea: item?.functionalArea ?? "(Uncategorized)",
+        totalSteps: item?.totalSteps ?? 0,
+        granularity: s.granularity,
+        assessmentVerdict: s.assessmentVerdict,
+        notes: s.notes,
+        upgradedAt: s.upgradedAt?.toISOString() ?? null,
+      };
+    })
+    .sort((a, b) => {
+      const fa = (a.functionalArea ?? "").localeCompare(b.functionalArea ?? "");
+      return fa !== 0 ? fa : a.scopeItemId.localeCompare(b.scopeItemId);
+    });
 
   return (
     <GranularityManagerClient
