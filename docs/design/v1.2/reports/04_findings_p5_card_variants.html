@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>04 Findings — Card Variants · Aptus</title>
+<link rel="stylesheet" href="print.css">
+<style>
+  /* This is a design-review artifact, not a single-page print artifact.
+     Allow the page to grow vertically to fit all 8 cards. */
+  .page { min-height: auto; padding-top: 18mm; padding-bottom: 18mm; }
+  .find-card { margin-bottom: 4mm; }
+  .find-card.compact { padding: 4mm 5mm; }
+  .find-card.compact .find-row { margin: 1.4mm 0; }
+  /* Don't ship this page to a printer — it's a reference, not a real PDF page. */
+  @media print { body { display: none; } }
+</style>
+</head>
+<body>
+
+<div class="page" style="width:210mm;">
+  <div style="margin-bottom: 6mm;">
+    <h1 class="h1" style="margin-bottom:1mm;">Finding card — variants by outcome</h1>
+    <p class="caption">All 8 outcome variants. Same card structure, different status dot, label, and "What it means for you" sentence (per §2.5 voice ladder).</p>
+  </div>
+
+  <!-- 1. Standard SAP -->
+  <div class="find-card compact">
+    <div class="find-head">
+      <div class="find-id">REQ-FIN-001</div>
+      <div class="pill"><span class="dot dot-success"></span>Standard SAP</div>
+    </div>
+    <div class="find-row"><div class="find-row-label">Your ask</div><div class="find-row-value">Generate monthly trial balance with comparative prior-period analysis.</div></div>
+    <div class="find-row"><div class="find-row-label">What SAP does</div><div class="find-row-value">Standard SAP produces this report exactly as described, with built-in comparison-period selection.</div></div>
+    <div class="find-row"><div class="find-row-label">What it means for you</div><div class="find-row-value">Nothing to build. Available from day one of go-live.</div></div>
+  </div>
+
+  <!-- 2. Configurable -->
+  <div class="find-card compact">
+    <div class="find-head">
+      <div class="find-id">REQ-FIN-014</div>
+      <div class="pill"><span class="dot dot-warning"></span>Configurable</div>
+    </div>
+    <div class="find-row"><div class="find-row-label">Your ask</div><div class="find-row-value">Apply withholding tax to vendor payments per LHDN Malaysia rules.</div></div>
+    <div class="find-row"><div class="find-row-label">What SAP does</div><div class="find-row-value">SAP supports country-specific withholding tax. Our team configures the rate matrix and certificate output.</div></div>
+    <div class="find-row"><div class="find-row-label">What it means for you</div><div class="find-row-value">Our team configures it once. Future changes are admin-level — no developer needed.</div></div>
+  </div>
+
+  <!-- 3. Adapt to SAP -->
+  <div class="find-card compact">
+    <div class="find-head">
+      <div class="find-id">REQ-FIN-041</div>
+      <div class="pill"><span class="dot dot-warning"></span>Adapt to SAP</div>
+    </div>
+    <div class="find-row"><div class="find-row-label">Your ask</div><div class="find-row-value">Manual journal-entry approval flow with 4-tier authorisation mirroring legacy paper process.</div></div>
+    <div class="find-row"><div class="find-row-label">What SAP does</div><div class="find-row-value">SAP standard supports a configurable approval workflow with up to 3 tiers.</div></div>
+    <div class="find-row"><div class="find-row-label">What it means for you</div><div class="find-row-value">We recommend adjusting how this is handled today. Why: SAP's standard approach is more efficient and avoids ongoing customisation cost.</div></div>
+  </div>
+
+  <!-- 4. Trusted add-on -->
+  <div class="find-card compact">
+    <div class="find-head">
+      <div class="find-id">REQ-FIN-027</div>
+      <div class="pill"><span class="dot dot-info"></span>Trusted add-on</div>
+    </div>
+    <div class="find-row"><div class="find-row-label">Your ask</div><div class="find-row-value">Real-time FX exposure dashboard across MYR, USD, SGD, EUR with automated hedging recommendations.</div></div>
+    <div class="find-row"><div class="find-row-label">What SAP does</div><div class="find-row-value">Standard SAP tracks FX positions but does not recommend hedges.</div></div>
+    <div class="find-row"><div class="find-row-label">What it means for you</div><div class="find-row-value">We deploy a certified third-party product (Kyriba). Licence cost ~MYR 320,000 / year. Lower risk than custom code.</div></div>
+  </div>
+
+  <!-- 5. Power-user extension -->
+  <div class="find-card compact">
+    <div class="find-head">
+      <div class="find-id">REQ-SD-082</div>
+      <div class="pill"><span class="dot dot-info"></span>Power-user extension</div>
+    </div>
+    <div class="find-row"><div class="find-row-label">Your ask</div><div class="find-row-value">Custom field on the sales order for "broker reference number" with copy-down to delivery and invoice.</div></div>
+    <div class="find-row"><div class="find-row-label">What SAP does</div><div class="find-row-value">SAP supports adding custom fields with copy-down behaviour through its no-code Key User Tools.</div></div>
+    <div class="find-row"><div class="find-row-label">What it means for you</div><div class="find-row-value">One of your power users builds it in SAP's no-code tool. About half a day of work, no developer required.</div></div>
+  </div>
+
+  <!-- 6. Cloud add-on (BTP) -->
+  <div class="find-card compact">
+    <div class="find-head">
+      <div class="find-id">REQ-CSV-019</div>
+      <div class="pill"><span class="dot dot-info"></span>Cloud add-on (BTP)</div>
+    </div>
+    <div class="find-row"><div class="find-row-label">Your ask</div><div class="find-row-value">Customer-facing portal showing real-time order status, downloadable invoices, and a self-service returns request.</div></div>
+    <div class="find-row"><div class="find-row-label">What SAP does</div><div class="find-row-value">Core SAP exposes the data, but the public-facing portal is built outside core to keep it isolated.</div></div>
+    <div class="find-row"><div class="find-row-label">What it means for you</div><div class="find-row-value">We build a small companion app on SAP's cloud platform. About 8 days. Stays separate from core SAP — easier upgrades.</div></div>
+  </div>
+
+  <!-- 7. Custom build -->
+  <div class="find-card compact">
+    <div class="find-head">
+      <div class="find-id">REQ-FIN-103</div>
+      <div class="pill"><span class="dot dot-danger"></span>Custom build</div>
+    </div>
+    <div class="find-row"><div class="find-row-label">Your ask</div><div class="find-row-value">Bursa-specific clearing-house settlement engine integrating intra-day with the trading platform.</div></div>
+    <div class="find-row"><div class="find-row-label">What SAP does</div><div class="find-row-value">No standard SAP equivalent. Logic is unique to Bursa's competitive position as a market operator.</div></div>
+    <div class="find-row"><div class="find-row-label">What it means for you</div><div class="find-row-value">Unique to your business, so we build it in SAP. About 12 days. We've kept these to a minimum — only 1.4% of your requirements.</div></div>
+  </div>
+
+  <!-- 8. Out of scope -->
+  <div class="find-card compact">
+    <div class="find-head">
+      <div class="find-id">REQ-HR-058</div>
+      <div class="pill"><span class="dot dot-neutral"></span>Out of scope</div>
+    </div>
+    <div class="find-row"><div class="find-row-label">Your ask</div><div class="find-row-value">Talent-management succession planning with 360° feedback workflow.</div></div>
+    <div class="find-row"><div class="find-row-label">What SAP does</div><div class="find-row-value">Handled by SuccessFactors, a separate SAP product not selected for this phase.</div></div>
+    <div class="find-row"><div class="find-row-label">What it means for you</div><div class="find-row-value">Not addressed in this phase. Reason: SuccessFactors is targeted for Phase 2 (FY27). Can be revisited then.</div></div>
+  </div>
+
+  <div class="page-footer">Aptus · Confidential · 5 · 04_Requirements_Findings.pdf — Card variants reference</div>
+</div>
+
+<div class="review-bar">
+  <a href="04_findings_p4_area_summary.html">← page 4</a>
+  <span>04_Requirements_Findings.pdf · page 5 of 6 — Card variants</span>
+  <a href="04_findings_p6_recommendations.html">page 6 →</a>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Reports — review grid · Aptus</title>
+<style>
+  body { background:#FAFAFA; margin:0; padding:32px 40px; font-family:'Geist','Inter',-apple-system,sans-serif; color:#0B0B0F; }
+  h1 { font-size:22pt; font-weight:600; margin:0 0 4px; letter-spacing:-0.01em; }
+  .lead { color:#52525B; font-size:11pt; margin:0 0 28px; max-width:680px; }
+  .legend { display:flex; gap:18px; align-items:center; font-size:10pt; color:#52525B; margin-bottom:24px; }
+  .swatch { display:inline-flex; align-items:center; gap:6px; }
+  .swatch i { width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .pdf  { background:#0B0B0F; }
+  .xlsx { background:#107C41; }
+  .group-h { font-size:9pt; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#71717A; margin:28px 0 10px; padding-bottom:4px; border-bottom:1px solid #E4E4E7; }
+  .grid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:14px; }
+  .card { display:block; background:white; border:1px solid #E4E4E7; padding:14px; text-decoration:none; color:inherit; transition:border-color .15s ease, transform .15s ease; }
+  .card:hover { border-color:#0B0B0F; transform:translateY(-1px); }
+  .card .num { font-size:9pt; color:#71717A; font-variant-numeric:tabular-nums; }
+  .card .title { font-size:11.5pt; font-weight:600; margin-top:4px; }
+  .card .meta { font-size:9.5pt; color:#52525B; margin-top:10px; display:flex; gap:8px; align-items:center; }
+  .card .kind { display:inline-flex; align-items:center; gap:5px; font-size:9pt; font-weight:600; padding:2px 7px; border-radius:3px; color:white; }
+  .card .kind.pdf { background:#0B0B0F; }
+  .card .kind.xlsx { background:#107C41; }
+  .card .pages { color:#71717A; }
+  .card .desc { font-size:9.5pt; color:#52525B; margin-top:8px; line-height:1.4; }
+  .card .mocks { font-size:8.5pt; color:#A1A1AA; margin-top:10px; padding-top:8px; border-top:1px dashed #E4E4E7; display:flex; flex-wrap:wrap; gap:4px 8px; }
+  .card .mocks a { color:#52525B; text-decoration:none; }
+  .card .mocks a:hover { color:#0B0B0F; text-decoration:underline; }
+  .footer-strip { display:flex; gap:14px; margin-top:28px; padding-top:18px; border-top:1px solid #E4E4E7; font-size:10pt; color:#52525B; }
+  .footer-strip a { color:#0B0B0F; text-decoration:none; font-weight:500; }
+  .footer-strip a:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+
+<h1>Reports — design review</h1>
+<p class="lead">All 16 deliverable mocks for Bursa Malaysia's S/4HANA fit-to-standard assessment. Each card opens a representative page or sheet. Use this grid to walk through the bundle in order.</p>
+
+<div class="legend">
+  <span class="swatch"><i class="pdf"></i> PDF deliverable</span>
+  <span class="swatch"><i class="xlsx"></i> XLSX deliverable</span>
+  <span style="margin-left:auto;"><a href="contact_sheet.html" style="color:#0B0B0F; text-decoration:none; font-weight:500;">→ Contact sheet (all covers)</a></span>
+</div>
+
+<div class="group-h">PDF reports</div>
+<div class="grid">
+
+  <a class="card" href="01_executive_summary_p1.html">
+    <div class="num">01</div>
+    <div class="title">Executive Summary</div>
+    <div class="meta"><span class="kind pdf">PDF</span><span class="pages">3 pp</span></div>
+    <div class="desc">Verdict, headline numbers, scope, fit/gap split, signoff.</div>
+    <div class="mocks">
+      <a href="01_executive_summary_p1.html">cover</a>
+      <a href="01_executive_summary_p2.html">scope/fit</a>
+      <a href="01_executive_summary_p3.html">config/signoff</a>
+    </div>
+  </a>
+
+  <a class="card" href="02_effort_estimate_p1.html">
+    <div class="num">02</div>
+    <div class="title">Effort Estimate</div>
+    <div class="meta"><span class="kind pdf">PDF</span><span class="pages">3 pp</span></div>
+    <div class="desc">Resourcing model, effort by workstream, phasing &amp; assumptions.</div>
+    <div class="mocks">
+      <a href="02_effort_estimate_p1.html">cover</a>
+      <a href="02_effort_estimate_p2.html">breakdown</a>
+      <a href="02_effort_estimate_p3.html">phasing</a>
+    </div>
+  </a>
+
+  <a class="card" href="03_readiness_scorecard_p1.html">
+    <div class="num">03</div>
+    <div class="title">Readiness Scorecard</div>
+    <div class="meta"><span class="kind pdf">PDF</span><span class="pages">~9 pp</span></div>
+    <div class="desc">Overall readiness ring, per-area scores, category template.</div>
+    <div class="mocks">
+      <a href="03_readiness_scorecard_p1.html">headline</a>
+      <a href="03_readiness_scorecard_p2.html">scores</a>
+      <a href="03_readiness_scorecard_p3.html">category</a>
+      <a href="03_readiness_bursa_variant.html">Bursa variant</a>
+    </div>
+  </a>
+
+  <a class="card" href="04_findings_p1_cover.html">
+    <div class="num">04</div>
+    <div class="title">Requirements Findings</div>
+    <div class="meta"><span class="kind pdf">PDF</span><span class="pages">~24 pp</span></div>
+    <div class="desc">Per-area findings, fit/gap cards, recommendations.</div>
+    <div class="mocks">
+      <a href="04_findings_p1_cover.html">cover</a>
+      <a href="04_findings_p2_glossary.html">glossary</a>
+      <a href="04_findings_p3_glance.html">at a glance</a>
+      <a href="04_findings_p4_area_summary.html">area</a>
+      <a href="04_findings_p5_card_variants.html">cards</a>
+      <a href="04_findings_p6_recommendations.html">recs</a>
+    </div>
+  </a>
+
+  <a class="card" href="13_flow_atlas_p1.html">
+    <div class="num">13</div>
+    <div class="title">Flow Atlas</div>
+    <div class="meta"><span class="kind pdf">PDF</span><span class="pages">143 pp · landscape</span></div>
+    <div class="desc">One swim-lane diagram per L4 process, lane labels, verdict dots.</div>
+    <div class="mocks">
+      <a href="13_flow_atlas_p1.html">cover</a>
+      <a href="13_flow_atlas_p2.html">L4 diagram</a>
+    </div>
+  </a>
+
+  <a class="card" href="16_sign_off.html">
+    <div class="num">16</div>
+    <div class="title">Sign-Off</div>
+    <div class="meta"><span class="kind pdf">PDF</span><span class="pages">2 pp</span></div>
+    <div class="desc">Two-signatory acceptance page with bundle hash.</div>
+    <div class="mocks">
+      <a href="16_sign_off.html">signature page</a>
+    </div>
+  </a>
+
+</div>
+
+<div class="group-h">XLSX deliverables</div>
+<div class="grid">
+
+  <a class="card" href="05_traceability_matrix.html">
+    <div class="num">05</div>
+    <div class="title">Traceability Matrix</div>
+    <div class="meta"><span class="kind xlsx">XLSX</span><span class="pages">778 rows</span></div>
+    <div class="desc">Requirement → process → step → outcome, all 8 verdicts represented.</div>
+    <div class="mocks"><a href="05_traceability_matrix.html">main sheet</a></div>
+  </a>
+
+  <a class="card" href="06_scope_catalog.html">
+    <div class="num">06</div>
+    <div class="title">Scope Catalog</div>
+    <div class="meta"><span class="kind xlsx">XLSX</span><span class="pages">142 rows</span></div>
+    <div class="desc">L1–L4 hierarchy, owner, scope flag, granularity.</div>
+    <div class="mocks"><a href="06_scope_catalog.html">catalog</a></div>
+  </a>
+
+  <a class="card" href="07_step_detail.html">
+    <div class="num">07</div>
+    <div class="title">Step Detail</div>
+    <div class="meta"><span class="kind xlsx">XLSX</span><span class="pages">3,049 rows</span></div>
+    <div class="desc">Step-level register: action, role, system, verdict, evidence.</div>
+    <div class="mocks"><a href="07_step_detail.html">register</a></div>
+  </a>
+
+  <a class="card" href="08_gap_register.html">
+    <div class="num">08</div>
+    <div class="title">Gap Register</div>
+    <div class="meta"><span class="kind xlsx">XLSX</span><span class="pages">158 rows</span></div>
+    <div class="desc">Gaps with resolution path (Configure / Adopt / Add-on / Custom).</div>
+    <div class="mocks"><a href="08_gap_register.html">register</a></div>
+  </a>
+
+  <a class="card" href="09_config_workbook.html">
+    <div class="num">09</div>
+    <div class="title">Config Workbook</div>
+    <div class="meta"><span class="kind xlsx">XLSX</span><span class="pages">~600 rows</span></div>
+    <div class="desc">Org structures, COA, doc types, tolerance groups, output ctrl.</div>
+    <div class="mocks"><a href="09_config_workbook.html">workbook</a></div>
+  </a>
+
+  <a class="card" href="10_integration_register.html">
+    <div class="num">10</div>
+    <div class="title">Integration Register</div>
+    <div class="meta"><span class="kind xlsx">XLSX</span><span class="pages">28 rows</span></div>
+    <div class="desc">Endpoints, patterns, data flows &amp; error catalogue.</div>
+    <div class="mocks"><a href="10_integration_register.html">integrations</a></div>
+  </a>
+
+  <a class="card" href="11_data_migration.html">
+    <div class="num">11</div>
+    <div class="title">Data Migration Register</div>
+    <div class="meta"><span class="kind xlsx">XLSX</span><span class="pages">22 rows</span></div>
+    <div class="desc">Migration objects, mappings, cleanse rules, cutover waves.</div>
+    <div class="mocks"><a href="11_data_migration.html">objects</a></div>
+  </a>
+
+  <a class="card" href="12_ocm_report.html">
+    <div class="num">12</div>
+    <div class="title">OCM Report</div>
+    <div class="meta"><span class="kind xlsx">XLSX</span><span class="pages">28 rows</span></div>
+    <div class="desc">Stakeholders, role-level impact, training hours, comms plan.</div>
+    <div class="mocks"><a href="12_ocm_report.html">impact</a></div>
+  </a>
+
+  <a class="card" href="14_audit_trail.html">
+    <div class="num">14</div>
+    <div class="title">Audit Trail</div>
+    <div class="meta"><span class="kind xlsx">XLSX</span><span class="pages">~12,800 rows</span></div>
+    <div class="desc">Every state-changing action with actor, before/after, IP.</div>
+    <div class="mocks"><a href="14_audit_trail.html">audit</a></div>
+  </a>
+
+  <a class="card" href="15_remaining_items.html">
+    <div class="num">15</div>
+    <div class="title">Remaining Items</div>
+    <div class="meta"><span class="kind xlsx">XLSX</span><span class="pages">34 rows</span></div>
+    <div class="desc">Open decisions, gaps, scope-resolution items — blocking flagged.</div>
+    <div class="mocks"><a href="15_remaining_items.html">remaining</a></div>
+  </a>
+
+</div>
+
+<div class="footer-strip">
+  <span>Aptus · Bursa Malaysia Berhad · S/4HANA fit-to-standard</span>
+  <span style="margin-left:auto;">
+    <a href="contact_sheet.html">contact sheet</a> ·
+    <a href="../index.html">↺ back to app</a>
+  </span>
+</div>
+
+</body>
+</html>

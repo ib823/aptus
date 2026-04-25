@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>08 Gap Register · Aptus</title>
+<link rel="stylesheet" href="print.css">
+<style>
+  body { background: #E4E4E7; }
+  .xlsx-page { width: 297mm; min-height: 210mm; margin: 16mm auto; background: white; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  .effort-low { background: #DCFCE7 !important; }
+  .effort-med { background: #FEF3C7 !important; }
+  .effort-hi  { background: #FEE2E2 !important; }
+  .risk-low { background: #DCFCE7 !important; }
+  .risk-med { background: #FEF3C7 !important; }
+  .risk-hi  { background: #FEE2E2 !important; }
+</style>
+</head>
+<body>
+
+<div class="xlsx-page">
+  <div class="xlsx-toolbar">
+    <span class="name">08_Gap_Register.xlsx</span>
+    <span class="sep"></span>
+    <span>Sheet: <b style="color:var(--text);">Gaps</b></span>
+    <span class="sep"></span>
+    <span>158 rows · 10 columns</span>
+    <span class="sep"></span>
+    <span>Effort &amp; Risk colour-scaled · Frozen header</span>
+  </div>
+
+  <table class="xlsx">
+    <colgroup>
+      <col style="width:22mm"><col style="width:42mm"><col style="width:42mm"><col style="width:32mm"><col style="width:18mm"><col style="width:18mm"><col style="width:20mm"><col style="width:24mm"><col style="width:22mm"><col style="width:50mm">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Gap ID <span class="chev">▼</span></th>
+        <th>L4 process <span class="chev">▼</span></th>
+        <th>Step <span class="chev">▼</span></th>
+        <th>Resolution Type <span class="chev">▼</span></th>
+        <th>Impl days <span class="chev">▼</span></th>
+        <th>Effort days <span class="chev">▼</span></th>
+        <th>Risk Level <span class="chev">▼</span></th>
+        <th>Owner <span class="chev">▼</span></th>
+        <th>Status <span class="chev">▼</span></th>
+        <th>Notes <span class="chev">▼</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="mono">GAP-001</td><td>FX hedge ratio calc</td><td>Define exposure types</td><td><span class="dot dot-info"></span>Trusted add-on</td><td class="num effort-low">2</td><td class="num effort-low">5</td><td class="risk-low">Low</td><td>S. Krishnan</td><td><span class="dot dot-success"></span>Resolved</td><td>Kyriba module Tx-Hedge</td></tr>
+      <tr><td class="mono">GAP-002</td><td>FX hedge ratio calc</td><td>Aggregate by currency</td><td><span class="dot dot-info"></span>Trusted add-on</td><td class="num effort-low">2</td><td class="num effort-low">5</td><td class="risk-low">Low</td><td>S. Krishnan</td><td><span class="dot dot-success"></span>Resolved</td><td>—</td></tr>
+      <tr><td class="mono">GAP-003</td><td>FX hedge ratio calc</td><td>Recommend instruments</td><td><span class="dot dot-info"></span>Trusted add-on</td><td class="num effort-low">2</td><td class="num effort-low">5</td><td class="risk-low">Low</td><td>S. Krishnan</td><td><span class="dot dot-success"></span>Resolved</td><td>—</td></tr>
+      <tr><td class="mono">GAP-014</td><td>JE 4-tier approval</td><td>Define approval levels</td><td><span class="dot dot-warning"></span>Adapt to SAP</td><td class="num effort-low">1</td><td class="num effort-low">3</td><td class="risk-low">Low</td><td>M. Tan</td><td><span class="dot dot-success"></span>Resolved</td><td>Recommend 3-tier; awaiting client sign-off</td></tr>
+      <tr><td class="mono">GAP-027</td><td>Settlement engine</td><td>Match clearing instructions</td><td><span class="dot dot-danger"></span>Custom build</td><td class="num effort-med">5</td><td class="num effort-hi">12</td><td class="risk-hi">High</td><td>R. Lim</td><td><span class="dot dot-warning"></span>Pending</td><td>Spec under review w/ Bursa trading</td></tr>
+      <tr><td class="mono">GAP-028</td><td>Settlement engine</td><td>Reconcile with trading platform</td><td><span class="dot dot-danger"></span>Custom build</td><td class="num effort-med">4</td><td class="num effort-med">8</td><td class="risk-hi">High</td><td>R. Lim</td><td><span class="dot dot-warning"></span>Pending</td><td>iDoc inbound, throughput TBD</td></tr>
+      <tr><td class="mono">GAP-051</td><td>Broker reference field</td><td>Add Z-field to VBAK</td><td><span class="dot dot-info"></span>Power-user extension</td><td class="num effort-low">0.5</td><td class="num effort-low">1</td><td class="risk-low">Low</td><td>L. Cheong</td><td><span class="dot dot-success"></span>Resolved</td><td>Built in Key User Tools</td></tr>
+      <tr><td class="mono">GAP-052</td><td>Broker reference field</td><td>Copy-down to LIKP/VBRK</td><td><span class="dot dot-info"></span>Power-user extension</td><td class="num effort-low">0.5</td><td class="num effort-low">1</td><td class="risk-low">Low</td><td>L. Cheong</td><td><span class="dot dot-success"></span>Resolved</td><td>—</td></tr>
+      <tr><td class="mono">GAP-077</td><td>Customer self-service</td><td>Build BTP UI shell</td><td><span class="dot dot-info"></span>Cloud add-on</td><td class="num effort-med">3</td><td class="num effort-med">8</td><td class="risk-med">Medium</td><td>R. Lim</td><td><span class="dot dot-warning"></span>Pending</td><td>SAP BTP, SAPUI5 framework</td></tr>
+      <tr><td class="mono">GAP-078</td><td>Customer self-service</td><td>Expose OData</td><td><span class="dot dot-info"></span>Cloud add-on</td><td class="num effort-low">1</td><td class="num effort-low">2</td><td class="risk-low">Low</td><td>R. Lim</td><td><span class="dot dot-success"></span>Resolved</td><td>Standard S/4 service</td></tr>
+      <tr><td class="mono">GAP-091</td><td>Demand planning</td><td>Statistical forecast</td><td><span class="dot dot-info"></span>Trusted add-on</td><td class="num effort-low">2</td><td class="num effort-low">5</td><td class="risk-med">Medium</td><td>L. Cheong</td><td><span class="dot dot-warning"></span>Pending</td><td>SAP IBP candidate</td></tr>
+      <tr><td class="mono">GAP-104</td><td>Quality inspection at op 0030</td><td>In-process inspection plan</td><td><span class="dot dot-info"></span>Trusted add-on</td><td class="num effort-low">2</td><td class="num effort-low">5</td><td class="risk-low">Low</td><td>R. Lim</td><td><span class="dot dot-warning"></span>Pending</td><td>—</td></tr>
+      <tr><td class="mono">GAP-122</td><td>Talent succession</td><td>Workflow design</td><td><span class="dot dot-neutral"></span>Out of scope</td><td class="num">0</td><td class="num">0</td><td class="risk-low">Low</td><td>—</td><td><span class="dot dot-success"></span>Resolved</td><td>SuccessFactors, Phase 2</td></tr>
+    </tbody>
+  </table>
+
+  <div style="padding: 4mm 8mm; font-size: 9pt; color: var(--text-muted); background: #FAFAFA; border-top: 0.5pt solid var(--border);">
+    Showing rows 1–13 of 158 · Effort &amp; Risk 3-colour scale · Frozen header.
+  </div>
+</div>
+
+<div class="review-bar" style="max-width: 297mm;">
+  <a href="07_step_detail.html">← prev</a>
+  <span>08_Gap_Register.xlsx</span>
+  <a href="09_config_workbook.html">next →</a>
+</div>
+
+</body>
+</html>

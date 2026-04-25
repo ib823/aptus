@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>03 Readiness Scorecard — Client brand-accent variant · Aptus</title>
+<link rel="stylesheet" href="print.css">
+<style>
+  /* Demonstrates a client brand-accent override.
+     Aptus brand identity (mark, cover band, table headers) stays Aptus.
+     Client color appears only on chart accents — here, the score-gauge ring. */
+  .ring-bg { fill:none; stroke:#E4E4E7; stroke-width:14; }
+  .ring-fg { fill:none; stroke: var(--client-accent); stroke-width:14; stroke-linecap:butt; transform:rotate(-90deg); transform-origin:center; }
+  .ring-num { font:600 30pt 'Geist',sans-serif; fill:var(--text); text-anchor:middle; dominant-baseline:central; }
+  .ring-lbl { font:500 9pt 'Geist',sans-serif; fill:var(--text-muted); text-anchor:middle; }
+
+  .accent-tag {
+    display: inline-flex; align-items: center; gap: 4pt;
+    font-size: 8.5pt; color: var(--text-muted);
+  }
+  .accent-tag::before {
+    content: ""; width: 8pt; height: 8pt; border-radius: 50%;
+    background: var(--client-accent);
+  }
+</style>
+</head>
+<body>
+
+<!-- Inline `--client-accent` is the ONLY thing that changes the brand accent.
+     Aptus mark + cover band + table headers all inherit Aptus brand. -->
+<div class="page" style="--client-accent: #003DA5;">
+  <div class="cover-band">
+    <div class="cover-mark">Aptus</div>
+    <div>
+      <h1 class="cover-title">Readiness Scorecard</h1>
+      <p class="cover-subtitle">Bursa Malaysia Berhad</p>
+    </div>
+  </div>
+
+  <div style="display:grid; grid-template-columns:90mm 1fr; gap:14mm; margin-top:14mm; align-items:center;">
+    <svg viewBox="0 0 160 160" width="90mm">
+      <circle class="ring-bg" cx="80" cy="80" r="62"/>
+      <circle class="ring-fg" cx="80" cy="80" r="62"
+              stroke-dasharray="389.5" stroke-dashoffset="116.85" />
+      <text class="ring-num" x="80" y="78">68</text>
+      <text class="ring-lbl" x="80" y="100">/ 100</text>
+    </svg>
+    <div>
+      <div class="caption" style="margin-bottom:3mm;">Overall readiness</div>
+      <div style="font-size:13pt; font-weight:600; line-height:1.35; max-width:100mm;">Strong on finance and procurement; treasury and customer self-service need decisions before kickoff.</div>
+      <div class="rule" style="margin:5mm 0 4mm;"></div>
+      <div style="display:grid; grid-template-columns:1fr auto; gap:2mm 8mm; font-size:10.5pt;">
+        <span>Finance &amp; Controlling</span><b>78</b>
+        <span>Procurement</span><b>74</b>
+        <span>Sales &amp; Distribution</span><b>71</b>
+        <span>Manufacturing</span><b>62</b>
+        <span>Treasury</span><b>54</b>
+        <span>Customer Service</span><b>48</b>
+      </div>
+    </div>
+  </div>
+
+  <div class="rule" style="margin-top:14mm;"></div>
+  <div class="caption" style="margin-top:3mm;">
+    <b>Branding-override demo.</b> The Aptus mark, cover band, and table headers always render in Aptus brand identity — they are not affected by the client's color. The single CSS variable <code>--client-accent</code> (here <span class="accent-tag">#003DA5 (Bursa blue)</span>) drives only the score-gauge ring stroke and any other chart accents on subsequent pages.
+  </div>
+
+  <div class="page-footer">Aptus · Confidential · cover · 03_Readiness_Scorecard.pdf (client-accent variant)</div>
+</div>
+<div class="review-bar"><a href="contact_sheet.html">← contact sheet</a><span>03 Readiness Scorecard · client brand-accent variant</span><a href="index.html">index →</a></div>
+</body>
+</html>

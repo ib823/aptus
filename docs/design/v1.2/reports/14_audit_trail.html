@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>14 Audit Trail · Aptus</title><link rel="stylesheet" href="print.css">
+<style>body{background:#E4E4E7;}.xlsx-page{width:297mm;min-height:210mm;margin:16mm auto;background:white;box-shadow:0 2px 12px rgba(0,0,0,0.08);}
+.action-create{color:#15803D;font-weight:600;}.action-update{color:#1D4ED8;font-weight:600;}.action-delete{color:#B91C1C;font-weight:600;}.action-signin{color:#52525B;font-weight:600;}</style></head>
+<body>
+<div class="xlsx-page">
+  <div class="xlsx-toolbar">
+    <span class="name">14_Audit_Trail.xlsx</span><span class="sep"></span>
+    <span>Sheet: <b style="color:var(--text);">Audit</b></span><span class="sep"></span>
+    <span>~12,800 rows · 8 columns</span><span class="sep"></span>
+    <span>Sorted by Timestamp DESC · Frozen header</span>
+  </div>
+  <table class="xlsx">
+    <colgroup><col style="width:36mm"><col style="width:42mm"><col style="width:24mm"><col style="width:28mm"><col style="width:24mm"><col style="width:50mm"><col style="width:50mm"><col style="width:24mm"></colgroup>
+    <thead><tr>
+      <th>Timestamp <span class="chev">▼</span></th><th>Actor <span class="chev">▼</span></th>
+      <th>Action <span class="chev">▼</span></th><th>Entity Type <span class="chev">▼</span></th>
+      <th>Entity ID <span class="chev">▼</span></th><th>Before <span class="chev">▼</span></th>
+      <th>After <span class="chev">▼</span></th><th>IP <span class="chev">▼</span></th>
+    </tr></thead>
+    <tbody>
+      <tr><td>2026-04-25 14:42:11</td><td>maya.chen@abeam.com</td><td class="action-update">UPDATE</td><td>Step</td><td class="mono">STP-00204</td><td>verdict=null</td><td>verdict=GAP, resolution=CUSTOM</td><td>10.42.18.7</td></tr>
+      <tr><td>2026-04-25 14:38:02</td><td>maya.chen@abeam.com</td><td class="action-update">UPDATE</td><td>Gap</td><td class="mono">GAP-027</td><td>days=8</td><td>days=12</td><td>10.42.18.7</td></tr>
+      <tr><td>2026-04-25 14:32:55</td><td>aliya.r@bursamy.com</td><td class="action-update">UPDATE</td><td>Requirement</td><td class="mono">REQ-FIN-041</td><td>mandatory=true</td><td>mandatory=false</td><td>203.116.4.22</td></tr>
+      <tr><td>2026-04-25 14:18:09</td><td>aliya.r@bursamy.com</td><td class="action-signin">SIGN_IN</td><td>Session</td><td class="mono">sess_8a4f…</td><td>—</td><td>SAML via Azure AD</td><td>203.116.4.22</td></tr>
+      <tr><td>2026-04-25 13:55:30</td><td>maya.chen@abeam.com</td><td class="action-create">CREATE</td><td>Comment</td><td class="mono">CMT-00412</td><td>—</td><td>"Confirmed Kyriba scope w/ S.K."</td><td>10.42.18.7</td></tr>
+      <tr><td>2026-04-25 13:42:11</td><td>raj.lim@abeam.com</td><td class="action-update">UPDATE</td><td>Step</td><td class="mono">STP-00811</td><td>reviewed=false</td><td>reviewed=true</td><td>10.42.18.9</td></tr>
+      <tr><td>2026-04-25 11:08:42</td><td>maya.chen@abeam.com</td><td class="action-update">UPDATE</td><td>Scope item</td><td class="mono">SCP-0042</td><td>granularity=Coarse</td><td>granularity=Fine</td><td>10.42.18.7</td></tr>
+      <tr><td>2026-04-25 10:51:19</td><td>system</td><td class="action-create">CREATE</td><td>Export</td><td class="mono">EXP-2026-0425</td><td>—</td><td>Bundle generated, hash a1b2…</td><td>—</td></tr>
+      <tr><td>2026-04-24 17:32:08</td><td>maya.chen@abeam.com</td><td class="action-update">UPDATE</td><td>Requirement</td><td class="mono">REQ-FIN-014</td><td>outcome=null</td><td>outcome=Configurable</td><td>10.42.18.7</td></tr>
+      <tr><td>2026-04-24 16:48:03</td><td>maya.chen@abeam.com</td><td class="action-update">UPDATE</td><td>Requirement</td><td class="mono">REQ-FIN-027</td><td>outcome=null</td><td>outcome=Trusted add-on</td><td>10.42.18.7</td></tr>
+      <tr><td>2026-04-24 15:14:55</td><td>raj.lim@abeam.com</td><td class="action-create">CREATE</td><td>Gap</td><td class="mono">GAP-077</td><td>—</td><td>process=Customer self-service, type=BTP_EXT</td><td>10.42.18.9</td></tr>
+      <tr><td>2026-04-24 13:08:21</td><td>maya.chen@abeam.com</td><td class="action-delete">DELETE</td><td>Comment</td><td class="mono">CMT-00387</td><td>(content)</td><td>—</td><td>10.42.18.7</td></tr>
+      <tr><td>2026-04-24 11:42:18</td><td>aliya.r@bursamy.com</td><td class="action-create">CREATE</td><td>Comment</td><td class="mono">CMT-00385</td><td>—</td><td>"Need confirmation on hedging scope"</td><td>203.116.4.22</td></tr>
+      <tr><td>2026-04-24 09:55:02</td><td>krishnan.s@abeam.com</td><td class="action-update">UPDATE</td><td>Requirement</td><td class="mono">REQ-FIN-027</td><td>owner=null</td><td>owner=S. Krishnan</td><td>10.42.18.11</td></tr>
+      <tr><td>2026-04-24 09:42:14</td><td>maya.chen@abeam.com</td><td class="action-signin">SIGN_IN</td><td>Session</td><td class="mono">sess_4c1d…</td><td>—</td><td>SSO via Azure AD</td><td>10.42.18.7</td></tr>
+      <tr><td>2026-04-23 18:11:09</td><td>system</td><td class="action-create">CREATE</td><td>Snapshot</td><td class="mono">SNP-2026-0423</td><td>—</td><td>Daily auto-snapshot</td><td>—</td></tr>
+      <tr><td>2026-04-23 17:08:42</td><td>l.cheong@abeam.com</td><td class="action-update">UPDATE</td><td>Step</td><td class="mono">STP-00712</td><td>verdict=null</td><td>verdict=FIT</td><td>10.42.18.14</td></tr>
+      <tr><td>2026-04-23 14:32:01</td><td>maya.chen@abeam.com</td><td class="action-update">UPDATE</td><td>Branding</td><td class="mono">BRD-001</td><td>color=#0B0B0F</td><td>color=#003DA5 (Bursa blue)</td><td>10.42.18.7</td></tr>
+      <tr><td>2026-04-23 11:48:23</td><td>krishnan.s@abeam.com</td><td class="action-update">UPDATE</td><td>Step</td><td class="mono">STP-00088</td><td>resolution=null</td><td>resolution=ISV (Kyriba)</td><td>10.42.18.11</td></tr>
+      <tr><td>2026-04-23 09:14:08</td><td>maya.chen@abeam.com</td><td class="action-update">UPDATE</td><td>Step</td><td class="mono">STP-00043</td><td>verdict=null</td><td>verdict=CONFIGURE</td><td>10.42.18.7</td></tr>
+      <tr><td>2026-04-22 16:42:11</td><td>k.wong@abeam.com</td><td class="action-create">CREATE</td><td>Config item</td><td class="mono">CFG-MM-022</td><td>—</td><td>Tolerance group, qty 5%</td><td>10.42.18.16</td></tr>
+      <tr><td>2026-04-22 14:02:55</td><td>maya.chen@abeam.com</td><td class="action-create">CREATE</td><td>Assessment</td><td class="mono">ASMT-2026-0142</td><td>—</td><td>Bursa Malaysia Berhad, S/4HANA</td><td>10.42.18.7</td></tr>
+    </tbody>
+  </table>
+  <div style="padding:4mm 8mm;font-size:9pt;color:var(--text-muted);background:#FAFAFA;border-top:0.5pt solid var(--border);">
+    Showing rows 1–22 of ~12,800 · Sorted timestamp DESC · Technical voice (audience: QA &amp; compliance).
+  </div>
+</div>
+<div class="review-bar" style="max-width:297mm;"><a href="13_flow_atlas_p2.html">← prev</a><span>14_Audit_Trail.xlsx</span><a href="15_remaining_items.html">next →</a></div>
+</body></html>

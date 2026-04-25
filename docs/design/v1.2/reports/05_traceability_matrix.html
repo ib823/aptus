@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>05 Requirements Traceability Matrix · Aptus</title>
+<link rel="stylesheet" href="print.css">
+<style>
+  body { background: #E4E4E7; }
+  .xlsx-page {
+    width: 297mm;
+    min-height: 210mm;
+    margin: 16mm auto;
+    background: white;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+  table.xlsx col.req     { width: 22mm; }
+  table.xlsx col.src     { width: 28mm; }
+  table.xlsx col.row     { width: 12mm; }
+  table.xlsx col.area    { width: 26mm; }
+  table.xlsx col.sub     { width: 30mm; }
+  table.xlsx col.proc    { width: 32mm; }
+  table.xlsx col.must    { width: 16mm; }
+  table.xlsx col.ask     { width: 56mm; }
+  table.xlsx col.outc    { width: 26mm; }
+  table.xlsx col.means   { width: 56mm; }
+  table.xlsx col.eff     { width: 12mm; }
+  table.xlsx col.owner   { width: 22mm; }
+  table.xlsx col.notes   { width: 38mm; }
+  table.xlsx td.ask, table.xlsx td.means, table.xlsx td.notes { white-space: normal; }
+</style>
+</head>
+<body>
+
+<div class="xlsx-page">
+  <div class="xlsx-toolbar">
+    <span class="name">05_Requirements_Traceability_Matrix.xlsx</span>
+    <span class="sep"></span>
+    <span>Sheet: <b style="color:var(--text);">Requirements</b></span>
+    <span class="sep"></span>
+    <span>778 rows · 13 columns</span>
+    <span class="sep"></span>
+    <span>Frozen header · Filter enabled · Sorted by Functional Area, Must-have desc, Req ID asc</span>
+  </div>
+
+  <table class="xlsx">
+    <colgroup>
+      <col class="req"><col class="src"><col class="row"><col class="area"><col class="sub"><col class="proc"><col class="must"><col class="ask"><col class="outc"><col class="means"><col class="eff"><col class="owner"><col class="notes">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Req ID <span class="chev">▼</span></th>
+        <th>Source File <span class="chev">▼</span></th>
+        <th>Source Row <span class="chev">▼</span></th>
+        <th>Functional Area <span class="chev">▼</span></th>
+        <th>Sub-area <span class="chev">▼</span></th>
+        <th>Process <span class="chev">▼</span></th>
+        <th>Must-have <span class="chev">▼</span></th>
+        <th>Your Ask <span class="chev">▼</span></th>
+        <th>Outcome <span class="chev">▼</span></th>
+        <th>What it means <span class="chev">▼</span></th>
+        <th>Days <span class="chev">▼</span></th>
+        <th>Owner <span class="chev">▼</span></th>
+        <th>Notes <span class="chev">▼</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="must-have">
+        <td class="mono">REQ-FIN-001</td><td>Bursa_Reqs_v3.xlsx</td><td class="num">12</td>
+        <td>Finance &amp; Treasury</td><td>Period-end Closing</td><td>Trial balance run</td>
+        <td>Must-have</td>
+        <td class="ask">Generate monthly trial balance with comparative prior-period analysis.</td>
+        <td class="tint-success"><span class="dot dot-success"></span>Standard SAP</td>
+        <td class="means">Nothing to build. Available from day one.</td>
+        <td class="num">0</td><td>M. Tan</td><td class="notes">—</td>
+      </tr>
+      <tr class="must-have">
+        <td class="mono">REQ-FIN-014</td><td>Bursa_Reqs_v3.xlsx</td><td class="num">25</td>
+        <td>Finance &amp; Treasury</td><td>Vendor Invoice Mgmt</td><td>Withholding tax</td>
+        <td>Must-have</td>
+        <td class="ask">Apply withholding tax to vendor payments per LHDN Malaysia rules.</td>
+        <td class="tint-warning"><span class="dot dot-warning"></span>Configurable</td>
+        <td class="means">Our team configures it once. Future changes are admin-level.</td>
+        <td class="num">1</td><td>M. Tan</td><td class="notes">LHDN MY codes 1–9 in scope</td>
+      </tr>
+      <tr class="must-have">
+        <td class="mono">REQ-FIN-027</td><td>Bursa_Reqs_v3.xlsx</td><td class="num">38</td>
+        <td>Finance &amp; Treasury</td><td>Treasury &amp; FX</td><td>FX hedging</td>
+        <td>Must-have</td>
+        <td class="ask">Real-time FX exposure dashboard across MYR, USD, SGD, EUR with hedging recs.</td>
+        <td class="tint-info"><span class="dot dot-info"></span>Trusted add-on</td>
+        <td class="means">Deploy Kyriba (certified for SAP). ~MYR 320k/yr licence.</td>
+        <td class="num">5</td><td>S. Krishnan</td><td class="notes">Kyriba module Tx-Hedge</td>
+      </tr>
+      <tr>
+        <td class="mono">REQ-FIN-041</td><td>Bursa_Reqs_v3.xlsx</td><td class="num">52</td>
+        <td>Finance &amp; Treasury</td><td>General Ledger</td><td>JE approval workflow</td>
+        <td>Nice-to-have</td>
+        <td class="ask">Manual journal-entry approval flow with 4-tier authorisation matrix.</td>
+        <td class="tint-warning"><span class="dot dot-warning"></span>Adapt to SAP</td>
+        <td class="means">Recommend 3-tier matrix. SAP standard is more efficient.</td>
+        <td class="num">3</td><td>M. Tan</td><td class="notes">Awaiting client sign-off (DEC-007)</td>
+      </tr>
+      <tr class="must-have">
+        <td class="mono">REQ-FIN-103</td><td>Bursa_Reqs_v3.xlsx</td><td class="num">114</td>
+        <td>Finance &amp; Treasury</td><td>Settlement Engine</td><td>Clearing &amp; settlement</td>
+        <td>Must-have</td>
+        <td class="ask">Bursa-specific clearing-house settlement engine integrating intra-day with trading platform.</td>
+        <td class="tint-danger"><span class="dot dot-danger"></span>Custom build</td>
+        <td class="means">Unique to your business. ~12 days of careful build.</td>
+        <td class="num">12</td><td>R. Lim</td><td class="notes">Spec under review (GAP-027)</td>
+      </tr>
+      <tr>
+        <td class="mono">REQ-FIN-118</td><td>Bursa_Reqs_v3.xlsx</td><td class="num">131</td>
+        <td>Finance &amp; Treasury</td><td>Reporting</td><td>Board pack generation</td>
+        <td>Nice-to-have</td>
+        <td class="ask">Quarterly board pack PDF generation from financial statements.</td>
+        <td class="tint-success"><span class="dot dot-success"></span>Standard SAP</td>
+        <td class="means">Nothing to build. Document templates already cover this.</td>
+        <td class="num">0</td><td>M. Tan</td><td class="notes">—</td>
+      </tr>
+      <tr>
+        <td class="mono">REQ-SD-082</td><td>Bursa_Reqs_v3.xlsx</td><td class="num">204</td>
+        <td>Sales &amp; Distribution</td><td>Order to Cash</td><td>Sales order create</td>
+        <td>Nice-to-have</td>
+        <td class="ask">Custom field "broker reference number" on sales order with copy-down to delivery and invoice.</td>
+        <td class="tint-info"><span class="dot dot-info"></span>Power-user extension</td>
+        <td class="means">Power user builds it in SAP's no-code tool. ~½ day.</td>
+        <td class="num">1</td><td>L. Cheong</td><td class="notes">Built in Key User Tools</td>
+      </tr>
+      <tr class="must-have">
+        <td class="mono">REQ-CSV-019</td><td>Bursa_Reqs_v3.xlsx</td><td class="num">412</td>
+        <td>Customer Service</td><td>Self-service</td><td>Customer portal</td>
+        <td>Must-have</td>
+        <td class="ask">Customer-facing portal showing real-time order status, downloadable invoices, returns request.</td>
+        <td class="tint-info"><span class="dot dot-info"></span>Cloud add-on (BTP)</td>
+        <td class="means">Build companion app on SAP's cloud platform. ~8 days.</td>
+        <td class="num">8</td><td>R. Lim</td><td class="notes">Read-mostly via data feed</td>
+      </tr>
+      <tr>
+        <td class="mono">REQ-HR-058</td><td>Bursa_Reqs_v3.xlsx</td><td class="num">521</td>
+        <td>Human Resources</td><td>Hire to Retire</td><td>Talent &amp; succession</td>
+        <td>Nice-to-have</td>
+        <td class="ask">Talent-management succession planning with 360° feedback workflow.</td>
+        <td class="tint-neutral"><span class="dot dot-neutral"></span>Out of scope</td>
+        <td class="means">Phase 2 (FY27). Handled by SuccessFactors.</td>
+        <td class="num">0</td><td>—</td><td class="notes">Phase 2 candidate</td>
+      </tr>
+      <tr class="must-have">
+        <td class="mono">REQ-PRO-009</td><td>Bursa_Reqs_v3.xlsx</td><td class="num">588</td>
+        <td>Procurement</td><td>Source to Pay</td><td>Three-way match</td>
+        <td>Must-have</td>
+        <td class="ask">Three-way match: PO, GR, invoice with tolerance limits.</td>
+        <td class="tint-success"><span class="dot dot-success"></span>Standard SAP</td>
+        <td class="means">Nothing to build. Tolerances are configuration-only.</td>
+        <td class="num">0</td><td>K. Wong</td><td class="notes">—</td>
+      </tr>
+      <tr>
+        <td class="mono">REQ-PRO-031</td><td>Bursa_Reqs_v3.xlsx</td><td class="num">622</td>
+        <td>Procurement</td><td>Source to Pay</td><td>Contract management</td>
+        <td>Nice-to-have</td>
+        <td class="ask">Auto-renewal alerts for contracts 60 days before expiry.</td>
+        <td class="tint-success"><span class="dot dot-success"></span>Standard SAP</td>
+        <td class="means">Nothing to build. Standard alert framework.</td>
+        <td class="num">0</td><td>K. Wong</td><td class="notes">—</td>
+      </tr>
+      <tr>
+        <td class="mono">REQ-SC-044</td><td>Bursa_Reqs_v3.xlsx</td><td class="num">701</td>
+        <td>Supply Chain</td><td>Plan to Inventory</td><td>Cycle counting</td>
+        <td>Nice-to-have</td>
+        <td class="ask">Cycle count scheduling with weekly cadence by warehouse zone.</td>
+        <td class="tint-success"><span class="dot dot-success"></span>Standard SAP</td>
+        <td class="means">Nothing to build. Standard cycle-count framework.</td>
+        <td class="num">0</td><td>L. Cheong</td><td class="notes">—</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="padding: 4mm 8mm; font-size: 9pt; color: var(--text-muted); background: #FAFAFA; border-top: 0.5pt solid var(--border);">
+    Showing rows 1–12 of 778 · Outcome column conditional-formatted · Must-have rows have a red left-border accent · Header row brand-color, frozen on scroll · 13 columns total.
+  </div>
+</div>
+
+<div class="review-bar" style="max-width: 297mm;">
+  <a href="04_findings_p6_recommendations.html">← prev report</a>
+  <span>05_Requirements_Traceability_Matrix.xlsx</span>
+  <a href="06_scope_catalog.html">next report →</a>
+</div>
+
+</body>
+</html>

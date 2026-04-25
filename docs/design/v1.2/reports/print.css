@@ -1,0 +1,502 @@
+/* Aptus Report Bundle — shared print CSS
+   Inherits tokens from app design system, applies print deltas per spec §2. */
+
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');
+
+:root {
+  /* Print colors — same tokens as app */
+  --bg: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-2: #FAFAFA;
+  --border: #E4E4E7;
+  --border-strong: #D4D4D8;
+  --text: #0B0B0F;
+  --text-muted: #52525B;
+  --text-subtle: #71717A;
+
+  --brand: #0B0B0F;
+  --brand-text: #FFFFFF;
+
+  /* Status palette (print) */
+  --success: #15803D;   --success-tint: #DCFCE7;
+  --warning: #B45309;   --warning-tint: #FEF3C7;
+  --info:    #1D4ED8;   --info-tint:    #DBEAFE;
+  --danger:  #B91C1C;   --danger-tint:  #FEE2E2;
+  --neutral: #52525B;   --neutral-tint: #F4F4F5;
+
+  /* Page */
+  --page-w: 210mm;
+  --page-h: 297mm;
+  --m-side: 20mm;
+  --m-top:  25mm;
+  --m-bot:  22mm;
+  --content-w: 170mm; /* 210 - 2*20 */
+}
+
+/* Client brand-override accent.
+   Aptus is the solution brand and never changes. The client's brand color (if
+   any) is exposed as `--client-accent` and applied ONLY to chart accents,
+   score-gauge strokes, and optional secondary rules — never to the Aptus
+   mark, the cover band, or table headers. Set via inline style on a page,
+   e.g. <div class="page" style="--client-accent:#003DA5">. */
+:root {
+  --client-accent: var(--brand); /* defaults to Aptus brand */
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  background: #E4E4E7; /* page surround on screen */
+  color: var(--text);
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: 'cv11','ss01';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The A4 page */
+.page {
+  width: var(--page-w);
+  min-height: var(--page-h);
+  background: var(--surface);
+  margin: 16mm auto;
+  position: relative;
+  padding: var(--m-top) var(--m-side) var(--m-bot);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  overflow: hidden;
+  /* Reset font sizing to print pt */
+  font-size: 10pt;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.page.landscape {
+  width: var(--page-h);
+  min-height: var(--page-w);
+}
+
+/* Footer (every page) */
+.page-footer {
+  position: absolute;
+  left: var(--m-side);
+  right: var(--m-side);
+  bottom: 10mm;
+  text-align: center;
+  font-size: 8pt;
+  color: var(--text-muted);
+  border-top: 0.25pt solid var(--border);
+  padding-top: 4mm;
+  letter-spacing: 0.02em;
+}
+
+/* Header band (cover only) */
+.cover-band {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 90mm;
+  background: var(--brand);
+  color: var(--brand-text);
+  padding: 18mm 20mm;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.cover-mark {
+  font-size: 14pt;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #FFFFFF;          /* always white on the dark cover band */
+  display: inline-flex;
+  align-items: center;
+  gap: 6pt;
+}
+/* The Aptus mark — actual SVG (matches src/components/AptusMark in the app).
+   Hard-coded white pyramid + dark cutout + white dot so it always reads as
+   the Aptus brand regardless of any client accent override. */
+.cover-mark::before {
+  content: "";
+  display: inline-block;
+  width: 14pt;
+  height: 14pt;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M16 4 L28 26 L4 26 Z' fill='white'/><path d='M16 13 L22 24 L10 24 Z' fill='%230B0B0F'/><circle cx='16' cy='20' r='1.5' fill='white'/></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  vertical-align: -2pt;
+}
+
+.cover-title {
+  font-size: 28pt;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 0 0 4mm 0;
+}
+.cover-subtitle {
+  font-size: 14pt;
+  font-weight: 400;
+  opacity: 0.8;
+  margin: 0;
+}
+
+/* Cover meta block */
+.cover-meta {
+  position: absolute;
+  top: 110mm;
+  left: var(--m-side);
+  right: var(--m-side);
+}
+.cover-meta-row {
+  display: grid;
+  grid-template-columns: 40mm 1fr;
+  align-items: baseline;
+  padding: 1.5mm 0;
+  border-bottom: 0.25pt solid var(--border);
+}
+.cover-meta-row:last-child { border-bottom: 0; }
+.cover-meta-label {
+  font-size: 9pt;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+.cover-meta-value {
+  font-size: 10pt;
+  color: var(--text);
+}
+
+.cover-lead {
+  position: absolute;
+  top: 170mm;
+  left: var(--m-side);
+  right: var(--m-side);
+  font-size: 10pt;
+  line-height: 1.55;
+  color: var(--text);
+  max-width: var(--content-w);
+}
+.cover-lead::before {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 0.5pt;
+  background: var(--border);
+  margin-bottom: 8mm;
+}
+
+/* Typography — print scale */
+.h1 { font-size: 16pt; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 4mm 0; }
+.h2 { font-size: 12pt; font-weight: 600; margin: 0 0 3mm 0; }
+.body { font-size: 10pt; line-height: 1.5; margin: 0 0 4mm 0; }
+.caption { font-size: 8pt; color: var(--text-muted); }
+.mono { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 9pt; font-weight: 500; }
+.muted { color: var(--text-muted); }
+
+.rule { height: 0.5pt; background: var(--border); margin: 6mm 0; }
+.rule-thick { height: 1pt; background: var(--text); margin: 4mm 0; }
+
+/* Status dot */
+.dot {
+  display: inline-block;
+  width: 6pt; height: 6pt;
+  border-radius: 50%;
+  vertical-align: 0.5pt;
+  margin-right: 4pt;
+}
+.dot-success { background: var(--success); }
+.dot-warning { background: var(--warning); }
+.dot-info    { background: var(--info); }
+.dot-danger  { background: var(--danger); }
+.dot-neutral { background: var(--neutral); }
+
+/* Print-pill (no fill, dot + label) */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9pt;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+/* Tables — PDF tables (hairline) */
+table.pdf {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9pt;
+}
+table.pdf th, table.pdf td {
+  text-align: left;
+  padding: 2mm 3mm;
+  border-bottom: 0.5pt solid var(--border);
+  vertical-align: top;
+}
+table.pdf th {
+  font-weight: 600;
+  border-bottom: 1pt solid var(--text);
+  font-size: 9pt;
+  letter-spacing: 0.02em;
+}
+table.pdf td.num, table.pdf th.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.pdf tr.total td { font-weight: 600; border-top: 1pt solid var(--text); border-bottom: 0; }
+
+/* Tables — XLSX-style */
+.xlsx-page {
+  /* For XLSX mocks, render full bleed (no print margin) — these aren't "printed" */
+  padding: 0;
+  background: var(--surface);
+  font-size: 11pt;
+  font-family: 'Geist', sans-serif;
+}
+.xlsx-toolbar {
+  height: 14mm;
+  border-bottom: 0.5pt solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 8mm;
+  background: var(--surface-2);
+  font-size: 10pt;
+  color: var(--text-muted);
+  gap: 6mm;
+}
+.xlsx-toolbar .name {
+  color: var(--text);
+  font-weight: 600;
+}
+.xlsx-toolbar .sep {
+  width: 1px; height: 6mm; background: var(--border);
+}
+
+table.xlsx {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9.5pt;
+  table-layout: fixed;
+}
+table.xlsx thead th {
+  /* Hard-coded Aptus brand — never inherits client accent override (spec §5.7) */
+  background: #0B0B0F;
+  color: #FFFFFF;
+  font-weight: 600;
+  font-size: 9pt;
+  letter-spacing: 0.02em;
+  padding: 3mm 3mm;
+  text-align: left;
+  border-right: 0.25pt solid rgba(255,255,255,0.15);
+  position: sticky;
+  top: 0;
+  white-space: nowrap;
+}
+table.xlsx thead th .chev {
+  display: inline-block;
+  width: 8pt; height: 8pt;
+  margin-left: 4pt;
+  opacity: 0.55;
+  vertical-align: -1pt;
+}
+table.xlsx tbody td {
+  padding: 2.4mm 3mm;
+  border-bottom: 0.25pt solid var(--border);
+  border-right: 0.25pt solid var(--border);
+  vertical-align: top;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+table.xlsx tbody td.wrap { white-space: normal; }
+table.xlsx tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.xlsx tbody tr:nth-child(even) td { background: #FAFAFA; }
+table.xlsx tbody tr.must-have td:first-child { box-shadow: inset 1mm 0 0 var(--danger); }
+
+/* Conditional outcome tints */
+.tint-success { background: var(--success-tint) !important; }
+.tint-warning { background: var(--warning-tint) !important; }
+.tint-info    { background: var(--info-tint) !important; }
+.tint-danger  { background: var(--danger-tint) !important; }
+.tint-neutral { background: var(--neutral-tint) !important; }
+
+/* Verdict block */
+.verdict {
+  border: 0.5pt solid var(--border);
+  padding: 8mm 10mm;
+  margin-top: 6mm;
+}
+.verdict-title { font-size: 9pt; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4mm; }
+.verdict-row { display: flex; gap: 12mm; align-items: baseline; margin-bottom: 5mm; }
+.verdict-num { font-size: 28pt; font-weight: 600; letter-spacing: -0.02em; line-height: 1; color: var(--brand); }
+.verdict-num small { display: block; font-size: 9pt; font-weight: 500; color: var(--text-muted); margin-top: 2mm; letter-spacing: 0.02em; text-transform: uppercase; }
+.verdict-meta { font-size: 10pt; line-height: 1.5; color: var(--text); }
+
+/* Stacked bar (for charts) */
+.stack-bar {
+  width: 100%;
+  height: 24mm;
+  display: flex;
+  border: 0.5pt solid var(--border);
+}
+.stack-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9pt;
+  font-weight: 500;
+  color: white;
+  letter-spacing: 0.02em;
+}
+
+/* Dot bar (10-segment) */
+.dotbar { display: inline-flex; gap: 2pt; }
+.dotbar i {
+  display: inline-block;
+  width: 7pt; height: 7pt;
+  border-radius: 50%;
+  background: var(--border);
+}
+.dotbar i.f { background: var(--success); }
+
+/* Card (Findings) */
+.find-card {
+  border: 0.5pt solid var(--border);
+  padding: 5mm 6mm;
+  margin-bottom: 5mm;
+}
+.find-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 0.5pt solid var(--border);
+  padding-bottom: 2mm;
+  margin-bottom: 3mm;
+}
+.find-id { font-family: 'Geist Mono', monospace; font-size: 9pt; font-weight: 600; }
+.find-row {
+  display: grid;
+  grid-template-columns: 32mm 1fr;
+  gap: 4mm;
+  margin: 2mm 0;
+  align-items: start;
+}
+.find-row-label {
+  font-family: 'Geist Mono', monospace;
+  font-size: 8.5pt;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  padding-top: 0.5mm;
+}
+.find-row-value {
+  font-size: 10pt;
+  line-height: 1.5;
+}
+
+/* Score gauge / pill */
+.score-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4pt;
+  font-size: 11pt;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.score-headline {
+  text-align: center;
+  padding: 14mm 0;
+}
+.score-label {
+  display: inline-block;
+  padding: 4mm 10mm;
+  border-radius: 1.5pt;
+  font-size: 18pt;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: white;
+  margin-bottom: 4mm;
+}
+.score-go { background: var(--success); }
+.score-cond { background: var(--warning); }
+.score-no { background: var(--danger); }
+
+/* Cover variants */
+.contact-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6mm;
+}
+.contact-item { font-size: 8pt; }
+.contact-item .thumb {
+  aspect-ratio: 210 / 297;
+  border: 0.5pt solid var(--border);
+  margin-bottom: 2mm;
+  position: relative;
+  overflow: hidden;
+  background: white;
+}
+.contact-item .thumb-band {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 30%;
+  /* Hard-coded Aptus brand — never inherits client accent override */
+  background: #0B0B0F;
+  color: white;
+  padding: 8% 8% 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.contact-item .thumb-mark { font-size: 5pt; font-weight: 600; opacity: 0.85; margin-bottom: 4pt; }
+.contact-item .thumb-title { font-size: 8pt; font-weight: 600; line-height: 1.1; }
+.contact-item .thumb-body {
+  position: absolute;
+  top: 30%; left: 0; right: 0; bottom: 0;
+  padding: 6% 8%;
+  display: flex;
+  flex-direction: column;
+  gap: 3pt;
+}
+.contact-item .thumb-body i {
+  display: block;
+  height: 2pt;
+  background: var(--border);
+}
+.contact-item .thumb-body i.s { width: 70%; }
+.contact-item .thumb-body i.m { width: 90%; }
+.contact-item .thumb-body i.l { width: 100%; }
+.contact-cap { font-size: 7pt; color: var(--text-muted); }
+.contact-cap b { display: block; font-size: 8pt; color: var(--text); font-weight: 600; }
+
+/* Print rules */
+@media print {
+  html, body { background: white; }
+  .page {
+    margin: 0;
+    box-shadow: none;
+    page-break-after: always;
+  }
+  .page:last-child { page-break-after: auto; }
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  @page landscape {
+    size: A4 landscape;
+    margin: 0;
+  }
+  .page.landscape { page: landscape; }
+}
+
+/* Screen-only review affordance */
+.review-bar {
+  max-width: var(--page-w);
+  margin: 12mm auto 0;
+  padding: 4mm 6mm;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.review-bar a { color: var(--text); text-decoration: none; }
+.review-bar a:hover { text-decoration: underline; }
+@media print { .review-bar { display: none; } }

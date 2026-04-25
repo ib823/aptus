@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>11 Data Migration Register · Aptus</title>
+<link rel="stylesheet" href="print.css">
+<style>
+  body { background: #E4E4E7; }
+  .xlsx-page { width: 297mm; min-height: 210mm; margin: 16mm auto; background: white; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  .tabs { display: flex; gap: 1mm; padding: 0 8mm; background: #FAFAFA; border-bottom: 0.25pt solid var(--border); }
+  .tab { padding: 2.5mm 4mm; font-size: 9pt; color: var(--text-muted); border-top: 1.5pt solid transparent; }
+  .tab.active { color: var(--text); font-weight: 600; background: white; border-top-color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="xlsx-page">
+  <div class="xlsx-toolbar">
+    <span class="name">11_Data_Migration_Register.xlsx</span>
+    <span class="sep"></span>
+    <span>Sheets: <b style="color:var(--text);">Objects</b> · Mappings · Cleansing · Cutover · Reconciliation</span>
+  </div>
+  <div class="tabs">
+    <div class="tab active">Objects</div>
+    <div class="tab">Mappings</div>
+    <div class="tab">Cleansing</div>
+    <div class="tab">Cutover</div>
+    <div class="tab">Reconciliation</div>
+  </div>
+
+  <table class="xlsx">
+    <colgroup>
+      <col style="width:22mm"><col style="width:42mm"><col style="width:32mm"><col style="width:24mm"><col style="width:22mm"><col style="width:24mm"><col style="width:22mm"><col style="width:24mm"><col style="width:48mm">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Object ID <span class="chev">▼</span></th>
+        <th>Object <span class="chev">▼</span></th>
+        <th>Source <span class="chev">▼</span></th>
+        <th>Volume <span class="chev">▼</span></th>
+        <th>Approach <span class="chev">▼</span></th>
+        <th>Cleanse req'd <span class="chev">▼</span></th>
+        <th>Owner <span class="chev">▼</span></th>
+        <th>Cutover wave <span class="chev">▼</span></th>
+        <th>Notes <span class="chev">▼</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="mono">OBJ-001</td><td>GL accounts</td><td>ECC FAGLFLEXT</td><td class="num">2,840</td><td>Migration Cockpit</td><td>Yes</td><td>M. Tan</td><td>W1</td><td>Map to BMYC COA</td></tr>
+      <tr><td class="mono">OBJ-002</td><td>Cost centers</td><td>ECC CSKS</td><td class="num">1,420</td><td>Migration Cockpit</td><td>Yes</td><td>M. Tan</td><td>W1</td><td>Hierarchy rebuild</td></tr>
+      <tr><td class="mono">OBJ-003</td><td>Profit centers</td><td>ECC CEPC</td><td class="num">312</td><td>Migration Cockpit</td><td>No</td><td>M. Tan</td><td>W1</td><td>—</td></tr>
+      <tr><td class="mono">OBJ-004</td><td>Vendors</td><td>ECC LFA1/LFB1</td><td class="num">2,210</td><td>Migration Cockpit</td><td>Yes</td><td>K. Wong</td><td>W1</td><td>Bank details encrypted</td></tr>
+      <tr><td class="mono">OBJ-005</td><td>Customers</td><td>ECC KNA1/KNB1</td><td class="num">8,800</td><td>Migration Cockpit</td><td>Yes</td><td>L. Cheong</td><td>W2</td><td>De-dup pass req'd</td></tr>
+      <tr><td class="mono">OBJ-006</td><td>Material master</td><td>ECC MARA/MARC</td><td class="num">42,500</td><td>Migration Cockpit</td><td>Yes</td><td>L. Cheong</td><td>W2</td><td>Plant-level segments</td></tr>
+      <tr><td class="mono">OBJ-007</td><td>Open POs</td><td>ECC EKKO/EKPO</td><td class="num">3,140</td><td>Migration Cockpit</td><td>Yes</td><td>K. Wong</td><td>W3 (cutover)</td><td>Open only</td></tr>
+      <tr><td class="mono">OBJ-008</td><td>Open SOs</td><td>ECC VBAK/VBAP</td><td class="num">2,900</td><td>Migration Cockpit</td><td>Yes</td><td>L. Cheong</td><td>W3 (cutover)</td><td>Open only</td></tr>
+      <tr><td class="mono">OBJ-009</td><td>Open AR/AP</td><td>ECC BSEG</td><td class="num">18,200</td><td>Migration Cockpit</td><td>Yes</td><td>M. Tan</td><td>W3 (cutover)</td><td>Open items only</td></tr>
+      <tr><td class="mono">OBJ-010</td><td>Bank master</td><td>ECC BNKA</td><td class="num">48</td><td>LSMW</td><td>No</td><td>M. Tan</td><td>W1</td><td>—</td></tr>
+      <tr><td class="mono">OBJ-011</td><td>Stock balances</td><td>ECC MSEG</td><td class="num">~2.1M</td><td>Migration Cockpit</td><td>Yes</td><td>L. Cheong</td><td>W3 (cutover)</td><td>Snapshot at cutover</td></tr>
+      <tr><td class="mono">OBJ-012</td><td>Asset master</td><td>ECC ANLA</td><td class="num">6,200</td><td>Migration Cockpit</td><td>No</td><td>M. Tan</td><td>W2</td><td>—</td></tr>
+      <tr><td class="mono">OBJ-013</td><td>BOMs &amp; routings</td><td>ECC STKO/PLKO</td><td class="num">11,400</td><td>Migration Cockpit</td><td>Yes</td><td>R. Lim</td><td>W2</td><td>—</td></tr>
+      <tr><td class="mono">OBJ-014</td><td>Employees (master)</td><td>ECC PA0001</td><td class="num">12,500</td><td>SAP CPI</td><td>No</td><td>A. Tan</td><td>W1</td><td>From SuccessFactors</td></tr>
+    </tbody>
+  </table>
+
+  <div style="padding: 4mm 8mm; font-size: 9pt; color: var(--text-muted); background: #FAFAFA; border-top: 0.5pt solid var(--border);">
+    Showing 14 of 22 objects · Other sheets: Mappings (field-by-field), Cleansing (rules), Cutover (wave plan), Reconciliation (post-load checks).
+  </div>
+</div>
+
+<div class="review-bar" style="max-width: 297mm;">
+  <a href="10_integration_register.html">← prev</a>
+  <span>11_Data_Migration_Register.xlsx (Objects sheet)</span>
+  <a href="12_ocm_report.html">next →</a>
+</div>
+
+</body>
+</html>

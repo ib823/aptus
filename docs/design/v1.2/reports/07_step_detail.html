@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>07 Step Detail · Aptus</title>
+<link rel="stylesheet" href="print.css">
+<style>
+  body { background: #E4E4E7; }
+  .xlsx-page { width: 297mm; min-height: 210mm; margin: 16mm auto; background: white; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+</style>
+</head>
+<body>
+
+<div class="xlsx-page">
+  <div class="xlsx-toolbar">
+    <span class="name">07_Step_Detail.xlsx</span>
+    <span class="sep"></span>
+    <span>Sheet: <b style="color:var(--text);">Steps</b></span>
+    <span class="sep"></span>
+    <span>3,049 rows · 9 columns</span>
+    <span class="sep"></span>
+    <span>Frozen header · Verdict colour-tinted</span>
+  </div>
+
+  <table class="xlsx">
+    <colgroup>
+      <col style="width:22mm"><col style="width:48mm"><col style="width:55mm"><col style="width:22mm"><col style="width:32mm"><col style="width:26mm"><col style="width:18mm"><col style="width:28mm"><col style="width:50mm">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Step ID <span class="chev">▼</span></th>
+        <th>L4 process <span class="chev">▼</span></th>
+        <th>Step name <span class="chev">▼</span></th>
+        <th>Verdict <span class="chev">▼</span></th>
+        <th>Resolution Type <span class="chev">▼</span></th>
+        <th>Source Reqs <span class="chev">▼</span></th>
+        <th>Reviewed <span class="chev">▼</span></th>
+        <th>Last edit <span class="chev">▼</span></th>
+        <th>Notes <span class="chev">▼</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="mono">STP-00012</td><td>Run preliminary trial balance</td><td>Define ledger group</td><td class="tint-success"><span class="dot dot-success"></span>FIT</td><td>—</td><td class="mono">REQ-FIN-001</td><td>✓</td><td>2026-04-22 14:02</td><td>—</td></tr>
+      <tr><td class="mono">STP-00013</td><td>Run preliminary trial balance</td><td>Select reporting period</td><td class="tint-success"><span class="dot dot-success"></span>FIT</td><td>—</td><td class="mono">REQ-FIN-001</td><td>✓</td><td>2026-04-22 14:03</td><td>—</td></tr>
+      <tr><td class="mono">STP-00014</td><td>Run preliminary trial balance</td><td>Generate report output</td><td class="tint-success"><span class="dot dot-success"></span>FIT</td><td>—</td><td class="mono">REQ-FIN-001</td><td>✓</td><td>2026-04-22 14:04</td><td>—</td></tr>
+      <tr><td class="mono">STP-00041</td><td>Vendor invoice w/ withholding tax</td><td>Maintain WHT type</td><td class="tint-warning"><span class="dot dot-warning"></span>CONFIGURE</td><td>Configurable</td><td class="mono">REQ-FIN-014</td><td>✓</td><td>2026-04-23 09:11</td><td>LHDN MY codes 1–9</td></tr>
+      <tr><td class="mono">STP-00042</td><td>Vendor invoice w/ withholding tax</td><td>Maintain WHT code</td><td class="tint-warning"><span class="dot dot-warning"></span>CONFIGURE</td><td>Configurable</td><td class="mono">REQ-FIN-014</td><td>✓</td><td>2026-04-23 09:12</td><td>—</td></tr>
+      <tr><td class="mono">STP-00043</td><td>Vendor invoice w/ withholding tax</td><td>Assign codes to vendor master</td><td class="tint-warning"><span class="dot dot-warning"></span>CONFIGURE</td><td>Configurable</td><td class="mono">REQ-FIN-014</td><td>✓</td><td>2026-04-23 09:14</td><td>2,200 vendors in scope</td></tr>
+      <tr><td class="mono">STP-00088</td><td>FX hedge ratio calc</td><td>Define FX exposure types</td><td class="tint-info"><span class="dot dot-info"></span>GAP</td><td>Trusted add-on</td><td class="mono">REQ-FIN-027</td><td>✓</td><td>2026-04-23 11:48</td><td>Kyriba</td></tr>
+      <tr><td class="mono">STP-00089</td><td>FX hedge ratio calc</td><td>Aggregate exposures by currency</td><td class="tint-info"><span class="dot dot-info"></span>GAP</td><td>Trusted add-on</td><td class="mono">REQ-FIN-027</td><td>✓</td><td>2026-04-23 11:49</td><td>Kyriba</td></tr>
+      <tr><td class="mono">STP-00090</td><td>FX hedge ratio calc</td><td>Recommend hedge instruments</td><td class="tint-info"><span class="dot dot-info"></span>GAP</td><td>Trusted add-on</td><td class="mono">REQ-FIN-027</td><td>✓</td><td>2026-04-23 11:50</td><td>Kyriba native</td></tr>
+      <tr><td class="mono">STP-00112</td><td>JE 4-tier approval</td><td>Define approval levels</td><td class="tint-warning"><span class="dot dot-warning"></span>GAP</td><td>Adapt to SAP</td><td class="mono">REQ-FIN-041</td><td>✓</td><td>2026-04-24 08:22</td><td>Recommend 3-tier</td></tr>
+      <tr><td class="mono">STP-00203</td><td>Settlement engine</td><td>Match clearing instructions</td><td class="tint-danger"><span class="dot dot-danger"></span>GAP</td><td>Custom build</td><td class="mono">REQ-FIN-103</td><td>✓</td><td>2026-04-24 13:01</td><td>ABAP class ZCL_BURSA_CLEAR</td></tr>
+      <tr><td class="mono">STP-00204</td><td>Settlement engine</td><td>Reconcile with trading platform</td><td class="tint-danger"><span class="dot dot-danger"></span>GAP</td><td>Custom build</td><td class="mono">REQ-FIN-103</td><td>—</td><td>2026-04-24 13:02</td><td>iDoc inbound</td></tr>
+      <tr><td class="mono">STP-00301</td><td>Sales order create</td><td>Customer master lookup</td><td class="tint-success"><span class="dot dot-success"></span>FIT</td><td>—</td><td class="mono">REQ-SD-001, 002</td><td>✓</td><td>2026-04-21 15:33</td><td>—</td></tr>
+      <tr><td class="mono">STP-00302</td><td>Sales order create</td><td>Item availability check</td><td class="tint-success"><span class="dot dot-success"></span>FIT</td><td>—</td><td class="mono">REQ-SD-003</td><td>✓</td><td>2026-04-21 15:34</td><td>—</td></tr>
+      <tr><td class="mono">STP-00303</td><td>Sales order create</td><td>Apply customer-specific pricing</td><td class="tint-success"><span class="dot dot-success"></span>FIT</td><td>—</td><td class="mono">REQ-SD-005, 006</td><td>✓</td><td>2026-04-21 15:36</td><td>—</td></tr>
+      <tr><td class="mono">STP-00304</td><td>Sales order create</td><td>Credit limit check</td><td class="tint-success"><span class="dot dot-success"></span>FIT</td><td>—</td><td class="mono">REQ-SD-008</td><td>✓</td><td>2026-04-21 15:38</td><td>—</td></tr>
+      <tr><td class="mono">STP-00422</td><td>Broker reference field</td><td>Add Z-field to VBAK</td><td class="tint-info"><span class="dot dot-info"></span>GAP</td><td>Power-user extension</td><td class="mono">REQ-SD-082</td><td>✓</td><td>2026-04-22 10:11</td><td>Key User Tools</td></tr>
+      <tr><td class="mono">STP-00423</td><td>Broker reference field</td><td>Copy-down to LIKP, VBRK</td><td class="tint-info"><span class="dot dot-info"></span>GAP</td><td>Power-user extension</td><td class="mono">REQ-SD-082</td><td>✓</td><td>2026-04-22 10:14</td><td>Key User Tools</td></tr>
+      <tr><td class="mono">STP-00601</td><td>3-way match</td><td>Define tolerance limits</td><td class="tint-success"><span class="dot dot-success"></span>FIT</td><td>—</td><td class="mono">REQ-PRO-009</td><td>✓</td><td>2026-04-22 16:42</td><td>—</td></tr>
+      <tr><td class="mono">STP-00712</td><td>Cycle count schedule</td><td>Maintain count zones</td><td class="tint-success"><span class="dot dot-success"></span>FIT</td><td>—</td><td class="mono">REQ-SC-044</td><td>✓</td><td>2026-04-23 17:08</td><td>—</td></tr>
+      <tr><td class="mono">STP-00811</td><td>Customer self-service</td><td>Build BTP UI shell</td><td class="tint-info"><span class="dot dot-info"></span>GAP</td><td>Cloud add-on</td><td class="mono">REQ-CSV-019</td><td>—</td><td>2026-04-24 11:33</td><td>BTP, SAPUI5</td></tr>
+      <tr><td class="mono">STP-00812</td><td>Customer self-service</td><td>Expose order-status OData</td><td class="tint-info"><span class="dot dot-info"></span>GAP</td><td>Cloud add-on</td><td class="mono">REQ-CSV-019</td><td>—</td><td>2026-04-24 11:35</td><td>S/4 standard service</td></tr>
+    </tbody>
+  </table>
+
+  <div style="padding: 4mm 8mm; font-size: 9pt; color: var(--text-muted); background: #FAFAFA; border-top: 0.5pt solid var(--border);">
+    Showing rows 1–22 of 3,049 · Verdict colour-tinted · Frozen header · This sheet is technical (Step Detail audience: ABeam consultants &amp; client tech team).
+  </div>
+</div>
+
+<div class="review-bar" style="max-width: 297mm;">
+  <a href="06_scope_catalog.html">← prev</a>
+  <span>07_Step_Detail.xlsx</span>
+  <a href="08_gap_register.html">next →</a>
+</div>
+
+</body>
+</html>

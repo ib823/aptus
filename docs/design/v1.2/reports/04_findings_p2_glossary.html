@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>04 Findings — How to read this report · Aptus</title>
+<link rel="stylesheet" href="print.css">
+<style>
+  table.glossary {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+    line-height: 1.55;
+  }
+  table.glossary th, table.glossary td {
+    text-align: left;
+    padding: 2.2mm 3mm;
+    vertical-align: top;
+    border-bottom: 0.25pt solid var(--border);
+  }
+  table.glossary th {
+    font-weight: 600;
+    border-bottom: 1pt solid var(--text);
+    font-size: 8.5pt;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  table.glossary tr:nth-child(even) td { background: #FAFAFA; }
+  table.glossary td.term { font-family: 'Geist Mono', monospace; font-size: 8.5pt; color: var(--text-muted); white-space: nowrap; }
+  table.glossary td.label { font-weight: 600; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <h1 class="h1">How to read this report</h1>
+  <p class="body" style="max-width:165mm">
+    Throughout this document we use plain-language labels for SAP concepts. Here's the dictionary so nothing reads as jargon.
+  </p>
+
+  <table class="glossary">
+    <thead>
+      <tr>
+        <th style="width: 36mm;">SAP / consulting term</th>
+        <th style="width: 36mm;">Plain-language label</th>
+        <th>Explanation</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="term">OOTB / FIT</td><td class="label">Standard SAP</td><td>The software does this exactly as you described, with no setup or code needed.</td></tr>
+      <tr><td class="term">CONFIGURE</td><td class="label">Configurable</td><td>The software does this, but our team needs to set it up for you. No code is written.</td></tr>
+      <tr><td class="term">ADAPT_PROCESS</td><td class="label">Adapt to SAP</td><td>We recommend adjusting how your team works to match SAP's standard way. Cheaper, future-proof.</td></tr>
+      <tr><td class="term">ISV (gap resolution)</td><td class="label">Trusted add-on</td><td>A third-party product certified for SAP fills this gap. Less risk than building from scratch.</td></tr>
+      <tr><td class="term">KEY_USER_EXT</td><td class="label">Power-user extension</td><td>One of your business users can build this in SAP's no-code tool — no developer needed.</td></tr>
+      <tr><td class="term">BTP_EXT</td><td class="label">Cloud add-on (BTP)</td><td>We build a small companion app on SAP's cloud platform. Modern, modular, decoupled from core SAP.</td></tr>
+      <tr><td class="term">CUSTOM_ABAP</td><td class="label">Custom build</td><td>We write new code inside SAP. Reserved for unique competitive advantage — used sparingly.</td></tr>
+      <tr><td class="term">OUT_OF_SCOPE</td><td class="label">Out of scope</td><td>Not addressed in this phase. May be revisited later or handled outside SAP.</td></tr>
+      <tr><td class="term">GAP (status)</td><td class="label">Needs work</td><td>SAP doesn't do this as standard — we've chosen one of the resolution options above.</td></tr>
+      <tr><td class="term">NA (status)</td><td class="label">Not applicable</td><td>This requirement doesn't apply to your business model. Closed with no further action.</td></tr>
+      <tr><td class="term">Mandatory</td><td class="label">Must-have</td><td>You flagged this requirement as non-negotiable. We've prioritised it accordingly.</td></tr>
+      <tr><td class="term">L1 / L2 / L3 / L4</td><td class="label">Process area / family / group / step</td><td>SAP organises business processes in a 4-level tree. L4 is the most detailed (e.g. "Create sales order").</td></tr>
+      <tr><td class="term">Fit-to-standard</td><td class="label">Fit assessment</td><td>The structured exercise of comparing your needs against what SAP does as standard.</td></tr>
+      <tr><td class="term">Granularity</td><td class="label">Detail level</td><td>How deeply we analysed each process — coarse (whole area), medium (sub-area), fine (each step).</td></tr>
+      <tr><td class="term">Workstream</td><td class="label">Project track</td><td>A parallel band of work (Finance, HR, Logistics, etc.) inside the overall project.</td></tr>
+      <tr><td class="term">ECC / S/4HANA</td><td class="label">Old SAP / new SAP</td><td>ECC is the prior generation. S/4HANA is what you're moving to — faster, simpler, cloud-ready.</td></tr>
+      <tr><td class="term">SmartForms / Adobe Forms</td><td class="label">Document templates</td><td>The SAP feature for designing printable / emailable documents (invoices, POs).</td></tr>
+      <tr><td class="term">Transaction code (Tcode)</td><td class="label">SAP screen</td><td>A short-code shortcut that opens a specific SAP screen. Power users still use them.</td></tr>
+      <tr><td class="term">Fiori</td><td class="label">Modern SAP screens</td><td>The new web-based SAP user interface. Mobile-friendly, role-based.</td></tr>
+      <tr><td class="term">OData / API</td><td class="label">Data feed</td><td>A standard way for one system to read or update data in another. Used by add-ons and portals.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="page-footer">Aptus · Confidential · 2 · 04_Requirements_Findings.pdf</div>
+</div>
+
+<div class="review-bar">
+  <a href="04_findings_p1_cover.html">← page 1</a>
+  <span>04_Requirements_Findings.pdf · page 2 of 6 — Glossary</span>
+  <a href="04_findings_p3_glance.html">page 3 →</a>
+</div>
+
+</body>
+</html>

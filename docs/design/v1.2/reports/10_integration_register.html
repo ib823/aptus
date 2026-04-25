@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>10 Integration Register · Aptus</title>
+<link rel="stylesheet" href="print.css">
+<style>
+  body { background: #E4E4E7; }
+  .xlsx-page { width: 297mm; min-height: 210mm; margin: 16mm auto; background: white; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  .tabs { display: flex; gap: 1mm; padding: 0 8mm; background: #FAFAFA; border-bottom: 0.25pt solid var(--border); }
+  .tab { padding: 2.5mm 4mm; font-size: 9pt; color: var(--text-muted); border-top: 1.5pt solid transparent; }
+  .tab.active { color: var(--text); font-weight: 600; background: white; border-top-color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="xlsx-page">
+  <div class="xlsx-toolbar">
+    <span class="name">10_Integration_Register.xlsx</span>
+    <span class="sep"></span>
+    <span>Sheets: <b style="color:var(--text);">Integrations</b> · Endpoints · DataFlows · Errors</span>
+  </div>
+  <div class="tabs">
+    <div class="tab active">Integrations</div>
+    <div class="tab">Endpoints</div>
+    <div class="tab">DataFlows</div>
+    <div class="tab">Errors</div>
+  </div>
+
+  <table class="xlsx">
+    <colgroup>
+      <col style="width:22mm"><col style="width:48mm"><col style="width:36mm"><col style="width:36mm"><col style="width:24mm"><col style="width:24mm"><col style="width:22mm"><col style="width:22mm"><col style="width:48mm">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Integration ID <span class="chev">▼</span></th>
+        <th>Name <span class="chev">▼</span></th>
+        <th>Source <span class="chev">▼</span></th>
+        <th>Target <span class="chev">▼</span></th>
+        <th>Pattern <span class="chev">▼</span></th>
+        <th>Frequency <span class="chev">▼</span></th>
+        <th>Volume / day <span class="chev">▼</span></th>
+        <th>Owner <span class="chev">▼</span></th>
+        <th>Notes <span class="chev">▼</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="mono">INT-001</td><td>Trading platform → Settlement</td><td>Bursa BTS</td><td>S/4HANA</td><td>iDoc inbound</td><td>Real-time</td><td class="num">~120,000</td><td>R. Lim</td><td>Throughput TBD</td></tr>
+      <tr><td class="mono">INT-002</td><td>Treasury (Kyriba) ↔ S/4</td><td>Kyriba</td><td>S/4HANA</td><td>SAP CIG (REST)</td><td>Hourly</td><td class="num">~4,800</td><td>S. Krishnan</td><td>Bidirectional</td></tr>
+      <tr><td class="mono">INT-003</td><td>Bank statement (MT940)</td><td>Maybank, CIMB</td><td>S/4HANA</td><td>SFTP file drop</td><td>Daily 06:00</td><td class="num">~2</td><td>M. Tan</td><td>EBS standard</td></tr>
+      <tr><td class="mono">INT-004</td><td>Payment file (PAIN.001)</td><td>S/4HANA</td><td>Maybank, CIMB</td><td>SFTP outbound</td><td>2× daily</td><td class="num">~1,200</td><td>M. Tan</td><td>ISO 20022</td></tr>
+      <tr><td class="mono">INT-005</td><td>HRIS → SAP HR</td><td>SuccessFactors</td><td>S/4HANA</td><td>SAP CPI</td><td>Daily 02:00</td><td class="num">~12,500</td><td>A. Tan</td><td>Master data only</td></tr>
+      <tr><td class="mono">INT-006</td><td>Credit bureau lookup</td><td>S/4HANA</td><td>CTOS</td><td>REST sync</td><td>On demand</td><td class="num">~280</td><td>L. Cheong</td><td>SO credit check</td></tr>
+      <tr><td class="mono">INT-007</td><td>Tax authority filing</td><td>S/4HANA</td><td>LHDN MyTax</td><td>SOAP</td><td>Monthly</td><td class="num">~1</td><td>M. Tan</td><td>SST/GST returns</td></tr>
+      <tr><td class="mono">INT-008</td><td>Customer portal (BTP)</td><td>SAP BTP</td><td>S/4HANA</td><td>OData</td><td>Real-time</td><td class="num">~38,000</td><td>R. Lim</td><td>Read-mostly</td></tr>
+      <tr><td class="mono">INT-009</td><td>Warehouse mgmt (3PL)</td><td>3PL Manhattan</td><td>S/4HANA</td><td>SAP CPI</td><td>Real-time</td><td class="num">~22,000</td><td>L. Cheong</td><td>SOH + ASN</td></tr>
+      <tr><td class="mono">INT-010</td><td>Document archive</td><td>S/4HANA</td><td>OpenText</td><td>ArchiveLink</td><td>Real-time</td><td class="num">~9,000</td><td>R. Lim</td><td>Invoices, POs</td></tr>
+      <tr><td class="mono">INT-011</td><td>Identity provider</td><td>Azure AD</td><td>S/4HANA</td><td>SAML 2.0</td><td>Real-time</td><td class="num">~14,000</td><td>R. Lim</td><td>SSO + MFA</td></tr>
+      <tr><td class="mono">INT-012</td><td>BI extract</td><td>S/4HANA</td><td>Snowflake</td><td>SAP DS / Datasphere</td><td>Daily 04:00</td><td class="num">~3.2 GB</td><td>R. Lim</td><td>Replicated views</td></tr>
+    </tbody>
+  </table>
+
+  <div style="padding: 4mm 8mm; font-size: 9pt; color: var(--text-muted); background: #FAFAFA; border-top: 0.5pt solid var(--border);">
+    Showing 12 of 28 integrations · Other sheets: Endpoints (URLs &amp; certs), DataFlows (field-level mapping), Errors (run-time error catalogue).
+  </div>
+</div>
+
+<div class="review-bar" style="max-width: 297mm;">
+  <a href="09_config_workbook.html">← prev</a>
+  <span>10_Integration_Register.xlsx (Integrations sheet)</span>
+  <a href="11_data_migration.html">next →</a>
+</div>
+
+</body>
+</html>
