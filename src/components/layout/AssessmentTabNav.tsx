@@ -39,7 +39,11 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, 
     event.preventDefault();
   };
 
-  // Build stages with conditional tabs
+  // Phase 5 — Simplified analyzer-flow tab nav.
+  // Hidden routes still work via direct URL (Step Review, Conversation,
+  // Config, Process Map, Flows, Action Items, Integrations, Data Transfer,
+  // OCM, Workshops, Activity Log, Snapshots, Change Requests). They're just
+  // not surfaced in the day-to-day workflow.
   const stages: TabStage[] = [
     {
       label: "Setup",
@@ -52,68 +56,29 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, 
           ...(scopeLocked ? { locked: true, title: `Profile ${profileScore ?? 0}% complete — reach 60% to unlock` } : {}),
         },
         { label: "Requirements", href: `${base}/requirements`, segment: "requirements" },
+        { label: "Granularity", href: `${base}/granularity`, segment: "granularity" },
       ],
     },
     {
-      label: "Review",
+      label: "Output",
       ...(preReviewStage ? { locked: true, title: lockedStageTitle } : {}),
       tabs: [
-        { label: "Step Review", href: `${base}/review`, segment: "review" },
-        { label: "Conversation", href: `${base}/conversation`, segment: "conversation" },
-      ],
-    },
-    {
-      label: "Results",
-      ...(preReviewStage ? { locked: true, title: lockedStageTitle } : {}),
-      tabs: [
-        { label: "Config", href: `${base}/config`, segment: "config" },
-        { label: "Process Map", href: `${base}/process-map`, segment: "process-map" },
-        { label: "Flows", href: `${base}/flows`, segment: "flows" },
         { label: "Gaps", href: `${base}/gaps`, segment: "gaps" },
-        { label: "Action Items", href: `${base}/remaining`, segment: "remaining" },
-      ],
-    },
-    {
-      label: "Tracking",
-      ...(preReviewStage ? { locked: true, title: lockedStageTitle } : {}),
-      tabs: [
-        { label: "System Connections", href: `${base}/integrations`, segment: "integrations" },
-        { label: "Data Transfer", href: `${base}/data-migration`, segment: "data-migration" },
-        { label: "Change Impact", href: `${base}/ocm`, segment: "ocm", title: "Organizational Change Management" },
-        { label: "Workshops", href: `${base}/workshops`, segment: "workshops" },
-      ],
-    },
-    {
-      label: "Wrap-up",
-      ...(preReviewStage ? { locked: true, title: lockedStageTitle } : {}),
-      tabs: [
-        { label: "Activity Log", href: `${base}/activity`, segment: "activity" },
       ],
     },
   ];
 
-  // Add conditional late-stage tabs to Wrap-up
-  const wrapUpStage = stages[4]!;
+  // Late-stage tabs: only Report visible by default. Sign-Off, Snapshots,
+  // Changes, Benchmarks etc. remain reachable via direct URL but aren't in
+  // the default analyzer flow.
   const reportStatuses = ["reviewed", "signed_off", "validated", "pending_sign_off", "handed_off", "archived"];
   if (reportStatuses.includes(assessmentStatus)) {
-    wrapUpStage.tabs.push({ label: "Report", href: `${base}/report`, segment: "report" });
-  }
-  const signOffStatuses = ["reviewed", "validated", "pending_sign_off", "signed_off", "handed_off", "archived"];
-  if (signOffStatuses.includes(assessmentStatus)) {
-    wrapUpStage.tabs.push({ label: "Sign-Off", href: `${base}/sign-off`, segment: "sign-off" });
-    wrapUpStage.tabs.push({ label: "Snapshots", href: `${base}/snapshots`, segment: "snapshots" });
-  }
-  const lifecycleStatuses = ["reviewed", "validated", "pending_sign_off", "signed_off", "handed_off", "archived"];
-  if (lifecycleStatuses.includes(assessmentStatus)) {
-    wrapUpStage.tabs.push({ label: "Changes", href: `${base}/change-requests`, segment: "change-requests" });
-    wrapUpStage.tabs.push({ label: "Triggers", href: `${base}/triggers`, segment: "triggers" });
-  }
-
-  // Add analytics stage conditionally
-  const analyticsStatuses = ["in_progress", "workshop_active", "review_cycle", "gap_resolution", "pending_validation", "reviewed", "validated", "pending_sign_off", "signed_off", "handed_off", "completed", "archived"];
-  if (analyticsStatuses.includes(assessmentStatus)) {
-    wrapUpStage.tabs.push({ label: "Benchmarks", href: `${base}/benchmarks`, segment: "benchmarks" });
-    wrapUpStage.tabs.push({ label: "Cross-Phase", href: `${base}/cross-phase`, segment: "cross-phase" });
+    stages.push({
+      label: "Report",
+      tabs: [
+        { label: "Download", href: `${base}/report`, segment: "report" },
+      ],
+    });
   }
 
   // Find active stage

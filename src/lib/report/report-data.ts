@@ -108,6 +108,8 @@ export async function getScopeDataForReport(assessmentId: string) {
       relevance: true,
       currentState: true,
       notes: true,
+      granularity: true,
+      assessmentVerdict: true,
     },
   });
   const scopeItemIds = selections.map((s) => s.scopeItemId);
@@ -131,6 +133,18 @@ export async function getScopeDataForReport(assessmentId: string) {
 
   const scopeMap = new Map(scopeItems.map((s) => [s.id, s]));
 
+  const verdictLabels: Record<string, string> = {
+    mostly_fit: "Mostly FIT",
+    mostly_config: "Mostly Configuration",
+    has_gaps: "Has Gaps",
+    needs_workshop: "Needs Workshop",
+  };
+  const granularityLabels: Record<string, string> = {
+    coarse: "Coarse",
+    medium: "Medium",
+    fine: "Fine",
+  };
+
   return selections.map((sel) => {
     const item = scopeMap.get(sel.scopeItemId);
     return {
@@ -140,6 +154,8 @@ export async function getScopeDataForReport(assessmentId: string) {
       subArea: item?.subArea ?? "",
       selected: sel.selected ? "Yes" : "No",
       relevance: sel.relevance,
+      granularity: granularityLabels[sel.granularity] ?? sel.granularity,
+      verdict: sel.assessmentVerdict ? verdictLabels[sel.assessmentVerdict] ?? sel.assessmentVerdict : "",
       currentState: sel.currentState ?? "",
       notes: sel.notes ?? "",
       totalSteps: item?.totalSteps ?? 0,
