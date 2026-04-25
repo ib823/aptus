@@ -20,7 +20,7 @@ export const ROLE_METADATA: Record<UserRole, RoleMetadata> = {
   platform_admin: {
     id: "platform_admin",
     label: "Platform Admin",
-    description: "ABeam platform operator with full system access",
+    description: "Aptus platform operator with full system access",
     category: "platform",
     hierarchyLevel: 1,
     validOrgTypes: ["PLATFORM"],

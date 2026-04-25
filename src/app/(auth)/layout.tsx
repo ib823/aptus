@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Shield, BarChart3, Users } from "lucide-react";
+import { Shield, BarChart3 } from "lucide-react";
 import { ABeamLogo } from "@/components/shared/ABeamLogo";
 import { UI_TEXT } from "@/constants/ui-text";
 
@@ -46,15 +46,13 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             with SAP best practices
           </h3>
           <div className="space-y-4">
-            <FeatureItem icon={Shield} text="Enterprise-grade security with passkey support" />
-            <FeatureItem icon={BarChart3} text="Compare processes against SAP Best Practices 2508" />
-            <FeatureItem icon={Users} text="Trusted by consulting teams worldwide" />
+            <FeatureItem icon={BarChart3} text="Compare processes against SAP Best Practices 2602" />
           </div>
         </div>
 
         {/* Bottom: Copyright */}
         <p className="relative z-10 text-xs text-white/30">
-          &copy; {new Date().getFullYear()} ABeam. All rights reserved.
+          &copy; {new Date().getFullYear()} Aptus. All rights reserved.
         </p>
       </div>
 

@@ -31,7 +31,7 @@ function deriveFromNextAuthUrl() {
 
 const _derived = deriveFromNextAuthUrl();
 const rpID = process.env.WEBAUTHN_RP_ID ?? _derived.hostname;
-const rpName = process.env.WEBAUTHN_RP_NAME ?? "ABeam";
+const rpName = process.env.WEBAUTHN_RP_NAME ?? "Aptus";
 const origin = process.env.WEBAUTHN_ORIGIN ?? _derived.origin;
 
 const CHALLENGE_COOKIE_NAME = "webauthn-challenge";

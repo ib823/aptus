@@ -12,7 +12,7 @@ export default function PrivacyPage() {
       <div className="prose prose-slate max-w-none space-y-4">
         <h2 className="text-xl font-semibold mt-8">1. Information We Collect</h2>
         <p>
-          We collect information you provide directly when using the ABeam SAP Best Practices
+          We collect information you provide directly when using the Aptus SAP Best Practices
           Process Validation Portal, including your name, email address, organization details,
           and assessment data entered during the evaluation process.
         </p>
@@ -44,7 +44,7 @@ export default function PrivacyPage() {
         <h2 className="text-xl font-semibold mt-8">5. Your Rights</h2>
         <p>
           You have the right to access, correct, or delete your personal data. Contact
-          your organization administrator or ABeam support to exercise these rights.
+          your organization administrator or Aptus support to exercise these rights.
         </p>
 
         <h2 className="text-xl font-semibold mt-8">6. Cookies and Session Data</h2>
@@ -55,7 +55,7 @@ export default function PrivacyPage() {
 
         <h2 className="text-xl font-semibold mt-8">7. Contact</h2>
         <p>
-          For privacy-related inquiries, please contact your ABeam project team or
+          For privacy-related inquiries, please contact your Aptus project team or
           administrator.
         </p>
       </div>

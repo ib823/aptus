@@ -17,8 +17,8 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: "ABeam",
-    template: "%s — ABeam",
+    default: "Aptus",
+    template: "%s — Aptus",
   },
   description: "SAP best practices process validation portal",
   manifest: "/manifest.json",
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "ABeam",
+    title: "Aptus",
   },
   other: {
     "theme-color": "#f8fafc",

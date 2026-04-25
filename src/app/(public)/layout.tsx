@@ -7,9 +7,9 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background">
       <header className="border-b bg-background">
         <div className="mx-auto flex h-12 items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-2" aria-label="ABeam home">
+          <Link href="/" className="flex items-center gap-2" aria-label="Aptus home">
             <ABeamLogo size="sm" />
-            <span className="text-sm font-semibold text-foreground">ABeam</span>
+            <span className="text-sm font-semibold text-foreground">Aptus</span>
           </Link>
           <Link
             href="/login"

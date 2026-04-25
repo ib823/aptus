@@ -29,7 +29,7 @@ export default async function RootNotFound() {
             <Button variant="outline" size="lg">Home</Button>
           </Link>
         </div>
-        <p className="mt-8 text-sm text-muted-foreground/60">ABeam</p>
+        <p className="mt-8 text-sm text-muted-foreground/60">Aptus</p>
       </div>
     </div>
   );

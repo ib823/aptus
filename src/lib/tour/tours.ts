@@ -32,7 +32,7 @@ export const TOURS: TourDefinition[] = [
   // ─── Portal Overview (all roles, first visit to assessments) ───
   {
     id: "portal-overview",
-    title: "Welcome to ABeam",
+    title: "Welcome to Aptus",
     description: "A quick tour of the main interface",
     roles: "all",
     pathMatch: "/assessments",
