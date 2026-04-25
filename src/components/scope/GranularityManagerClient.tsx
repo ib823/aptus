@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 interface Row {
   id: string;
@@ -12,6 +12,16 @@ interface Row {
   assessmentVerdict: string | null;
   notes: string | null;
   upgradedAt: string | null;
+}
+
+interface UpgradeSuggestion {
+  scopeItemId: string;
+  scopeItemName: string;
+  currentGranularity: string;
+  suggestedGranularity: string;
+  reason: string;
+  triggerRule: number;
+  impactScore: number;
 }
 
 interface Props {
@@ -60,6 +70,31 @@ export function GranularityManagerClient({
   const [filter, setFilter] = useState<string>("all"); // all | coarse | medium | fine
   const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<UpgradeSuggestion[] | null>(null);
+  const [suggestionsExpanded, setSuggestionsExpanded] = useState(true);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch(`/api/assessments/${assessmentId}/scope/upgrade-suggestions`);
+        if (!res.ok) return;
+        const data = (await res.json().catch(() => ({}))) as { suggestions?: UpgradeSuggestion[] };
+        setSuggestions(data.suggestions ?? []);
+      } catch {
+        setSuggestions([]);
+      }
+    })();
+  }, [assessmentId]);
+
+  const visibleSuggestions = useMemo(
+    () => (suggestions ?? []).filter((s) => !dismissedIds.has(s.scopeItemId)),
+    [suggestions, dismissedIds],
+  );
+
+  function dismissSuggestion(scopeItemId: string): void {
+    setDismissedIds((prev) => new Set(prev).add(scopeItemId));
+  }
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
@@ -111,6 +146,45 @@ export function GranularityManagerClient({
         <RollupCard label="Medium" value={rollup.medium} colorClass="bg-amber-50 text-amber-700 border-amber-200" hint="Verdict + notes" />
         <RollupCard label="Fine" value={rollup.fine} colorClass="bg-blue-50 text-blue-700 border-blue-200" hint="Step-level detail" />
       </div>
+
+      {visibleSuggestions.length > 0 && (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50/50">
+          <button
+            type="button"
+            onClick={() => setSuggestionsExpanded(!suggestionsExpanded)}
+            className="w-full flex items-center justify-between px-4 py-3 text-left"
+          >
+            <div className="text-sm font-semibold text-amber-900">
+              ⚠ {visibleSuggestions.length} suggested upgrade{visibleSuggestions.length === 1 ? "" : "s"}
+            </div>
+            <div className="text-xs text-amber-700">
+              {suggestionsExpanded ? "Hide" : "Show"}
+            </div>
+          </button>
+          {suggestionsExpanded && (
+            <div className="px-4 pb-3 space-y-2 max-h-96 overflow-y-auto">
+              {visibleSuggestions.slice(0, 12).map((s) => (
+                <SuggestionItem
+                  key={s.scopeItemId}
+                  suggestion={s}
+                  assessmentId={assessmentId}
+                  onApplied={(patch, nextRollup) => {
+                    setRows((prev) => prev.map((r) => r.scopeItemId === s.scopeItemId ? { ...r, ...patch } : r));
+                    setRollup(nextRollup);
+                    dismissSuggestion(s.scopeItemId);
+                  }}
+                  onDismiss={() => dismissSuggestion(s.scopeItemId)}
+                />
+              ))}
+              {visibleSuggestions.length > 12 && (
+                <div className="text-xs text-muted-foreground text-center pt-2">
+                  +{visibleSuggestions.length - 12} more — review the rest as you go
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-3 mb-4 items-center">
         <select
@@ -165,6 +239,106 @@ export function GranularityManagerClient({
             No scope items match the filter.
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function SuggestionItem({
+  suggestion,
+  assessmentId,
+  onApplied,
+  onDismiss,
+}: {
+  suggestion: UpgradeSuggestion;
+  assessmentId: string;
+  onApplied: (
+    patch: Partial<Row>,
+    nextRollup: { coarse: number; medium: number; fine: number },
+  ) => void;
+  onDismiss: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function apply(): void {
+    setError(null);
+    startTransition(() => {
+      void (async () => {
+        try {
+          // Default verdict for Medium upgrades — consultant can refine in Edit panel later
+          const verdict = suggestion.suggestedGranularity === "medium" ? "has_gaps" : null;
+          const res = await fetch(
+            `/api/assessments/${assessmentId}/scope/${suggestion.scopeItemId}/granularity`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                granularity: suggestion.suggestedGranularity,
+                assessmentVerdict: verdict,
+                notes: `Auto-upgraded based on rule ${suggestion.triggerRule}: ${suggestion.reason}`,
+              }),
+            },
+          );
+          const data = (await res.json().catch(() => ({}))) as {
+            ok?: boolean;
+            error?: string;
+            rollup?: { coarse: number; medium: number; fine: number };
+          };
+          if (!res.ok || !data.ok) {
+            setError(data.error ?? `Apply failed (${res.status})`);
+            return;
+          }
+          onApplied(
+            {
+              granularity: suggestion.suggestedGranularity,
+              assessmentVerdict: verdict,
+              notes: `Auto-upgraded based on rule ${suggestion.triggerRule}: ${suggestion.reason}`,
+              upgradedAt: new Date().toISOString(),
+            },
+            data.rollup ?? { coarse: 0, medium: 0, fine: 0 },
+          );
+        } catch (e) {
+          setError((e as Error).message);
+        }
+      })();
+    });
+  }
+
+  return (
+    <div className="rounded border border-amber-200 bg-white p-3 text-sm">
+      <div className="flex items-start gap-3">
+        <code className="font-mono text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-900 shrink-0 mt-0.5">
+          {suggestion.scopeItemId}
+        </code>
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-amber-900">
+            {suggestion.scopeItemName}
+            <span className="ml-2 text-xs text-amber-700 font-normal">
+              {suggestion.currentGranularity} → {suggestion.suggestedGranularity}
+            </span>
+          </div>
+          <div className="text-xs text-amber-800 mt-1">{suggestion.reason}</div>
+          {error && <div className="text-xs text-red-600 mt-1">{error}</div>}
+        </div>
+        <div className="flex flex-col gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={apply}
+            disabled={pending}
+            className="text-xs px-3 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+          >
+            {pending ? "Applying…" : "Apply"}
+          </button>
+          <button
+            type="button"
+            onClick={onDismiss}
+            disabled={pending}
+            className="text-xs px-3 py-1 rounded border border-amber-300 bg-white hover:bg-amber-100 text-amber-800"
+          >
+            Dismiss
+          </button>
+        </div>
       </div>
     </div>
   );
