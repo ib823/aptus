@@ -6,7 +6,10 @@
  */
 
 import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis/cloudflare";
+// Default export of @upstash/redis works on Vercel Edge runtime.
+// The "/cloudflare" subpath is Cloudflare-Workers-only and silently fails on Vercel,
+// degrading the limiter to its per-instance in-memory fallback.
+import { Redis } from "@upstash/redis";
 
 interface RateLimitEntry {
   timestamps: number[];
