@@ -169,6 +169,13 @@ export function generateExecutiveSummaryPdf(summary: ReportSummary, branding?: B
   // Configuration
   y = getFinalY(doc, y + 30) + 12;
 
+  // Page-break guard — Configuration Activities was overlapping Gap Resolution
+  // when the gap table pushed past the page boundary.
+  if (y > 240) {
+    doc.addPage();
+    y = 20;
+  }
+
   doc.setFontSize(13);
   doc.setTextColor(primary[0], primary[1], primary[2]);
   doc.text("Configuration Activities", 20, y);
