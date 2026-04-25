@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Shield, BarChart3 } from "lucide-react";
+import { BarChart3, type LucideIcon } from "lucide-react";
 import { ABeamLogo } from "@/components/shared/ABeamLogo";
 import { UI_TEXT } from "@/constants/ui-text";
 
 export const metadata: Metadata = { title: "Sign In" };
 
-function FeatureItem({ icon: Icon, text }: { icon: typeof Shield; text: string }) {
+function FeatureItem({ icon: Icon, text }: { icon: LucideIcon; text: string }) {
   return (
     <div className="flex items-center gap-3">
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10">
