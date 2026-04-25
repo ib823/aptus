@@ -12,15 +12,18 @@ const sizeMap = {
   xl: 56,
 } as const;
 
-/** ABeam "ab" swoosh logomark */
+/**
+ * Aptus logomark — geometric triangle SVG mark.
+ * Component name kept as ABeamLogo for legacy import compatibility (~14 callers).
+ */
 export function ABeamLogo({ size = "md", className = "" }: ABeamLogoProps) {
   const px = sizeMap[size];
 
   return (
     <span className={`inline-flex items-center ${className}`}>
       <Image
-        src="/icons/abeam-logo.png"
-        alt="ABeam"
+        src="/icons/aptus-mark.svg"
+        alt="Aptus"
         width={px}
         height={px}
         className="shrink-0"
