@@ -2,7 +2,7 @@
 
 export const UI_TEXT = {
   app: {
-    name: "ABeam",
+    name: "Aptus",
     tagline: "SAP Business Process Assessment",
     sapVersion: "SAP Best Practices 2508",
   },

@@ -12,14 +12,14 @@ export default function TermsPage() {
       <div className="prose prose-slate max-w-none space-y-4">
         <h2 className="text-xl font-semibold mt-8">1. Acceptance of Terms</h2>
         <p>
-          By accessing and using the ABeam SAP Best Practices Process Validation Portal
+          By accessing and using the Aptus SAP Best Practices Process Validation Portal
           (&quot;Service&quot;), you agree to be bound by these Terms of Service. If you do not
           agree to these terms, please do not use the Service.
         </p>
 
         <h2 className="text-xl font-semibold mt-8">2. Description of Service</h2>
         <p>
-          ABeam provides a platform for SAP S/4HANA implementation planning, including
+          Aptus provides a platform for SAP S/4HANA implementation planning, including
           business process assessment, fit-gap analysis, and project readiness evaluation.
         </p>
 
@@ -32,7 +32,7 @@ export default function TermsPage() {
 
         <h2 className="text-xl font-semibold mt-8">4. Intellectual Property</h2>
         <p>
-          All content, features, and functionality of the Service are owned by ABeam Consulting
+          All content, features, and functionality of the Service are owned by Aptus Consulting
           and are protected by international copyright, trademark, and other intellectual
           property laws.
         </p>
@@ -45,14 +45,14 @@ export default function TermsPage() {
 
         <h2 className="text-xl font-semibold mt-8">6. Limitation of Liability</h2>
         <p>
-          The Service is provided &quot;as is&quot; without warranties of any kind. ABeam shall
+          The Service is provided &quot;as is&quot; without warranties of any kind. Aptus shall
           not be liable for any indirect, incidental, special, or consequential damages
           arising from your use of the Service.
         </p>
 
         <h2 className="text-xl font-semibold mt-8">7. Contact</h2>
         <p>
-          For questions about these Terms, please contact your ABeam project team or
+          For questions about these Terms, please contact your Aptus project team or
           administrator.
         </p>
       </div>

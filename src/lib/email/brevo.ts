@@ -14,7 +14,7 @@ function getTransport() {
   });
 }
 
-const DEFAULT_FROM = `"${process.env.EMAIL_SENDER_NAME ?? "ABeam"}" <${process.env.EMAIL_FROM ?? "no-reply@brevo.com"}>`;
+const DEFAULT_FROM = `"${process.env.EMAIL_SENDER_NAME ?? "Aptus"}" <${process.env.EMAIL_FROM ?? "no-reply@brevo.com"}>`;
 
 interface EmailRecipient {
   email: string;

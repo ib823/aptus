@@ -114,14 +114,14 @@ export function PortalNav({ user }: PortalNavProps) {
           <Link
             href="/assessments"
             className="flex items-center gap-2 shrink-0"
-            aria-label="ABeam home"
+            aria-label="Aptus home"
           >
             <ABeamLogo size="sm" />
             <span
               className="hidden lg:inline text-sm font-semibold"
               style={{ color: "var(--sapShell_TextColor, #32363a)" }}
             >
-              ABeam
+              Aptus
             </span>
           </Link>
 
@@ -141,7 +141,7 @@ export function PortalNav({ user }: PortalNavProps) {
               <SheetHeader className="p-4 border-b text-left">
                 <SheetTitle className="flex items-center gap-2">
                   <ABeamLogo size="sm" />
-                  <span className="text-sm font-semibold">ABeam</span>
+                  <span className="text-sm font-semibold">Aptus</span>
                 </SheetTitle>
               </SheetHeader>
               <nav className="flex-1 py-2 overflow-y-auto">

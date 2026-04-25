@@ -20,7 +20,7 @@ export interface Preset {
 
 export const PRESETS: Record<string, Preset> = {
   coreedge: {
-    name: "ABeam CoreEdge",
+    name: "Aptus CoreEdge",
     description:
       "Essential finance processes for a single legal entity — accounting, payables, assets, and banking.",
     scopeItems: [
