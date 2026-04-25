@@ -30,6 +30,32 @@ function getFinalY(doc: jsPDF, fallback: number): number {
   return d.previousAutoTable?.finalY ?? fallback;
 }
 
+/** Move the cursor below the last autoTable, jumping to a new page if it doesn't fit.
+ *  autoTable's previousAutoTable.finalY is page-relative — without also syncing
+ *  the active page via lastAutoTable.pageNumber, subsequent text can land on the
+ *  wrong page on top of existing content. */
+function advancePastTable(
+  doc: jsPDF,
+  fallback: number,
+  spacing: number,
+  needed: number,
+): number {
+  const d = doc as unknown as {
+    previousAutoTable?: { finalY?: number; pageNumber?: number };
+    lastAutoTable?: { finalY?: number; pageNumber?: number };
+  };
+  const meta = d.lastAutoTable ?? d.previousAutoTable;
+  if (meta?.pageNumber) doc.setPage(meta.pageNumber);
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const finalY = meta?.finalY ?? fallback;
+  let y = finalY + spacing;
+  if (y + needed > pageHeight - 20) {
+    doc.addPage();
+    y = 20;
+  }
+  return y;
+}
+
 function resolveColor(branding: BrandingConfig, key: "primaryColor" | "secondaryColor"): [number, number, number] {
   const { r, g, b } = hexToRgb(branding[key]);
   return [r, g, b];
@@ -113,7 +139,7 @@ export function generateExecutiveSummaryPdf(summary: ReportSummary, branding?: B
     styles: { fontSize: 9 },
   });
 
-  y = getFinalY(doc, y + 60) + 12;
+  y = advancePastTable(doc, y + 60, 12, 60);
   doc.setFontSize(13);
   doc.setTextColor(primary[0], primary[1], primary[2]);
   doc.text("Fit Analysis", 20, y);
@@ -136,12 +162,7 @@ export function generateExecutiveSummaryPdf(summary: ReportSummary, branding?: B
   });
 
   // Gap Resolution
-  y = getFinalY(doc, y + 50) + 12;
-
-  if (y > 240) {
-    doc.addPage();
-    y = 20;
-  }
+  y = advancePastTable(doc, y + 50, 12, 70);
 
   doc.setFontSize(13);
   doc.setTextColor(primary[0], primary[1], primary[2]);
@@ -166,15 +187,8 @@ export function generateExecutiveSummaryPdf(summary: ReportSummary, branding?: B
     styles: { fontSize: 9 },
   });
 
-  // Configuration
-  y = getFinalY(doc, y + 30) + 12;
-
-  // Page-break guard — Configuration Activities was overlapping Gap Resolution
-  // when the gap table pushed past the page boundary.
-  if (y > 240) {
-    doc.addPage();
-    y = 20;
-  }
+  // Configuration — needs ~24mm (header + subtext + footer breathing room)
+  y = advancePastTable(doc, y + 30, 12, 24);
 
   doc.setFontSize(13);
   doc.setTextColor(primary[0], primary[1], primary[2]);
@@ -184,7 +198,12 @@ export function generateExecutiveSummaryPdf(summary: ReportSummary, branding?: B
   doc.setTextColor(107, 114, 128);
   doc.text(`${summary.config.total} configuration activities for selected scope items`, 20, y);
 
-  renderFooter(doc, b);
+  // Render footer on every page that exists in the doc
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    renderFooter(doc, b);
+  }
   return new Uint8Array(doc.output("arraybuffer"));
 }
 
@@ -234,7 +253,7 @@ export function generateEffortEstimatePdf(
   });
 
   // Effort by phase
-  y = getFinalY(doc, y + 40) + 12;
+  y = advancePastTable(doc, y + 40, 12, 80);
 
   doc.setFontSize(13);
   doc.text("Estimated Phase Breakdown", 20, y);
@@ -259,7 +278,7 @@ export function generateEffortEstimatePdf(
   });
 
   // Confidence indicator
-  y = getFinalY(doc, y + 50) + 12;
+  y = advancePastTable(doc, y + 50, 12, 24);
 
   const reviewedPercent = summary.steps.total > 0
     ? Math.round((summary.steps.reviewed / summary.steps.total) * 100)
@@ -267,13 +286,18 @@ export function generateEffortEstimatePdf(
   const confidence = reviewedPercent >= 90 ? "High" : reviewedPercent >= 60 ? "Medium" : "Low";
 
   doc.setFontSize(13);
+  doc.setTextColor(primary[0], primary[1], primary[2]);
   doc.text("Confidence Assessment", 20, y);
   y += 8;
   doc.setFontSize(10);
   doc.setTextColor(107, 114, 128);
   doc.text(`Steps Reviewed: ${reviewedPercent}% — Confidence: ${confidence}`, 20, y);
 
-  renderFooter(doc, b);
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    renderFooter(doc, b);
+  }
   return new Uint8Array(doc.output("arraybuffer"));
 }
 
