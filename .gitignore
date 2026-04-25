@@ -53,4 +53,6 @@ prisma/dev.db
 *.png
 *.html
 *.docx
+*.xlsx
+*.xlsm
 .env*.local

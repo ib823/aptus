@@ -413,6 +413,7 @@ model Assessment {
   flowDiagrams   ProcessFlowDiagram[]
   functionalAreaOverviews FunctionalAreaOverview[]
   remainingItems RemainingItem[]
+  clientRequirements ClientRequirement[]
   integrationPoints    IntegrationPoint[]
   dataMigrationObjects DataMigrationObject[]
   ocmImpacts           OcmImpact[]
@@ -780,6 +781,34 @@ model RemainingItem {
   @@index([assessmentId, severity, createdAt])
   @@index([assessmentId, resolvedAt])
   @@index([scopeItemId])
+}
+
+/// Client-authored functional requirement (RFP-style matrix entry).
+/// One row imported from a client requirements spreadsheet — unlike
+/// ScopeSelection or StepResponse, these are NOT keyed to SAP catalog content;
+/// the client wrote them, and we record the SI (solution provider) response.
+model ClientRequirement {
+  id                       String   @id @default(cuid())
+  assessmentId             String
+  module                   String   // sheet name, e.g. "Procurement", "Asset Accounting"
+  section                  String?  // section header, e.g. "A. General Requirements"
+  code                     String   // row code, e.g. "A1", "B3.a"
+  requirementText          String   @db.Text
+  requirementType          String?  // "Mandatory" | "Non-Mandatory" | null
+  clientRemarks            String?  @db.Text
+  solutionProviderResponse String?  @db.Text   // editable in-app
+  solutionProviderRemarks  String?  @db.Text   // editable in-app
+  erpModuleSupporting      String?  @db.Text
+  sortOrder                Int      // sequence for stable display order
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@unique([assessmentId, module, code])
+  @@index([assessmentId])
+  @@index([assessmentId, module])
+  @@index([assessmentId, module, sortOrder])
 }
 
 // =============================================================

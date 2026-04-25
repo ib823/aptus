@@ -51,6 +51,7 @@ export function AssessmentTabNav({ assessmentId, assessmentStatus, scopeLocked, 
           segment: "scope",
           ...(scopeLocked ? { locked: true, title: `Profile ${profileScore ?? 0}% complete — reach 60% to unlock` } : {}),
         },
+        { label: "Requirements", href: `${base}/requirements`, segment: "requirements" },
       ],
     },
     {
