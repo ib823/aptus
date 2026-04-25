@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aptus — Design Canvas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    body { margin: 0; font-family: "Geist", -apple-system, system-ui, sans-serif; background: #f5f4f0; }
+    .ab-iframe {
+      width: 100%; height: 100%; border: 0; display: block;
+      background: white;
+      pointer-events: none; /* let canvas pan; user can focus to interact */
+    }
+    .ab-fixed {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--surface-1, #fff);
+      color: var(--text, #111);
+    }
+  </style>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // Concurrency-limited loader: keep at most 3 iframes loading at once.
+    // Stagger the start so the page stays responsive while many iframes spin up.
+    const __pendingLoaders = [];
+    let __activeLoads = 0;
+    const MAX_CONCURRENT = 2;
+    const __pump = () => {
+      while (__activeLoads < MAX_CONCURRENT && __pendingLoaders.length) {
+        const fn = __pendingLoaders.shift();
+        __activeLoads++;
+        fn(() => { __activeLoads--; __pump(); });
+      }
+    };
+
+    const Frame = ({ src, w = 1280, h = 800, scale = 1 }) => {
+      const [src2, setSrc2] = useState(null);
+      useEffect(() => {
+        let cancelled = false;
+        __pendingLoaders.push((done) => {
+          if (cancelled) { done(); return; }
+          setSrc2(src);
+          // give iframe ~5s to fully render before releasing the slot
+          setTimeout(done, 5000);
+        });
+        __pump();
+        return () => { cancelled = true; };
+      }, [src]);
+      return (
+        <div style={{ width: w * scale, height: h * scale, overflow: "hidden", borderRadius: 8, background: "#fff", position: "relative" }}>
+          {src2 ? (
+            <iframe
+              className="ab-iframe"
+              src={src2}
+              style={{ width: w, height: h, transform: `scale(${scale})`, transformOrigin: "top left", border: 0 }}
+            />
+          ) : (
+            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#bbb", fontSize: 11, fontFamily: "Geist Mono, monospace", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+              Loading…
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const PROTO = "Aptus%20Prototype.html";
+    const url = (params) => `${PROTO}#embed=1&${Object.entries(params).map(([k,v]) => `${k}=${encodeURIComponent(v)}`).join("&")}`;
+
+    const W = 1280, H = 800, S = 0.5; // 50% — fits 4-up nicely on canvas
+
+    function CanvasApp() {
+      return (
+        <DesignCanvas>
+          <DCSection id="overview" title="Overview" subtitle="The five-step assessment shell across all major surfaces. Everything below is the same prototype, parameterized.">
+            <DCArtboard id="dashboard" label="Home" width={W*S} height={H*S}>
+              <Frame src={url({ view: "home" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="dashboard-empty" label="Home — empty state" width={W*S} height={H*S}>
+              <Frame src={url({ view: "home", empty: "true" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="assessments-list" label="Assessments list" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessments" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="templates" label="Templates" width={W*S} height={H*S}>
+              <Frame src={url({ view: "templates" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="settings" label="Settings" width={W*S} height={H*S}>
+              <Frame src={url({ view: "settings" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="five-steps" title="The five steps" subtitle="Bursa Malaysia Berhad — Profile → Scope → Analyze → Adjust → Export.">
+            <DCArtboard id="s1" label="1 · Profile" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 1 })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="s2" label="2 · Scope" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 2 })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="s3" label="3 · Analyze" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 3 })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="s4" label="4 · Adjust" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 4 })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="s5" label="5 · Export" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 5 })} w={W} h={H} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="auth" title="Authentication & first-run" subtitle="Login (magic-link) and 3-step onboarding.">
+            <DCArtboard id="login" label="Login" width={W*S} height={H*S}>
+              <Frame src={url({ skipLogin: "false" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="onboarding" label="Onboarding" width={W*S} height={H*S}>
+              <Frame src={url({ onboarding: "true" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="wizard" label="New assessment wizard" width={W*S} height={H*S}>
+              <Frame src={url({ view: "wizard" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="density" title="Density variants — Step 4 (Adjust)" subtitle="Same screen, three densities. Tight ≈ Linear · Medium ≈ Stripe · Relaxed ≈ Notion.">
+            <DCArtboard id="density-tight" label="Tight" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 4, density: "tight" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="density-medium" label="Medium (default)" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 4, density: "medium" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="density-relaxed" label="Relaxed" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 4, density: "relaxed" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="rail" title="Step rail variants" subtitle="Three ways to expose the 5-step backbone.">
+            <DCArtboard id="rail-rail" label="Rail (default)" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 3, rail: "rail" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="rail-progress" label="Progress bar" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 3, rail: "progress" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="rail-breadcrumb" label="Breadcrumb" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 3, rail: "breadcrumb" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="coverage" title="Coverage visualization variants — Step 4" subtitle="OOTB / Config / Gap, four ways.">
+            <DCArtboard id="cov-stacked" label="Stacked bar" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 4, coverage: "stacked" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="cov-donut" label="Donut" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 4, coverage: "donut" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="cov-pie" label="Pie" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 4, coverage: "pie" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="cov-numbers" label="Number grid" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 4, coverage: "numbers" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="scope-rows" title="Scope item row layouts" subtitle="Three densities/treatments for the scope-item list.">
+            <DCArtboard id="scope-default" label="Default" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 2, scope: "default" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="scope-compact" label="Compact" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 2, scope: "compact" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="scope-card" label="Card" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 2, scope: "card" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="theme" title="Light / dark theme" subtitle="Token-driven. Toggle is in the user menu.">
+            <DCArtboard id="theme-light-home" label="Home — light" width={W*S} height={H*S}>
+              <Frame src={url({ view: "home", theme: "light" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="theme-dark-home" label="Home — dark" width={W*S} height={H*S}>
+              <Frame src={url({ view: "home", theme: "dark" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="theme-light-adjust" label="Adjust — light" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 4, theme: "light" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="theme-dark-adjust" label="Adjust — dark" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 4, theme: "dark" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="drawer" title="Scope drawer variants" subtitle="Width: 480 vs. 640. Save model: auto vs. explicit Save button.">
+            <DCArtboard id="drawer-480" label="480 · Auto-save" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 4, openScope: "FIN-AP-001", drawer: "default", drawerSave: "auto" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="drawer-640" label="640 · Auto-save" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 4, openScope: "FIN-AP-001", drawer: "wide", drawerSave: "auto" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="drawer-explicit" label="640 · Explicit Save" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessment", id: "bursa-malaysia", step: 4, openScope: "FIN-AP-001", drawer: "wide", drawerSave: "explicit" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="empty" title="Empty states" subtitle="Two illustration treatments — geometric mark vs. centered icon.">
+            <DCArtboard id="empty-geometric" label="Geometric (default)" width={W*S} height={H*S}>
+              <Frame src={url({ view: "home", empty: "true" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="empty-list" label="Filtered list — empty" width={W*S} height={H*S}>
+              <Frame src={url({ view: "assessments", filter: "archived" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="empty-catalog" title="#1 · Empty-state catalog" subtitle="11 surfaces with tactical, instructive copy. Full-page audit before sign-off.">
+            <DCArtboard id="empties" label="11 empty states · grid" width={W*S} height={H*S*1.4}>
+              <Frame src={url({ view: "empty-catalog" })} w={W} h={H*1.4} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="loading-error" title="#2 · Loading + error catalog" subtitle="Loading skeletons by surface and 6 error/conflict scenarios.">
+            <DCArtboard id="loading-error-board" label="Loading + errors" width={W*S} height={H*S*1.6}>
+              <Frame src={url({ view: "loading-error" })} w={W} h={H*1.6} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="client-share" title="#3 · Client share-link view (Aliya)" subtitle="Read-only. No 'Aptus' chrome. Comment-on-cells. Approve scope/gaps in 3 clicks.">
+            <DCArtboard id="share-scope" label="Share — Scope tab" width={W*S} height={H*S*1.2}>
+              <Frame src={url({ view: "client-share" })} w={W} h={H*1.2} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="mobile" title="#4 · Mobile + tablet variants" subtitle="375px phone and 768px tablet of the 5-step shell. Read-mostly mode for site visits.">
+            <DCArtboard id="mobile-shell" label="Phone (375)" width={W*S} height={H*S*1.1}>
+              <Frame src={url({ view: "mobile-shell" })} w={W} h={H*1.1} scale={S} />
+            </DCArtboard>
+            <DCArtboard id="tablet-shell" label="Tablet (768)" width={W*S} height={H*S*1.1}>
+              <Frame src={url({ view: "tablet-shell" })} w={W} h={H*1.1} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="bulk-ops" title="#5 · Bulk operations" subtitle="Multi-select 32 scope items, classify, set granularity, archive, export.">
+            <DCArtboard id="bulk" label="Sticky action bar with 3 selected" width={W*S} height={H*S}>
+              <Frame src={url({ view: "bulk-ops" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="onboarding" title="#6 · Onboarding A/B" subtitle="(a) Skippable 3-screen welcome — guided. (b) Coach-marks fired contextually on first use.">
+            <DCArtboard id="welcome" label="Welcome (3 screens)" width={W*S} height={H*S}>
+              <Frame src={url({ view: "onboarding-tours" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="upload" title="#7 · File upload affordance" subtitle="Drop, drag-active, multi-progress, parsed result. The single highest-leverage interaction.">
+            <DCArtboard id="upload-states" label="4 upload states" width={W*S} height={H*S}>
+              <Frame src={url({ view: "file-upload" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="cmdk" title="#8 · Cmd-K palette in 4 states" subtitle="Empty → recent suggestions → search results → no results.">
+            <DCArtboard id="cmdk-board" label="4 states · grid" width={W*S} height={H*S}>
+              <Frame src={url({ view: "cmdk-states" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="toasts" title="#9 · Toast / notification variants" subtitle="6 messages × 3 styles. Density tradeoff: subtle vs. impactful.">
+            <DCArtboard id="toasts-board" label="Toast catalog" width={W*S} height={H*S*1.3}>
+              <Frame src={url({ view: "toasts" })} w={W} h={H*1.3} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="export-pair" title="#10 · Step 5 Export — light & dark" subtitle="Single primary CTA, collapsed individual reports, share-link generator, locked state.">
+            <DCArtboard id="export-light-dark" label="Light + Dark" width={W*S} height={H*S*1.2}>
+              <Frame src={url({ view: "export-pair" })} w={W} h={H*1.2} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="complexity" title="#11 · Complexity scaling test" subtitle="Same shell, three engagement sizes — does the IA hold from 1-page form to 3,000-req portfolio?">
+            <DCArtboard id="complexity-board" label="Simple → Standard → Enterprise" width={W*S} height={H*S}>
+              <Frame src={url({ view: "complexity" })} w={W} h={H} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="archive" title="#12 · Post-sign-off archive view" subtitle="Read-only. Decisions timeline as the spine. No edit affordances.">
+            <DCArtboard id="archive-board" label="Maybank Procurement · archived" width={W*S} height={H*S*1.3}>
+              <Frame src={url({ view: "archive" })} w={W} h={H*1.3} scale={S} />
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="bundle-vs" title="#13 · Bundle vs per-report — opinion test" subtitle="Same 14 reports, two presentations. Which wins at 11pm the night before sign-off?">
+            <DCArtboard id="bundle-vs-board" label="A: bundle  /  B: per audience" width={W*S} height={H*S*1.2}>
+              <Frame src={url({ view: "bundle-vs" })} w={W} h={H*1.2} scale={S} />
+            </DCArtboard>
+          </DCSection>
+        </DesignCanvas>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<CanvasApp />);
+  </script>
+</body>
+</html>

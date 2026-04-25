@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>09 Config Workbook · Aptus</title>
+<link rel="stylesheet" href="print.css">
+<style>
+  body { background: #E4E4E7; }
+  .xlsx-page { width: 297mm; min-height: 210mm; margin: 16mm auto; background: white; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  .badge { display: inline-block; font-size: 8pt; padding: 0.4mm 1.5mm; border: 0.5pt solid var(--border-strong); border-radius: 1pt; font-weight: 600; letter-spacing: 0.04em; }
+  .b-dev { background: #DBEAFE; color: #1D4ED8; border-color: #BFDBFE; }
+  .b-qas { background: #FEF3C7; color: #B45309; border-color: #FDE68A; }
+  .b-prd { background: #DCFCE7; color: #15803D; border-color: #A7F3D0; }
+</style>
+</head>
+<body>
+
+<div class="xlsx-page">
+  <div class="xlsx-toolbar">
+    <span class="name">09_Config_Workbook.xlsx</span>
+    <span class="sep"></span>
+    <span>Sheet: <b style="color:var(--text);">Configuration</b></span>
+    <span class="sep"></span>
+    <span>~600 rows · 9 columns</span>
+    <span class="sep"></span>
+    <span>Audience: Basis &amp; configurators (technical voice level)</span>
+  </div>
+
+  <table class="xlsx">
+    <colgroup>
+      <col style="width:22mm"><col style="width:18mm"><col style="width:42mm"><col style="width:48mm"><col style="width:42mm"><col style="width:36mm"><col style="width:24mm"><col style="width:22mm"><col style="width:24mm">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Config ID <span class="chev">▼</span></th>
+        <th>Module <span class="chev">▼</span></th>
+        <th>Object <span class="chev">▼</span></th>
+        <th>L4 Process <span class="chev">▼</span></th>
+        <th>Field / Setting <span class="chev">▼</span></th>
+        <th>Value <span class="chev">▼</span></th>
+        <th>Owner <span class="chev">▼</span></th>
+        <th>Target client <span class="chev">▼</span></th>
+        <th>Status <span class="chev">▼</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="mono">CFG-FI-001</td><td>FI</td><td>Company Code</td><td>GL setup</td><td>Country key</td><td class="mono">MY</td><td>M. Tan</td><td><span class="badge b-dev">DEV</span></td><td><span class="dot dot-success"></span>Done</td></tr>
+      <tr><td class="mono">CFG-FI-002</td><td>FI</td><td>Company Code</td><td>GL setup</td><td>Currency</td><td class="mono">MYR</td><td>M. Tan</td><td><span class="badge b-dev">DEV</span></td><td><span class="dot dot-success"></span>Done</td></tr>
+      <tr><td class="mono">CFG-FI-003</td><td>FI</td><td>Chart of Accounts</td><td>GL setup</td><td>COA ID</td><td class="mono">BMYC</td><td>M. Tan</td><td><span class="badge b-dev">DEV</span></td><td><span class="dot dot-success"></span>Done</td></tr>
+      <tr><td class="mono">CFG-FI-014</td><td>FI</td><td>WHT Type</td><td>Vendor invoice</td><td>WHT Type code</td><td class="mono">M1</td><td>M. Tan</td><td><span class="badge b-dev">DEV</span></td><td><span class="dot dot-success"></span>Done</td></tr>
+      <tr><td class="mono">CFG-FI-015</td><td>FI</td><td>WHT Code</td><td>Vendor invoice</td><td>Tax rate</td><td class="mono">10.00%</td><td>M. Tan</td><td><span class="badge b-dev">DEV</span></td><td><span class="dot dot-success"></span>Done</td></tr>
+      <tr><td class="mono">CFG-FI-016</td><td>FI</td><td>WHT Code</td><td>Vendor invoice</td><td>Posting key</td><td class="mono">50</td><td>M. Tan</td><td><span class="badge b-dev">DEV</span></td><td><span class="dot dot-success"></span>Done</td></tr>
+      <tr><td class="mono">CFG-FI-017</td><td>FI</td><td>WHT Code</td><td>Vendor invoice</td><td>Cert template</td><td class="mono">CT-MY-LHDN-01</td><td>M. Tan</td><td><span class="badge b-qas">QAS</span></td><td><span class="dot dot-warning"></span>Pending</td></tr>
+      <tr><td class="mono">CFG-CO-008</td><td>CO</td><td>Cost Center</td><td>Cost center setup</td><td>CC hierarchy</td><td class="mono">BMY-CC-2026</td><td>M. Tan</td><td><span class="badge b-dev">DEV</span></td><td><span class="dot dot-success"></span>Done</td></tr>
+      <tr><td class="mono">CFG-MM-022</td><td>MM</td><td>Tolerance Group</td><td>3-way match</td><td>Qty variance %</td><td class="mono">5.0</td><td>K. Wong</td><td><span class="badge b-dev">DEV</span></td><td><span class="dot dot-success"></span>Done</td></tr>
+      <tr><td class="mono">CFG-MM-023</td><td>MM</td><td>Tolerance Group</td><td>3-way match</td><td>Price variance %</td><td class="mono">2.0</td><td>K. Wong</td><td><span class="badge b-dev">DEV</span></td><td><span class="dot dot-success"></span>Done</td></tr>
+      <tr><td class="mono">CFG-MM-024</td><td>MM</td><td>Tolerance Group</td><td>3-way match</td><td>Schedule variance days</td><td class="mono">3</td><td>K. Wong</td><td><span class="badge b-dev">DEV</span></td><td><span class="dot dot-success"></span>Done</td></tr>
+      <tr><td class="mono">CFG-SD-031</td><td>SD</td><td>Pricing Procedure</td><td>Sales pricing</td><td>Procedure ID</td><td class="mono">ZBMY01</td><td>L. Cheong</td><td><span class="badge b-dev">DEV</span></td><td><span class="dot dot-success"></span>Done</td></tr>
+      <tr><td class="mono">CFG-SD-032</td><td>SD</td><td>Condition Type</td><td>Sales pricing</td><td>Discount cond.</td><td class="mono">K007</td><td>L. Cheong</td><td><span class="badge b-dev">DEV</span></td><td><span class="dot dot-success"></span>Done</td></tr>
+      <tr><td class="mono">CFG-SD-033</td><td>SD</td><td>Credit Mgmt</td><td>SO credit check</td><td>Credit group</td><td class="mono">01</td><td>L. Cheong</td><td><span class="badge b-qas">QAS</span></td><td><span class="dot dot-warning"></span>Pending</td></tr>
+      <tr><td class="mono">CFG-PP-019</td><td>PP</td><td>Order Type</td><td>Production order</td><td>Order type</td><td class="mono">ZP01</td><td>R. Lim</td><td><span class="badge b-dev">DEV</span></td><td><span class="dot dot-success"></span>Done</td></tr>
+      <tr><td class="mono">CFG-PP-020</td><td>PP</td><td>Status Profile</td><td>Production order</td><td>Status profile</td><td class="mono">ZSP01</td><td>R. Lim</td><td><span class="badge b-dev">DEV</span></td><td><span class="dot dot-success"></span>Done</td></tr>
+      <tr><td class="mono">CFG-WM-007</td><td>WM</td><td>Storage Type</td><td>Cycle count</td><td>Cycle interval (d)</td><td class="mono">7</td><td>L. Cheong</td><td><span class="badge b-dev">DEV</span></td><td><span class="dot dot-success"></span>Done</td></tr>
+      <tr><td class="mono">CFG-HR-011</td><td>HR</td><td>Action Type</td><td>Onboarding</td><td>Action ID</td><td class="mono">Z01</td><td>A. Tan</td><td><span class="badge b-dev">DEV</span></td><td><span class="dot dot-success"></span>Done</td></tr>
+    </tbody>
+  </table>
+
+  <div style="padding: 4mm 8mm; font-size: 9pt; color: var(--text-muted); background: #FAFAFA; border-top: 0.5pt solid var(--border);">
+    Showing rows 1–18 of ~600 · Frozen header · Technical voice (Module/Tcode/transport-target visible).
+  </div>
+</div>
+
+<div class="review-bar" style="max-width: 297mm;">
+  <a href="08_gap_register.html">← prev</a>
+  <span>09_Config_Workbook.xlsx</span>
+  <a href="10_integration_register.html">next →</a>
+</div>
+
+</body>
+</html>

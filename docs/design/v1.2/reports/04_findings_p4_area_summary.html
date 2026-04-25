@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>04 Findings — Finance &amp; Treasury · Aptus</title>
+<link rel="stylesheet" href="print.css">
+<style>
+  .area-summary {
+    border-top: 1pt solid var(--text);
+    border-bottom: 0.5pt solid var(--border);
+    padding: 4mm 0 5mm;
+    margin-bottom: 6mm;
+  }
+  .area-summary .head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 3mm;
+  }
+  .area-summary .head h2 { font-size: 14pt; font-weight: 600; margin: 0; }
+  .area-summary .head .reqs { font-size: 10pt; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .area-summary .headline {
+    font-size: 10pt; line-height: 1.5; max-width: 165mm; margin-bottom: 4mm;
+  }
+  .mix-grid {
+    display: grid;
+    grid-template-columns: 32mm 60mm 16mm 18mm;
+    align-items: center;
+    row-gap: 1.6mm;
+    column-gap: 4mm;
+    font-size: 9pt;
+  }
+  .mix-grid .lbl { font-weight: 500; }
+  .mix-grid .count { font-variant-numeric: tabular-nums; text-align: right; color: var(--text-muted); }
+  .mix-grid .pct { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="area-summary">
+    <div class="head">
+      <h2>Finance &amp; Treasury</h2>
+      <div class="reqs">142 requirements</div>
+    </div>
+    <div class="headline">
+      <b>Headline:</b> 89% of your finance requirements are met by standard SAP. The remaining 11% are handled through configuration and a small set of trusted add-ons — no custom code needed.
+    </div>
+    <div class="mix-grid">
+      <div class="lbl"><span class="dot dot-success"></span>Standard SAP</div>
+      <div class="dotbar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i></div>
+      <div class="count">118</div><div class="pct">83%</div>
+
+      <div class="lbl"><span class="dot dot-warning"></span>Configurable</div>
+      <div class="dotbar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i></div>
+      <div class="count">10</div><div class="pct">7%</div>
+
+      <div class="lbl"><span class="dot dot-warning"></span>Adapt to SAP</div>
+      <div class="dotbar"><i class="f"></i></div>
+      <div class="count">2</div><div class="pct">1%</div>
+
+      <div class="lbl"><span class="dot dot-info"></span>Trusted add-on</div>
+      <div class="dotbar"><i class="f"></i><i class="f"></i></div>
+      <div class="count">7</div><div class="pct">5%</div>
+
+      <div class="lbl"><span class="dot dot-danger"></span>Custom build</div>
+      <div class="dotbar"><i class="f"></i></div>
+      <div class="count">3</div><div class="pct">2%</div>
+
+      <div class="lbl"><span class="dot dot-neutral"></span>Out of scope</div>
+      <div class="dotbar"><i class="f"></i></div>
+      <div class="count">2</div><div class="pct">1%</div>
+    </div>
+  </div>
+
+  <!-- 4 finding cards -->
+  <div class="find-card">
+    <div class="find-head">
+      <div class="find-id">REQ-FIN-001</div>
+      <div class="pill"><span class="dot dot-success"></span>Standard SAP</div>
+    </div>
+    <div class="find-row"><div class="find-row-label">Your ask</div><div class="find-row-value">Generate monthly trial balance with comparative prior-period analysis.</div></div>
+    <div class="find-row"><div class="find-row-label">What SAP does</div><div class="find-row-value">Standard SAP produces this report exactly as described, with built-in comparison-period selection.</div></div>
+    <div class="find-row"><div class="find-row-label">What it means for you</div><div class="find-row-value">Nothing for your team to build. Available from day one of go-live.</div></div>
+  </div>
+
+  <div class="find-card">
+    <div class="find-head">
+      <div class="find-id">REQ-FIN-014</div>
+      <div class="pill"><span class="dot dot-warning"></span>Configurable</div>
+    </div>
+    <div class="find-row"><div class="find-row-label">Your ask</div><div class="find-row-value">Apply withholding tax to vendor payments per Inland Revenue Board (LHDN) Malaysia rules.</div></div>
+    <div class="find-row"><div class="find-row-label">What SAP does</div><div class="find-row-value">SAP supports country-specific withholding tax. Our team configures the LHDN rate matrix and certificate output.</div></div>
+    <div class="find-row"><div class="find-row-label">What it means for you</div><div class="find-row-value">Our team configures it once. Future rate changes are admin-level — no developer needed.</div></div>
+  </div>
+
+  <div class="find-card">
+    <div class="find-head">
+      <div class="find-id">REQ-FIN-027</div>
+      <div class="pill"><span class="dot dot-info"></span>Trusted add-on</div>
+    </div>
+    <div class="find-row"><div class="find-row-label">Your ask</div><div class="find-row-value">Real-time FX exposure dashboard across MYR, USD, SGD, EUR positions with automated hedging recommendations.</div></div>
+    <div class="find-row"><div class="find-row-label">What SAP does</div><div class="find-row-value">Standard SAP tracks FX positions but does not recommend hedges. We deploy Kyriba, a treasury platform certified for SAP.</div></div>
+    <div class="find-row"><div class="find-row-label">What it means for you</div><div class="find-row-value">We deploy a certified third-party product (Kyriba). Licence cost ~MYR 320,000 / year. Lower risk than custom code.</div></div>
+  </div>
+
+  <div class="find-card">
+    <div class="find-head">
+      <div class="find-id">REQ-FIN-041</div>
+      <div class="pill"><span class="dot dot-warning"></span>Adapt to SAP</div>
+    </div>
+    <div class="find-row"><div class="find-row-label">Your ask</div><div class="find-row-value">Manual journal-entry approval flow with 4-tier authorisation matrix mirroring legacy paper process.</div></div>
+    <div class="find-row"><div class="find-row-label">What SAP does</div><div class="find-row-value">SAP standard supports a configurable approval workflow with up to 3 tiers. The 4th tier mirrors a paper-based control no longer required by audit.</div></div>
+    <div class="find-row"><div class="find-row-label">What it means for you</div><div class="find-row-value">We recommend adjusting the approval matrix to 3 tiers. SAP's standard approach is more efficient and avoids ongoing customisation cost.</div></div>
+  </div>
+
+  <div class="page-footer">Aptus · Confidential · 4 · 04_Requirements_Findings.pdf</div>
+</div>
+
+<div class="review-bar">
+  <a href="04_findings_p3_glance.html">← page 3</a>
+  <span>04_Requirements_Findings.pdf · page 4 of 6 — Finance area</span>
+  <a href="04_findings_p5_card_variants.html">page 5 →</a>
+</div>
+
+</body>
+</html>

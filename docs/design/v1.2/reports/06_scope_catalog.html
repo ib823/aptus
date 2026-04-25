@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>06 Scope Catalog · Aptus</title>
+<link rel="stylesheet" href="print.css">
+<style>
+  body { background: #E4E4E7; }
+  .xlsx-page { width: 297mm; min-height: 210mm; margin: 16mm auto; background: white; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  .heat-0 { background: #FEE2E2 !important; }
+  .heat-1 { background: #FEF3C7 !important; }
+  .heat-2 { background: #DCFCE7 !important; }
+  .avatar { display: inline-block; width: 14pt; height: 14pt; border-radius: 50%; background: #E4E4E7; color: var(--text); font-size: 8pt; font-weight: 600; text-align: center; line-height: 14pt; vertical-align: -2pt; margin-right: 4pt; }
+</style>
+</head>
+<body>
+
+<div class="xlsx-page">
+  <div class="xlsx-toolbar">
+    <span class="name">06_Scope_Catalog.xlsx</span>
+    <span class="sep"></span>
+    <span>Sheet: <b style="color:var(--text);">Scope</b></span>
+    <span class="sep"></span>
+    <span>142 rows · 9 columns</span>
+    <span class="sep"></span>
+    <span>Frozen header · Filter enabled · Reviewed % colour-scaled</span>
+  </div>
+
+  <table class="xlsx">
+    <colgroup>
+      <col style="width:30mm"><col style="width:38mm"><col style="width:42mm"><col style="width:55mm">
+      <col style="width:24mm"><col style="width:22mm"><col style="width:14mm"><col style="width:18mm"><col style="width:30mm">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>L1 (Area) <span class="chev">▼</span></th>
+        <th>L2 (Family) <span class="chev">▼</span></th>
+        <th>L3 (Group) <span class="chev">▼</span></th>
+        <th>L4 (Process step) <span class="chev">▼</span></th>
+        <th>Decision <span class="chev">▼</span></th>
+        <th>Detail level <span class="chev">▼</span></th>
+        <th>Steps <span class="chev">▼</span></th>
+        <th>Reviewed <span class="chev">▼</span></th>
+        <th>Owner <span class="chev">▼</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Finance &amp; Treasury</td><td>Period-end Closing</td><td>General Ledger Closing</td><td>Run preliminary trial balance</td><td><span class="dot dot-success"></span>Selected</td><td>Fine</td><td class="num">14</td><td class="num heat-2">100%</td><td><span class="avatar">MT</span>M. Tan</td></tr>
+      <tr><td>Finance &amp; Treasury</td><td>Period-end Closing</td><td>Subledger Reconciliation</td><td>AR-GL reconciliation</td><td><span class="dot dot-success"></span>Selected</td><td>Fine</td><td class="num">9</td><td class="num heat-2">100%</td><td><span class="avatar">MT</span>M. Tan</td></tr>
+      <tr><td>Finance &amp; Treasury</td><td>Treasury &amp; FX</td><td>Cash Position</td><td>Daily cash position report</td><td><span class="dot dot-success"></span>Selected</td><td>Medium</td><td class="num">22</td><td class="num heat-2">96%</td><td><span class="avatar">SK</span>S. Krishnan</td></tr>
+      <tr><td>Finance &amp; Treasury</td><td>Treasury &amp; FX</td><td>Hedging</td><td>FX exposure hedge ratio calc</td><td><span class="dot dot-warning"></span>Maybe</td><td>Coarse</td><td class="num">18</td><td class="num heat-1">62%</td><td><span class="avatar">SK</span>S. Krishnan</td></tr>
+      <tr><td>Procurement</td><td>Source-to-Pay</td><td>Vendor Onboarding</td><td>New vendor request &amp; approval</td><td><span class="dot dot-success"></span>Selected</td><td>Fine</td><td class="num">28</td><td class="num heat-2">100%</td><td><span class="avatar">KW</span>K. Wong</td></tr>
+      <tr><td>Procurement</td><td>Source-to-Pay</td><td>Purchase Requisition</td><td>Create &amp; route requisition</td><td><span class="dot dot-success"></span>Selected</td><td>Fine</td><td class="num">19</td><td class="num heat-2">94%</td><td><span class="avatar">KW</span>K. Wong</td></tr>
+      <tr><td>Procurement</td><td>Source-to-Pay</td><td>Three-Way Match</td><td>PO-GR-Invoice match w/ tolerances</td><td><span class="dot dot-success"></span>Selected</td><td>Fine</td><td class="num">12</td><td class="num heat-2">100%</td><td><span class="avatar">KW</span>K. Wong</td></tr>
+      <tr><td>Sales &amp; Distribution</td><td>Order to Cash</td><td>Sales Order Processing</td><td>Create sales order with credit check</td><td><span class="dot dot-success"></span>Selected</td><td>Fine</td><td class="num">24</td><td class="num heat-2">100%</td><td><span class="avatar">LC</span>L. Cheong</td></tr>
+      <tr><td>Sales &amp; Distribution</td><td>Order to Cash</td><td>Pricing &amp; Discounts</td><td>Apply customer-specific pricing</td><td><span class="dot dot-success"></span>Selected</td><td>Medium</td><td class="num">17</td><td class="num heat-2">88%</td><td><span class="avatar">LC</span>L. Cheong</td></tr>
+      <tr><td>Sales &amp; Distribution</td><td>Order to Cash</td><td>Billing</td><td>Generate invoice from delivery</td><td><span class="dot dot-success"></span>Selected</td><td>Fine</td><td class="num">15</td><td class="num heat-2">96%</td><td><span class="avatar">LC</span>L. Cheong</td></tr>
+      <tr><td>Supply Chain</td><td>Plan to Inventory</td><td>Cycle Count</td><td>Schedule weekly cycle counts</td><td><span class="dot dot-success"></span>Selected</td><td>Medium</td><td class="num">11</td><td class="num heat-1">72%</td><td><span class="avatar">LC</span>L. Cheong</td></tr>
+      <tr><td>Supply Chain</td><td>Plan to Inventory</td><td>Demand Planning</td><td>Statistical forecast generation</td><td><span class="dot dot-warning"></span>Maybe</td><td>Coarse</td><td class="num">29</td><td class="num heat-0">38%</td><td><span class="avatar">LC</span>L. Cheong</td></tr>
+      <tr><td>Manufacturing</td><td>Make to Stock</td><td>Production Order</td><td>Release production order to shop floor</td><td><span class="dot dot-success"></span>Selected</td><td>Medium</td><td class="num">21</td><td class="num heat-1">82%</td><td><span class="avatar">RL</span>R. Lim</td></tr>
+      <tr><td>Manufacturing</td><td>Make to Stock</td><td>Quality Inspection</td><td>In-process inspection at op 0030</td><td><span class="dot dot-warning"></span>Maybe</td><td>Coarse</td><td class="num">14</td><td class="num heat-0">46%</td><td><span class="avatar">RL</span>R. Lim</td></tr>
+      <tr><td>Human Resources</td><td>Hire to Retire</td><td>Onboarding</td><td>New-hire data setup &amp; access provisioning</td><td><span class="dot dot-success"></span>Selected</td><td>Fine</td><td class="num">18</td><td class="num heat-2">100%</td><td><span class="avatar">AT</span>A. Tan</td></tr>
+      <tr><td>Human Resources</td><td>Hire to Retire</td><td>Talent Management</td><td>Succession planning workflow</td><td><span class="dot dot-neutral"></span>Out</td><td>—</td><td class="num">0</td><td class="num">—</td><td>—</td></tr>
+      <tr><td>Asset Management</td><td>Plant Maintenance</td><td>Preventive Maintenance</td><td>Generate PM order from schedule</td><td><span class="dot dot-success"></span>Selected</td><td>Medium</td><td class="num">16</td><td class="num heat-2">94%</td><td><span class="avatar">RL</span>R. Lim</td></tr>
+      <tr><td>Customer Service</td><td>Service Request</td><td>Self-Service Portal</td><td>Customer-facing order status</td><td><span class="dot dot-success"></span>Selected</td><td>Fine</td><td class="num">9</td><td class="num heat-2">100%</td><td><span class="avatar">RL</span>R. Lim</td></tr>
+    </tbody>
+  </table>
+
+  <div style="padding: 4mm 8mm; font-size: 9pt; color: var(--text-muted); background: #FAFAFA; border-top: 0.5pt solid var(--border);">
+    Showing rows 1–18 of 142 · Reviewed % colour-scaled (red&nbsp;0&nbsp;→&nbsp;amber&nbsp;50&nbsp;→&nbsp;green&nbsp;100) · Frozen header.
+  </div>
+</div>
+
+<div class="review-bar" style="max-width: 297mm;">
+  <a href="05_traceability_matrix.html">← prev</a>
+  <span>06_Scope_Catalog.xlsx</span>
+  <a href="07_step_detail.html">next →</a>
+</div>
+
+</body>
+</html>

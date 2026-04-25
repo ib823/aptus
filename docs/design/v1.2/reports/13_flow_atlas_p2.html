@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>13 Flow Atlas — Sales Order Processing · Aptus</title><link rel="stylesheet" href="print.css">
+<style>
+  body { background:#E4E4E7; }
+  .page.landscape { width:297mm; min-height:210mm; padding:18mm 18mm 16mm; }
+  .flow-head { display:flex; justify-content:space-between; align-items:baseline; padding-bottom:3mm; border-bottom:1pt solid var(--text); margin-bottom:6mm; }
+  .flow-head .crumb { font-size:10pt; color:var(--text-muted); }
+  .flow-head h1 { font-size:14pt; font-weight:600; margin:0; }
+  .flow-foot { display:flex; gap:10mm; align-items:baseline; padding-top:3mm; border-top:0.5pt solid var(--border); margin-top:6mm; font-size:9.5pt; }
+  .flow-foot .lbl { color:var(--text-muted); margin-right:2mm; }
+  .flow-foot b { font-variant-numeric:tabular-nums; }
+  svg .lane { fill:#FAFAFA; stroke:none; }
+  svg .lane-label { font:600 10pt 'Geist',sans-serif; fill:var(--text-muted); }
+  svg .lane-rule { stroke:#E4E4E7; stroke-width:0.5; }
+  svg .step { fill:white; stroke:#0B0B0F; stroke-width:0.6; }
+  svg .step-label { font:500 9pt 'Geist',sans-serif; fill:#0B0B0F; }
+  svg .conn { fill:none; stroke:#71717A; stroke-width:0.6; }
+  svg .conn-arrow { fill:#71717A; }
+  svg .verdict { stroke:white; stroke-width:0.5; }
+</style></head>
+<body>
+<div class="page landscape">
+  <div class="flow-head">
+    <div>
+      <div class="crumb">Order to Cash › Sales Order Processing</div>
+      <h1>Create sales order with credit check</h1>
+    </div>
+    <div class="crumb">L4-SD-0301 · Aptus · Page 7</div>
+  </div>
+
+  <svg viewBox="0 0 1080 380" width="100%" style="display:block;">
+    <!-- Lanes -->
+    <rect class="lane" x="0" y="20"  width="1080" height="80"/>
+    <rect class="lane" x="0" y="100" width="1080" height="80"/>
+    <rect class="lane" x="0" y="180" width="1080" height="80"/>
+    <rect class="lane" x="0" y="260" width="1080" height="80"/>
+    <line class="lane-rule" x1="120" y1="20"  x2="120" y2="340"/>
+    <line class="lane-rule" x1="0"   y1="100" x2="1080" y2="100"/>
+    <line class="lane-rule" x1="0"   y1="180" x2="1080" y2="180"/>
+    <line class="lane-rule" x1="0"   y1="260" x2="1080" y2="260"/>
+    <line class="lane-rule" x1="0"   y1="340" x2="1080" y2="340"/>
+    <line class="lane-rule" x1="0"   y1="20"  x2="1080" y2="20"/>
+
+    <text class="lane-label" x="14" y="65">Customer</text>
+    <text class="lane-label" x="14" y="145">Sales</text>
+    <text class="lane-label" x="14" y="225">Warehouse</text>
+    <text class="lane-label" x="14" y="305">Finance</text>
+
+    <!-- Customer lane -->
+    <rect class="step" x="140" y="40" width="120" height="40" rx="2"/>
+    <circle cx="152" cy="52" r="4" fill="#15803D" class="verdict"/>
+    <text class="step-label" x="170" y="65">PO received</text>
+
+    <!-- Sales lane -->
+    <rect class="step" x="290" y="120" width="130" height="40" rx="2"/>
+    <circle cx="302" cy="132" r="4" fill="#15803D" class="verdict"/>
+    <text class="step-label" x="320" y="145">Create SO</text>
+
+    <rect class="step" x="445" y="120" width="130" height="40" rx="2"/>
+    <circle cx="457" cy="132" r="4" fill="#15803D" class="verdict"/>
+    <text class="step-label" x="475" y="145">Credit check</text>
+
+    <rect class="step" x="600" y="120" width="130" height="40" rx="2"/>
+    <circle cx="612" cy="132" r="4" fill="#B45309" class="verdict"/>
+    <text class="step-label" x="630" y="145">Apply pricing</text>
+
+    <rect class="step" x="755" y="120" width="130" height="40" rx="2"/>
+    <circle cx="767" cy="132" r="4" fill="#15803D" class="verdict"/>
+    <text class="step-label" x="785" y="145">Confirm SO</text>
+
+    <!-- Warehouse lane -->
+    <rect class="step" x="600" y="200" width="130" height="40" rx="2"/>
+    <circle cx="612" cy="212" r="4" fill="#15803D" class="verdict"/>
+    <text class="step-label" x="630" y="225">Pick &amp; pack</text>
+
+    <rect class="step" x="755" y="200" width="130" height="40" rx="2"/>
+    <circle cx="767" cy="212" r="4" fill="#1D4ED8" class="verdict"/>
+    <text class="step-label" x="785" y="225">Post GI</text>
+
+    <!-- Finance lane -->
+    <rect class="step" x="900" y="280" width="130" height="40" rx="2"/>
+    <circle cx="912" cy="292" r="4" fill="#15803D" class="verdict"/>
+    <text class="step-label" x="930" y="305">Bill customer</text>
+
+    <!-- Connectors -->
+    <path class="conn" d="M 200 80 L 200 100 L 355 100 L 355 120"/>
+    <polygon class="conn-arrow" points="355,120 351,114 359,114"/>
+
+    <path class="conn" d="M 420 140 L 445 140"/>
+    <polygon class="conn-arrow" points="445,140 439,137 439,143"/>
+
+    <path class="conn" d="M 575 140 L 600 140"/>
+    <polygon class="conn-arrow" points="600,140 594,137 594,143"/>
+
+    <path class="conn" d="M 730 140 L 755 140"/>
+    <polygon class="conn-arrow" points="755,140 749,137 749,143"/>
+
+    <path class="conn" d="M 820 160 L 820 200"/>
+    <polygon class="conn-arrow" points="820,200 817,194 823,194"/>
+
+    <path class="conn" d="M 730 220 L 755 220"/>
+    <polygon class="conn-arrow" points="755,220 749,217 749,223"/>
+
+    <path class="conn" d="M 820 240 L 820 280 L 900 280 L 900 300"/>
+    <polygon class="conn-arrow" points="900,300 897,294 903,294"/>
+  </svg>
+
+  <div class="flow-foot">
+    <span><span class="lbl">Verdict:</span><span class="pill"><span class="dot dot-warning"></span>Configurable</span></span>
+    <span><span class="lbl">Steps:</span><b>12</b></span>
+    <span><span class="lbl">Gaps:</span><b>2</b> (Power-user extension)</span>
+    <span><span class="lbl">Owner:</span><b>L. Cheong</b></span>
+    <span style="margin-left:auto; color:var(--text-muted); font-size:9pt;">Verdict dots: ● green = Standard SAP · ● amber = Configurable / Adapt · ● blue = Add-on / Extension · ● red = Custom build</span>
+  </div>
+
+  <div class="page-footer">Aptus · Confidential · 7 · 13_Flow_Atlas.pdf</div>
+</div>
+<div class="review-bar" style="max-width:297mm;"><a href="13_flow_atlas_p1.html">← cover</a><span>13_Flow_Atlas.pdf · landscape example (1 of 142)</span><a href="14_audit_trail.html">next →</a></div>
+</body></html>

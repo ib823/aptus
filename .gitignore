@@ -56,3 +56,6 @@ prisma/dev.db
 *.xlsx
 *.xlsm
 .env*.local
+
+# Design package — allow committed mocks (HTML, PNG, JPG, JSX) under docs/design/
+!docs/design/**

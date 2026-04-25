@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>12 OCM Report · Aptus</title>
+<link rel="stylesheet" href="print.css">
+<style>
+  body { background: #E4E4E7; }
+  .xlsx-page { width: 297mm; min-height: 210mm; margin: 16mm auto; background: white; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+  .tabs { display: flex; gap: 1mm; padding: 0 8mm; background: #FAFAFA; border-bottom: 0.25pt solid var(--border); }
+  .tab { padding: 2.5mm 4mm; font-size: 9pt; color: var(--text-muted); border-top: 1.5pt solid transparent; }
+  .tab.active { color: var(--text); font-weight: 600; background: white; border-top-color: var(--text); }
+  .impact-hi { background: #FEE2E2 !important; }
+  .impact-md { background: #FEF3C7 !important; }
+  .impact-lo { background: #DCFCE7 !important; }
+</style>
+</head>
+<body>
+
+<div class="xlsx-page">
+  <div class="xlsx-toolbar">
+    <span class="name">12_OCM_Report.xlsx</span>
+    <span class="sep"></span>
+    <span>Sheets: Stakeholders · <b style="color:var(--text);">Impact</b> · Training · Comms</span>
+  </div>
+  <div class="tabs">
+    <div class="tab">Stakeholders</div>
+    <div class="tab active">Impact</div>
+    <div class="tab">Training</div>
+    <div class="tab">Comms</div>
+  </div>
+
+  <table class="xlsx">
+    <colgroup>
+      <col style="width:22mm"><col style="width:38mm"><col style="width:30mm"><col style="width:18mm"><col style="width:20mm"><col style="width:42mm"><col style="width:42mm"><col style="width:24mm"><col style="width:30mm">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Role ID <span class="chev">▼</span></th>
+        <th>Role <span class="chev">▼</span></th>
+        <th>Department <span class="chev">▼</span></th>
+        <th>Headcount <span class="chev">▼</span></th>
+        <th>Impact level <span class="chev">▼</span></th>
+        <th>Process change <span class="chev">▼</span></th>
+        <th>System change <span class="chev">▼</span></th>
+        <th>Training (h) <span class="chev">▼</span></th>
+        <th>Champion <span class="chev">▼</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="mono">ROL-001</td><td>AP Clerk</td><td>Finance</td><td class="num">42</td><td class="impact-hi">High</td><td>3-way match w/ tolerances replaces manual</td><td>SAP Fiori "Process Receivables"</td><td class="num">16</td><td>M. Tan</td></tr>
+      <tr><td class="mono">ROL-002</td><td>AR Clerk</td><td>Finance</td><td class="num">38</td><td class="impact-hi">High</td><td>Cash app uses ML matching</td><td>SAP Fiori "Process Receivables"</td><td class="num">16</td><td>M. Tan</td></tr>
+      <tr><td class="mono">ROL-003</td><td>GL Accountant</td><td>Finance</td><td class="num">14</td><td class="impact-md">Medium</td><td>Universal Journal replaces classic GL</td><td>Embedded analytics</td><td class="num">12</td><td>M. Tan</td></tr>
+      <tr><td class="mono">ROL-004</td><td>Treasury Analyst</td><td>Finance</td><td class="num">8</td><td class="impact-hi">High</td><td>Hedging via Kyriba (new)</td><td>Kyriba portal + S/4 link</td><td class="num">24</td><td>S. Krishnan</td></tr>
+      <tr><td class="mono">ROL-005</td><td>Buyer</td><td>Procurement</td><td class="num">28</td><td class="impact-md">Medium</td><td>Catalogue-driven requisition</td><td>Fiori "Manage Purchase Requisitions"</td><td class="num">12</td><td>K. Wong</td></tr>
+      <tr><td class="mono">ROL-006</td><td>Sales Order Coordinator</td><td>Sales</td><td class="num">22</td><td class="impact-md">Medium</td><td>Broker reference field added</td><td>Fiori "Manage Sales Orders"</td><td class="num">10</td><td>L. Cheong</td></tr>
+      <tr><td class="mono">ROL-007</td><td>Warehouse Operator</td><td>Supply Chain</td><td class="num">88</td><td class="impact-md">Medium</td><td>3PL Manhattan handles handheld scanning; SAP confirms</td><td>SAP handheld scanner or kiosk</td><td class="num">8</td><td>L. Cheong</td></tr>
+      <tr><td class="mono">ROL-008</td><td>Production Planner</td><td>Manufacturing</td><td class="num">12</td><td class="impact-md">Medium</td><td>Forecast via IBP candidate</td><td>Fiori "MRP Cockpit"</td><td class="num">14</td><td>R. Lim</td></tr>
+      <tr><td class="mono">ROL-009</td><td>Maintenance Tech</td><td>Asset Mgmt</td><td class="num">52</td><td class="impact-lo">Low</td><td>Notification → Order similar to ECC</td><td>Fiori "Manage Maintenance Notifications"</td><td class="num">6</td><td>R. Lim</td></tr>
+      <tr><td class="mono">ROL-010</td><td>HR Business Partner</td><td>Human Resources</td><td class="num">14</td><td class="impact-lo">Low</td><td>Master data flows from SuccessFactors</td><td>Read-only S/4 HR view</td><td class="num">4</td><td>A. Tan</td></tr>
+      <tr><td class="mono">ROL-011</td><td>Internal Auditor</td><td>Audit</td><td class="num">6</td><td class="impact-md">Medium</td><td>Audit trail consolidated</td><td>SAP Audit Mgmt + ARC</td><td class="num">12</td><td>R. Lim</td></tr>
+      <tr><td class="mono">ROL-012</td><td>Customer Service Agent</td><td>Customer Service</td><td class="num">24</td><td class="impact-hi">High</td><td>Self-service portal deflects ~30% calls</td><td>BTP customer portal</td><td class="num">12</td><td>R. Lim</td></tr>
+      <tr><td class="mono">ROL-013</td><td>Settlement Operator</td><td>Trading Operations</td><td class="num">10</td><td class="impact-hi">High</td><td>Settlement engine replaces legacy</td><td>SAP custom screen</td><td class="num">24</td><td>R. Lim</td></tr>
+      <tr><td class="mono">ROL-014</td><td>Executive (CFO/CIO)</td><td>Leadership</td><td class="num">6</td><td class="impact-lo">Low</td><td>Embedded dashboards, fewer printouts</td><td>SAP Analytics Cloud</td><td class="num">2</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <div style="padding: 4mm 8mm; font-size: 9pt; color: var(--text-muted); background: #FAFAFA; border-top: 0.5pt solid var(--border);">
+    Showing 14 of 28 roles · Impact 3-colour scale · Other sheets: Stakeholders, Training, Comms.
+  </div>
+</div>
+
+<div class="review-bar" style="max-width: 297mm;">
+  <a href="11_data_migration.html">← prev</a>
+  <span>12_OCM_Report.xlsx (Impact sheet)</span>
+  <a href="13_flow_atlas_p1.html">next →</a>
+</div>
+
+</body>
+</html>

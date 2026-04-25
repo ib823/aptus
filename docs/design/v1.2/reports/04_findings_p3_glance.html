@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>04 Findings — Your requirements at a glance · Aptus</title>
+<link rel="stylesheet" href="print.css">
+<style>
+  .glance-bignum {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6mm;
+    margin: 4mm 0 8mm;
+  }
+  .glance-bignum .cell {
+    border: 0.5pt solid var(--border);
+    padding: 5mm 6mm;
+  }
+  .glance-bignum .num {
+    font-size: 26pt;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    color: var(--text);
+    margin-bottom: 2.5mm;
+  }
+  .glance-bignum .lbl {
+    font-size: 9pt;
+    font-weight: 600;
+    margin-bottom: 1mm;
+  }
+  .glance-bignum .sub {
+    font-size: 8.5pt;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+  .area-row {
+    display: grid;
+    grid-template-columns: 60mm 22mm 60mm 18mm;
+    align-items: center;
+    padding: 2.5mm 0;
+    border-bottom: 0.25pt solid var(--border);
+    font-size: 10pt;
+  }
+  .area-row .name { font-weight: 500; }
+  .area-row .reqs { color: var(--text-muted); font-size: 9pt; font-variant-numeric: tabular-nums; }
+  .area-row .pct { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <h1 class="h1">Your requirements at a glance</h1>
+  <p class="body">You sent us <b>778 requirements</b> across 9 functional areas.</p>
+
+  <div class="glance-bignum">
+    <div class="cell">
+      <div class="num">482</div>
+      <div class="lbl"><span class="dot dot-success"></span>Standard SAP</div>
+      <div class="sub">62% — nothing to build. Available from day one.</div>
+    </div>
+    <div class="cell">
+      <div class="num">132</div>
+      <div class="lbl"><span class="dot dot-warning"></span>Configurable</div>
+      <div class="sub">17% — our team configures it once. No code.</div>
+    </div>
+    <div class="cell">
+      <div class="num">41</div>
+      <div class="lbl"><span class="dot dot-warning"></span>Adapt to SAP</div>
+      <div class="sub">5% — recommend adapting your process to SAP's standard.</div>
+    </div>
+    <div class="cell">
+      <div class="num">123</div>
+      <div class="lbl"><span class="dot dot-info"></span>Needs work</div>
+      <div class="sub">16% — broken down below.</div>
+    </div>
+  </div>
+
+  <!-- Sub-breakdown of the "Needs work" 123 -->
+  <div style="margin: 0 0 6mm; padding: 4mm 5mm; border: 0.5pt solid var(--border); background: #FAFAFA;">
+    <div class="caption" style="margin-bottom: 3mm; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted);">Needs work — what kind of work</div>
+    <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 6mm; font-size: 9.5pt;">
+      <div><b style="font-size: 13pt;">98</b> &nbsp;<span class="muted">(13%)</span><br><span class="pill"><span class="dot dot-info"></span>Trusted add-on</span></div>
+      <div><b style="font-size: 13pt;">8</b> &nbsp;<span class="muted">(1%)</span><br><span class="pill"><span class="dot dot-info"></span>Power-user extension</span></div>
+      <div><b style="font-size: 13pt;">14</b> &nbsp;<span class="muted">(2%)</span><br><span class="pill"><span class="dot dot-info"></span>Cloud add-on (BTP)</span></div>
+      <div><b style="font-size: 13pt;">3</b> &nbsp;<span class="muted">(0.4%)</span><br><span class="pill"><span class="dot dot-danger"></span>Custom build</span></div>
+    </div>
+  </div>
+
+  <p class="body" style="max-width:165mm; padding: 4mm 5mm; background:#FAFAFA; border-left: 1.5mm solid var(--text);">
+    <b>Bottom line:</b> SAP covers <b>79%</b> of what you asked for with no new code. The remaining 21% is handled with a mix of trusted add-ons (the bulk) and minimal custom development (under 0.5%).
+  </p>
+
+  <div class="rule"></div>
+
+  <h2 class="h2" style="margin-top:6mm;">By functional area</h2>
+  <p class="caption" style="margin-bottom: 4mm;">Filled circles = % of requirements met by Standard SAP + Configurable.</p>
+
+  <div>
+    <div class="area-row">
+      <div class="name">Finance &amp; Treasury</div>
+      <div class="reqs">142 reqs</div>
+      <div class="dotbar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i></div>
+      <div class="pct">89%</div>
+    </div>
+    <div class="area-row">
+      <div class="name">Sales &amp; Distribution</div>
+      <div class="reqs">118 reqs</div>
+      <div class="dotbar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i></div>
+      <div class="pct">76%</div>
+    </div>
+    <div class="area-row">
+      <div class="name">Procurement</div>
+      <div class="reqs">97 reqs</div>
+      <div class="dotbar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i></div>
+      <div class="pct">71%</div>
+    </div>
+    <div class="area-row">
+      <div class="name">Supply Chain</div>
+      <div class="reqs">88 reqs</div>
+      <div class="dotbar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i></div>
+      <div class="pct">62%</div>
+    </div>
+    <div class="area-row">
+      <div class="name">Human Resources</div>
+      <div class="reqs">73 reqs</div>
+      <div class="dotbar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i></div>
+      <div class="pct">84%</div>
+    </div>
+    <div class="area-row">
+      <div class="name">Manufacturing</div>
+      <div class="reqs">86 reqs</div>
+      <div class="dotbar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i></div>
+      <div class="pct">68%</div>
+    </div>
+    <div class="area-row">
+      <div class="name">Asset Management</div>
+      <div class="reqs">62 reqs</div>
+      <div class="dotbar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i></div>
+      <div class="pct">81%</div>
+    </div>
+    <div class="area-row">
+      <div class="name">Customer Service</div>
+      <div class="reqs">58 reqs</div>
+      <div class="dotbar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i></div>
+      <div class="pct">73%</div>
+    </div>
+    <div class="area-row" style="border-bottom:0;">
+      <div class="name">Project Systems</div>
+      <div class="reqs">54 reqs</div>
+      <div class="dotbar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i></div>
+      <div class="pct">91%</div>
+    </div>
+  </div>
+
+  <div class="page-footer">Aptus · Confidential · 3 · 04_Requirements_Findings.pdf</div>
+</div>
+
+<div class="review-bar">
+  <a href="04_findings_p2_glossary.html">← page 2</a>
+  <span>04_Requirements_Findings.pdf · page 3 of 6 — At a glance</span>
+  <a href="04_findings_p4_area_summary.html">page 4 →</a>
+</div>
+
+</body>
+</html>
