@@ -402,6 +402,11 @@ model Assessment {
   profileCompletedAt   DateTime?
   profileCompletedBy   String?
 
+  // Progressive elaboration rollup — number of ScopeSelection rows at each granularity tier
+  granularityCoarse Int @default(0)
+  granularityMedium Int @default(0)
+  granularityFine   Int @default(0)
+
   organization   Organization           @relation(fields: [organizationId], references: [id])
   stakeholders   AssessmentStakeholder[]
   scopeSelections  ScopeSelection[]
@@ -507,11 +512,19 @@ model ScopeSelection {
   estimatedComplexity   String?
   dependsOnScopeItems   String[]   @default([])
 
+  // Progressive elaboration — Coarse → Medium → Fine
+  granularity            String    @default("coarse")  // coarse | medium | fine
+  assessmentVerdict      String?                        // mostly_fit | mostly_config | has_gaps | needs_workshop (Medium+)
+  upgradeSuggestedReason String?   @db.Text             // why the engine suggested upgrading this row
+  upgradedAt             DateTime?
+  upgradedBy             String?
+
   assessment Assessment @relation(fields: [assessmentId], references: [id])
 
   @@unique([assessmentId, scopeItemId])
   @@index([assessmentId])
   @@index([assessmentId, selected])
+  @@index([assessmentId, granularity])
 }
 
 model ConfigSelection {
