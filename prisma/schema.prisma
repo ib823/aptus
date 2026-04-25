@@ -21,7 +21,7 @@ model ScopeItem {
   prerequisitesHtml String   @db.Text
   country           String // "MY" or "XX" — from filename suffix
   language          String   @default("EN")
-  version           String   @default("2508")
+  version           String   @default("2602")
   totalSteps        Int
   functionalArea    String
   subArea           String
@@ -377,7 +377,7 @@ model Assessment {
   companySize        String
   revenueBand        String?
   currentErp         String?
-  sapVersion         String    @default("2508")
+  sapVersion         String    @default("2602")
   status             String    @default("draft")
   createdBy          String
   organizationId     String

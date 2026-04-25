@@ -9,7 +9,7 @@ export default async function IngestPage() {
 
   return (
     <IngestClient
-      currentVersion="2508"
+      currentVersion="2602"
       counts={{
         scopeItems: catalog.scopeItems,
         processSteps: catalog.processSteps,

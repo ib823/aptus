@@ -72,7 +72,7 @@ export function IngestClient({ currentVersion, counts }: IngestClientProps) {
               This feature requires running the ingestion script from the server terminal.
             </p>
             <code className="block bg-muted rounded px-3 py-2 text-xs text-foreground">
-              npx tsx scripts/ingest-bpd.ts /path/to/SAP_Best_Practices.zip
+              npx tsx scripts/ingest-sap-zip.ts /path/to/SAP_Best_Practices.zip
             </code>
             <Button variant="outline" onClick={() => setShowWarning(false)}>
               Dismiss

@@ -44,7 +44,7 @@ export async function GET(): Promise<NextResponse> {
         scopeItems: scopeItemCount,
         processSteps: processStepCount,
         configActivities: configActivityCount,
-        sapVersion: "2508",
+        sapVersion: "2602",
       },
       intelligence: {
         industries: industryCount,
