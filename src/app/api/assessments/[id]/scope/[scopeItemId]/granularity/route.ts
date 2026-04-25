@@ -122,8 +122,10 @@ export async function PATCH(
     updateData.upgradedBy = user.id;
   }
 
-  // Atomic: update the row + recompute Assessment rollup counts in one transaction
-  const [updated, dist] = await prisma.$transaction([
+  // Atomic: update the row + recompute Assessment rollup counts.
+  // Three parallel counts instead of groupBy (more portable across Prisma client
+  // generations + simpler types).
+  const [updated, coarseCount, mediumCount, fineCount] = await prisma.$transaction([
     prisma.scopeSelection.update({
       where: { id: sel.id },
       data: updateData,
@@ -135,17 +137,18 @@ export async function PATCH(
         upgradedAt: true,
       },
     }),
-    prisma.scopeSelection.groupBy({
-      by: ["granularity"],
-      where: { assessmentId, selected: true },
-      _count: true,
+    prisma.scopeSelection.count({
+      where: { assessmentId, selected: true, granularity: "coarse" },
+    }),
+    prisma.scopeSelection.count({
+      where: { assessmentId, selected: true, granularity: "medium" },
+    }),
+    prisma.scopeSelection.count({
+      where: { assessmentId, selected: true, granularity: "fine" },
     }),
   ]);
 
-  const counts = { coarse: 0, medium: 0, fine: 0 };
-  for (const c of dist) {
-    counts[c.granularity as keyof typeof counts] = c._count;
-  }
+  const counts = { coarse: coarseCount, medium: mediumCount, fine: fineCount };
   await prisma.assessment.update({
     where: { id: assessmentId },
     data: {
