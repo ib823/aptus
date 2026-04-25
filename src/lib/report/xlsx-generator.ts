@@ -59,6 +59,8 @@ export function scopeCatalogSheet(data: Array<Record<string, unknown>>): SheetCo
       { header: "Sub Area", key: "subArea", width: 20 },
       { header: "Selected", key: "selected", width: 10 },
       { header: "Relevance", key: "relevance", width: 12 },
+      { header: "Granularity", key: "granularity", width: 13 },
+      { header: "Verdict", key: "verdict", width: 22 },
       { header: "Current State", key: "currentState", width: 15 },
       { header: "Notes", key: "notes", width: 40 },
       { header: "Total Steps", key: "totalSteps", width: 12 },
