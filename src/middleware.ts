@@ -110,6 +110,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
     pathname.startsWith("/api/") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/login") ||
+    pathname.startsWith("/dev-login") ||
     pathname.startsWith("/mfa/") ||
     pathname.includes(".")
   ) {

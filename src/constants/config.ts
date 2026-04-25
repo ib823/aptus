@@ -2,7 +2,7 @@
 
 export const APP_CONFIG = {
   port: 3003,
-  sessionMaxAgeHours: 24,
+  sessionMaxAgeHours: 720,
   sessionConcurrentLimit: 1,
   magicLinkExpiryMinutes: 15,
   sapVersion: "2602",
