@@ -5,7 +5,7 @@ export const APP_CONFIG = {
   sessionMaxAgeHours: 24,
   sessionConcurrentLimit: 1,
   magicLinkExpiryMinutes: 15,
-  sapVersion: "2508",
+  sapVersion: "2602",
   pagination: {
     defaultLimit: 50,
     maxLimit: 200,

@@ -22,7 +22,7 @@ export async function AdminStatsSection() {
         <MetricCard icon={FileText} label="Total Assessments" value={totalAssessments} />
         <MetricCard icon={Activity} label="Active" value={activeAssessments} color="text-blue-600" />
         <MetricCard icon={Settings} label="Signed Off" value={signedOffAssessments} color="text-green-600" />
-        <MetricCard icon={Database} label="SAP Version" value="2508" />
+        <MetricCard icon={Database} label="SAP Version" value="2602" />
       </div>
 
       {/* Data health */}

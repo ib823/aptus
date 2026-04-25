@@ -44,9 +44,13 @@ async function uploadToBlob(
   filename: string,
 ): Promise<string | null> {
   if (!USE_BLOB) return null;
+  // allowOverwrite is required for re-ingest: a prior release's catalog left
+  // blobs at the same paths (e.g. setup-guides/J58_Set-Up_EN_XX.pdf), and
+  // Vercel Blob's put() defaults to fail-on-exists.
   const { url } = await put(blobPath, data, {
     access: "private",
     contentType: contentTypeForFilename(filename),
+    allowOverwrite: true,
   });
   return url;
 }
@@ -84,11 +88,32 @@ function normalizeStepType(actionTitle: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Extract scope item ID from filename
+// Detect SAP release code (e.g. "2508", "2602") from BPD filenames in the ZIP.
+// SAP names BPD files {SCOPE_ID}_S4CLD{RELEASE}_BPD_EN_{COUNTRY}.xlsx — the
+// release code in the filename is authoritative for that ZIP.
 // ---------------------------------------------------------------------------
-function parseScopeIdFromFilename(filename: string): { scopeId: string; country: string } | null {
-  // Pattern: {SCOPE_ID}_S4CLD2508_BPD_EN_{COUNTRY}.xlsx
-  const match = filename.match(/^([A-Z0-9]+)_S4CLD2508_BPD_EN_([A-Z]+)\./i);
+function detectReleaseCode(entries: AdmZip.IZipEntry[]): string | null {
+  const pattern = /^[A-Z0-9]+_S4CLD(\d{4})_BPD_EN_[A-Z]+\./i;
+  for (const entry of entries) {
+    if (entry.isDirectory) continue;
+    const basename = path.basename(entry.entryName);
+    const m = basename.match(pattern);
+    if (m?.[1]) return m[1];
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Extract scope item ID from filename. Release is detected per-ZIP via
+// detectReleaseCode and passed in, so the same script can ingest 2508, 2602,
+// and future S/4HANA Cloud Public Edition releases without code changes.
+// ---------------------------------------------------------------------------
+function parseScopeIdFromFilename(
+  filename: string,
+  release: string,
+): { scopeId: string; country: string } | null {
+  const pattern = new RegExp(`^([A-Z0-9]+)_S4CLD${release}_BPD_EN_([A-Z]+)\\.`, "i");
+  const match = filename.match(pattern);
   if (!match?.[1] || !match[2]) return null;
   return { scopeId: match[1], country: match[2] };
 }
@@ -176,6 +201,15 @@ async function main(): Promise<void> {
     }
   }
 
+  const releaseCode = detectReleaseCode(entries);
+  if (!releaseCode) {
+    console.error(
+      "Could not detect SAP release code from ZIP. Expected BPD filenames like {ID}_S4CLD{RELEASE}_BPD_EN_{COUNTRY}.xlsx",
+    );
+    process.exit(1);
+  }
+  console.log(`Detected SAP release: ${releaseCode}`);
+
   console.log(`TestScript XLSX: ${testScriptXlsx.length}`);
   console.log(`TestScript DOCX: ${testScriptDocx.length}`);
   console.log(`Setup PDFs: ${setupPdfs.length}`);
@@ -195,7 +229,7 @@ async function main(): Promise<void> {
   for (let i = 0; i < testScriptXlsx.length; i++) {
     const entry = testScriptXlsx[i]!;
     const filename = path.basename(entry.entryName);
-    const parsed = parseScopeIdFromFilename(filename);
+    const parsed = parseScopeIdFromFilename(filename, releaseCode);
     if (!parsed) {
       console.warn(`  Skipping unparseable filename: ${filename}`);
       continue;
@@ -255,6 +289,7 @@ async function main(): Promise<void> {
         overviewHtml: "",
         prerequisitesHtml: "",
         country: parsed.country,
+        version: releaseCode,
         totalSteps: steps.length,
         functionalArea: "Uncategorized",
         subArea: "Uncategorized",
@@ -452,7 +487,7 @@ async function main(): Promise<void> {
   let docxProcessed = 0;
   for (const entry of testScriptDocx) {
     const filename = path.basename(entry.entryName);
-    const parsed = parseScopeIdFromFilename(filename);
+    const parsed = parseScopeIdFromFilename(filename, releaseCode);
     if (!parsed) continue;
 
     // Check if scope item exists
@@ -540,7 +575,7 @@ async function main(): Promise<void> {
     await workbook.xlsx.load(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer);
 
     // --- Main config sheet ---
-    const mainSheet = workbook.getWorksheet("2508 S4H Cloud");
+    const mainSheet = workbook.getWorksheet(`${releaseCode} S4H Cloud`);
     if (mainSheet) {
       const rows: unknown[][] = [];
       mainSheet.eachRow((row) => {
@@ -625,7 +660,7 @@ async function main(): Promise<void> {
 
     // --- Expert config sheets (Tasks 3-15 in the XLSM, excluding Doc. Info) ---
     const expertSheetNames = workbook.worksheets.map(ws => ws.name).filter(
-      (name: string) => name !== "2508 S4H Cloud" && name !== "IMG Activity TRAN in BC" && name !== "Doc. Info"
+      (name: string) => name !== `${releaseCode} S4H Cloud` && name !== "IMG Activity TRAN in BC" && name !== "Doc. Info"
     );
     console.log(`  Expert config sheets: ${expertSheetNames.length}`);
 
@@ -742,6 +777,7 @@ async function main(): Promise<void> {
           overviewHtml: "",
           prerequisitesHtml: "",
           country: pdfCountry,
+          version: releaseCode,
           totalSteps: 0,
           functionalArea: "Uncategorized",
           subArea: "Uncategorized",
@@ -940,7 +976,7 @@ async function main(): Promise<void> {
     const cfgBuffer = configXlsm.getData();
     const cfgWorkbook = new ExcelJS.Workbook();
     await cfgWorkbook.xlsx.load(cfgBuffer as unknown as ArrayBuffer);
-    const cfgSheet = cfgWorkbook.getWorksheet("2508 S4H Cloud");
+    const cfgSheet = cfgWorkbook.getWorksheet(`${releaseCode} S4H Cloud`);
     if (cfgSheet) {
       const cfgRows: unknown[][] = [];
       cfgSheet.eachRow((row) => {
