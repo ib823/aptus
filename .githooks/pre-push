@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Pre-push gate: runs the same build Vercel runs.
+# If this passes locally, Vercel's deploy build will pass too.
+#
+# Bypass (use sparingly — emergency hotfix only):
+#   SKIP_PRE_PUSH=1 git push
+#
+# Disable globally for one session (e.g., docs-only stretch of work):
+#   git push --no-verify
+#
+# Why a full build, not just typecheck?
+# `next build` runs strict ESLint + production type narrowing that
+# `tsc --noEmit` and `vitest run` do not. The Phase D→F deployment
+# regressions in this repo came from exactly that gap.
+
+set -euo pipefail
+
+if [ "${SKIP_PRE_PUSH:-}" = "1" ]; then
+  printf "\033[33m⚠️  pre-push: skipped via SKIP_PRE_PUSH=1\033[0m\n"
+  exit 0
+fi
+
+# Skip if no relevant files changed since the last successful build.
+# Pulls the diff between local HEAD and the remote ref being pushed.
+remote="$1"
+url="$2"
+
+# Read the refs being pushed from stdin.
+# Format per push: <local-ref> <local-sha> <remote-ref> <remote-sha>
+# A zero remote-sha means the remote branch doesn't exist yet (first push).
+zero='0000000000000000000000000000000000000000'
+needs_build=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # If we're deleting a remote branch, skip
+  if [ "$local_sha" = "$zero" ]; then
+    continue
+  fi
+
+  # If the remote ref doesn't exist yet, force a build (first push)
+  if [ "$remote_sha" = "$zero" ]; then
+    needs_build=1
+    break
+  fi
+
+  # Diff the range remote_sha..local_sha — if it touches build-relevant files, build
+  if git diff --name-only "$remote_sha" "$local_sha" 2>/dev/null \
+    | grep -qE '\.(ts|tsx|js|jsx|mjs|cjs|css|json|prisma)$|^next\.config|^tsconfig|^package(\.|-lock\.)'; then
+    needs_build=1
+    break
+  fi
+done
+
+if [ "$needs_build" -eq 0 ]; then
+  printf "\033[32m✓\033[0m pre-push: no build-relevant files changed — skipping build.\n"
+  exit 0
+fi
+
+printf "\033[36m🔨 pre-push: running 'next build' to match Vercel's deploy step…\033[0m\n"
+printf "   (~80s on this repo. Bypass with SKIP_PRE_PUSH=1 git push if truly needed.)\n\n"
+
+start=$(date +%s)
+
+# Use npx directly to bypass the pnpm engine check that fires when running
+# under codespaces with a Node version different from package.json#engines.
+# The actual build command is identical: 'prisma generate && next build'.
+if ! npx prisma generate >/dev/null 2>&1; then
+  printf "\n\033[31m✗\033[0m pre-push: 'prisma generate' failed — push REJECTED.\n"
+  exit 1
+fi
+
+if ! npx next build; then
+  end=$(date +%s)
+  printf "\n\033[31m✗\033[0m pre-push: 'next build' failed in $((end-start))s — push REJECTED.\n"
+  printf "   Vercel would also reject this build. Fix locally first.\n"
+  printf "   Emergency bypass (NOT recommended): SKIP_PRE_PUSH=1 git push\n"
+  exit 1
+fi
+
+end=$(date +%s)
+printf "\n\033[32m✓\033[0m pre-push: build passed in $((end-start))s — pushing.\n"
+exit 0
