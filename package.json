@@ -52,7 +52,10 @@
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio --port 5556",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "prepare": "bash scripts/install-githooks.sh",
+    "hooks:install": "bash scripts/install-githooks.sh",
+    "feat:new": "bash scripts/new-feature.sh"
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "^1.0.7",
