@@ -295,6 +295,248 @@
   display: none;
 }
 
+/* ═════════════════════════════════════════════════════════════════════════════
+   Aptus Design System v1.2 (App-1 of 8 — design tokens + component CSS)
+   ─────────────────────────────────────────────────────────────────────────────
+   Source: docs/design/v1.2/styles.css (the prototype)
+   Spec:   docs/APTUS-DESIGN-SPEC.md §5
+
+   Strategy: SCOPED rollout. Tokens + classes live under the .aptus-app
+   selector so existing SAP-Horizon-styled pages aren't affected. Each
+   subsequent phase (App-2 through App-7) opts pages into the new system
+   by wrapping them in .aptus-app. Once all pages are migrated, the
+   wrapper can be hoisted to <body> and the SAP tokens removed.
+
+   Verify in browser: /design-system (showcase page).
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+.aptus-app {
+  /* ── Neutrals — light ── */
+  --aptus-bg:           #FAFAFA;
+  --aptus-surface:      #FFFFFF;
+  --aptus-surface-2:    #F4F4F6;
+  --aptus-surface-3:    #EAEAEE;
+  --aptus-border:       #E4E4E7;
+  --aptus-border-strong:#D4D4D8;
+  --aptus-text:         #0B0B0F;
+  --aptus-text-muted:   #52525B;
+  --aptus-text-subtle:  #71717A;
+
+  /* ── Brand ── */
+  --aptus-brand:        #0B0B0F;
+  --aptus-brand-text:   #FFFFFF;
+  --aptus-brand-hover:  #27272A;
+
+  /* ── Status palette (50 / 200 / 500 / 700) ── */
+  --aptus-success-50:  #ECFDF5;  --aptus-success-200: #A7F3D0;  --aptus-success-500: #10B981;  --aptus-success-700: #15803D;
+  --aptus-warning-50:  #FFFBEB;  --aptus-warning-200: #FDE68A;  --aptus-warning-500: #F59E0B;  --aptus-warning-700: #B45309;
+  --aptus-info-50:     #EFF6FF;  --aptus-info-200:    #BFDBFE;  --aptus-info-500:    #3B82F6;  --aptus-info-700:    #1D4ED8;
+  --aptus-danger-50:   #FEF2F2;  --aptus-danger-200:  #FECACA;  --aptus-danger-500:  #EF4444;  --aptus-danger-700:  #B91C1C;
+  --aptus-neutral-50:  #F4F4F5;  --aptus-neutral-200: #E4E4E7;  --aptus-neutral-500: #71717A;  --aptus-neutral-700: #3F3F46;
+
+  /* ── Shadows (only two — spec §5.5 says no heavy shadows) ── */
+  --aptus-shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
+  --aptus-shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --aptus-shadow-lg: 0 10px 32px rgba(0,0,0,0.10);
+
+  /* ── Density (spec §5.8 — medium is the default; tight/relaxed tweakable) ── */
+  --aptus-row-h:    56px;
+  --aptus-field-h:  40px;
+  --aptus-card-pad: 20px;
+
+  /* ── Surface defaults (the visible change on .aptus-app subtree) ── */
+  background: var(--aptus-bg);
+  color: var(--aptus-text);
+  font-family: var(--font-geist-sans, 'Geist'), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+/* ── Density variants (data-attribute opt-in) ── */
+.aptus-app[data-density="tight"]   { --aptus-row-h: 44px; --aptus-field-h: 36px; --aptus-card-pad: 14px; }
+.aptus-app[data-density="medium"]  { --aptus-row-h: 56px; --aptus-field-h: 40px; --aptus-card-pad: 20px; }
+.aptus-app[data-density="relaxed"] { --aptus-row-h: 68px; --aptus-field-h: 44px; --aptus-card-pad: 28px; }
+
+/* ── Dark theme (data-attribute opt-in — applies inside .aptus-app subtree) ── */
+.aptus-app[data-theme="dark"] {
+  --aptus-bg:           #0B0B0F;
+  --aptus-surface:      #15151A;
+  --aptus-surface-2:    #1D1D24;
+  --aptus-surface-3:    #27272A;
+  --aptus-border:       #27272A;
+  --aptus-border-strong:#3F3F46;
+  --aptus-text:         #FAFAFA;
+  --aptus-text-muted:   #A1A1AA;
+  --aptus-text-subtle:  #71717A;
+  --aptus-brand:        #FAFAFA;
+  --aptus-brand-text:   #0B0B0F;
+  --aptus-brand-hover:  #E4E4E7;
+  --aptus-shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --aptus-shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --aptus-shadow-lg: 0 10px 32px rgba(0,0,0,0.5);
+}
+
+/* ── Typography utilities (spec §5.1 — 4 sizes max per screen) ── */
+.aptus-app .a-display { font-size: 32px; font-weight: 600; line-height: 1.15; letter-spacing: -0.02em; }
+.aptus-app .a-h1      { font-size: 22px; font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; }
+.aptus-app .a-h2      { font-size: 18px; font-weight: 600; line-height: 1.3; }
+.aptus-app .a-body    { font-size: 14px; font-weight: 400; line-height: 1.5; }
+.aptus-app .a-small   { font-size: 12px; font-weight: 400; line-height: 1.4; color: var(--aptus-text-muted); }
+.aptus-app .a-mono    { font-family: var(--font-geist-mono, 'Geist Mono'), ui-monospace, SFMono-Regular, monospace; font-size: 12px; font-weight: 500; }
+
+/* ── Buttons (spec §7.1 — primary/secondary/ghost/danger only) ── */
+.aptus-app .a-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: var(--aptus-field-h); padding: 0 14px;
+  border-radius: 6px; border: 1px solid transparent;
+  font-size: 14px; font-weight: 500;
+  transition: background 100ms ease-out, border-color 100ms ease-out, color 100ms ease-out;
+  white-space: nowrap; cursor: pointer; font-family: inherit;
+}
+.aptus-app .a-btn-primary    { background: var(--aptus-brand); color: var(--aptus-brand-text); border-color: var(--aptus-brand); }
+.aptus-app .a-btn-primary:hover { background: var(--aptus-brand-hover); border-color: var(--aptus-brand-hover); }
+.aptus-app .a-btn-secondary  { background: transparent; color: var(--aptus-text); border-color: var(--aptus-border-strong); }
+.aptus-app .a-btn-secondary:hover { background: var(--aptus-surface-2); }
+.aptus-app .a-btn-ghost      { background: transparent; color: var(--aptus-text); border-color: transparent; }
+.aptus-app .a-btn-ghost:hover { background: var(--aptus-surface-2); }
+.aptus-app .a-btn-danger     { background: var(--aptus-danger-700); color: white; border-color: var(--aptus-danger-700); }
+.aptus-app .a-btn-sm         { height: 28px; padding: 0 10px; font-size: 12px; }
+.aptus-app .a-btn-icon       { width: var(--aptus-field-h); padding: 0; }
+.aptus-app .a-btn-icon.a-btn-sm { width: 28px; }
+
+/* ── Inputs ── */
+.aptus-app .a-input, .aptus-app .a-select {
+  height: var(--aptus-field-h); padding: 0 12px;
+  border: 1px solid var(--aptus-border); border-radius: 6px;
+  background: var(--aptus-surface); color: var(--aptus-text);
+  font-size: 14px; width: 100%; outline: none;
+  transition: border-color 100ms; font-family: inherit;
+}
+.aptus-app .a-input:focus, .aptus-app .a-select:focus {
+  border-color: var(--aptus-brand); box-shadow: 0 0 0 3px rgba(11,11,15,0.08);
+}
+.aptus-app .a-textarea {
+  padding: 10px 12px; border: 1px solid var(--aptus-border); border-radius: 6px;
+  background: var(--aptus-surface); color: var(--aptus-text);
+  font-size: 14px; width: 100%; resize: vertical; min-height: 80px;
+  outline: none; font-family: inherit;
+}
+.aptus-app .a-textarea:focus { border-color: var(--aptus-brand); }
+
+/* ── Card ── */
+.aptus-app .a-card {
+  background: var(--aptus-surface); border: 1px solid var(--aptus-border);
+  border-radius: 8px; box-shadow: var(--aptus-shadow-sm);
+}
+
+/* ── Status pill (the canonical one — spec §6.4) ── */
+.aptus-app .a-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 24px; padding: 0 8px;
+  border-radius: 999px; border: 1px solid transparent;
+  font-size: 12px; font-weight: 500; white-space: nowrap;
+}
+.aptus-app .a-pill-success { background: var(--aptus-success-50); color: var(--aptus-success-700); border-color: var(--aptus-success-200); }
+.aptus-app .a-pill-warning { background: var(--aptus-warning-50); color: var(--aptus-warning-700); border-color: var(--aptus-warning-200); }
+.aptus-app .a-pill-info    { background: var(--aptus-info-50);    color: var(--aptus-info-700);    border-color: var(--aptus-info-200); }
+.aptus-app .a-pill-danger  { background: var(--aptus-danger-50);  color: var(--aptus-danger-700);  border-color: var(--aptus-danger-200); }
+.aptus-app .a-pill-neutral { background: var(--aptus-neutral-50); color: var(--aptus-neutral-700); border-color: var(--aptus-neutral-200); }
+
+/* ── App shell (used in App-3) ── */
+.aptus-app .a-shell      { display: grid; grid-template-rows: 56px 1fr; height: 100vh; overflow: hidden; }
+.aptus-app .a-topbar     {
+  display: flex; align-items: center; gap: 16px; padding: 0 20px;
+  border-bottom: 1px solid var(--aptus-border); background: var(--aptus-surface); z-index: 10;
+}
+.aptus-app .a-shell-body { display: grid; grid-template-columns: 64px 1fr; overflow: hidden; }
+.aptus-app .a-shell-body.a-expanded { grid-template-columns: 240px 1fr; }
+.aptus-app .a-siderail   {
+  background: var(--aptus-surface); border-right: 1px solid var(--aptus-border);
+  padding: 12px 8px; display: flex; flex-direction: column; gap: 2px;
+  transition: width 200ms ease-in-out; overflow: hidden;
+}
+.aptus-app .a-siderail-item {
+  display: flex; align-items: center; gap: 12px;
+  height: 40px; padding: 0 10px;
+  border-radius: 6px; color: var(--aptus-text-muted); cursor: pointer;
+  font-size: 14px; white-space: nowrap;
+  transition: background 100ms, color 100ms;
+}
+.aptus-app .a-siderail-item:hover { background: var(--aptus-surface-2); color: var(--aptus-text); }
+.aptus-app .a-siderail-item.a-active { background: var(--aptus-surface-2); color: var(--aptus-text); font-weight: 500; }
+.aptus-app .a-content      { overflow-y: auto; padding: 32px 24px 64px; }
+.aptus-app .a-content-inner { max-width: 1280px; margin: 0 auto; }
+
+/* ── Step rail (used in App-5 — assessment shell) ── */
+.aptus-app .a-step-rail   { width: 220px; flex-shrink: 0; padding: 16px 8px; }
+.aptus-app .a-step-item   {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: 6px; cursor: pointer;
+  transition: background 100ms; position: relative;
+}
+.aptus-app .a-step-item:hover  { background: var(--aptus-surface-2); }
+.aptus-app .a-step-item.a-active { background: var(--aptus-surface-2); }
+.aptus-app .a-step-item.a-locked { color: var(--aptus-text-subtle); cursor: not-allowed; }
+.aptus-app .a-step-marker {
+  width: 24px; height: 24px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--aptus-border-strong); background: var(--aptus-surface);
+  font-size: 11px; font-weight: 600; color: var(--aptus-text-muted); flex-shrink: 0;
+}
+.aptus-app .a-step-item.a-complete .a-step-marker { background: var(--aptus-brand); border-color: var(--aptus-brand); color: var(--aptus-brand-text); }
+.aptus-app .a-step-item.a-active   .a-step-marker { background: var(--aptus-surface); border-color: var(--aptus-brand); color: var(--aptus-text); border-width: 2px; }
+
+/* ── Coverage bar (used everywhere coverage is shown) ── */
+.aptus-app .a-coverage-bar {
+  display: flex; height: 8px; border-radius: 999px; overflow: hidden;
+  background: var(--aptus-surface-2);
+}
+.aptus-app .a-coverage-bar-thin { height: 6px; }
+.aptus-app .a-coverage-seg.a-ootb   { background: var(--aptus-success-500); }
+.aptus-app .a-coverage-seg.a-config { background: var(--aptus-warning-500); }
+.aptus-app .a-coverage-seg.a-gap    { background: var(--aptus-danger-500); }
+
+/* ── Drawer + modal + cmd-k (used in App-3, App-7) ── */
+.aptus-app .a-drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 50; animation: a-fadeIn 180ms ease-out; }
+.aptus-app .a-drawer {
+  position: fixed; right: 0; top: 0; bottom: 0; width: 480px; max-width: 100vw;
+  background: var(--aptus-surface); border-left: 1px solid var(--aptus-border);
+  box-shadow: var(--aptus-shadow-lg); z-index: 51;
+  display: flex; flex-direction: column;
+  animation: a-slideInRight 240ms cubic-bezier(0.32,0.72,0,1);
+}
+.aptus-app .a-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 60; display: flex; align-items: center; justify-content: center; animation: a-fadeIn 180ms ease-out; }
+.aptus-app .a-modal { background: var(--aptus-surface); border-radius: 8px; box-shadow: var(--aptus-shadow-lg); width: 480px; max-width: 90vw; animation: a-slideUp 200ms ease-out; }
+
+@keyframes a-fadeIn      { from { opacity: 0; } to { opacity: 1; } }
+@keyframes a-slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes a-slideUp     { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+/* ── Row (used in scope/requirements lists) ── */
+.aptus-app .a-row {
+  display: flex; align-items: center; gap: 16px;
+  height: var(--aptus-row-h); padding: 0 16px;
+  border-bottom: 1px solid var(--aptus-border); cursor: pointer;
+  transition: background 100ms;
+}
+.aptus-app .a-row:hover { background: var(--aptus-surface-2); }
+
+/* ── Toast (used app-wide) ── */
+.aptus-app .a-toast-stack { position: fixed; top: 72px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 80; }
+.aptus-app .a-toast {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; background: var(--aptus-surface);
+  border: 1px solid var(--aptus-border); border-radius: 8px;
+  box-shadow: var(--aptus-shadow-md); min-width: 280px;
+  font-size: 13px; animation: a-slideInRight 150ms ease-out;
+}
+
+/* ── Misc utilities (subset of prototype helpers) ── */
+.aptus-app .a-divider { height: 1px; background: var(--aptus-border); margin: 16px 0; }
+.aptus-app .a-muted   { color: var(--aptus-text-muted); }
+.aptus-app .a-subtle  { color: var(--aptus-text-subtle); }
+
 /* Print styles for report pages */
 @media print {
   header,
