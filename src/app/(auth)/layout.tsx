@@ -19,9 +19,14 @@ function FeatureItem({ icon: Icon, text }: { icon: LucideIcon; text: string }) {
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen flex">
+    // App-6: wrap the auth route group in .aptus-app so the new design
+    // tokens (Geist font, light bg, brand color) cascade into the form
+    // pages. The branding panel keeps its existing gradient + decorative
+    // chrome — that's a deliberate visual contrast for the auth surface.
+    <div className="aptus-app min-h-screen flex">
       {/* Left branding panel — desktop only */}
-      <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden flex-col justify-between p-12 bg-gradient-to-br from-primary via-primary/95 to-blue-800 text-white">
+      <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden flex-col justify-between p-12 text-white" style={{ background: "linear-gradient(135deg, var(--aptus-brand) 0%, #1F1F2E 100%)" }}>
+        {/* App-6: Aptus mark replaces the gradient backdrop's logo */}
         {/* Decorative background circles */}
         <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
           <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full border border-white/[0.06]" />
