@@ -1,15 +1,62 @@
-/** POST: Digital sign-off */
+/** POST: Digital sign-off action.
+ *  GET:  Sign-off PDF (spec §4.16) — 2-page acceptance with two-up signature
+ *        blocks and bundle SHA-256 hash. */
 
+import { createHash } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   requireAssessmentAccess,
   isAssessmentAccessError,
 } from "@/lib/auth/assessment-guard";
+import { authenticateForReport, isErrorResponse, sanitizeFilename } from "@/lib/report/report-auth";
+import { generateSignOffPdf } from "@/lib/report/pdf-generator";
+import { loadAssessmentBranding } from "@/lib/report/branding";
 import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { ERROR_CODES } from "@/types/api";
 import { z } from "zod";
+
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  const { id: assessmentId } = await params;
+  const auth = await authenticateForReport(assessmentId);
+  if (isErrorResponse(auth)) return auth;
+
+  const [assessment, branding] = await Promise.all([
+    prisma.assessment.findUniqueOrThrow({
+      where: { id: assessmentId },
+      select: {
+        companyName: true,
+        industry: true,
+        country: true,
+        companySize: true,
+        updatedAt: true,
+      },
+    }),
+    loadAssessmentBranding(assessmentId),
+  ]);
+
+  // Standalone-route hash: identifies this assessment + its current state.
+  // The complete-package route uses the actual ZIP hash (computed after assembly).
+  const standaloneHash = createHash("sha256")
+    .update(assessmentId + assessment.updatedAt.toISOString())
+    .digest("hex");
+
+  const pdf = generateSignOffPdf(
+    { assessment, bundleHash: standaloneHash },
+    branding,
+  );
+
+  return new NextResponse(pdf as unknown as BodyInit, {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${sanitizeFilename(assessment.companyName)}_Sign_Off.pdf"`,
+    },
+  });
+}
 
 const bodySchema = z.object({
   signatoryName: z.string().min(1).max(255),

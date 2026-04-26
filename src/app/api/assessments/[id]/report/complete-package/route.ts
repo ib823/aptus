@@ -1,5 +1,6 @@
-/** GET: Complete Blueprint Package — ZIP of all 13 reports + README */
+/** GET: Complete Blueprint Package — ZIP of all 16 reports + README (spec v1.2) */
 
+import { createHash } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import archiver from "archiver";
 import { authenticateForReport, isErrorResponse, sanitizeFilename } from "@/lib/report/report-auth";
@@ -13,6 +14,8 @@ import {
   getIntegrationDataForReport,
   getDataMigrationDataForReport,
   getOcmDataForReport,
+  getFindingsDataForReport,
+  getTraceabilityDataForReport,
 } from "@/lib/report/report-data";
 import {
   generateXlsx,
@@ -25,15 +28,18 @@ import {
   dataMigrationRegisterSheets,
   ocmReportSheets,
   remainingItemsSheet,
+  requirementsTraceabilitySheet,
 } from "@/lib/report/xlsx-generator";
 import {
   generateExecutiveSummaryPdf,
   generateEffortEstimatePdf,
   generateReadinessScorecardPdf,
   generateFlowAtlasPdf,
+  generateRequirementsFindingsPdf,
+  generateSignOffPdf,
 } from "@/lib/report/pdf-generator";
 import { calculateReadinessScorecard, type ReadinessInput } from "@/lib/report/readiness-calculator";
-import { loadBranding } from "@/lib/report/branding";
+import { loadAssessmentBranding } from "@/lib/report/branding";
 import { prisma } from "@/lib/db/prisma";
 
 export async function GET(
@@ -44,8 +50,8 @@ export async function GET(
   const auth = await authenticateForReport(assessmentId);
   if (isErrorResponse(auth)) return auth;
 
-  // Load branding for PDF generation
-  const branding = await loadBranding(auth.assessment.organizationId);
+  // Load branding (org-level + per-assessment client accent — spec §5.7)
+  const branding = await loadAssessmentBranding(assessmentId);
 
   // Load all data in parallel
   const [
@@ -60,6 +66,8 @@ export async function GET(
     ocmData,
     flowDiagrams,
     remainingItems,
+    findingsData,
+    traceabilityData,
   ] = await Promise.all([
     getReportSummary(assessmentId),
     getScopeDataForReport(assessmentId),
@@ -72,6 +80,8 @@ export async function GET(
     getOcmDataForReport(assessmentId),
     loadFlowDiagramData(assessmentId),
     loadRemainingItemsData(assessmentId),
+    getFindingsDataForReport(assessmentId),
+    getTraceabilityDataForReport(assessmentId),
   ]);
 
   // Generate readiness scorecard data
@@ -120,57 +130,92 @@ export async function GET(
 
   const scorecard = calculateReadinessScorecard(readinessInput);
 
-  // Generate all 13 report files in parallel
+  // Generate the first 15 files in parallel (sign-off needs all bytes for hashing)
   const prefix = sanitizeFilename(auth.assessment.companyName);
   const [
     execPdf,
     effortPdf,
     readinessPdf,
-    flowAtlasPdf,
+    findingsPdf,
+    traceabilityXlsx,
     scopeXlsx,
     stepXlsx,
     gapXlsx,
     configXlsx,
-    auditXlsx,
     integrationXlsx,
     dmXlsx,
     ocmXlsx,
+    flowAtlasPdf,
+    auditXlsx,
     remainingXlsx,
   ] = await Promise.all([
     Promise.resolve(generateExecutiveSummaryPdf(summary, branding)),
     Promise.resolve(generateEffortEstimatePdf(summary, gapData, branding)),
     Promise.resolve(generateReadinessScorecardPdf(auth.assessment.companyName, scorecard, branding)),
-    Promise.resolve(generateFlowAtlasPdf(auth.assessment.companyName, flowDiagrams, branding)),
+    Promise.resolve(generateRequirementsFindingsPdf(findingsData, branding)),
+    generateXlsx([requirementsTraceabilitySheet(traceabilityData)]),
     generateXlsx([scopeCatalogSheet(scopeData)]),
     generateXlsx([stepDetailSheet(stepData)]),
     generateXlsx([gapRegisterSheet(gapData)]),
     generateXlsx([configWorkbookSheet(configData)]),
-    generateXlsx([auditTrailSheet(auditData)]),
     generateXlsx(integrationRegisterSheets(integrationData)),
     generateXlsx(dataMigrationRegisterSheets(dmData)),
     generateXlsx(ocmReportSheets(ocmData)),
+    Promise.resolve(generateFlowAtlasPdf(auth.assessment.companyName, flowDiagrams, branding)),
+    generateXlsx([auditTrailSheet(auditData)]),
     generateXlsx([remainingItemsSheet(remainingItems)]),
   ]);
 
-  // Build README
+  // Compute the bundle hash from the 15 files (everything except sign-off itself).
+  // Sign-off PDF embeds this hash so the client can verify the signed bundle
+  // wasn't tampered with after they accepted it.
+  const hasher = createHash("sha256");
+  for (const part of [execPdf, effortPdf, readinessPdf, findingsPdf, traceabilityXlsx,
+    scopeXlsx, stepXlsx, gapXlsx, configXlsx, integrationXlsx,
+    dmXlsx, ocmXlsx, flowAtlasPdf, auditXlsx, remainingXlsx]) {
+    hasher.update(part);
+  }
+  const bundleHash = hasher.digest("hex");
+
+  // Sign-off needs the full assessment metadata (auth.assessment is minimal)
+  const fullAssessment = await prisma.assessment.findUniqueOrThrow({
+    where: { id: assessmentId },
+    select: {
+      companyName: true, industry: true, country: true,
+      companySize: true, updatedAt: true,
+    },
+  });
+  const signOffPdf = generateSignOffPdf(
+    { assessment: fullAssessment, bundleHash },
+    branding,
+  );
+
+  // Build README — the v1.2 16-file bundle order matches spec §3 inventory
   const readmeText = [
     `${auth.assessment.companyName} — Complete Blueprint Package`,
     `Generated: ${new Date().toISOString()}`,
+    `Bundle hash (SHA-256): ${bundleHash}`,
+    "",
+    "Read this bundle in order. The first 4 PDFs are for executives; the XLSX",
+    "files are for functional and PMO teams; the last PDF is for signature.",
     "",
     "Contents:",
-    `  01 Executive Summary (PDF)`,
-    `  02 Effort Estimate (PDF)`,
-    `  03 Readiness Scorecard (PDF)`,
-    `  04 Process Flow Atlas (PDF)`,
-    `  05 Scope Catalog (XLSX)`,
-    `  06 Step Detail (XLSX)`,
-    `  07 Gap Register (XLSX)`,
-    `  08 Config Workbook (XLSX)`,
-    `  09 Audit Trail (XLSX)`,
-    `  10 Integration Register (XLSX — 3 sheets)`,
-    `  11 Data Migration Register (XLSX — 4 sheets)`,
-    `  12 OCM Impact Report (XLSX — 4 sheets)`,
-    `  13 Remaining Items Register (XLSX)`,
+    `  01 Executive Summary             (PDF — 3 pp)`,
+    `  02 Effort Estimate               (PDF — 3 pp)`,
+    `  03 Readiness Scorecard           (PDF — ~9 pp)`,
+    `  04 Requirements Findings         (PDF — every requirement, plain language)`,
+    `  05 Requirements Traceability     (XLSX — 1 sheet, 1 row per requirement)`,
+    `  06 Scope Catalog                 (XLSX)`,
+    `  07 Step Detail                   (XLSX)`,
+    `  08 Gap Register                  (XLSX)`,
+    `  09 Config Workbook               (XLSX)`,
+    `  10 Integration Register          (XLSX — 3 sheets)`,
+    `  11 Data Migration Register       (XLSX — 4 sheets)`,
+    `  12 OCM Impact Report             (XLSX — 4 sheets)`,
+    `  13 Process Flow Atlas            (PDF — landscape, 1 page per process)`,
+    `  14 Audit Trail                   (XLSX — every state change with actor + IP)`,
+    `  15 Remaining Items Register      (XLSX)`,
+    `  16 Sign-Off                      (PDF — two-up signature page + hash)`,
     "",
     "Generated by Aptus Assessment Platform",
   ].join("\n");
@@ -181,19 +226,22 @@ export async function GET(
   archive.on("data", (chunk: Buffer) => chunks.push(new Uint8Array(chunk)));
 
   archive.append(Buffer.from(readmeText), { name: "README.txt" });
-  archive.append(Buffer.from(execPdf), { name: `01_${prefix}_Executive_Summary.pdf` });
-  archive.append(Buffer.from(effortPdf), { name: `02_${prefix}_Effort_Estimate.pdf` });
-  archive.append(Buffer.from(readinessPdf), { name: `03_${prefix}_Readiness_Scorecard.pdf` });
-  archive.append(Buffer.from(flowAtlasPdf), { name: `04_${prefix}_Process_Flow_Atlas.pdf` });
-  archive.append(Buffer.from(scopeXlsx), { name: `05_${prefix}_Scope_Catalog.xlsx` });
-  archive.append(Buffer.from(stepXlsx), { name: `06_${prefix}_Step_Detail.xlsx` });
-  archive.append(Buffer.from(gapXlsx), { name: `07_${prefix}_Gap_Register.xlsx` });
-  archive.append(Buffer.from(configXlsx), { name: `08_${prefix}_Config_Workbook.xlsx` });
-  archive.append(Buffer.from(auditXlsx), { name: `09_${prefix}_Audit_Trail.xlsx` });
-  archive.append(Buffer.from(integrationXlsx), { name: `10_${prefix}_Integration_Register.xlsx` });
-  archive.append(Buffer.from(dmXlsx), { name: `11_${prefix}_Data_Migration_Register.xlsx` });
-  archive.append(Buffer.from(ocmXlsx), { name: `12_${prefix}_OCM_Impact_Report.xlsx` });
-  archive.append(Buffer.from(remainingXlsx), { name: `13_${prefix}_Remaining_Items_Register.xlsx` });
+  archive.append(Buffer.from(execPdf),          { name: `01_${prefix}_Executive_Summary.pdf` });
+  archive.append(Buffer.from(effortPdf),        { name: `02_${prefix}_Effort_Estimate.pdf` });
+  archive.append(Buffer.from(readinessPdf),     { name: `03_${prefix}_Readiness_Scorecard.pdf` });
+  archive.append(Buffer.from(findingsPdf),      { name: `04_${prefix}_Requirements_Findings.pdf` });
+  archive.append(Buffer.from(traceabilityXlsx), { name: `05_${prefix}_Traceability_Matrix.xlsx` });
+  archive.append(Buffer.from(scopeXlsx),        { name: `06_${prefix}_Scope_Catalog.xlsx` });
+  archive.append(Buffer.from(stepXlsx),         { name: `07_${prefix}_Step_Detail.xlsx` });
+  archive.append(Buffer.from(gapXlsx),          { name: `08_${prefix}_Gap_Register.xlsx` });
+  archive.append(Buffer.from(configXlsx),       { name: `09_${prefix}_Config_Workbook.xlsx` });
+  archive.append(Buffer.from(integrationXlsx),  { name: `10_${prefix}_Integration_Register.xlsx` });
+  archive.append(Buffer.from(dmXlsx),           { name: `11_${prefix}_Data_Migration_Register.xlsx` });
+  archive.append(Buffer.from(ocmXlsx),          { name: `12_${prefix}_OCM_Impact_Report.xlsx` });
+  archive.append(Buffer.from(flowAtlasPdf),     { name: `13_${prefix}_Process_Flow_Atlas.pdf` });
+  archive.append(Buffer.from(auditXlsx),        { name: `14_${prefix}_Audit_Trail.xlsx` });
+  archive.append(Buffer.from(remainingXlsx),    { name: `15_${prefix}_Remaining_Items_Register.xlsx` });
+  archive.append(Buffer.from(signOffPdf),       { name: `16_${prefix}_Sign_Off.pdf` });
 
   await archive.finalize();
 
