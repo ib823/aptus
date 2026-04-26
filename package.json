@@ -20,6 +20,7 @@
     "predb:seed": "node scripts/check-node-version.mjs",
     "dev": "next dev -p 3003",
     "build": "prisma generate && next build",
+    "vercel-build": "prisma db push --skip-generate && prisma generate && next build",
     "prebuild:production": "node scripts/check-production-env.js",
     "start": "next start -p 3003",
     "lint": "eslint",
