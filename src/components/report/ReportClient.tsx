@@ -42,19 +42,26 @@ interface ReportClientProps {
   signOffs: SignOff[];
 }
 
+// Order matches the v1.2 spec §3 inventory — Findings + Traceability are the
+// new client-facing centerpieces (the "we heard you" deliverables) and slot in
+// directly after the executive trio.
 const REPORTS = [
   { key: "executive-summary", label: "Executive Summary", format: "PDF", icon: FileText, description: "One-page overview with scope, fit rate, gaps, and effort" },
+  { key: "effort-estimate", label: "Effort Estimate", format: "PDF", icon: FileText, description: "Effort breakdown by phase and resolution type" },
+  { key: "readiness-scorecard", label: "Readiness Scorecard", format: "PDF", icon: FileText, description: "GO / CONDITIONAL / NO-GO recommendation with per-category breakdown" },
+  { key: "requirements-findings", label: "Requirements Findings", format: "PDF", icon: FileText, description: "Every requirement you submitted, in plain English — the client-facing centerpiece" },
+  { key: "traceability-matrix", label: "Requirements Traceability Matrix", format: "XLSX", icon: FileSpreadsheet, description: "One row per requirement with source-file traceability and outcome" },
   { key: "scope-catalog", label: "Scope Catalog", format: "XLSX", icon: FileSpreadsheet, description: "All scope items with selection status and notes" },
   { key: "step-detail", label: "Process Step Detail", format: "XLSX", icon: FileSpreadsheet, description: "Every reviewed step with client responses" },
   { key: "gap-register", label: "Gap Register", format: "XLSX", icon: FileSpreadsheet, description: "All gaps with resolution details and effort" },
   { key: "config-workbook", label: "Configuration Workbook", format: "XLSX", icon: FileSpreadsheet, description: "Config activities with include/exclude decisions" },
-  { key: "effort-estimate", label: "Effort Estimate", format: "PDF", icon: FileText, description: "Effort breakdown by phase and resolution type" },
-  { key: "audit-trail", label: "Decision Audit Trail", format: "XLSX", icon: FileSpreadsheet, description: "Complete chronological decision log" },
-  { key: "flow-atlas", label: "Process Flow Atlas", format: "PDF", icon: FileText, description: "All flow diagrams compiled in a single PDF" },
-  { key: "remaining-register", label: "Remaining Items Register", format: "XLSX", icon: FileSpreadsheet, description: "Unresolved items requiring post-assessment action" },
   { key: "integration-register", label: "Integration Register", format: "XLSX", icon: FileSpreadsheet, description: "All integration points with direction, type, and effort" },
   { key: "dm-register", label: "Data Migration Register", format: "XLSX", icon: FileSpreadsheet, description: "Migration objects with approach, complexity, and status" },
   { key: "ocm-report", label: "OCM Impact Report", format: "XLSX", icon: FileSpreadsheet, description: "Change impacts with severity, training, and mitigation" },
+  { key: "flow-atlas", label: "Process Flow Atlas", format: "PDF", icon: FileText, description: "All flow diagrams compiled in a single PDF" },
+  { key: "audit-trail", label: "Decision Audit Trail", format: "XLSX", icon: FileSpreadsheet, description: "Complete chronological decision log" },
+  { key: "remaining-register", label: "Remaining Items Register", format: "XLSX", icon: FileSpreadsheet, description: "Unresolved items requiring post-assessment action" },
+  { key: "sign-off", label: "Sign-Off", format: "PDF", icon: FileText, description: "Two-up signature page with bundle SHA-256 hash for tamper detection" },
 ] as const;
 
 const SIGNOFF_ROLES = [
