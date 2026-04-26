@@ -5,29 +5,33 @@
  * Source: docs/design/v1.2/assessment.jsx (the prototype's AssessmentShell).
  *
  * Replaces the breadcrumb + StatusTransitionBar header. Adds the StepRail
- * (breadcrumb variant) so users can navigate between Profile → Scope →
- * Analyze → Adjust → Export at a glance.
+ * (breadcrumb variant) plus a per-step StepSubTabs strip. The legacy
+ * AssessmentTabNav has been removed; its surviving routes are now folded
+ * into the StepSubTabs map below.
  *
  * Each step maps to one or more existing routes via STEP_ROUTE_MAP. The
  * usePathname() is matched to determine the active step. Clicking a step
  * navigates to its primary route.
- *
- * Preserves the existing AssessmentTabNav (rendered via children/secondary
- * nav slot) so all 29 ancillary sub-pages keep working unchanged.
  */
 
-import { ArrowLeft, Download, Share2 } from "lucide-react";
+import { ArrowLeft, Clock, Download, Share2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { StatusPill } from "./StatusPill";
 import { STEPS, StepRail } from "./StepRail";
+import { StepSubTabs, type StepSubTab } from "./StepSubTabs";
 
 interface AptusAssessmentShellProps {
   assessmentId: string;
   companyName: string;
   status: string;
-  /** The existing AssessmentTabNav (or any other secondary chrome) goes here. */
-  secondaryNav?: React.ReactNode;
+  /**
+   * When true, the Scope step's sub-tabs are rendered disabled with a
+   * tooltip pointing back to Profile. The Scope step button in the rail
+   * itself remains clickable (matches the legacy behaviour — server-side
+   * gating still applies).
+   */
+  scopeLocked?: boolean;
   /** The actual page content. */
   children: React.ReactNode;
 }
@@ -46,21 +50,79 @@ const STEP_ROUTE_MAP: Record<
   },
   scope: {
     primaryRoute: (id) => `/assessment/${id}/scope`,
-    prefixes: ["/scope", "/granularity", "/workshops"],
+    prefixes: ["/scope", "/requirements", "/granularity", "/workshops"],
   },
   analyze: {
     primaryRoute: (id) => `/assessment/${id}/process-map`,
-    prefixes: ["/process-map", "/review"],
+    prefixes: ["/process-map", "/flows", "/review", "/conversation"],
   },
   adjust: {
     primaryRoute: (id) => `/assessment/${id}/gaps`,
-    prefixes: ["/gaps", "/config", "/integrations", "/data-migration", "/ocm"],
+    prefixes: [
+      "/gaps",
+      "/config",
+      "/integrations",
+      "/data-migration",
+      "/ocm",
+      "/remaining",
+    ],
   },
   export: {
     primaryRoute: (id) => `/assessment/${id}/report`,
     prefixes: ["/report", "/sign-off", "/snapshots"],
   },
 };
+
+/**
+ * Per-step sub-tab definitions. Each step's surviving routes show up as a
+ * tab strip under the step rail. Steps with a single surface (Profile)
+ * return [] and the StepSubTabs component renders nothing.
+ */
+function buildSubTabs(
+  step: (typeof STEPS)[number]["key"],
+  assessmentId: string,
+  scopeLocked: boolean,
+): StepSubTab[] {
+  const id = assessmentId;
+  switch (step) {
+    case "profile":
+      return [];
+    case "scope": {
+      const labels = ["Scope", "Requirements", "Granularity", "Workshops"] as const;
+      const slugs = ["scope", "requirements", "granularity", "workshops"] as const;
+      return labels.map((label, i) => {
+        const tab: StepSubTab = { label, href: `/assessment/${id}/${slugs[i]}` };
+        if (scopeLocked) {
+          tab.disabled = true;
+          tab.disabledReason = "Complete the Profile to unlock Scope.";
+        }
+        return tab;
+      });
+    }
+    case "analyze":
+      return [
+        { label: "Process Map", href: `/assessment/${id}/process-map` },
+        { label: "Flows", href: `/assessment/${id}/flows` },
+        { label: "Review", href: `/assessment/${id}/review` },
+        { label: "Conversation", href: `/assessment/${id}/conversation` },
+      ];
+    case "adjust":
+      return [
+        { label: "Gaps", href: `/assessment/${id}/gaps` },
+        { label: "Config", href: `/assessment/${id}/config` },
+        { label: "Integrations", href: `/assessment/${id}/integrations` },
+        { label: "Data Migration", href: `/assessment/${id}/data-migration` },
+        { label: "OCM", href: `/assessment/${id}/ocm` },
+        { label: "Remaining", href: `/assessment/${id}/remaining` },
+      ];
+    case "export":
+      return [
+        { label: "Report", href: `/assessment/${id}/report` },
+        { label: "Sign-off", href: `/assessment/${id}/sign-off` },
+        { label: "Snapshots", href: `/assessment/${id}/snapshots` },
+      ];
+  }
+}
 
 /** Resolve the active step number from the current pathname. */
 function activeStepFromPath(pathname: string, assessmentId: string): number {
@@ -95,13 +157,15 @@ export function AptusAssessmentShell({
   assessmentId,
   companyName,
   status,
-  secondaryNav,
+  scopeLocked = false,
   children,
 }: AptusAssessmentShellProps) {
   const router = useRouter();
   const pathname = usePathname() ?? `/assessment/${assessmentId}`;
   const currentStep = activeStepFromPath(pathname, assessmentId);
   const completed = completedStepsFor(currentStep);
+  const currentStepKey = STEPS[currentStep - 1]?.key ?? "profile";
+  const subTabs = buildSubTabs(currentStepKey, assessmentId, scopeLocked);
 
   const handleStepSelect = (n: number) => {
     const step = STEPS.find((s) => s.n === n);
@@ -163,6 +227,14 @@ export function AptusAssessmentShell({
           </div>
         </div>
 
+        <Link
+          href={`/assessment/${assessmentId}/activity`}
+          className="a-btn a-btn-secondary a-btn-sm"
+          style={{ textDecoration: "none" }}
+          aria-label="View activity feed"
+        >
+          <Clock size={14} /> Activity
+        </Link>
         <button type="button" className="a-btn a-btn-secondary a-btn-sm">
           <Share2 size={14} /> Share
         </button>
@@ -175,7 +247,7 @@ export function AptusAssessmentShell({
         </Link>
       </div>
 
-      {/* Step rail (breadcrumb variant) */}
+      {/* Step rail (breadcrumb variant) + per-step sub-tabs */}
       <div
         style={{
           padding: "0 24px",
@@ -189,12 +261,8 @@ export function AptusAssessmentShell({
           onSelect={handleStepSelect}
           variant="breadcrumb"
         />
+        <StepSubTabs items={subTabs} activeHref={pathname} />
       </div>
-
-      {/* Optional secondary nav (the existing AssessmentTabNav lives here) */}
-      {secondaryNav && (
-        <div style={{ background: "var(--aptus-surface)" }}>{secondaryNav}</div>
-      )}
 
       {/* Content */}
       <div

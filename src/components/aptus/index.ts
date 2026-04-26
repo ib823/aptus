@@ -31,8 +31,9 @@ export { AptusUserMenu, type AptusUserMenuUser } from "./AptusUserMenu";
 // App-4 — assessments list
 export { AptusAssessmentsList } from "./AptusAssessmentsList";
 
-// App-5 — assessment shell (5-step rail)
+// App-5 — assessment shell (5-step rail) + per-step sub-tabs
 export { AptusAssessmentShell } from "./AptusAssessmentShell";
+export { StepSubTabs, type StepSubTab } from "./StepSubTabs";
 
 // App-7 — Cmd-K command palette (global ⌘K / Ctrl+K)
 export { AptusCmdKProvider, useAptusCmdK } from "./AptusCmdK";
