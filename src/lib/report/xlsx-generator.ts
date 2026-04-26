@@ -1,12 +1,40 @@
-/** XLSX report generation using ExcelJS */
+/** XLSX report generation using ExcelJS — applies the v1.2 design system:
+ *
+ *   - Aptus brand-color frozen header (#0B0B0F, white text, bold) — locked
+ *     per spec §5.7, never inherits client-accent override
+ *   - Zebra row banding at #FAFAFA (alternate rows)
+ *   - Auto-filter on header row
+ *   - Frozen header row on scroll
+ *   - Optional per-cell styling via SheetConfig.styleRow hook (used for
+ *     outcome conditional tinting and must-have row left-border accent
+ *     per spec §4.5–§4.15) */
 
 import ExcelJS from "exceljs";
+import { APTUS_BRAND } from "@/lib/report/branding";
+import {
+  DOT_TINT_HEX,
+  type DotTier,
+  outcomeLabel,
+} from "@/lib/report/glossary";
+import type { ResolutionType } from "@/types/assessment";
 
 interface SheetConfig {
   name: string;
   columns: Array<{ header: string; key: string; width: number }>;
   rows: Array<Record<string, unknown>>;
+  /** Optional per-row style hook. Receives the (1-indexed) row number + the
+   * source row data. Apply cell styling via `row.getCell(n).fill = {...}`.
+   * Called after the row has been added but before workbook.write. */
+  styleRow?: (row: ExcelJS.Row, source: Record<string, unknown>, rowIndex: number) => void;
 }
+
+/** Hex (#RRGGBB) → ExcelJS ARGB ("FFRRGGBB") format. */
+function argb(hex: string): string {
+  return "FF" + hex.replace(/^#/, "").toUpperCase();
+}
+
+const APTUS_BRAND_ARGB = argb(APTUS_BRAND);
+const ZEBRA_ARGB = argb("#FAFAFA");
 
 export async function generateXlsx(sheets: SheetConfig[]): Promise<Uint8Array> {
   const workbook = new ExcelJS.Workbook();
@@ -17,23 +45,37 @@ export async function generateXlsx(sheets: SheetConfig[]): Promise<Uint8Array> {
     const ws = workbook.addWorksheet(sheet.name);
     ws.columns = sheet.columns;
 
-    // Style header row
+    // Header — Aptus brand fill (locked per spec §5.7)
     const headerRow = ws.getRow(1);
-    headerRow.font = { bold: true, size: 11 };
     headerRow.fill = {
       type: "pattern",
       pattern: "solid",
-      fgColor: { argb: "FF1F2937" },
+      fgColor: { argb: APTUS_BRAND_ARGB },
     };
     headerRow.font = { bold: true, size: 11, color: { argb: "FFFFFFFF" } };
     headerRow.alignment = { vertical: "middle" };
     headerRow.height = 28;
 
-    for (const row of sheet.rows) {
-      ws.addRow(row);
-    }
+    // Body rows + zebra banding + per-row style hook
+    sheet.rows.forEach((srcRow, idx) => {
+      const wsRow = ws.addRow(srcRow);
+      // Zebra striping — every other body row
+      if (idx % 2 === 1) {
+        wsRow.eachCell({ includeEmpty: true }, (cell) => {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: ZEBRA_ARGB },
+          };
+        });
+      }
+      // Per-sheet conditional formatting hook
+      if (sheet.styleRow) {
+        sheet.styleRow(wsRow, srcRow, idx + 2); // +2: 1 for header, 1 for 1-index
+      }
+    });
 
-    // Auto-filter
+    // Auto-filter on the data range
     if (sheet.rows.length > 0) {
       ws.autoFilter = {
         from: { row: 1, column: 1 },
@@ -41,12 +83,30 @@ export async function generateXlsx(sheets: SheetConfig[]): Promise<Uint8Array> {
       };
     }
 
-    // Freeze header row
+    // Freeze header row on scroll
     ws.views = [{ state: "frozen", ySplit: 1 }];
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
   return new Uint8Array(buffer);
+}
+
+/** Tint a single cell with the dot-tier light background. */
+export function tintCell(cell: ExcelJS.Cell, tier: DotTier): void {
+  cell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: argb(DOT_TINT_HEX[tier]) },
+  };
+}
+
+/** Apply the must-have left-border accent (red) to a row's first cell. */
+export function markMustHave(row: ExcelJS.Row): void {
+  const firstCell = row.getCell(1);
+  firstCell.border = {
+    ...firstCell.border,
+    left: { style: "medium", color: { argb: argb("#B91C1C") } },
+  };
 }
 
 export function scopeCatalogSheet(data: Array<Record<string, unknown>>): SheetConfig {
@@ -485,4 +545,99 @@ export function remainingItemsSheet(data: Array<Record<string, unknown>>): Sheet
     ],
     rows: data,
   };
+}
+
+// ── NEW: Requirements Traceability Matrix (spec §4.5) ────────────────────────
+
+export interface TraceabilityRow {
+  reqId: string;
+  sourceFile: string;
+  sourceRow: number;
+  functionalArea: string;
+  subArea: string;
+  process: string;
+  mustHave: boolean;
+  yourAsk: string;
+  /** Original ResolutionType — translated to plain label at render time */
+  outcome: ResolutionType;
+  /** "What it means for you" sentence */
+  whatItMeans: string;
+  effortDays: number;
+  owner: string;
+  notes: string;
+}
+
+const RT_TIER: Record<ResolutionType, DotTier> = {
+  FIT: "success",
+  CONFIGURE: "warning",
+  ADAPT_PROCESS: "warning",
+  ISV: "info",
+  KEY_USER_EXT: "info",
+  BTP_EXT: "info",
+  CUSTOM_ABAP: "danger",
+  OUT_OF_SCOPE: "neutral",
+};
+
+/** The Traceability Matrix sheet — 13 columns, must-have left-border accent,
+ * Outcome column conditional tinting (light tier color). The 'Outcome' column
+ * is the 9th (1-indexed). */
+export function requirementsTraceabilitySheet(data: TraceabilityRow[]): SheetConfig {
+  const rows = data.map((d) => ({
+    reqId: d.reqId,
+    sourceFile: d.sourceFile,
+    sourceRow: d.sourceRow,
+    functionalArea: d.functionalArea,
+    subArea: d.subArea,
+    process: d.process,
+    mustHave: d.mustHave ? "Must-have" : "Nice-to-have",
+    yourAsk: d.yourAsk,
+    outcome: outcomeLabel(d.outcome),
+    whatItMeans: d.whatItMeans,
+    effortDays: d.effortDays,
+    owner: d.owner,
+    notes: d.notes,
+  }));
+
+  return {
+    name: "Requirements",
+    columns: [
+      { header: "Req ID",          key: "reqId",          width: 14 },
+      { header: "Source File",     key: "sourceFile",     width: 22 },
+      { header: "Source Row",      key: "sourceRow",      width: 12 },
+      { header: "Functional Area", key: "functionalArea", width: 22 },
+      { header: "Sub-area",        key: "subArea",        width: 22 },
+      { header: "Process",         key: "process",        width: 28 },
+      { header: "Must-have",       key: "mustHave",       width: 14 },
+      { header: "Your Ask",        key: "yourAsk",        width: 60 },
+      { header: "Outcome",         key: "outcome",        width: 22 },
+      { header: "What it means",   key: "whatItMeans",    width: 60 },
+      { header: "Days",            key: "effortDays",     width: 8 },
+      { header: "Owner",           key: "owner",          width: 18 },
+      { header: "Notes",           key: "notes",          width: 38 },
+    ],
+    rows,
+    styleRow(row, srcRow) {
+      // Tint the Outcome cell (column 9) with the tier's light background
+      const outcomeRaw = (srcRow as { outcome: string }).outcome;
+      // srcRow.outcome is the plain label here; map back via the original data
+      // (we stored both, but for simplicity use the visible label)
+      const tier = labelToTier(outcomeRaw);
+      if (tier) tintCell(row.getCell(9), tier);
+      // Must-have row gets red left-border accent on the first cell
+      if ((srcRow as { mustHave: string }).mustHave === "Must-have") {
+        markMustHave(row);
+      }
+    },
+  };
+}
+
+/** Reverse-lookup from plain label back to the dot tier. Tight coupling to
+ * outcomeLabel() output — if labels are renamed in glossary.ts, the unit
+ * test for traceability will catch the drift. */
+function labelToTier(label: string): DotTier | null {
+  // Iterate the canonical map rather than hand-coding strings
+  for (const rt of Object.keys(RT_TIER) as ResolutionType[]) {
+    if (outcomeLabel(rt) === label) return RT_TIER[rt];
+  }
+  return null;
 }
