@@ -407,6 +407,12 @@ model Assessment {
   granularityMedium Int @default(0)
   granularityFine   Int @default(0)
 
+  // Per-assessment client brand-accent override (hex, e.g. "#003DA5").
+  // Applied ONLY to chart accents in the report bundle (score-gauge ring,
+  // phase-bar segments). The Aptus mark, cover band, and table headers are
+  // always Aptus-brand regardless. Spec §5.7. Null = no override.
+  clientAccent String?
+
   organization   Organization           @relation(fields: [organizationId], references: [id])
   stakeholders   AssessmentStakeholder[]
   scopeSelections  ScopeSelection[]
@@ -1106,6 +1112,17 @@ model Organization {
   @@index([plan])
   @@index([subscriptionStatus])
   @@index([stripeCustomerId])
+}
+
+// Phase 29: Stripe webhook idempotency. Insert on receipt; unique-constraint
+// violation on `id` means this event was already processed (safe to drop).
+model StripeWebhookEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now())
+
+  @@index([type])
+  @@index([processedAt])
 }
 
 model Session {
