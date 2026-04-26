@@ -16,7 +16,7 @@ export default async function AdminLayout({
       <AdminSidebar />
       <div
         className="flex-1 p-8"
-        style={{ background: "var(--sapBackgroundColor, #f5f6f7)" }}
+        style={{ background: "var(--aptus-bg)" }}
         role="region"
         aria-label="Admin content"
       >
