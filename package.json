@@ -37,6 +37,8 @@
     "test:e2e:smoke": "playwright test tests/e2e/login.unauth.spec.ts tests/e2e/portal.auth.spec.ts tests/e2e/accessibility.unauth.spec.ts tests/e2e/accessibility.auth.spec.ts --project=unauthenticated --project=authenticated",
     "test:visual": "playwright test --config=playwright.visual.config.ts",
     "test:visual:update": "playwright test --config=playwright.visual.config.ts --update-snapshots",
+    "test:visual-app": "playwright test --config=playwright.visual-app.config.ts",
+    "test:visual-app:update": "playwright test --config=playwright.visual-app.config.ts --update-snapshots",
     "test:security": "vitest run tests/security",
     "test:perf": "vitest run tests/performance",
     "test:a11y": "playwright test tests/e2e/accessibility.unauth.spec.ts tests/e2e/accessibility.auth.spec.ts --project=unauthenticated --project=authenticated",
