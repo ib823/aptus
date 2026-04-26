@@ -55,12 +55,6 @@ interface ReportSummary {
 
 // ── Layout helpers ───────────────────────────────────────────────────────────
 
-/** Get the page-relative finalY from the last autoTable. */
-function getFinalY(doc: jsPDF, fallback: number): number {
-  const d = doc as unknown as { previousAutoTable?: { finalY?: number } };
-  return d.previousAutoTable?.finalY ?? fallback;
-}
-
 /** Move the cursor below the last autoTable, jumping to a new page if it
  * doesn't fit. Critical: also calls `doc.setPage()` to sync the active page
  * — `previousAutoTable.finalY` is page-relative and without this sync the
