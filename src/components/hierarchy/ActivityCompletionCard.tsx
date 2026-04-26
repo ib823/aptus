@@ -38,25 +38,25 @@ export function ActivityCompletionCard({
       <div className="flex justify-center gap-4 mb-6 text-xs">
         {fitCount > 0 && (
           <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--sapPositiveColor, #256f3a)" }} />
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--aptus-success-500)" }} />
             <span>{fitCount} FIT</span>
           </div>
         )}
         {configureCount > 0 && (
           <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--sapInformativeColor, #0070f2)" }} />
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--aptus-info-500)" }} />
             <span>{configureCount} CONFIGURE</span>
           </div>
         )}
         {gapCount > 0 && (
           <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--sapCriticalColor, #e9730c)" }} />
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--aptus-warning-500)" }} />
             <span>{gapCount} GAP</span>
           </div>
         )}
         {naCount > 0 && (
           <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--sapNeutralColor, #6a6d70)" }} />
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--aptus-neutral-500)" }} />
             <span>{naCount} N/A</span>
           </div>
         )}
