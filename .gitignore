@@ -59,3 +59,11 @@ prisma/dev.db
 
 # Design package — allow committed mocks (HTML, PNG, JPG, JSX) under docs/design/
 !docs/design/**
+
+# Visual-regression baselines — pinned screenshots that fail CI on drift
+!tests/visual-regression/**
+
+# Playwright reports / artifacts — local-only, never tracked
+playwright-report/
+playwright-visual-report/
+test-results/
