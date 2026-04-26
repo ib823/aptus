@@ -33,3 +33,6 @@ export { AptusAssessmentsList } from "./AptusAssessmentsList";
 
 // App-5 — assessment shell (5-step rail)
 export { AptusAssessmentShell } from "./AptusAssessmentShell";
+
+// App-7 — Cmd-K command palette (global ⌘K / Ctrl+K)
+export { AptusCmdKProvider, useAptusCmdK } from "./AptusCmdK";
