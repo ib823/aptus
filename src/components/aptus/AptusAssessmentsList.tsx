@@ -234,7 +234,19 @@ export function AptusAssessmentsList({
           <button
             key={a.id}
             type="button"
-            onClick={() => router.push(`/assessment/${a.id}`)}
+            onClick={() => {
+              // Navigate to the most relevant step rather than the bare
+              // /assessment/[id] (which redirects via assessment/[id]/page.tsx
+              // — but we save the round-trip by routing directly here).
+              const status = a.status.toLowerCase();
+              const target =
+                status === "draft"
+                  ? `/assessment/${a.id}/profile`
+                  : ["reviewed", "completed", "signed_off", "handed_off"].includes(status)
+                    ? `/assessment/${a.id}/report`
+                    : `/assessment/${a.id}/scope`;
+              router.push(target);
+            }}
             style={{
               display: "grid",
               gridTemplateColumns: "2fr 1fr 1.5fr 1fr 1fr 60px",
