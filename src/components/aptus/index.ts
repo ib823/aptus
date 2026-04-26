@@ -30,3 +30,6 @@ export { AptusUserMenu, type AptusUserMenuUser } from "./AptusUserMenu";
 
 // App-4 — assessments list
 export { AptusAssessmentsList } from "./AptusAssessmentsList";
+
+// App-5 — assessment shell (5-step rail)
+export { AptusAssessmentShell } from "./AptusAssessmentShell";
