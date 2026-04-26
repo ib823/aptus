@@ -46,15 +46,19 @@ export default function DesignSystemPage() {
         <section className="a-card" style={{ padding: 24, marginBottom: 16 }}>
           <h2 className="a-h2" style={{ marginTop: 0 }}>AptusMark + AptusWordmark</h2>
           <p className="a-small" style={{ marginTop: 4, marginBottom: 16 }}>
-            The brand mark — pyramid with cutout and dot. Inherits color via
-            currentColor; flip with `monochrome` prop.
+            The brand mark — same path as <code className="a-mono">public/icons/aptus-mark.svg</code>.
+            Single path with even-odd fill rule (the inner triangle is a cutout).
+            Inherits color via <code className="a-mono">currentColor</code>.
           </p>
           <div style={{ display: "flex", gap: 24, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ color: "var(--aptus-text)" }}>
+              <AptusMark size={32} />
+            </div>
             <div style={{ color: "var(--aptus-text)" }}>
               <AptusMark size={48} />
             </div>
             <div style={{ background: "var(--aptus-brand)", padding: 12, borderRadius: 8, color: "white" }}>
-              <AptusMark size={48} monochrome />
+              <AptusMark size={48} />
             </div>
             <AptusWordmark size={14} />
             <AptusWordmark size={18} />

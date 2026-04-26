@@ -17,11 +17,12 @@ import {
 } from "@/components/aptus";
 
 describe("AptusMark", () => {
-  it("renders an SVG with the canonical viewBox", () => {
+  it("renders an SVG with the canonical viewBox (matches public/icons/aptus-mark.svg)", () => {
     const { container } = render(<AptusMark />);
     const svg = container.querySelector("svg");
     expect(svg).not.toBeNull();
-    expect(svg?.getAttribute("viewBox")).toBe("0 0 32 32");
+    // ViewBox matches the live app's /icons/aptus-mark.svg asset
+    expect(svg?.getAttribute("viewBox")).toBe("0 0 100 100");
   });
 
   it("respects the size prop", () => {
@@ -31,16 +32,16 @@ describe("AptusMark", () => {
     expect(svg?.getAttribute("height")).toBe("48");
   });
 
-  it("uses currentColor fill when monochrome=true (no gradient ref)", () => {
-    const { container } = render(<AptusMark monochrome />);
-    const outerPath = container.querySelector("path");
-    expect(outerPath?.getAttribute("fill")).toBe("currentColor");
+  it("uses currentColor fill so it inherits surrounding text color", () => {
+    const { container } = render(<AptusMark />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("fill")).toBe("currentColor");
   });
 
-  it("uses gradient fill by default", () => {
+  it("uses fill-rule even-odd for the cutout (single-path with hole)", () => {
     const { container } = render(<AptusMark />);
-    const outerPath = container.querySelector("path");
-    expect(outerPath?.getAttribute("fill")).toContain("url(#aptus-grad)");
+    const path = container.querySelector("path");
+    expect(path?.getAttribute("fill-rule")).toBe("evenodd");
   });
 });
 
