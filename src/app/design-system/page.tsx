@@ -1,34 +1,70 @@
+"use client";
+
 /**
- * Design system showcase — the visible verification surface for App-1.
+ * Design system showcase — the visible verification surface for Apps 1–8.
  *
- * Renders one of every Aptus design-system component using the new tokens.
- * Wrapped in `.aptus-app` so the new tokens activate without affecting any
- * other route. Visit /design-system on the Vercel preview URL to verify.
+ * Each phase adds a section. Wrapped in `.aptus-app` so the new tokens
+ * activate without affecting any other route. Visit /design-system on
+ * the Vercel preview URL to verify.
  *
- * As subsequent App-2…App-7 phases land, this page gets new sections
- * showcasing the new components/screens. App-8 pins this page in visual
- * regression as a single source of truth for the design system's state.
+ * Updated for App-2: replaces inline HTML with the new TSX components
+ * (AptusMark, StatusPill, CoverageBar, StepRail). What you see here is
+ * what subsequent phases (App-3..App-7) will compose into actual screens.
  */
 
-export const metadata = {
-  title: "Design System",
-};
+import {
+  AptusMark,
+  AptusWordmark,
+  CoverageBar,
+  StatusPill,
+  StepRail,
+} from "@/components/aptus";
+
+// Note: cannot export `metadata` from a Client Component — set in a parent
+// layout if a route-specific title is needed.
 
 export default function DesignSystemPage() {
   return (
     <div className="aptus-app" style={{ minHeight: "100vh", padding: "32px 24px" }}>
       <div style={{ maxWidth: 960, margin: "0 auto" }}>
-        <header style={{ marginBottom: 32 }}>
-          <p className="a-small">App-1 — Foundation tokens</p>
-          <h1 className="a-display" style={{ margin: "4px 0 8px" }}>
-            Aptus Design System
-          </h1>
-          <p className="a-body a-muted" style={{ maxWidth: 640 }}>
-            Living showcase of the design tokens, status pills, buttons,
-            cards, and shell components. Every page redesigned in App-3
-            onwards uses these primitives.
-          </p>
+        <header style={{ marginBottom: 32, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <p className="a-small">App-1 + App-2 of 8</p>
+            <h1 className="a-display" style={{ margin: "4px 0 8px" }}>
+              Aptus Design System
+            </h1>
+            <p className="a-body a-muted" style={{ maxWidth: 640 }}>
+              Living showcase of the design tokens (App-1) and the four shared
+              components (App-2). Every page redesigned in App-3 onwards
+              composes these primitives.
+            </p>
+          </div>
+          <AptusWordmark size={20} />
         </header>
+
+        {/* App-2: Aptus mark */}
+        <section className="a-card" style={{ padding: 24, marginBottom: 16 }}>
+          <h2 className="a-h2" style={{ marginTop: 0 }}>AptusMark + AptusWordmark</h2>
+          <p className="a-small" style={{ marginTop: 4, marginBottom: 16 }}>
+            The brand mark — same path as <code className="a-mono">public/icons/aptus-mark.svg</code>.
+            Single path with even-odd fill rule (the inner triangle is a cutout).
+            Inherits color via <code className="a-mono">currentColor</code>.
+          </p>
+          <div style={{ display: "flex", gap: 24, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ color: "var(--aptus-text)" }}>
+              <AptusMark size={32} />
+            </div>
+            <div style={{ color: "var(--aptus-text)" }}>
+              <AptusMark size={48} />
+            </div>
+            <div style={{ background: "var(--aptus-brand)", padding: 12, borderRadius: 8, color: "white" }}>
+              <AptusMark size={48} />
+            </div>
+            <AptusWordmark size={14} />
+            <AptusWordmark size={18} />
+            <AptusWordmark size={24} />
+          </div>
+        </section>
 
         {/* Color tokens */}
         <section className="a-card" style={{ padding: 24, marginBottom: 16 }}>
@@ -70,21 +106,29 @@ export default function DesignSystemPage() {
           </div>
         </section>
 
-        {/* Status pills */}
+        {/* App-2: StatusPill */}
         <section className="a-card" style={{ padding: 24, marginBottom: 16 }}>
-          <h2 className="a-h2" style={{ marginTop: 0 }}>Status pills</h2>
+          <h2 className="a-h2" style={{ marginTop: 0 }}>StatusPill — the canonical one</h2>
           <p className="a-small" style={{ marginTop: 4, marginBottom: 16 }}>
-            One canonical component used across every status surface (spec §6.4).
+            One component, all status types. Tone resolves from PILL_MAP by
+            string, override with `tone` prop. Used everywhere — granularity,
+            mandatory, gap-resolution, scope decisions, etc. (Spec §6.4.)
           </p>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <span className="a-pill a-pill-success">Standard SAP</span>
-            <span className="a-pill a-pill-warning">Configurable</span>
-            <span className="a-pill a-pill-warning">Adapt to SAP</span>
-            <span className="a-pill a-pill-info">Trusted add-on</span>
-            <span className="a-pill a-pill-info">Power-user extension</span>
-            <span className="a-pill a-pill-info">Cloud add-on</span>
-            <span className="a-pill a-pill-danger">Custom build</span>
-            <span className="a-pill a-pill-neutral">Out of scope</span>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+            <StatusPill status="Standard SAP" />
+            <StatusPill status="Configurable" />
+            <StatusPill status="Adapt to SAP" />
+            <StatusPill status="Trusted add-on" />
+            <StatusPill status="Power-user extension" />
+            <StatusPill status="Cloud add-on (BTP)" />
+            <StatusPill status="Custom build" />
+            <StatusPill status="Out of scope" />
+          </div>
+          <p className="a-small a-muted" style={{ marginBottom: 8 }}>With chevron (clickable) + size variants:</p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <StatusPill status="In Analyze" withChevron onClick={() => {}} />
+            <StatusPill status="Mandatory" leftDot />
+            <StatusPill status="Coarse" size="lg" />
           </div>
         </section>
 
@@ -121,48 +165,58 @@ export default function DesignSystemPage() {
           </div>
         </section>
 
-        {/* Coverage bar */}
+        {/* App-2: CoverageBar — all 3 variants */}
         <section className="a-card" style={{ padding: 24, marginBottom: 16 }}>
-          <h2 className="a-h2" style={{ marginTop: 0 }}>Coverage bar</h2>
+          <h2 className="a-h2" style={{ marginTop: 0 }}>CoverageBar — three variants</h2>
           <p className="a-small" style={{ marginTop: 4, marginBottom: 16 }}>
-            Used to show OOTB / Configure / Gap split at-a-glance.
+            OOTB / Configure / Gap split. Used on Dashboard, assessment header,
+            and Step 4 (Adjust).
           </p>
-          <div className="a-coverage-bar">
-            <div className="a-coverage-seg a-ootb"   style={{ width: "62%" }} />
-            <div className="a-coverage-seg a-config" style={{ width: "17%" }} />
-            <div className="a-coverage-seg a-gap"    style={{ width: "21%" }} />
+
+          <div style={{ marginBottom: 16 }}>
+            <p className="a-small a-muted" style={{ marginBottom: 8 }}>variant=&quot;stacked&quot; (default):</p>
+            <CoverageBar ootb={62} config={17} gap={21} />
           </div>
-          <div style={{ display: "flex", gap: 12, marginTop: 12, fontSize: 12 }}>
-            <span className="a-muted">62% Standard</span>
-            <span className="a-muted">17% Config</span>
-            <span className="a-muted">21% Gap</span>
+
+          <div style={{ marginBottom: 16 }}>
+            <p className="a-small a-muted" style={{ marginBottom: 8 }}>variant=&quot;donut&quot;:</p>
+            <CoverageBar ootb={62} config={17} gap={21} variant="donut" />
+          </div>
+
+          <div>
+            <p className="a-small a-muted" style={{ marginBottom: 8 }}>variant=&quot;numbers&quot;:</p>
+            <CoverageBar ootb={62} config={17} gap={21} variant="numbers" />
           </div>
         </section>
 
-        {/* Step rail (preview of App-5) */}
+        {/* App-2: StepRail — all 3 variants */}
         <section className="a-card" style={{ padding: 24, marginBottom: 16 }}>
-          <h2 className="a-h2" style={{ marginTop: 0 }}>Step rail (preview)</h2>
+          <h2 className="a-h2" style={{ marginTop: 0 }}>StepRail — three variants</h2>
           <p className="a-small" style={{ marginTop: 4, marginBottom: 16 }}>
-            The 5-step flow inside an assessment. Will land in App-5.
+            The 5-step flow inside an assessment (Profile → Scope → Analyze → Adjust → Export).
+            Single source of truth — STEPS const exported from the same module.
           </p>
-          <div className="a-step-rail">
-            {[
-              { n: 1, label: "Profile", state: "complete" },
-              { n: 2, label: "Scope", state: "complete" },
-              { n: 3, label: "Analyze", state: "active" },
-              { n: 4, label: "Adjust", state: "" },
-              { n: 5, label: "Export", state: "locked" },
-            ].map((s) => (
-              <div key={s.n} className={`a-step-item ${s.state ? `a-${s.state}` : ""}`}>
-                <span className="a-step-marker">{s.n}</span>
-                <span style={{ fontSize: 13, fontWeight: 500 }}>{s.label}</span>
+
+          <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 24, marginTop: 16 }}>
+            <div>
+              <p className="a-small a-muted" style={{ marginBottom: 8 }}>variant=&quot;rail&quot; (sidebar):</p>
+              <StepRail current={3} completed={[1, 2]} />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+              <div>
+                <p className="a-small a-muted" style={{ marginBottom: 8 }}>variant=&quot;progress&quot;:</p>
+                <StepRail current={3} completed={[1, 2]} variant="progress" />
               </div>
-            ))}
+              <div>
+                <p className="a-small a-muted" style={{ marginBottom: 8 }}>variant=&quot;breadcrumb&quot;:</p>
+                <StepRail current={3} completed={[1, 2]} variant="breadcrumb" />
+              </div>
+            </div>
           </div>
         </section>
 
         <footer className="a-small a-muted" style={{ marginTop: 32, textAlign: "center" }}>
-          Aptus design system v1.2 · App-1 of 8 · Verify each phase by visiting this page on its preview URL.
+          Aptus design system v1.2 · App-2 of 8 · Verify each phase by visiting this page on its preview URL.
         </footer>
       </div>
     </div>
