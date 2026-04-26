@@ -477,3 +477,188 @@ export async function getAuditTrailForReport(assessmentId: string) {
     reason: e.reason ?? "",
   }));
 }
+
+// ── NEW (Phase F): Findings + Traceability data prep ─────────────────────────
+
+import { outcomeMeans } from "@/lib/report/glossary";
+import type { ResolutionType } from "@/types/assessment";
+import type { FindingsData } from "@/lib/report/pdf-generator";
+import type { TraceabilityRow } from "@/lib/report/xlsx-generator";
+
+/** Map a free-text resolution-type string from data to a canonical
+ * ResolutionType. Falls back to FIT (the most common, "no work needed"). */
+function normalizeResolutionType(raw: string | null | undefined): ResolutionType {
+  if (!raw) return "FIT";
+  const upper = raw.toUpperCase().replace(/[\s-]/g, "_");
+  const VALID: ReadonlySet<string> = new Set([
+    "FIT", "CONFIGURE", "ADAPT_PROCESS", "ISV", "KEY_USER_EXT", "BTP_EXT", "CUSTOM_ABAP", "OUT_OF_SCOPE",
+  ]);
+  return (VALID.has(upper) ? upper : "FIT") as ResolutionType;
+}
+
+/** Per-area outcome distribution derived from GapResolution. Areas without
+ * gaps are assumed to be all FIT (the "nothing to build" outcome). */
+async function buildAreaOutcomeMap(assessmentId: string): Promise<Map<string, Partial<Record<ResolutionType, number>>>> {
+  const gaps = await prisma.gapResolution.findMany({
+    where: { assessmentId },
+    select: { scopeItemId: true, resolutionType: true },
+  });
+  const scopeItemIds = [...new Set(gaps.map((g) => g.scopeItemId))];
+  const scopeItems = await prisma.scopeItem.findMany({
+    where: { id: { in: scopeItemIds } },
+    select: { id: true, functionalArea: true },
+  });
+  const scopeMap = new Map(scopeItems.map((s) => [s.id, s.functionalArea ?? "Unassigned"]));
+
+  const result = new Map<string, Partial<Record<ResolutionType, number>>>();
+  for (const g of gaps) {
+    const area = scopeMap.get(g.scopeItemId) ?? "Unassigned";
+    const rt = normalizeResolutionType(g.resolutionType);
+    const bucket = result.get(area) ?? {};
+    bucket[rt] = (bucket[rt] ?? 0) + 1;
+    result.set(area, bucket);
+  }
+  return result;
+}
+
+/** Build the shape consumed by generateRequirementsFindingsPdf.
+ * Aggregates ClientRequirements by module (= functional area), enriches each
+ * area with a per-area outcome distribution from GapResolution, and picks
+ * up to 4 sample requirement cards per area. */
+export async function getFindingsDataForReport(assessmentId: string): Promise<FindingsData> {
+  const assessment = await prisma.assessment.findUniqueOrThrow({
+    where: { id: assessmentId },
+    select: {
+      companyName: true,
+      industry: true,
+      country: true,
+      companySize: true,
+      updatedAt: true,
+    },
+  });
+
+  const reqs = await prisma.clientRequirement.findMany({
+    where: { assessmentId },
+    select: {
+      module: true,
+      code: true,
+      requirementText: true,
+      requirementType: true,
+      solutionProviderResponse: true,
+      sortOrder: true,
+    },
+    orderBy: [{ module: "asc" }, { sortOrder: "asc" }],
+  });
+
+  const areaOutcomes = await buildAreaOutcomeMap(assessmentId);
+
+  // Group requirements by module
+  const byModule = new Map<string, typeof reqs>();
+  for (const r of reqs) {
+    const key = r.module || "Unassigned";
+    const list = byModule.get(key) ?? [];
+    list.push(r);
+    byModule.set(key, list);
+  }
+
+  // Build totals (across all areas)
+  const totalsByOutcome: Partial<Record<ResolutionType, number>> = {};
+  for (const [, dist] of areaOutcomes) {
+    for (const [rt, count] of Object.entries(dist)) {
+      const k = rt as ResolutionType;
+      totalsByOutcome[k] = (totalsByOutcome[k] ?? 0) + (count ?? 0);
+    }
+  }
+  // Requirements without a corresponding gap → assumed FIT
+  const totalReqs = reqs.length;
+  const accountedFor = Object.values(totalsByOutcome).reduce<number>((s, n) => s + (n ?? 0), 0);
+  totalsByOutcome.FIT = (totalsByOutcome.FIT ?? 0) + Math.max(0, totalReqs - accountedFor);
+
+  // Build per-area summaries with sample cards
+  const byArea = [...byModule.entries()].map(([area, areaReqs]) => {
+    const dist = areaOutcomes.get(area) ?? {};
+    const accountedForArea = Object.values(dist).reduce<number>((s, n) => s + (n ?? 0), 0);
+    const distWithFit: Partial<Record<ResolutionType, number>> = {
+      ...dist,
+      FIT: (dist.FIT ?? 0) + Math.max(0, areaReqs.length - accountedForArea),
+    };
+    const dominantOutcome = pickDominantOutcome(distWithFit);
+
+    return {
+      area,
+      total: areaReqs.length,
+      byOutcome: distWithFit,
+      cards: areaReqs.slice(0, 4).map((r) => ({
+        reqId: r.code,
+        yourAsk: r.requirementText,
+        whatSapDoes: r.solutionProviderResponse?.trim() || outcomeMeans(dominantOutcome),
+        resolutionType: dominantOutcome,
+      })),
+    };
+  });
+
+  return {
+    assessment: {
+      companyName: assessment.companyName,
+      industry: assessment.industry,
+      country: assessment.country,
+      companySize: assessment.companySize,
+      updatedAt: assessment.updatedAt,
+    },
+    totals: { total: totalReqs, byOutcome: totalsByOutcome },
+    byArea,
+  };
+}
+
+function pickDominantOutcome(dist: Partial<Record<ResolutionType, number>>): ResolutionType {
+  let best: ResolutionType = "FIT";
+  let bestCount = -1;
+  for (const [rt, count] of Object.entries(dist)) {
+    if ((count ?? 0) > bestCount) {
+      best = rt as ResolutionType;
+      bestCount = count ?? 0;
+    }
+  }
+  return best;
+}
+
+/** Build the shape consumed by requirementsTraceabilitySheet.
+ * One row per ClientRequirement with derived outcome from the area's
+ * gap distribution. */
+export async function getTraceabilityDataForReport(assessmentId: string): Promise<TraceabilityRow[]> {
+  const reqs = await prisma.clientRequirement.findMany({
+    where: { assessmentId },
+    select: {
+      code: true,
+      module: true,
+      section: true,
+      requirementText: true,
+      requirementType: true,
+      solutionProviderResponse: true,
+      sortOrder: true,
+    },
+    orderBy: [{ module: "asc" }, { sortOrder: "asc" }],
+  });
+
+  const areaOutcomes = await buildAreaOutcomeMap(assessmentId);
+
+  return reqs.map((r) => {
+    const dist = areaOutcomes.get(r.module || "Unassigned") ?? {};
+    const outcome = pickDominantOutcome(dist);
+    return {
+      reqId: r.code,
+      sourceFile: `${r.module}.xlsx`,
+      sourceRow: r.sortOrder,
+      functionalArea: r.module,
+      subArea: r.section ?? "—",
+      process: r.module,
+      mustHave: r.requirementType?.toLowerCase().includes("mandatory") ?? false,
+      yourAsk: r.requirementText,
+      outcome,
+      whatItMeans: r.solutionProviderResponse?.trim() || outcomeMeans(outcome),
+      effortDays: 0, // TODO: link req → step → gap effortDays in a future phase
+      owner: "—",
+      notes: "",
+    };
+  });
+}
