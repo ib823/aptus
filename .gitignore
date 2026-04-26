@@ -62,8 +62,10 @@ prisma/dev.db
 
 # Visual-regression baselines — pinned screenshots that fail CI on drift
 !tests/visual-regression/**
+!tests/visual-regression-app/**
 
 # Playwright reports / artifacts — local-only, never tracked
 playwright-report/
 playwright-visual-report/
+playwright-visual-app-report/
 test-results/

@@ -35,6 +35,32 @@ Squash-merge keeps `main`'s history at one commit per feature.
 
 Anything that changes `src/`, `prisma/`, `tests/`, or `package.json` should go through a feature branch so the preview URL exists.
 
+## Visual regression — two suites
+
+| Suite | What it tests | Config | When it runs |
+|---|---|---|---|
+| **Report mocks** (`pnpm test:visual`) | The 27 static HTML mocks under `docs/design/v1.2/reports/` via `file://` | `playwright.visual.config.ts` | Every PR — the `Visual Regression (report mocks)` CI job |
+| **Live app** (`pnpm test:visual-app`) | The redesigned Next.js pages (`/design-system`, `/login`) via `next start` | `playwright.visual-app.config.ts` | **Not yet enabled in CI** — see below |
+
+### Enabling live-app visual regression in CI
+
+The infrastructure is shipped but baselines are missing — generating them requires `pnpm build` to complete (≈ 3 GB memory; many codespaces OOM).
+
+To enable:
+
+1. On a machine that can complete `pnpm build`, run:
+   ```bash
+   pnpm test:visual-app:update
+   ```
+2. Commit the generated baselines:
+   ```bash
+   git add tests/visual-regression-app/redesigned-screens.spec.ts-snapshots/
+   git commit -m "test(visual-app): pin baselines for redesigned screens"
+   ```
+3. Add the `visual-regression-app` CI job to `.github/workflows/ci.yml` (template provided in the existing `visual-regression` job — just swap `pnpm test:visual` for `pnpm test:visual-app` and add a postgres service + Prisma steps for the build's DB needs).
+
+Once enabled, every PR will fail CI on any pixel drift in the redesigned screens.
+
 ## Local validation before push
 
 The pre-push hook handles `next build` (~80s on this repo). For faster iteration loops while developing:
