@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * StatusPill — the canonical status pill (one component, used everywhere).
  * Source: docs/design/v1.2/components.jsx (the prototype).

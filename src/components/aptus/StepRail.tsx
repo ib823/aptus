@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * StepRail — the canonical 5-step navigation for the assessment flow.
  * Source: docs/design/v1.2/components.jsx (the prototype).

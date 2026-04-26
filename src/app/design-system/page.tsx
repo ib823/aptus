@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Design system showcase — the visible verification surface for Apps 1–8.
  *
@@ -18,9 +20,8 @@ import {
   StepRail,
 } from "@/components/aptus";
 
-export const metadata = {
-  title: "Design System",
-};
+// Note: cannot export `metadata` from a Client Component — set in a parent
+// layout if a route-specific title is needed.
 
 export default function DesignSystemPage() {
   return (
