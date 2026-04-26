@@ -61,6 +61,10 @@ function createBase(overrides: AssessmentOverrides = {}): Assessment {
     clonedFromSnapshotId: overrides.clonedFromSnapshotId ?? null,
     carryForwardConfig: overrides.carryForwardConfig ?? null,
     operationalSites: overrides.operationalSites ?? null,
+    granularityCoarse: overrides.granularityCoarse ?? 0,
+    granularityMedium: overrides.granularityMedium ?? 0,
+    granularityFine: overrides.granularityFine ?? 0,
+    clientAccent: overrides.clientAccent ?? null,
   };
 }
 
