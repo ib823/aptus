@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = { title: "Assessments" };
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { AssessmentsPageClient } from "@/components/assessment/AssessmentsPageClient";
+import { AptusAssessmentsList } from "@/components/aptus";
 import { redirect } from "next/navigation";
 
 interface AssessmentsPageProps {
@@ -55,7 +55,7 @@ export default async function AssessmentsPage({ searchParams }: AssessmentsPageP
   const canCreate = ["consultant", "platform_admin", "admin", "partner_lead"].includes(user.role);
 
   return (
-    <AssessmentsPageClient
+    <AptusAssessmentsList
       assessments={assessments.map((a) => ({
         ...a,
         updatedAt: a.updatedAt.toISOString(),

@@ -27,3 +27,6 @@ export { AptusShell } from "./AptusShell";
 export { AptusTopbar } from "./AptusTopbar";
 export { AptusSideRail } from "./AptusSideRail";
 export { AptusUserMenu, type AptusUserMenuUser } from "./AptusUserMenu";
+
+// App-4 — assessments list
+export { AptusAssessmentsList } from "./AptusAssessmentsList";
