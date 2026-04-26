@@ -19,6 +19,7 @@
  * Spec §6.1.
  */
 
+import { AptusCmdKProvider, useAptusCmdK } from "./AptusCmdK";
 import { AptusSideRail } from "./AptusSideRail";
 import { AptusTopbar } from "./AptusTopbar";
 import type { AptusUserMenuUser } from "./AptusUserMenu";
@@ -32,6 +33,18 @@ interface AptusShellProps {
 
 export function AptusShell({ user, banner, children }: AptusShellProps) {
   return (
+    <AptusCmdKProvider>
+      <ShellInner user={user} banner={banner}>
+        {children}
+      </ShellInner>
+    </AptusCmdKProvider>
+  );
+}
+
+/** Inner shell — split out so we can call useAptusCmdK() (must be inside provider). */
+function ShellInner({ user, banner, children }: AptusShellProps) {
+  const cmdk = useAptusCmdK();
+  return (
     <div
       className="aptus-app"
       style={{
@@ -41,7 +54,7 @@ export function AptusShell({ user, banner, children }: AptusShellProps) {
         background: "var(--aptus-bg)",
       }}
     >
-      <AptusTopbar user={user} />
+      <AptusTopbar user={user} onSearch={cmdk.open} />
 
       <div
         style={{
