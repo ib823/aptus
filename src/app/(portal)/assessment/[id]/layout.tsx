@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { calculateProfileCompleteness } from "@/lib/assessment/profile-completeness";
 import { PROFILE_COMPLETENESS_GATE } from "@/types/assessment";
-import { AssessmentTabNav } from "@/components/layout/AssessmentTabNav";
 import { AptusAssessmentShell } from "@/components/aptus";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
@@ -49,25 +48,12 @@ export default async function AssessmentLayout({
   const { score: profileScore } = calculateProfileCompleteness(assessment);
   const scopeLocked = profileScore < PROFILE_COMPLETENESS_GATE;
 
-  // The existing AssessmentTabNav has 14+ sub-page tabs — too granular for
-  // the 5-step rail. We keep it as a "secondary nav" inside the new Aptus
-  // shell so every existing route stays reachable. Future App-5b can fold
-  // these sub-pages into per-step content tabs.
   return (
     <AptusAssessmentShell
       assessmentId={assessment.id}
       companyName={assessment.companyName}
       status={assessment.status}
-      secondaryNav={
-        <div className="hidden md:block">
-          <AssessmentTabNav
-            assessmentId={assessment.id}
-            assessmentStatus={assessment.status}
-            scopeLocked={scopeLocked}
-            profileScore={profileScore}
-          />
-        </div>
-      }
+      scopeLocked={scopeLocked}
     >
       {children}
     </AptusAssessmentShell>
