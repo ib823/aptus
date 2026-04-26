@@ -1,12 +1,9 @@
 import { notFound } from "next/navigation";
-import { ChevronRight } from "lucide-react";
 import { prisma } from "@/lib/db/prisma";
 import { calculateProfileCompleteness } from "@/lib/assessment/profile-completeness";
 import { PROFILE_COMPLETENESS_GATE } from "@/types/assessment";
 import { AssessmentTabNav } from "@/components/layout/AssessmentTabNav";
-import { MobileBottomTabBar } from "@/components/layout/MobileBottomTabBar";
-import { StatusTransitionBar } from "@/components/assessment/StatusTransitionBar";
-import { PresenceAvatars } from "@/components/collaboration/PresenceAvatars";
+import { AptusAssessmentShell } from "@/components/aptus";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
@@ -52,41 +49,27 @@ export default async function AssessmentLayout({
   const { score: profileScore } = calculateProfileCompleteness(assessment);
   const scopeLocked = profileScore < PROFILE_COMPLETENESS_GATE;
 
+  // The existing AssessmentTabNav has 14+ sub-page tabs — too granular for
+  // the 5-step rail. We keep it as a "secondary nav" inside the new Aptus
+  // shell so every existing route stays reachable. Future App-5b can fold
+  // these sub-pages into per-step content tabs.
   return (
-    <div className="flex flex-col h-full">
-      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 px-4 pt-3 pb-1 text-sm">
-        <a href="/assessments" className="text-muted-foreground hover:text-foreground transition-colors">
-          Assessments
-        </a>
-        <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/60" />
-        <span className="font-medium text-foreground truncate max-w-[300px]" title={assessment.companyName}>
-          {assessment.companyName}
-        </span>
-      </nav>
-      <div className="flex items-center justify-between px-4 py-2">
-        <StatusTransitionBar
-          assessmentId={assessment.id}
-          currentStatus={assessment.status}
-        />
-        <PresenceAvatars assessmentId={assessment.id} />
-      </div>
-      <div className="hidden md:block">
-        <AssessmentTabNav
-          assessmentId={assessment.id}
-          assessmentStatus={assessment.status}
-          scopeLocked={scopeLocked}
-          profileScore={profileScore}
-        />
-      </div>
-      <div className="flex-1 min-h-0 overflow-auto pb-16 md:pb-0" role="region" aria-label="Assessment content" data-assessment-main>
-        {children}
-      </div>
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40">
-        <MobileBottomTabBar
-          assessmentId={assessment.id}
-          assessmentStatus={assessment.status}
-        />
-      </div>
-    </div>
+    <AptusAssessmentShell
+      assessmentId={assessment.id}
+      companyName={assessment.companyName}
+      status={assessment.status}
+      secondaryNav={
+        <div className="hidden md:block">
+          <AssessmentTabNav
+            assessmentId={assessment.id}
+            assessmentStatus={assessment.status}
+            scopeLocked={scopeLocked}
+            profileScore={profileScore}
+          />
+        </div>
+      }
+    >
+      {children}
+    </AptusAssessmentShell>
   );
 }
