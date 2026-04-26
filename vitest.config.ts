@@ -2,6 +2,13 @@ import { defineConfig } from "vitest/config";
 import path from "path";
 
 export default defineConfig({
+  // Use the new automatic JSX transform (matches Next.js 15 behaviour) so
+  // component files don't need an explicit `import React from "react"` to
+  // render in tests. Without this, esbuild defaults to the classic transform
+  // which calls React.createElement and requires React in scope.
+  esbuild: {
+    jsx: "automatic",
+  },
   test: {
     globals: true,
     environment: "jsdom",
