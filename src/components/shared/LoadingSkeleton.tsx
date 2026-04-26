@@ -14,7 +14,7 @@ export function LoadingSkeleton({ lines = 3, className = "" }: LoadingSkeletonPr
       {Array.from({ length: lines }).map((_, i) => (
         <div
           key={i}
-          className="h-4 bg-[var(--sapContent_ImagePlaceholderBackground,#e0e0e0)] rounded animate-pulse"
+          className="h-4 bg-[var(--aptus-surface-3)] rounded animate-pulse"
           style={{ width: `${100 - i * 15}%` }}
         />
       ))}
@@ -30,9 +30,9 @@ export function CardSkeleton({ className = "" }: { className?: string }) {
       aria-live="polite"
       aria-label="Loading"
     >
-      <div className="h-5 bg-[var(--sapContent_ImagePlaceholderBackground,#e0e0e0)] rounded animate-pulse w-2/3 mb-3" />
-      <div className="h-4 bg-[var(--sapContent_ImagePlaceholderBackground,#e0e0e0)] rounded animate-pulse w-full mb-2" />
-      <div className="h-4 bg-[var(--sapContent_ImagePlaceholderBackground,#e0e0e0)] rounded animate-pulse w-4/5" />
+      <div className="h-5 bg-[var(--aptus-surface-3)] rounded animate-pulse w-2/3 mb-3" />
+      <div className="h-4 bg-[var(--aptus-surface-3)] rounded animate-pulse w-full mb-2" />
+      <div className="h-4 bg-[var(--aptus-surface-3)] rounded animate-pulse w-4/5" />
     </div>
   );
 }
