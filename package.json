@@ -86,6 +86,7 @@
     "idb-keyval": "^6.2.2",
     "jspdf": "^4.2.0",
     "jspdf-autotable": "^5.0.7",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.575.0",
     "mammoth": "^1.11.0",
     "next": "15.5.12",

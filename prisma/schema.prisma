@@ -819,6 +819,17 @@ model ClientRequirement {
   solutionProviderRemarks  String?  @db.Text   // editable in-app
   erpModuleSupporting      String?  @db.Text
   sortOrder                Int      // sequence for stable display order
+
+  // Added 2026-04-26 for the broader Bursa import (A2/A3/A4/A5 in addition to
+  // A6/A7). All nullable so existing rows are unaffected.
+  // requirementClass drives UI grouping/filtering — older rows remain null and
+  // continue to render under the legacy "functional" path.
+  requirementClass         String?  // "mandatory" | "checklist" | "business" | "technical" | "functional"
+  subCriteria              String?  // A4 sub-criteria (e.g. "Experience", "RPA Offerings")
+  requiredDocs             String?  @db.Text  // A4 Required Docs / A2 Supporting Documents
+  complianceStatus         String?  // A3 Yes/Partial/No/NA, A5 NM/PM/FM/Exceed (vendor-fillable)
+  submissionFolder         String?  // A2 Assigned Folder for Submission
+
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
@@ -828,6 +839,7 @@ model ClientRequirement {
   @@index([assessmentId])
   @@index([assessmentId, module])
   @@index([assessmentId, module, sortOrder])
+  @@index([assessmentId, requirementClass])
 }
 
 // =============================================================
