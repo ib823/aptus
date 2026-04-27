@@ -694,8 +694,15 @@ export interface ClassificationRow {
   classification: string;
   /** Aptus's grounded narrative explaining the verdict. */
   remarks: string;
-  /** Comma-separated 2602 scope item IDs + names that satisfy this. */
+  /** Comma-separated 2602 scope item IDs + names that satisfy this — legacy
+   * combined view. Kept for back-compat with older rows. */
   scopeItems: string;
+  /** Structured columns added 2026-04-27. Null on rows classified before that
+   * cutover; populated by classify-batch apply when the result file provides
+   * sapModule / scopeItemIds / scopeItemNames. */
+  sapModule: string;
+  scopeItemIds: string;
+  scopeItemNames: string;
   /** Bucket — derived from `classification` for grouping. */
   bucket: ClassificationBucket;
 }
@@ -767,6 +774,9 @@ export async function getSapBestPracticeClassificationData(
       solutionProviderResponse: true,
       solutionProviderRemarks: true,
       erpModuleSupporting: true,
+      sapModule: true,
+      scopeItemIds: true,
+      scopeItemNames: true,
       sortOrder: true,
     },
     orderBy: [{ module: "asc" }, { sortOrder: "asc" }],
@@ -792,6 +802,9 @@ export async function getSapBestPracticeClassificationData(
       classification: r.solutionProviderResponse ?? "",
       remarks: r.solutionProviderRemarks ?? "",
       scopeItems: r.erpModuleSupporting ?? "",
+      sapModule: r.sapModule ?? "",
+      scopeItemIds: r.scopeItemIds ?? "",
+      scopeItemNames: r.scopeItemNames ?? "",
       bucket,
     };
 

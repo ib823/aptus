@@ -1387,12 +1387,22 @@ function renderRequirementSection(
     y += 4;
 
     const head: string[][] = [["Code", "Requirement"]];
-    if (showScope) head[0]!.push("2602 Scope Items");
+    if (showScope) head[0]!.push("SAP Module + Scope ID");
     if (showRemarks) head[0]!.push("Aptus Remarks");
 
     const body = modRows.map((r) => {
       const row: string[] = [r.code, r.requirementText];
-      if (showScope) row.push(r.scopeItems);
+      if (showScope) {
+        // Prefer the structured columns; fall back to legacy free-text scopeItems.
+        const ids = r.scopeItemIds && r.scopeItemIds !== "—" ? r.scopeItemIds : "";
+        const names = r.scopeItemNames && r.scopeItemNames !== "—" ? r.scopeItemNames : "";
+        const mod = r.sapModule && r.sapModule !== "—" ? r.sapModule : "";
+        const lines: string[] = [];
+        if (mod) lines.push(`[${mod}]`);
+        if (ids) lines.push(ids);
+        if (names) lines.push(names);
+        row.push(lines.length > 0 ? lines.join("\n") : (r.scopeItems || "—"));
+      }
       if (showRemarks) row.push(r.remarks);
       return row;
     });
@@ -1408,7 +1418,7 @@ function renderRequirementSection(
       // A4 portrait, 20mm side margins → 170mm content width. Sum below
       // must total ≤ 170 to avoid jspdf-autotable's "could not fit page" warning.
       columnStyles: showScope && showRemarks
-        ? { 0: { cellWidth: 20 }, 1: { cellWidth: 60 }, 2: { cellWidth: 40 }, 3: { cellWidth: 50 } }
+        ? { 0: { cellWidth: 18 }, 1: { cellWidth: 58 }, 2: { cellWidth: 42 }, 3: { cellWidth: 52 } }
         : showScope || showRemarks
           ? { 0: { cellWidth: 20 }, 1: { cellWidth: 75 }, 2: { cellWidth: 75 } }
           : { 0: { cellWidth: 20 }, 1: { cellWidth: 150 } },
