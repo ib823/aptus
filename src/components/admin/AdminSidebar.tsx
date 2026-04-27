@@ -51,15 +51,15 @@ export function AdminSidebar() {
     <aside
       className="w-64 shrink-0 border-r"
       aria-label="Admin navigation"
-      style={{ background: "var(--sapGroup_ContentBackground, #fff)" }}
+      style={{ background: "var(--aptus-surface)" }}
     >
       <div
         className="p-4 border-b"
-        style={{ borderColor: "var(--sapGroup_ContentBorderColor, #d9d9d9)" }}
+        style={{ borderColor: "var(--aptus-border)" }}
       >
         <p
           className="text-sm font-semibold uppercase tracking-wider"
-          style={{ color: "var(--sapContent_LabelColor, #6a6d70)" }}
+          style={{ color: "var(--aptus-text-muted)" }}
           aria-hidden="true"
         >
           Admin Panel
@@ -71,7 +71,7 @@ export function AdminSidebar() {
             {section.label && (
               <p
                 className="px-4 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider"
-                style={{ color: "var(--sapContent_LabelColor, #6a6d70)" }}
+                style={{ color: "var(--aptus-text-muted)" }}
               >
                 {section.label}
               </p>
@@ -94,13 +94,13 @@ export function AdminSidebar() {
                   }`}
                   style={{
                     color: isActive
-                      ? "var(--sapSelectedColor, #0854a0)"
-                      : "var(--sapTextColor, #32363a)",
+                      ? "var(--aptus-brand)"
+                      : "var(--aptus-text)",
                     background: isActive
-                      ? "var(--sapList_Active_Background, #eaf6ff)"
+                      ? "var(--aptus-surface-2)"
                       : "transparent",
                     borderLeft: isActive
-                      ? "3px solid var(--sapSelectedColor, #0854a0)"
+                      ? "3px solid var(--aptus-brand)"
                       : "3px solid transparent",
                   }}
                 >
