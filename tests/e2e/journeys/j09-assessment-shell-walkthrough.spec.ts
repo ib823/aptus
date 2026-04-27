@@ -131,10 +131,33 @@ test.describe("J09 — Assessment shell walkthrough", () => {
   test("Step 10 — Step rail step click navigates to that step's primary route", async ({ page }) => {
     await page.goto(`/assessment/${assessmentId}/scope`);
     await page.waitForLoadState("networkidle");
-    // The breadcrumb step rail locks any step > current + 1. From /scope
-    // (step 2), only Analyze (step 3) is the next-reachable step. Clicking
-    // it should land on the Analyze step's primary route.
+    // The breadcrumb step rail no longer locks "future" steps — every
+    // step is freely navigable, page-level gates handle "you can't do
+    // anything here yet". Clicking Analyze should land on its primary
+    // route just like clicking Adjust or Export does.
     await page.getByRole("button", { name: /\bAnalyze\b/ }).first().click();
     await expect(page).toHaveURL(`/assessment/${assessmentId}/process-map`);
+  });
+
+  test("Step 11 — Previously-locked Adjust step is clickable from /scope", async ({ page }) => {
+    await page.goto(`/assessment/${assessmentId}/scope`);
+    await page.waitForLoadState("networkidle");
+    // Regression guard: the rail used to disable buttons whose step
+    // number exceeded current+1. From /scope (step 2), Adjust (step 4)
+    // was unreachable. After fix/steprail-disabled-and-submit-type the
+    // disabled prop is gone and the click navigates.
+    const adjust = page.getByRole("button", { name: /\bAdjust\b/ }).first();
+    await expect(adjust).not.toBeDisabled();
+    await adjust.click();
+    await expect(page).toHaveURL(`/assessment/${assessmentId}/gaps`);
+  });
+
+  test("Step 12 — Step-rail buttons are type=button (no accidental form submit)", async ({ page }) => {
+    await page.goto(`/assessment/${assessmentId}/scope`);
+    await page.waitForLoadState("networkidle");
+    for (const label of ["Profile", "Scope", "Analyze", "Adjust", "Export"]) {
+      const btn = page.getByRole("button", { name: new RegExp(`\\b${label}\\b`) }).first();
+      await expect(btn).toHaveAttribute("type", "button");
+    }
   });
 });

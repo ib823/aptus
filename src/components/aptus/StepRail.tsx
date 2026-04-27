@@ -83,12 +83,17 @@ export function StepRail({
         {STEPS.map((s, i) => {
           const isComplete = completed.includes(s.n);
           const isCurrent = current === s.n;
-          const isLocked = !isComplete && !isCurrent && s.n > Math.max(current, ...completed) + 1;
+          // The rail used to lock any step beyond `current + 1`, but in
+          // practice consultants jump around the assessment freely (e.g.
+          // peeking at the Export bundle while still scoping). Page-level
+          // gates (profile completeness on /scope, etc.) already enforce
+          // "you can't actually do anything here yet" at the destination.
+          // The nav itself stays unconditional.
           return (
             <Fragment key={s.key}>
               <button
-                disabled={isLocked}
-                onClick={() => !isLocked && onSelect?.(s.n)}
+                type="button"
+                onClick={() => onSelect?.(s.n)}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -97,10 +102,10 @@ export function StepRail({
                   borderRadius: 6,
                   border: "none",
                   background: isCurrent ? "var(--aptus-surface-2)" : "transparent",
-                  color: isLocked ? "var(--aptus-text-subtle)" : isCurrent ? "var(--aptus-text)" : "var(--aptus-text-muted)",
+                  color: isCurrent ? "var(--aptus-text)" : "var(--aptus-text-muted)",
                   fontSize: 13,
                   fontWeight: isCurrent ? 600 : 500,
-                  cursor: isLocked ? "not-allowed" : "pointer",
+                  cursor: "pointer",
                   fontFamily: "inherit",
                 }}
               >
