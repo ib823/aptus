@@ -85,7 +85,17 @@ export function AptusSideRail() {
         flexDirection: "column",
         gap: 2,
         width: 64,
-        height: "100%",
+        // The shell's outer grid is `min-height: 100vh`, so when the page
+        // content overflows the viewport (e.g. the Scope step list at 2k+
+        // rows) the body row — and thus this nav — stretches to the full
+        // body height. The flex-1 spacer below then balloons by tens of
+        // thousands of pixels and pushes the Help link off-screen.
+        // Sticky positioning relative to the (scrolling) document, sized
+        // to the viewport minus the 56 px topbar, keeps the rail on
+        // screen and lets the spacer collapse to its intended size.
+        position: "sticky",
+        top: 56,
+        height: "calc(100vh - 56px)",
         overflow: "hidden",
         transition: "width 200ms ease-in-out",
       }}
