@@ -61,6 +61,8 @@ const REPORTS = [
   { key: "flow-atlas", label: "Process Flow Atlas", format: "PDF", icon: FileText, description: "All flow diagrams compiled in a single PDF" },
   { key: "audit-trail", label: "Decision Audit Trail", format: "XLSX", icon: FileSpreadsheet, description: "Complete chronological decision log" },
   { key: "remaining-register", label: "Remaining Items Register", format: "XLSX", icon: FileSpreadsheet, description: "Unresolved items requiring post-assessment action" },
+  { key: "sap-best-practice-classification", label: "SAP Best-Practice Classification", format: "PDF", icon: FileText, description: "Aptus's independent O/C/G verdict per 2602 — dedicated Gap section" },
+  { key: "sap-best-practice-classification?format=xlsx", label: "SAP Best-Practice Classification", format: "XLSX", icon: FileSpreadsheet, description: "Same independent verdict — multi-sheet workbook (O / C / G / N/A / Pending)" },
   { key: "sign-off", label: "Sign-Off", format: "PDF", icon: FileText, description: "Two-up signature page with bundle SHA-256 hash for tamper detection" },
 ] as const;
 
