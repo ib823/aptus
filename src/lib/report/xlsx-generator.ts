@@ -641,3 +641,117 @@ function labelToTier(label: string): DotTier | null {
   }
   return null;
 }
+
+// ── SAP Best-Practice Classification (independent verdict per 2602) ──────
+//
+// Multi-sheet workbook reading exclusively from the analyzer's verdict in
+// `ClientRequirement.solutionProviderResponse` (see report-data.ts
+// `getSapBestPracticeClassificationData`). Stays separate from the
+// existing 16 reports — those aggregate analyst-output (StepResponse +
+// GapResolution) and we never want to mix the two streams in one chart.
+
+import type {
+  SapBestPracticeClassificationData,
+  ClassificationRow,
+  ClassificationModuleBreakdown,
+} from "@/lib/report/report-data";
+
+function classificationRow(r: ClassificationRow): Record<string, unknown> {
+  return {
+    module: r.module,
+    code: r.code,
+    requirementClass: r.requirementClass,
+    requirementType: r.requirementType ?? "",
+    requirementText: r.requirementText,
+    classification: r.classification,
+    remarks: r.remarks,
+    scopeItems: r.scopeItems,
+  };
+}
+
+const ROW_COLUMNS = [
+  { header: "Module", key: "module", width: 28 },
+  { header: "Code", key: "code", width: 14 },
+  { header: "Class", key: "requirementClass", width: 14 },
+  { header: "Type", key: "requirementType", width: 16 },
+  { header: "Requirement", key: "requirementText", width: 70 },
+  { header: "Classification", key: "classification", width: 22 },
+  { header: "Aptus Remarks", key: "remarks", width: 70 },
+  { header: "2602 Scope Items", key: "scopeItems", width: 50 },
+];
+
+function summaryRows(data: SapBestPracticeClassificationData): Array<Record<string, unknown>> {
+  const rows: Array<Record<string, unknown>> = [];
+  rows.push({ section: "TOTAL", scope: "All requirements", total: data.totals.grand,
+    O: data.totals.O, C: data.totals.C, G: data.totals.G, NA: data.totals.NA, Pending: data.totals.Pending });
+  rows.push({}); // spacer
+  rows.push({ section: "PER CLASS" });
+  for (const cls of Object.keys(data.perClass).sort()) {
+    const b = data.perClass[cls]!;
+    rows.push({ scope: cls, total: b.total, O: b.O, C: b.C, G: b.G, NA: b.NA, Pending: b.Pending });
+  }
+  rows.push({});
+  rows.push({ section: "PER MODULE" });
+  for (const m of data.perModule) {
+    rows.push({ scope: m.module, total: m.total, O: m.O, C: m.C, G: m.G, NA: m.NA, Pending: m.Pending });
+  }
+  return rows;
+}
+
+export function sapBestPracticeClassificationSheets(
+  data: SapBestPracticeClassificationData,
+): SheetConfig[] {
+  const sheets: SheetConfig[] = [];
+
+  sheets.push({
+    name: "Summary",
+    columns: [
+      { header: "Section", key: "section", width: 14 },
+      { header: "Scope", key: "scope", width: 32 },
+      { header: "Total", key: "total", width: 8 },
+      { header: "O", key: "O", width: 6 },
+      { header: "C", key: "C", width: 6 },
+      { header: "G", key: "G", width: 6 },
+      { header: "N/A", key: "NA", width: 6 },
+      { header: "Pending", key: "Pending", width: 9 },
+    ],
+    rows: summaryRows(data),
+  });
+
+  sheets.push({
+    name: "Out-of-the-Box (O)",
+    columns: ROW_COLUMNS,
+    rows: data.byBucket.O.map(classificationRow),
+  });
+
+  sheets.push({
+    name: "Configuration (C)",
+    columns: ROW_COLUMNS,
+    rows: data.byBucket.C.map(classificationRow),
+  });
+
+  sheets.push({
+    name: "Gaps (G)",
+    columns: ROW_COLUMNS,
+    rows: data.byBucket.G.map(classificationRow),
+  });
+
+  sheets.push({
+    // ExcelJS forbids / : * ? \ [ ] in sheet names — keep it slash-free.
+    name: "Out of Scope (NA)",
+    columns: ROW_COLUMNS,
+    rows: data.byBucket.NA.map(classificationRow),
+  });
+
+  sheets.push({
+    name: "Pending Classification",
+    columns: ROW_COLUMNS,
+    rows: data.byBucket.Pending.map(classificationRow),
+  });
+
+  return sheets;
+}
+
+// Silence unused-type warnings on module breakdown (kept exported in
+// report-data.ts for the PDF generator's signature).
+export type _ClassificationModuleBreakdown = ClassificationModuleBreakdown;

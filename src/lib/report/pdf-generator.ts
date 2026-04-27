@@ -1251,3 +1251,289 @@ function isResolutionType(s: string): s is ResolutionType {
 // Re-export brandColor / brandRole convenience for callers that want to draw
 // custom chart accents using the client-accent override pattern.
 export { brandColor, type BrandRole };
+
+// ── SAP Best-Practice Classification (independent verdict per 2602) ──────
+//
+// PDF for the analyzer's independent O / C / G classification. Stays
+// completely separate from the analyst-output reports above. The shape is
+// produced by report-data.ts `getSapBestPracticeClassificationData`.
+
+import type {
+  SapBestPracticeClassificationData,
+  ClassificationRow,
+  ClassificationModuleBreakdown,
+} from "@/lib/report/report-data";
+
+function pct(part: number, total: number): string {
+  if (total <= 0) return "0%";
+  return `${Math.round((part / total) * 100)}%`;
+}
+
+/** Render the verdict block — the executive O / C / G card. */
+function renderVerdictBlock(
+  doc: jsPDF, totals: SapBestPracticeClassificationData["totals"],
+): void {
+  const pw = doc.internal.pageSize.getWidth();
+  const ph = doc.internal.pageSize.getHeight();
+  const top = ph - 22 - 60;
+
+  doc.setDrawColor(228, 228, 231);
+  doc.setLineWidth(0.2);
+  doc.rect(20, top, pw - 40, 56);
+
+  doc.setFontSize(9);
+  doc.setTextColor(82, 82, 91);
+  doc.text("INDEPENDENT VERDICT — SAP S/4HANA Cloud 2602 protocol", 28, top + 8);
+
+  const aptus = aptusRgb();
+  doc.setTextColor(aptus[0], aptus[1], aptus[2]);
+  doc.setFontSize(28);
+  doc.setFont("helvetica", "bold");
+  doc.text(pct(totals.O, totals.grand), 28, top + 26);
+  doc.text(pct(totals.C, totals.grand), 78, top + 26);
+  doc.text(pct(totals.G, totals.grand), 128, top + 26);
+
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(82, 82, 91);
+  doc.text("OUT-OF-THE-BOX", 28, top + 32);
+  doc.text("CONFIGURATION", 78, top + 32);
+  doc.text("GAP", 128, top + 32);
+
+  doc.setFontSize(10);
+  doc.setTextColor(11, 11, 15);
+  const naPending = totals.NA + totals.Pending;
+  doc.text(
+    `${totals.grand} requirements analysed against the 2602 catalog. ` +
+    `${totals.O} OOTB · ${totals.C} Configuration · ${totals.G} Gap${naPending > 0 ? ` · ${naPending} N/A or Pending` : ""}.`,
+    28, top + 44,
+  );
+}
+
+/** Build a per-class table body from the per-class breakdown map. */
+function classTableBody(
+  perClass: Record<string, ClassificationModuleBreakdown>,
+): Array<Array<string>> {
+  const rows: Array<Array<string>> = [];
+  for (const cls of Object.keys(perClass).sort()) {
+    const b = perClass[cls]!;
+    rows.push([
+      cls,
+      String(b.total),
+      `${b.O} (${pct(b.O, b.total)})`,
+      `${b.C} (${pct(b.C, b.total)})`,
+      `${b.G} (${pct(b.G, b.total)})`,
+      String(b.NA),
+      String(b.Pending),
+    ]);
+  }
+  return rows;
+}
+
+/** Section renderer used for O, C, G, N/A, Pending. */
+function renderRequirementSection(
+  doc: jsPDF,
+  title: string,
+  intro: string,
+  rows: ClassificationRow[],
+  options?: { showScopeItems?: boolean; showRemarks?: boolean },
+): void {
+  doc.addPage();
+  let y = 25;
+
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(11, 11, 15);
+  doc.text(title, 20, y);
+  y += 8;
+
+  if (intro) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(82, 82, 91);
+    const introLines = doc.splitTextToSize(intro, doc.internal.pageSize.getWidth() - 40) as string[];
+    doc.text(introLines, 20, y);
+    y += introLines.length * 5 + 4;
+  }
+
+  if (rows.length === 0) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(82, 82, 91);
+    doc.text("No requirements in this category.", 20, y + 6);
+    return;
+  }
+
+  const showScope = options?.showScopeItems ?? true;
+  const showRemarks = options?.showRemarks ?? true;
+
+  // Group rows by module so the section reads cleanly
+  const byModule = new Map<string, ClassificationRow[]>();
+  for (const r of rows) {
+    const list = byModule.get(r.module) ?? [];
+    list.push(r);
+    byModule.set(r.module, list);
+  }
+
+  for (const [module, modRows] of byModule) {
+    if (y > doc.internal.pageSize.getHeight() - 40) {
+      doc.addPage();
+      y = 25;
+    }
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(11, 11, 15);
+    doc.text(`${module}  (${modRows.length})`, 20, y);
+    y += 4;
+
+    const head: string[][] = [["Code", "Requirement"]];
+    if (showScope) head[0]!.push("2602 Scope Items");
+    if (showRemarks) head[0]!.push("Aptus Remarks");
+
+    const body = modRows.map((r) => {
+      const row: string[] = [r.code, r.requirementText];
+      if (showScope) row.push(r.scopeItems);
+      if (showRemarks) row.push(r.remarks);
+      return row;
+    });
+
+    autoTable(doc, {
+      startY: y,
+      head,
+      body,
+      theme: "grid",
+      headStyles: aptusHeadStyles(),
+      margin: { left: 20, right: 20 },
+      styles: { fontSize: 8, cellPadding: 2, overflow: "linebreak" },
+      // A4 portrait, 20mm side margins → 170mm content width. Sum below
+      // must total ≤ 170 to avoid jspdf-autotable's "could not fit page" warning.
+      columnStyles: showScope && showRemarks
+        ? { 0: { cellWidth: 20 }, 1: { cellWidth: 60 }, 2: { cellWidth: 40 }, 3: { cellWidth: 50 } }
+        : showScope || showRemarks
+          ? { 0: { cellWidth: 20 }, 1: { cellWidth: 75 }, 2: { cellWidth: 75 } }
+          : { 0: { cellWidth: 20 }, 1: { cellWidth: 150 } },
+    });
+
+    y = advancePastTable(doc, y + 60, 6, 30);
+  }
+}
+
+export function generateSapBestPracticeClassificationPdf(
+  data: SapBestPracticeClassificationData,
+  branding?: BrandingConfig | undefined,
+): Uint8Array {
+  const b = branding ?? DEFAULT_BRANDING;
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  // Page 1 — Cover + verdict block
+  renderCover(doc, b, "SAP Best-Practice Classification", data.assessment.companyName);
+  renderCoverMeta(doc, [
+    ["Industry", data.assessment.industry],
+    ["Country", data.assessment.country],
+    ["Report date", data.assessment.updatedAt.toLocaleDateString("en-US", {
+      year: "numeric", month: "long", day: "numeric",
+    })],
+    ["Catalog baseline", "SAP S/4HANA Cloud Public Edition 2602"],
+    ["Prepared by", "ABeam Consulting (Aptus)"],
+  ]);
+  renderCoverLead(doc,
+    `Aptus's independent classification of every requirement submitted by ` +
+    `${data.assessment.companyName}, evaluated against the SAP S/4HANA Cloud ` +
+    `Public Edition 2602 catalog. Each requirement is bucketed as Out-of-the-Box ` +
+    `(O), Configuration (C), or Gap (G) — with grounded scope-item references ` +
+    `for O and C, and explicit categorization for every G. Vendor self-` +
+    `classification was deliberately not consulted.`,
+  );
+  renderVerdictBlock(doc, data.totals);
+
+  // Page 2 — Per-class + per-module breakdown
+  doc.addPage();
+  let y = 25;
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(11, 11, 15);
+  doc.text("Breakdown by requirement class", 20, y);
+  y += 6;
+
+  autoTable(doc, {
+    startY: y,
+    head: [["Class", "Total", "O", "C", "G", "N/A", "Pending"]],
+    body: classTableBody(data.perClass),
+    theme: "grid",
+    headStyles: aptusHeadStyles(),
+    margin: { left: 20, right: 20 },
+    styles: { fontSize: 9 },
+  });
+
+  y = advancePastTable(doc, y + 50, 12, 40);
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.text("Breakdown by module", 20, y);
+  y += 6;
+
+  autoTable(doc, {
+    startY: y,
+    head: [["Module", "Total", "O", "C", "G", "N/A", "Pending"]],
+    body: data.perModule.map((m) => [
+      m.module,
+      String(m.total),
+      `${m.O} (${pct(m.O, m.total)})`,
+      `${m.C} (${pct(m.C, m.total)})`,
+      `${m.G} (${pct(m.G, m.total)})`,
+      String(m.NA),
+      String(m.Pending),
+    ]),
+    theme: "grid",
+    headStyles: aptusHeadStyles(),
+    margin: { left: 20, right: 20 },
+    styles: { fontSize: 8 },
+  });
+
+  // Sections — O, C, G, N/A, Pending — each its own page-break
+  renderRequirementSection(
+    doc,
+    "Out-of-the-Box (O)",
+    "Requirements satisfied by the SAP 2602 baseline without configuration. The 2602 Scope Items column lists the specific best-practice scope items that cover each requirement.",
+    data.byBucket.O,
+    { showScopeItems: true, showRemarks: false },
+  );
+
+  renderRequirementSection(
+    doc,
+    "Configuration (C)",
+    "Requirements satisfied by 2602 with in-app configuration only — SSCUI, Key User Extensibility, Output Management, Manage Workflows, Adapt UI, Adobe Forms, or Communication Arrangements. The Aptus Remarks column names the specific configuration mechanism for each requirement.",
+    data.byBucket.C,
+    { showScopeItems: true, showRemarks: true },
+  );
+
+  renderRequirementSection(
+    doc,
+    "Gaps (G) — dedicated section",
+    "Requirements that cannot be met by the 2602 baseline. Each row names the separate-licensed product (SuccessFactors, Ariba, SAC, Commerce, etc.) or 3rd-party tool (Vertex, ONESOURCE, etc.) that would close the gap, and notes any partial workaround within 2602.",
+    data.byBucket.G,
+    { showScopeItems: false, showRemarks: true },
+  );
+
+  if (data.byBucket.NA.length > 0) {
+    renderRequirementSection(
+      doc,
+      "Out of scope (N/A)",
+      "Requirements that are not capability questions for the 2602 catalog — typically vendor commercial pre-qualification, ESG offerings, vendor track-record, or general policy statements. Listed for completeness but not classified as O / C / G.",
+      data.byBucket.NA,
+      { showScopeItems: false, showRemarks: true },
+    );
+  }
+
+  if (data.byBucket.Pending.length > 0) {
+    renderRequirementSection(
+      doc,
+      "Pending classification",
+      "Requirements not yet classified by Aptus. Re-run the analyzer to complete the verdict.",
+      data.byBucket.Pending,
+      { showScopeItems: false, showRemarks: false },
+    );
+  }
+
+  renderFooterOnAllPages(doc, "SAP_Best_Practice_Classification.pdf");
+  return new Uint8Array(doc.output("arraybuffer"));
+}

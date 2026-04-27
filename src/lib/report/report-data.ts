@@ -662,3 +662,166 @@ export async function getTraceabilityDataForReport(assessmentId: string): Promis
     };
   });
 }
+
+// ---------------------------------------------------------------------------
+// SAP Best-Practice Classification report
+//
+// Reads the analyzer's independent verdict directly from
+// `ClientRequirement.solutionProviderResponse` (and accompanying Remarks +
+// erpModuleSupporting columns). Does NOT consult `GapResolution` or
+// `StepResponse` — the existing 16 reports already aggregate those for
+// analyst-output deliverables. This accessor stays separate so the two
+// classification streams (independent SAP-2602 verdict vs. analyst review)
+// never get mixed up in a single chart.
+// ---------------------------------------------------------------------------
+
+export type ClassificationBucket = "O" | "C" | "G" | "NA" | "Pending";
+
+export interface ClassificationRow {
+  /** Aptus assessment ID for the requirement (cuid). */
+  id: string;
+  /** Vendor sheet/section the requirement was imported from. */
+  module: string;
+  /** Vendor row code (e.g. "C.AAT.I16", "M1", "A.BR.4"). */
+  code: string;
+  /** "mandatory" | "business" | "technical" | "functional" | "checklist". */
+  requirementClass: string;
+  /** "Mandatory" | "Non-Mandatory" | null. */
+  requirementType: string | null;
+  /** The vendor's requirement text (read-only — what they asked for). */
+  requirementText: string;
+  /** Aptus's independent classification, e.g. "O - Out Of The Box". */
+  classification: string;
+  /** Aptus's grounded narrative explaining the verdict. */
+  remarks: string;
+  /** Comma-separated 2602 scope item IDs + names that satisfy this. */
+  scopeItems: string;
+  /** Bucket — derived from `classification` for grouping. */
+  bucket: ClassificationBucket;
+}
+
+export interface ClassificationModuleBreakdown {
+  module: string;
+  total: number;
+  O: number;
+  C: number;
+  G: number;
+  NA: number;
+  Pending: number;
+}
+
+export interface SapBestPracticeClassificationData {
+  assessment: {
+    companyName: string;
+    industry: string;
+    country: string;
+    updatedAt: Date;
+  };
+  totals: {
+    grand: number;
+    O: number;
+    C: number;
+    G: number;
+    NA: number;
+    Pending: number;
+  };
+  perClass: Record<string, ClassificationModuleBreakdown>;
+  perModule: ClassificationModuleBreakdown[];
+  byBucket: Record<ClassificationBucket, ClassificationRow[]>;
+}
+
+/** Bucket Aptus's classification text into one of 5 stable buckets. */
+function bucketOf(classification: string | null | undefined): ClassificationBucket {
+  const s = (classification ?? "").trim().toUpperCase();
+  if (!s) return "Pending";
+  // The classifier emits "O - Out Of The Box", "C - Configuration", "G - Gap".
+  // Older imports may have "NM - Not Met", "N/A", etc.
+  if (s.startsWith("O")) return "O";
+  if (s.startsWith("C")) return "C";
+  if (s.startsWith("G")) return "G";
+  if (s.startsWith("N/A") || s.startsWith("NA") || s.startsWith("N -")) return "NA";
+  return "Pending";
+}
+
+function emptyBreakdown(module: string): ClassificationModuleBreakdown {
+  return { module, total: 0, O: 0, C: 0, G: 0, NA: 0, Pending: 0 };
+}
+
+export async function getSapBestPracticeClassificationData(
+  assessmentId: string,
+): Promise<SapBestPracticeClassificationData> {
+  const assessment = await prisma.assessment.findUniqueOrThrow({
+    where: { id: assessmentId },
+    select: { companyName: true, industry: true, country: true, updatedAt: true },
+  });
+
+  const reqs = await prisma.clientRequirement.findMany({
+    where: { assessmentId },
+    select: {
+      id: true,
+      module: true,
+      code: true,
+      requirementClass: true,
+      requirementType: true,
+      requirementText: true,
+      solutionProviderResponse: true,
+      solutionProviderRemarks: true,
+      erpModuleSupporting: true,
+      sortOrder: true,
+    },
+    orderBy: [{ module: "asc" }, { sortOrder: "asc" }],
+  });
+
+  const totals = { grand: 0, O: 0, C: 0, G: 0, NA: 0, Pending: 0 };
+  const perClass: Record<string, ClassificationModuleBreakdown> = {};
+  const perModuleMap = new Map<string, ClassificationModuleBreakdown>();
+  const byBucket: Record<ClassificationBucket, ClassificationRow[]> = {
+    O: [], C: [], G: [], NA: [], Pending: [],
+  };
+
+  for (const r of reqs) {
+    const bucket = bucketOf(r.solutionProviderResponse);
+    const cls = r.requirementClass ?? "unclassified";
+    const row: ClassificationRow = {
+      id: r.id,
+      module: r.module,
+      code: r.code,
+      requirementClass: cls,
+      requirementType: r.requirementType,
+      requirementText: r.requirementText,
+      classification: r.solutionProviderResponse ?? "",
+      remarks: r.solutionProviderRemarks ?? "",
+      scopeItems: r.erpModuleSupporting ?? "",
+      bucket,
+    };
+
+    totals.grand++;
+    totals[bucket]++;
+
+    if (!perClass[cls]) perClass[cls] = emptyBreakdown(cls);
+    perClass[cls].total++;
+    perClass[cls][bucket]++;
+
+    if (!perModuleMap.has(r.module)) perModuleMap.set(r.module, emptyBreakdown(r.module));
+    const mod = perModuleMap.get(r.module)!;
+    mod.total++;
+    mod[bucket]++;
+
+    byBucket[bucket].push(row);
+  }
+
+  const perModule = [...perModuleMap.values()].sort((a, b) => b.total - a.total);
+
+  return {
+    assessment: {
+      companyName: assessment.companyName,
+      industry: assessment.industry,
+      country: assessment.country,
+      updatedAt: assessment.updatedAt,
+    },
+    totals,
+    perClass,
+    perModule,
+    byBucket,
+  };
+}
