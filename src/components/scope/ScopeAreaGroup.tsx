@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, memo } from "react";
+import { useCallback, useMemo, useState, memo } from "react";
 import {
   Accordion,
   AccordionContent,
@@ -32,6 +32,13 @@ interface SelectionPayload {
   currentState?: string | null;
   notes?: string | null;
 }
+
+/**
+ * Areas with selections auto-open at this size or smaller. Larger areas
+ * stay collapsed even if they have selections so the page doesn't mount
+ * hundreds of ScopeItemCards on initial render. Tunable.
+ */
+const AUTO_OPEN_ITEM_LIMIT = 50;
 
 interface ScopeAreaGroupProps {
   area: string;
@@ -74,8 +81,31 @@ export const ScopeAreaGroup = memo(function ScopeAreaGroup({
     [area, onBulkAction],
   );
 
+  // The previous defaultValue rule auto-opened any area with selections,
+  // which in production caused the "Uncategorized" area (357 catalog items)
+  // and "Finance" (98 items) to mount ~455 ScopeItemCards on initial render
+  // for the Bursa assessment alone — ~9,000 DOM nodes and a ~39,000-px
+  // body that triggered the side-rail layout bug fixed in PR #27.
+  //
+  // Auto-open is now gated by a soft cap: areas with selections still open
+  // automatically when they're small enough to render quickly; larger areas
+  // stay collapsed (their selection count is still visible in the header)
+  // and only mount their items when the user explicitly expands them.
+  // Radix's Accordion uses Presence under the hood and unmounts content
+  // on close, so a closed area mounts nothing.
+  const initialOpen = useMemo(
+    () =>
+      selectedCount > 0 && totalCount <= AUTO_OPEN_ITEM_LIMIT ? [area] : [],
+    [area, selectedCount, totalCount],
+  );
+  const [openItems, setOpenItems] = useState<string[]>(initialOpen);
+
+  const handleValueChange = useCallback((val: string[]) => {
+    setOpenItems(val);
+  }, []);
+
   return (
-    <Accordion type="multiple" defaultValue={selectedCount > 0 ? [area] : []}>
+    <Accordion type="multiple" value={openItems} onValueChange={handleValueChange}>
       <AccordionItem value={area} className="border rounded-lg bg-card">
         <AccordionTrigger className="px-5 hover:no-underline">
           <div className="flex items-center gap-4 flex-1 min-w-0">
