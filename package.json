@@ -48,6 +48,8 @@
     "test:coverage": "vitest run --coverage",
     "verify:data": "tsx scripts/verify-data.ts",
     "ingest": "tsx scripts/ingest-sap-zip.ts",
+    "catalog:snapshot": "tsx scripts/snapshot-catalog.ts",
+    "fixtures:classifier:refresh": "tsx scripts/snapshot-classifier-fixture.ts",
     "migrate:blobs": "tsx scripts/migrate-blobs-to-vercel.ts",
     "migrate:roles": "tsx scripts/migrate-roles.ts",
     "migrate:statuses": "tsx scripts/migrate-statuses.ts",

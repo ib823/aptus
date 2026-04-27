@@ -1,0 +1,2918 @@
+{
+  "snapshotAt": "2026-04-27T23:46:11.191Z",
+  "versions": {
+    "2602": [
+      {
+        "id": "7G5",
+        "name": "Intercompany Lease Accounting – Group Ledger US GAAP   (7G5)",
+        "country": "MY"
+      },
+      {
+        "id": "BMH",
+        "name": "Stock Transfer Without Delivery   (BMH)",
+        "country": "MY"
+      },
+      {
+        "id": "4N6",
+        "name": "Invoice Processing with SAP Ariba Central Invoice Management   (4N6)",
+        "country": "XX"
+      },
+      {
+        "id": "5OM",
+        "name": "Field Logistics Planning and Execution – Direct Procurement   (5OM)",
+        "country": "MY"
+      },
+      {
+        "id": "53X",
+        "name": "Just-In-Time Supply to Customer with Delivery Confirmation   (53X)",
+        "country": "MY"
+      },
+      {
+        "id": "6AA",
+        "name": "From Planning to Fulfillment – Consumer Products   (6AA)",
+        "country": "MY"
+      },
+      {
+        "id": "1WV",
+        "name": "Debt and Investment Management   (1WV)",
+        "country": "MY"
+      },
+      {
+        "id": "33E",
+        "name": "Treasury Workstation Accounting Integration   (33E)",
+        "country": "MY"
+      },
+      {
+        "id": "2OI",
+        "name": "Intercompany Debt and Investment Mgmt – Group Ledger IFRS   (2OI)",
+        "country": "MY"
+      },
+      {
+        "id": "2BK",
+        "name": "Contract Accounting – Daily and Monthly Closing   (2BK)",
+        "country": "MY"
+      },
+      {
+        "id": "7UQ",
+        "name": "Margin Optimization – SAP Solution Extensions by Vistex   (7UQ)",
+        "country": "XX"
+      },
+      {
+        "id": "6DI",
+        "name": "Seasons for Retail   (6DI)",
+        "country": "MY"
+      },
+      {
+        "id": "34G",
+        "name": "Money Market Mutual Fund Management – Group Ledger US GAAP   (34G)",
+        "country": "MY"
+      },
+      {
+        "id": "4PG",
+        "name": "Organizational Flexibility in Financial Accounting   (4PG)",
+        "country": "XX"
+      },
+      {
+        "id": "4B5",
+        "name": "Predictive Material and Resource Planning   (4B5)",
+        "country": "MY"
+      },
+      {
+        "id": "49F",
+        "name": "Letter of Credit Management – Group Ledger US GAAP   (49F)",
+        "country": "MY"
+      },
+      {
+        "id": "BMD",
+        "name": "Purchase Contract   (BMD)",
+        "country": "MY"
+      },
+      {
+        "id": "5FW",
+        "name": "My Store Management   (5FW)",
+        "country": "MY"
+      },
+      {
+        "id": "637",
+        "name": "Retail Promotions   (637)",
+        "country": "MY"
+      },
+      {
+        "id": "2FD",
+        "name": "Predictive Accounting for Sales Orders   (2FD)",
+        "country": "MY"
+      },
+      {
+        "id": "5FX",
+        "name": "Store Ordering from Distribution Center   (5FX)",
+        "country": "MY"
+      },
+      {
+        "id": "1WE",
+        "name": "Restricted Party Screening with SAP Watch List Screening   (1WE)",
+        "country": "MY"
+      },
+      {
+        "id": "3FP",
+        "name": "Lean Incident Management Reporting   (3FP)",
+        "country": "MY"
+      },
+      {
+        "id": "2TX",
+        "name": "Direct Procurement with Inbound Delivery   (2TX)",
+        "country": "MY"
+      },
+      {
+        "id": "BDW",
+        "name": "Returnables Processing   (BDW)",
+        "country": "MY"
+      },
+      {
+        "id": "5CX",
+        "name": "Customer Returns for Sales Kits   (5CX)",
+        "country": "MY"
+      },
+      {
+        "id": "7MG",
+        "name": "Payables Financing with Taulia   (7MG)",
+        "country": "MY"
+      },
+      {
+        "id": "6N0",
+        "name": "Advanced Available-to-Promise – Consumer Products   (6N0)",
+        "country": "MY"
+      },
+      {
+        "id": "5OI",
+        "name": "Production Capacity Evaluation and Leveling – Consumer Products   (5OI)",
+        "country": "MY"
+      },
+      {
+        "id": "5DQ",
+        "name": "Event-Based Revenue Recognition – Subscription Billing   (5DQ)",
+        "country": "MY"
+      },
+      {
+        "id": "1N5",
+        "name": "Mass Processing for Product   (1N5)",
+        "country": "XX"
+      },
+      {
+        "id": "6NI",
+        "name": "Warehouse Advanced Production Integration   (6NI)",
+        "country": "MY"
+      },
+      {
+        "id": "1S4",
+        "name": "Automatic Market Rates Management   (1S4)",
+        "country": "MY"
+      },
+      {
+        "id": "2Q2",
+        "name": "Data Migration to SAP S/4HANA from Staging   (2Q2)",
+        "country": "XX"
+      },
+      {
+        "id": "2NZ",
+        "name": "Bank Guarantee Management   (2NZ)",
+        "country": "MY"
+      },
+      {
+        "id": "35D",
+        "name": "CDS-Based Extraction with SAP S/4HANA Cloud Public Edition   (35D)",
+        "country": "XX"
+      },
+      {
+        "id": "3M4",
+        "name": "Event-Based Revenue Recognition – Service Documents – IFRS   (3M4)",
+        "country": "MY"
+      },
+      {
+        "id": "1N7",
+        "name": "Central Governance for Business Partner   (1N7)",
+        "country": "XX"
+      },
+      {
+        "id": "21R",
+        "name": "Service Contract   (21R)",
+        "country": "MY"
+      },
+      {
+        "id": "2SA",
+        "name": "Lease-Out for Sublease Accounting – Group Ledger IFRS   (2SA)",
+        "country": "MY"
+      },
+      {
+        "id": "2BI",
+        "name": "Contract Accounting – Customer Initiated Payments   (2BI)",
+        "country": "MY"
+      },
+      {
+        "id": "2TS",
+        "name": "Intercompany Stock Transfer Returns   (2TS)",
+        "country": "MY"
+      },
+      {
+        "id": "7EZ",
+        "name": "Intercompany Lease Accounting   (7EZ)",
+        "country": "MY"
+      },
+      {
+        "id": "1WA",
+        "name": "Transfer of Primary Master Data for SAP Global Trade Services   (1WA)",
+        "country": "XX"
+      },
+      {
+        "id": "4GA",
+        "name": "Service Quotation   (4GA)",
+        "country": "MY"
+      },
+      {
+        "id": "5W2",
+        "name": "Group Valuation   (5W2)",
+        "country": "MY"
+      },
+      {
+        "id": "4A2",
+        "name": "Replenishment in Warehousing   (4A2)",
+        "country": "MY"
+      },
+      {
+        "id": "5DS",
+        "name": "Event-Based Revenue Recognition – Subscription Billing – US GAAP   (5DS)",
+        "country": "MY"
+      },
+      {
+        "id": "19E",
+        "name": "Supplier Classification and Segmentation   (19E)",
+        "country": "MY"
+      },
+      {
+        "id": "2YL",
+        "name": "SAP EWM Integration – Warehouse Stock Handling   (2YL)",
+        "country": "MY"
+      },
+      {
+        "id": "4OL",
+        "name": "Substance Volume Tracking   (4OL)",
+        "country": "MY"
+      },
+      {
+        "id": "7AU",
+        "name": "Fund Accounting   (7AU)",
+        "country": "XX"
+      },
+      {
+        "id": "1ZQ",
+        "name": "Logistics with Third-Party Warehouse Management   (1ZQ)",
+        "country": "MY"
+      },
+      {
+        "id": "4B0",
+        "name": "Contract for Central Procurement with SAP Ariba Contracts   (4B0)",
+        "country": "XX"
+      },
+      {
+        "id": "J82",
+        "name": "Automated Purchase-to-Pay with SAP Ariba Commerce Automation   (J82)",
+        "country": "MY"
+      },
+      {
+        "id": "BMC",
+        "name": "Core Inventory Management   (BMC)",
+        "country": "MY"
+      },
+      {
+        "id": "4BL",
+        "name": "Sourcing with SAP Ariba Sourcing   (4BL)",
+        "country": "MY"
+      },
+      {
+        "id": "3VR",
+        "name": "Manage Safety Data Sheets for Products   (3VR)",
+        "country": "MY"
+      },
+      {
+        "id": "21P",
+        "name": "Lease-In Accounting – Group Ledger IFRS   (21P)",
+        "country": "MY"
+      },
+      {
+        "id": "5FH",
+        "name": "Business Partners for Retail   (5FH)",
+        "country": "MY"
+      },
+      {
+        "id": "54U",
+        "name": "Produce and Sell Standard Products – Inventory Management   (54U)",
+        "country": "MY"
+      },
+      {
+        "id": "34E",
+        "name": "Interest Rate Derivatives Management – Group Ledger US GAAP   (34E)",
+        "country": "MY"
+      },
+      {
+        "id": "5OJ",
+        "name": "Supplier Compliance in the Value Chain   (5OJ)",
+        "country": "MY"
+      },
+      {
+        "id": "34O",
+        "name": "Lease-Out for Sublease Accounting – Group Ledger US GAAP   (34O)",
+        "country": "MY"
+      },
+      {
+        "id": "24F",
+        "name": "Transfer of Contact Person for SAP Global Trade Services   (24F)",
+        "country": "XX"
+      },
+      {
+        "id": "34F",
+        "name": "Bank Guarantee Management – Group Ledger US GAAP   (34F)",
+        "country": "MY"
+      },
+      {
+        "id": "1KA",
+        "name": "Information Lifecycle Management   (1KA)",
+        "country": "XX"
+      },
+      {
+        "id": "40Y",
+        "name": "Intercompany Reconciliation Process   (40Y)",
+        "country": "XX"
+      },
+      {
+        "id": "1M1",
+        "name": "Travel Expense Processing with SAP Concur   (1M1)",
+        "country": "XX"
+      },
+      {
+        "id": "6W2",
+        "name": "Manual Transportation Planning   (6W2)",
+        "country": "MY"
+      },
+      {
+        "id": "2UG",
+        "name": "Make-to-Stock – Process Manufacturing Based on Production Order   (2UG)",
+        "country": "MY"
+      },
+      {
+        "id": "4R2",
+        "name": "Service Procurement with SAP Business Network and SAP Fieldglass   (4R2)",
+        "country": "XX"
+      },
+      {
+        "id": "2UJ",
+        "name": "Contract Accounting – Open Item Management   (2UJ)",
+        "country": "MY"
+      },
+      {
+        "id": "2DP",
+        "name": "Contract Accounting – Company Initiated Payments   (2DP)",
+        "country": "MY"
+      },
+      {
+        "id": "5FM",
+        "name": "Procurement for Retail   (5FM)",
+        "country": "MY"
+      },
+      {
+        "id": "7MI",
+        "name": "Mass Load and Mass Maintenance for Business Partners   (7MI)",
+        "country": "XX"
+      },
+      {
+        "id": "1Y2",
+        "name": "Demand-Driven Buffer Level Management   (1Y2)",
+        "country": "MY"
+      },
+      {
+        "id": "5OF",
+        "name": "Stock Management – Group Ledger US GAAP   (5OF)",
+        "country": "MY"
+      },
+      {
+        "id": "34M",
+        "name": "Intercompany Foreign Exchange – Group Ledger US GAAP   (34M)",
+        "country": "MY"
+      },
+      {
+        "id": "4GR",
+        "name": "Event-Based Revenue Recognition – Project-Based Sales – IFRS   (4GR)",
+        "country": "MY"
+      },
+      {
+        "id": "60H",
+        "name": "Waste Management   (60H)",
+        "country": "XX"
+      },
+      {
+        "id": "2F4",
+        "name": "Intercompany Process for Customer Returns   (2F4)",
+        "country": "MY"
+      },
+      {
+        "id": "1ZT",
+        "name": "Managing Material Price Changes and Inventory Values   (1ZT)",
+        "country": "MY"
+      },
+      {
+        "id": "21Q",
+        "name": "Lease-Out Accounting   (21Q)",
+        "country": "MY"
+      },
+      {
+        "id": "4AN",
+        "name": "Intercompany Billing for Cross-Company Cost Accounting Postings   (4AN)",
+        "country": "MY"
+      },
+      {
+        "id": "3W3",
+        "name": "Third-Party Shop Floor Execution – Process Industry   (3W3)",
+        "country": "XX"
+      },
+      {
+        "id": "55E",
+        "name": "Lot Size of One with Advanced Variant Configuration   (55E)",
+        "country": "MY"
+      },
+      {
+        "id": "BKA",
+        "name": "Free Goods Processing   (BKA)",
+        "country": "MY"
+      },
+      {
+        "id": "77G",
+        "name": "Batch Derivation – Consumer Products   (77G)",
+        "country": "MY"
+      },
+      {
+        "id": "5IS",
+        "name": "VAT Tax Calculation and Reporting for Belgium   (5IS)",
+        "country": "XX"
+      },
+      {
+        "id": "5Z1",
+        "name": "VAT Tax Calculation and Reporting for Sweden   (5Z1)",
+        "country": "XX"
+      },
+      {
+        "id": "5Z0",
+        "name": "VAT Tax Calculation and Reporting for South Africa   (5Z0)",
+        "country": "XX"
+      },
+      {
+        "id": "5OK",
+        "name": "Warehouse Internal Inspections   (5OK)",
+        "country": "MY"
+      },
+      {
+        "id": "5FJ",
+        "name": "Product Taxonomies for Retail   (5FJ)",
+        "country": "MY"
+      },
+      {
+        "id": "22P",
+        "name": "Manage Documents   (22P)",
+        "country": "MY"
+      },
+      {
+        "id": "BKP",
+        "name": "Customer Returns   (BKP)",
+        "country": "MY"
+      },
+      {
+        "id": "1RK",
+        "name": "Mass Load and Mass Maintenance for Business Partner   (1RK)",
+        "country": "XX"
+      },
+      {
+        "id": "3BT",
+        "name": "Warehouse Ad Hoc Goods Issue   (3BT)",
+        "country": "MY"
+      },
+      {
+        "id": "1MR",
+        "name": "Quality Management in Stock Handling   (1MR)",
+        "country": "MY"
+      },
+      {
+        "id": "2BE",
+        "name": "Convergent Invoicing – Invoice Correction Processing   (2BE)",
+        "country": "MY"
+      },
+      {
+        "id": "2I3",
+        "name": "Predictive Commitments Management   (2I3)",
+        "country": "MY"
+      },
+      {
+        "id": "2RW",
+        "name": "Hedge Accounting for FX Option – Group Ledger IFRS   (2RW)",
+        "country": "MY"
+      },
+      {
+        "id": "BFH",
+        "name": "Asset Under Construction   (BFH)",
+        "country": "MY"
+      },
+      {
+        "id": "2TW",
+        "name": "Complementary Procurement Functions   (2TW)",
+        "country": "MY"
+      },
+      {
+        "id": "3UL",
+        "name": "Make-to-Stock with Silo Material – Process Manufacturing   (3UL)",
+        "country": "MY"
+      },
+      {
+        "id": "6VN",
+        "name": "Product-Related Carbon Emission Quantities   (6VN)",
+        "country": "MY"
+      },
+      {
+        "id": "6NM",
+        "name": "Value-Added Services for Retail   (6NM)",
+        "country": "MY"
+      },
+      {
+        "id": "5OE",
+        "name": "Stock Management – Group Ledger IFRS   (5OE)",
+        "country": "MY"
+      },
+      {
+        "id": "4VT",
+        "name": "Improvement Maintenance   (4VT)",
+        "country": "MY"
+      },
+      {
+        "id": "4R8",
+        "name": "Engineer-to-Order Production with Variant Configuration   (4R8)",
+        "country": "MY"
+      },
+      {
+        "id": "2LG",
+        "name": "Supplier Consignment   (2LG)",
+        "country": "MY"
+      },
+      {
+        "id": "2PD",
+        "name": "Provisioning of Overdue Receivables   (2PD)",
+        "country": "MY"
+      },
+      {
+        "id": "J78",
+        "name": "Advanced Cash Operations   (J78)",
+        "country": "MY"
+      },
+      {
+        "id": "BD6",
+        "name": "Basic Credit Management   (BD6)",
+        "country": "MY"
+      },
+      {
+        "id": "6AV",
+        "name": "Request Regulatory Documentation from Service Provider   (6AV)",
+        "country": "XX"
+      },
+      {
+        "id": "2EM",
+        "name": "Just-In-Time Supply to Customer   (2EM)",
+        "country": "MY"
+      },
+      {
+        "id": "2V7",
+        "name": "Monitoring of Goods and Invoice Receipts   (2V7)",
+        "country": "MY"
+      },
+      {
+        "id": "3L5",
+        "name": "Liquidity Planning   (3L5)",
+        "country": "MY"
+      },
+      {
+        "id": "6YU",
+        "name": "Government Budget Management   (6YU)",
+        "country": "XX"
+      },
+      {
+        "id": "5KF",
+        "name": "Asset Under Construction – Additional Depreciation Area   (5KF)",
+        "country": "MY"
+      },
+      {
+        "id": "63L",
+        "name": "Service Entry Sheet Based Accruals   (63L)",
+        "country": "MY"
+      },
+      {
+        "id": "4E9",
+        "name": "Project Billing – Project-Based Services   (4E9)",
+        "country": "MY"
+      },
+      {
+        "id": "33G",
+        "name": "Asset Under Construction – Group Ledger US GAAP   (33G)",
+        "country": "MY"
+      },
+      {
+        "id": "5WG",
+        "name": "Shareholding Management – Group Ledger IFRS   (5WG)",
+        "country": "MY"
+      },
+      {
+        "id": "41F",
+        "name": "Procurement of Pipeline Materials   (41F)",
+        "country": "MY"
+      },
+      {
+        "id": "1O0",
+        "name": "Planning Apps for Sales   (1O0)",
+        "country": "XX"
+      },
+      {
+        "id": "BEG",
+        "name": "Standard Cost Calculation   (BEG)",
+        "country": "MY"
+      },
+      {
+        "id": "3I2",
+        "name": "Store Connectivity – Outbound   (3I2)",
+        "country": "MY"
+      },
+      {
+        "id": "2YJ",
+        "name": "Predictive Analytics Model Training – Sales   (2YJ)",
+        "country": "XX"
+      },
+      {
+        "id": "7YH",
+        "name": "Invoice Processing - SAP Ariba Central Invoice Management   (7YH)",
+        "country": "XX"
+      },
+      {
+        "id": "1XI",
+        "name": "Central Requisitioning   (1XI)",
+        "country": "XX"
+      },
+      {
+        "id": "5LE",
+        "name": "Data Protection and Privacy   (5LE)",
+        "country": "MY"
+      },
+      {
+        "id": "3KY",
+        "name": "Control Monitoring with SAP Risk and Assurance Management   (3KY)",
+        "country": "XX"
+      },
+      {
+        "id": "1MX",
+        "name": "Intercompany Sales Order Processing – International   (1MX)",
+        "country": "MY"
+      },
+      {
+        "id": "BFB",
+        "name": "Basic Cash Operations   (BFB)",
+        "country": "MY"
+      },
+      {
+        "id": "3N5",
+        "name": "SAP Enable Now Integration   (3N5)",
+        "country": "XX"
+      },
+      {
+        "id": "3WZ",
+        "name": "Bond Management – Group Ledger IFRS   (3WZ)",
+        "country": "MY"
+      },
+      {
+        "id": "5I2",
+        "name": "Supply Chain Automation with SAP Business Network   (5I2)",
+        "country": "MY"
+      },
+      {
+        "id": "BFA",
+        "name": "Basic Bank Account Management   (BFA)",
+        "country": "MY"
+      },
+      {
+        "id": "5HN",
+        "name": "Warehouse Inbound Processing with Synchronous Goods Receipt   (5HN)",
+        "country": "MY"
+      },
+      {
+        "id": "69M",
+        "name": "Retail Logistics with Third-Party Warehouse Management   (69M)",
+        "country": "MY"
+      },
+      {
+        "id": "5FO",
+        "name": "Returns to Supplier for Retail   (5FO)",
+        "country": "MY"
+      },
+      {
+        "id": "BNA",
+        "name": "Period-End Closing – Projects   (BNA)",
+        "country": "MY"
+      },
+      {
+        "id": "1YF",
+        "name": "Project Review   (1YF)",
+        "country": "MY"
+      },
+      {
+        "id": "BDH",
+        "name": "Sales Order Entry with One-Time Customer   (BDH)",
+        "country": "MY"
+      },
+      {
+        "id": "5WH",
+        "name": "Shareholding Management – Group Ledger US GAAP   (5WH)",
+        "country": "MY"
+      },
+      {
+        "id": "1JI",
+        "name": "Real-Time Reporting and Monitoring for Procurement   (1JI)",
+        "country": "XX"
+      },
+      {
+        "id": "3I5",
+        "name": "Assortments   (3I5)",
+        "country": "MY"
+      },
+      {
+        "id": "4GS",
+        "name": "Event-Based Revenue Recognition – Project-Based Sales – US GAAP   (4GS)",
+        "country": "MY"
+      },
+      {
+        "id": "1MP",
+        "name": "Quality Management in Sales   (1MP)",
+        "country": "MY"
+      },
+      {
+        "id": "1P0",
+        "name": "Event-Based Revenue Recognition – Project-Based Services – IFRS   (1P0)",
+        "country": "MY"
+      },
+      {
+        "id": "2R3",
+        "name": "Cross-Company Purchasing Organization   (2R3)",
+        "country": "MY"
+      },
+      {
+        "id": "3UP",
+        "name": "Payroll Processing with SAP ERP HCM Payroll   (3UP)",
+        "country": "XX"
+      },
+      {
+        "id": "1YB",
+        "name": "Import Connection Setup with SAP Analytics Cloud   (1YB)",
+        "country": "XX"
+      },
+      {
+        "id": "5HR",
+        "name": "Warranty Claim Management – Supplier Recovery Processing   (5HR)",
+        "country": "MY"
+      },
+      {
+        "id": "78S",
+        "name": "Earmarked Funds   (78S)",
+        "country": "XX"
+      },
+      {
+        "id": "I9I",
+        "name": "Sales Contract Management   (I9I)",
+        "country": "MY"
+      },
+      {
+        "id": "41U",
+        "name": "Warehouse Goods Receipt from Repetitive Manufacturing   (41U)",
+        "country": "MY"
+      },
+      {
+        "id": "1GF",
+        "name": "Asset Under Construction – Group Ledger IFRS   (1GF)",
+        "country": "MY"
+      },
+      {
+        "id": "2EQ",
+        "name": "Sale of Services   (2EQ)",
+        "country": "MY"
+      },
+      {
+        "id": "3I4",
+        "name": "Sales Pricing for Retail   (3I4)",
+        "country": "MY"
+      },
+      {
+        "id": "BMY",
+        "name": "Subcontracting   (BMY)",
+        "country": "MY"
+      },
+      {
+        "id": "5HO",
+        "name": "Warehouse Production Integration with Synchronous Goods Receipt   (5HO)",
+        "country": "MY"
+      },
+      {
+        "id": "6W1",
+        "name": "External Transportation Planning   (6W1)",
+        "country": "MY"
+      },
+      {
+        "id": "6GU",
+        "name": "Service Contract Management with Advanced Variant Configuration   (6GU)",
+        "country": "MY"
+      },
+      {
+        "id": "3HS",
+        "name": "Sales from Distribution Center   (3HS)",
+        "country": "MY"
+      },
+      {
+        "id": "2TT",
+        "name": "Sales Commissions – External Sales Representative   (2TT)",
+        "country": "MY"
+      },
+      {
+        "id": "2UF",
+        "name": "Hedge Accounting for FX Swap – Group Ledger IFRS   (2UF)",
+        "country": "MY"
+      },
+      {
+        "id": "31G",
+        "name": "Chemical Compliance Approval for Purchased Material and Supplier   (31G)",
+        "country": "MY"
+      },
+      {
+        "id": "2FA",
+        "name": "Quality Management for Complaints from Customers   (2FA)",
+        "country": "MY"
+      },
+      {
+        "id": "4R7",
+        "name": "Group Reporting – Environmental, Social, and Governance Data   (4R7)",
+        "country": "XX"
+      },
+      {
+        "id": "6JM",
+        "name": "Basic Business Process Scheduling   (6JM)",
+        "country": "MY"
+      },
+      {
+        "id": "4LU",
+        "name": "Physical Inventory – Cycle Counting   (4LU)",
+        "country": "MY"
+      },
+      {
+        "id": "1XF",
+        "name": "Request for Price   (1XF)",
+        "country": "MY"
+      },
+      {
+        "id": "1P9",
+        "name": "Intercompany Stock Transfer   (1P9)",
+        "country": "MY"
+      },
+      {
+        "id": "4MT",
+        "name": "Advanced Payment Management   (4MT)",
+        "country": "XX"
+      },
+      {
+        "id": "4YX",
+        "name": "Lean Management of Change Process   (4YX)",
+        "country": "XX"
+      },
+      {
+        "id": "J59",
+        "name": "Accounts Receivable   (J59)",
+        "country": "MY"
+      },
+      {
+        "id": "3X4",
+        "name": "Hedge Accounting for FX Option – Group Ledger US GAAP   (3X4)",
+        "country": "MY"
+      },
+      {
+        "id": "6N9",
+        "name": "Data Protection and Privacy – Data Controller and Purpose   (6N9)",
+        "country": "MY"
+      },
+      {
+        "id": "4AH",
+        "name": "Field Logistics Planning and Execution – Supplier Items   (4AH)",
+        "country": "MY"
+      },
+      {
+        "id": "1Z1",
+        "name": "Digital Payments – Sales   (1Z1)",
+        "country": "MY"
+      },
+      {
+        "id": "BDQ",
+        "name": "Invoice Correction Process with Debit Memo   (BDQ)",
+        "country": "MY"
+      },
+      {
+        "id": "42K",
+        "name": "Automation of Source-to-Pay with SAP Business Network   (42K)",
+        "country": "MY"
+      },
+      {
+        "id": "J44",
+        "name": "Material Requirements Planning   (J44)",
+        "country": "MY"
+      },
+      {
+        "id": "BKK",
+        "name": "Sales Order Fulfillment Monitoring and Operations   (BKK)",
+        "country": "MY"
+      },
+      {
+        "id": "5DR",
+        "name": "Event-Based Revenue Recognition – Subscription Billing – IFRS   (5DR)",
+        "country": "MY"
+      },
+      {
+        "id": "31J",
+        "name": "Chemical Compliance in the Value Chain   (31J)",
+        "country": "MY"
+      },
+      {
+        "id": "3I7",
+        "name": "Replenishment Planning for Stores   (3I7)",
+        "country": "MY"
+      },
+      {
+        "id": "7KW",
+        "name": "Customer Returns for Material with Variant Configuration   (7KW)",
+        "country": "MY"
+      },
+      {
+        "id": "3TE",
+        "name": "Customer Returns for Non-Stock and Service Materials   (3TE)",
+        "country": "MY"
+      },
+      {
+        "id": "2MB",
+        "name": "Integration of Payment Advice with Buyers and Suppliers   (2MB)",
+        "country": "MY"
+      },
+      {
+        "id": "1GP",
+        "name": "Intercompany Financial Posting   (1GP)",
+        "country": "MY"
+      },
+      {
+        "id": "4LZ",
+        "name": "Sales Scheduling Agreement with Consignment   (4LZ)",
+        "country": "MY"
+      },
+      {
+        "id": "4A1",
+        "name": "Automation of Order-to-Invoice with SAP Business Network   (4A1)",
+        "country": "MY"
+      },
+      {
+        "id": "2T3",
+        "name": "Convergent Invoicing – Recurring and One-Off Items   (2T3)",
+        "country": "MY"
+      },
+      {
+        "id": "2AR",
+        "name": "Contract Accounting – Master Data and Basic Functions   (2AR)",
+        "country": "MY"
+      },
+      {
+        "id": "BDN",
+        "name": "Sales of Non-Stock Item with Order-Specific Procurement   (BDN)",
+        "country": "MY"
+      },
+      {
+        "id": "1XD",
+        "name": "Hedge Accounting for FX Forward – Group Ledger IFRS   (1XD)",
+        "country": "MY"
+      },
+      {
+        "id": "65D",
+        "name": "MRP Change Request Integration with SAP Business Network   (65D)",
+        "country": "MY"
+      },
+      {
+        "id": "1S2",
+        "name": "Digital Payments   (1S2)",
+        "country": "MY"
+      },
+      {
+        "id": "1X1",
+        "name": "Foreign Currency Risk Management   (1X1)",
+        "country": "MY"
+      },
+      {
+        "id": "3FC",
+        "name": "Assess Dangerous Goods for a Product   (3FC)",
+        "country": "MY"
+      },
+      {
+        "id": "34D",
+        "name": "Foreign Currency Risk Management – Group Ledger US GAAP   (34D)",
+        "country": "MY"
+      },
+      {
+        "id": "20N",
+        "name": "Predictive Analytics Model Training – Supply Chain   (20N)",
+        "country": "XX"
+      },
+      {
+        "id": "5JT",
+        "name": "Automation of Central Procurement Quote with SAP Business Network   (5JT)",
+        "country": "XX"
+      },
+      {
+        "id": "22K",
+        "name": "External Workforce Procurement via SAP Fieldglass   (22K)",
+        "country": "XX"
+      },
+      {
+        "id": "1HO",
+        "name": "Intercompany Sales Order Processing – Domestic   (1HO)",
+        "country": "MY"
+      },
+      {
+        "id": "2OH",
+        "name": "Continuous Control Monitoring with SAP Process Control   (2OH)",
+        "country": "XX"
+      },
+      {
+        "id": "3NA",
+        "name": "Treasury Workstation Payment Integration   (3NA)",
+        "country": "XX"
+      },
+      {
+        "id": "J12",
+        "name": "Time Recording – Project-Based Services   (J12)",
+        "country": "MY"
+      },
+      {
+        "id": "1NJ",
+        "name": "Responsibility Management   (1NJ)",
+        "country": "XX"
+      },
+      {
+        "id": "3I8",
+        "name": "Replenishment Planning for Distribution Centers   (3I8)",
+        "country": "MY"
+      },
+      {
+        "id": "5OD",
+        "name": "Stock Management   (5OD)",
+        "country": "MY"
+      },
+      {
+        "id": "61W",
+        "name": "Product Cost Related Master Data Changes – Consumer Products   (61W)",
+        "country": "MY"
+      },
+      {
+        "id": "4MM",
+        "name": "Handling Unit Management   (4MM)",
+        "country": "MY"
+      },
+      {
+        "id": "3F4",
+        "name": "Sales-Based Rent   (3F4)",
+        "country": "MY"
+      },
+      {
+        "id": "3FY",
+        "name": "Prediction of Delivery Date for Purchase Order Items   (3FY)",
+        "country": "XX"
+      },
+      {
+        "id": "6A6",
+        "name": "Vendor Performance – Consumer Products   (6A6)",
+        "country": "MY"
+      },
+      {
+        "id": "3HR",
+        "name": "In-Store Inventory Management   (3HR)",
+        "country": "MY"
+      },
+      {
+        "id": "J62",
+        "name": "Asset Accounting   (J62)",
+        "country": "MY"
+      },
+      {
+        "id": "6IL",
+        "name": "Account Reconciliation – SAP Solution Extensions by BlackLine   (6IL)",
+        "country": "XX"
+      },
+      {
+        "id": "1IQ",
+        "name": "Sales Inquiry   (1IQ)",
+        "country": "MY"
+      },
+      {
+        "id": "3I3",
+        "name": "Sites for Retail   (3I3)",
+        "country": "MY"
+      },
+      {
+        "id": "5HG",
+        "name": "Asset Accounting – Additional Depreciation Area   (5HG)",
+        "country": "MY"
+      },
+      {
+        "id": "3W1",
+        "name": "Project Data Replication to Central Finance   (3W1)",
+        "country": "XX"
+      },
+      {
+        "id": "21T",
+        "name": "Subsidiary as Production Unit and Internal Supplier to Headquarters   (21T)",
+        "country": "MY"
+      },
+      {
+        "id": "71P",
+        "name": "Supplier Consignment for Retail   (71P)",
+        "country": "MY"
+      },
+      {
+        "id": "5Z2",
+        "name": "VAT Tax Calculation and Reporting for Czech Republic   (5Z2)",
+        "country": "XX"
+      },
+      {
+        "id": "71S",
+        "name": "Grants Management   (71S)",
+        "country": "XX"
+      },
+      {
+        "id": "1Q4",
+        "name": "Time Recording   (1Q4)",
+        "country": "MY"
+      },
+      {
+        "id": "1LQ",
+        "name": "Output Management   (1LQ)",
+        "country": "XX"
+      },
+      {
+        "id": "1J2",
+        "name": "Compliance Formats – Support Preparation   (1J2)",
+        "country": "MY"
+      },
+      {
+        "id": "2WL",
+        "name": "Enable Manufacturing Subsidiary to Handle Assembly for Headquarter   (2WL)",
+        "country": "MY"
+      },
+      {
+        "id": "61V",
+        "name": "Customer Returns Management – Consumer Products   (61V)",
+        "country": "MY"
+      },
+      {
+        "id": "4X8",
+        "name": "Advanced Bank Statement Automation   (4X8)",
+        "country": "XX"
+      },
+      {
+        "id": "3VT",
+        "name": "Warehouse Kanban Supply into Production   (3VT)",
+        "country": "MY"
+      },
+      {
+        "id": "7G4",
+        "name": "Intercompany Lease Accounting – Group Ledger IFRS   (7G4)",
+        "country": "MY"
+      },
+      {
+        "id": "55I",
+        "name": "Royalties Settlement for Sales   (55I)",
+        "country": "MY"
+      },
+      {
+        "id": "78L",
+        "name": "78L",
+        "country": "XX"
+      },
+      {
+        "id": "4GG",
+        "name": "Credit and Debit Memo Processing for Service Management   (4GG)",
+        "country": "MY"
+      },
+      {
+        "id": "1MI",
+        "name": "Delivery Processing Without Order Reference   (1MI)",
+        "country": "MY"
+      },
+      {
+        "id": "31H",
+        "name": "Assess Marketability of a Product   (31H)",
+        "country": "MY"
+      },
+      {
+        "id": "1IL",
+        "name": "Event-Based Revenue Recognition – Project-Based Services   (1IL)",
+        "country": "MY"
+      },
+      {
+        "id": "3LQ",
+        "name": "Production Capacity Leveling   (3LQ)",
+        "country": "MY"
+      },
+      {
+        "id": "4HH",
+        "name": "Reactive Maintenance   (4HH)",
+        "country": "MY"
+      },
+      {
+        "id": "5HP",
+        "name": "Advanced Intercompany Stock Transfer   (5HP)",
+        "country": "MY"
+      },
+      {
+        "id": "2XU",
+        "name": "Procurement of Materials with Variant Configuration   (2XU)",
+        "country": "MY"
+      },
+      {
+        "id": "4QN",
+        "name": "Central Procurement with SAP Ariba Sourcing   (4QN)",
+        "country": "XX"
+      },
+      {
+        "id": "1QM",
+        "name": "Advanced Credit Management   (1QM)",
+        "country": "MY"
+      },
+      {
+        "id": "BJ8",
+        "name": "Make-to-Stock – Process Manufacturing Based on Process Order   (BJ8)",
+        "country": "MY"
+      },
+      {
+        "id": "33X",
+        "name": "Contract Accounting – Group Ledger IFRS   (33X)",
+        "country": "MY"
+      },
+      {
+        "id": "6B7",
+        "name": "Asset-Backed Securities Management – Group Ledger US GAAP   (6B7)",
+        "country": "MY"
+      },
+      {
+        "id": "53L",
+        "name": "ABAP Core Data Services Extraction for SAP Datasphere   (53L)",
+        "country": "XX"
+      },
+      {
+        "id": "BLL",
+        "name": "Serial Number Management in Logistics   (BLL)",
+        "country": "MY"
+      },
+      {
+        "id": "3UK",
+        "name": "Inbound Storage Tank Management – Process Manufacturing   (3UK)",
+        "country": "MY"
+      },
+      {
+        "id": "1T6",
+        "name": "Lease-In Accounting   (1T6)",
+        "country": "MY"
+      },
+      {
+        "id": "4AP",
+        "name": "Data Quality Management for Business Partner   (4AP)",
+        "country": "XX"
+      },
+      {
+        "id": "1W8",
+        "name": "Legal Control   (1W8)",
+        "country": "MY"
+      },
+      {
+        "id": "4OC",
+        "name": "Make-to-Order Production for Sales Kits with Variant Configuration   (4OC)",
+        "country": "MY"
+      },
+      {
+        "id": "6NE",
+        "name": "Securities Option Management – Group Ledger IFRS   (6NE)",
+        "country": "MY"
+      },
+      {
+        "id": "3ZF",
+        "name": "Central Sourcing   (3ZF)",
+        "country": "XX"
+      },
+      {
+        "id": "7BG",
+        "name": "Complaint Handling   (7BG)",
+        "country": "XX"
+      },
+      {
+        "id": "5HL",
+        "name": "Sell from Stock – Consumer Products   (5HL)",
+        "country": "MY"
+      },
+      {
+        "id": "1S0",
+        "name": "Customer Payments   (1S0)",
+        "country": "MY"
+      },
+      {
+        "id": "3BS",
+        "name": "Warehouse Outbound Processing   (3BS)",
+        "country": "MY"
+      },
+      {
+        "id": "1K2",
+        "name": "Event-Based Revenue Recognition – Sell from Stock   (1K2)",
+        "country": "MY"
+      },
+      {
+        "id": "4V7",
+        "name": "Predictive Accounting for Service Contract Management   (4V7)",
+        "country": "MY"
+      },
+      {
+        "id": "6ND",
+        "name": "Securities Option Management   (6ND)",
+        "country": "MY"
+      },
+      {
+        "id": "42L",
+        "name": "Convergent Invoicing – Revenue Sharing and Partner Settlement   (42L)",
+        "country": "MY"
+      },
+      {
+        "id": "31N",
+        "name": "Situation Handling   (31N)",
+        "country": "XX"
+      },
+      {
+        "id": "1P7",
+        "name": "Cross-Plant Transfer Posting   (1P7)",
+        "country": "MY"
+      },
+      {
+        "id": "2YM",
+        "name": "2YM",
+        "country": "XX"
+      },
+      {
+        "id": "28B",
+        "name": "Group Reporting – Plan Consolidation   (28B)",
+        "country": "XX"
+      },
+      {
+        "id": "6B5",
+        "name": "Asset-Backed Securities Management   (6B5)",
+        "country": "MY"
+      },
+      {
+        "id": "33V",
+        "name": "Contract Accounting – Group Ledger US GAAP   (33V)",
+        "country": "MY"
+      },
+      {
+        "id": "49D",
+        "name": "Letter of Credit Management   (49D)",
+        "country": "MY"
+      },
+      {
+        "id": "3HU",
+        "name": "In-Store Customer Order Management   (3HU)",
+        "country": "MY"
+      },
+      {
+        "id": "BJH",
+        "name": "Make-to-Stock Production – Repetitive Manufacturing   (BJH)",
+        "country": "MY"
+      },
+      {
+        "id": "7DL",
+        "name": "Characteristic Value Conversion for Retail   (7DL)",
+        "country": "MY"
+      },
+      {
+        "id": "6B6",
+        "name": "Asset-Backed Securities Management – Group Ledger IFRS   (6B6)",
+        "country": "MY"
+      },
+      {
+        "id": "2QL",
+        "name": "Universal Allocation   (2QL)",
+        "country": "MY"
+      },
+      {
+        "id": "22Z",
+        "name": "Procurement of Services   (22Z)",
+        "country": "MY"
+      },
+      {
+        "id": "BD3",
+        "name": "Sales Processing using Third-Party with Shipping Notification   (BD3)",
+        "country": "MY"
+      },
+      {
+        "id": "73P",
+        "name": "Sales Order Automation   (73P)",
+        "country": "MY"
+      },
+      {
+        "id": "6NF",
+        "name": "Securities Option Management – Group Ledger US GAAP   (6NF)",
+        "country": "MY"
+      },
+      {
+        "id": "1HB",
+        "name": "Financial Plan Data Upload from File   (1HB)",
+        "country": "MY"
+      },
+      {
+        "id": "33Q",
+        "name": "Actual Costing   (33Q)",
+        "country": "MY"
+      },
+      {
+        "id": "1Z6",
+        "name": "External Billing   (1Z6)",
+        "country": "MY"
+      },
+      {
+        "id": "1NT",
+        "name": "Project Control – Finance   (1NT)",
+        "country": "MY"
+      },
+      {
+        "id": "4I9",
+        "name": "Project Control – Sales   (4I9)",
+        "country": "MY"
+      },
+      {
+        "id": "5W3",
+        "name": "Procurement of Production Components – Consumer Products   (5W3)",
+        "country": "MY"
+      },
+      {
+        "id": "34B",
+        "name": "Statistical Sales Conditions   (34B)",
+        "country": "MY"
+      },
+      {
+        "id": "5FQ",
+        "name": "Inventory Management for Distribution Centers   (5FQ)",
+        "country": "MY"
+      },
+      {
+        "id": "5WF",
+        "name": "Shareholding Management   (5WF)",
+        "country": "MY"
+      },
+      {
+        "id": "2SB",
+        "name": "Lease-Out for Sublease Accounting   (2SB)",
+        "country": "MY"
+      },
+      {
+        "id": "2VA",
+        "name": "Accounting and Financial Close – Group Ledger US GAAP   (2VA)",
+        "country": "MY"
+      },
+      {
+        "id": "6A9",
+        "name": "Rework with Quality Management – Consumer Products   (6A9)",
+        "country": "MY"
+      },
+      {
+        "id": "6BP",
+        "name": "In-House Banking   (6BP)",
+        "country": "MY"
+      },
+      {
+        "id": "2KF",
+        "name": "SAP Fiori Analytical Apps for Convergent Invoicing Specialist   (2KF)",
+        "country": "XX"
+      },
+      {
+        "id": "6U2",
+        "name": "6U2",
+        "country": "XX"
+      },
+      {
+        "id": "2OQ",
+        "name": "Integration to SAP Enterprise Contract Assembly   (2OQ)",
+        "country": "XX"
+      },
+      {
+        "id": "2LH",
+        "name": "Automated Invoice Settlement   (2LH)",
+        "country": "MY"
+      },
+      {
+        "id": "4HI",
+        "name": "Proactive Maintenance   (4HI)",
+        "country": "MY"
+      },
+      {
+        "id": "2KH",
+        "name": "SAP Fiori Analytical Apps for Contract Accounting Manager   (2KH)",
+        "country": "XX"
+      },
+      {
+        "id": "2NY",
+        "name": "Scheduling Agreement for Consignment Procurement   (2NY)",
+        "country": "MY"
+      },
+      {
+        "id": "1X9",
+        "name": "Foreign Currency Risk Management – Group Ledger IFRS   (1X9)",
+        "country": "MY"
+      },
+      {
+        "id": "1JW",
+        "name": "Advanced Available-to-Promise Processing   (1JW)",
+        "country": "MY"
+      },
+      {
+        "id": "69L",
+        "name": "Retail Logistics with Embedded Warehouse Management   (69L)",
+        "country": "MY"
+      },
+      {
+        "id": "4WM",
+        "name": "Operational and Overhead Maintenance   (4WM)",
+        "country": "MY"
+      },
+      {
+        "id": "6NH",
+        "name": "Wave Management in Warehousing   (6NH)",
+        "country": "MY"
+      },
+      {
+        "id": "16T",
+        "name": "Intercompany Processes – Project-Based Services   (16T)",
+        "country": "MY"
+      },
+      {
+        "id": "6MT",
+        "name": "Label Management   (6MT)",
+        "country": "MY"
+      },
+      {
+        "id": "3L7",
+        "name": "Make-to-Stock with Co- and By-Products – Process Manufacturing   (3L7)",
+        "country": "MY"
+      },
+      {
+        "id": "1QR",
+        "name": "Predictive Analytics for Purchase Contract Quantity Consumption   (1QR)",
+        "country": "XX"
+      },
+      {
+        "id": "6GD",
+        "name": "Engineer Products and Systems – Project with Production   (6GD)",
+        "country": "MY"
+      },
+      {
+        "id": "5PU",
+        "name": "Group Financial Planning   (5PU)",
+        "country": "XX"
+      },
+      {
+        "id": "1GO",
+        "name": "Cash Journal   (1GO)",
+        "country": "MY"
+      },
+      {
+        "id": "BMR",
+        "name": "Scheduling Agreements in Procurement   (BMR)",
+        "country": "MY"
+      },
+      {
+        "id": "1NN",
+        "name": "1NN",
+        "country": "XX"
+      },
+      {
+        "id": "54A",
+        "name": "Health and Safety Management   (54A)",
+        "country": "MY"
+      },
+      {
+        "id": "1E3",
+        "name": "Material Replenishment with Kanban – External Procurement   (1E3)",
+        "country": "MY"
+      },
+      {
+        "id": "BDA",
+        "name": "Free of Charge Delivery   (BDA)",
+        "country": "MY"
+      },
+      {
+        "id": "33J",
+        "name": "Event-Based Revenue Recognition – Sell from Stock – US GAAP   (33J)",
+        "country": "MY"
+      },
+      {
+        "id": "3M3",
+        "name": "Event-Based Revenue Recognition – Service Documents   (3M3)",
+        "country": "MY"
+      },
+      {
+        "id": "2EJ",
+        "name": "Integration of Procurement with External Suppliers   (2EJ)",
+        "country": "MY"
+      },
+      {
+        "id": "3L8",
+        "name": "Contract Accounting – Enabling of Products with Variant Configuration   (3L8)",
+        "country": "MY"
+      },
+      {
+        "id": "3F0",
+        "name": "Event-Based Production Cost Posting   (3F0)",
+        "country": "MY"
+      },
+      {
+        "id": "71O",
+        "name": "Merchandise Distribution and Collective Purchase Order   (71O)",
+        "country": "MY"
+      },
+      {
+        "id": "4AU",
+        "name": "Project Control – Intercompany   (4AU)",
+        "country": "MY"
+      },
+      {
+        "id": "J14",
+        "name": "Sales Order Processing – Project-Based Services   (J14)",
+        "country": "MY"
+      },
+      {
+        "id": "2NX",
+        "name": "Scheduling Agreement for Subcontracting Procurement   (2NX)",
+        "country": "MY"
+      },
+      {
+        "id": "BNX",
+        "name": "Consumable Purchasing   (BNX)",
+        "country": "MY"
+      },
+      {
+        "id": "6UC",
+        "name": "Government Budget Planning   (6UC)",
+        "country": "XX"
+      },
+      {
+        "id": "2VB",
+        "name": "Purchase Order Accruals   (2VB)",
+        "country": "MY"
+      },
+      {
+        "id": "1BS",
+        "name": "SAP Fiori Analytical Apps for Sales   (1BS)",
+        "country": "XX"
+      },
+      {
+        "id": "49E",
+        "name": "Letter of Credit Management – Group Ledger IFRS   (49E)",
+        "country": "MY"
+      },
+      {
+        "id": "3OK",
+        "name": "Make-to-Order Production – Process Manufacturing   (3OK)",
+        "country": "MY"
+      },
+      {
+        "id": "6JO",
+        "name": "Resource Management for Projects   (6JO)",
+        "country": "XX"
+      },
+      {
+        "id": "1YT",
+        "name": "Make-to-Order Production with Variant Configuration   (1YT)",
+        "country": "MY"
+      },
+      {
+        "id": "3BX",
+        "name": "Warehouse Physical Inventory   (3BX)",
+        "country": "MY"
+      },
+      {
+        "id": "1WC",
+        "name": "Embargo Control   (1WC)",
+        "country": "MY"
+      },
+      {
+        "id": "1RM",
+        "name": "Mass Load and Mass Maintenance for Product   (1RM)",
+        "country": "XX"
+      },
+      {
+        "id": "BF7",
+        "name": "Period-End Closing – Maintenance Orders   (BF7)",
+        "country": "MY"
+      },
+      {
+        "id": "7L4",
+        "name": "First Article Inspection – Consumer Products   (7L4)",
+        "country": "MY"
+      },
+      {
+        "id": "2V0",
+        "name": "SAP Fiori Analytical Apps for Quality Management   (2V0)",
+        "country": "XX"
+      },
+      {
+        "id": "64F",
+        "name": "Bill of Material Management   (64F)",
+        "country": "MY"
+      },
+      {
+        "id": "2ME",
+        "name": "Central Purchase Contracts   (2ME)",
+        "country": "MY"
+      },
+      {
+        "id": "BLF",
+        "name": "Batch Management   (BLF)",
+        "country": "MY"
+      },
+      {
+        "id": "BML",
+        "name": "Physical Inventory – Inventory Count and Adjustment   (BML)",
+        "country": "MY"
+      },
+      {
+        "id": "33O",
+        "name": "Event-Based Revenue Recognition – Project-Based Services – US GAAP   (33O)",
+        "country": "MY"
+      },
+      {
+        "id": "BME",
+        "name": "Stock Transfer with Delivery   (BME)",
+        "country": "MY"
+      },
+      {
+        "id": "4X5",
+        "name": "Recurring Services   (4X5)",
+        "country": "MY"
+      },
+      {
+        "id": "6WD",
+        "name": "Convergent Invoicing – Cost Handling for Subscriptions and Usage   (6WD)",
+        "country": "MY"
+      },
+      {
+        "id": "3DX",
+        "name": "Convergent Invoicing – Management and Rating of Consumption Items   (3DX)",
+        "country": "MY"
+      },
+      {
+        "id": "3L3",
+        "name": "Contract Accounting – Contract-Based Revenue Recognition   (3L3)",
+        "country": "MY"
+      },
+      {
+        "id": "1SG",
+        "name": "Group Reporting – Financial Consolidation   (1SG)",
+        "country": "XX"
+      },
+      {
+        "id": "3QD",
+        "name": "Customer Returns Involving Supplier by Message Exchange   (3QD)",
+        "country": "MY"
+      },
+      {
+        "id": "81Y",
+        "name": "SAP Ariba Buying Procurement Expansion Package   (81Y)",
+        "country": "XX"
+      },
+      {
+        "id": "5FR",
+        "name": "Returns from Store   (5FR)",
+        "country": "MY"
+      },
+      {
+        "id": "2VL",
+        "name": "SAP EWM Integration – Stock Transport Orders   (2VL)",
+        "country": "MY"
+      },
+      {
+        "id": "53M",
+        "name": "ABAP Core Data Services Extraction for SAP Data Intelligence   (53M)",
+        "country": "XX"
+      },
+      {
+        "id": "BDK",
+        "name": "Sales Processing Using Third-Party Without Shipping Notification   (BDK)",
+        "country": "MY"
+      },
+      {
+        "id": "2UO",
+        "name": "Money Market Mutual Fund Management – Group Ledger IFRS   (2UO)",
+        "country": "MY"
+      },
+      {
+        "id": "JB1",
+        "name": "Core HR with SAP SuccessFactors Employee Central   (JB1)",
+        "country": "MY"
+      },
+      {
+        "id": "2U3",
+        "name": "Classification for Customs Tariff Number and Commodity Code   (2U3)",
+        "country": "MY"
+      },
+      {
+        "id": "3KX",
+        "name": "Privacy Risk Detection with SAP Risk and Assurance Management   (3KX)",
+        "country": "XX"
+      },
+      {
+        "id": "35F",
+        "name": "Project Control – Capital Projects   (35F)",
+        "country": "MY"
+      },
+      {
+        "id": "BJN",
+        "name": "Rework Processing – Stock-Manufactured Material   (BJN)",
+        "country": "MY"
+      },
+      {
+        "id": "1XB",
+        "name": "Interest Rate Derivatives Management – Group Ledger IFRS   (1XB)",
+        "country": "MY"
+      },
+      {
+        "id": "4B4",
+        "name": "Material Replenishment with Kanban – Stock Transfer   (4B4)",
+        "country": "MY"
+      },
+      {
+        "id": "BDG",
+        "name": "Sales Quotation   (BDG)",
+        "country": "MY"
+      },
+      {
+        "id": "2O0",
+        "name": "Bank Fee Management   (2O0)",
+        "country": "MY"
+      },
+      {
+        "id": "BDD",
+        "name": "Lean Customer Returns   (BDD)",
+        "country": "MY"
+      },
+      {
+        "id": "2EL",
+        "name": "Integration of Sales with External Buyers   (2EL)",
+        "country": "MY"
+      },
+      {
+        "id": "18J",
+        "name": "Requisitioning   (18J)",
+        "country": "MY"
+      },
+      {
+        "id": "3X3",
+        "name": "Hedge Accounting for FX Forward – Group Ledger US GAAP   (3X3)",
+        "country": "MY"
+      },
+      {
+        "id": "2LN",
+        "name": "Basic Available-to-Promise Processing   (2LN)",
+        "country": "MY"
+      },
+      {
+        "id": "2SJ",
+        "name": "Contract Accounting – External Tax Audit and Compliance Reporting   (2SJ)",
+        "country": "MY"
+      },
+      {
+        "id": "4RF",
+        "name": "Project Control – Resourcing and Procurement   (4RF)",
+        "country": "MY"
+      },
+      {
+        "id": "6BU",
+        "name": "Solution Order – Advanced Product Bundling   (6BU)",
+        "country": "MY"
+      },
+      {
+        "id": "7DN",
+        "name": "Planning and Production in Other Plant – Consumer Products   (7DN)",
+        "country": "MY"
+      },
+      {
+        "id": "2VK",
+        "name": "SAP EWM Integration – Outbound Processing to Customer   (2VK)",
+        "country": "MY"
+      },
+      {
+        "id": "3M5",
+        "name": "Event-Based Revenue Recognition – Service Documents – US GAAP   (3M5)",
+        "country": "MY"
+      },
+      {
+        "id": "3VS",
+        "name": "Contract-Based Revenue Recognition – US GAAP   (3VS)",
+        "country": "MY"
+      },
+      {
+        "id": "31Q",
+        "name": "Sales Order Processing for Sales Kits   (31Q)",
+        "country": "MY"
+      },
+      {
+        "id": "5FT",
+        "name": "Sales Price Valuation for Retail   (5FT)",
+        "country": "MY"
+      },
+      {
+        "id": "3W4",
+        "name": "Third-Party Shop Floor Execution – Discrete Industry   (3W4)",
+        "country": "XX"
+      },
+      {
+        "id": "BD9",
+        "name": "Sell from Stock   (BD9)",
+        "country": "MY"
+      },
+      {
+        "id": "6KO",
+        "name": "Opportunity to Order with SAP Sales Cloud Version 2   (6KO)",
+        "country": "XX"
+      },
+      {
+        "id": "5FV",
+        "name": "Outbound Logistics for Distribution Centers   (5FV)",
+        "country": "MY"
+      },
+      {
+        "id": "J55",
+        "name": "Margin Analysis   (J55)",
+        "country": "MY"
+      },
+      {
+        "id": "33M",
+        "name": "Event-Based Revenue Recognition – Sell from Stock – IFRS   (33M)",
+        "country": "MY"
+      },
+      {
+        "id": "3G8",
+        "name": "Dangerous Goods in the Value Chain   (3G8)",
+        "country": "MY"
+      },
+      {
+        "id": "2XT",
+        "name": "Central Purchasing   (2XT)",
+        "country": "XX"
+      },
+      {
+        "id": "53Y",
+        "name": "Intercompany Billing for Service Documents   (53Y)",
+        "country": "MY"
+      },
+      {
+        "id": "35E",
+        "name": "Project Control – Research and Development Projects   (35E)",
+        "country": "MY"
+      },
+      {
+        "id": "J11",
+        "name": "Customer Project Management – Project-Based Services   (J11)",
+        "country": "MY"
+      },
+      {
+        "id": "BMK",
+        "name": "Return to Supplier   (BMK)",
+        "country": "MY"
+      },
+      {
+        "id": "3BW",
+        "name": "Warehouse Internal Repacking   (3BW)",
+        "country": "MY"
+      },
+      {
+        "id": "43Y",
+        "name": "Contract Accounting – Integration with Sales Documents   (43Y)",
+        "country": "MY"
+      },
+      {
+        "id": "1Z3",
+        "name": "Customer Returns with Direct Shipment from Customer to Supplier   (1Z3)",
+        "country": "MY"
+      },
+      {
+        "id": "4XD",
+        "name": "Emissions Management   (4XD)",
+        "country": "XX"
+      },
+      {
+        "id": "16R",
+        "name": "Bank Integration with SAP Multi-Bank Connectivity   (16R)",
+        "country": "MY"
+      },
+      {
+        "id": "3EN",
+        "name": "Guided Buying for Central Procurement with SAP Ariba Buying   (3EN)",
+        "country": "XX"
+      },
+      {
+        "id": "6GC",
+        "name": "Intercompany Sales Order Processing – Make-to-Order   (6GC)",
+        "country": "MY"
+      },
+      {
+        "id": "J77",
+        "name": "Advanced Bank Account Management   (J77)",
+        "country": "MY"
+      },
+      {
+        "id": "2QY",
+        "name": "SAP Fiori Analytical Apps for Asset Accounting in Finance   (2QY)",
+        "country": "XX"
+      },
+      {
+        "id": "4Q0",
+        "name": "Predictive Accounting for Travel and Expense Management   (4Q0)",
+        "country": "MY"
+      },
+      {
+        "id": "1MN",
+        "name": "SAP Fiori Analytical Apps for Treasury and Risk Management   (1MN)",
+        "country": "XX"
+      },
+      {
+        "id": "1EZ",
+        "name": "Credit Memo Processing   (1EZ)",
+        "country": "MY"
+      },
+      {
+        "id": "J13",
+        "name": "Service and Material Procurement – Project-Based Services   (J13)",
+        "country": "MY"
+      },
+      {
+        "id": "5FL",
+        "name": "Merchandise Allocation   (5FL)",
+        "country": "MY"
+      },
+      {
+        "id": "5W4",
+        "name": "Subcontracting – Consumer Products   (5W4)",
+        "country": "MY"
+      },
+      {
+        "id": "4C8",
+        "name": "Compliance Management for Environment, Health, and Safety   (4C8)",
+        "country": "XX"
+      },
+      {
+        "id": "63Y",
+        "name": "Warranty Claim Management – Customer Claim Processing   (63Y)",
+        "country": "MY"
+      },
+      {
+        "id": "6N4",
+        "name": "ABAP Core Data Services Extraction for SAP HANA   (6N4)",
+        "country": "XX"
+      },
+      {
+        "id": "34L",
+        "name": "Intercompany Debt and Investment Mgmt – Group Ledger US GAAP   (34L)",
+        "country": "MY"
+      },
+      {
+        "id": "1GA",
+        "name": "Accounting and Financial Close – Group Ledger IFRS   (1GA)",
+        "country": "MY"
+      },
+      {
+        "id": "1MC",
+        "name": "Omnichannel Convergent Billing   (1MC)",
+        "country": "MY"
+      },
+      {
+        "id": "5FY",
+        "name": "In-Store Purchase Order Management   (5FY)",
+        "country": "MY"
+      },
+      {
+        "id": "5HK",
+        "name": "Quality Management in Discrete Manufacturing – Consumer Products   (5HK)",
+        "country": "MY"
+      },
+      {
+        "id": "BH3",
+        "name": "Data Migration to SAP S/4HANA from SAP   (BH3)",
+        "country": "XX"
+      },
+      {
+        "id": "63V",
+        "name": "Mobile RF Devices in Warehousing   (63V)",
+        "country": "MY"
+      },
+      {
+        "id": "2F9",
+        "name": "Quality Management for Complaints Against Suppliers   (2F9)",
+        "country": "MY"
+      },
+      {
+        "id": "4B3",
+        "name": "Material Replenishment with Kanban – In-House Production   (4B3)",
+        "country": "MY"
+      },
+      {
+        "id": "57Z",
+        "name": "Subscription Management with Sales Billing   (57Z)",
+        "country": "MY"
+      },
+      {
+        "id": "4H2",
+        "name": "Self-Billing   (4H2)",
+        "country": "MY"
+      },
+      {
+        "id": "4GQ",
+        "name": "Event-Based Revenue Recognition – Project-Based Sales   (4GQ)",
+        "country": "MY"
+      },
+      {
+        "id": "4AQ",
+        "name": "Data Quality Management for Product   (4AQ)",
+        "country": "XX"
+      },
+      {
+        "id": "5IM",
+        "name": "Product Footprint Management   (5IM)",
+        "country": "XX"
+      },
+      {
+        "id": "21D",
+        "name": "Make-to-Stock Production with Variant Configuration   (21D)",
+        "country": "MY"
+      },
+      {
+        "id": "4R6",
+        "name": "Sales Processing using Third-Party with Variant Configuration   (4R6)",
+        "country": "MY"
+      },
+      {
+        "id": "2QI",
+        "name": "Demand-Driven Replenishment Planning and Execution   (2QI)",
+        "country": "MY"
+      },
+      {
+        "id": "1F1",
+        "name": "Debit Memo Processing   (1F1)",
+        "country": "MY"
+      },
+      {
+        "id": "BJK",
+        "name": "Production Subcontracting – External Processing   (BJK)",
+        "country": "MY"
+      },
+      {
+        "id": "34C",
+        "name": "Debt and Investment Management – Group Ledger US GAAP   (34C)",
+        "country": "MY"
+      },
+      {
+        "id": "4X9",
+        "name": "Create Sales Orders from Unstructured Data   (4X9)",
+        "country": "MY"
+      },
+      {
+        "id": "54V",
+        "name": "Produce and Sell Standard Products – Warehouse Managed   (54V)",
+        "country": "MY"
+      },
+      {
+        "id": "2QP",
+        "name": "Quality Management of Internal Problems   (2QP)",
+        "country": "MY"
+      },
+      {
+        "id": "7YM",
+        "name": "SAP Ariba Buying Base Edition   (7YM)",
+        "country": "XX"
+      },
+      {
+        "id": "5FZ",
+        "name": "Omnichannel Order Fulfillment for Retail   (5FZ)",
+        "country": "MY"
+      },
+      {
+        "id": "6V2",
+        "name": "Integration to Icertis for Contract Assembly   (6V2)",
+        "country": "XX"
+      },
+      {
+        "id": "2O2",
+        "name": "Bank Guarantee Management – Group Ledger IFRS   (2O2)",
+        "country": "MY"
+      },
+      {
+        "id": "1XN",
+        "name": "Market Rates Management – Manually via Upload   (1XN)",
+        "country": "MY"
+      },
+      {
+        "id": "1B6",
+        "name": "Sales Rebate Processing   (1B6)",
+        "country": "MY"
+      },
+      {
+        "id": "5FS",
+        "name": "Physical Inventory for Distribution Centers   (5FS)",
+        "country": "MY"
+      },
+      {
+        "id": "55F",
+        "name": "Automotive Supply to Customer – Inventory Management   (55F)",
+        "country": "MY"
+      },
+      {
+        "id": "43B",
+        "name": "Service Monitoring and Analytics   (43B)",
+        "country": "XX"
+      },
+      {
+        "id": "2VN",
+        "name": "SAP EWM Integration – Batch Management   (2VN)",
+        "country": "MY"
+      },
+      {
+        "id": "5XU",
+        "name": "Document and Reporting Compliance   (5XU)",
+        "country": "XX"
+      },
+      {
+        "id": "4RV",
+        "name": "SAP Maintenance Assistant   (4RV)",
+        "country": "XX"
+      },
+      {
+        "id": "1Y5",
+        "name": "Production Operations with Manufacturing Execution System   (1Y5)",
+        "country": "XX"
+      },
+      {
+        "id": "40G",
+        "name": "Field Logistics Planning and Execution   (40G)",
+        "country": "MY"
+      },
+      {
+        "id": "2BG",
+        "name": "Convergent Invoicing – Invoice Creation for Usage and Service   (2BG)",
+        "country": "MY"
+      },
+      {
+        "id": "J45",
+        "name": "Procurement of Direct Materials   (J45)",
+        "country": "MY"
+      },
+      {
+        "id": "6R3",
+        "name": "Earmarked Funds for Real Estate Contracts   (6R3)",
+        "country": "XX"
+      },
+      {
+        "id": "33F",
+        "name": "Asset Accounting – Group Ledger US GAAP   (33F)",
+        "country": "MY"
+      },
+      {
+        "id": "34N",
+        "name": "Lease-In Accounting – Group Ledger US GAAP   (34N)",
+        "country": "MY"
+      },
+      {
+        "id": "5FK",
+        "name": "Empties for Retail   (5FK)",
+        "country": "MY"
+      },
+      {
+        "id": "1GB",
+        "name": "Asset Accounting – Group Ledger IFRS   (1GB)",
+        "country": "MY"
+      },
+      {
+        "id": "3VQ",
+        "name": "Safety Data Sheets in the Value Chain   (3VQ)",
+        "country": "MY"
+      },
+      {
+        "id": "BKJ",
+        "name": "Sales Order Processing with Customer Down Payment   (BKJ)",
+        "country": "MY"
+      },
+      {
+        "id": "1WO",
+        "name": "Extended Intercompany Processes for Sales   (1WO)",
+        "country": "MY"
+      },
+      {
+        "id": "1IU",
+        "name": "Customer Consignment   (1IU)",
+        "country": "MY"
+      },
+      {
+        "id": "1XV",
+        "name": "SAP S/4HANA for Enterprise Contract Management   (1XV)",
+        "country": "XX"
+      },
+      {
+        "id": "1N1",
+        "name": "Master Data Consolidation for Product   (1N1)",
+        "country": "XX"
+      },
+      {
+        "id": "1W4",
+        "name": "Subsidiary Integration of SAP S/4HANA Cloud to Central Finance   (1W4)",
+        "country": "XX"
+      },
+      {
+        "id": "6GS",
+        "name": "Service Management with Advanced Variant Configuration   (6GS)",
+        "country": "MY"
+      },
+      {
+        "id": "2UN",
+        "name": "Money Market Mutual Fund Management   (2UN)",
+        "country": "MY"
+      },
+      {
+        "id": "1E1",
+        "name": "Quality Management in Discrete and Process Manufacturing   (1E1)",
+        "country": "MY"
+      },
+      {
+        "id": "3BU",
+        "name": "Warehouse Posting Changes   (3BU)",
+        "country": "MY"
+      },
+      {
+        "id": "BFC",
+        "name": "Collections and Dispute Management   (BFC)",
+        "country": "MY"
+      },
+      {
+        "id": "1FM",
+        "name": "Quality Management in Procurement   (1FM)",
+        "country": "MY"
+      },
+      {
+        "id": "BH1",
+        "name": "Corrective Maintenance   (BH1)",
+        "country": "MY"
+      },
+      {
+        "id": "43R",
+        "name": "Maintenance Resource Scheduling   (43R)",
+        "country": "MY"
+      },
+      {
+        "id": "55U",
+        "name": "VAT Tax Calculation and Reporting for Germany   (55U)",
+        "country": "XX"
+      },
+      {
+        "id": "1N3",
+        "name": "Master Data Consolidation for Business Partner   (1N3)",
+        "country": "XX"
+      },
+      {
+        "id": "22T",
+        "name": "Set Up Configurable Model Using Variant Configuration   (22T)",
+        "country": "MY"
+      },
+      {
+        "id": "31L",
+        "name": "Production Capacity Evaluation   (31L)",
+        "country": "MY"
+      },
+      {
+        "id": "3QM",
+        "name": "Treasury Correspondence Integration with SWIFT Network   (3QM)",
+        "country": "XX"
+      },
+      {
+        "id": "3HQ",
+        "name": "In-Store Merchandise Management   (3HQ)",
+        "country": "MY"
+      },
+      {
+        "id": "42N",
+        "name": "Tank Trailer Filling with Residuals   (42N)",
+        "country": "MY"
+      },
+      {
+        "id": "4HG",
+        "name": "Advanced Financial Closing Integration   (4HG)",
+        "country": "XX"
+      },
+      {
+        "id": "3AB",
+        "name": "Automated Provisioning via SAP Cloud Identity Access Governance   (3AB)",
+        "country": "XX"
+      },
+      {
+        "id": "2O9",
+        "name": "Intercompany Process for Sublease Accounting   (2O9)",
+        "country": "XX"
+      },
+      {
+        "id": "J58",
+        "name": "Accounting and Financial Close   (J58)",
+        "country": "MY"
+      },
+      {
+        "id": "2NV",
+        "name": "Guided Buying Capability with SAP Ariba Buying   (2NV)",
+        "country": "MY"
+      },
+      {
+        "id": "J54",
+        "name": "Overhead Cost Accounting   (J54)",
+        "country": "MY"
+      },
+      {
+        "id": "1RY",
+        "name": "Credit Agency Integration   (1RY)",
+        "country": "XX"
+      },
+      {
+        "id": "3M0",
+        "name": "Quality Management in Warehousing   (3M0)",
+        "country": "MY"
+      },
+      {
+        "id": "47I",
+        "name": "Contract Accounting – Cash Application   (47I)",
+        "country": "MY"
+      },
+      {
+        "id": "63W",
+        "name": "Mobile RF Devices in Warehousing with Production Integration   (63W)",
+        "country": "MY"
+      },
+      {
+        "id": "6HY",
+        "name": "Solution Order Management with Advanced Variant Configuration   (6HY)",
+        "country": "MY"
+      },
+      {
+        "id": "1X3",
+        "name": "Interest Rate Derivatives Management   (1X3)",
+        "country": "MY"
+      },
+      {
+        "id": "2F5",
+        "name": "Treasury Trading via Trading Platforms   (2F5)",
+        "country": "XX"
+      },
+      {
+        "id": "1RO",
+        "name": "Master Data Integration   (1RO)",
+        "country": "MY"
+      },
+      {
+        "id": "6WC",
+        "name": "Convergent Invoicing – Intercompany Settlement   (6WC)",
+        "country": "MY"
+      },
+      {
+        "id": "6W4",
+        "name": "Freight Settlement   (6W4)",
+        "country": "MY"
+      },
+      {
+        "id": "4RC",
+        "name": "Integrated Financial Planning   (4RC)",
+        "country": "XX"
+      },
+      {
+        "id": "63X",
+        "name": "Mobile RF Devices in Warehousing with Quality Management   (63X)",
+        "country": "MY"
+      },
+      {
+        "id": "7L1",
+        "name": "7L1",
+        "country": "XX"
+      },
+      {
+        "id": "49X",
+        "name": "Service Order Processing with SAP Field Service Management   (49X)",
+        "country": "MY"
+      },
+      {
+        "id": "2U2",
+        "name": "Key Risk Indicator Monitoring with SAP Risk Management   (2U2)",
+        "country": "XX"
+      },
+      {
+        "id": "5WI",
+        "name": "Intra-Company Returns Stock Transfers   (5WI)",
+        "country": "MY"
+      },
+      {
+        "id": "6U3",
+        "name": "6U3",
+        "country": "XX"
+      },
+      {
+        "id": "BKZ",
+        "name": "Sales Order Processing with Invoice List and Collective Billing   (BKZ)",
+        "country": "MY"
+      },
+      {
+        "id": "3X0",
+        "name": "Bond Management – Group Ledger US GAAP   (3X0)",
+        "country": "MY"
+      },
+      {
+        "id": "46P",
+        "name": "46P",
+        "country": "XX"
+      },
+      {
+        "id": "5IK",
+        "name": "Subscription Management with Convergent Invoicing   (5IK)",
+        "country": "MY"
+      },
+      {
+        "id": "7OD",
+        "name": "Accounting Interface for Contract and Lease Management   (7OD)",
+        "country": "MY"
+      },
+      {
+        "id": "77V",
+        "name": "77V",
+        "country": "XX"
+      },
+      {
+        "id": "4AZ",
+        "name": "Contract Management with SAP Ariba Contracts   (4AZ)",
+        "country": "MY"
+      },
+      {
+        "id": "6JN",
+        "name": "Collaborative Project Management   (6JN)",
+        "country": "XX"
+      },
+      {
+        "id": "SL4",
+        "name": "Supplier Evaluation and Performance Monitoring   (SL4)",
+        "country": "MY"
+      },
+      {
+        "id": "5D2",
+        "name": "Advanced Intercompany Sales   (5D2)",
+        "country": "MY"
+      },
+      {
+        "id": "1NL",
+        "name": "Payroll Processing with SAP SuccessFactors Employee Central Payroll   (1NL)",
+        "country": "XX"
+      },
+      {
+        "id": "3XK",
+        "name": "In-House Repair   (3XK)",
+        "country": "MY"
+      },
+      {
+        "id": "6W3",
+        "name": "Transportation Execution   (6W3)",
+        "country": "MY"
+      },
+      {
+        "id": "3HV",
+        "name": "Store Connectivity – Inbound   (3HV)",
+        "country": "MY"
+      },
+      {
+        "id": "2VO",
+        "name": "SAP EWM Integration – Customer Returns   (2VO)",
+        "country": "MY"
+      },
+      {
+        "id": "2RU",
+        "name": "Production Order Processing with Third-Party Warehouse Management   (2RU)",
+        "country": "MY"
+      },
+      {
+        "id": "2HU",
+        "name": "Intercompany Foreign Exchange – Group Ledger IFRS   (2HU)",
+        "country": "MY"
+      },
+      {
+        "id": "2QN",
+        "name": "Nonconformance Management   (2QN)",
+        "country": "MY"
+      },
+      {
+        "id": "5MQ",
+        "name": "Sell from Stock with Valuated Stock in Transit   (5MQ)",
+        "country": "MY"
+      },
+      {
+        "id": "5I9",
+        "name": "5I9",
+        "country": "XX"
+      },
+      {
+        "id": "4X3",
+        "name": "Integration of SAP S/4HANA and SAP Cloud for Real Estate   (4X3)",
+        "country": "XX"
+      },
+      {
+        "id": "24H",
+        "name": "Transfer of Bill of Materials for SAP Global Trade Services   (24H)",
+        "country": "MY"
+      },
+      {
+        "id": "7TE",
+        "name": "WalkMe Premium Integration   (7TE)",
+        "country": "XX"
+      },
+      {
+        "id": "3W0",
+        "name": "3W0",
+        "country": "XX"
+      },
+      {
+        "id": "6IM",
+        "name": "Transaction Matching – SAP Solution Extensions by BlackLine   (6IM)",
+        "country": "XX"
+      },
+      {
+        "id": "4LO",
+        "name": "Enablement of SAP Excise Tax Management   (4LO)",
+        "country": "XX"
+      },
+      {
+        "id": "2ZS",
+        "name": "Machine Learning for Monitoring of Goods and Invoice Receipts   (2ZS)",
+        "country": "MY"
+      },
+      {
+        "id": "4AI",
+        "name": "SAP Ariba Buying   (4AI)",
+        "country": "XX"
+      },
+      {
+        "id": "3ZB",
+        "name": "Billing of Costs Between Affiliated Companies   (3ZB)",
+        "country": "MY"
+      },
+      {
+        "id": "4GT",
+        "name": "Solution Order Management   (4GT)",
+        "country": "MY"
+      },
+      {
+        "id": "2U6",
+        "name": "2U6",
+        "country": "XX"
+      },
+      {
+        "id": "6X0",
+        "name": "6X0",
+        "country": "XX"
+      },
+      {
+        "id": "3DV",
+        "name": "Warehouse Production Integration   (3DV)",
+        "country": "MY"
+      },
+      {
+        "id": "6BV",
+        "name": "Solution Order Quotation Management with SAP CPQ   (6BV)",
+        "country": "MY"
+      },
+      {
+        "id": "3I1",
+        "name": "Products for Retail   (3I1)",
+        "country": "MY"
+      },
+      {
+        "id": "BJ5",
+        "name": "Make-to-Stock Production – Discrete Manufacturing   (BJ5)",
+        "country": "MY"
+      },
+      {
+        "id": "1VP",
+        "name": "Opportunity-to-Order with SAP Cloud for Customer   (1VP)",
+        "country": "XX"
+      },
+      {
+        "id": "34P",
+        "name": "Treasury Workstation Cash Integration   (34P)",
+        "country": "MY"
+      },
+      {
+        "id": "2F2",
+        "name": "Intercompany Foreign Exchange Management   (2F2)",
+        "country": "MY"
+      },
+      {
+        "id": "2R7",
+        "name": "Purchasing Rebate Processing   (2R7)",
+        "country": "MY"
+      },
+      {
+        "id": "1BM",
+        "name": "Make-to-Order Production – Semifinished Goods Planning and Assembly   (1BM)",
+        "country": "MY"
+      },
+      {
+        "id": "BH2",
+        "name": "Emergency Maintenance   (BH2)",
+        "country": "MY"
+      },
+      {
+        "id": "1X7",
+        "name": "Debt and Investment Management – Group Ledger IFRS   (1X7)",
+        "country": "MY"
+      },
+      {
+        "id": "1MV",
+        "name": "Cash Application Integration   (1MV)",
+        "country": "XX"
+      },
+      {
+        "id": "J60",
+        "name": "Accounts Payable   (J60)",
+        "country": "MY"
+      },
+      {
+        "id": "BEJ",
+        "name": "Inventory Valuation for Year-End Closing   (BEJ)",
+        "country": "MY"
+      },
+      {
+        "id": "24J",
+        "name": "Compliance Management with SAP Global Trade Services   (24J)",
+        "country": "MY"
+      },
+      {
+        "id": "2FM",
+        "name": "Financial Planning and Analysis   (2FM)",
+        "country": "MY"
+      },
+      {
+        "id": "BJQ",
+        "name": "Rework Processing – Work-in-Process   (BJQ)",
+        "country": "MY"
+      },
+      {
+        "id": "19M",
+        "name": "Direct Debit   (19M)",
+        "country": "MY"
+      },
+      {
+        "id": "1YI",
+        "name": "Intercompany Process for Debt and Investment Mgmt   (1YI)",
+        "country": "MY"
+      },
+      {
+        "id": "3WY",
+        "name": "Bond Management   (3WY)",
+        "country": "MY"
+      },
+      {
+        "id": "3JX",
+        "name": "Preference Management with SAP Global Trade Services   (3JX)",
+        "country": "MY"
+      },
+      {
+        "id": "1A8",
+        "name": "Internal Project Management – Project-Based Services   (1A8)",
+        "country": "MY"
+      },
+      {
+        "id": "BKL",
+        "name": "Invoice Correction Process with Credit Memo   (BKL)",
+        "country": "MY"
+      },
+      {
+        "id": "3NI",
+        "name": "Procurement for Service Management   (3NI)",
+        "country": "MY"
+      },
+      {
+        "id": "BJ2",
+        "name": "Preventive Maintenance   (BJ2)",
+        "country": "MY"
+      },
+      {
+        "id": "BJE",
+        "name": "Make-to-Order Production – Finished Goods Sales and Final Assembly   (BJE)",
+        "country": "MY"
+      },
+      {
+        "id": "64E",
+        "name": "Product Change Management with Change Records   (64E)",
+        "country": "MY"
+      },
+      {
+        "id": "2ET",
+        "name": "Sales Order Processing for Non-Stock Material   (2ET)",
+        "country": "MY"
+      },
+      {
+        "id": "3F7",
+        "name": "Joint Venture Accounting   (3F7)",
+        "country": "MY"
+      },
+      {
+        "id": "3MO",
+        "name": "Service Contract Management   (3MO)",
+        "country": "MY"
+      },
+      {
+        "id": "3KK",
+        "name": "Contract-Based Revenue Recognition – IFRS   (3KK)",
+        "country": "MY"
+      },
+      {
+        "id": "2U1",
+        "name": "Customs Management with SAP Global Trade Services   (2U1)",
+        "country": "MY"
+      },
+      {
+        "id": "3NR",
+        "name": "Sales Scheduling Agreements   (3NR)",
+        "country": "MY"
+      },
+      {
+        "id": "2U8",
+        "name": "Intercompany Process for Cash Concentration   (2U8)",
+        "country": "MY"
+      },
+      {
+        "id": "2VJ",
+        "name": "SAP EWM Integration – Inbound Processing from Supplier   (2VJ)",
+        "country": "MY"
+      },
+      {
+        "id": "1EG",
+        "name": "Bank Integration with File Interface   (1EG)",
+        "country": "MY"
+      },
+      {
+        "id": "3TD",
+        "name": "Internal Commissions Settlement for Sales   (3TD)",
+        "country": "MY"
+      },
+      {
+        "id": "2VM",
+        "name": "SAP EWM Integration – Delivery-Based Production Integration   (2VM)",
+        "country": "MY"
+      },
+      {
+        "id": "3BR",
+        "name": "Warehouse Inbound Processing   (3BR)",
+        "country": "MY"
+      },
+      {
+        "id": "3D2",
+        "name": "Service Order Management and Monitoring   (3D2)",
+        "country": "MY"
+      },
+      {
+        "id": "53V",
+        "name": "Digital Payments Foundation   (53V)",
+        "country": "XX"
+      },
+      {
+        "id": "2LZ",
+        "name": "External Digital Payments   (2LZ)",
+        "country": "MY"
+      },
+      {
+        "id": "5FN",
+        "name": "Invoice Verification for Retail   (5FN)",
+        "country": "MY"
+      },
+      {
+        "id": "5FU",
+        "name": "Inbound Logistics for Distribution Centers   (5FU)",
+        "country": "MY"
+      }
+    ]
+  },
+  "totalIds": 582
+}
