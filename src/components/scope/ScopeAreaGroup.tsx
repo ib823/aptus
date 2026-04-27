@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, memo } from "react";
+import { useCallback, useMemo, memo } from "react";
 import {
   Accordion,
   AccordionContent,
@@ -65,8 +65,15 @@ export const ScopeAreaGroup = memo(function ScopeAreaGroup({
   onOpenBriefing,
   warningsByScope,
 }: ScopeAreaGroupProps) {
+  // Bulk-action triggers used to be <button>s nested inside the
+  // AccordionTrigger's own <button>. In React 19 / Next 15 that's a
+  // fatal hydration error ("button cannot contain a nested button"),
+  // which produced an infinite re-render loop on /scope and made
+  // every link click — including the Requirements sub-tab — net::
+  // ERR_ABORTED. They're now <span role="button"> inside the trigger,
+  // which is valid HTML and accessible (keyboard handler below).
   const handleSelectAll = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.SyntheticEvent) => {
       e.stopPropagation();
       onBulkAction(area, "select_all");
     },
@@ -74,38 +81,38 @@ export const ScopeAreaGroup = memo(function ScopeAreaGroup({
   );
 
   const handleDeselectAll = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.SyntheticEvent) => {
       e.stopPropagation();
       onBulkAction(area, "deselect_all");
     },
     [area, onBulkAction],
   );
 
-  // The previous defaultValue rule auto-opened any area with selections,
-  // which in production caused the "Uncategorized" area (357 catalog items)
-  // and "Finance" (98 items) to mount ~455 ScopeItemCards on initial render
-  // for the Bursa assessment alone — ~9,000 DOM nodes and a ~39,000-px
-  // body that triggered the side-rail layout bug fixed in PR #27.
-  //
-  // Auto-open is now gated by a soft cap: areas with selections still open
-  // automatically when they're small enough to render quickly; larger areas
-  // stay collapsed (their selection count is still visible in the header)
-  // and only mount their items when the user explicitly expands them.
-  // Radix's Accordion uses Presence under the hood and unmounts content
-  // on close, so a closed area mounts nothing.
-  const initialOpen = useMemo(
+  const onKeyActivate = useCallback(
+    (fn: (e: React.SyntheticEvent) => void) =>
+      (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          fn(e);
+        }
+      },
+    [],
+  );
+
+  // Auto-open is gated by a soft cap so areas with hundreds of items
+  // (e.g. "Uncategorized" at 357 in the catalog) don't mount all their
+  // ScopeItemCards on initial render even when they have selections.
+  // Default uncontrolled — going controlled triggered an infinite-
+  // re-render loop in some scenarios; the auto-open cap is sufficient
+  // for the perf goal without controlling the accordion state.
+  const defaultOpen = useMemo(
     () =>
       selectedCount > 0 && totalCount <= AUTO_OPEN_ITEM_LIMIT ? [area] : [],
     [area, selectedCount, totalCount],
   );
-  const [openItems, setOpenItems] = useState<string[]>(initialOpen);
-
-  const handleValueChange = useCallback((val: string[]) => {
-    setOpenItems(val);
-  }, []);
 
   return (
-    <Accordion type="multiple" value={openItems} onValueChange={handleValueChange}>
+    <Accordion type="multiple" defaultValue={defaultOpen}>
       <AccordionItem value={area} className="border rounded-lg bg-card">
         <AccordionTrigger className="px-5 hover:no-underline">
           <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -120,18 +127,24 @@ export const ScopeAreaGroup = memo(function ScopeAreaGroup({
             </div>
             {!isReadOnly && (
               <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                <button
+                <span
+                  role="button"
+                  tabIndex={0}
                   onClick={handleSelectAll}
-                  className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                  onKeyDown={onKeyActivate(handleSelectAll)}
+                  className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded transition-colors cursor-pointer select-none"
                 >
                   Select All
-                </button>
-                <button
+                </span>
+                <span
+                  role="button"
+                  tabIndex={0}
                   onClick={handleDeselectAll}
-                  className="px-2 py-1 text-xs text-muted-foreground hover:bg-accent rounded transition-colors"
+                  onKeyDown={onKeyActivate(handleDeselectAll)}
+                  className="px-2 py-1 text-xs text-muted-foreground hover:bg-accent rounded transition-colors cursor-pointer select-none"
                 >
                   Deselect All
-                </button>
+                </span>
               </div>
             )}
           </div>

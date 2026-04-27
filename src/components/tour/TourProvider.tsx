@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useState,
   useCallback,
   useRef,
@@ -68,7 +69,17 @@ export function TourProvider({ children, userRole }: TourProviderProps) {
     setMounted(true);
   }, []);
 
-  const availableTours = getAllToursForRole(userRole);
+  // getAllToursForRole returns Array.filter(), which is a NEW array reference
+  // every call. Memoizing keeps the reference stable across renders, which
+  // in turn keeps `startTour` stable, which prevents the auto-trigger
+  // useEffect (deps include startTour) from re-running on every render.
+  // Without this, every TourProvider re-render scheduled+cancelled a 1500ms
+  // setTimeout and shipped a new context value to consumers — under React 19
+  // with strict-mode hydration, that cascade hit "Maximum update depth
+  // exceeded" inside dev and React error #418 (HTML hydration mismatch) on
+  // prod, both of which silently aborted Next.js Link navigations on
+  // /scope (and any other portal route).
+  const availableTours = useMemo(() => getAllToursForRole(userRole), [userRole]);
 
   const startTour = useCallback(
     (tourId: string) => {
@@ -203,17 +214,20 @@ export function TourProvider({ children, userRole }: TourProviderProps) {
     };
   }, []);
 
+  // Memoize the context value too — recreating it every render forces every
+  // useTour() consumer to re-render even when nothing changed.
+  const contextValue = useMemo(
+    () => ({
+      startTour,
+      resetTour: resetTourFn,
+      isComplete: isCompleteFn,
+      availableTours,
+      isActive,
+    }),
+    [startTour, resetTourFn, isCompleteFn, availableTours, isActive],
+  );
+
   return (
-    <TourContext.Provider
-      value={{
-        startTour,
-        resetTour: resetTourFn,
-        isComplete: isCompleteFn,
-        availableTours,
-        isActive,
-      }}
-    >
-      {children}
-    </TourContext.Provider>
+    <TourContext.Provider value={contextValue}>{children}</TourContext.Provider>
   );
 }
