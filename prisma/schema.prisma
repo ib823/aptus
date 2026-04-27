@@ -830,6 +830,15 @@ model ClientRequirement {
   complianceStatus         String?  // A3 Yes/Partial/No/NA, A5 NM/PM/FM/Exceed (vendor-fillable)
   submissionFolder         String?  // A2 Assigned Folder for Submission
 
+  // Added 2026-04-27 for the SAP 2602 best-practice classification report.
+  // Structured complement to the free-text erpModuleSupporting field — let the
+  // XLSX/PDF render scope-id and SAP-module breakdowns cleanly and let us
+  // validate cited scope IDs against the catalog programmatically.
+  // Set by scripts/classify-batch.ts apply; existing rows remain null.
+  sapModule                String?  // controlled vocab: FI-AR, FI-AP, FI-AA, FI-GL, CO, MM, SD, PS, RE-FX, BTP, SuccessFactors, Ariba, SAC, BPA, IS, EAM, "—"
+  scopeItemIds             String?  // comma-separated 2602 scope item IDs only (e.g. "J45, BMD, 19C")
+  scopeItemNames           String?  @db.Text  // human-readable scope-item names (or product name for Gap)
+
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 

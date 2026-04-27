@@ -664,20 +664,24 @@ function classificationRow(r: ClassificationRow): Record<string, unknown> {
     requirementType: r.requirementType ?? "",
     requirementText: r.requirementText,
     classification: r.classification,
+    sapModule: r.sapModule || "",
+    scopeItemIds: r.scopeItemIds || "",
+    scopeItemNames: r.scopeItemNames || r.scopeItems || "",
     remarks: r.remarks,
-    scopeItems: r.scopeItems,
   };
 }
 
 const ROW_COLUMNS = [
-  { header: "Module", key: "module", width: 28 },
-  { header: "Code", key: "code", width: 14 },
-  { header: "Class", key: "requirementClass", width: 14 },
-  { header: "Type", key: "requirementType", width: 16 },
-  { header: "Requirement", key: "requirementText", width: 70 },
-  { header: "Classification", key: "classification", width: 22 },
+  { header: "Source Module", key: "module", width: 24 },
+  { header: "Code", key: "code", width: 12 },
+  { header: "Class", key: "requirementClass", width: 12 },
+  { header: "Type", key: "requirementType", width: 14 },
+  { header: "Requirement", key: "requirementText", width: 60 },
+  { header: "Classification", key: "classification", width: 20 },
+  { header: "SAP Module", key: "sapModule", width: 18 },
+  { header: "2602 Scope ID(s)", key: "scopeItemIds", width: 22 },
+  { header: "2602 Scope Name(s)", key: "scopeItemNames", width: 50 },
   { header: "Aptus Remarks", key: "remarks", width: 70 },
-  { header: "2602 Scope Items", key: "scopeItems", width: 50 },
 ];
 
 function summaryRows(data: SapBestPracticeClassificationData): Array<Record<string, unknown>> {
@@ -691,9 +695,36 @@ function summaryRows(data: SapBestPracticeClassificationData): Array<Record<stri
     rows.push({ scope: cls, total: b.total, O: b.O, C: b.C, G: b.G, NA: b.NA, Pending: b.Pending });
   }
   rows.push({});
-  rows.push({ section: "PER MODULE" });
+  rows.push({ section: "PER SOURCE MODULE" });
   for (const m of data.perModule) {
     rows.push({ scope: m.module, total: m.total, O: m.O, C: m.C, G: m.G, NA: m.NA, Pending: m.Pending });
+  }
+
+  // Per SAP module breakdown — derived on the fly from the row-level
+  // sapModule field. Helps you see "how much of the assessment maps to
+  // FI-AR vs SuccessFactors vs Ariba" at a glance.
+  const sapModuleAgg = new Map<string, { O: number; C: number; G: number; NA: number; Pending: number; total: number }>();
+  const allRows = [
+    ...data.byBucket.O,
+    ...data.byBucket.C,
+    ...data.byBucket.G,
+    ...data.byBucket.NA,
+    ...data.byBucket.Pending,
+  ];
+  for (const r of allRows) {
+    const key = (r.sapModule || "(unset)").trim() || "(unset)";
+    const cur = sapModuleAgg.get(key) ?? { O: 0, C: 0, G: 0, NA: 0, Pending: 0, total: 0 };
+    cur[r.bucket]++;
+    cur.total++;
+    sapModuleAgg.set(key, cur);
+  }
+  if (sapModuleAgg.size > 0) {
+    rows.push({});
+    rows.push({ section: "PER SAP MODULE / TARGET PRODUCT" });
+    const sorted = [...sapModuleAgg.entries()].sort((a, b) => b[1].total - a[1].total);
+    for (const [name, b] of sorted) {
+      rows.push({ scope: name, total: b.total, O: b.O, C: b.C, G: b.G, NA: b.NA, Pending: b.Pending });
+    }
   }
   return rows;
 }

@@ -52,7 +52,13 @@ interface ResultRow {
   requirementId: string;
   classification: string;       // "O - Out Of The Box" | "C - Configuration" | "G - Gap" | "N/A - Out of Scope" | similar
   remarks: string;              // grounded narrative
-  scopeItems: string;           // comma-separated 2602 scope item ids + names
+  scopeItems: string;           // legacy free-text combined view (kept for back-compat)
+  /** New 2026-04-27 structured fields. All optional for back-compat with older
+   * result files. When present they're written into the dedicated DB columns
+   * surfaced in the XLSX/PDF reports. */
+  sapModule?: string;           // controlled vocab: FI-AR, FI-AP, FI-AA, FI-GL, CO, MM, SD, PS, RE-FX, BTP, SuccessFactors, Ariba, SAC, BPA, IS, EAM, "—"
+  scopeItemIds?: string;        // comma-separated 2602 IDs only (e.g. "J45, BMD, 19C") or "—"
+  scopeItemNames?: string;      // human-readable scope-item names (or product name for Gap)
   confidence?: "high" | "medium" | "low";
 }
 
@@ -82,6 +88,15 @@ GROUNDING RULES:
 - For Gap, explicitly name the separate product needed; note any partial workaround within 2602
 - "scopeItems" should be the top 1-3 scope item IDs + names from the candidate list that cover this requirement; empty string if none match (then it's a Gap or N/A by definition)
 
+STRUCTURED FIELDS (REQUIRED for new classifications, 2026-04-27 onward):
+- "sapModule" — controlled vocabulary, choose ONE primary:
+    OOTB / Config in 2602: FI-AR | FI-AP | FI-AA | FI-GL | CO | MM | SD | PS | RE-FX | TR | TRM
+    Gap to non-2602 SAP product: SuccessFactors | Ariba | SAC | BPA | IS | EAM | Convergent-Invoicing | ABAP-Environment | BTP-Other
+    Gap to 3rd-party / not SAP: 3rd-party
+    N/A bucket: "—" (em-dash)
+- "scopeItemIds" — comma-sep 2602 IDs ONLY (e.g. "J45, BMD, 19C"). Use "—" for Gap or N/A.
+- "scopeItemNames" — human-readable names matching scopeItemIds order (e.g. "Procurement of Services; Procurement of Direct Materials"). For Gap, the SAP product/component name (e.g. "SuccessFactors Employee Central"). Use "—" for N/A.
+
 OUTPUT FORMAT — write a strict JSON file matching this schema (no preamble, no markdown):
 {
   "schemaVersion": 1,
@@ -91,7 +106,10 @@ OUTPUT FORMAT — write a strict JSON file matching this schema (no preamble, no
       "requirementId": "<id>",
       "classification": "O - Out Of The Box | C - Configuration | G - Gap | N/A - Out of Scope",
       "remarks": "<60-200 words, grounded in scope items + config mechanism / gap product>",
-      "scopeItems": "<scope item id + name pattern, e.g. '5XU Document and Reporting Compliance, 1J2 Compliance Formats'>",
+      "scopeItems": "<legacy combined view, e.g. '5XU Document and Reporting Compliance, 1J2 Compliance Formats' — keep for back-compat>",
+      "sapModule": "<from controlled vocab above>",
+      "scopeItemIds": "<comma-sep IDs only, e.g. 'J45, BMD'>",
+      "scopeItemNames": "<human-readable names>",
       "confidence": "high | medium | low"
     }
   ]
@@ -271,6 +289,11 @@ async function apply(): Promise<void> {
         solutionProviderResponse: r.classification,
         solutionProviderRemarks: r.remarks,
         erpModuleSupporting: r.scopeItems,
+        // New structured columns — set when result file provides them, else
+        // null so we don't blow away prior values on a partial re-apply.
+        ...(r.sapModule !== undefined ? { sapModule: r.sapModule } : {}),
+        ...(r.scopeItemIds !== undefined ? { scopeItemIds: r.scopeItemIds } : {}),
+        ...(r.scopeItemNames !== undefined ? { scopeItemNames: r.scopeItemNames } : {}),
       },
     });
     updated++;
