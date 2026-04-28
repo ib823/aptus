@@ -144,6 +144,30 @@ model VerdictScopeItem {
   @@index([scopeItemId])
 }
 
+// Phase 12 — Customer-facing read-only share links.
+// Buyer-side stakeholders access a filtered view of an assessment without
+// needing a full account. Auth is via signed share-link token.
+model AssessmentShareLink {
+  id              String    @id @default(cuid())
+  assessmentId    String
+  token           String    @unique // urlsafe base64; the share URL slug
+  createdBy       String
+  createdAt       DateTime  @default(now())
+  expiresAt       DateTime?
+  revokedAt       DateTime?
+  // Scope: which sections of the report the recipient can see.
+  // Default: read all classification + gaps + reports; never write.
+  scopeJson       Json?
+  // Audit: every access logged for evidence.
+  lastAccessedAt  DateTime?
+  accessCount     Int       @default(0)
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId])
+  @@index([token])
+}
+
 // Phase 9 — AD-10: curation to DB.
 // 3,086 lines of TS-locked metadata + 17-ID hardcoded sets become DB rows
 // editable via admin UI. Each model below is seeded from the corresponding
@@ -665,6 +689,7 @@ model Assessment {
   catalogVersion      ScopeCatalogVersion?   @relation(fields: [catalogVersionId], references: [id])
   classificationPasses ClassificationPass[]
   vendorSubmissions    VendorSubmission[]
+  shareLinks          AssessmentShareLink[]
   stakeholders        AssessmentStakeholder[]
   scopeSelections     ScopeSelection[]
   configSelections    ConfigSelection[]
