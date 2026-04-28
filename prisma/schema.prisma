@@ -144,6 +144,43 @@ model VerdictScopeItem {
   @@index([scopeItemId])
 }
 
+// Phase 4 — AD-2: vendor responses live in their own table.
+// Vendor-supplied classifications never touch the verdict path
+// (ClassificationVerdict). Multi-round vendor submissions naturally
+// supported via VendorSubmission rows.
+model VendorSubmission {
+  id            String   @id @default(cuid())
+  assessmentId  String
+  vendorName    String
+  submittedAt   DateTime @default(now())
+  sourceArchive String?  // blob URL of the original RFP / template
+  notes         String?  @db.Text
+  importedBy    String?
+
+  assessment Assessment       @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  responses  VendorResponse[]
+
+  @@index([assessmentId])
+  @@index([assessmentId, submittedAt])
+}
+
+model VendorResponse {
+  id              String   @id @default(cuid())
+  requirementId   String
+  submissionId    String
+  verdict         String   // raw vendor classification (may be NM / UD / etc.)
+  remarksMd       String?  @db.Text
+  vendorMetaJson  Json?    // any vendor-specific extras (compliance status, etc.)
+  importedAt      DateTime @default(now())
+
+  requirement ClientRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  submission  VendorSubmission  @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([requirementId])
+  @@index([submissionId])
+  @@index([submissionId, requirementId])
+}
+
 model ScopeItem {
   id                String   @id // e.g., "J60" — from BPD filename
   name              String // from BPD XLSX column 1, first data row
@@ -559,6 +596,7 @@ model Assessment {
   organization        Organization           @relation(fields: [organizationId], references: [id])
   catalogVersion      ScopeCatalogVersion?   @relation(fields: [catalogVersionId], references: [id])
   classificationPasses ClassificationPass[]
+  vendorSubmissions    VendorSubmission[]
   stakeholders        AssessmentStakeholder[]
   scopeSelections     ScopeSelection[]
   configSelections    ConfigSelection[]
@@ -995,8 +1033,9 @@ model ClientRequirement {
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
-  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
-  verdicts   ClassificationVerdict[]
+  assessment      Assessment              @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  verdicts        ClassificationVerdict[]
+  vendorResponses VendorResponse[]
 
   @@unique([assessmentId, module, code])
   @@index([assessmentId])
