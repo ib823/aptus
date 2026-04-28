@@ -88,9 +88,9 @@ const KNOWN_STALE_PROCESS_CHAIN_REFS = new Set<string>([
   "Organization/Enterprise Structure Setup→J01",
 ]);
 
-const KNOWN_STALE_UI_TEXT_LABELS = new Set<string>([
-  "SAP Best Practices 2508",
-]);
+// Phase 11 — fixed: ui-text.ts now reads from APP_CONFIG.sapVersion.
+// The KNOWN_STALE_UI_TEXT_LABELS set is empty; any new stale label fails CI.
+const KNOWN_STALE_UI_TEXT_LABELS = new Set<string>([]);
 
 describe("curation drift — scope-item ID references vs live catalog", () => {
   it("loads a non-empty catalog snapshot", () => {

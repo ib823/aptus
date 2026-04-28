@@ -1,10 +1,15 @@
 /** All user-facing strings — never hardcode text in JSX */
 
+import { APP_CONFIG } from "@/constants/config";
+
 export const UI_TEXT = {
   app: {
     name: "Aptus",
     tagline: "SAP Business Process Assessment",
-    sapVersion: "SAP Best Practices 2508",
+    // Phase 11 — AD-3: read from APP_CONFIG so the version label can never
+    // drift from the canonical sapVersion. Previously hardcoded "2508"
+    // (already 4 minor releases stale at the time of fix).
+    sapVersion: `SAP Best Practices ${APP_CONFIG.sapVersion}`,
   },
   auth: {
     loginTitle: "Sign in",

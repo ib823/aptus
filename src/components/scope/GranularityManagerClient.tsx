@@ -42,18 +42,21 @@ const GRANULARITY_BADGES: Record<
   string,
   { label: string; color: string; description: string }
 > = {
+  // Phase 11 — UI labels renamed Coarse/Medium/Fine → Summary/Detailed/Per-step.
+  // DB enum values + audit log retain coarse/medium/fine for stability; only
+  // user-facing surfaces change. Per AD-8.
   coarse: {
-    label: "Coarse",
+    label: "Summary",
     color: "bg-emerald-50 text-emerald-700 border-emerald-200",
     description: "Auto-FIT — no review yet",
   },
   medium: {
-    label: "Medium",
+    label: "Detailed",
     color: "bg-amber-50 text-amber-700 border-amber-200",
     description: "Verdict + notes captured",
   },
   fine: {
-    label: "Fine",
+    label: "Per-step",
     color: "bg-blue-50 text-blue-700 border-blue-200",
     description: "Step-level classification",
   },
@@ -136,15 +139,15 @@ export function GranularityManagerClient({
         <h1 className="text-2xl font-bold tracking-tight">Granularity Manager</h1>
         <p className="text-sm text-muted-foreground mt-1">
           {companyName} · Progressive FIT-to-Standard elaboration. Each scope
-          item starts at <strong>Coarse</strong> (Auto-FIT) and is upgraded only
+          item starts at <strong>Summary</strong> (Auto-FIT) and is upgraded only
           where the engagement requires depth.
         </p>
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-6">
-        <RollupCard label="Coarse" value={rollup.coarse} colorClass="bg-emerald-50 text-emerald-700 border-emerald-200" hint="Auto-FIT, no review" />
-        <RollupCard label="Medium" value={rollup.medium} colorClass="bg-amber-50 text-amber-700 border-amber-200" hint="Verdict + notes" />
-        <RollupCard label="Fine" value={rollup.fine} colorClass="bg-blue-50 text-blue-700 border-blue-200" hint="Step-level detail" />
+        <RollupCard label="Summary" value={rollup.coarse} colorClass="bg-emerald-50 text-emerald-700 border-emerald-200" hint="Auto-FIT, no review" />
+        <RollupCard label="Detailed" value={rollup.medium} colorClass="bg-amber-50 text-amber-700 border-amber-200" hint="Verdict + notes" />
+        <RollupCard label="Per-step" value={rollup.fine} colorClass="bg-blue-50 text-blue-700 border-blue-200" hint="Step-level detail" />
       </div>
 
       {visibleSuggestions.length > 0 && (
@@ -193,9 +196,9 @@ export function GranularityManagerClient({
           className="rounded border border-input bg-background px-3 py-1.5 text-sm"
         >
           <option value="all">All ({rows.length})</option>
-          <option value="coarse">Coarse ({rollup.coarse})</option>
-          <option value="medium">Medium ({rollup.medium})</option>
-          <option value="fine">Fine ({rollup.fine})</option>
+          <option value="coarse">Summary ({rollup.coarse})</option>
+          <option value="medium">Detailed ({rollup.medium})</option>
+          <option value="fine">Per-step ({rollup.fine})</option>
         </select>
         <input
           type="search"
