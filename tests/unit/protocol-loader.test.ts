@@ -74,7 +74,7 @@ describe("Phase 2 — classifier.ts no longer hardcodes the protocol", () => {
   });
 
   it("imports loadActiveProtocol from the loader", () => {
-    expect(classifierSrc).toMatch(/loadActiveProtocol.*protocol-loader/s);
+    expect(classifierSrc).toMatch(/loadActiveProtocol[\s\S]*protocol-loader/);
   });
 });
 
