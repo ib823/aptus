@@ -55,6 +55,36 @@ async function uploadToBlob(
   return url;
 }
 
+// Phase 1 — AD-3: catalog-version resolver.
+// Every ingest gets-or-creates a ScopeCatalogVersion row keyed by
+// (version, edition). The id is cached per ingest invocation so we don't
+// re-query for every ScopeItem upsert.
+const catalogVersionCache = new Map<string, string>();
+async function resolveCatalogVersion(
+  version: string,
+  edition: "PUBLIC" | "PRIVATE" | "ON_PREM" = "PUBLIC",
+): Promise<string> {
+  const key = `${edition}:${version}`;
+  const cached = catalogVersionCache.get(key);
+  if (cached) return cached;
+
+  const row = await prisma.scopeCatalogVersion.upsert({
+    where: { version_edition: { version, edition } },
+    create: {
+      version,
+      edition,
+      ingestedAt: new Date(),
+      isActive: true,
+    },
+    update: {
+      // Touch ingestedAt on re-ingest so admins can see the last-touched time
+      ingestedAt: new Date(),
+    },
+  });
+  catalogVersionCache.set(key, row.id);
+  return row.id;
+}
+
 // ---------------------------------------------------------------------------
 // Step type normalization (DATA-CONTRACT.md Section 12)
 // ---------------------------------------------------------------------------
@@ -275,11 +305,14 @@ async function main(): Promise<void> {
     }
 
     // Create ScopeItem (without DOCX content yet — that's Step 2)
+    // Phase 1 — AD-3: pin to a ScopeCatalogVersion (PUBLIC by default).
+    const catalogVersionId = await resolveCatalogVersion(releaseCode);
     await prisma.scopeItem.upsert({
       where: { id: parsed.scopeId },
       update: {
         totalSteps: steps.length,
         xlsxStored: true,
+        catalogVersionId,
       },
       create: {
         id: parsed.scopeId,
@@ -290,6 +323,7 @@ async function main(): Promise<void> {
         prerequisitesHtml: "",
         country: parsed.country,
         version: releaseCode,
+        catalogVersionId,
         totalSteps: steps.length,
         functionalArea: "Uncategorized",
         subArea: "Uncategorized",
@@ -768,6 +802,8 @@ async function main(): Promise<void> {
       // Create a minimal scope item for setup PDFs without matching XLSX
       // These are scope items that exist in the SAP package but only have setup guides
       const pdfCountry = filename.match(/_EN_([A-Z]+)\.pdf$/i)?.[1] ?? "XX";
+      // Phase 1 — AD-3: pin to a ScopeCatalogVersion.
+      const catalogVersionId = await resolveCatalogVersion(releaseCode);
       await prisma.scopeItem.create({
         data: {
           id: scopeId,
@@ -778,6 +814,7 @@ async function main(): Promise<void> {
           prerequisitesHtml: "",
           country: pdfCountry,
           version: releaseCode,
+          catalogVersionId,
           totalSteps: 0,
           functionalArea: "Uncategorized",
           subArea: "Uncategorized",
