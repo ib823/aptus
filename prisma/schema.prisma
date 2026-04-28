@@ -60,10 +60,88 @@ model ClassificationProtocol {
   updatedAt         DateTime @updatedAt
 
   catalogVersion    ScopeCatalogVersion @relation(fields: [catalogVersionId], references: [id])
+  passes            ClassificationPass[]
+  verdicts          ClassificationVerdict[]
 
   @@unique([name, version])
   @@index([catalogVersionId])
   @@index([isActive])
+}
+
+// Phase 3 — AD-5: ClassificationPass as the unit of work.
+// Each pass groups a batch of verdicts produced by a single actor + protocol +
+// catalog combination. Snapshot + diff between passes is the audit story.
+model ClassificationPass {
+  id                  String   @id @default(cuid())
+  assessmentId        String
+  protocolVersionId   String
+  catalogVersionId    String
+  startedAt           DateTime @default(now())
+  completedAt         DateTime?
+  actor               String   // user id or "orchestrator"
+  actorRole           String   // "ai" | "consultant" | "orchestrator"
+  summaryJson         Json?    // bucket distribution, per-module counts, vs-prior diff
+  parentPassId        String?  // chain for diff lineage
+
+  assessment       Assessment              @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  protocolVersion  ClassificationProtocol  @relation(fields: [protocolVersionId], references: [id])
+  parentPass       ClassificationPass?     @relation("PassChain", fields: [parentPassId], references: [id])
+  childPasses      ClassificationPass[]    @relation("PassChain")
+  verdicts         ClassificationVerdict[]
+
+  @@index([assessmentId])
+  @@index([assessmentId, startedAt])
+  @@index([parentPassId])
+}
+
+// Phase 3 — AD-1: ClassificationVerdict as a first-class entity.
+// Append-only. Each verdict is created within a pass; isCurrent is set
+// on the latest verdict per requirement (the verdict-writer chokepoint
+// flips prior verdicts' isCurrent to false on new write).
+model ClassificationVerdict {
+  id                  String   @id @default(cuid())
+  requirementId       String
+  passId              String
+  protocolVersionId   String
+  verdict             String   // "O - Out Of The Box" | "C - Configuration" | "G - Gap" | "N/A - Out of Scope"
+  confidence          String?  // "high" | "medium" | "low" | null
+  sapModule           String?  // controlled vocab (FI-AR / SuccessFactors / etc.)
+  remarksMd           String   @db.Text
+  actor               String   // user id or "orchestrator"
+  source              String   // "AI" | "MANUAL" | "ORCHESTRATOR" | "REIMPORT"
+  createdAt           DateTime @default(now())
+  isCurrent           Boolean  @default(true)
+  // Phase 7 — AD-7: set when parent assessment hits signed_off; writes refused
+  // unless an explicit unsealReason is provided through the verdict-writer.
+  frozenAt            DateTime?
+
+  requirement         ClientRequirement       @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  pass                ClassificationPass      @relation(fields: [passId], references: [id], onDelete: Cascade)
+  protocolVersion     ClassificationProtocol  @relation(fields: [protocolVersionId], references: [id])
+  scopeCitations      VerdictScopeItem[]
+
+  @@index([requirementId, isCurrent])
+  @@index([passId])
+  @@index([requirementId, createdAt])
+  @@index([source])
+  @@index([sapModule])
+}
+
+// Phase 3 — AD-6: catalog FK enforcement, not free text.
+// Verdict citations point at REAL ScopeItem IDs. Hallucinated IDs are
+// rejected at write time. role distinguishes primary / secondary /
+// gap-target / alternative for richer reporting.
+model VerdictScopeItem {
+  verdictId    String
+  scopeItemId  String
+  role         String   // "primary" | "secondary" | "gap-target" | "alternative"
+  rationaleMd  String?  @db.Text
+
+  verdict      ClassificationVerdict @relation(fields: [verdictId], references: [id], onDelete: Cascade)
+  scopeItem    ScopeItem             @relation(fields: [scopeItemId], references: [id])
+
+  @@id([verdictId, scopeItemId])
+  @@index([scopeItemId])
 }
 
 model ScopeItem {
@@ -94,6 +172,7 @@ model ScopeItem {
   processSteps      ProcessStep[]
   setupGuide        SetupGuide?
   solutionProcesses SolutionProcess[]
+  verdictCitations  VerdictScopeItem[]
 
   @@index([functionalArea])
   @@index([subArea])
@@ -477,12 +556,13 @@ model Assessment {
   // always Aptus-brand regardless. Spec §5.7. Null = no override.
   clientAccent String?
 
-  organization     Organization           @relation(fields: [organizationId], references: [id])
-  catalogVersion   ScopeCatalogVersion?   @relation(fields: [catalogVersionId], references: [id])
-  stakeholders     AssessmentStakeholder[]
-  scopeSelections  ScopeSelection[]
-  configSelections ConfigSelection[]
-  stepResponses    StepResponse[]
+  organization        Organization           @relation(fields: [organizationId], references: [id])
+  catalogVersion      ScopeCatalogVersion?   @relation(fields: [catalogVersionId], references: [id])
+  classificationPasses ClassificationPass[]
+  stakeholders        AssessmentStakeholder[]
+  scopeSelections     ScopeSelection[]
+  configSelections    ConfigSelection[]
+  stepResponses       StepResponse[]
   gapResolutions GapResolution[]
   decisionLog    DecisionLogEntry[]
   signOffs       AssessmentSignOff[]
@@ -904,16 +984,26 @@ model ClientRequirement {
   scopeItemIds             String?  // comma-separated 2602 scope item IDs only (e.g. "J45, BMD, 19C")
   scopeItemNames           String?  @db.Text  // human-readable scope-item names (or product name for Gap)
 
+  // Phase 3 — AD-1: denormalised pointer to the current ClassificationVerdict
+  // for this requirement. Refreshed by the verdict-writer on every write.
+  // The 6 columns above (sapModule / scopeItemIds / scopeItemNames /
+  // solutionProviderResponse / solutionProviderRemarks / erpModuleSupporting)
+  // become a read-cache during the dual-write window; dropped in a follow-up
+  // migration after read-side cutover.
+  currentVerdictId         String?
+
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  verdicts   ClassificationVerdict[]
 
   @@unique([assessmentId, module, code])
   @@index([assessmentId])
   @@index([assessmentId, module])
   @@index([assessmentId, module, sortOrder])
   @@index([assessmentId, requirementClass])
+  @@index([currentVerdictId])
 }
 
 // =============================================================
