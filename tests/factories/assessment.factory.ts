@@ -35,6 +35,7 @@ function createBase(overrides: AssessmentOverrides = {}): Assessment {
     revenueBand: overrides.revenueBand ?? "$100M-$500M",
     currentErp: overrides.currentErp ?? "SAP ECC",
     sapVersion: overrides.sapVersion ?? "2508",
+    catalogVersionId: overrides.catalogVersionId ?? null,
     status: overrides.status ?? "draft",
     createdBy: overrides.createdBy ?? nextId(),
     organizationId: overrides.organizationId ?? nextId(),
