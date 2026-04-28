@@ -144,6 +144,73 @@ model VerdictScopeItem {
   @@index([scopeItemId])
 }
 
+// Phase 9 — AD-10: curation to DB.
+// 3,086 lines of TS-locked metadata + 17-ID hardcoded sets become DB rows
+// editable via admin UI. Each model below is seeded from the corresponding
+// TS const file (one-time seed; constant files become a one-shot import).
+// Drift CI test (Phase 0) extended to cover these tables.
+
+model ScopeItemCuration {
+  id                   String   @id @default(cuid())
+  scopeItemId          String   @unique  // FK to ScopeItem.id
+  summaryHtml          String?  @db.Text
+  briefingMdSections   Json?    // briefing sections per scope-briefings.ts shape
+  prereviewQuestions   Json?    // string[] of pre-review questions
+  modulesJson          Json?    // SAP module list (the metadata file's "modules" arrays)
+  masterDataJson       Json?
+  dependenciesJson     Json?    // [{ scopeItemId, name, reason, type }]
+  activityPatternsJson Json?
+  implicationsJson     Json?
+  curatedAt            DateTime @default(now())
+  curatedBy            String?
+  updatedAt            DateTime @updatedAt
+
+  scopeItem ScopeItem @relation(fields: [scopeItemId], references: [id], onDelete: Cascade)
+
+  @@index([scopeItemId])
+}
+
+model ProcessChain {
+  id                  String   @id @default(cuid())
+  area                String   // "Finance", "Sourcing and Procurement", etc.
+  name                String   // "Record to Report", "Procure to Pay", etc.
+  description         String?  @db.Text
+  scopeItemIdsOrdered String[] @default([])  // ordered scope-item IDs for the chain
+  sortOrder           Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([area, name])
+  @@index([area])
+}
+
+model ScopePreset {
+  id                    String   @id @default(cuid())
+  key                   String   @unique  // "coreedge"
+  name                  String
+  description           String   @db.Text
+  defaultScopeItemIds   String[] @default([])
+  optionalScopeItemIds  String[] @default([])
+  modulesJson           Json     // ["FI", "CO"]
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model GapProneArea {
+  id           String   @id @default(cuid())
+  name         String   // "Human Resources", "Sourcing/Procurement", "Tax/Reporting"
+  matchPattern String   // regex source string, applied to module/area names
+  rationaleMd  String   @db.Text
+  severity     String   @default("medium") // low | medium | high
+  scopeItemIds String[] @default([])  // optional: specific catalog IDs always flagged
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([isActive])
+}
+
 // Phase 4 — AD-2: vendor responses live in their own table.
 // Vendor-supplied classifications never touch the verdict path
 // (ClassificationVerdict). Multi-round vendor submissions naturally
@@ -210,6 +277,7 @@ model ScopeItem {
   setupGuide        SetupGuide?
   solutionProcesses SolutionProcess[]
   verdictCitations  VerdictScopeItem[]
+  curation          ScopeItemCuration?
 
   @@index([functionalArea])
   @@index([subArea])
