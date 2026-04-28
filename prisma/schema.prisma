@@ -12,6 +12,34 @@ datasource db {
 // Layer 1: SAP Catalog (Ingested from ZIP)
 // =============================================================
 
+// Phase 1 — AD-3: Catalog versioning + edition partition.
+// Every ingest creates a new ScopeCatalogVersion row instead of mutating
+// existing ScopeItem rows. Verdicts (Phase 3) pin to a catalog version so
+// biannual SAP releases (2608 / 2702 / etc.) don't silently corrupt prior
+// classifications.
+//
+// During Phase 1 the catalogVersionId FKs on ScopeItem + Assessment are
+// nullable to allow a backfill seed before flipping to non-null in a
+// follow-up migration.
+model ScopeCatalogVersion {
+  id                String   @id @default(cuid())
+  version           String   // "2602", "2608", etc.
+  edition           String   @default("PUBLIC") // "PUBLIC" | "PRIVATE" | "ON_PREM"
+  releaseDate       DateTime?
+  ingestedAt        DateTime @default(now())
+  sourceArchiveUrl  String?  // blob URL of the original SAP ZIP
+  sourceArchiveHash String?  // sha256 — same archive re-ingest is a no-op
+  notes             String?  @db.Text
+  isActive          Boolean  @default(true)
+  supersededById    String?
+
+  scopeItems  ScopeItem[]
+  assessments Assessment[]
+
+  @@unique([version, edition])
+  @@index([isActive])
+}
+
 model ScopeItem {
   id                String   @id // e.g., "J60" — from BPD filename
   name              String // from BPD XLSX column 1, first data row
@@ -22,6 +50,10 @@ model ScopeItem {
   country           String // "MY" or "XX" — from filename suffix
   language          String   @default("EN")
   version           String   @default("2602")
+  // Phase 1 — AD-3: nullable FK to ScopeCatalogVersion. Backfilled to a
+  // single seeded PUBLIC_2602 row in the catalog-versions seed migration;
+  // flipped to non-nullable in a follow-up after the dual-mode period.
+  catalogVersionId  String?
   totalSteps        Int
   functionalArea    String
   subArea           String
@@ -32,6 +64,7 @@ model ScopeItem {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  catalogVersion    ScopeCatalogVersion? @relation(fields: [catalogVersionId], references: [id])
   processSteps      ProcessStep[]
   setupGuide        SetupGuide?
   solutionProcesses SolutionProcess[]
@@ -39,6 +72,7 @@ model ScopeItem {
   @@index([functionalArea])
   @@index([subArea])
   @@index([country])
+  @@index([catalogVersionId])
 }
 
 // Phase M1: Hierarchy Entities — extracted from flat ProcessStep columns
@@ -378,6 +412,10 @@ model Assessment {
   revenueBand        String?
   currentErp         String?
   sapVersion         String    @default("2602")
+  // Phase 1 — AD-3: pin assessment to a frozen catalog version so verdicts
+  // remain reproducible after biannual SAP catalog ingests.
+  // Nullable during Phase 1 backfill; flipped to non-nullable after dual-mode period.
+  catalogVersionId   String?
   status             String    @default("draft")
   createdBy          String
   organizationId     String
@@ -413,8 +451,9 @@ model Assessment {
   // always Aptus-brand regardless. Spec §5.7. Null = no override.
   clientAccent String?
 
-  organization   Organization           @relation(fields: [organizationId], references: [id])
-  stakeholders   AssessmentStakeholder[]
+  organization     Organization           @relation(fields: [organizationId], references: [id])
+  catalogVersion   ScopeCatalogVersion?   @relation(fields: [catalogVersionId], references: [id])
+  stakeholders     AssessmentStakeholder[]
   scopeSelections  ScopeSelection[]
   configSelections ConfigSelection[]
   stepResponses    StepResponse[]
