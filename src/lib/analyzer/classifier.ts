@@ -48,35 +48,11 @@ interface AnthropicResponse {
   usage: { input_tokens: number; output_tokens: number };
 }
 
-const SYSTEM_PROMPT = `You are a SAP FIT-to-Standard analyst working with the SAP S/4HANA Cloud Public Edition 2602 catalog.
-
-Your job: given a batch of client requirements + a list of candidate 2602 scope items, classify each requirement and produce a grounded narrative.
-
-CLASSIFICATION RULES (use exact strings):
-- "O - Out Of The Box" — capability is in the 2602 baseline, no customization needed
-- "C - Configuration" — capability needs SSCUI / Key User Extensibility / Output Management / Manage Workflows setup, all within 2602 baseline
-- "G - Gap" — requires a separate licensed SAP product (SuccessFactors EC, Ariba, SAC Planning, SAC Smart Predict, SAP Commerce Cloud, etc.) OR a 3rd-party tool (ONESOURCE/Vertex for corporate tax, etc.) — NOT in 2602 baseline
-
-GROUNDING RULES:
-- Reference scope items by ID (e.g., "5XU Document and Reporting Compliance")
-- Be brutally honest about Gaps — do not invent OOTB coverage that doesn't exist in the candidate list
-- For Configuration, name the specific config mechanism (SSCUI / KUE / Adapt UI / Manage Workflows / Output Management / Adobe Forms / Communication Arrangement)
-- For Gap, explicitly name the separate product needed and note any partial workaround within 2602
-- "matchedScopeItems" should be the top 1-3 scope item IDs from the candidate list that cover this requirement; empty array if none match (then it's a Gap by definition)
-
-OUTPUT FORMAT — strict JSON, no preamble, no markdown:
-{
-  "results": [
-    {
-      "requirementId": "<id>",
-      "classification": "<O - Out Of The Box | C - Configuration | G - Gap>",
-      "matchedScopeItems": ["<id1>", "<id2>"],
-      "remarks": "<one paragraph, 60-200 words, grounded in scope items>",
-      "erpModuleSupporting": "<scope item id + name pattern, e.g. '5XU Document and Reporting Compliance + 1J2 Compliance Formats'>",
-      "confidence": "<high | medium | low>"
-    }
-  ]
-}`;
+// Phase 2 — AD-4: protocol text lives in the DB (ClassificationProtocol).
+// Loaded via loadActiveProtocol(); cached 60s in-process. The previous
+// hardcoded SYSTEM_PROMPT const is gone — single source of truth is the
+// seeded ClassificationProtocol row.
+import { loadActiveProtocol } from "@/lib/analyzer/protocol-loader";
 
 function buildUserMessage(
   requirements: RequirementToClassify[],
@@ -106,11 +82,16 @@ Classify every requirement above. Return ONLY the JSON object specified.`;
 export async function classifyBatch(
   requirements: RequirementToClassify[],
   candidates: CandidateScopeItem[],
-): Promise<{ results: ClassificationResult[]; usage: { inputTokens: number; outputTokens: number } }> {
+): Promise<{ results: ClassificationResult[]; usage: { inputTokens: number; outputTokens: number }; protocolVersionId: string }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY not configured — set it in Vercel env to enable AI analysis");
   }
+
+  // Phase 2 — AD-4: load active protocol from DB. The protocolVersionId is
+  // returned alongside results so Phase 3's verdict-writer can pin every
+  // verdict to the exact protocol that produced it.
+  const protocol = await loadActiveProtocol();
 
   const userMessage = buildUserMessage(requirements, candidates);
 
@@ -124,7 +105,7 @@ export async function classifyBatch(
     body: JSON.stringify({
       model: MODEL,
       max_tokens: 4096,
-      system: SYSTEM_PROMPT,
+      system: protocol.systemPrompt,
       messages: [{ role: "user", content: userMessage }],
     }),
   });
@@ -156,6 +137,7 @@ export async function classifyBatch(
       inputTokens: json.usage.input_tokens,
       outputTokens: json.usage.output_tokens,
     },
+    protocolVersionId: protocol.id,
   };
 }
 

@@ -35,8 +35,34 @@ model ScopeCatalogVersion {
 
   scopeItems  ScopeItem[]
   assessments Assessment[]
+  protocols   ClassificationProtocol[]
 
   @@unique([version, edition])
+  @@index([isActive])
+}
+
+// Phase 2 — AD-4: SAP best-practice classification protocol as DB config.
+// Single source of truth for the protocol text used by both the AI
+// classifier (src/lib/analyzer/classifier.ts) and the orchestrator
+// (scripts/classify-batch.ts). Verdicts (Phase 3) pin to a protocolVersionId
+// so the protocol used to produce them is reconstructable forever.
+model ClassificationProtocol {
+  id                String   @id @default(cuid())
+  name              String   // "SAP 2602 best-practice"
+  version           String   // semver-ish, e.g. "1.0.0"
+  catalogVersionId  String
+  bucketDefinitions Json     // { O: "...", C: "...", G: "...", "N/A": "..." }
+  groundingRules    String   @db.Text // free-form prose
+  systemPrompt      String   @db.Text // the full prompt sent to the AI
+  isActive          Boolean  @default(true)
+  deprecatedAt      DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  catalogVersion    ScopeCatalogVersion @relation(fields: [catalogVersionId], references: [id])
+
+  @@unique([name, version])
+  @@index([catalogVersionId])
   @@index([isActive])
 }
 
