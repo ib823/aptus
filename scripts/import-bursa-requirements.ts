@@ -25,7 +25,7 @@
  * user (both auto-provisioned by /api/auth/test-login).
  */
 
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import fs from "fs";
@@ -612,6 +612,30 @@ async function main(): Promise<void> {
   console.log(`Upserting ${all.length} ClientRequirement rows…`);
   let inserted = 0;
   let updated = 0;
+  // Phase 4 — AD-2: vendor responses go into the dedicated VendorResponse
+  // table, not the ClientRequirement verdict columns. We create one
+  // VendorSubmission per import run; each requirement's vendor verdict
+  // becomes a VendorResponse row tied to that submission.
+  let vendorSubmissionId: string | null = null;
+  const hasVendorData = all.some(
+    (r) => r.solutionProviderResponse || r.solutionProviderRemarks || r.complianceStatus,
+  );
+  if (hasVendorData) {
+    const sub = await prisma.vendorSubmission.create({
+      data: {
+        assessmentId: assessment.id,
+        vendorName: process.env.VENDOR_NAME ?? "Source RFP import",
+        submittedAt: new Date(),
+        notes: "Created by scripts/import-bursa-requirements.ts. Captures vendor-supplied verdicts + remarks separately from Aptus's independent classification (AD-2).",
+        importedBy: "import-bursa-requirements.ts",
+      },
+    });
+    vendorSubmissionId = sub.id;
+    console.log(`  Created VendorSubmission ${vendorSubmissionId} for vendor-supplied data`);
+  }
+
+  let vendorResponseCount = 0;
+
   for (const r of all) {
     const result = await prisma.clientRequirement.upsert({
       where: {
@@ -629,14 +653,17 @@ async function main(): Promise<void> {
         requirementText: r.requirementText,
         requirementType: r.requirementType,
         clientRemarks: r.clientRemarks,
-        solutionProviderResponse: r.solutionProviderResponse,
-        solutionProviderRemarks: r.solutionProviderRemarks,
-        erpModuleSupporting: r.erpModuleSupporting,
+        // Phase 4 — vendor data NO LONGER lives in these columns. Left
+        // null on create; legacy in-app edits remain (preserved by the
+        // unchanged update branch below).
+        solutionProviderResponse: null,
+        solutionProviderRemarks: null,
+        erpModuleSupporting: null,
         sortOrder: r.sortOrder,
         requirementClass: r.requirementClass,
         subCriteria: r.subCriteria,
         requiredDocs: r.requiredDocs,
-        complianceStatus: r.complianceStatus,
+        complianceStatus: null,
         submissionFolder: r.submissionFolder,
       },
       update: {
@@ -650,13 +677,36 @@ async function main(): Promise<void> {
         subCriteria: r.subCriteria,
         requiredDocs: r.requiredDocs,
         submissionFolder: r.submissionFolder,
-        // Do NOT overwrite fields that may have been edited in-app:
-        // solutionProviderResponse, solutionProviderRemarks, erpModuleSupporting,
-        // complianceStatus.
+        // Do NOT overwrite verdict fields that may have been edited in-app
+        // (these will be migrated away in Phase 10 — for now we leave them
+        // alone since prior in-app edits live there):
+        // solutionProviderResponse, solutionProviderRemarks,
+        // erpModuleSupporting, complianceStatus.
       },
     });
     if (result.createdAt.getTime() === result.updatedAt.getTime()) inserted++;
     else updated++;
+
+    // Phase 4 — write vendor data to VendorResponse if any field is populated.
+    if (vendorSubmissionId && (r.solutionProviderResponse || r.solutionProviderRemarks || r.complianceStatus)) {
+      await prisma.vendorResponse.create({
+        data: {
+          requirementId: result.id,
+          submissionId: vendorSubmissionId,
+          verdict: r.solutionProviderResponse ?? "",
+          remarksMd: r.solutionProviderRemarks,
+          vendorMetaJson: r.complianceStatus
+            ? { complianceStatus: r.complianceStatus, erpModuleSupporting: r.erpModuleSupporting }
+            : (r.erpModuleSupporting ? { erpModuleSupporting: r.erpModuleSupporting } : Prisma.JsonNull),
+          importedAt: new Date(),
+        },
+      });
+      vendorResponseCount++;
+    }
+  }
+
+  if (vendorResponseCount > 0) {
+    console.log(`  Created ${vendorResponseCount} VendorResponse rows under submission ${vendorSubmissionId}`);
   }
 
   console.log(`\nDone. Inserted ${inserted}, updated ${updated}.`);
