@@ -68,36 +68,18 @@ interface ResultFile {
   results: ResultRow[];
 }
 
-// ── Embedded SAP-2602 protocol (pinned in this file so emits are
-//    self-contained even if the analyzer's prompt drifts later). ───────────
-
-const SAP_2602_PROTOCOL = `You are a SAP FIT-to-Standard analyst working with the SAP S/4HANA Cloud Public Edition 2602 catalog.
-
-Your job: classify each requirement in this batch against the candidate 2602 scope items, then produce a grounded narrative.
-
-CLASSIFICATION RULES (use exact strings):
-- "O - Out Of The Box"   — capability is in the 2602 baseline as-is, no customization needed
-- "C - Configuration"    — capability needs SSCUI / Key User Extensibility / Output Management / Manage Workflows / Adapt UI / Adobe Forms / Communication Arrangement setup, all within the 2602 baseline
-- "G - Gap"              — requires a separate licensed SAP product (SuccessFactors EC, Ariba, SAC Planning, SAC Smart Predict, SAP Commerce Cloud, FieldGlass, etc.) OR a 3rd-party tool (Vertex / ONESOURCE for corporate tax, Avalara, Adobe Sign, etc.) — NOT in the 2602 baseline
-- "N/A - Out of Scope"   — not a SAP capability question (vendor commercial pre-qualification, ESG offerings, vendor track record, contractual policy, security policy that's the cloud provider's responsibility, etc.)
-
-GROUNDING RULES:
-- Reference scope items by ID + name (e.g. "5XU Document and Reporting Compliance")
-- Be brutally honest about Gaps — do NOT invent OOTB coverage that isn't in the candidate list
-- For Configuration, name the specific config mechanism (SSCUI / KUE / Adapt UI / Manage Workflows / Output Management / Adobe Forms / Communication Arrangement)
-- For Gap, explicitly name the separate product needed; note any partial workaround within 2602
-- "scopeItems" should be the top 1-3 scope item IDs + names from the candidate list that cover this requirement; empty string if none match (then it's a Gap or N/A by definition)
-
-STRUCTURED FIELDS (REQUIRED for new classifications, 2026-04-27 onward):
-- "sapModule" — controlled vocabulary, choose ONE primary:
-    OOTB / Config in 2602: FI-AR | FI-AP | FI-AA | FI-GL | CO | MM | SD | PS | RE-FX | TR | TRM
-    Gap to non-2602 SAP product: SuccessFactors | Ariba | SAC | BPA | IS | EAM | Convergent-Invoicing | ABAP-Environment | BTP-Other
-    Gap to 3rd-party / not SAP: 3rd-party
-    N/A bucket: "—" (em-dash)
-- "scopeItemIds" — comma-sep 2602 IDs ONLY (e.g. "J45, BMD, 19C"). Use "—" for Gap or N/A.
-- "scopeItemNames" — human-readable names matching scopeItemIds order (e.g. "Procurement of Services; Procurement of Direct Materials"). For Gap, the SAP product/component name (e.g. "SuccessFactors Employee Central"). Use "—" for N/A.
-
-OUTPUT FORMAT — write a strict JSON file matching this schema (no preamble, no markdown):
+// Phase 2 — AD-4: protocol text lives in the DB.
+// The orchestrator fetches the active ClassificationProtocol row at emit time
+// and embeds its systemPrompt into the emitted batch JSON. The previous
+// hardcoded SAP_2602_PROTOCOL const is gone — single source of truth is
+// the seeded ClassificationProtocol row (see scripts/seed-classification-protocol.ts).
+//
+// Output-format addendum kept here because it's orchestrator-specific
+// (the analyzer's output format is similar but not identical — analyzer
+// emits a top-level { results: [...] }, orchestrator wants
+// { schemaVersion: 1, assessmentId: ..., results: [...] }).
+const ORCHESTRATOR_OUTPUT_ADDENDUM = `
+ORCHESTRATOR OUTPUT FORMAT — write a strict JSON file matching this schema (no preamble, no markdown):
 {
   "schemaVersion": 1,
   "assessmentId": "<the assessmentId from the input file>",
@@ -117,6 +99,19 @@ OUTPUT FORMAT — write a strict JSON file matching this schema (no preamble, no
 
 Write your output to a file at the path the orchestrator tells you, then run:
   npx tsx scripts/classify-batch.ts apply --in <output-file>`;
+
+async function loadProtocolText(): Promise<string> {
+  const row = await prisma.classificationProtocol.findFirst({
+    where: { isActive: true },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!row) {
+    throw new Error(
+      "No active ClassificationProtocol — seed via `pnpm tsx scripts/seed-classification-protocol.ts` first.",
+    );
+  }
+  return row.systemPrompt + "\n\n" + ORCHESTRATOR_OUTPUT_ADDENDUM;
+}
 
 // ── CLI parsing ─────────────────────────────────────────────────────────────
 
@@ -200,12 +195,13 @@ async function emit(): Promise<void> {
   });
   const candidates = selectRelevantCandidates(allItems, requirementsForClassifier);
 
+  const protocolText = await loadProtocolText();
   const file: EmitFile = {
     schemaVersion: 1,
     assessmentId: a.id,
     assessmentCompany: a.companyName,
     filterDescription,
-    systemPrompt: SAP_2602_PROTOCOL,
+    systemPrompt: protocolText,
     candidateScopeItems: candidates,
     requirements: reqs.map((r) => ({
       id: r.id,
