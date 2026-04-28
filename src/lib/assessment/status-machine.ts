@@ -153,6 +153,43 @@ export const STATUS_LABELS: Record<AssessmentStatusV2, string> = {
   archived: "Archived",
 };
 
+// Phase 11 — collapse 12 internal states into 6 user-visible groups for the UI
+// while keeping the full 12-state granularity for audit. Per the rebuild plan
+// Phase 11: "user-facing fewer states; audit log keeps the raw status."
+//
+// Use STATUS_GROUP[status].label / .key in surfaces (badges, nav, dashboards).
+// Use STATUS_LABELS[status] in audit log + reports.
+export type StatusGroupKey = "setup" | "review" | "validating" | "signoff" | "signed" | "closed";
+
+export const STATUS_GROUPS: Record<AssessmentStatusV2, { key: StatusGroupKey; label: string }> = {
+  draft:              { key: "setup",       label: "Setup" },
+  scoping:            { key: "setup",       label: "Setup" },
+  in_progress:        { key: "review",      label: "Review" },
+  workshop_active:    { key: "review",      label: "Review" },
+  review_cycle:       { key: "review",      label: "Review" },
+  gap_resolution:     { key: "review",      label: "Review" },
+  pending_validation: { key: "validating",  label: "Validating" },
+  validated:          { key: "validating",  label: "Validating" },
+  pending_sign_off:   { key: "signoff",     label: "Sign-off" },
+  signed_off:         { key: "signed",      label: "Signed" },
+  handed_off:         { key: "closed",      label: "Closed" },
+  archived:           { key: "closed",      label: "Closed" },
+};
+
+/** Convenience: 6 user-visible groups in display order. */
+export const STATUS_GROUP_ORDER: StatusGroupKey[] = [
+  "setup", "review", "validating", "signoff", "signed", "closed",
+];
+
+export const STATUS_GROUP_LABELS: Record<StatusGroupKey, string> = {
+  setup: "Setup",
+  review: "Review",
+  validating: "Validating",
+  signoff: "Sign-off",
+  signed: "Signed",
+  closed: "Closed",
+};
+
 /** Status color mapping for UI badges */
 export const STATUS_COLORS: Record<AssessmentStatusV2, string> = {
   draft: "gray",
