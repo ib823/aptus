@@ -316,6 +316,7 @@ async function main(): Promise<void> {
       },
       create: {
         id: parsed.scopeId,
+        scopeCode: parsed.scopeId,
         name: scopeItemName || parsed.scopeId,
         nameClean,
         purposeHtml: "",
@@ -807,6 +808,7 @@ async function main(): Promise<void> {
       await prisma.scopeItem.create({
         data: {
           id: scopeId,
+          scopeCode: scopeId,
           name: scopeId,
           nameClean: scopeId,
           purposeHtml: "",

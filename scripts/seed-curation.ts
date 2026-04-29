@@ -63,25 +63,35 @@ async function seedScopeItemCuration(prisma: PrismaClient): Promise<number> {
 }
 
 async function seedProcessChains(prisma: PrismaClient): Promise<number> {
+  // Phase 13.1 — refactored from String[] column to ProcessChainItem join table.
+  // Orphan refs (codes not in the catalog) are silently skipped per FK enforcement.
+  const catalog = new Set((await prisma.scopeItem.findMany({ select: { id: true } })).map((r) => r.id));
   let count = 0;
   let order = 0;
   for (const landscape of PROCESS_LANDSCAPES) {
     for (const chain of landscape.chains) {
-      await prisma.processChain.upsert({
+      const upserted = await prisma.processChain.upsert({
         where: { area_name: { area: landscape.area, name: chain.name } },
         create: {
           area: landscape.area,
           name: chain.name,
           description: chain.description ?? null,
-          scopeItemIdsOrdered: chain.steps.map((s) => s.scopeItemId),
           sortOrder: order++,
         },
         update: {
           description: chain.description ?? null,
-          scopeItemIdsOrdered: chain.steps.map((s) => s.scopeItemId),
           sortOrder: order++,
         },
       });
+      // Reset items + re-insert in declared order, filtering orphans.
+      await prisma.processChainItem.deleteMany({ where: { chainId: upserted.id } });
+      let itemOrder = 0;
+      for (const step of chain.steps) {
+        if (!catalog.has(step.scopeItemId)) continue;
+        await prisma.processChainItem.create({
+          data: { chainId: upserted.id, scopeItemId: step.scopeItemId, sortOrder: itemOrder++ },
+        });
+      }
       count++;
     }
   }
@@ -89,28 +99,36 @@ async function seedProcessChains(prisma: PrismaClient): Promise<number> {
 }
 
 async function seedPresets(prisma: PrismaClient): Promise<number> {
+  // Phase 13.1 — refactored from String[] columns to ScopePresetItem join table.
+  const catalog = new Set((await prisma.scopeItem.findMany({ select: { id: true } })).map((r) => r.id));
   let count = 0;
   for (const [key, preset] of Object.entries(PRESETS)) {
-    const defaultIds = preset.scopeItems.filter((i) => i.defaultSelected).map((i) => i.id);
-    const optionalIds = preset.scopeItems.filter((i) => !i.defaultSelected).map((i) => i.id);
-    await prisma.scopePreset.upsert({
+    const upserted = await prisma.scopePreset.upsert({
       where: { key },
       create: {
         key,
         name: preset.name,
         description: preset.description,
-        defaultScopeItemIds: defaultIds,
-        optionalScopeItemIds: optionalIds,
         modulesJson: preset.modules as unknown as Prisma.InputJsonValue,
       },
       update: {
         name: preset.name,
         description: preset.description,
-        defaultScopeItemIds: defaultIds,
-        optionalScopeItemIds: optionalIds,
         modulesJson: preset.modules as unknown as Prisma.InputJsonValue,
       },
     });
+    // Reset + re-insert join rows, filtering orphans.
+    await prisma.scopePresetItem.deleteMany({ where: { presetId: upserted.id } });
+    for (const item of preset.scopeItems) {
+      if (!catalog.has(item.id)) continue;
+      await prisma.scopePresetItem.create({
+        data: {
+          presetId: upserted.id,
+          scopeItemId: item.id,
+          role: item.defaultSelected ? "default" : "optional",
+        },
+      });
+    }
     count++;
   }
   return count;
