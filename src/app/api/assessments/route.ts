@@ -27,6 +27,8 @@ const createSchema = z.object({
   companySize: z.enum(["small", "midsize", "large", "enterprise"]).default("midsize"),
   revenueBand: z.string().optional(),
   currentErp: z.string().optional(),
+  // Phase 13.4 — AD-13.7: optional, defaults to active PUBLIC inside createAssessment
+  catalogVersionId: z.string().optional(),
 });
 
 const listQuerySchema = z.object({

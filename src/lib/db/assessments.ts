@@ -13,6 +13,12 @@ export interface CreateAssessmentInput {
   currentErp?: string | undefined;
   createdBy: string;
   organizationId: string;
+  /**
+   * Phase 13.4 — AD-13.7: catalog version the assessment is pinned to.
+   * Defaults to the active PUBLIC catalog when omitted (back-compat).
+   * Supplied by the new-assessment form's Edition + Version picker.
+   */
+  catalogVersionId?: string | undefined;
 }
 
 interface AssessmentCursorParts {
@@ -46,6 +52,38 @@ export function decodeAssessmentCursor(cursor: string | undefined): AssessmentCu
 }
 
 export async function createAssessment(input: CreateAssessmentInput) {
+  // Phase 13.4 — AD-13.7: every new assessment must be pinned to a catalog
+  // version. If the caller doesn't specify, default to the most recently
+  // ingested active PUBLIC catalog (back-compat for legacy callers).
+  let catalogVersionId = input.catalogVersionId;
+  if (!catalogVersionId) {
+    const fallback = await prisma.scopeCatalogVersion.findFirst({
+      where: { edition: "PUBLIC", isActive: true },
+      orderBy: { ingestedAt: "desc" },
+      select: { id: true },
+    });
+    if (!fallback) {
+      throw new Error(
+        "No active PUBLIC catalog version found and no catalogVersionId supplied. Cannot create assessment.",
+      );
+    }
+    catalogVersionId = fallback.id;
+  } else {
+    // Validate caller-supplied id refers to an active catalog
+    const supplied = await prisma.scopeCatalogVersion.findUnique({
+      where: { id: catalogVersionId },
+      select: { id: true, isActive: true, edition: true, version: true },
+    });
+    if (!supplied) {
+      throw new Error(`catalogVersionId=${catalogVersionId} does not exist.`);
+    }
+    if (!supplied.isActive) {
+      throw new Error(
+        `catalogVersionId=${catalogVersionId} (${supplied.edition}/${supplied.version}) is not active. Pick an active version.`,
+      );
+    }
+  }
+
   return prisma.assessment.create({
     data: {
       companyName: input.companyName,
@@ -57,6 +95,7 @@ export async function createAssessment(input: CreateAssessmentInput) {
       currentErp: input.currentErp ?? null,
       createdBy: input.createdBy,
       organizationId: input.organizationId,
+      catalogVersionId,
       status: "draft",
     },
   });
