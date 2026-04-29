@@ -1,0 +1,35 @@
+{
+  "captured": "2026-04-29",
+  "purpose": "Phase 13.1 schema-migration regression baseline. Every value below MUST match before and after the cuid + curation-join-table migration runs. Diff this fixture in CI to refuse any drift.",
+  "bursaAssessment": {
+    "id": "cmofk3zql000163ubn43nkhqy",
+    "companyName": "Bursa Malaysia Berhad",
+    "status": "signed_off",
+    "catalogVersionId": "cmoi2idh000006335y202rez2",
+    "catalogEdition": "PUBLIC",
+    "catalogVersion": "2602",
+    "clientRequirementsCount": 981,
+    "classificationPassesCount": 1,
+    "totalVerdictsIncludingHistory": 981,
+    "currentVerdictsCount": 981,
+    "bucketDistributionCurrent": {
+      "O - Out Of The Box": 443,
+      "C - Configuration": 182,
+      "G - Gap": 238,
+      "N/A - Out of Scope": 118
+    },
+    "verdictScopeItemCitations": 241
+  },
+  "publicCatalog": {
+    "scopeItemRowCount": 582
+  },
+  "regressionRules": [
+    "Bursa assessment row exists with status='signed_off'",
+    "Bursa.catalogVersionId resolves to PUBLIC 2602",
+    "ClientRequirement count = 981",
+    "Current ClassificationVerdict count = 981 (one current per requirement)",
+    "Bucket distribution unchanged",
+    "VerdictScopeItem citations count = 241",
+    "Public 2602 ScopeItem count = 582"
+  ]
+}
