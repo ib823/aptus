@@ -22,15 +22,15 @@ datasource db {
 // nullable to allow a backfill seed before flipping to non-null in a
 // follow-up migration.
 model ScopeCatalogVersion {
-  id                String   @id @default(cuid())
-  version           String   // "2602", "2608", etc.
-  edition           String   @default("PUBLIC") // "PUBLIC" | "PRIVATE" | "ON_PREM"
+  id                String    @id @default(cuid())
+  version           String // "2602", "2608", etc.
+  edition           String    @default("PUBLIC") // "PUBLIC" | "PRIVATE" | "ON_PREM"
   releaseDate       DateTime?
-  ingestedAt        DateTime @default(now())
-  sourceArchiveUrl  String?  // blob URL of the original SAP ZIP
-  sourceArchiveHash String?  // sha256 — same archive re-ingest is a no-op
-  notes             String?  @db.Text
-  isActive          Boolean  @default(true)
+  ingestedAt        DateTime  @default(now())
+  sourceArchiveUrl  String? // blob URL of the original SAP ZIP
+  sourceArchiveHash String? // sha256 — same archive re-ingest is a no-op
+  notes             String?   @db.Text
+  isActive          Boolean   @default(true)
   supersededById    String?
 
   scopeItems  ScopeItem[]
@@ -47,21 +47,21 @@ model ScopeCatalogVersion {
 // (scripts/classify-batch.ts). Verdicts (Phase 3) pin to a protocolVersionId
 // so the protocol used to produce them is reconstructable forever.
 model ClassificationProtocol {
-  id                String   @id @default(cuid())
-  name              String   // "SAP 2602 best-practice"
-  version           String   // semver-ish, e.g. "1.0.0"
+  id                String    @id @default(cuid())
+  name              String // "SAP 2602 best-practice"
+  version           String // semver-ish, e.g. "1.0.0"
   catalogVersionId  String
-  bucketDefinitions Json     // { O: "...", C: "...", G: "...", "N/A": "..." }
-  groundingRules    String   @db.Text // free-form prose
-  systemPrompt      String   @db.Text // the full prompt sent to the AI
-  isActive          Boolean  @default(true)
+  bucketDefinitions Json // { O: "...", C: "...", G: "...", "N/A": "..." }
+  groundingRules    String    @db.Text // free-form prose
+  systemPrompt      String    @db.Text // the full prompt sent to the AI
+  isActive          Boolean   @default(true)
   deprecatedAt      DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  catalogVersion    ScopeCatalogVersion @relation(fields: [catalogVersionId], references: [id])
-  passes            ClassificationPass[]
-  verdicts          ClassificationVerdict[]
+  catalogVersion ScopeCatalogVersion     @relation(fields: [catalogVersionId], references: [id])
+  passes         ClassificationPass[]
+  verdicts       ClassificationVerdict[]
 
   @@unique([name, version])
   @@index([catalogVersionId])
@@ -72,22 +72,22 @@ model ClassificationProtocol {
 // Each pass groups a batch of verdicts produced by a single actor + protocol +
 // catalog combination. Snapshot + diff between passes is the audit story.
 model ClassificationPass {
-  id                  String   @id @default(cuid())
-  assessmentId        String
-  protocolVersionId   String
-  catalogVersionId    String
-  startedAt           DateTime @default(now())
-  completedAt         DateTime?
-  actor               String   // user id or "orchestrator"
-  actorRole           String   // "ai" | "consultant" | "orchestrator"
-  summaryJson         Json?    // bucket distribution, per-module counts, vs-prior diff
-  parentPassId        String?  // chain for diff lineage
+  id                String    @id @default(cuid())
+  assessmentId      String
+  protocolVersionId String
+  catalogVersionId  String
+  startedAt         DateTime  @default(now())
+  completedAt       DateTime?
+  actor             String // user id or "orchestrator"
+  actorRole         String // "ai" | "consultant" | "orchestrator"
+  summaryJson       Json? // bucket distribution, per-module counts, vs-prior diff
+  parentPassId      String? // chain for diff lineage
 
-  assessment       Assessment              @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
-  protocolVersion  ClassificationProtocol  @relation(fields: [protocolVersionId], references: [id])
-  parentPass       ClassificationPass?     @relation("PassChain", fields: [parentPassId], references: [id])
-  childPasses      ClassificationPass[]    @relation("PassChain")
-  verdicts         ClassificationVerdict[]
+  assessment      Assessment              @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  protocolVersion ClassificationProtocol  @relation(fields: [protocolVersionId], references: [id])
+  parentPass      ClassificationPass?     @relation("PassChain", fields: [parentPassId], references: [id])
+  childPasses     ClassificationPass[]    @relation("PassChain")
+  verdicts        ClassificationVerdict[]
 
   @@index([assessmentId])
   @@index([assessmentId, startedAt])
@@ -99,26 +99,26 @@ model ClassificationPass {
 // on the latest verdict per requirement (the verdict-writer chokepoint
 // flips prior verdicts' isCurrent to false on new write).
 model ClassificationVerdict {
-  id                  String   @id @default(cuid())
-  requirementId       String
-  passId              String
-  protocolVersionId   String
-  verdict             String   // "O - Out Of The Box" | "C - Configuration" | "G - Gap" | "N/A - Out of Scope"
-  confidence          String?  // "high" | "medium" | "low" | null
-  sapModule           String?  // controlled vocab (FI-AR / SuccessFactors / etc.)
-  remarksMd           String   @db.Text
-  actor               String   // user id or "orchestrator"
-  source              String   // "AI" | "MANUAL" | "ORCHESTRATOR" | "REIMPORT"
-  createdAt           DateTime @default(now())
-  isCurrent           Boolean  @default(true)
+  id                String    @id @default(cuid())
+  requirementId     String
+  passId            String
+  protocolVersionId String
+  verdict           String // "O - Out Of The Box" | "C - Configuration" | "G - Gap" | "N/A - Out of Scope"
+  confidence        String? // "high" | "medium" | "low" | null
+  sapModule         String? // controlled vocab (FI-AR / SuccessFactors / etc.)
+  remarksMd         String    @db.Text
+  actor             String // user id or "orchestrator"
+  source            String // "AI" | "MANUAL" | "ORCHESTRATOR" | "REIMPORT"
+  createdAt         DateTime  @default(now())
+  isCurrent         Boolean   @default(true)
   // Phase 7 — AD-7: set when parent assessment hits signed_off; writes refused
   // unless an explicit unsealReason is provided through the verdict-writer.
-  frozenAt            DateTime?
+  frozenAt          DateTime?
 
-  requirement         ClientRequirement       @relation(fields: [requirementId], references: [id], onDelete: Cascade)
-  pass                ClassificationPass      @relation(fields: [passId], references: [id], onDelete: Cascade)
-  protocolVersion     ClassificationProtocol  @relation(fields: [protocolVersionId], references: [id])
-  scopeCitations      VerdictScopeItem[]
+  requirement     ClientRequirement      @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  pass            ClassificationPass     @relation(fields: [passId], references: [id], onDelete: Cascade)
+  protocolVersion ClassificationProtocol @relation(fields: [protocolVersionId], references: [id])
+  scopeCitations  VerdictScopeItem[]
 
   @@index([requirementId, isCurrent])
   @@index([passId])
@@ -132,13 +132,13 @@ model ClassificationVerdict {
 // rejected at write time. role distinguishes primary / secondary /
 // gap-target / alternative for richer reporting.
 model VerdictScopeItem {
-  verdictId    String
-  scopeItemId  String
-  role         String   // "primary" | "secondary" | "gap-target" | "alternative"
-  rationaleMd  String?  @db.Text
+  verdictId   String
+  scopeItemId String
+  role        String // "primary" | "secondary" | "gap-target" | "alternative"
+  rationaleMd String? @db.Text
 
-  verdict      ClassificationVerdict @relation(fields: [verdictId], references: [id], onDelete: Cascade)
-  scopeItem    ScopeItem             @relation(fields: [scopeItemId], references: [id])
+  verdict   ClassificationVerdict @relation(fields: [verdictId], references: [id], onDelete: Cascade)
+  scopeItem ScopeItem             @relation(fields: [scopeItemId], references: [id])
 
   @@id([verdictId, scopeItemId])
   @@index([scopeItemId])
@@ -148,19 +148,19 @@ model VerdictScopeItem {
 // Buyer-side stakeholders access a filtered view of an assessment without
 // needing a full account. Auth is via signed share-link token.
 model AssessmentShareLink {
-  id              String    @id @default(cuid())
-  assessmentId    String
-  token           String    @unique // urlsafe base64; the share URL slug
-  createdBy       String
-  createdAt       DateTime  @default(now())
-  expiresAt       DateTime?
-  revokedAt       DateTime?
+  id             String    @id @default(cuid())
+  assessmentId   String
+  token          String    @unique // urlsafe base64; the share URL slug
+  createdBy      String
+  createdAt      DateTime  @default(now())
+  expiresAt      DateTime?
+  revokedAt      DateTime?
   // Scope: which sections of the report the recipient can see.
   // Default: read all classification + gaps + reports; never write.
-  scopeJson       Json?
+  scopeJson      Json?
   // Audit: every access logged for evidence.
-  lastAccessedAt  DateTime?
-  accessCount     Int       @default(0)
+  lastAccessedAt DateTime?
+  accessCount    Int       @default(0)
 
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
 
@@ -176,13 +176,13 @@ model AssessmentShareLink {
 
 model ScopeItemCuration {
   id                   String   @id @default(cuid())
-  scopeItemId          String   @unique  // FK to ScopeItem.id
+  scopeItemId          String   @unique // FK to ScopeItem.id
   summaryHtml          String?  @db.Text
-  briefingMdSections   Json?    // briefing sections per scope-briefings.ts shape
-  prereviewQuestions   Json?    // string[] of pre-review questions
-  modulesJson          Json?    // SAP module list (the metadata file's "modules" arrays)
+  briefingMdSections   Json? // briefing sections per scope-briefings.ts shape
+  prereviewQuestions   Json? // string[] of pre-review questions
+  modulesJson          Json? // SAP module list (the metadata file's "modules" arrays)
   masterDataJson       Json?
-  dependenciesJson     Json?    // [{ scopeItemId, name, reason, type }]
+  dependenciesJson     Json? // [{ scopeItemId, name, reason, type }]
   activityPatternsJson Json?
   implicationsJson     Json?
   curatedAt            DateTime @default(now())
@@ -194,45 +194,88 @@ model ScopeItemCuration {
   @@index([scopeItemId])
 }
 
+// Phase 13.1 — AD-13.3: scope-item refs in curation models become FK join
+// tables. The old String[] columns are dropped in the same migration; their
+// data is backfilled into the join tables. Catalog-scoping is provided by
+// the FK target (ScopeItem.id is a cuid pinned to a catalog version).
+
 model ProcessChain {
-  id                  String   @id @default(cuid())
-  area                String   // "Finance", "Sourcing and Procurement", etc.
-  name                String   // "Record to Report", "Procure to Pay", etc.
-  description         String?  @db.Text
-  scopeItemIdsOrdered String[] @default([])  // ordered scope-item IDs for the chain
-  sortOrder           Int      @default(0)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id          String   @id @default(cuid())
+  area        String // "Finance", "Sourcing and Procurement", etc.
+  name        String // "Record to Report", "Procure to Pay", etc.
+  description String?  @db.Text
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items ProcessChainItem[]
 
   @@unique([area, name])
   @@index([area])
 }
 
+model ProcessChainItem {
+  chainId     String
+  scopeItemId String
+  sortOrder   Int // ordered position within the chain
+
+  chain     ProcessChain @relation(fields: [chainId], references: [id], onDelete: Cascade)
+  scopeItem ScopeItem    @relation(fields: [scopeItemId], references: [id])
+
+  @@id([chainId, scopeItemId])
+  @@unique([chainId, sortOrder])
+  @@index([scopeItemId])
+}
+
 model ScopePreset {
-  id                    String   @id @default(cuid())
-  key                   String   @unique  // "coreedge"
-  name                  String
-  description           String   @db.Text
-  defaultScopeItemIds   String[] @default([])
-  optionalScopeItemIds  String[] @default([])
-  modulesJson           Json     // ["FI", "CO"]
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id          String   @id @default(cuid())
+  key         String   @unique // "coreedge"
+  name        String
+  description String   @db.Text
+  modulesJson Json // ["FI", "CO"]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items ScopePresetItem[]
+}
+
+model ScopePresetItem {
+  presetId    String
+  scopeItemId String
+  role        String // "default" | "optional"
+
+  preset    ScopePreset @relation(fields: [presetId], references: [id], onDelete: Cascade)
+  scopeItem ScopeItem   @relation(fields: [scopeItemId], references: [id])
+
+  @@id([presetId, scopeItemId, role])
+  @@index([scopeItemId])
 }
 
 model GapProneArea {
   id           String   @id @default(cuid())
-  name         String   // "Human Resources", "Sourcing/Procurement", "Tax/Reporting"
-  matchPattern String   // regex source string, applied to module/area names
+  name         String // "Human Resources", "Sourcing/Procurement", "Tax/Reporting"
+  matchPattern String // regex source string, applied to module/area names
   rationaleMd  String   @db.Text
   severity     String   @default("medium") // low | medium | high
-  scopeItemIds String[] @default([])  // optional: specific catalog IDs always flagged
   isActive     Boolean  @default(true)
   sortOrder    Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  items GapProneAreaItem[]
+
   @@index([isActive])
+}
+
+model GapProneAreaItem {
+  areaId      String
+  scopeItemId String
+
+  area      GapProneArea @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  scopeItem ScopeItem    @relation(fields: [scopeItemId], references: [id])
+
+  @@id([areaId, scopeItemId])
+  @@index([scopeItemId])
 }
 
 // Phase 4 — AD-2: vendor responses live in their own table.
@@ -244,7 +287,7 @@ model VendorSubmission {
   assessmentId  String
   vendorName    String
   submittedAt   DateTime @default(now())
-  sourceArchive String?  // blob URL of the original RFP / template
+  sourceArchive String? // blob URL of the original RFP / template
   notes         String?  @db.Text
   importedBy    String?
 
@@ -256,13 +299,13 @@ model VendorSubmission {
 }
 
 model VendorResponse {
-  id              String   @id @default(cuid())
-  requirementId   String
-  submissionId    String
-  verdict         String   // raw vendor classification (may be NM / UD / etc.)
-  remarksMd       String?  @db.Text
-  vendorMetaJson  Json?    // any vendor-specific extras (compliance status, etc.)
-  importedAt      DateTime @default(now())
+  id             String   @id @default(cuid())
+  requirementId  String
+  submissionId   String
+  verdict        String // raw vendor classification (may be NM / UD / etc.)
+  remarksMd      String?  @db.Text
+  vendorMetaJson Json? // any vendor-specific extras (compliance status, etc.)
+  importedAt     DateTime @default(now())
 
   requirement ClientRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
   submission  VendorSubmission  @relation(fields: [submissionId], references: [id], onDelete: Cascade)
@@ -273,7 +316,11 @@ model VendorResponse {
 }
 
 model ScopeItem {
-  id                String   @id // e.g., "J60" — from BPD filename
+  // Phase 13.1 — AD-13.1: id is now a cuid; the bare SAP code lives in scopeCode.
+  // Composite uniqueness on (scopeCode, catalogVersionId) lets J60 exist in
+  // both Public 2602 and Private 2025-FPS1 as distinct rows.
+  id                String   @id @default(cuid())
+  scopeCode         String // e.g., "J60" — was the primary key pre-Phase-13
   name              String // from BPD XLSX column 1, first data row
   nameClean         String // cleaned: "Accounts Payable" (parenthetical code removed)
   purposeHtml       String   @db.Text
@@ -282,10 +329,9 @@ model ScopeItem {
   country           String // "MY" or "XX" — from filename suffix
   language          String   @default("EN")
   version           String   @default("2602")
-  // Phase 1 — AD-3: nullable FK to ScopeCatalogVersion. Backfilled to a
-  // single seeded PUBLIC_2602 row in the catalog-versions seed migration;
-  // flipped to non-nullable in a follow-up after the dual-mode period.
-  catalogVersionId  String?
+  // Phase 13.1: catalogVersionId flipped to non-null. All 582 pre-existing
+  // rows already had it set (Public 2602); enforced from this migration on.
+  catalogVersionId  String
   totalSteps        Int
   functionalArea    String
   subArea           String
@@ -296,13 +342,18 @@ model ScopeItem {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  catalogVersion    ScopeCatalogVersion? @relation(fields: [catalogVersionId], references: [id])
-  processSteps      ProcessStep[]
-  setupGuide        SetupGuide?
-  solutionProcesses SolutionProcess[]
-  verdictCitations  VerdictScopeItem[]
-  curation          ScopeItemCuration?
+  catalogVersion     ScopeCatalogVersion @relation(fields: [catalogVersionId], references: [id])
+  processSteps       ProcessStep[]
+  setupGuide         SetupGuide?
+  solutionProcesses  SolutionProcess[]
+  verdictCitations   VerdictScopeItem[]
+  curation           ScopeItemCuration?
+  presetMemberships  ScopePresetItem[]
+  gapAreaMemberships GapProneAreaItem[]
+  processChainSteps  ProcessChainItem[]
 
+  @@unique([scopeCode, catalogVersionId])
+  @@index([scopeCode])
   @@index([functionalArea])
   @@index([subArea])
   @@index([country])
@@ -313,8 +364,8 @@ model ScopeItem {
 model SolutionProcess {
   id          String   @id @default(cuid())
   scopeItemId String
-  guid        String?  // col 4 — SAP-assigned GUID
-  name        String   // col 5 — e.g. "Invoice Processing"
+  guid        String? // col 4 — SAP-assigned GUID
+  name        String // col 5 — e.g. "Invoice Processing"
   sequence    Int      @default(0)
   createdAt   DateTime @default(now())
 
@@ -329,14 +380,14 @@ model SolutionProcess {
 model ProcessFlow {
   id                String   @id @default(cuid())
   solutionProcessId String
-  guid              String?  // col 6
-  name              String   // col 7
-  flowDiagramGuid   String?  // col 8 (L4 folded into L3)
-  flowDiagramName   String?  // col 9
+  guid              String? // col 6
+  name              String // col 7
+  flowDiagramGuid   String? // col 8 (L4 folded into L3)
+  flowDiagramName   String? // col 9
   sequence          Int      @default(0)
   createdAt         DateTime @default(now())
 
-  solutionProcess SolutionProcess    @relation(fields: [solutionProcessId], references: [id])
+  solutionProcess SolutionProcess      @relation(fields: [solutionProcessId], references: [id])
   activities      Activity[]
   diagrams        ProcessFlowDiagram[]
 
@@ -348,10 +399,10 @@ model ProcessFlow {
 model Activity {
   id            String   @id @default(cuid())
   processFlowId String
-  guid          String?  // col 13
-  title         String   // col 14
-  targetName    String?  // col 15
-  targetUrl     String?  // col 16
+  guid          String? // col 13
+  title         String // col 14
+  targetName    String? // col 15
+  targetUrl     String? // col 16
   sequence      Int      @default(0)
   createdAt     DateTime @default(now())
 
@@ -368,9 +419,9 @@ model Activity {
 }
 
 model ProcessStep {
-  id                      String   @id @default(cuid())
-  scopeItemId             String
-  sequence                Int
+  id          String @id @default(cuid())
+  scopeItemId String
+  sequence    Int
 
   /// @deprecated Flat hierarchy column — superseded by SolutionProcess/ProcessFlow/Activity entities.
   /// Retained for rollback safety. Planned removal: May 2026.
@@ -406,22 +457,22 @@ model ProcessStep {
   activityTargetUrl       String?
   actionGuid              String?
   actionTitle             String
-  actionInstructionsHtml  String   @db.Text
-  actionExpectedResult    String?  @db.Text
+  actionInstructionsHtml  String  @db.Text
+  actionExpectedResult    String? @db.Text
 
   stepType         String
   /// @deprecated See testCaseGuid note. Use ProcessFlow entity via Activity FK chain.
   processFlowGroup String?
 
   // Phase 12: Step Classification
-  stepCategory     String?
-  parsedContent    Json?
-  isClassifiable   Boolean    @default(true)
-  groupKey         String?
-  groupLabel       String?
+  stepCategory   String?
+  parsedContent  Json?
+  isClassifiable Boolean @default(true)
+  groupKey       String?
+  groupLabel     String?
 
   // Phase M1: Hierarchy FK
-  activityId   String?
+  activityId String?
 
   createdAt DateTime @default(now())
 
@@ -441,29 +492,29 @@ model ProcessStep {
 }
 
 model ConfigActivity {
-  id                   String   @id @default(cuid())
+  id                   String  @id @default(cuid())
   scopeItemId          String
   scopeItemDescription String?
 
-  applicationArea      String
-  applicationSubarea   String
-  configItemName       String
-  configItemId         String
-  activityDescription  String   @db.Text
-  selfService          Boolean
-  configApproach       String?  @db.Text
-  category             String
-  activityId           String
-  localizationScope    String?
-  countrySpecific      String?
-  alternateActivityId  String?
-  componentId          String?
-  redoInProduction     String?
+  applicationArea       String
+  applicationSubarea    String
+  configItemName        String
+  configItemId          String
+  activityDescription   String  @db.Text
+  selfService           Boolean
+  configApproach        String? @db.Text
+  category              String
+  activityId            String
+  localizationScope     String?
+  countrySpecific       String?
+  alternateActivityId   String?
+  componentId           String?
+  redoInProduction      String?
   deleteCustomerRecords String?
-  additionalInfo       String?  @db.Text
-  fileUploadEnabled    String?
+  additionalInfo        String? @db.Text
+  fileUploadEnabled     String?
 
-  rawScopeItemIds  String?  // Preserves original multi-ID value (e.g., "J14, J13, 22Z")
+  rawScopeItemIds String? // Preserves original multi-ID value (e.g., "J14, J13, 22Z")
 
   createdAt DateTime @default(now())
 
@@ -478,13 +529,13 @@ model ConfigActivity {
 }
 
 model ImgActivity {
-  id                         String   @id @default(cuid())
+  id                         String  @id @default(cuid())
   businessCatalogId          String
   description                String
   transactionCode            String?
   iamAppId                   String?
   imgActivity                String?
-  explanatoryText            String?  @db.Text
+  explanatoryText            String? @db.Text
   sscuiId                    String?
   businessCatalogComponentId String?
   imgActivityAch             String?
@@ -522,14 +573,14 @@ model GeneralFile {
 }
 
 model SolutionLink {
-  id       String   @id @default(cuid())
-  bomId    String
-  title    String
-  entityId String
-  country  String
-  language String
-  url      String
-  type     String
+  id        String   @id @default(cuid())
+  bomId     String
+  title     String
+  entityId  String
+  country   String
+  language  String
+  url       String
+  type      String
   createdAt DateTime @default(now())
 
   @@index([entityId])
@@ -551,21 +602,21 @@ model ExpertConfig {
 }
 
 model OtherFile {
-  id       String   @id @default(cuid())
-  filename String
-  path     String
-  fileSize Int
-  blob     Bytes?   @db.ByteA
-  blobUrl  String?
+  id        String   @id @default(cuid())
+  filename  String
+  path      String
+  fileSize  Int
+  blob      Bytes?   @db.ByteA
+  blobUrl   String?
   createdAt DateTime @default(now())
 }
 
 model ReadmeFile {
-  id       String   @id @default(cuid())
-  filename String
-  content  String   @db.Text
-  blob     Bytes?   @db.ByteA
-  blobUrl  String?
+  id        String   @id @default(cuid())
+  filename  String
+  content   String   @db.Text
+  blob      Bytes?   @db.ByteA
+  blobUrl   String?
   createdAt DateTime @default(now())
 }
 
@@ -660,14 +711,14 @@ model Assessment {
   // Phase 10: Company Profile Enrichment
   employeeCount        Int?
   annualRevenue        Float?
-  currencyCode         String?    @default("USD")
+  currencyCode         String?   @default("USD")
   targetGoLiveDate     DateTime?
   deploymentModel      String?
-  sapModules           String[]   @default([])
-  keyProcesses         String[]   @default([])
-  languageRequirements String[]   @default([])
-  regulatoryFrameworks String[]   @default([])
-  itLandscapeSummary   String?    @db.Text
+  sapModules           String[]  @default([])
+  keyProcesses         String[]  @default([])
+  languageRequirements String[]  @default([])
+  regulatoryFrameworks String[]  @default([])
+  itLandscapeSummary   String?   @db.Text
   currentErpVersion    String?
   migrationApproach    String?
   operationalSites     Int?
@@ -685,55 +736,55 @@ model Assessment {
   // always Aptus-brand regardless. Spec §5.7. Null = no override.
   clientAccent String?
 
-  organization        Organization           @relation(fields: [organizationId], references: [id])
-  catalogVersion      ScopeCatalogVersion?   @relation(fields: [catalogVersionId], references: [id])
-  classificationPasses ClassificationPass[]
-  vendorSubmissions    VendorSubmission[]
-  shareLinks          AssessmentShareLink[]
-  stakeholders        AssessmentStakeholder[]
-  scopeSelections     ScopeSelection[]
-  configSelections    ConfigSelection[]
-  stepResponses       StepResponse[]
-  gapResolutions GapResolution[]
-  decisionLog    DecisionLogEntry[]
-  signOffs       AssessmentSignOff[]
-  flowDiagrams   ProcessFlowDiagram[]
+  organization            Organization             @relation(fields: [organizationId], references: [id])
+  catalogVersion          ScopeCatalogVersion?     @relation(fields: [catalogVersionId], references: [id])
+  classificationPasses    ClassificationPass[]
+  vendorSubmissions       VendorSubmission[]
+  shareLinks              AssessmentShareLink[]
+  stakeholders            AssessmentStakeholder[]
+  scopeSelections         ScopeSelection[]
+  configSelections        ConfigSelection[]
+  stepResponses           StepResponse[]
+  gapResolutions          GapResolution[]
+  decisionLog             DecisionLogEntry[]
+  signOffs                AssessmentSignOff[]
+  flowDiagrams            ProcessFlowDiagram[]
   functionalAreaOverviews FunctionalAreaOverview[]
-  remainingItems RemainingItem[]
-  clientRequirements ClientRequirement[]
-  integrationPoints    IntegrationPoint[]
-  dataMigrationObjects DataMigrationObject[]
-  ocmImpacts           OcmImpact[]
+  remainingItems          RemainingItem[]
+  clientRequirements      ClientRequirement[]
+  integrationPoints       IntegrationPoint[]
+  dataMigrationObjects    DataMigrationObject[]
+  ocmImpacts              OcmImpact[]
 
   // Phase 18: Assessment Lifecycle
-  phaseProgress      AssessmentPhaseProgress[]
-  workshopSessions   WorkshopSession[]
-  statusTransitions  StatusTransitionLog[]
+  phaseProgress     AssessmentPhaseProgress[]
+  workshopSessions  WorkshopSession[]
+  statusTransitions StatusTransitionLog[]
 
   // Phase 19+28: Collaboration
-  comments             Comment[]
-  conflicts            Conflict[]
-  activityFeedEntries  ActivityFeedEntry[]
-  editingLocks         EditingLock[]
-  presenceRecords      PresenceRecord[]
+  comments            Comment[]
+  conflicts           Conflict[]
+  activityFeedEntries ActivityFeedEntry[]
+  editingLocks        EditingLock[]
+  presenceRecords     PresenceRecord[]
 
   // Phase 27: PWA & Production Hardening
-  offlineSyncQueue     OfflineSyncQueue[]
+  offlineSyncQueue OfflineSyncQueue[]
 
   // Phase 25: Report Generation
-  reportGenerations  ReportGeneration[]
+  reportGenerations ReportGeneration[]
 
   // Phase 30: Sign-Off & Handoff
-  snapshots            AssessmentSnapshot[]
-  signOffProcess       SignOffProcess?
-  handoffPackages      HandoffPackage[]
-  almExportRecords     AlmExportRecord[]
+  snapshots        AssessmentSnapshot[]
+  signOffProcess   SignOffProcess?
+  handoffPackages  HandoffPackage[]
+  almExportRecords AlmExportRecord[]
 
   // Phase 31: Lifecycle Continuity
   parentAssessmentId   String?
-  parentAssessment     Assessment?          @relation("AssessmentPhases", fields: [parentAssessmentId], references: [id])
-  childAssessments     Assessment[]         @relation("AssessmentPhases")
-  phaseNumber          Int                  @default(1)
+  parentAssessment     Assessment?           @relation("AssessmentPhases", fields: [parentAssessmentId], references: [id])
+  childAssessments     Assessment[]          @relation("AssessmentPhases")
+  phaseNumber          Int                   @default(1)
   currentSnapshotId    String?
   clonedFromSnapshotId String?
   carryForwardConfig   Json?
@@ -741,7 +792,7 @@ model Assessment {
   reassessmentTriggers ReassessmentTrigger[]
 
   // Phase: Dependency Engine
-  propagationLogs      DependencyPropagationLog[]
+  propagationLogs DependencyPropagationLog[]
 
   @@index([status])
   @@index([createdBy])
@@ -790,14 +841,14 @@ model ScopeSelection {
 
   // Phase 11: Scope Selection Enhancement
   priority              String?
-  businessJustification String?    @db.Text
+  businessJustification String?  @db.Text
   estimatedComplexity   String?
-  dependsOnScopeItems   String[]   @default([])
+  dependsOnScopeItems   String[] @default([])
 
   // Progressive elaboration — Coarse → Medium → Fine
-  granularity            String    @default("coarse")  // coarse | medium | fine
-  assessmentVerdict      String?                        // mostly_fit | mostly_config | has_gaps | needs_workshop (Medium+)
-  upgradeSuggestedReason String?   @db.Text             // why the engine suggested upgrading this row
+  granularity            String    @default("coarse") // coarse | medium | fine
+  assessmentVerdict      String? // mostly_fit | mostly_config | has_gaps | needs_workshop (Medium+)
+  upgradeSuggestedReason String?   @db.Text // why the engine suggested upgrading this row
   upgradedAt             DateTime?
   upgradedBy             String?
 
@@ -810,15 +861,15 @@ model ScopeSelection {
 }
 
 model ConfigSelection {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   assessmentId     String
   configActivityId String
   included         Boolean
-  excludeReason    String?  @db.Text
+  excludeReason    String?   @db.Text
   decidedBy        String?
   decidedAt        DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   assessment Assessment @relation(fields: [assessmentId], references: [id])
 
@@ -840,17 +891,17 @@ model StepResponse {
   updatedAt      DateTime  @updatedAt
 
   // Phase 12: Step Response Enrichment
-  confidence     String?
-  evidenceUrls   String[]   @default([])
-  reviewedBy     String?
-  reviewedAt     DateTime?
+  confidence   String?
+  evidenceUrls String[]  @default([])
+  reviewedBy   String?
+  reviewedAt   DateTime?
 
   // Phase: Dependency Engine
-  isPropagated   Boolean    @default(false)
-  propagatedFrom String?    // DependencyPropagationLog ID if auto-classified
+  isPropagated   Boolean @default(false)
+  propagatedFrom String? // DependencyPropagationLog ID if auto-classified
 
-  assessment  Assessment  @relation(fields: [assessmentId], references: [id])
-  processStep ProcessStep @relation(fields: [processStepId], references: [id])
+  assessment  Assessment            @relation(fields: [assessmentId], references: [id])
+  processStep ProcessStep           @relation(fields: [processStepId], references: [id])
   history     StepResponseHistory[]
 
   @@unique([assessmentId, processStepId])
@@ -861,22 +912,22 @@ model StepResponse {
 }
 
 model StepResponseHistory {
-  id             String   @id @default(cuid())
+  id             String @id @default(cuid())
   stepResponseId String
   actorId        String
   actorName      String
-  actionType     String   // CREATED, UPDATED, DELETED
-  
+  actionType     String // CREATED, UPDATED, DELETED
+
   // Snapshots of the change
   previousStatus String?
   newStatus      String
   previousNote   String?
   newNote        String?
-  
-  metadata       Json?    // Stores additional context (e.g. "propagated from X")
-  createdAt      DateTime @default(now())
 
-  stepResponse   StepResponse @relation(fields: [stepResponseId], references: [id], onDelete: Cascade)
+  metadata  Json? // Stores additional context (e.g. "propagated from X")
+  createdAt DateTime @default(now())
+
+  stepResponse StepResponse @relation(fields: [stepResponseId], references: [id], onDelete: Cascade)
 
   @@index([stepResponseId])
   @@index([actorId])
@@ -906,11 +957,11 @@ model GapResolution {
   priority               String?
   oneTimeCost            Float?
   recurringCost          Float?
-  costCurrency           String?    @default("USD")
+  costCurrency           String?   @default("USD")
   implementationDays     Float?
   riskCategory           String?
   upgradeStrategy        String?
-  clientApprovalNote     String?    @db.Text
+  clientApprovalNote     String?   @db.Text
   clientApprovedBy       String?
   clientApprovedAt       DateTime?
   extensibilityPatternId String?
@@ -927,24 +978,24 @@ model GapResolution {
 }
 
 model GapAlternative {
-  id                    String    @id @default(cuid())
+  id                    String   @id @default(cuid())
   gapResolutionId       String
   label                 String
   resolutionType        String
-  resolutionDescription String    @db.Text
+  resolutionDescription String   @db.Text
   oneTimeCost           Float?
   recurringCost         Float?
-  costCurrency          String?   @default("USD")
+  costCurrency          String?  @default("USD")
   implementationDays    Float?
   riskLevel             String?
   riskCategory          String?
   upgradeStrategy       String?
-  rationale             String?   @db.Text
-  pros                  String[]  @default([])
-  cons                  String[]  @default([])
+  rationale             String?  @db.Text
+  pros                  String[] @default([])
+  cons                  String[] @default([])
   createdBy             String
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   gapResolution GapResolution @relation(fields: [gapResolutionId], references: [id], onDelete: Cascade)
 
@@ -973,16 +1024,16 @@ model DecisionLogEntry {
 }
 
 model AssessmentSignOff {
-  id               String   @id @default(cuid())
-  assessmentId     String
-  signatoryName    String
-  signatoryEmail   String
-  signatoryRole    String
-  signatoryTitle   String?
-  acknowledgement  Boolean  @default(true)
-  signedAt         DateTime @default(now())
-  ipAddress        String?
-  userAgent        String?
+  id              String   @id @default(cuid())
+  assessmentId    String
+  signatoryName   String
+  signatoryEmail  String
+  signatoryRole   String
+  signatoryTitle  String?
+  acknowledgement Boolean  @default(true)
+  signedAt        DateTime @default(now())
+  ipAddress       String?
+  userAgent       String?
 
   assessment Assessment @relation(fields: [assessmentId], references: [id])
 
@@ -1008,13 +1059,13 @@ model ProcessFlowDiagram {
   generatedBy     String
 
   // Phase 20: Process Visualization
-  interactiveData   Json?
-  thumbnailSvg      String?   @db.Text
-  riskOverlayData   Json?
-  layoutVersion     Int       @default(1)
+  interactiveData Json?
+  thumbnailSvg    String? @db.Text
+  riskOverlayData Json?
+  layoutVersion   Int     @default(1)
 
   // Phase M1: Hierarchy FK
-  processFlowId     String?
+  processFlowId String?
 
   assessment  Assessment   @relation(fields: [assessmentId], references: [id])
   processFlow ProcessFlow? @relation(fields: [processFlowId], references: [id])
@@ -1083,37 +1134,37 @@ model RemainingItem {
 /// ScopeSelection or StepResponse, these are NOT keyed to SAP catalog content;
 /// the client wrote them, and we record the SI (solution provider) response.
 model ClientRequirement {
-  id                       String   @id @default(cuid())
+  id                       String  @id @default(cuid())
   assessmentId             String
-  module                   String   // sheet name, e.g. "Procurement", "Asset Accounting"
-  section                  String?  // section header, e.g. "A. General Requirements"
-  code                     String   // row code, e.g. "A1", "B3.a"
-  requirementText          String   @db.Text
-  requirementType          String?  // "Mandatory" | "Non-Mandatory" | null
-  clientRemarks            String?  @db.Text
-  solutionProviderResponse String?  @db.Text   // editable in-app
-  solutionProviderRemarks  String?  @db.Text   // editable in-app
-  erpModuleSupporting      String?  @db.Text
-  sortOrder                Int      // sequence for stable display order
+  module                   String // sheet name, e.g. "Procurement", "Asset Accounting"
+  section                  String? // section header, e.g. "A. General Requirements"
+  code                     String // row code, e.g. "A1", "B3.a"
+  requirementText          String  @db.Text
+  requirementType          String? // "Mandatory" | "Non-Mandatory" | null
+  clientRemarks            String? @db.Text
+  solutionProviderResponse String? @db.Text // editable in-app
+  solutionProviderRemarks  String? @db.Text // editable in-app
+  erpModuleSupporting      String? @db.Text
+  sortOrder                Int // sequence for stable display order
 
   // Added 2026-04-26 for the broader Bursa import (A2/A3/A4/A5 in addition to
   // A6/A7). All nullable so existing rows are unaffected.
   // requirementClass drives UI grouping/filtering — older rows remain null and
   // continue to render under the legacy "functional" path.
-  requirementClass         String?  // "mandatory" | "checklist" | "business" | "technical" | "functional"
-  subCriteria              String?  // A4 sub-criteria (e.g. "Experience", "RPA Offerings")
-  requiredDocs             String?  @db.Text  // A4 Required Docs / A2 Supporting Documents
-  complianceStatus         String?  // A3 Yes/Partial/No/NA, A5 NM/PM/FM/Exceed (vendor-fillable)
-  submissionFolder         String?  // A2 Assigned Folder for Submission
+  requirementClass String? // "mandatory" | "checklist" | "business" | "technical" | "functional"
+  subCriteria      String? // A4 sub-criteria (e.g. "Experience", "RPA Offerings")
+  requiredDocs     String? @db.Text // A4 Required Docs / A2 Supporting Documents
+  complianceStatus String? // A3 Yes/Partial/No/NA, A5 NM/PM/FM/Exceed (vendor-fillable)
+  submissionFolder String? // A2 Assigned Folder for Submission
 
   // Added 2026-04-27 for the SAP 2602 best-practice classification report.
   // Structured complement to the free-text erpModuleSupporting field — let the
   // XLSX/PDF render scope-id and SAP-module breakdowns cleanly and let us
   // validate cited scope IDs against the catalog programmatically.
   // Set by scripts/classify-batch.ts apply; existing rows remain null.
-  sapModule                String?  // controlled vocab: FI-AR, FI-AP, FI-AA, FI-GL, CO, MM, SD, PS, RE-FX, BTP, SuccessFactors, Ariba, SAC, BPA, IS, EAM, "—"
-  scopeItemIds             String?  // comma-separated 2602 scope item IDs only (e.g. "J45, BMD, 19C")
-  scopeItemNames           String?  @db.Text  // human-readable scope-item names (or product name for Gap)
+  sapModule      String? // controlled vocab: FI-AR, FI-AP, FI-AA, FI-GL, CO, MM, SD, PS, RE-FX, BTP, SuccessFactors, Ariba, SAC, BPA, IS, EAM, "—"
+  scopeItemIds   String? // comma-separated 2602 scope item IDs only (e.g. "J45, BMD, 19C")
+  scopeItemNames String? @db.Text // human-readable scope-item names (or product name for Gap)
 
   // Phase 3 — AD-1: denormalised pointer to the current ClassificationVerdict
   // for this requirement. Refreshed by the verdict-writer on every write.
@@ -1121,10 +1172,10 @@ model ClientRequirement {
   // solutionProviderResponse / solutionProviderRemarks / erpModuleSupporting)
   // become a read-cache during the dual-write window; dropped in a follow-up
   // migration after read-side cutover.
-  currentVerdictId         String?
+  currentVerdictId String?
 
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   assessment      Assessment              @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
   verdicts        ClassificationVerdict[]
@@ -1143,29 +1194,29 @@ model ClientRequirement {
 // =============================================================
 
 model IntegrationPoint {
-  id               String    @id @default(cuid())
-  assessmentId     String
-  scopeItemId      String?
-  name             String
-  description      String    @db.Text
-  direction        String    // INBOUND, OUTBOUND, BIDIRECTIONAL
-  sourceSystem     String
-  targetSystem     String
-  interfaceType    String    // API, IDOC, FILE, RFC, ODATA, EVENT
-  frequency        String    // REAL_TIME, NEAR_REAL_TIME, BATCH_DAILY, BATCH_WEEKLY, ON_DEMAND
-  middleware       String?   // SAP_CPI, SAP_PO, MULESOFT, BOOMI, AZURE_INTEGRATION, OTHER
-  dataVolume       String?
-  complexity       String?   // LOW, MEDIUM, HIGH, VERY_HIGH
-  priority            String?   // critical, high, medium, low
-  status              String    @default("identified") // identified, analyzed, designed, approved
+  id                  String   @id @default(cuid())
+  assessmentId        String
+  scopeItemId         String?
+  name                String
+  description         String   @db.Text
+  direction           String // INBOUND, OUTBOUND, BIDIRECTIONAL
+  sourceSystem        String
+  targetSystem        String
+  interfaceType       String // API, IDOC, FILE, RFC, ODATA, EVENT
+  frequency           String // REAL_TIME, NEAR_REAL_TIME, BATCH_DAILY, BATCH_WEEKLY, ON_DEMAND
+  middleware          String? // SAP_CPI, SAP_PO, MULESOFT, BOOMI, AZURE_INTEGRATION, OTHER
+  dataVolume          String?
+  complexity          String? // LOW, MEDIUM, HIGH, VERY_HIGH
+  priority            String? // critical, high, medium, low
+  status              String   @default("identified") // identified, analyzed, designed, approved
   estimatedEffortDays Float?
-  dataObjects         String[]  @default([])
+  dataObjects         String[] @default([])
   functionalArea      String?
-  technicalNotes      String?   @db.Text
+  technicalNotes      String?  @db.Text
   createdBy           String
   updatedBy           String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
 
@@ -1175,32 +1226,32 @@ model IntegrationPoint {
 }
 
 model DataMigrationObject {
-  id                String    @id @default(cuid())
-  assessmentId      String
-  scopeItemId       String?
-  objectName        String
-  description       String    @db.Text
-  objectType        String    // MASTER_DATA, TRANSACTION_DATA, CONFIG_DATA, HISTORICAL, REFERENCE
-  sourceSystem      String
-  sourceFormat      String?   // SAP_TABLE, CSV, EXCEL, XML, DATABASE, API
-  volumeEstimate    String?   // SMALL, MEDIUM, LARGE, VERY_LARGE
-  recordCount       Int?
-  cleansingRequired Boolean   @default(false)
-  cleansingNotes    String?   @db.Text
-  mappingComplexity String?   // SIMPLE, MODERATE, COMPLEX, VERY_COMPLEX
-  migrationApproach String?   // AUTOMATED, SEMI_AUTOMATED, MANUAL, HYBRID
-  migrationTool     String?   // LTMC, LSMW, BODS, CPI, CUSTOM
-  validationRules   String?   @db.Text
-  priority          String?   // critical, high, medium, low
-  status            String    @default("identified") // identified, mapped, cleansed, validated, approved
-  dependsOn            String[]  @default([])   // IDs of other DataMigrationObjects
-  estimatedEffortDays  Float?
-  functionalArea       String?
-  technicalNotes       String?   @db.Text
-  createdBy            String
-  updatedBy            String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  id                  String   @id @default(cuid())
+  assessmentId        String
+  scopeItemId         String?
+  objectName          String
+  description         String   @db.Text
+  objectType          String // MASTER_DATA, TRANSACTION_DATA, CONFIG_DATA, HISTORICAL, REFERENCE
+  sourceSystem        String
+  sourceFormat        String? // SAP_TABLE, CSV, EXCEL, XML, DATABASE, API
+  volumeEstimate      String? // SMALL, MEDIUM, LARGE, VERY_LARGE
+  recordCount         Int?
+  cleansingRequired   Boolean  @default(false)
+  cleansingNotes      String?  @db.Text
+  mappingComplexity   String? // SIMPLE, MODERATE, COMPLEX, VERY_COMPLEX
+  migrationApproach   String? // AUTOMATED, SEMI_AUTOMATED, MANUAL, HYBRID
+  migrationTool       String? // LTMC, LSMW, BODS, CPI, CUSTOM
+  validationRules     String?  @db.Text
+  priority            String? // critical, high, medium, low
+  status              String   @default("identified") // identified, mapped, cleansed, validated, approved
+  dependsOn           String[] @default([]) // IDs of other DataMigrationObjects
+  estimatedEffortDays Float?
+  functionalArea      String?
+  technicalNotes      String?  @db.Text
+  createdBy           String
+  updatedBy           String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
 
@@ -1210,32 +1261,32 @@ model DataMigrationObject {
 }
 
 model OcmImpact {
-  id                 String    @id @default(cuid())
+  id                 String   @id @default(cuid())
   assessmentId       String
   scopeItemId        String?
   functionalArea     String?
   impactedRole       String
   impactedDepartment String?
-  changeType         String    // PROCESS_CHANGE, ROLE_CHANGE, TECHNOLOGY_CHANGE, ORGANIZATIONAL, BEHAVIORAL
-  severity           String    // LOW, MEDIUM, HIGH, TRANSFORMATIONAL
-  description        String    @db.Text
-  trainingRequired   Boolean   @default(false)
-  trainingType       String?   // INSTRUCTOR_LED, E_LEARNING, ON_THE_JOB, WORKSHOP
-  trainingDuration   Float?    // days
-  communicationPlan  String?   @db.Text
-  resistanceRisk     String?   // LOW, MEDIUM, HIGH
-  readinessScore     Float?    // 0.0 to 1.0
-  mitigationStrategy String?   @db.Text
-  priority           String?   // critical, high, medium, low
-  status             String    @default("identified") // identified, assessed, planned, approved
+  changeType         String // PROCESS_CHANGE, ROLE_CHANGE, TECHNOLOGY_CHANGE, ORGANIZATIONAL, BEHAVIORAL
+  severity           String // LOW, MEDIUM, HIGH, TRANSFORMATIONAL
+  description        String   @db.Text
+  trainingRequired   Boolean  @default(false)
+  trainingType       String? // INSTRUCTOR_LED, E_LEARNING, ON_THE_JOB, WORKSHOP
+  trainingDuration   Float? // days
+  communicationPlan  String?  @db.Text
+  resistanceRisk     String? // LOW, MEDIUM, HIGH
+  readinessScore     Float? // 0.0 to 1.0
+  mitigationStrategy String?  @db.Text
+  priority           String? // critical, high, medium, low
+  status             String   @default("identified") // identified, assessed, planned, approved
   impactTitle        String?
   affectedUserCount  Int?
   relatedGapId       String?
-  technicalNotes     String?   @db.Text
+  technicalNotes     String?  @db.Text
   createdBy          String
   updatedBy          String?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
 
@@ -1261,7 +1312,7 @@ model User {
   avatarUrl      String?
 
   // mfaEnabled is kept as a soft preference flag; the only second factor is now passkey/WebAuthn
-  mfaEnabled     Boolean   @default(false)
+  mfaEnabled Boolean @default(false)
 
   webauthnCredentials WebAuthnCredential[]
 
@@ -1284,23 +1335,23 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  organization      Organization?          @relation(fields: [organizationId], references: [id])
-  sessions          Session[]
+  organization       Organization?           @relation(fields: [organizationId], references: [id])
+  sessions           Session[]
   stakeholderEntries AssessmentStakeholder[]
-  accounts          Account[]
+  accounts           Account[]
 
   // Phase 19+28: Collaboration
-  notifications           Notification[]          @relation("userNotifications")
+  notifications           Notification[]           @relation("userNotifications")
   notificationPreferences NotificationPreference[] @relation("userNotificationPrefs")
-  authoredComments        Comment[]               @relation("commentAuthor")
-  resolvedComments        Comment[]               @relation("commentResolver")
-  resolvedConflicts       Conflict[]              @relation("conflictResolver")
+  authoredComments        Comment[]                @relation("commentAuthor")
+  resolvedComments        Comment[]                @relation("commentResolver")
+  resolvedConflicts       Conflict[]               @relation("conflictResolver")
   pushSubscriptions       PushSubscription[]
   editingLocks            EditingLock[]
   presenceRecords         PresenceRecord[]
 
   // Phase 27: PWA & Production Hardening
-  offlineSyncQueue        OfflineSyncQueue[]
+  offlineSyncQueue OfflineSyncQueue[]
 
   // Phase 21: Workshop Management
   workshopAttendances WorkshopAttendee[]
@@ -1347,20 +1398,20 @@ model VerificationToken {
 }
 
 model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String?  @unique
-  type      String
-  orgType   String   @default("client") // partner, client, platform
-  domain    String?
-  logoUrl   String?
-  isActive  Boolean  @default(true)
+  id       String  @id @default(cuid())
+  name     String
+  slug     String? @unique
+  type     String
+  orgType  String  @default("client") // partner, client, platform
+  domain   String?
+  logoUrl  String?
+  isActive Boolean @default(true)
 
   // SSO Configuration (structure only; actual SSO in Phase 29)
-  ssoEnabled   Boolean  @default(false)
+  ssoEnabled   Boolean @default(false)
   ssoProvider  String?
   ssoDomain    String?
-  scimEnabled  Boolean  @default(false)
+  scimEnabled  Boolean @default(false)
   scimEndpoint String?
 
   // Policies
@@ -1370,8 +1421,8 @@ model Organization {
   dataRetentionDays     Int?
 
   // SSO extended
-  ssoExclusive     Boolean @default(false)  // When true, only SSO login allowed
-  ssoEntityId      String?
+  ssoExclusive Boolean @default(false) // When true, only SSO login allowed
+  ssoEntityId  String?
 
   // Branding
   brandPrimaryColor String?
@@ -1379,40 +1430,40 @@ model Organization {
   reportLogoUrl     String?
 
   // Phase 29: Commercial / Multi-Tenant
-  plan                  String   @default("TRIAL")
-  subscriptionStatus    String   @default("TRIALING")
-  trialEndsAt           DateTime?
-  stripeCustomerId      String?  @unique
-  stripeSubscriptionId  String?  @unique
-  billingEmail          String?
-  ssoMetadataUrl        String?
-  ssoClientId           String?
-  ssoClientSecret       String?
-  scimBearerToken       String?
-  maxActiveAssessments  Int      @default(1)
-  maxPartnerUsers       Int      @default(5)
-  primaryColor          String?  @default("#1e40af")
-  reportFooterText      String?
-  industryFocus         String[] @default([])
-  contactEmail          String?
-  websiteUrl            String?
-  hasDemoAssessment     Boolean  @default(false)
-  demoAssessmentId      String?
+  plan                 String    @default("TRIAL")
+  subscriptionStatus   String    @default("TRIALING")
+  trialEndsAt          DateTime?
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  billingEmail         String?
+  ssoMetadataUrl       String?
+  ssoClientId          String?
+  ssoClientSecret      String?
+  scimBearerToken      String?
+  maxActiveAssessments Int       @default(1)
+  maxPartnerUsers      Int       @default(5)
+  primaryColor         String?   @default("#1e40af")
+  reportFooterText     String?
+  industryFocus        String[]  @default([])
+  contactEmail         String?
+  websiteUrl           String?
+  hasDemoAssessment    Boolean   @default(false)
+  demoAssessmentId     String?
 
   // BYOAI Configuration
-  aiConfig              Json?    // Stores provider, encrypted key, endpoint, model name
+  aiConfig Json? // Stores provider, encrypted key, endpoint, model name
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users       User[]
-  assessments Assessment[]
+  users            User[]
+  assessments      Assessment[]
   // Phase 25
-  reportBranding ReportBranding?
+  reportBranding   ReportBranding?
   // Phase 29
-  templates      AssessmentTemplate[]
-  usageEvents    UsageEvent[]
-  invitations OrgInvitation[]
+  templates        AssessmentTemplate[]
+  usageEvents      UsageEvent[]
+  invitations      OrgInvitation[]
   // Phase 26
   portfolioMetrics PortfolioMetric[]
 
@@ -1434,17 +1485,17 @@ model StripeWebhookEvent {
 }
 
 model Session {
-  id                String    @id @default(cuid())
-  userId            String
-  token             String    @unique
-  expiresAt         DateTime
-  mfaVerified       Boolean   @default(false)
-  mfaVerifiedAt     DateTime?
+  id            String    @id @default(cuid())
+  userId        String
+  token         String    @unique
+  expiresAt     DateTime
+  mfaVerified   Boolean   @default(false)
+  mfaVerifiedAt DateTime?
 
   ipAddress         String?
   userAgent         String?
   deviceFingerprint String?
-  lastActiveAt      DateTime  @default(now())
+  lastActiveAt      DateTime @default(now())
 
   isRevoked     Boolean   @default(false)
   revokedAt     DateTime?
@@ -1502,10 +1553,10 @@ model HelpSession {
   clientUserId     String
   consultantUserId String?
   assessmentId     String?
-  currentPage      String?   // URL path where help was requested
+  currentPage      String? // URL path where help was requested
   category         String    @default("general") // question, stuck, bug, general
   status           String    @default("open") // open, active, resolved, closed
-  rating           Int?      // CSAT 1-5
+  rating           Int? // CSAT 1-5
   ratingComment    String?   @db.Text
   createdAt        DateTime  @default(now())
   resolvedAt       DateTime?
@@ -1520,13 +1571,13 @@ model HelpSession {
 }
 
 model HelpMessage {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   sessionId  String
   senderId   String
-  senderRole String   // client, consultant
-  content    String   @db.Text
+  senderRole String // client, consultant
+  content    String    @db.Text
   readAt     DateTime?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   session HelpSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
@@ -1563,17 +1614,17 @@ model OrgInvitation {
 // =============================================================
 
 model AssessmentPhaseProgress {
-  id             String    @id @default(cuid())
-  assessmentId   String
-  phase          String // scoping, process_review, gap_resolution, integration, data_migration, ocm, validation, sign_off
-  status         String    @default("not_started") // not_started, in_progress, completed, blocked
-  completionPct  Int       @default(0) // 0-100
-  blockedReason  String?   @db.Text
-  startedAt      DateTime?
-  completedAt    DateTime?
-  completedBy    String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  assessmentId  String
+  phase         String // scoping, process_review, gap_resolution, integration, data_migration, ocm, validation, sign_off
+  status        String    @default("not_started") // not_started, in_progress, completed, blocked
+  completionPct Int       @default(0) // 0-100
+  blockedReason String?   @db.Text
+  startedAt     DateTime?
+  completedAt   DateTime?
+  completedBy   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   assessment Assessment @relation(fields: [assessmentId], references: [id])
 
@@ -1599,19 +1650,19 @@ model WorkshopSession {
   updatedAt       DateTime  @updatedAt
 
   // Phase 21: Workshop Management
-  qrCodeUrl         String?   @db.Text
-  facilitatorNotes  String?   @db.Text
-  agenda            Json?
-  currentStepId     String?
+  qrCodeUrl          String? @db.Text
+  facilitatorNotes   String? @db.Text
+  agenda             Json?
+  currentStepId      String?
   currentScopeItemId String?
-  duration          Int?
-  recordingUrl      String?
+  duration           Int?
+  recordingUrl       String?
 
-  assessment Assessment @relation(fields: [assessmentId], references: [id])
-  attendees  WorkshopAttendee[]
-  votes      WorkshopVote[]
+  assessment  Assessment           @relation(fields: [assessmentId], references: [id])
+  attendees   WorkshopAttendee[]
+  votes       WorkshopVote[]
   actionItems WorkshopActionItem[]
-  minutes    WorkshopMinutes?
+  minutes     WorkshopMinutes?
 
   @@index([assessmentId])
   @@index([sessionCode])
@@ -1620,18 +1671,18 @@ model WorkshopSession {
 
 // Phase 21: Workshop Attendees
 model WorkshopAttendee {
-  id              String    @id @default(cuid())
-  sessionId       String
-  userId          String
-  role            String    @default("attendee")
-  joinedAt        DateTime  @default(now())
-  leftAt          DateTime?
-  deviceType      String?
-  isFollowing     Boolean   @default(true)
-  isPresenter     Boolean   @default(false)
-  connectionStatus String   @default("connected")
-  lastPingAt      DateTime  @default(now())
-  createdAt       DateTime  @default(now())
+  id               String    @id @default(cuid())
+  sessionId        String
+  userId           String
+  role             String    @default("attendee")
+  joinedAt         DateTime  @default(now())
+  leftAt           DateTime?
+  deviceType       String?
+  isFollowing      Boolean   @default(true)
+  isPresenter      Boolean   @default(false)
+  connectionStatus String    @default("connected")
+  lastPingAt       DateTime  @default(now())
+  createdAt        DateTime  @default(now())
 
   session WorkshopSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   user    User            @relation(fields: [userId], references: [id])
@@ -1643,14 +1694,14 @@ model WorkshopAttendee {
 
 // Phase 21: Workshop Votes
 model WorkshopVote {
-  id              String   @id @default(cuid())
-  sessionId       String
-  processStepId   String
-  userId          String
-  classification  String
-  confidence      String?
-  notes           String?  @db.Text
-  votedAt         DateTime @default(now())
+  id             String   @id @default(cuid())
+  sessionId      String
+  processStepId  String
+  userId         String
+  classification String
+  confidence     String?
+  notes          String?  @db.Text
+  votedAt        DateTime @default(now())
 
   session WorkshopSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
@@ -1661,21 +1712,21 @@ model WorkshopVote {
 
 // Phase 21: Workshop Action Items
 model WorkshopActionItem {
-  id              String    @id @default(cuid())
-  sessionId       String
-  title           String
-  description     String?   @db.Text
-  assignedTo      String?
-  assignedToName  String?
-  dueDate         DateTime?
-  status          String    @default("open")
-  priority        String    @default("medium")
-  relatedStepId   String?
+  id                 String    @id @default(cuid())
+  sessionId          String
+  title              String
+  description        String?   @db.Text
+  assignedTo         String?
+  assignedToName     String?
+  dueDate            DateTime?
+  status             String    @default("open")
+  priority           String    @default("medium")
+  relatedStepId      String?
   relatedScopeItemId String?
-  completedAt     DateTime?
-  completedBy     String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  completedAt        DateTime?
+  completedBy        String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   session WorkshopSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
@@ -1686,18 +1737,18 @@ model WorkshopActionItem {
 
 // Phase 21: Workshop Minutes
 model WorkshopMinutes {
-  id                  String   @id @default(cuid())
-  sessionId           String   @unique
-  content             String   @db.Text
-  attendeesSummary    Json
-  decisionsSummary    Json
-  actionItemsSummary  Json
-  agendaSummary       Json
-  statisticsSummary   Json
-  generatedAt         DateTime @default(now())
-  regeneratedAt       DateTime?
-  exportedAt          DateTime?
-  exportFormat        String?
+  id                 String    @id @default(cuid())
+  sessionId          String    @unique
+  content            String    @db.Text
+  attendeesSummary   Json
+  decisionsSummary   Json
+  actionItemsSummary Json
+  agendaSummary      Json
+  statisticsSummary  Json
+  generatedAt        DateTime  @default(now())
+  regeneratedAt      DateTime?
+  exportedAt         DateTime?
+  exportFormat       String?
 
   session WorkshopSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
@@ -1724,20 +1775,20 @@ model StatusTransitionLog {
 // =============================================================
 
 model Notification {
-  id              String    @id @default(cuid())
-  userId          String
-  assessmentId    String?
-  type            String
-  title           String
-  body            String    @db.Text
-  channel         String    @default("in_app")
-  status          String    @default("unread")
-  deepLink        String?
-  metadata        Json?
-  sentAt          DateTime  @default(now())
-  readAt          DateTime?
-  dismissedAt     DateTime?
-  createdAt       DateTime  @default(now())
+  id           String    @id @default(cuid())
+  userId       String
+  assessmentId String?
+  type         String
+  title        String
+  body         String    @db.Text
+  channel      String    @default("in_app")
+  status       String    @default("unread")
+  deepLink     String?
+  metadata     Json?
+  sentAt       DateTime  @default(now())
+  readAt       DateTime?
+  dismissedAt  DateTime?
+  createdAt    DateTime  @default(now())
 
   user User @relation("userNotifications", fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1747,14 +1798,14 @@ model Notification {
 }
 
 model NotificationPreference {
-  id                String  @id @default(cuid())
-  userId            String
-  notificationType  String
-  channelEmail      Boolean @default(true)
-  channelInApp      Boolean @default(true)
-  channelPush       Boolean @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id               String   @id @default(cuid())
+  userId           String
+  notificationType String
+  channelEmail     Boolean  @default(true)
+  channelInApp     Boolean  @default(true)
+  channelPush      Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   user User @relation("userNotificationPrefs", fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1763,24 +1814,24 @@ model NotificationPreference {
 }
 
 model Comment {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   assessmentId    String
   targetType      String
   targetId        String
   authorId        String
-  content         String   @db.Text
-  contentHtml     String?  @db.Text
-  mentions        String[] @default([])
+  content         String    @db.Text
+  contentHtml     String?   @db.Text
+  mentions        String[]  @default([])
   parentCommentId String?
-  status          String   @default("OPEN")
+  status          String    @default("OPEN")
   resolvedById    String?
   resolvedAt      DateTime?
   editedAt        DateTime?
-  isEdited        Boolean  @default(false)
-  isDeleted       Boolean  @default(false)
+  isEdited        Boolean   @default(false)
+  isDeleted       Boolean   @default(false)
   deletedAt       DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
   author     User       @relation("commentAuthor", fields: [authorId], references: [id])
@@ -1845,16 +1896,16 @@ model ActivityFeedEntry {
 // =============================================================
 
 model ConversationTemplate {
-  id              String   @id @default(cuid())
-  scopeItemId     String
-  processStepId   String
-  questionFlow    Json
-  language        String   @default("en")
-  version         Int      @default(1)
-  createdBy       String
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String   @id @default(cuid())
+  scopeItemId   String
+  processStepId String
+  questionFlow  Json
+  language      String   @default("en")
+  version       Int      @default(1)
+  createdBy     String
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@unique([scopeItemId, processStepId, language])
   @@index([scopeItemId])
@@ -1891,23 +1942,24 @@ model DashboardWidget {
   isVisible  Boolean @default(true)
 
   user User @relation(fields: [userId], references: [id])
+
   @@index([userId])
   @@index([userId, isVisible])
 }
 
 model DashboardDeadline {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   assessmentId String
   title        String
-  description  String?  @db.Text
+  description  String?   @db.Text
   dueDate      DateTime
   assignedRole String?
   assignedUser String?
-  status       String   @default("pending")
+  status       String    @default("pending")
   completedAt  DateTime?
   createdBy    String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@index([assessmentId])
   @@index([dueDate])
@@ -1942,6 +1994,7 @@ model OnboardingTooltip {
   dismissedAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
+
   @@unique([userId, tooltipKey])
   @@index([userId])
 }
@@ -1970,7 +2023,7 @@ model ReportGeneration {
   snapshotId        String?
   protocolVersionId String?
   catalogVersionId  String?
-  contentHash       String?  // sha256 of generated bytes for cache integrity
+  contentHash       String? // sha256 of generated bytes for cache integrity
 
   assessment Assessment @relation(fields: [assessmentId], references: [id])
 
@@ -1981,14 +2034,14 @@ model ReportGeneration {
 }
 
 model ReportBranding {
-  id              String  @id @default(cuid())
-  organizationId  String  @unique
-  logoUrl         String?
-  primaryColor    String  @default("#1a1a2e")
-  secondaryColor  String  @default("#16213e")
-  footerText      String? @db.Text
-  companyName     String?
-  isActive        Boolean @default(true)
+  id             String  @id @default(cuid())
+  organizationId String  @unique
+  logoUrl        String?
+  primaryColor   String  @default("#1a1a2e")
+  secondaryColor String  @default("#16213e")
+  footerText     String? @db.Text
+  companyName    String?
+  isActive       Boolean @default(true)
 
   organization Organization @relation(fields: [organizationId], references: [id])
 }
@@ -1998,22 +2051,22 @@ model ReportBranding {
 // =============================================================
 
 model AssessmentTemplate {
-  id              String   @id @default(cuid())
-  organizationId  String
-  name            String
-  description     String?  @db.Text
-  industry        String?
-  country         String?
-  scopeItemIds    String[] @default([])
-  isDemo          Boolean  @default(false)
-  isPublic        Boolean  @default(false)
-  createdById     String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?  @db.Text
+  industry       String?
+  country        String?
+  scopeItemIds   String[] @default([])
+  isDemo         Boolean  @default(false)
+  isPublic       Boolean  @default(false)
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   // Phase 26: Analytics, Benchmarking & Templates
   companySize         String?
-  modules             String[]   @default([])
+  modules             String[] @default([])
   geography           String?
   scopeSelections     Json?
   commonGapPatterns   Json?
@@ -2022,10 +2075,11 @@ model AssessmentTemplate {
   workshopTemplate    Json?
   roleTemplate        Json?
   sourceAssessmentId  String?
-  isPublished         Boolean    @default(false)
-  timesUsed           Int        @default(0)
+  isPublished         Boolean  @default(false)
+  timesUsed           Int      @default(0)
 
   organization Organization @relation(fields: [organizationId], references: [id])
+
   @@index([organizationId])
   @@index([isDemo])
   @@index([organizationId, industry])
@@ -2033,16 +2087,17 @@ model AssessmentTemplate {
 }
 
 model UsageEvent {
-  id              String   @id @default(cuid())
-  organizationId  String
-  eventType       String
-  entityId        String?
-  metadata        Json?
-  stripeSent      Boolean  @default(false)
-  stripeError     String?
-  createdAt       DateTime @default(now())
+  id             String   @id @default(cuid())
+  organizationId String
+  eventType      String
+  entityId       String?
+  metadata       Json?
+  stripeSent     Boolean  @default(false)
+  stripeError    String?
+  createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id])
+
   @@index([organizationId])
   @@index([organizationId, eventType])
   @@index([createdAt])
@@ -2054,17 +2109,17 @@ model UsageEvent {
 // =============================================================
 
 model AssessmentSnapshot {
-  id            String   @id @default(cuid())
-  assessmentId  String
-  version       Int
-  label         String?
-  snapshotData  Json
-  dataHash      String
-  createdById   String
-  reason        String   @db.Text
-  createdAt     DateTime @default(now())
+  id           String   @id @default(cuid())
+  assessmentId String
+  version      Int
+  label        String?
+  snapshotData Json
+  dataHash     String
+  createdById  String
+  reason       String   @db.Text
+  createdAt    DateTime @default(now())
 
-  assessment    Assessment      @relation(fields: [assessmentId], references: [id])
+  assessment     Assessment      @relation(fields: [assessmentId], references: [id])
   signOffProcess SignOffProcess?
 
   // Phase 31: Change request relations
@@ -2076,25 +2131,25 @@ model AssessmentSnapshot {
 }
 
 model SignOffProcess {
-  id                 String    @id @default(cuid())
-  assessmentId       String    @unique
-  snapshotId         String    @unique
-  status             String    @default("VALIDATION_NOT_STARTED") // SignOffStatus enum values
-  rejectedToStatus   String?
-  rejectionReason    String?   @db.Text
-  certificatePdfUrl  String?
-  certificateHash    String?
-  verificationToken  String?   @unique
-  initiatedById      String
-  createdAt          DateTime  @default(now())
-  completedAt        DateTime?
+  id                String    @id @default(cuid())
+  assessmentId      String    @unique
+  snapshotId        String    @unique
+  status            String    @default("VALIDATION_NOT_STARTED") // SignOffStatus enum values
+  rejectedToStatus  String?
+  rejectionReason   String?   @db.Text
+  certificatePdfUrl String?
+  certificateHash   String?
+  verificationToken String?   @unique
+  initiatedById     String
+  createdAt         DateTime  @default(now())
+  completedAt       DateTime?
 
-  assessment           Assessment              @relation(fields: [assessmentId], references: [id])
-  snapshot             AssessmentSnapshot       @relation(fields: [snapshotId], references: [id])
-  areaValidations      AreaValidation[]
-  technicalValidation  TechnicalValidation?
-  crossFuncValidation  CrossFunctionalValidation?
-  signatures           SignatureRecord[]
+  assessment          Assessment                 @relation(fields: [assessmentId], references: [id])
+  snapshot            AssessmentSnapshot         @relation(fields: [snapshotId], references: [id])
+  areaValidations     AreaValidation[]
+  technicalValidation TechnicalValidation?
+  crossFuncValidation CrossFunctionalValidation?
+  signatures          SignatureRecord[]
 
   @@index([assessmentId])
   @@index([status])
@@ -2108,7 +2163,7 @@ model AreaValidation {
   validatorName   String
   validatorEmail  String
   validatorRole   String
-  status          String    // PENDING, APPROVED, REJECTED
+  status          String // PENDING, APPROVED, REJECTED
   comments        String?   @db.Text
   rejectionReason String?   @db.Text
   validatedAt     DateTime?
@@ -2121,21 +2176,21 @@ model AreaValidation {
 }
 
 model TechnicalValidation {
-  id            String    @id @default(cuid())
-  signOffId     String    @unique
-  itLeadId      String?
-  itLeadName    String?
-  itLeadEmail   String?
-  itLeadStatus  String?   // PENDING, APPROVED, REJECTED
-  itLeadComments String?  @db.Text
-  itLeadAt      DateTime?
-  dmLeadId      String?
-  dmLeadName    String?
-  dmLeadEmail   String?
-  dmLeadStatus  String?   // PENDING, APPROVED, REJECTED
-  dmLeadComments String?  @db.Text
-  dmLeadAt      DateTime?
-  createdAt     DateTime  @default(now())
+  id             String    @id @default(cuid())
+  signOffId      String    @unique
+  itLeadId       String?
+  itLeadName     String?
+  itLeadEmail    String?
+  itLeadStatus   String? // PENDING, APPROVED, REJECTED
+  itLeadComments String?   @db.Text
+  itLeadAt       DateTime?
+  dmLeadId       String?
+  dmLeadName     String?
+  dmLeadEmail    String?
+  dmLeadStatus   String? // PENDING, APPROVED, REJECTED
+  dmLeadComments String?   @db.Text
+  dmLeadAt       DateTime?
+  createdAt      DateTime  @default(now())
 
   signOff SignOffProcess @relation(fields: [signOffId], references: [id])
 }
@@ -2146,7 +2201,7 @@ model CrossFunctionalValidation {
   validatedById     String
   validatorName     String
   validatorEmail    String
-  status            String    // PENDING, APPROVED, REJECTED
+  status            String // PENDING, APPROVED, REJECTED
   comments          String?   @db.Text
   conflictsReviewed Boolean   @default(false)
   conflictCount     Int       @default(0)
@@ -2158,24 +2213,24 @@ model CrossFunctionalValidation {
 }
 
 model SignatureRecord {
-  id                  String   @id @default(cuid())
-  signOffId           String
-  signatureType       String   // EXECUTIVE, PARTNER
-  signerId            String
-  signerName          String
-  signerEmail         String
-  signerRole          String
-  signerOrganization  String
-  signerTitle         String?
-  authorityStatement  String   @db.Text
-  ipAddress           String
-  userAgent           String   @db.Text
-  authMethod          String
-  mfaVerified         Boolean
-  documentHash        String
-  signedAt            DateTime
-  status              String   @default("PENDING") // PENDING, COMPLETED, DECLINED
-  declineReason       String?  @db.Text
+  id                 String   @id @default(cuid())
+  signOffId          String
+  signatureType      String // EXECUTIVE, PARTNER
+  signerId           String
+  signerName         String
+  signerEmail        String
+  signerRole         String
+  signerOrganization String
+  signerTitle        String?
+  authorityStatement String   @db.Text
+  ipAddress          String
+  userAgent          String   @db.Text
+  authMethod         String
+  mfaVerified        Boolean
+  documentHash       String
+  signedAt           DateTime
+  status             String   @default("PENDING") // PENDING, COMPLETED, DECLINED
+  declineReason      String?  @db.Text
 
   signOff SignOffProcess @relation(fields: [signOffId], references: [id])
 
@@ -2185,7 +2240,7 @@ model SignatureRecord {
 model AlmExportRecord {
   id            String    @id @default(cuid())
   assessmentId  String
-  targetSystem  String    // JIRA, AZURE_DEVOPS, SAP_SOLMAN, CSV
+  targetSystem  String // JIRA, AZURE_DEVOPS, SAP_SOLMAN, CSV
   status        String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, FAILED
   exportedById  String
   exportConfig  Json
@@ -2222,28 +2277,28 @@ model HandoffPackage {
 // =============================================================
 
 model ChangeRequest {
-  id                  String    @id @default(cuid())
-  assessmentId        String
-  requestedById       String
-  title               String
-  reason              String    @db.Text
-  impactSummary       Json
-  status              String    @default("REQUESTED") // REQUESTED, APPROVED, REJECTED, IN_PROGRESS, COMPLETED
-  approvedById        String?
-  approvedAt          DateTime?
-  rejectedReason      String?   @db.Text
-  changes             Json?
-  unlockedEntities    Json
-  previousSnapshotId  String
-  newSnapshotId       String?
-  expeditedSignOff    Boolean   @default(true)
-  signOffCompleted    Boolean   @default(false)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  assessmentId       String
+  requestedById      String
+  title              String
+  reason             String    @db.Text
+  impactSummary      Json
+  status             String    @default("REQUESTED") // REQUESTED, APPROVED, REJECTED, IN_PROGRESS, COMPLETED
+  approvedById       String?
+  approvedAt         DateTime?
+  rejectedReason     String?   @db.Text
+  changes            Json?
+  unlockedEntities   Json
+  previousSnapshotId String
+  newSnapshotId      String?
+  expeditedSignOff   Boolean   @default(true)
+  signOffCompleted   Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  assessment        Assessment          @relation(fields: [assessmentId], references: [id])
-  previousSnapshot  AssessmentSnapshot  @relation("ChangeRequestPreviousSnapshot", fields: [previousSnapshotId], references: [id])
-  newSnapshot       AssessmentSnapshot? @relation("ChangeRequestNewSnapshot", fields: [newSnapshotId], references: [id])
+  assessment       Assessment          @relation(fields: [assessmentId], references: [id])
+  previousSnapshot AssessmentSnapshot  @relation("ChangeRequestPreviousSnapshot", fields: [previousSnapshotId], references: [id])
+  newSnapshot      AssessmentSnapshot? @relation("ChangeRequestNewSnapshot", fields: [newSnapshotId], references: [id])
 
   @@index([assessmentId])
   @@index([status])
@@ -2252,7 +2307,7 @@ model ChangeRequest {
 model ReassessmentTrigger {
   id              String    @id @default(cuid())
   assessmentId    String
-  triggerType     String    // SAP_UPDATE, REGULATORY_CHANGE, ORG_CHANGE, SCOPE_DRIFT, MANUAL
+  triggerType     String // SAP_UPDATE, REGULATORY_CHANGE, ORG_CHANGE, SCOPE_DRIFT, MANUAL
   title           String
   description     String    @db.Text
   sourceReference String?
@@ -2388,7 +2443,7 @@ model PresenceRecord {
   userRole     String
   userImage    String?
   currentPage  String?
-  entityId     String?  // Optional: ID of the specific step or gap being viewed
+  entityId     String? // Optional: ID of the specific step or gap being viewed
   lastSeenAt   DateTime @default(now())
 
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
@@ -2403,16 +2458,16 @@ model PresenceRecord {
 // ============================================================
 
 model OfflineSyncQueue {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   userId       String
   assessmentId String
   action       String
   payload      Json
-  clientId     String   @unique
-  status       String   @default("pending")
-  attempts     Int      @default(0)
+  clientId     String    @unique
+  status       String    @default("pending")
+  attempts     Int       @default(0)
   lastError    String?
-  queuedAt     DateTime @default(now())
+  queuedAt     DateTime  @default(now())
   processedAt  DateTime?
 
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -2424,14 +2479,14 @@ model OfflineSyncQueue {
 }
 
 model PerformanceBaseline {
-  id        String   @id @default(cuid())
-  route     String
-  metric    String
-  p50       Float
-  p75       Float
-  p95       Float
+  id         String   @id @default(cuid())
+  route      String
+  metric     String
+  p50        Float
+  p75        Float
+  p95        Float
   sampleSize Int
-  period    String
+  period     String
   computedAt DateTime @default(now())
 
   @@unique([route, metric, period])
@@ -2504,8 +2559,8 @@ model CrossScopeDependency {
 
 model DependencyManifestRecord {
   id              String   @id @default(cuid())
-  version         String   @unique    // "2508", "2602"
-  contentHash     String              // SHA-256 of manifest body
+  version         String   @unique // "2508", "2602"
+  contentHash     String // SHA-256 of manifest body
   withinCount     Int
   crossCount      Int
   resolvedCount   Int
@@ -2522,7 +2577,7 @@ model DependencyPropagationLog {
   dependencyId    String
   previousStatus  String?
   newStatus       String    @default("NA")
-  propagationType String    // "AUTO_NA" | "WARNING"
+  propagationType String // "AUTO_NA" | "WARNING"
   undone          Boolean   @default(false)
   undoneAt        DateTime?
   undoneBy        String?
