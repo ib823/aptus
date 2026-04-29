@@ -43,7 +43,7 @@ export async function POST(
 
   const assessment = await prisma.assessment.findUnique({
     where: { id: assessmentId, deletedAt: null },
-    select: { id: true, organizationId: true },
+    select: { id: true, organizationId: true, catalogVersionId: true },
   });
   if (!assessment) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -54,6 +54,16 @@ export async function POST(
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  // Phase 13.3 — AD-13.6: every assessment must be pinned to a catalog version
+  // before classification can run. Without this, the classifier doesn't know
+  // which edition's scope items + protocol to use.
+  if (!assessment.catalogVersionId) {
+    return NextResponse.json(
+      { error: "Assessment is not pinned to a catalog version. Set Assessment.catalogVersionId before analyzing." },
+      { status: 409 },
+    );
+  }
+  const catalogVersionId = assessment.catalogVersionId;
 
   let body: unknown = {};
   try {
@@ -106,11 +116,14 @@ export async function POST(
     });
   }
 
-  // Pull the full 2602 inventory and pre-filter to candidates relevant to this batch
+  // Phase 13.3 — AD-13.6: pull only scope items pinned to this assessment's
+  // catalog version. Edition isolation is enforced at the source query plus
+  // a runtime assert in selectRelevantCandidates / classifyBatch.
   const allItems = await prisma.scopeItem.findMany({
-    select: { id: true, name: true, functionalArea: true, totalSteps: true },
+    where: { catalogVersionId },
+    select: { id: true, name: true, functionalArea: true, totalSteps: true, catalogVersionId: true },
   });
-  const candidates: CandidateScopeItem[] = selectRelevantCandidates(allItems, requirements);
+  const candidates: CandidateScopeItem[] = selectRelevantCandidates(allItems, requirements, { catalogVersionId });
 
   // Call Claude
   let classified;
@@ -118,6 +131,7 @@ export async function POST(
     classified = await classifyBatch(
       requirements as RequirementToClassify[],
       candidates,
+      { catalogVersionId },
     );
   } catch (err) {
     return NextResponse.json(

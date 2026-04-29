@@ -22,6 +22,12 @@ export interface CandidateScopeItem {
   name: string;
   functionalArea: string | null;
   totalSteps: number;
+  /**
+   * Phase 13.3 — AD-13.6: every candidate carries its catalog version so the
+   * runtime assert in selectRelevantCandidates() can guarantee no cross-edition
+   * leakage. Must equal the assessment.catalogVersionId at the call site.
+   */
+  catalogVersionId: string;
 }
 
 export interface RequirementToClassify {
@@ -82,16 +88,31 @@ Classify every requirement above. Return ONLY the JSON object specified.`;
 export async function classifyBatch(
   requirements: RequirementToClassify[],
   candidates: CandidateScopeItem[],
+  opts: { catalogVersionId: string },
 ): Promise<{ results: ClassificationResult[]; usage: { inputTokens: number; outputTokens: number }; protocolVersionId: string }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY not configured — set it in Vercel env to enable AI analysis");
   }
 
-  // Phase 2 — AD-4: load active protocol from DB. The protocolVersionId is
-  // returned alongside results so Phase 3's verdict-writer can pin every
-  // verdict to the exact protocol that produced it.
-  const protocol = await loadActiveProtocol();
+  // Phase 13.3 — AD-13.6 defense-in-depth: refuse any candidate whose catalog
+  // doesn't match the assessment's. Pre-filtering at the orchestrator
+  // (pass-data / route.ts findMany) is the primary safeguard; this assert
+  // catches future regressions.
+  for (const c of candidates) {
+    if (c.catalogVersionId !== opts.catalogVersionId) {
+      throw new Error(
+        `Catalog filter violation: candidate ${c.id} (${c.name}) is in catalog ${c.catalogVersionId}, ` +
+        `assessment is pinned to ${opts.catalogVersionId}. Refusing to classify across editions.`,
+      );
+    }
+  }
+
+  // Phase 13.3 — AD-13.5: load the protocol pinned to the assessment's catalog
+  // version. Each catalog has its own active protocol (Public 2602's protocol
+  // ≠ Private 2025-FPS1's protocol because BAdI / classic-config availability
+  // differs).
+  const protocol = await loadActiveProtocol(opts.catalogVersionId);
 
   const userMessage = buildUserMessage(requirements, candidates);
 
@@ -145,12 +166,25 @@ export async function classifyBatch(
  * Pre-filter the inventory to a relevant subset for a batch of requirements.
  * Heuristic: union of scope items whose name or functional area mentions any
  * keyword from the requirement texts. Capped at 80 items.
+ *
+ * Phase 13.3: catalogVersionId is required. Every input is asserted to belong
+ * to the same catalog — caller is expected to pre-filter `findMany()` by
+ * catalogVersionId; this assert catches accidental mixing.
  */
 export function selectRelevantCandidates(
   allItems: CandidateScopeItem[],
   requirements: RequirementToClassify[],
-  limit = 80,
+  opts: { catalogVersionId: string; limit?: number },
 ): CandidateScopeItem[] {
+  const limit = opts.limit ?? 80;
+  for (const item of allItems) {
+    if (item.catalogVersionId !== opts.catalogVersionId) {
+      throw new Error(
+        `Catalog filter violation in selectRelevantCandidates: item ${item.id} ` +
+        `(catalog ${item.catalogVersionId}) does not match expected ${opts.catalogVersionId}.`,
+      );
+    }
+  }
   const keywords = new Set<string>();
   for (const r of requirements) {
     const words = r.requirementText

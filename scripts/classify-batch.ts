@@ -100,14 +100,17 @@ ORCHESTRATOR OUTPUT FORMAT — write a strict JSON file matching this schema (no
 Write your output to a file at the path the orchestrator tells you, then run:
   npx tsx scripts/classify-batch.ts apply --in <output-file>`;
 
-async function loadProtocolText(): Promise<string> {
+async function loadProtocolText(catalogVersionId: string): Promise<string> {
+  // Phase 13.3 — AD-13.5: pin to the assessment's catalog so each edition
+  // (Public 2602 / Private 2025-FPS1) gets its own bucket rules.
   const row = await prisma.classificationProtocol.findFirst({
-    where: { isActive: true },
+    where: { isActive: true, catalogVersionId },
     orderBy: { createdAt: "desc" },
   });
   if (!row) {
     throw new Error(
-      "No active ClassificationProtocol — seed via `pnpm tsx scripts/seed-classification-protocol.ts` first.",
+      `No active ClassificationProtocol for catalogVersionId=${catalogVersionId}. ` +
+      `Seed via scripts/seed-classification-protocol.ts (Public) or scripts/seed-private-placeholder-protocol.ts (Private).`,
     );
   }
   return row.systemPrompt + "\n\n" + ORCHESTRATOR_OUTPUT_ADDENDUM;
@@ -135,9 +138,15 @@ async function emit(): Promise<void> {
   const assessmentId = arg("assessmentId") ?? (await resolveBursaId());
   const a = await prisma.assessment.findUnique({
     where: { id: assessmentId },
-    select: { id: true, companyName: true },
+    select: { id: true, companyName: true, catalogVersionId: true },
   });
   if (!a) throw new Error(`Assessment not found: ${assessmentId}`);
+  if (!a.catalogVersionId) {
+    throw new Error(
+      `Assessment ${assessmentId} has no catalogVersionId — cannot classify. Pin via Assessment.catalogVersionId first.`,
+    );
+  }
+  const catalogVersionId = a.catalogVersionId;
 
   const filter: { assessmentId: string; module?: string; requirementClass?: string;
     OR?: Array<{ solutionProviderResponse?: { equals: null } | { equals: "" } | { startsWith: string } }>; } = {
@@ -190,12 +199,15 @@ async function emit(): Promise<void> {
     clientRemarks: r.clientRemarks,
   }));
 
+  // Phase 13.3 — AD-13.6: scope-item pull is catalog-filtered; runtime assert
+  // guarantees no cross-edition leak even if a future code path forgets to filter.
   const allItems = await prisma.scopeItem.findMany({
-    select: { id: true, name: true, functionalArea: true, totalSteps: true },
+    where: { catalogVersionId },
+    select: { id: true, name: true, functionalArea: true, totalSteps: true, catalogVersionId: true },
   });
-  const candidates = selectRelevantCandidates(allItems, requirementsForClassifier);
+  const candidates = selectRelevantCandidates(allItems, requirementsForClassifier, { catalogVersionId });
 
-  const protocolText = await loadProtocolText();
+  const protocolText = await loadProtocolText(catalogVersionId);
   const file: EmitFile = {
     schemaVersion: 1,
     assessmentId: a.id,
