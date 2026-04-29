@@ -26,6 +26,14 @@ interface AptusAssessmentShellProps {
   companyName: string;
   status: string;
   /**
+   * Phase 13.4 — AD-13.7: pinned catalog edition + version chip beside the
+   * company name so consultants always see which SAP catalog they're
+   * classifying against. Optional for backwards compatibility with legacy
+   * assessments still missing catalogVersionId.
+   */
+  catalogEdition?: string;
+  catalogVersion?: string;
+  /**
    * When true, the Scope step's sub-tabs are rendered disabled with a
    * tooltip pointing back to Profile. The Scope step button in the rail
    * itself remains clickable (matches the legacy behaviour — server-side
@@ -157,6 +165,8 @@ export function AptusAssessmentShell({
   assessmentId,
   companyName,
   status,
+  catalogEdition,
+  catalogVersion,
   scopeLocked = false,
   children,
 }: AptusAssessmentShellProps) {
@@ -224,6 +234,24 @@ export function AptusAssessmentShell({
             </h1>
             <StatusPill status={`In ${STEPS[currentStep - 1]?.label ?? "?"}`} tone="info" />
             <StatusPill status={status} tone={statusTone(status)} />
+            {catalogEdition && catalogVersion && (
+              <span
+                title={`SAP catalog: ${catalogEdition} ${catalogVersion}`}
+                style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  padding: "2px 8px",
+                  borderRadius: 4,
+                  background: "var(--aptus-surface-2)",
+                  color: "var(--aptus-text-muted)",
+                  border: "1px solid var(--aptus-border)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {catalogEdition === "PUBLIC" ? "Public" : catalogEdition === "PRIVATE" ? "Private" : catalogEdition} ·{" "}
+                {catalogVersion}
+              </span>
+            )}
           </div>
         </div>
 

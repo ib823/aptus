@@ -38,6 +38,8 @@ export default async function AssessmentLayout({
       migrationApproach: true, targetGoLiveDate: true,
       keyProcesses: true, operatingCountries: true,
       currentErpVersion: true, itLandscapeSummary: true,
+      // Phase 13.4 — surface catalog edition + version on the shell chip
+      catalogVersion: { select: { edition: true, version: true } },
     },
   });
 
@@ -53,6 +55,10 @@ export default async function AssessmentLayout({
       assessmentId={assessment.id}
       companyName={assessment.companyName}
       status={assessment.status}
+      {...(assessment.catalogVersion ? {
+        catalogEdition: assessment.catalogVersion.edition,
+        catalogVersion: assessment.catalogVersion.version,
+      } : {})}
       scopeLocked={scopeLocked}
     >
       {children}

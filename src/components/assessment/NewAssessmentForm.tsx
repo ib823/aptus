@@ -1,11 +1,28 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UI_TEXT } from "@/constants/ui-text";
+
+interface CatalogVersionOption {
+  id: string;
+  version: string;
+  ingestedAt: string;
+  scopeItemCount: number;
+}
+interface CatalogEditionGroup {
+  edition: string;
+  versions: CatalogVersionOption[];
+}
+
+const EDITION_LABELS: Record<string, string> = {
+  PUBLIC: "Public Edition",
+  PRIVATE: "Private Edition",
+  ON_PREM: "On-Premise",
+};
 
 const INDUSTRY_OPTIONS = [
   { value: "Manufacturing", label: "Manufacturing" },
@@ -44,13 +61,57 @@ export function NewAssessmentForm() {
     industry: "",
     country: "",
     companySize: "",
+    edition: "",
+    catalogVersionId: "",
   });
+
+  // Phase 13.4 — load active catalog versions for the cascading picker
+  const [catalogEditions, setCatalogEditions] = useState<CatalogEditionGroup[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/catalog-versions")
+      .then((r) => r.json())
+      .then((data: { editions?: CatalogEditionGroup[] }) => {
+        if (cancelled) return;
+        const editions = data.editions ?? [];
+        setCatalogEditions(editions);
+        // Default: pick the first edition's most-recent version (UI prefers PUBLIC first)
+        if (editions.length > 0 && editions[0]?.versions[0]) {
+          const firstEdition = editions[0];
+          setFormData((prev) => ({
+            ...prev,
+            edition: firstEdition.edition,
+            catalogVersionId: firstEdition.versions[0]!.id,
+          }));
+        }
+      })
+      .catch(() => {
+        // Non-blocking: form still works with default catalogVersionId on the API
+      })
+      .finally(() => {
+        if (!cancelled) setCatalogLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleChange = useCallback(
     (field: string, value: string) => {
       setFormData((prev) => ({ ...prev, [field]: value }));
     },
     [],
+  );
+
+  const handleEditionChange = useCallback(
+    (edition: string) => {
+      const group = catalogEditions.find((e) => e.edition === edition);
+      const firstVersion = group?.versions[0]?.id ?? "";
+      setFormData((prev) => ({ ...prev, edition, catalogVersionId: firstVersion }));
+    },
+    [catalogEditions],
   );
 
   const handleSubmit = useCallback(
@@ -64,8 +125,12 @@ export function NewAssessmentForm() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            ...formData,
+            companyName: formData.companyName,
+            industry: formData.industry,
+            country: formData.country,
+            companySize: formData.companySize,
             operatingCountries: [formData.country],
+            ...(formData.catalogVersionId ? { catalogVersionId: formData.catalogVersionId } : {}),
           }),
         });
 
@@ -155,6 +220,50 @@ export function NewAssessmentForm() {
           </SelectContent>
         </Select>
       </div>
+
+      {/* Phase 13.4 — Edition + Version cascading picker */}
+      {!catalogLoading && catalogEditions.length > 0 && (
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="catalog-edition" className="block text-sm font-medium text-foreground mb-1">
+              SAP Edition
+            </label>
+            <Select value={formData.edition} onValueChange={handleEditionChange}>
+              <SelectTrigger id="catalog-edition">
+                <SelectValue placeholder="Select edition" />
+              </SelectTrigger>
+              <SelectContent>
+                {catalogEditions.map((g) => (
+                  <SelectItem key={g.edition} value={g.edition}>
+                    {EDITION_LABELS[g.edition] ?? g.edition}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label htmlFor="catalog-version" className="block text-sm font-medium text-foreground mb-1">
+              Catalog Version
+            </label>
+            <Select
+              value={formData.catalogVersionId}
+              onValueChange={(val) => handleChange("catalogVersionId", val)}
+              disabled={!formData.edition}
+            >
+              <SelectTrigger id="catalog-version">
+                <SelectValue placeholder="Select version" />
+              </SelectTrigger>
+              <SelectContent>
+                {(catalogEditions.find((e) => e.edition === formData.edition)?.versions ?? []).map((v) => (
+                  <SelectItem key={v.id} value={v.id}>
+                    {v.version} ({v.scopeItemCount} scope items)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
 
       {error && (
         <p className="text-sm text-red-500" role="alert">{error}</p>
