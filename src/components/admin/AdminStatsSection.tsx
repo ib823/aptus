@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { getCatalogStats, getIntelligenceStats } from "@/lib/db/cached-queries";
+import { formatNumber } from "@/lib/format/number";
 import { Building2, BarChart3, Puzzle, ArrowLeftRight, Database, FileText, Settings, Activity } from "lucide-react";
 
 export async function AdminStatsSection() {
@@ -32,15 +33,15 @@ export async function AdminStatsSection() {
         </h3>
         <div className="grid grid-cols-3 gap-6">
           <div>
-            <p className="text-2xl font-bold text-foreground">{scopeItemCount.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-foreground">{formatNumber(scopeItemCount)}</p>
             <p className="text-sm text-muted-foreground">Scope Items</p>
           </div>
           <div>
-            <p className="text-2xl font-bold text-foreground">{processStepCount.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-foreground">{formatNumber(processStepCount)}</p>
             <p className="text-sm text-muted-foreground">Process Steps</p>
           </div>
           <div>
-            <p className="text-2xl font-bold text-foreground">{configActivityCount.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-foreground">{formatNumber(configActivityCount)}</p>
             <p className="text-sm text-muted-foreground">Config Activities</p>
           </div>
         </div>
@@ -54,22 +55,22 @@ export async function AdminStatsSection() {
         <div className="grid grid-cols-4 gap-4">
           <a href="/admin/industries" className="block bg-muted rounded-lg p-4 hover:bg-muted/80 transition-colors">
             <Building2 className="w-5 h-5 text-muted-foreground/60 mb-2" />
-            <p className="text-xl font-bold text-foreground">{industryCount}</p>
+            <p className="text-xl font-bold text-foreground">{formatNumber(industryCount)}</p>
             <p className="text-xs text-muted-foreground">Industry Profiles</p>
           </a>
           <a href="/admin/baselines" className="block bg-muted rounded-lg p-4 hover:bg-muted/80 transition-colors">
             <BarChart3 className="w-5 h-5 text-muted-foreground/60 mb-2" />
-            <p className="text-xl font-bold text-foreground">{baselineCount}</p>
+            <p className="text-xl font-bold text-foreground">{formatNumber(baselineCount)}</p>
             <p className="text-xs text-muted-foreground">Effort Baselines</p>
           </a>
           <a href="/admin/extensibility-patterns" className="block bg-muted rounded-lg p-4 hover:bg-muted/80 transition-colors">
             <Puzzle className="w-5 h-5 text-muted-foreground/60 mb-2" />
-            <p className="text-xl font-bold text-foreground">{extPatternCount}</p>
+            <p className="text-xl font-bold text-foreground">{formatNumber(extPatternCount)}</p>
             <p className="text-xs text-muted-foreground">Extensibility Patterns</p>
           </a>
           <a href="/admin/adaptation-patterns" className="block bg-muted rounded-lg p-4 hover:bg-muted/80 transition-colors">
             <ArrowLeftRight className="w-5 h-5 text-muted-foreground/60 mb-2" />
-            <p className="text-xl font-bold text-foreground">{adaptPatternCount}</p>
+            <p className="text-xl font-bold text-foreground">{formatNumber(adaptPatternCount)}</p>
             <p className="text-xs text-muted-foreground">Adaptation Patterns</p>
           </a>
         </div>
@@ -95,7 +96,7 @@ function MetricCard({
         <Icon className="w-4 h-4 text-muted-foreground/60" />
         <p className="text-xs text-muted-foreground uppercase tracking-wider">{label}</p>
       </div>
-      <p className={`text-2xl font-bold ${color ?? "text-foreground"}`}>{value}</p>
+      <p className={`text-2xl font-bold ${color ?? "text-foreground"}`}>{typeof value === "number" ? formatNumber(value) : value}</p>
     </div>
   );
 }

@@ -13,6 +13,11 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
+  APTUS_MARK_PNG_DATA_URL,
+  APTUS_MARK_WHITE_PNG_DATA_URL,
+} from "@/lib/brand/pdf-mark";
+import { formatDecimal, formatNumber } from "@/lib/format/number";
+import {
   APTUS_BRAND,
   brandColor,
   brandColorRgb,
@@ -69,7 +74,9 @@ function advancePastTable(doc: jsPDF, fallback: number, spacing: number, needed:
   const pageHeight = doc.internal.pageSize.getHeight();
   const finalY = meta?.finalY ?? fallback;
   let y = finalY + spacing;
-  if (y + needed > pageHeight - 22) {
+  // Reserve 30mm for the footer (was 22mm — caused intermittent overlap on
+  // pages where content extended close to the page bottom).
+  if (y + needed > pageHeight - 30) {
     doc.addPage();
     y = 25;
   }
@@ -87,33 +94,21 @@ function aptusRgb(): [number, number, number] {
   return rgb(APTUS_BRAND);
 }
 
-/** Render the small Aptus pyramid mark. Outer white triangle + dark inner
- * cutout + white dot. Matches `docs/design/v1.2/reports/print.css` cover-mark.
- * Drawn at (x, y) with given size in mm (default 5mm = roughly 14pt). */
-function drawAptusMark(doc: jsPDF, x: number, y: number, size = 5): void {
-  // Outer pyramid — white
-  doc.setFillColor(255, 255, 255);
-  doc.triangle(
-    x + size / 2, y,         // apex
-    x + size,     y + size,  // bottom-right
-    x,            y + size,  // bottom-left
-    "F",
-  );
-  // Inner cutout — Aptus brand (dark)
-  const inner = size * 0.4;
-  const innerX = x + (size - inner) / 2;
-  const innerY = y + size - inner * 0.85;
-  const aptus = aptusRgb();
-  doc.setFillColor(aptus[0], aptus[1], aptus[2]);
-  doc.triangle(
-    innerX + inner / 2, innerY,
-    innerX + inner,     innerY + inner * 0.85,
-    innerX,             innerY + inner * 0.85,
-    "F",
-  );
-  // Dot — white
-  doc.setFillColor(255, 255, 255);
-  doc.circle(x + size / 2, y + size * 0.7, size * 0.06, "F");
+/** Embed the canonical Aptus mark (sourced from `public/icons/aptus-mark.svg`
+ * via `src/lib/brand/pdf-mark.ts`). Caller picks the variant — `light` for
+ * dark cover bands (white fill), default for light backgrounds. The PNG is
+ * regenerated from the SVG by `scripts/regenerate-brand-pngs.ts` so the
+ * web app, favicon, OG image, and PDF stamp all share one source. */
+function drawAptusMark(
+  doc: jsPDF,
+  x: number,
+  y: number,
+  size = 5,
+  variant: "default" | "light" = "light",
+): void {
+  const dataUrl =
+    variant === "light" ? APTUS_MARK_WHITE_PNG_DATA_URL : APTUS_MARK_PNG_DATA_URL;
+  doc.addImage(dataUrl, "PNG", x, y, size, size, undefined, "FAST");
 }
 
 /** Render the standard cover band: Aptus-brand fill (top 90mm), Aptus mark +
@@ -253,7 +248,7 @@ export function generateExecutiveSummaryPdf(
   ]);
   renderCoverLead(doc,
     `This document summarizes the SAP S/4HANA fit-to-standard assessment for ${summary.assessment.companyName}, ` +
-    `covering ${summary.steps.total} business requirements across ${summary.scope.selected} in-scope process items. ` +
+    `covering ${formatNumber(summary.steps.total)} business requirements across ${formatNumber(summary.scope.selected)} in-scope process items. ` +
     `It states the verdict, the effort estimate, and the steering-committee-level recommendations.`,
   );
 
@@ -292,8 +287,8 @@ export function generateExecutiveSummaryPdf(
   doc.setFontSize(10);
   doc.setTextColor(11, 11, 15);
   doc.text(
-    `${summary.steps.total} requirements analysed across ${summary.scope.selected} in-scope items. ` +
-    `Estimated effort: ${summary.gaps.totalEffortDays} days.`,
+    `${formatNumber(summary.steps.total)} requirements analysed across ${formatNumber(summary.scope.selected)} in-scope items. ` +
+    `Estimated effort: ${formatNumber(summary.gaps.totalEffortDays)} days.`,
     28, verdictTop + 44,
   );
   doc.text("Confidence: ", 28, verdictTop + 50);
@@ -315,12 +310,12 @@ export function generateExecutiveSummaryPdf(
     startY: y,
     head: [["Metric", "Value"]],
     body: [
-      ["Total Scope Items", String(summary.scope.total)],
-      ["Selected Scope Items", String(summary.scope.selected)],
-      ["Undecided", String(summary.scope.maybe)],
-      ["Total Process Steps", String(summary.steps.total)],
-      ["Steps Reviewed", String(summary.steps.reviewed)],
-      ["Steps Pending", String(summary.steps.pending)],
+      ["Total Scope Items", formatNumber(summary.scope.total)],
+      ["Selected Scope Items", formatNumber(summary.scope.selected)],
+      ["Undecided", formatNumber(summary.scope.maybe)],
+      ["Total Process Steps", formatNumber(summary.steps.total)],
+      ["Steps Reviewed", formatNumber(summary.steps.reviewed)],
+      ["Steps Pending", formatNumber(summary.steps.pending)],
     ],
     theme: "grid",
     headStyles: aptusHeadStyles(),
@@ -338,10 +333,10 @@ export function generateExecutiveSummaryPdf(
     startY: y,
     head: [["Outcome", "Count", "% of total"]],
     body: [
-      [outcomeLabel("FIT"),       String(summary.steps.fit),       `${ootbPct}%`],
-      [outcomeLabel("CONFIGURE"), String(summary.steps.configure), `${cfgPct}%`],
-      ["Needs work",              String(summary.steps.gap),       `${gapPct}%`],
-      ["Not applicable",          String(summary.steps.na),
+      [outcomeLabel("FIT"),       formatNumber(summary.steps.fit),       `${ootbPct}%`],
+      [outcomeLabel("CONFIGURE"), formatNumber(summary.steps.configure), `${cfgPct}%`],
+      ["Needs work",              formatNumber(summary.steps.gap),       `${gapPct}%`],
+      ["Not applicable",          formatNumber(summary.steps.na),
         `${summary.steps.total > 0 ? Math.round((summary.steps.na / summary.steps.total) * 100) : 0}%`],
     ],
     theme: "grid",
@@ -359,11 +354,11 @@ export function generateExecutiveSummaryPdf(
   // Translate raw resolutionType keys → plain-language labels
   const gapRows: string[][] = Object.entries(summary.gaps.byType).map(([rt, count]) => [
     isResolutionType(rt) ? outcomeLabel(rt) : rt,
-    String(count),
+    formatNumber(count),
   ]);
-  gapRows.push(["Total Gaps", String(summary.gaps.total)]);
-  gapRows.push(["Resolved", String(summary.gaps.resolved)]);
-  gapRows.push(["Estimated Effort (days)", String(summary.gaps.totalEffortDays)]);
+  gapRows.push(["Total Gaps", formatNumber(summary.gaps.total)]);
+  gapRows.push(["Resolved", formatNumber(summary.gaps.resolved)]);
+  gapRows.push(["Estimated Effort (days)", formatNumber(summary.gaps.totalEffortDays)]);
 
   autoTable(doc, {
     startY: y,
@@ -385,7 +380,7 @@ export function generateExecutiveSummaryPdf(
   doc.setFont("helvetica", "normal");
   doc.setTextColor(82, 82, 91);
   doc.text(
-    `${summary.config.total} configuration activities for selected scope items.`,
+    `${formatNumber(summary.config.total)} configuration activities for selected scope items.`,
     20, y,
   );
 
@@ -432,7 +427,7 @@ export function generateEffortEstimatePdf(
     ["Prepared by", "ABeam Consulting"],
   ]);
   renderCoverLead(doc,
-    `Bottom-up effort estimate derived from ${summary.gaps.total} gap items and ${summary.config.total} configuration activities. ` +
+    `Bottom-up effort estimate derived from ${formatNumber(summary.gaps.total)} gap items and ${formatNumber(summary.config.total)} configuration activities. ` +
     "Estimates use industry-standard heuristics by resolution type. Excludes infrastructure provisioning, training material development, and post-go-live support beyond standard hypercare.",
   );
 
@@ -455,11 +450,11 @@ export function generateEffortEstimatePdf(
   }
   const effortRows = Object.entries(effortByType).map(([rt, agg]) => [
     isResolutionType(rt) ? outcomeLabel(rt) : rt,
-    String(agg.count),
-    agg.count > 0 ? (agg.days / agg.count).toFixed(1) : "0.0",
-    String(agg.days),
+    formatNumber(agg.count),
+    agg.count > 0 ? formatDecimal(agg.days / agg.count, 1) : "0.0",
+    formatNumber(agg.days),
   ]);
-  effortRows.push(["Total", String(gapData.length), "—", String(summary.gaps.totalEffortDays)]);
+  effortRows.push(["Total", formatNumber(gapData.length), "—", formatNumber(summary.gaps.totalEffortDays)]);
 
   autoTable(doc, {
     startY: y,
@@ -512,8 +507,8 @@ export function generateEffortEstimatePdf(
     body: phases.map((p) => [
       p.label,
       `${Math.round(p.pct * 100)}%`,
-      String(Math.round(totalDays * p.pct)),
-    ]).concat([["Total", "100%", String(summary.gaps.totalEffortDays)]]),
+      formatNumber(Math.round(totalDays * p.pct)),
+    ]).concat([["Total", "100%", formatNumber(summary.gaps.totalEffortDays)]]),
     theme: "grid",
     headStyles: aptusHeadStyles(),
     margin: { left: 20, right: 20 },
@@ -828,7 +823,7 @@ export function generateRequirementsFindingsPdf(
   y += 8;
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.text(`You sent us ${data.totals.total} requirements across ${data.byArea.length} functional areas.`, 20, y);
+  doc.text(`You sent us ${formatNumber(data.totals.total)} requirements across ${formatNumber(data.byArea.length)} functional areas.`, 20, y);
   y += 10;
 
   // 4 big-number cells: Standard SAP / Configurable / Adapt / Needs work
@@ -856,7 +851,7 @@ export function generateRequirementsFindingsPdf(
     doc.setFontSize(22);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(11, 11, 15);
-    doc.text(String(c.num), x + 4, y + 11);
+    doc.text(formatNumber(c.num), x + 4, y + 11);
     drawPill(doc, x + 4, y + 19, c.label, c.tier);
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
@@ -898,7 +893,7 @@ export function generateRequirementsFindingsPdf(
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(82, 82, 91);
-    doc.text(`${area.total} requirements`, pw - 20, y + 4, { align: "right" });
+    doc.text(`${formatNumber(area.total)} requirements`, pw - 20, y + 4, { align: "right" });
     y += 10;
     doc.setDrawColor(228, 228, 231);
     doc.setLineWidth(0.1);
@@ -917,14 +912,19 @@ export function generateRequirementsFindingsPdf(
     doc.text(hLines, 20, y);
     y += hLines.length * 5 + 6;
 
-    // Finding cards (up to 4 per page)
-    for (const card of area.cards.slice(0, 4)) {
-      if (y + 50 > doc.internal.pageSize.getHeight() - 22) {
+    // Finding cards — size dynamically based on wrapped text. Estimate a
+    // conservative 60mm before drawing so the page-break check has a safe
+    // upper bound; the renderer returns the actual height used.
+    const FOOTER_RESERVE = 30;
+    const CARD_GUTTER = 4;
+    for (const card of area.cards) {
+      const projected = 80; // upper bound; renderer measures actual height
+      if (y + projected > doc.internal.pageSize.getHeight() - FOOTER_RESERVE) {
         doc.addPage();
         y = 25;
       }
-      drawFindingCard(doc, 20, y, pw - 40, card);
-      y += 50;
+      const used = drawFindingCard(doc, 20, y, pw - 40, card);
+      y += used + CARD_GUTTER;
     }
   }
 
@@ -989,49 +989,88 @@ export function generateRequirementsFindingsPdf(
 }
 
 /** Render a single finding card — header (Req ID + outcome pill), then 3
- * labelled rows: Your ask / What SAP does / What it means for you. */
+ * labelled rows: Your ask / What SAP does / What it means for you.
+ *
+ * Each value can wrap to multiple lines; the renderer measures the wrapped
+ * height of every section and advances the cursor before drawing the next
+ * one (no fixed y-offsets). The card's outer rectangle is sized to fit the
+ * actual content, and the function returns the total height used so the
+ * caller can advance for the next card without overlap. */
 function drawFindingCard(
   doc: jsPDF,
   x: number, y: number, w: number,
   card: { reqId: string; yourAsk: string; whatSapDoes: string; resolutionType: ResolutionType },
-): void {
+): number {
+  // 9pt body line-height ≈ 4.4mm; 8pt label line-height ≈ 3.9mm. Use a
+  // single conservative LH so labels and values share rows neatly.
+  const LH_BODY = 4.6;
+  const PAD_X = 4;
+  const HEADER_BASELINE = 6;       // baseline of Req ID / pill
+  const HR_OFFSET = 9;             // hairline below header
+  const FIRST_ROW_BASELINE = 14;   // first label/value baseline
+  const ROW_GAP = 2;               // gutter between rows
+  const BOTTOM_PAD = 3;            // padding below last value to card border
+  const LABEL_COLW = 32;           // width reserved for the left-side LABEL column
+  const VAL_X = x + LABEL_COLW + 4;
+  const valW = w - LABEL_COLW - 8;
+
+  // Measure value heights up-front so we can size the outer card dynamically.
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  const yourAskLines = doc.splitTextToSize(card.yourAsk, valW) as string[];
+  const sapLines = doc.splitTextToSize(card.whatSapDoes, valW) as string[];
+  const meansLines = doc.splitTextToSize(outcomeMeans(card.resolutionType), valW) as string[];
+
+  const yourAskH = Math.max(yourAskLines.length, 1) * LH_BODY;
+  const sapH = Math.max(sapLines.length, 1) * LH_BODY;
+  const meansH = Math.max(meansLines.length, 1) * LH_BODY;
+
+  const cardHeight = HR_OFFSET + (FIRST_ROW_BASELINE - HR_OFFSET) + yourAskH + ROW_GAP + sapH + ROW_GAP + meansH + BOTTOM_PAD;
+
+  // Outer frame
   doc.setDrawColor(228, 228, 231);
   doc.setLineWidth(0.2);
-  doc.rect(x, y, w, 47);
+  doc.rect(x, y, w, cardHeight);
 
   // Header row
   doc.setFontSize(9);
   doc.setFont("courier", "bold");
   doc.setTextColor(11, 11, 15);
-  doc.text(card.reqId, x + 4, y + 6);
+  doc.text(card.reqId, x + PAD_X, y + HEADER_BASELINE);
 
   const label = outcomeLabel(card.resolutionType);
   const tier = outcomeDot(card.resolutionType);
-  // Place pill on the right
   doc.setFont("helvetica", "normal");
   const labelW = doc.getTextWidth(label) + 6;
-  drawPill(doc, x + w - labelW - 4, y + 6, label, tier);
+  drawPill(doc, x + w - labelW - PAD_X, y + HEADER_BASELINE, label, tier);
 
-  // Hairline separator
+  // Hairline separator below header
   doc.setDrawColor(228, 228, 231);
   doc.setLineWidth(0.1);
-  doc.line(x + 4, y + 9, x + w - 4, y + 9);
+  doc.line(x + PAD_X, y + HR_OFFSET, x + w - PAD_X, y + HR_OFFSET);
 
-  // Three rows
-  doc.setFontSize(8);
-  doc.setFont("courier", "normal");
-  doc.setTextColor(82, 82, 91);
-  doc.text("YOUR ASK", x + 4, y + 14);
-  doc.text("WHAT SAP DOES", x + 4, y + 24);
-  doc.text("WHAT IT MEANS", x + 4, y + 36);
+  // Measure-and-advance per row: label + wrapped value share a baseline,
+  // cursor advances by the row's *actual* rendered height before the next
+  // row is drawn — eliminates the previous fixed-y overlap bug.
+  let rowY = y + FIRST_ROW_BASELINE;
+  const rows: Array<{ label: string; lines: string[]; height: number }> = [
+    { label: "YOUR ASK", lines: yourAskLines, height: yourAskH },
+    { label: "WHAT SAP DOES", lines: sapLines, height: sapH },
+    { label: "WHAT IT MEANS", lines: meansLines, height: meansH },
+  ];
+  for (const r of rows) {
+    doc.setFontSize(8);
+    doc.setFont("courier", "normal");
+    doc.setTextColor(82, 82, 91);
+    doc.text(r.label, x + PAD_X, rowY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(11, 11, 15);
+    doc.text(r.lines, VAL_X, rowY);
+    rowY += r.height + ROW_GAP;
+  }
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(11, 11, 15);
-  const valW = w - 38;
-  doc.text(doc.splitTextToSize(card.yourAsk, valW) as string[], x + 36, y + 14);
-  doc.text(doc.splitTextToSize(card.whatSapDoes, valW) as string[], x + 36, y + 24);
-  doc.text(doc.splitTextToSize(outcomeMeans(card.resolutionType), valW) as string[], x + 36, y + 36);
+  return cardHeight;
 }
 
 // ── Generator: 13_Flow_Atlas.pdf ─────────────────────────────────────────────
@@ -1079,9 +1118,9 @@ export function generateFlowAtlasPdf(
   const totalFit = diagrams.reduce((s, d) => s + d.fitCount, 0);
   const totalGap = diagrams.reduce((s, d) => s + d.gapCount, 0);
   const scopeIds = new Set(diagrams.map((d) => d.scopeItemId));
-  doc.text(`Total Diagrams: ${diagrams.length}   |   Scope Items: ${scopeIds.size}   |   Total Steps: ${totalSteps}`, 20, y);
+  doc.text(`Total Diagrams: ${formatNumber(diagrams.length)}   |   Scope Items: ${formatNumber(scopeIds.size)}   |   Total Steps: ${formatNumber(totalSteps)}`, 20, y);
   y += 6;
-  doc.text(`Standard SAP: ${totalFit}   |   Needs work: ${totalGap}   |   Fit Rate: ${totalSteps > 0 ? Math.round((totalFit / totalSteps) * 100) : 0}%`, 20, y);
+  doc.text(`Standard SAP: ${formatNumber(totalFit)}   |   Needs work: ${formatNumber(totalGap)}   |   Fit Rate: ${totalSteps > 0 ? Math.round((totalFit / totalSteps) * 100) : 0}%`, 20, y);
   y += 14;
 
   // Status legend with status dots
@@ -1125,7 +1164,7 @@ export function generateFlowAtlasPdf(
     doc.setTextColor(11, 11, 15);
     doc.text("Verdict:", 20, phLand - 22);
     drawPill(doc, 38, phLand - 22, tier === "success" ? "Standard SAP" : tier === "warning" ? "Configurable" : "Needs work", tier);
-    doc.text(`Steps: ${d.stepCount}    Gaps: ${d.gapCount}`, 100, phLand - 22);
+    doc.text(`Steps: ${formatNumber(d.stepCount)}    Gaps: ${formatNumber(d.gapCount)}`, 100, phLand - 22);
   }
 
   renderFooterOnAllPages(doc, "13_Flow_Atlas.pdf");
@@ -1304,8 +1343,8 @@ function renderVerdictBlock(
   doc.setTextColor(11, 11, 15);
   const naPending = totals.NA + totals.Pending;
   doc.text(
-    `${totals.grand} requirements analysed against the 2602 catalog. ` +
-    `${totals.O} OOTB · ${totals.C} Configuration · ${totals.G} Gap${naPending > 0 ? ` · ${naPending} N/A or Pending` : ""}.`,
+    `${formatNumber(totals.grand)} requirements analysed against the 2602 catalog. ` +
+    `${formatNumber(totals.O)} OOTB · ${formatNumber(totals.C)} Configuration · ${formatNumber(totals.G)} Gap${naPending > 0 ? ` · ${formatNumber(naPending)} N/A or Pending` : ""}.`,
     28, top + 44,
   );
 }
@@ -1319,12 +1358,12 @@ function classTableBody(
     const b = perClass[cls]!;
     rows.push([
       cls,
-      String(b.total),
-      `${b.O} (${pct(b.O, b.total)})`,
-      `${b.C} (${pct(b.C, b.total)})`,
-      `${b.G} (${pct(b.G, b.total)})`,
-      String(b.NA),
-      String(b.Pending),
+      formatNumber(b.total),
+      `${formatNumber(b.O)} (${pct(b.O, b.total)})`,
+      `${formatNumber(b.C)} (${pct(b.C, b.total)})`,
+      `${formatNumber(b.G)} (${pct(b.G, b.total)})`,
+      formatNumber(b.NA),
+      formatNumber(b.Pending),
     ]);
   }
   return rows;
@@ -1383,7 +1422,7 @@ function renderRequirementSection(
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(11, 11, 15);
-    doc.text(`${module}  (${modRows.length})`, 20, y);
+    doc.text(`${module}  (${formatNumber(modRows.length)})`, 20, y);
     y += 4;
 
     const head: string[][] = [["Code", "Requirement"]];
@@ -1486,12 +1525,12 @@ export function generateSapBestPracticeClassificationPdf(
     head: [["Module", "Total", "O", "C", "G", "N/A", "Pending"]],
     body: data.perModule.map((m) => [
       m.module,
-      String(m.total),
-      `${m.O} (${pct(m.O, m.total)})`,
-      `${m.C} (${pct(m.C, m.total)})`,
-      `${m.G} (${pct(m.G, m.total)})`,
-      String(m.NA),
-      String(m.Pending),
+      formatNumber(m.total),
+      `${formatNumber(m.O)} (${pct(m.O, m.total)})`,
+      `${formatNumber(m.C)} (${pct(m.C, m.total)})`,
+      `${formatNumber(m.G)} (${pct(m.G, m.total)})`,
+      formatNumber(m.NA),
+      formatNumber(m.Pending),
     ]),
     theme: "grid",
     headStyles: aptusHeadStyles(),

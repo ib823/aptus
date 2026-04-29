@@ -11,6 +11,7 @@
 
 import ExcelJS from "exceljs";
 import { APTUS_BRAND } from "@/lib/report/branding";
+import { NUMFMT_THOUSANDS, NUMFMT_THOUSANDS_DECIMAL } from "@/lib/format/number";
 import {
   DOT_TINT_HEX,
   type DotTier,
@@ -18,9 +19,19 @@ import {
 } from "@/lib/report/glossary";
 import type { ResolutionType } from "@/types/assessment";
 
+interface SheetColumn {
+  header: string;
+  key: string;
+  width: number;
+  /** Optional ExcelJS number format. Applied to every cell in the column.
+   * Use `NUMFMT_THOUSANDS` for integer counts/effort/records that may
+   * exceed 999. */
+  numFmt?: string;
+}
+
 interface SheetConfig {
   name: string;
-  columns: Array<{ header: string; key: string; width: number }>;
+  columns: Array<SheetColumn>;
   rows: Array<Record<string, unknown>>;
   /** Optional per-row style hook. Receives the (1-indexed) row number + the
    * source row data. Apply cell styling via `row.getCell(n).fill = {...}`.
@@ -44,6 +55,16 @@ export async function generateXlsx(sheets: SheetConfig[]): Promise<Uint8Array> {
   for (const sheet of sheets) {
     const ws = workbook.addWorksheet(sheet.name);
     ws.columns = sheet.columns;
+
+    // Apply numFmt to columns that declared one (thousands separator on
+    // counts / effort / records / users — every numeric value ≥1000 reads
+    // as "1,234" rather than "1234").
+    for (const col of sheet.columns) {
+      if (col.numFmt) {
+        const wsCol = ws.getColumn(col.key);
+        wsCol.numFmt = col.numFmt;
+      }
+    }
 
     // Header — Aptus brand fill (locked per spec §5.7)
     const headerRow = ws.getRow(1);
@@ -123,8 +144,8 @@ export function scopeCatalogSheet(data: Array<Record<string, unknown>>): SheetCo
       { header: "Verdict", key: "verdict", width: 22 },
       { header: "Current State", key: "currentState", width: 15 },
       { header: "Notes", key: "notes", width: 40 },
-      { header: "Total Steps", key: "totalSteps", width: 12 },
-      { header: "Config Count", key: "configCount", width: 12 },
+      { header: "Total Steps", key: "totalSteps", width: 12, numFmt: NUMFMT_THOUSANDS },
+      { header: "Config Count", key: "configCount", width: 12, numFmt: NUMFMT_THOUSANDS },
     ],
     rows: data,
   };
@@ -160,9 +181,9 @@ export function gapRegisterSheet(data: Array<Record<string, unknown>>): SheetCon
       { header: "Gap Description", key: "gapDescription", width: 40 },
       { header: "Resolution Type", key: "resolutionType", width: 18 },
       { header: "Resolution Description", key: "resolutionDescription", width: 40 },
-      { header: "Effort Days", key: "effortDays", width: 12 },
-      { header: "One-time Cost", key: "oneTimeCost", width: 14 },
-      { header: "Recurring Cost", key: "recurringCost", width: 14 },
+      { header: "Effort Days", key: "effortDays", width: 12, numFmt: NUMFMT_THOUSANDS },
+      { header: "One-time Cost", key: "oneTimeCost", width: 14, numFmt: '"$"#,##0' },
+      { header: "Recurring Cost", key: "recurringCost", width: 14, numFmt: '"$"#,##0' },
       { header: "Risk Level", key: "riskLevel", width: 12 },
       { header: "Upgrade Impact", key: "upgradeImpact", width: 30 },
       { header: "Decided By", key: "decidedBy", width: 25 },
@@ -253,8 +274,8 @@ export function integrationRegisterSheets(data: Array<Record<string, unknown>>):
       name: "Summary",
       columns: [
         { header: "Direction", key: "direction", width: 20 },
-        { header: "Integration Count", key: "count", width: 18 },
-        { header: "Total Effort Days", key: "totalEffortDays", width: 18 },
+        { header: "Integration Count", key: "count", width: 18, numFmt: NUMFMT_THOUSANDS },
+        { header: "Total Effort Days", key: "totalEffortDays", width: 18, numFmt: NUMFMT_THOUSANDS },
       ],
       rows: summaryRows,
     },
@@ -273,7 +294,7 @@ export function integrationRegisterSheets(data: Array<Record<string, unknown>>):
         { header: "Complexity", key: "complexity", width: 12 },
         { header: "Priority", key: "priority", width: 10 },
         { header: "Status", key: "status", width: 12 },
-        { header: "Effort Days", key: "effortDays", width: 12 },
+        { header: "Effort Days", key: "effortDays", width: 12, numFmt: NUMFMT_THOUSANDS },
         { header: "Functional Area", key: "functionalArea", width: 18 },
         { header: "Technical Notes", key: "technicalNotes", width: 40 },
       ],
@@ -283,8 +304,8 @@ export function integrationRegisterSheets(data: Array<Record<string, unknown>>):
       name: "By Source System",
       columns: [
         { header: "Source System", key: "sourceSystem", width: 25 },
-        { header: "Integration Count", key: "integrationCount", width: 18 },
-        { header: "Total Effort Days", key: "totalEffortDays", width: 18 },
+        { header: "Integration Count", key: "integrationCount", width: 18, numFmt: NUMFMT_THOUSANDS },
+        { header: "Total Effort Days", key: "totalEffortDays", width: 18, numFmt: NUMFMT_THOUSANDS },
         { header: "Directions", key: "directions", width: 30 },
       ],
       rows: bySourceRows,
@@ -356,9 +377,9 @@ export function dataMigrationRegisterSheets(data: Array<Record<string, unknown>>
       name: "Summary",
       columns: [
         { header: "Object Type", key: "objectType", width: 22 },
-        { header: "Object Count", key: "objectCount", width: 14 },
-        { header: "Total Records", key: "totalRecords", width: 14 },
-        { header: "Total Effort Days", key: "totalEffortDays", width: 18 },
+        { header: "Object Count", key: "objectCount", width: 14, numFmt: NUMFMT_THOUSANDS },
+        { header: "Total Records", key: "totalRecords", width: 16, numFmt: NUMFMT_THOUSANDS },
+        { header: "Total Effort Days", key: "totalEffortDays", width: 18, numFmt: NUMFMT_THOUSANDS },
       ],
       rows: summaryRows,
     },
@@ -372,14 +393,14 @@ export function dataMigrationRegisterSheets(data: Array<Record<string, unknown>>
         { header: "Source System", key: "sourceSystem", width: 20 },
         { header: "Source Format", key: "sourceFormat", width: 14 },
         { header: "Volume", key: "volumeEstimate", width: 12 },
-        { header: "Record Count", key: "recordCount", width: 12 },
+        { header: "Record Count", key: "recordCount", width: 14, numFmt: NUMFMT_THOUSANDS },
         { header: "Cleansing Required", key: "cleansingRequired", width: 16 },
         { header: "Mapping Complexity", key: "mappingComplexity", width: 16 },
         { header: "Migration Approach", key: "migrationApproach", width: 18 },
         { header: "Migration Tool", key: "migrationTool", width: 14 },
         { header: "Priority", key: "priority", width: 10 },
         { header: "Status", key: "status", width: 12 },
-        { header: "Effort Days", key: "effortDays", width: 12 },
+        { header: "Effort Days", key: "effortDays", width: 12, numFmt: NUMFMT_THOUSANDS },
         { header: "Functional Area", key: "functionalArea", width: 18 },
       ],
       rows: data,
@@ -388,9 +409,9 @@ export function dataMigrationRegisterSheets(data: Array<Record<string, unknown>>
       name: "By Source System",
       columns: [
         { header: "Source System", key: "sourceSystem", width: 25 },
-        { header: "Object Count", key: "objectCount", width: 14 },
-        { header: "Total Records", key: "totalRecords", width: 14 },
-        { header: "Total Effort Days", key: "totalEffortDays", width: 18 },
+        { header: "Object Count", key: "objectCount", width: 14, numFmt: NUMFMT_THOUSANDS },
+        { header: "Total Records", key: "totalRecords", width: 16, numFmt: NUMFMT_THOUSANDS },
+        { header: "Total Effort Days", key: "totalEffortDays", width: 18, numFmt: NUMFMT_THOUSANDS },
       ],
       rows: bySourceRows,
     },
@@ -398,10 +419,10 @@ export function dataMigrationRegisterSheets(data: Array<Record<string, unknown>>
       name: "Effort Breakdown",
       columns: [
         { header: "Mapping Complexity", key: "mappingComplexity", width: 22 },
-        { header: "Object Count", key: "objectCount", width: 14 },
-        { header: "Cleansing Required", key: "cleansingRequired", width: 18 },
-        { header: "Total Effort Days", key: "totalEffortDays", width: 18 },
-        { header: "Avg Effort Days", key: "avgEffortDays", width: 16 },
+        { header: "Object Count", key: "objectCount", width: 14, numFmt: NUMFMT_THOUSANDS },
+        { header: "Cleansing Required", key: "cleansingRequired", width: 18, numFmt: NUMFMT_THOUSANDS },
+        { header: "Total Effort Days", key: "totalEffortDays", width: 18, numFmt: NUMFMT_THOUSANDS },
+        { header: "Avg Effort Days", key: "avgEffortDays", width: 16, numFmt: NUMFMT_THOUSANDS_DECIMAL },
       ],
       rows: effortRows,
     },
@@ -465,9 +486,9 @@ export function ocmReportSheets(data: Array<Record<string, unknown>>): SheetConf
       name: "Summary",
       columns: [
         { header: "Severity", key: "severity", width: 18 },
-        { header: "Impact Count", key: "impactCount", width: 14 },
-        { header: "Total Affected Users", key: "totalAffectedUsers", width: 20 },
-        { header: "Training Required", key: "trainingRequired", width: 18 },
+        { header: "Impact Count", key: "impactCount", width: 14, numFmt: NUMFMT_THOUSANDS },
+        { header: "Total Affected Users", key: "totalAffectedUsers", width: 20, numFmt: NUMFMT_THOUSANDS },
+        { header: "Training Required", key: "trainingRequired", width: 18, numFmt: NUMFMT_THOUSANDS },
       ],
       rows: summaryRows,
     },
@@ -488,7 +509,7 @@ export function ocmReportSheets(data: Array<Record<string, unknown>>): SheetConf
         { header: "Resistance Risk", key: "resistanceRisk", width: 14 },
         { header: "Readiness", key: "readinessScore", width: 10 },
         { header: "Mitigation Strategy", key: "mitigationStrategy", width: 40 },
-        { header: "Affected Users", key: "affectedUsers", width: 14 },
+        { header: "Affected Users", key: "affectedUsers", width: 14, numFmt: NUMFMT_THOUSANDS },
         { header: "Priority", key: "priority", width: 10 },
         { header: "Status", key: "status", width: 12 },
       ],
@@ -502,7 +523,7 @@ export function ocmReportSheets(data: Array<Record<string, unknown>>): SheetConf
         { header: "Department", key: "department", width: 18 },
         { header: "Training Type", key: "trainingType", width: 16 },
         { header: "Training Duration", key: "trainingDuration", width: 14 },
-        { header: "Affected Users", key: "affectedUsers", width: 14 },
+        { header: "Affected Users", key: "affectedUsers", width: 14, numFmt: NUMFMT_THOUSANDS },
         { header: "Severity", key: "severity", width: 14 },
         { header: "Status", key: "status", width: 12 },
       ],
@@ -517,7 +538,7 @@ export function ocmReportSheets(data: Array<Record<string, unknown>>): SheetConf
         { header: "Change Type", key: "changeType", width: 18 },
         { header: "Resistance Risk", key: "resistanceRisk", width: 14 },
         { header: "Mitigation Strategy", key: "mitigationStrategy", width: 40 },
-        { header: "Affected Users", key: "affectedUsers", width: 14 },
+        { header: "Affected Users", key: "affectedUsers", width: 14, numFmt: NUMFMT_THOUSANDS },
         { header: "Priority", key: "priority", width: 10 },
       ],
       rows: commsRows,
@@ -529,7 +550,7 @@ export function remainingItemsSheet(data: Array<Record<string, unknown>>): Sheet
   return {
     name: "Remaining Items",
     columns: [
-      { header: "Item #", key: "itemNumber", width: 10 },
+      { header: "Item #", key: "itemNumber", width: 10, numFmt: NUMFMT_THOUSANDS },
       { header: "Category", key: "category", width: 25 },
       { header: "Title", key: "title", width: 35 },
       { header: "Description", key: "description", width: 50 },
@@ -603,7 +624,7 @@ export function requirementsTraceabilitySheet(data: TraceabilityRow[]): SheetCon
     columns: [
       { header: "Req ID",          key: "reqId",          width: 14 },
       { header: "Source File",     key: "sourceFile",     width: 22 },
-      { header: "Source Row",      key: "sourceRow",      width: 12 },
+      { header: "Source Row",      key: "sourceRow",      width: 12, numFmt: NUMFMT_THOUSANDS },
       { header: "Functional Area", key: "functionalArea", width: 22 },
       { header: "Sub-area",        key: "subArea",        width: 22 },
       { header: "Process",         key: "process",        width: 28 },
@@ -611,7 +632,7 @@ export function requirementsTraceabilitySheet(data: TraceabilityRow[]): SheetCon
       { header: "Your Ask",        key: "yourAsk",        width: 60 },
       { header: "Outcome",         key: "outcome",        width: 22 },
       { header: "What it means",   key: "whatItMeans",    width: 60 },
-      { header: "Days",            key: "effortDays",     width: 8 },
+      { header: "Days",            key: "effortDays",     width: 10, numFmt: NUMFMT_THOUSANDS },
       { header: "Owner",           key: "owner",          width: 18 },
       { header: "Notes",           key: "notes",          width: 38 },
     ],
@@ -738,13 +759,13 @@ export function sapBestPracticeClassificationSheets(
     name: "Summary",
     columns: [
       { header: "Section", key: "section", width: 14 },
-      { header: "Scope", key: "scope", width: 32 },
-      { header: "Total", key: "total", width: 8 },
-      { header: "O", key: "O", width: 6 },
-      { header: "C", key: "C", width: 6 },
-      { header: "G", key: "G", width: 6 },
-      { header: "N/A", key: "NA", width: 6 },
-      { header: "Pending", key: "Pending", width: 9 },
+      { header: "Scope", key: "scope", width: 36 },
+      { header: "Total", key: "total", width: 10, numFmt: NUMFMT_THOUSANDS },
+      { header: "O", key: "O", width: 9, numFmt: NUMFMT_THOUSANDS },
+      { header: "C", key: "C", width: 9, numFmt: NUMFMT_THOUSANDS },
+      { header: "G", key: "G", width: 9, numFmt: NUMFMT_THOUSANDS },
+      { header: "N/A", key: "NA", width: 9, numFmt: NUMFMT_THOUSANDS },
+      { header: "Pending", key: "Pending", width: 12, numFmt: NUMFMT_THOUSANDS },
     ],
     rows: summaryRows(data),
   });

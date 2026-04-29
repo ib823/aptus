@@ -6,6 +6,7 @@ import { ArrowLeft, Download, FileText, FileSpreadsheet, Archive, CheckCircle, C
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { formatNumber } from "@/lib/format/number";
 
 interface ReportSummary {
   assessment: {
@@ -131,8 +132,8 @@ export function ReportClient({
         <StatCard label="Scope Items" value={`${summary.scope.selected}/${summary.scope.total}`} />
         <StatCard label="Fit Rate" value={`${summary.steps.fitPercent}%`} highlight />
         <StatCard label="Steps Reviewed" value={`${summary.steps.reviewed}/${summary.steps.total}`} />
-        <StatCard label="Gaps" value={String(summary.gaps.total)} />
-        <StatCard label="Effort (days)" value={String(summary.gaps.totalEffortDays)} />
+        <StatCard label="Gaps" value={summary.gaps.total} />
+        <StatCard label="Effort (days)" value={summary.gaps.totalEffortDays} />
       </div>
 
       {/* Fit breakdown */}
@@ -306,11 +307,12 @@ export function ReportClient({
   );
 }
 
-function StatCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean | undefined }) {
+function StatCard({ label, value, highlight }: { label: string; value: string | number; highlight?: boolean | undefined }) {
+  const display = typeof value === "number" ? formatNumber(value) : value;
   return (
     <div className="bg-card rounded-lg border p-4 text-center">
       <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${highlight ? "text-green-600" : "text-foreground"}`}>{value}</p>
+      <p className={`text-2xl font-bold mt-1 ${highlight ? "text-green-600" : "text-foreground"}`}>{display}</p>
     </div>
   );
 }

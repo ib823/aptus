@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { StatusPill } from "./StatusPill";
+import { formatNumber } from "@/lib/format/number";
 
 interface AssessmentRow {
   id: string;
@@ -158,7 +159,7 @@ export function AptusAssessmentsList({
         </div>
         <div style={{ flex: 1 }} />
         <span className="a-small">
-          Showing {filtered.length} of {assessments.length}
+          Showing {formatNumber(filtered.length)} of {formatNumber(assessments.length)}
         </span>
       </div>
 

@@ -2,6 +2,7 @@
 
 import { MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatNumber } from "@/lib/format/number";
 
 interface CommentIndicatorProps {
   count: number;
@@ -35,7 +36,7 @@ export function CommentIndicator({ count, onClick, hasUnresolved }: CommentIndic
       aria-label={`${count} comment${count !== 1 ? "s" : ""}`}
     >
       <MessageSquare className="w-3.5 h-3.5" />
-      <span>{count}</span>
+      <span>{formatNumber(count)}</span>
     </Button>
   );
 }

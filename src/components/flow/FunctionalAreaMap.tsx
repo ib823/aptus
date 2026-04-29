@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { AreaDrillDown } from "./AreaDrillDown";
 import type { FunctionalAreaOverviewData } from "@/types/flow";
+import { formatNumber } from "@/lib/format/number";
 
 interface FunctionalAreaMapProps {
   areas: FunctionalAreaOverviewData[];
@@ -85,10 +86,10 @@ export function FunctionalAreaMap({ areas, assessmentId, assignedAreas }: Functi
               {/* Status breakdown */}
               {isAssigned && (
                 <div className="mt-3 flex gap-2 text-xs">
-                  <span className="text-green-600">{area.fitCount} Matches</span>
-                  <span className="text-blue-600">{area.configureCount} Adjust</span>
-                  <span className="text-amber-600">{area.gapCount} Gaps</span>
-                  <span className="text-muted-foreground">{area.pendingCount} Pending</span>
+                  <span className="text-green-600">{formatNumber(area.fitCount)} Matches</span>
+                  <span className="text-blue-600">{formatNumber(area.configureCount)} Adjust</span>
+                  <span className="text-amber-600">{formatNumber(area.gapCount)} Gaps</span>
+                  <span className="text-muted-foreground">{formatNumber(area.pendingCount)} Pending</span>
                 </div>
               )}
 

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import type { FunctionalAreaOverviewData } from "@/types/flow";
+import { formatNumber } from "@/lib/format/number";
 
 interface FunctionalAreaOverviewMapProps {
   assessmentId: string;
@@ -111,19 +112,19 @@ export function FunctionalAreaOverviewMap({
               {/* Status counts */}
               <div className="grid grid-cols-4 gap-2 text-center text-xs">
                 <div>
-                  <div className="font-semibold text-green-700">{area.fitCount}</div>
+                  <div className="font-semibold text-green-700">{formatNumber(area.fitCount)}</div>
                   <div className="text-muted-foreground">Matches</div>
                 </div>
                 <div>
-                  <div className="font-semibold text-blue-700">{area.configureCount}</div>
+                  <div className="font-semibold text-blue-700">{formatNumber(area.configureCount)}</div>
                   <div className="text-muted-foreground">Adjust</div>
                 </div>
                 <div>
-                  <div className="font-semibold text-amber-700">{area.gapCount}</div>
+                  <div className="font-semibold text-amber-700">{formatNumber(area.gapCount)}</div>
                   <div className="text-muted-foreground">Gaps</div>
                 </div>
                 <div>
-                  <div className="font-semibold text-muted-foreground">{area.pendingCount}</div>
+                  <div className="font-semibold text-muted-foreground">{formatNumber(area.pendingCount)}</div>
                   <div className="text-muted-foreground">Pending</div>
                 </div>
               </div>
@@ -139,10 +140,10 @@ export function FunctionalAreaOverviewMap({
                     <div key={si.scopeItemId} className="flex items-center justify-between text-xs">
                       <span className="truncate mr-2" title={si.scopeItemName}>{si.scopeItemName}</span>
                       <div className="flex gap-1 shrink-0">
-                        {si.fitCount > 0 && <Badge variant="outline" className="bg-green-50 text-green-700 text-[10px] px-1">{si.fitCount}</Badge>}
-                        {si.configureCount > 0 && <Badge variant="outline" className="bg-blue-50 text-blue-700 text-[10px] px-1">{si.configureCount}</Badge>}
-                        {si.gapCount > 0 && <Badge variant="outline" className="bg-amber-50 text-amber-700 text-[10px] px-1">{si.gapCount}</Badge>}
-                        {si.pendingCount > 0 && <Badge variant="outline" className="bg-slate-50 text-slate-500 text-[10px] px-1">{si.pendingCount}</Badge>}
+                        {si.fitCount > 0 && <Badge variant="outline" className="bg-green-50 text-green-700 text-[10px] px-1">{formatNumber(si.fitCount)}</Badge>}
+                        {si.configureCount > 0 && <Badge variant="outline" className="bg-blue-50 text-blue-700 text-[10px] px-1">{formatNumber(si.configureCount)}</Badge>}
+                        {si.gapCount > 0 && <Badge variant="outline" className="bg-amber-50 text-amber-700 text-[10px] px-1">{formatNumber(si.gapCount)}</Badge>}
+                        {si.pendingCount > 0 && <Badge variant="outline" className="bg-slate-50 text-slate-500 text-[10px] px-1">{formatNumber(si.pendingCount)}</Badge>}
                       </div>
                     </div>
                   ))}

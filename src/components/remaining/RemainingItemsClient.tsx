@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { formatNumber } from "@/lib/format/number";
 
 interface RemainingItem {
   id: string;
@@ -200,10 +201,10 @@ export function RemainingItemsClient({
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <SummaryCard label="Total Items" value={summary.total} />
-        <SummaryCard label="Critical" value={summary.bySeverity["critical"] ?? 0} variant="critical" />
-        <SummaryCard label="High" value={summary.bySeverity["high"] ?? 0} variant="high" />
-        <SummaryCard label="Resolved" value={summary.resolved} variant="resolved" />
+        <SummaryCard label="Total Items" value={formatNumber(summary.total)} />
+        <SummaryCard label="Critical" value={formatNumber(summary.bySeverity["critical"] ?? 0)} variant="critical" />
+        <SummaryCard label="High" value={formatNumber(summary.bySeverity["high"] ?? 0)} variant="high" />
+        <SummaryCard label="Resolved" value={formatNumber(summary.resolved)} variant="resolved" />
       </div>
 
       {/* Filters */}
@@ -421,7 +422,7 @@ export function RemainingItemsClient({
       )}
 
       <p className="text-xs text-muted-foreground/60 mt-2">
-        Showing {filteredItems.length} of {items.length} items
+        Showing {formatNumber(filteredItems.length)} of {formatNumber(items.length)} items
       </p>
 
       {/* Navigation */}
@@ -448,7 +449,7 @@ function SummaryCard({
   variant,
 }: {
   label: string;
-  value: number;
+  value: string | number;
   variant?: "critical" | "high" | "resolved" | undefined;
 }) {
   const colorClass =

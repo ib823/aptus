@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { formatNumber } from "@/lib/format/number";
 
 interface PhaseSummaryCardProps {
   title: string;
@@ -44,28 +45,28 @@ export function PhaseSummaryCard({
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="flex items-center justify-between rounded bg-muted px-2 py-1">
               <span>FIT</span>
-              <span className="font-medium text-green-600">{fitCount}</span>
+              <span className="font-medium text-green-600">{formatNumber(fitCount)}</span>
             </div>
             <div className="flex items-center justify-between rounded bg-muted px-2 py-1">
               <span>GAP</span>
-              <span className="font-medium text-red-600">{gapCount}</span>
+              <span className="font-medium text-red-600">{formatNumber(gapCount)}</span>
             </div>
             <div className="flex items-center justify-between rounded bg-muted px-2 py-1">
               <span>CONFIG</span>
-              <span className="font-medium text-amber-600">{configCount}</span>
+              <span className="font-medium text-amber-600">{formatNumber(configCount)}</span>
             </div>
             <div className="flex items-center justify-between rounded bg-muted px-2 py-1">
               <span>N/A</span>
-              <span className="font-medium text-muted-foreground">{naCount}</span>
+              <span className="font-medium text-muted-foreground">{formatNumber(naCount)}</span>
             </div>
           </div>
           <div className="flex items-center justify-between text-sm border-t pt-2">
             <span className="text-muted-foreground">Total Steps</span>
-            <span className="font-medium">{totalSteps}</span>
+            <span className="font-medium">{formatNumber(totalSteps)}</span>
           </div>
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Scope Items</span>
-            <span className="font-medium">{scopeItemCount}</span>
+            <span className="font-medium">{formatNumber(scopeItemCount)}</span>
           </div>
         </div>
       </CardContent>

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PortfolioSummaryCards } from "@/components/analytics/PortfolioSummaryCards";
+import { formatNumber } from "@/lib/format/number";
 
 interface PortfolioData {
   summary: {
@@ -109,7 +110,7 @@ export function PortfolioDashboard() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium">{item.industry}</span>
                     <span className="text-muted-foreground">
-                      {item.avgFitRate.toFixed(1)}% ({item.assessmentCount}{" "}
+                      {item.avgFitRate.toFixed(1)}% ({formatNumber(item.assessmentCount)}{" "}
                       assessment{item.assessmentCount !== 1 ? "s" : ""})
                     </span>
                   </div>
@@ -157,7 +158,7 @@ export function PortfolioDashboard() {
                       <Badge variant="outline">{gap.resolutionType}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      {gap.frequency}
+                      {formatNumber(gap.frequency)}
                     </TableCell>
                   </TableRow>
                 ))}

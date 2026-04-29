@@ -1,5 +1,7 @@
 import Image from "next/image";
 
+import { APTUS_MARK_SVG_URL } from "@/lib/brand/assets";
+
 interface ABeamLogoProps {
   size?: "sm" | "md" | "lg" | "xl";
   className?: string;
@@ -15,6 +17,7 @@ const sizeMap = {
 /**
  * Aptus logomark — geometric triangle SVG mark.
  * Component name kept as ABeamLogo for legacy import compatibility (~14 callers).
+ * Asset resolved through `src/lib/brand/assets.ts` to keep all surfaces aligned.
  */
 export function ABeamLogo({ size = "md", className = "" }: ABeamLogoProps) {
   const px = sizeMap[size];
@@ -22,7 +25,7 @@ export function ABeamLogo({ size = "md", className = "" }: ABeamLogoProps) {
   return (
     <span className={`inline-flex items-center ${className}`}>
       <Image
-        src="/icons/aptus-mark.svg"
+        src={APTUS_MARK_SVG_URL}
         alt="Aptus"
         width={px}
         height={px}

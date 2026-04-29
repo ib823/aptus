@@ -2,6 +2,7 @@
 
 import { CheckCircle2, ArrowRight, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatNumber } from "@/lib/format/number";
 
 interface ActivityCompletionCardProps {
   activityTitle: string;
@@ -39,25 +40,25 @@ export function ActivityCompletionCard({
         {fitCount > 0 && (
           <div className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--aptus-success-500)" }} />
-            <span>{fitCount} FIT</span>
+            <span>{formatNumber(fitCount)} FIT</span>
           </div>
         )}
         {configureCount > 0 && (
           <div className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--aptus-info-500)" }} />
-            <span>{configureCount} CONFIGURE</span>
+            <span>{formatNumber(configureCount)} CONFIGURE</span>
           </div>
         )}
         {gapCount > 0 && (
           <div className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--aptus-warning-500)" }} />
-            <span>{gapCount} GAP</span>
+            <span>{formatNumber(gapCount)} GAP</span>
           </div>
         )}
         {naCount > 0 && (
           <div className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--aptus-neutral-500)" }} />
-            <span>{naCount} N/A</span>
+            <span>{formatNumber(naCount)} N/A</span>
           </div>
         )}
       </div>
