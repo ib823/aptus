@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatDecimal, formatNumber } from "@/lib/format/number";
 
 interface PortfolioSummaryCardsProps {
   totalAssessments: number;
@@ -20,8 +21,8 @@ export function PortfolioSummaryCards({
   const cards = [
     {
       title: "Total Assessments",
-      value: totalAssessments.toString(),
-      description: `${activeAssessments} active, ${completedAssessments} completed`,
+      value: formatNumber(totalAssessments),
+      description: `${formatNumber(activeAssessments)} active, ${formatNumber(completedAssessments)} completed`,
     },
     {
       title: "Avg FIT Rate",
@@ -30,12 +31,12 @@ export function PortfolioSummaryCards({
     },
     {
       title: "Avg Duration",
-      value: avgDurationDays > 0 ? `${avgDurationDays.toFixed(0)} days` : "N/A",
+      value: avgDurationDays > 0 ? `${formatDecimal(avgDurationDays, 0)} days` : "N/A",
       description: "Assessment completion time",
     },
     {
       title: "Active Assessments",
-      value: activeAssessments.toString(),
+      value: formatNumber(activeAssessments),
       description: "Currently in progress",
     },
   ];

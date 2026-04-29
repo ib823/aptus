@@ -3,6 +3,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { type BrandingConfig, DEFAULT_BRANDING, hexToRgb } from "@/lib/report/branding";
+import { formatNumber } from "@/lib/format/number";
 
 interface SignatureInfo {
   signatureType: "EXECUTIVE" | "PARTNER";
@@ -105,13 +106,13 @@ export function generateSignOffCertificatePdf(
     startY: y,
     head: [["Metric", "Value"]],
     body: [
-      ["Scope Items (Selected / Total)", `${stats.selectedScopeItems} / ${stats.totalScopeItems}`],
-      ["Process Steps", String(stats.totalSteps)],
+      ["Scope Items (Selected / Total)", `${formatNumber(stats.selectedScopeItems)} / ${formatNumber(stats.totalScopeItems)}`],
+      ["Process Steps", formatNumber(stats.totalSteps)],
       ["Fit Rate", `${fitRate}%`],
-      ["Gaps Identified", String(stats.gapCount)],
-      ["Gap Resolutions (Approved / Total)", `${stats.approvedGapResolutions} / ${stats.totalGapResolutions}`],
-      ["Integration Points", String(stats.integrationPointCount)],
-      ["Data Migration Objects", String(stats.dataMigrationObjectCount)],
+      ["Gaps Identified", formatNumber(stats.gapCount)],
+      ["Gap Resolutions (Approved / Total)", `${formatNumber(stats.approvedGapResolutions)} / ${formatNumber(stats.totalGapResolutions)}`],
+      ["Integration Points", formatNumber(stats.integrationPointCount)],
+      ["Data Migration Objects", formatNumber(stats.dataMigrationObjectCount)],
     ],
     theme: "grid",
     headStyles: { fillColor: primary },

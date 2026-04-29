@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { formatNumber } from "@/lib/format/number";
 import type { KpiMetrics } from "@/types/dashboard";
 
 interface KpiPanelProps {
@@ -25,8 +26,8 @@ function KpiCard({
     <div className="p-3 rounded-lg border bg-card">
       <p className="text-sm tracking-wide" style={{ color: "var(--sapContent_LabelColor, #6a6d70)" }}>{label}</p>
       <div className="flex items-baseline gap-1 mt-1">
-        <span className="text-3xl font-bold" style={{ color: "var(--sapTextColor, #32363a)" }}>{value}</span>
-        <span className="text-sm text-muted-foreground">/ {total}</span>
+        <span className="text-3xl font-bold" style={{ color: "var(--sapTextColor, #32363a)" }}>{formatNumber(value)}</span>
+        <span className="text-sm text-muted-foreground">/ {formatNumber(total)}</span>
       </div>
       <Progress value={percent} className={`h-1.5 mt-2 ${color}`} />
       <p className="text-xs text-muted-foreground mt-1">{percent}% complete</p>
@@ -82,23 +83,23 @@ export function KpiPanel({ metrics }: KpiPanelProps) {
         </div>
         <div className="mt-4 grid grid-cols-5 gap-2 text-center">
           <div className="p-2 rounded" style={{ backgroundColor: "var(--status-fit-bg)" }}>
-            <span className="text-lg font-bold" style={{ color: "var(--status-fit-fg)" }}>{metrics.fitCount}</span>
+            <span className="text-lg font-bold" style={{ color: "var(--status-fit-fg)" }}>{formatNumber(metrics.fitCount)}</span>
             <p className="text-xs" style={{ color: "var(--status-fit-fg)" }}>Fit</p>
           </div>
           <div className="p-2 rounded" style={{ backgroundColor: "var(--status-configure-bg)" }}>
-            <span className="text-lg font-bold" style={{ color: "var(--status-configure-fg)" }}>{metrics.configureCount}</span>
+            <span className="text-lg font-bold" style={{ color: "var(--status-configure-fg)" }}>{formatNumber(metrics.configureCount)}</span>
             <p className="text-xs" style={{ color: "var(--status-configure-fg)" }}>Config</p>
           </div>
           <div className="p-2 rounded" style={{ backgroundColor: "var(--status-extend-bg)" }}>
-            <span className="text-lg font-bold" style={{ color: "var(--status-extend-fg)" }}>{metrics.gapCount}</span>
+            <span className="text-lg font-bold" style={{ color: "var(--status-extend-fg)" }}>{formatNumber(metrics.gapCount)}</span>
             <p className="text-xs" style={{ color: "var(--status-extend-fg)" }}>Gap</p>
           </div>
           <div className="p-2 rounded" style={{ backgroundColor: "var(--status-na-bg)" }}>
-            <span className="text-lg font-bold" style={{ color: "var(--status-na-fg)" }}>{metrics.naCount}</span>
+            <span className="text-lg font-bold" style={{ color: "var(--status-na-fg)" }}>{formatNumber(metrics.naCount)}</span>
             <p className="text-xs" style={{ color: "var(--status-na-fg)" }}>N/A</p>
           </div>
           <div className="p-2 rounded" style={{ backgroundColor: "var(--status-pending-bg)" }}>
-            <span className="text-lg font-bold" style={{ color: "var(--status-pending-fg)" }}>{metrics.pendingCount}</span>
+            <span className="text-lg font-bold" style={{ color: "var(--status-pending-fg)" }}>{formatNumber(metrics.pendingCount)}</span>
             <p className="text-xs" style={{ color: "var(--status-pending-fg)" }}>Pending</p>
           </div>
         </div>

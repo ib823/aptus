@@ -72,9 +72,11 @@ export function generateFlowSvg(
     // Step number
     parts.push(`<text x="${x + 8}" y="${y + 16}" font-size="9" fill="${colors.text}" font-weight="bold">${step.sequence}</text>`);
 
-    // Step title (truncated)
+    // Step title — visually truncated at 22 chars to fit the node, but the
+    // full title is preserved as an SVG <title> element so users hovering
+    // the node in any modern browser see the complete text.
     const title = step.actionTitle.length > 22 ? step.actionTitle.slice(0, 22) + "…" : step.actionTitle;
-    parts.push(`<text x="${x + 8}" y="${y + 30}" font-size="10" fill="#111827">${escapeXml(title)}</text>`);
+    parts.push(`<text x="${x + 8}" y="${y + 30}" font-size="10" fill="#111827"><title>${escapeXml(step.actionTitle)}</title>${escapeXml(title)}</text>`);
 
     // Status + type
     parts.push(`<text x="${x + 8}" y="${y + 42}" font-size="8" fill="${colors.text}">${step.fitStatus} · ${step.stepType}</text>`);

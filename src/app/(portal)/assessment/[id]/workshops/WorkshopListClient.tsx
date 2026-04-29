@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { WorkshopScheduleDialog } from "@/components/workshop/WorkshopScheduleDialog";
+import { formatNumber } from "@/lib/format/number";
 
 interface WorkshopSession {
   id: string;
@@ -89,9 +90,9 @@ export function WorkshopListClient({ assessmentId, sessions }: WorkshopListClien
                 </div>
 
                 <div className="flex items-center gap-3 text-xs">
-                  <span>{s.attendeeCount} attendees</span>
-                  <span>{s.actionItemCount} actions</span>
-                  {s.voteCount > 0 && <span>{s.voteCount} votes</span>}
+                  <span>{formatNumber(s.attendeeCount)} attendees</span>
+                  <span>{formatNumber(s.actionItemCount)} actions</span>
+                  {s.voteCount > 0 && <span>{formatNumber(s.voteCount)} votes</span>}
                   {s.hasMinutes && <span className="text-blue-600">Minutes</span>}
                 </div>
               </a>

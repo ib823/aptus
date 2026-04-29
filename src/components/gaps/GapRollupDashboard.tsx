@@ -3,6 +3,7 @@
 import { Fragment } from "react";
 import { Badge } from "@/components/ui/badge";
 import type { CostRollupV2, RiskHeatMap, UpgradeImpactSummary } from "@/lib/assessment/gap-analytics";
+import { formatNumber } from "@/lib/format/number";
 
 interface ApprovalStatus {
   total: number;
@@ -70,7 +71,7 @@ export function GapRollupDashboard({
             <p className="text-xs text-muted-foreground">Annual Recurring</p>
           </div>
           <div className="text-center">
-            <p className="text-lg font-bold text-foreground">{costRollup.totalImplementationDays}</p>
+            <p className="text-lg font-bold text-foreground">{formatNumber(costRollup.totalImplementationDays)}</p>
             <p className="text-xs text-muted-foreground">Effort Days</p>
           </div>
         </div>
@@ -80,7 +81,7 @@ export function GapRollupDashboard({
               .sort(([, a], [, b]) => b.oneTime - a.oneTime)
               .map(([type, data]) => (
                 <div key={type} className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">{type} ({data.count})</span>
+                  <span className="text-muted-foreground">{type} ({formatNumber(data.count)})</span>
                   <span className="font-medium">{formatCurrency(data.oneTime)}</span>
                 </div>
               ))}
@@ -118,9 +119,9 @@ export function GapRollupDashboard({
                     className={`text-center py-1 rounded ${
                       count > 0 ? RISK_LEVEL_COLORS[level] ?? "" : "bg-muted/30 text-muted-foreground/40"
                     }`}
-                    title={`${count} ${category} risk${count !== 1 ? "s" : ""} at ${level} level`}
+                    title={`${formatNumber(count)} ${category} risk${count !== 1 ? "s" : ""} at ${level} level`}
                   >
-                    {count}
+                    {formatNumber(count)}
                   </div>
                 );
               })}
@@ -128,7 +129,7 @@ export function GapRollupDashboard({
           ))}
         </div>
         <p className="text-xs text-muted-foreground/60 mt-2">
-          {riskHeatMap.totalCategorized} categorized · {riskHeatMap.totalUncategorized} uncategorized
+          {formatNumber(riskHeatMap.totalCategorized)} categorized · {formatNumber(riskHeatMap.totalUncategorized)} uncategorized
         </p>
       </div>
 
@@ -148,13 +149,13 @@ export function GapRollupDashboard({
                 <Badge className={`text-xs ${STRATEGY_COLORS[strategy] ?? "bg-slate-50 text-slate-600"}`}>
                   {STRATEGY_LABELS[strategy] ?? strategy}
                 </Badge>
-                <span className="text-sm font-medium text-foreground">{count}</span>
+                <span className="text-sm font-medium text-foreground">{formatNumber(count)}</span>
               </div>
             ))}
         </div>
         {upgradeImpact.upgradeUnsafeCount > 0 && (
           <p className="text-xs text-amber-600 mt-2">
-            {upgradeImpact.upgradeUnsafeCount} resolution(s) require custom maintenance during upgrades
+            {formatNumber(upgradeImpact.upgradeUnsafeCount)} resolution(s) require custom maintenance during upgrades
           </p>
         )}
       </div>
@@ -166,7 +167,7 @@ export function GapRollupDashboard({
         </h3>
         <div className="flex items-center gap-3 mb-2">
           <span className="text-lg font-bold text-foreground">
-            {approvalStatus.approved} / {approvalStatus.total}
+            {formatNumber(approvalStatus.approved)} / {formatNumber(approvalStatus.total)}
           </span>
           <span className="text-xs text-muted-foreground">approved</span>
         </div>
@@ -178,10 +179,10 @@ export function GapRollupDashboard({
         </div>
         <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
           {approvalStatus.pending > 0 && (
-            <span>{approvalStatus.pending} pending approval</span>
+            <span>{formatNumber(approvalStatus.pending)} pending approval</span>
           )}
           {approvalStatus.unresolvedCount > 0 && (
-            <span className="text-amber-600">{approvalStatus.unresolvedCount} unresolved</span>
+            <span className="text-amber-600">{formatNumber(approvalStatus.unresolvedCount)} unresolved</span>
           )}
         </div>
       </div>

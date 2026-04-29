@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { formatNumber } from "@/lib/format/number";
 
 interface ConfigData {
   id: string;
@@ -294,7 +295,7 @@ export function ConfigMatrixClient({
       </div>
 
       <p className="text-xs text-muted-foreground/60 mt-2">
-        Showing {filteredConfigs.length} of {configs.length} configurations
+        Showing {formatNumber(filteredConfigs.length)} of {formatNumber(configs.length)} configurations
       </p>
 
       {/* Action bar */}
@@ -340,7 +341,7 @@ function SummaryCard({ label, count, color, description }: {
         <span className={`w-2.5 h-2.5 rounded-full ${color}`} />
         <span className="text-xs font-semibold text-muted-foreground/60 tracking-wide">{label}</span>
       </div>
-      <p className="text-2xl font-bold text-foreground mt-1">{count}</p>
+      <p className="text-2xl font-bold text-foreground mt-1">{formatNumber(count)}</p>
       <p className="text-xs text-muted-foreground">{description}</p>
     </div>
   );

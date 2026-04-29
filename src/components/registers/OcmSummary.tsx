@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatNumber } from "@/lib/format/number";
 
 interface OcmSummaryProps {
   summary: {
@@ -37,9 +38,9 @@ export function OcmSummary({ summary }: OcmSummaryProps) {
           <CardTitle className="text-sm font-medium text-muted-foreground">Total Impacts</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-2xl font-bold">{summary.total}</p>
+          <p className="text-2xl font-bold">{formatNumber(summary.total)}</p>
           {summary.trainingCount > 0 && (
-            <p className="text-xs text-muted-foreground mt-1">{summary.trainingCount} requiring training</p>
+            <p className="text-xs text-muted-foreground mt-1">{formatNumber(summary.trainingCount)} requiring training</p>
           )}
         </CardContent>
       </Card>
@@ -69,7 +70,7 @@ export function OcmSummary({ summary }: OcmSummaryProps) {
           {Object.entries(summary.byChangeType).map(([key, count]) => (
             <div key={key} className="flex justify-between text-sm">
               <span className="text-muted-foreground">{key.replace(/_/g, " ")}</span>
-              <span className="font-medium">{count}</span>
+              <span className="font-medium">{formatNumber(count)}</span>
             </div>
           ))}
         </CardContent>
@@ -83,7 +84,7 @@ export function OcmSummary({ summary }: OcmSummaryProps) {
           {Object.entries(summary.bySeverity).map(([key, count]) => (
             <div key={key} className="flex justify-between text-sm">
               <span className="text-muted-foreground">{key}</span>
-              <span className="font-medium">{count}</span>
+              <span className="font-medium">{formatNumber(count)}</span>
             </div>
           ))}
         </CardContent>
@@ -97,7 +98,7 @@ export function OcmSummary({ summary }: OcmSummaryProps) {
           {Object.entries(summary.byStatus).map(([key, count]) => (
             <div key={key} className="flex justify-between text-sm">
               <span className="text-muted-foreground">{key}</span>
-              <span className="font-medium">{count}</span>
+              <span className="font-medium">{formatNumber(count)}</span>
             </div>
           ))}
         </CardContent>

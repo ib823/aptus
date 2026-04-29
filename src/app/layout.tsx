@@ -16,19 +16,31 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://aptus-sandy.vercel.app",
+  ),
   title: {
     default: "Aptus",
     template: "%s — Aptus",
   },
   description: "SAP best practices process validation portal",
   manifest: "/manifest.json",
-  icons: {
-    apple: "/icons/icon-192x192.png",
-  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Aptus",
+  },
+  openGraph: {
+    title: "Aptus",
+    description: "SAP best practices process validation portal",
+    siteName: "Aptus",
+    type: "website",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Aptus",
+    description: "SAP best practices process validation portal",
   },
   other: {
     "theme-color": "#f8fafc",

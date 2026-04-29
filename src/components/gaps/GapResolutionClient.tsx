@@ -10,6 +10,7 @@ import { GapRollupDashboard } from "@/components/gaps/GapRollupDashboard";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { StatCard } from "@/components/shared/StatCard";
 import { computeCostRollup, computeRiskHeatMap, analyzeUpgradeImpact } from "@/lib/assessment/gap-analytics";
+import { formatNumber } from "@/lib/format/number";
 
 interface GapData {
   id: string;
@@ -317,7 +318,7 @@ export function GapResolutionClient({
               {summary.resolved} of {summary.total} gaps resolved
             </p>
             <p className="text-sm text-muted-foreground">
-              {approvalStatus.approved} approved · {costRollup.totalImplementationDays} effort days
+              {approvalStatus.approved} approved · {formatNumber(costRollup.totalImplementationDays)} effort days
             </p>
           </div>
 

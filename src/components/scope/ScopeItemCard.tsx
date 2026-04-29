@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { sanitizeHtmlContent } from "@/lib/security/sanitize";
 import { extractScopeSummary } from "@/lib/assessment/scope-summary";
 import { getFirstSentence } from "@/constants/scope-summaries";
+import { formatNumber } from "@/lib/format/number";
 
 interface ScopeItemData {
   id: string;
@@ -252,11 +253,11 @@ export const ScopeItemCard = memo(function ScopeItemCard({ item, assessmentId, o
             </p>
           )}
           <div className="flex items-center gap-4 mt-0.5 text-xs text-muted-foreground">
-            <span>{item.classifiableSteps != null ? `${item.classifiableSteps} steps to review` : `${item.totalSteps} steps`}</span>
+            <span>{item.classifiableSteps != null ? `${formatNumber(item.classifiableSteps)} steps to review` : `${formatNumber(item.totalSteps)} steps`}</span>
             <span>{item.subArea}</span>
-            <span>{item.configCount} configs</span>
+            <span>{formatNumber(item.configCount)} configs</span>
             {item.effortDays != null && item.effortDays > 0 && (
-              <span>~{item.effortDays}d effort</span>
+              <span>~{formatNumber(item.effortDays)}d effort</span>
             )}
           </div>
         </div>

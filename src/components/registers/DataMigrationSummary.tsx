@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatNumber } from "@/lib/format/number";
 
 interface DataMigrationSummaryProps {
   summary: {
@@ -20,9 +21,9 @@ export function DataMigrationSummary({ summary }: DataMigrationSummaryProps) {
           <CardTitle className="text-sm font-medium text-muted-foreground">Total Objects</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-2xl font-bold">{summary.total}</p>
+          <p className="text-2xl font-bold">{formatNumber(summary.total)}</p>
           {summary.totalRecordCount > 0 && (
-            <p className="text-xs text-muted-foreground mt-1">{summary.totalRecordCount.toLocaleString()} total records</p>
+            <p className="text-xs text-muted-foreground mt-1">{formatNumber(summary.totalRecordCount)} total records</p>
           )}
         </CardContent>
       </Card>
@@ -35,7 +36,7 @@ export function DataMigrationSummary({ summary }: DataMigrationSummaryProps) {
           {Object.entries(summary.byObjectType).map(([key, count]) => (
             <div key={key} className="flex justify-between text-sm">
               <span className="text-muted-foreground">{key.replace(/_/g, " ")}</span>
-              <span className="font-medium">{count}</span>
+              <span className="font-medium">{formatNumber(count)}</span>
             </div>
           ))}
         </CardContent>
@@ -49,7 +50,7 @@ export function DataMigrationSummary({ summary }: DataMigrationSummaryProps) {
           {Object.entries(summary.byStatus).map(([key, count]) => (
             <div key={key} className="flex justify-between text-sm">
               <span className="text-muted-foreground">{key}</span>
-              <span className="font-medium">{count}</span>
+              <span className="font-medium">{formatNumber(count)}</span>
             </div>
           ))}
         </CardContent>

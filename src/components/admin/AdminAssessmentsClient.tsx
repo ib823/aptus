@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Trash2, Calendar } from "lucide-react";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatNumber } from "@/lib/format/number";
 
 interface AssessmentRow {
   id: string;
@@ -214,7 +215,7 @@ export function AdminAssessmentsClient({ assessments, pagination }: AdminAssessm
         </>
       )}
       <p className="text-xs text-muted-foreground/60 mt-4 text-center md:text-left">
-        Showing {startItem}-{endItem} of {pagination.totalCount} assessments
+        Showing {formatNumber(startItem)}-{formatNumber(endItem)} of {formatNumber(pagination.totalCount)} assessments
       </p>
       <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
         <span>
