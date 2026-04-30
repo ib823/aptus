@@ -1199,6 +1199,10 @@ model ClientRequirement {
   code                     String // row code, e.g. "A1", "B3.a"
   requirementText          String  @db.Text
   requirementType          String? // "Mandatory" | "Non-Mandatory" | null
+  // Phase 13.8 — for SKM-class clients with multi-tier compliance taxonomy.
+  // Values: "MANDATORI" | "PILIHAN_TINGGI" | "PILIHAN_SEDERHANA" | "PILIHAN_RENDAH"
+  // (Bursa-class clients use only requirementType; this column is null for them.)
+  priorityTier             String?
   clientRemarks            String? @db.Text
   solutionProviderResponse String? @db.Text // editable in-app
   solutionProviderRemarks  String? @db.Text // editable in-app
