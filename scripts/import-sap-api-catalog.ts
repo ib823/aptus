@@ -175,7 +175,12 @@ function classifyOneTag(t: string): {
   const isOnPrem =
     lower.includes("on premise") ||
     lower.includes("on-premise") ||
-    lower.includes("on-prem");
+    lower.includes("on-prem") ||
+    // Bare "SAP S/4HANA" without "Cloud" qualifier → On-Premise per SAP
+    // taxonomy. The check on absence of "cloud" excludes any tag containing
+    // "S/4HANA Cloud" / "S/4HANA Cloud, private edition" — those are
+    // already handled by isPublic / isPrivate above.
+    (lower.includes("s/4hana") && !lower.includes("cloud"));
   return { isPublic, isPrivate, isOnPrem };
 }
 
