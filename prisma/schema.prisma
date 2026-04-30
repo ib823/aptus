@@ -315,6 +315,64 @@ model VendorResponse {
   @@index([submissionId, requirementId])
 }
 
+// =============================================================================
+// Phase 13.6 — AD-13-6: SAP API Business Hub live-knowledge library.
+//
+// Caches SAP API metadata (api.sap.com) so the classifier can ground verdicts
+// in actual integration-boundary evidence. A "Released" API for a scope item
+// is strong evidence the requirement is C (configuration via API integration)
+// rather than G (gap requiring custom development).
+//
+// Edition mapping is via three booleans (not a junction): SAP publishes APIs
+// at edition granularity, not version granularity. If an API is released for
+// "SAP S/4HANA Cloud" it applies to all PUBLIC catalog versions; same for
+// "SAP S/4HANA Cloud, private edition". Most APIs apply to both editions.
+// =============================================================================
+model SapApiReference {
+  id          String @id @default(cuid())
+  apiId       String @unique // SAP's canonical id, e.g. "API_BUSINESS_PARTNER"
+  apiName     String // human-readable, e.g. "Business Partner (A2X)"
+  description String @db.Text
+
+  /// Lifecycle: "Released" | "Beta" | "Deprecated". Classifier filters on
+  /// "Released" by default — beta/deprecated APIs are weak grounding signals.
+  status   String
+  category String? // SAP business area: "Master Data" | "Sales" | etc.
+
+  /// Edition applicability — set from SAP's productCategory tag at ingest.
+  /// Most APIs are dual-edition (true/true). Edition-restricted APIs (PUBLIC-
+  /// only RAP services, PRIVATE-only classic ABAP exposes) are rare but
+  /// critical to mark correctly.
+  appliesToPublic  Boolean @default(false)
+  appliesToPrivate Boolean @default(false)
+  appliesToOnPrem  Boolean @default(false)
+
+  /// Linkage to scope items — denormalized String[] (not FK). SAP's API tags
+  /// reference scope codes (e.g. "J60") which may exist in multiple catalog
+  /// versions or none. Matching at classification time uses (scopeCode,
+  /// assessment.catalogVersionId) lookup against ScopeItem.
+  scopeItemCodes         String[] @default([])
+  communicationScenarios String[] @default([]) // SAP-published integration scenario IDs
+
+  /// Provenance + refresh metadata
+  apiHubUrl       String // canonical link back to api.sap.com
+  rawMetadataJson Json? // EDMX/OpenAPI spec preserved for future deep queries
+  etag            String? // for conditional GET on re-ingest
+  lastFetchedAt   DateTime @default(now()) // when we last *attempted* the fetch (set even on no-op refresh)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  // GIN index on scopeItemCodes would speed `&& ARRAY[...]` lookups;
+  // Prisma doesn't support it natively — ingest will write a raw SQL
+  // index alongside the migration if query latency becomes an issue.
+
+  @@index([status])
+  @@index([apiId])
+  @@index([appliesToPublic])
+  @@index([appliesToPrivate])
+  @@index([appliesToOnPrem])
+}
+
 model ScopeItem {
   // Phase 13.1 — AD-13.1: id is now a cuid; the bare SAP code lives in scopeCode.
   // Composite uniqueness on (scopeCode, catalogVersionId) lets J60 exist in

@@ -59,10 +59,13 @@ interface AnthropicResponse {
 // hardcoded SYSTEM_PROMPT const is gone — single source of truth is the
 // seeded ClassificationProtocol row.
 import { loadActiveProtocol } from "@/lib/analyzer/protocol-loader";
+import { findMatchingApis, formatApiEvidenceForPrompt } from "@/lib/classification/api-evidence";
+import { prisma } from "@/lib/db/prisma";
 
 function buildUserMessage(
   requirements: RequirementToClassify[],
   candidates: CandidateScopeItem[],
+  apiEvidenceBlock: string,
 ): string {
   const inventoryLines = candidates
     .slice(0, 80) // cap at 80 candidates per batch to control token use
@@ -76,11 +79,13 @@ function buildUserMessage(
     )
     .join("\n\n");
 
-  return `## CANDIDATE 2602 SCOPE ITEMS (inventory subset)
+  // Phase 13.6: API evidence is appended only when the SapApiReference table
+  // has matching rows. Empty string when table is empty (no behavior change).
+  return `## CANDIDATE SCOPE ITEMS (inventory subset)
 ${inventoryLines}
 
 ## REQUIREMENTS TO CLASSIFY
-${reqLines}
+${reqLines}${apiEvidenceBlock}
 
 Classify every requirement above. Return ONLY the JSON object specified.`;
 }
@@ -114,7 +119,36 @@ export async function classifyBatch(
   // differs).
   const protocol = await loadActiveProtocol(opts.catalogVersionId);
 
-  const userMessage = buildUserMessage(requirements, candidates);
+  // Phase 13.6 — pull API evidence from the SapApiReference table. The catalog
+  // edition (PUBLIC / PRIVATE / ON_PREM) gates which APIs are visible to this
+  // assessment so a Public-only API never grounds a Private classification.
+  // Returns an empty array (and an empty string block) if the table is empty
+  // — zero behavior change relative to pre-Phase-13.6 in that case.
+  const catalog = await prisma.scopeCatalogVersion.findUnique({
+    where: { id: opts.catalogVersionId },
+    select: { edition: true },
+  });
+  const candidateScopeCodes = Array.from(new Set(candidates.map((c) => c.id))); // candidate.id IS the scope code for legacy Public; for Private it's a cuid — we use scopeCode lookup below
+  // For Private edition, candidate.id is a cuid. Convert to scopeCode for the API match.
+  const candidatesWithScopeCodes = await prisma.scopeItem.findMany({
+    where: { id: { in: candidates.map((c) => c.id) } },
+    select: { scopeCode: true },
+  });
+  const allScopeCodes = Array.from(new Set([
+    ...candidateScopeCodes, // Public legacy: id == scopeCode, so this catches them
+    ...candidatesWithScopeCodes.map((s) => s.scopeCode),
+  ]));
+  const matchedApis = catalog
+    ? await findMatchingApis({
+        scopeItemCodes: allScopeCodes,
+        catalogEdition: catalog.edition,
+        acceptedStatuses: ["Released"],
+        limit: 12,
+      })
+    : [];
+  const apiEvidenceBlock = formatApiEvidenceForPrompt(matchedApis);
+
+  const userMessage = buildUserMessage(requirements, candidates, apiEvidenceBlock);
 
   const res = await fetch(ANTHROPIC_API_URL, {
     method: "POST",
