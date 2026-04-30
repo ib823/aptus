@@ -40,9 +40,17 @@ export interface WriteVerdictInput {
 
 const VALID_VERDICT_PREFIXES = /^(O|C|G|N\/A)\b/i;
 const VALID_SAP_MODULES = new Set([
+  // Standard S/4HANA Cloud modules (Public + Private)
   "FI-AR", "FI-AP", "FI-AA", "FI-GL", "CO", "MM", "SD", "PS", "RE-FX", "TR", "TRM",
-  "SuccessFactors", "Ariba", "SAC", "BPA", "IS", "EAM",
+  // Additional Private 2025-FPS1 modules (Phase 13.x for SKM-class clients)
+  "EAM", "QM", "PM", "PP", "WM", "LE", "EWM", "FSCM", "TM",
+  // Malaysian-localization-tagged modules
+  "MY-SST", "MY-Peppol", "MY-Payroll", "MY-BankReporting",
+  // Separate-licensed SAP products (Gap targets)
+  "SuccessFactors", "Ariba", "SAC", "BPA", "IS",
   "Convergent-Invoicing", "ABAP-Environment", "BTP-Other", "BTP",
+  "Concur", "IBP", "FieldGlass", "SAP-Commerce",
+  // Non-SAP / sentinel
   "3rd-party",
   "—",
 ]);
