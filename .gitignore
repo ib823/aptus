@@ -69,3 +69,6 @@ playwright-report/
 playwright-visual-report/
 playwright-visual-app-report/
 test-results/
+
+# Phase 13.6 — user-supplied SAP API Hub export
+/sap-references/
