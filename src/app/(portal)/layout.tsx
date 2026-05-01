@@ -8,6 +8,7 @@ import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { PasskeyEnrollmentPrompt } from "@/components/auth/PasskeyEnrollmentPrompt";
 import { TourProvider } from "@/components/tour/TourProvider";
 import { AptusShell } from "@/components/aptus";
+import { NavigationFailsafe } from "@/components/layout/NavigationFailsafe";
 import type { UserRole } from "@/types/assessment";
 import type { ReactNode } from "react";
 
@@ -66,6 +67,7 @@ export default async function PortalLayout({
 
   return (
     <TourProvider userRole={user.role as UserRole}>
+      <NavigationFailsafe />
       <OfflineIndicator />
       <AptusShell user={aptusUser} banner={banner}>
         <PasskeyEnrollmentPrompt hasWebAuthn={user.hasWebAuthn} />

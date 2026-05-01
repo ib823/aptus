@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GatedButton } from "@/components/ui/gated-button";
+import { safePush } from "@/lib/navigation/safe-push";
 
 import { ProfileCompletenessBar } from "@/components/profile/ProfileCompletenessBar";
 import { PROFILE_COMPLETENESS_GATE } from "@/types/assessment";
@@ -655,7 +656,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
                 });
               });
             }}
-            onClick={() => router.push(`/assessment/${assessmentId}/scope`)}
+            onClick={() => void safePush(router, `/assessment/${assessmentId}/scope`)}
           >
             Continue to Scope Selection &rarr;
           </GatedButton>
