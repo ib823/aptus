@@ -13,7 +13,7 @@
  * incomplete.
  */
 
-import Link from "next/link";
+import { SafeLink } from "@/components/ui/safe-link";
 
 export interface StepSubTab {
   /** Display label. */
@@ -82,10 +82,11 @@ export function StepSubTabs({ items, activeHref }: StepSubTabsProps) {
         }
 
         return (
-          <Link
+          <SafeLink
             key={item.href}
             href={item.href}
             aria-current={isActive ? "page" : undefined}
+            prefetch={false}
             style={{
               ...baseStyle,
               background: isActive ? "var(--aptus-surface-2)" : "transparent",
@@ -93,7 +94,7 @@ export function StepSubTabs({ items, activeHref }: StepSubTabsProps) {
             }}
           >
             {item.label}
-          </Link>
+          </SafeLink>
         );
       })}
     </nav>

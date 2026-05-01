@@ -18,8 +18,8 @@ import {
   ListChecks,
   Settings as SettingsIcon,
 } from "lucide-react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { SafeLink } from "@/components/ui/safe-link";
 
 interface NavItem {
   key: string;
@@ -105,9 +105,14 @@ export function AptusSideRail() {
 
 function SideRailItem({ item, active }: { item: NavItem; active: boolean }) {
   return (
-    <Link
+    <SafeLink
       href={item.href}
       title={item.label}
+      // Disable Next.js prefetch on sidebar items: prefetching all 4
+      // (previously 5) destinations on every page mount was contributing
+      // to the parallel-RSC-fetch storm that triggers backend 503s.
+      // safePush pre-warms the destination at click-time anyway.
+      prefetch={false}
       style={{
         display: "flex",
         alignItems: "center",
@@ -138,6 +143,6 @@ function SideRailItem({ item, active }: { item: NavItem; active: boolean }) {
     >
       <span style={{ flexShrink: 0 }}>{item.icon}</span>
       <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>
-    </Link>
+    </SafeLink>
   );
 }
