@@ -10,6 +10,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { GatedButton } from "@/components/ui/gated-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -116,12 +117,14 @@ export function UseTemplateDialog({
             >
               Cancel
             </Button>
-            <Button
+            <GatedButton
               type="submit"
-              disabled={!companyName || (isSubmitting ?? false)}
+              gated={!companyName}
+              gatedReason="Enter a company name to create the assessment."
+              disabled={isSubmitting ?? false}
             >
               {isSubmitting ? "Creating..." : "Create Assessment"}
-            </Button>
+            </GatedButton>
           </DialogFooter>
         </form>
       </DialogContent>

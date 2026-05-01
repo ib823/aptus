@@ -10,6 +10,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { GatedButton } from "@/components/ui/gated-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -152,12 +153,14 @@ export function CreateTemplateDialog({
             >
               Cancel
             </Button>
-            <Button
+            <GatedButton
               type="submit"
-              disabled={!assessmentId || !name || (isSubmitting ?? false)}
+              gated={!assessmentId || !name}
+              gatedReason={!assessmentId ? "Select a source assessment to clone from." : "Enter a template name to continue."}
+              disabled={isSubmitting ?? false}
             >
               {isSubmitting ? "Creating..." : "Create Template"}
-            </Button>
+            </GatedButton>
           </DialogFooter>
         </form>
       </DialogContent>

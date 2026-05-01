@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Download, FileText, FileSpreadsheet, Archive, CheckCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { GatedButton } from "@/components/ui/gated-button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { formatNumber } from "@/lib/format/number";
@@ -271,14 +272,16 @@ export function ReportClient({
                     </div>
                   </div>
                 ) : (
-                  <Button
+                  <GatedButton
                     size="sm"
                     variant="outline"
-                    disabled={!canSignOff || signedRoles.has(role)}
+                    gated={!canSignOff}
+                    gatedReason="Sign-off becomes available once the assessment is reviewed or completed."
+                    disabled={signedRoles.has(role)}
                     onClick={() => setSigningRole(role)}
                   >
                     Sign Off
-                  </Button>
+                  </GatedButton>
                 )}
               </div>
             );

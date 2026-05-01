@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import { GatedButton } from "@/components/ui/gated-button";
 import {
   Dialog,
   DialogContent,
@@ -104,9 +105,14 @@ export function WorkshopScheduleDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={() => void handleCreate()} disabled={submitting || !title.trim()}>
+          <GatedButton
+            gated={!title.trim()}
+            gatedReason="Enter a workshop title to continue."
+            disabled={submitting}
+            onClick={() => void handleCreate()}
+          >
             {submitting ? "Creating..." : "Create Workshop"}
-          </Button>
+          </GatedButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

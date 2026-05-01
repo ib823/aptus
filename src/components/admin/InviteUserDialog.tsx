@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { GatedButton } from "@/components/ui/gated-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -127,9 +128,14 @@ export function InviteUserDialog({
             <Button variant="outline" onClick={() => handleClose(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={sending || !email || !role}>
+            <GatedButton
+              gated={!email || !role}
+              gatedReason={!email && !role ? "Enter an email and select a role." : !email ? "Enter the invitee's email." : "Select a role."}
+              disabled={sending}
+              onClick={handleSubmit}
+            >
               {sending ? "Sending..." : "Send Invitation"}
-            </Button>
+            </GatedButton>
           </div>
         </div>
       </DialogContent>
