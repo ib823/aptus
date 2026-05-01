@@ -5,90 +5,98 @@
  * navigation failures the framework doesn't surface.
  *
  * Background: when `router.push` triggers an RSC fetch that returns 5xx (or
- * any unhandled rejection during navigation), Next.js drains the action queue
- * silently. The user sees no toast, no console banner — the URL just doesn't
- * change. Forensic diagnosis 2026-05-01.
+ * the underlying stream is cut), Next.js drains the action queue silently.
+ * The user sees no toast, no console banner — the URL just doesn't change.
  *
- * This component listens for `unhandledrejection` at the window level and:
- *   1. Recognises the navigation-failure signature (RSC / Service Unavailable
- *      / Failed to fetch keywords in the rejection reason).
- *   2. Shows a toast so the user gets feedback ("Connection hiccup — please
- *      retry"). Failed navigations correlate to backend 503 spikes worth
- *      investigating server-side.
- *   3. If the rejection carries a target URL, falls back to `window.location`
- *      so the user reaches the page anyway.
+ * This component installs three listeners:
  *
- * Mounted once near the top of the portal layout. Companion to `safePush`
- * (see src/lib/navigation/safe-push.ts) — `safePush` is the proactive guard,
- * this is the safety net for cases that slip through.
+ *   1. `window.unhandledrejection` — recognises RSC failure messages and,
+ *      if a navigation is currently in flight, shows a toast and (when the
+ *      rejection carries a target URL) hard-navigates so the user reaches
+ *      the page anyway.
+ *   2. `document.click` (capture phase) on any internal `<a>` — marks a
+ *      navigation as in flight at click time. This is what tells the
+ *      rejection handler "yes, the failure that just fired is for a real
+ *      user-initiated navigation, not a stray prefetch or background fetch."
+ *   3. `history.pushState` / `history.replaceState` monkey-patch — same
+ *      thing for any code path that navigates without going through one of
+ *      our `<a>` clicks (programmatic redirects, Next.js's own Link
+ *      handlers, router.push/replace from un-converted call sites).
+ *
+ * Everything is gated on `isNavInFlight()` from `safe-push.ts`. That single
+ * gate eliminates the prefetch-storm false-positive class — a `<Link>`
+ * prefetch failure for `/templates` will reject with the same message as a
+ * real navigation, but if no nav was just initiated, we ignore it.
  */
 
 import { useEffect } from "react";
 import { toast } from "sonner";
-import { isNavInFlight } from "@/lib/navigation/safe-push";
+import { isNavInFlight, markNavInFlight } from "@/lib/navigation/safe-push";
 
 /**
- * Patterns that are unambiguously a navigation failure (always toast).
+ * Patterns that match Next.js App Router navigation/RSC failures.
  *
- * `Connection closed` is the message Next.js throws when an RSC stream is
- * cut mid-flight — exactly the 503-mid-stream signature we care about.
- * `Failed to fetch RSC payload for` is Next.js's primary RSC failure copy.
- * `NetworkError when attempting to fetch resource` is Firefox's flavor.
- * Plain `503` / `Service Unavailable` are belt-and-suspenders for cases
- * where the rejection carries the HTTP status in its message.
+ * These are the literal error message templates the framework throws —
+ * verified against the bundled chunks during the 2026-05-01 forensic audit:
+ *
+ *   - `Failed to fetch RSC payload for ...`  Next's primary clean-failure copy
+ *   - `Connection closed.`                   Stream cut mid-flight (the 503-mid-stream signature)
+ *   - `NetworkError when attempting to fetch resource.`  Firefox's network failure
+ *   - bare `Failed to fetch`                 Chrome/Edge's generic fetch failure
+ *   - `TypeError: Failed to fetch`           Wrapped variant
+ *   - `AbortError`                           Fetch cancelled mid-flight
+ *
+ * NOT included (intentionally): plain `503` / `Service Unavailable` strings.
+ * The RSC client never propagates the HTTP status code into the rejection
+ * message — these strings would essentially never fire and would create a
+ * false sense of coverage. We catch the *symptoms* of 503 (the messages
+ * above), not the status code itself.
+ *
+ * We don't tier these by ambiguity any more — every match is gated on
+ * `isNavInFlight()`, which handles disambiguation more reliably than the
+ * message text could.
  */
-const NAV_FAIL_UNAMBIGUOUS = [
+const NAV_FAIL_PATTERNS = [
   /Failed to fetch RSC payload/i,
-  /NetworkError when attempting to fetch/i,
   /Connection closed/i,
-  /\b503\b/,
-  /Service Unavailable/i,
-];
-
-/**
- * Patterns that *can* be navigation failures but also fire in unrelated
- * contexts (analytics aborted on tab close, image loader aborted on
- * navigate-away, React strict-mode dev double-render aborts, etc.).
- *
- * For these we require an in-flight safePush within the last few seconds
- * before treating them as a navigation failure. Otherwise we'd toast on
- * every routine background fetch hiccup.
- */
-const NAV_FAIL_AMBIGUOUS = [
+  /NetworkError when attempting to fetch/i,
   /^Failed to fetch$/i,
   /^TypeError: Failed to fetch$/i,
   /AbortError/i,
 ];
 
-function classify(reason: unknown): "fire" | "gated" | "ignore" {
+const TOAST_ID = "nav-failure" as const;
+
+function isNavFailureMessage(reason: unknown): boolean {
   const message =
     typeof reason === "string"
       ? reason
       : ((reason as { message?: string } | undefined)?.message ?? String(reason ?? ""));
-  if (NAV_FAIL_UNAMBIGUOUS.some((p) => p.test(message))) return "fire";
-  if (NAV_FAIL_AMBIGUOUS.some((p) => p.test(message))) return "gated";
-  return "ignore";
+  return NAV_FAIL_PATTERNS.some((p) => p.test(message));
 }
 
 export function NavigationFailsafe(): null {
   useEffect(() => {
+    // ── (1) unhandledrejection: the actual failure detector ───────────────
     const onUnhandled = (event: PromiseRejectionEvent): void => {
-      const reason = event.reason as { message?: string; url?: string } | string | undefined;
-      const verdict = classify(reason);
-      if (verdict === "ignore") return;
-      // Ambiguous rejections only count when a safePush was recently dispatched,
-      // so we don't toast on unrelated background-fetch hiccups.
-      if (verdict === "gated" && !isNavInFlight()) return;
+      if (!isNavFailureMessage(event.reason)) return;
+      // Gate: only a real user-initiated navigation should produce a toast.
+      // Prefetch / background-fetch failures sharing the same error message
+      // are filtered out here.
+      if (!isNavInFlight()) return;
 
-      // Show a non-blocking toast so the user knows something happened.
+      // Toast id dedupes burst failures (during pool exhaustion three RSC
+      // requests can fail within a 200 ms window — we want one toast, not three).
       toast.error("Couldn't load the next page — please retry.", {
+        id: TOAST_ID,
         description: "If this keeps happening, refresh the browser.",
         duration: 5000,
       });
 
-      // If the rejection carries a target URL, do a hard navigation as a last
-      // resort so the user isn't stuck.
-      const target = typeof reason === "object" ? reason?.url : undefined;
+      // If the rejection carries a target URL, do a hard navigation as a
+      // last resort so the user isn't stuck.
+      const reasonObj = typeof event.reason === "object" ? event.reason as { url?: string } | null : null;
+      const target = reasonObj?.url;
       if (target && typeof target === "string") {
         window.location.href = target;
       }
@@ -96,10 +104,53 @@ export function NavigationFailsafe(): null {
       // Don't let it bubble to the console as an unhandled error.
       event.preventDefault();
     };
-
     window.addEventListener("unhandledrejection", onUnhandled);
+
+    // ── (2) document click on internal anchors: nav-intent signal ─────────
+    // Capture phase so we set the flag *before* Next.js's Link handler runs
+    // and starts the async navigation. Same-origin only — clicks on external
+    // / mailto: / tel: / hash-only links don't count.
+    const onClick = (event: MouseEvent): void => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const anchor = target.closest("a");
+      if (!anchor) return;
+      const href = anchor.getAttribute("href") ?? "";
+      // Internal route only — skip externals, mailto:, tel:, javascript:, hash.
+      if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:") || href.startsWith("javascript:")) {
+        return;
+      }
+      try {
+        const url = new URL(href, window.location.href);
+        if (url.origin !== window.location.origin) return;
+      } catch {
+        return;
+      }
+      markNavInFlight();
+    };
+    document.addEventListener("click", onClick, true);
+
+    // ── (3) history hooks: catch programmatic / framework navigations ─────
+    // Wrap pushState/replaceState so any navigation — including Next.js's
+    // own router.push from un-converted <Link>s, server redirects, the
+    // back/forward cache replay path, etc. — refreshes the in-flight window.
+    // We restore on unmount to be polite to the next tenant.
+    const origPush = history.pushState.bind(history);
+    const origReplace = history.replaceState.bind(history);
+    history.pushState = function patchedPush(...args: Parameters<typeof history.pushState>) {
+      markNavInFlight();
+      return origPush(...args);
+    };
+    history.replaceState = function patchedReplace(...args: Parameters<typeof history.replaceState>) {
+      markNavInFlight();
+      return origReplace(...args);
+    };
+
     return () => {
       window.removeEventListener("unhandledrejection", onUnhandled);
+      document.removeEventListener("click", onClick, true);
+      history.pushState = origPush;
+      history.replaceState = origReplace;
     };
   }, []);
 
