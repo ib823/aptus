@@ -15,9 +15,9 @@
  */
 
 import { ArrowLeft, Clock, Download, Share2 } from "lucide-react";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { safePush } from "@/lib/navigation/safe-push";
+import { SafeLink } from "@/components/ui/safe-link";
 import { StatusPill } from "./StatusPill";
 import { STEPS, StepRail } from "./StepRail";
 import { StepSubTabs, type StepSubTab } from "./StepSubTabs";
@@ -197,9 +197,10 @@ export function AptusAssessmentShell({
           background: "var(--aptus-surface)",
         }}
       >
-        <Link
+        <SafeLink
           href="/assessments"
           aria-label="Back to assessments"
+          prefetch={false}
           style={{
             width: 32,
             height: 32,
@@ -215,7 +216,7 @@ export function AptusAssessmentShell({
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
           <ArrowLeft size={16} />
-        </Link>
+        </SafeLink>
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -256,24 +257,26 @@ export function AptusAssessmentShell({
           </div>
         </div>
 
-        <Link
+        <SafeLink
           href={`/assessment/${assessmentId}/activity`}
           className="a-btn a-btn-secondary a-btn-sm"
           style={{ textDecoration: "none" }}
           aria-label="View activity feed"
+          prefetch={false}
         >
           <Clock size={14} /> Activity
-        </Link>
+        </SafeLink>
         <button type="button" className="a-btn a-btn-secondary a-btn-sm">
           <Share2 size={14} /> Share
         </button>
-        <Link
+        <SafeLink
           href={`/assessment/${assessmentId}/report`}
           className="a-btn a-btn-primary a-btn-sm"
           style={{ textDecoration: "none" }}
+          prefetch={false}
         >
           <Download size={14} /> Export
-        </Link>
+        </SafeLink>
       </div>
 
       {/* Step rail (breadcrumb variant) + per-step sub-tabs */}

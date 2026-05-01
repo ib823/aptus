@@ -10,7 +10,7 @@
  */
 
 import { Bell, Search } from "lucide-react";
-import Link from "next/link";
+import { SafeLink } from "@/components/ui/safe-link";
 import { AptusWordmark } from "./AptusMark";
 import { AptusUserMenu, type AptusUserMenuUser } from "./AptusUserMenu";
 
@@ -23,9 +23,9 @@ interface AptusTopbarProps {
 export function AptusTopbar({ user, onSearch }: AptusTopbarProps) {
   return (
     <div className="a-topbar" style={{ display: "flex", alignItems: "center", gap: 16, height: 56, padding: "0 20px", borderBottom: "1px solid var(--aptus-border)", background: "var(--aptus-surface)", position: "sticky", top: 0, zIndex: 10 }}>
-      <Link href="/" style={{ display: "flex", alignItems: "center", textDecoration: "none" }}>
+      <SafeLink href="/" prefetch={false} style={{ display: "flex", alignItems: "center", textDecoration: "none" }}>
         <AptusWordmark size={15} />
-      </Link>
+      </SafeLink>
 
       <button
         onClick={onSearch}
