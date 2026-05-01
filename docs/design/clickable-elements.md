@@ -117,7 +117,91 @@ Before you submit a PR with a new clickable element, check:
       text OR both, explaining what's blocking. `<GatedButton gatedReason>`
       gives you the tooltip for free.
 
+## Companion concern — CSS layout containment
+
+Late April 2026 a forensic audit of the live shell revealed a **CSS Grid
+min-content blowout** on `.aptus-app`: the top-level grid had no
+`grid-template-columns`, so its single implicit column track defaulted to
+`auto` (= max-content), forcing the entire shell to its widest descendant's
+width (~1432px). Every Tailwind `md:` breakpoint underneath was effectively
+disabled because the parent container was always wider than the viewport.
+
+The fix is structural and lives in three places:
+
+1. **`src/components/aptus/AptusShell.tsx`** — the outer grid now declares
+   `grid-template-columns: minmax(0, 1fr)` and `width: 100%; max-width: 100vw;
+   overflow-x: hidden`. The inner `64px 1fr` shell-body grid was changed to
+   `64px minmax(0, 1fr)` for the same reason.
+2. **`src/styles/aptus-responsive-guards.css`** — global `:where()` rules
+   (specificity 0,0,0) that default every grid/flex descendant of `.aptus-app`
+   to `min-width: 0; min-height: 0`, cap media to `max-width: 100%`, and break
+   long unbreakable strings via `overflow-wrap: anywhere`. Imported from
+   `globals.css` immediately after Tailwind.
+3. **`src/app/globals.css`** — the `.a-shell-body` / `.a-topbar` / `main`
+   selectors gain `min-width: 0`; topbar gets a flex-row layout with a
+   `.a-search` field that hides ≤640px; `.a-menu-toggle` (hamburger) reveals
+   the off-canvas sidebar at ≤768px.
+
+### Authoring rule for layout containers
+
+If you create a new grid or flex container inside `.aptus-app`:
+
+- **Grid columns:** prefer `minmax(0, 1fr)` over `1fr` for any track that
+  contains long content (forms, tables, prose, breadcrumbs).
+- **Direct grid/flex children:** add `min-w-0` (Tailwind) or `min-width: 0`
+  if the child contains content that can overflow. The global guard handles
+  this for `.aptus-app` descendants but explicit is better.
+- **Tables, code, pre:** don't put naked `<table>` / `<pre>` in a card.
+  Wrap in `<div className="overflow-x-auto">` or rely on the globals.css
+  `.aptus-app table { display: block; overflow-x: auto }` rule.
+- **Long URLs / IDs / tokens:** the global `overflow-wrap: anywhere` will
+  break them. If you need the original behavior, override at the component
+  level with `overflow-wrap: normal`.
+
+### Regression test
+
+`tests/e2e/responsive/responsive-shell.spec.ts` asserts at every viewport:
+
+1. `document.documentElement.scrollWidth ≤ clientWidth + 1` (no horizontal
+   overflow on the page).
+2. `.aptus-app` bounding-box width ≤ viewport width + 1.
+3. `.aptus-app` computed `grid-template-columns` is **not** a single fixed
+   pixel value (which would mean the blowout returned).
+
+Run via `pnpm test:responsive`.
+
+### Stylelint guard
+
+`.stylelintrc.json` forbids any layout container declaring:
+
+- `grid-template-columns` made entirely of px values (e.g. `64px 1280px`)
+- `width: 1234px` (4-digit pixel widths)
+
+Run via `pnpm lint:css`. Add to CI for prevention.
+
 ## Migration history
+
+### 2026-05-01 — CSS Grid min-content blowout fix
+
+- Updated: `src/components/aptus/AptusShell.tsx` (outer + inner grid use
+  `minmax(0, 1fr)`; off-canvas mobile sidebar with hamburger toggle + body-
+  scroll lock + auto-close on route change)
+- Updated: `src/components/aptus/AptusTopbar.tsx` (hamburger button at
+  `.a-menu-toggle`, `.a-search` flexes 1 1 auto + collapses ≤640px,
+  `.a-actions` group)
+- New: `src/styles/aptus-responsive-guards.css` (4 global guard rules at
+  zero specificity)
+- Updated: `src/app/globals.css` (imports the guards file; `.a-topbar` flex
+  + min-width:0; `.a-shell-body` uses `minmax(0,1fr)`; off-canvas sidebar
+  CSS at `≤768px`; layout containment rules for `main`/`section`/`table`/
+  `pre`/`code`)
+- Updated: `src/components/profile/CompanyProfileForm.tsx` (`min-w-0` on
+  the two-column grid + each section card)
+- New: `tests/e2e/responsive/responsive-shell.spec.ts` (regression suite)
+- New: `.stylelintrc.json` + `pnpm lint:css` script + `pnpm test:responsive`
+  script
+
+### 2026-04-30 — GatedButton + cursor a11y
 
 The audit + cleanup shipped on 2026-04-30. Files touched:
 

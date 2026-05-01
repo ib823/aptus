@@ -1,0 +1,59 @@
+/* ============================================================================
+ * Aptus Responsive Guards
+ *
+ * These rules neutralise the most common classes of layout-blowout bug:
+ *
+ *   1. Document/root containers being widened past the viewport by overflowing
+ *      content (typical of long URLs, wide tables, or grid min-content blowout).
+ *   2. Grid/flex children inheriting the default `min-width: auto` (= min-content)
+ *      that prevents them from shrinking below their content width.
+ *   3. Media (img/video/svg/canvas) intrinsically sized larger than the viewport.
+ *   4. Long unbreakable strings (URLs, IDs, tokens) blowing out cards.
+ *
+ * All selectors use `:where()` so specificity is (0,0,0) — they act as defaults.
+ * Any intentional component-level rule still wins.
+ *
+ * Risk note: rule #2 (`min-width: 0` on every descendant of `.aptus-app`) is
+ * a sledgehammer. It overrides `min-width: auto` for legacy SAP-Horizon-styled
+ * components too. Verified to be safe for the current Aptus surface (none of
+ * the legacy components rely on min-content sizing) but worth re-checking if
+ * any SAP-Horizon page suddenly shrinks unexpectedly.
+ *
+ * Imported from globals.css. See also docs/design/clickable-elements.md and
+ * the Playwright regression suite at tests/e2e/responsive/responsive-shell.spec.ts.
+ * ============================================================================ */
+
+/* 1. Root containers must not exceed the viewport width.
+   `overflow-x: clip` is preferred over `hidden` because it does not establish
+   a scroll container and therefore does not break sticky positioning. */
+:where(html, body, #__next, [data-app-root]) {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: clip;
+}
+
+/* 2. Default every grid/flex descendant of .aptus-app to min-width:0 + min-height:0
+   so they can shrink below their intrinsic content size. */
+:where(.aptus-app *) {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* 3. Media should never push layout wider than its container. */
+:where(.aptus-app img,
+       .aptus-app video,
+       .aptus-app svg,
+       .aptus-app canvas) {
+  max-width: 100%;
+  height: auto;
+}
+
+/* 4. Long unbreakable strings (URLs, IDs, JSON tokens) should wrap rather
+   than overflow their parent card. `anywhere` is more aggressive than
+   `break-word`: it permits a break at any character, not just word boundaries. */
+:where(.aptus-app p,
+       .aptus-app span,
+       .aptus-app div,
+       .aptus-app td) {
+  overflow-wrap: anywhere;
+}
