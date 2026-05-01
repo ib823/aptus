@@ -27,6 +27,30 @@
 
 import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
+/**
+ * Module-level "navigation in flight" timestamp. Set whenever safePush hands
+ * off to the App Router; checked by NavigationFailsafe to decide whether
+ * an ambiguous unhandledrejection (e.g. plain "Failed to fetch", AbortError)
+ * is actually a navigation failure or some unrelated background fetch
+ * (analytics, image loaders, React strict-mode double-render aborts, etc.).
+ *
+ * The window is intentionally generous — soft transitions usually resolve
+ * within ~500 ms, but a slow RSC fetch can stretch a couple of seconds
+ * before erroring. NAV_IN_FLIGHT_WINDOW_MS covers the realistic worst case.
+ */
+const NAV_IN_FLIGHT_WINDOW_MS = 3000;
+let navInFlightUntil = 0;
+
+/** Mark a navigation as in flight. Called automatically by safePush. */
+export function markNavInFlight(): void {
+  navInFlightUntil = Date.now() + NAV_IN_FLIGHT_WINDOW_MS;
+}
+
+/** True if a safePush call is within its in-flight window. */
+export function isNavInFlight(): boolean {
+  return Date.now() < navInFlightUntil;
+}
+
 interface SafePushOptions {
   /** Use `replace` semantics instead of `push`. */
   replace?: boolean;
@@ -69,6 +93,10 @@ export async function safePush(
 
   // 2. Hand off to the App Router.
   const start = typeof window !== "undefined" ? window.location.pathname + window.location.search : "";
+  // Mark nav as in flight so NavigationFailsafe can disambiguate any
+  // ambiguous rejection that fires shortly after (AbortError, bare
+  // "Failed to fetch") from unrelated background fetches.
+  markNavInFlight();
   if (replace) router.replace(url);
   else router.push(url);
 
