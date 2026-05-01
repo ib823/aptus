@@ -30,6 +30,7 @@ import {
   Settings as SettingsIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { safePush } from "@/lib/navigation/safe-push";
 import {
   createContext,
   useCallback,
@@ -129,44 +130,44 @@ function AptusCmdK({ open, onClose }: AptusCmdKProps) {
         icon: <Plus size={14} />,
         label: "New assessment",
         kbd: "⌘N",
-        action: () => router.push("/assessments/new"),
+        action: () => void safePush(router,"/assessments/new"),
       },
       {
         group: "Commands",
         icon: <Download size={14} />,
         label: "Browse assessments",
         kbd: "⌘E",
-        action: () => router.push("/assessments"),
+        action: () => void safePush(router,"/assessments"),
       },
       {
         group: "Navigate",
         icon: <Home size={14} />,
         label: "Home",
-        action: () => router.push("/"),
+        action: () => void safePush(router,"/"),
       },
       {
         group: "Navigate",
         icon: <ListChecks size={14} />,
         label: "Assessments",
-        action: () => router.push("/assessments"),
+        action: () => void safePush(router,"/assessments"),
       },
       {
         group: "Navigate",
         icon: <LayoutTemplate size={14} />,
         label: "Templates",
-        action: () => router.push("/templates"),
+        action: () => void safePush(router,"/templates"),
       },
       {
         group: "Navigate",
         icon: <SettingsIcon size={14} />,
         label: "Settings",
-        action: () => router.push("/settings"),
+        action: () => void safePush(router,"/settings"),
       },
       {
         group: "Navigate",
         icon: <FileText size={14} />,
         label: "Design system",
-        action: () => router.push("/design-system"),
+        action: () => void safePush(router,"/design-system"),
       },
     ],
     [router],

@@ -13,7 +13,6 @@
  */
 
 import {
-  HelpCircle,
   Home,
   LayoutTemplate,
   ListChecks,
@@ -62,13 +61,8 @@ const NAV: NavItem[] = [
   },
 ];
 
-const HELP_ITEM: NavItem = {
-  key: "help",
-  label: "Help",
-  href: "/help",
-  icon: <HelpCircle size={18} />,
-  match: (p) => p.startsWith("/help"),
-};
+// HELP_ITEM removed 2026-05-01 — /help route doesn't exist; the Link was
+// 404-ing on prefetch. Restore once a help destination is shipped.
 
 export function AptusSideRail() {
   const pathname = usePathname() ?? "/";
@@ -105,8 +99,6 @@ export function AptusSideRail() {
       ))}
 
       <div style={{ flex: 1 }} />
-
-      <SideRailItem item={HELP_ITEM} active={HELP_ITEM.match(pathname)} />
     </nav>
   );
 }

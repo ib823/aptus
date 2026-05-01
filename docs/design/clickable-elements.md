@@ -117,7 +117,66 @@ Before you submit a PR with a new clickable element, check:
       text OR both, explaining what's blocking. `<GatedButton gatedReason>`
       gives you the tooltip for free.
 
+## Companion concern — silent client-side navigation failures
+
+When `router.push(url)` triggers an RSC payload fetch (`?_rsc=...`) and the
+server returns 5xx, Next.js App Router rejects the navigation action's
+Promise, drains the queue, and **the user sees nothing** — URL doesn't
+change, no toast, no console banner. This was traced to intermittent 503s
+on RSC requests for auth/DB-touching routes (likely cold-start timeouts or
+DB pool exhaustion when 5–8 prefetches fire in parallel on layout mount).
+
+The front end can't fix the 503 source, but it can stop swallowing it.
+Two primitives, both shipped 2026-05-01:
+
+### `safePush(router, url)` — `src/lib/navigation/safe-push.ts`
+
+Drop-in replacement for `router.push`. Pre-warms the destination via a
+manual `fetch(url, {RSC:'1'})`, falls back to `window.location.href` if
+the pre-warm 5xxs, and runs a 1500 ms watchdog that hard-navigates if the
+URL hasn't changed (catches cases where the App Router silently fails
+despite a healthy server response, e.g. cached error state).
+
+**Use it for any user-initiated navigation:** sidebar links, stepper
+buttons, post-save redirects, gated CTAs. Currently wired into
+`AptusAssessmentShell` (stepper), `AptusCmdK` (palette commands), and
+`CompanyProfileForm` (Continue CTA).
+
+### `<NavigationFailsafe />` — `src/components/layout/NavigationFailsafe.tsx`
+
+Mounted once in the portal layout. Listens for `unhandledrejection` at the
+window level, recognises the navigation-failure signature, shows a sonner
+toast ("Couldn't load the next page — please retry"), and hard-navigates
+to the rejection's target URL when one is present. Catches cases that slip
+through `safePush` (third-party prefetch failures, race conditions).
+
+### Authoring rule
+
+For any new navigation call:
+- **User-initiated** (button click, form submit) → `safePush(router, url)`,
+  not `router.push(url)`.
+- **Programmatic / non-blocking** (e.g. post-save redirect that the user
+  doesn't directly trigger) → `safePush` with `{ skipPrewarm: true }` is OK.
+- **Refresh after mutation** → `router.refresh()` is fine; it's a different
+  code path that doesn't hit this trap.
+
 ## Migration history
+
+### 2026-05-01 — Navigation resilience + minimal shell fix
+
+After the 2026-04-30 shell rewrite (`eb2c149`) caused a regression where
+client-side navigation silently failed in production, root cause was traced
+to **intermittent RSC 503s, not the shell change**. The shell rewrite was
+reverted (`64fc540`) and replaced with a much smaller, targeted change set:
+
+- New: `src/lib/navigation/safe-push.ts` (RSC pre-warm + watchdog + hard-nav fallback)
+- New: `src/components/layout/NavigationFailsafe.tsx` (global unhandled-rejection listener with sonner toast)
+- Updated: `src/app/(portal)/layout.tsx` (mounts `<NavigationFailsafe />`)
+- Updated: `src/components/aptus/AptusShell.tsx` (re-applied **only** the inline `minmax(0, 1fr)` on outer + inner grids — none of the wrapper-div / off-canvas-sidebar / global-guards / Playwright/stylelint scaffolding from the reverted commit)
+- Updated: `src/components/aptus/AptusAssessmentShell.tsx`, `AptusCmdK.tsx`, `src/components/profile/CompanyProfileForm.tsx` (router.push → safePush)
+- Updated: `src/components/aptus/AptusSideRail.tsx` (removed phantom `/help` Link that was 404-ing on every prefetch)
+
+### 2026-04-30 — GatedButton + cursor a11y
 
 The audit + cleanup shipped on 2026-04-30. Files touched:
 

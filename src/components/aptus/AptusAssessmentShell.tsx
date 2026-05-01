@@ -17,6 +17,7 @@
 import { ArrowLeft, Clock, Download, Share2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { safePush } from "@/lib/navigation/safe-push";
 import { StatusPill } from "./StatusPill";
 import { STEPS, StepRail } from "./StepRail";
 import { StepSubTabs, type StepSubTab } from "./StepSubTabs";
@@ -180,7 +181,7 @@ export function AptusAssessmentShell({
   const handleStepSelect = (n: number) => {
     const step = STEPS.find((s) => s.n === n);
     if (!step) return;
-    router.push(STEP_ROUTE_MAP[step.key].primaryRoute(assessmentId));
+    void safePush(router, STEP_ROUTE_MAP[step.key].primaryRoute(assessmentId));
   };
 
   return (

@@ -51,6 +51,11 @@ function ShellInner({ user, banner, children }: AptusShellProps) {
         minHeight: "100vh",
         display: "grid",
         gridTemplateRows: "56px 1fr",
+        // Declare a flexible column so the implicit auto-track doesn't
+        // size to max-content (which would force the whole shell wider
+        // than the viewport at narrow widths). minmax(0, 1fr) lets the
+        // column shrink below intrinsic content width.
+        gridTemplateColumns: "minmax(0, 1fr)",
         background: "var(--aptus-bg)",
       }}
     >
@@ -59,8 +64,12 @@ function ShellInner({ user, banner, children }: AptusShellProps) {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "64px 1fr",
-          minHeight: 0, // allow grid child to scroll
+          // `1fr` is shorthand for `minmax(auto, 1fr)`; `auto` = min-content
+          // = the same blowout trap. `minmax(0, 1fr)` lets the content
+          // column shrink below its intrinsic width.
+          gridTemplateColumns: "64px minmax(0, 1fr)",
+          minHeight: 0,  // allow grid child to scroll
+          minWidth: 0,   // allow grid child to shrink
         }}
       >
         <AptusSideRail />
