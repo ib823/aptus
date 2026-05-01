@@ -70,7 +70,7 @@ interface SectionProps {
 
 function CollapsibleSection({ id, title, complete, open, onToggle, children }: SectionProps) {
   return (
-    <div id={id} className="border rounded-lg bg-card scroll-mt-24 min-w-0">
+    <div id={id} className="border rounded-lg bg-card scroll-mt-24">
       <button
         type="button"
         onClick={onToggle}
@@ -229,7 +229,7 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
       </div>
 
       {/* Two-column card layout */}
-      <div data-tour="profile-sections" className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
+      <div data-tour="profile-sections" className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Left column: Identity & Scale */}
         <div className="space-y-3">
           {/* Section 1: Basic Info */}

@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "../styles/aptus-responsive-guards.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -396,53 +395,13 @@
 .aptus-app .a-pill-neutral { background: var(--aptus-neutral-50); color: var(--aptus-neutral-700); border-color: var(--aptus-neutral-200); }
 
 /* ── App shell (used in App-3) ── */
-.aptus-app .a-shell      { display: grid; grid-template-rows: 56px 1fr; grid-template-columns: minmax(0, 1fr); height: 100vh; overflow: hidden; }
+.aptus-app .a-shell      { display: grid; grid-template-rows: 56px 1fr; height: 100vh; overflow: hidden; }
 .aptus-app .a-topbar     {
   display: flex; align-items: center; gap: 16px; padding: 0 20px;
   border-bottom: 1px solid var(--aptus-border); background: var(--aptus-surface); z-index: 10;
-  min-width: 0; /* allow flex children to shrink instead of forcing topbar wider */
 }
-.aptus-app .a-topbar > *           { min-width: 0; }
-.aptus-app .a-topbar .a-search     { flex: 1 1 auto; min-width: 0; }
-.aptus-app .a-topbar .a-actions    { flex: 0 0 auto; }
-@media (max-width: 640px) {
-  /* On phones, collapse the search field to save space; the global Cmd+K
-     shortcut + AptusCmdK provider still expose search. */
-  .aptus-app .a-topbar .a-search   { display: none; }
-}
-/* The shell body grid uses minmax(0, 1fr) for the content column so the
-   content can shrink below its intrinsic width. See AptusShell.tsx for the
-   inline-style equivalent that is actually rendered today. */
-.aptus-app .a-shell-body { display: grid; grid-template-columns: 64px minmax(0, 1fr); overflow: hidden; }
-.aptus-app .a-shell-body.a-expanded { grid-template-columns: 240px minmax(0, 1fr); }
-@media (max-width: 768px) {
-  /* Off-canvas sidebar at narrow widths: the rail leaves the flow and is
-     toggled by a hamburger button in the topbar (see AptusShell.tsx). */
-  .aptus-app .a-shell-body,
-  .aptus-app .a-shell-body.a-expanded { grid-template-columns: minmax(0, 1fr); }
-  .aptus-app .a-siderail-mobile {
-    position: fixed; inset: 56px 0 0 0;
-    transform: translateX(-100%);
-    transition: transform 200ms ease;
-    z-index: 40;
-    width: min(280px, 80vw);
-    background: var(--aptus-surface);
-    border-right: 1px solid var(--aptus-border);
-  }
-  .aptus-app .a-siderail-mobile.a-open { transform: translateX(0); }
-  .aptus-app .a-menu-toggle { display: inline-flex; }
-}
-@media (min-width: 769px) {
-  .aptus-app .a-menu-toggle { display: none; }
-}
-
-/* ── Layout containment guards: Fix 3 ── */
-.aptus-app .a-shell-main,
-.aptus-app main,
-.aptus-app section { min-width: 0; }
-.aptus-app table   { display: block; max-width: 100%; overflow-x: auto; }
-.aptus-app pre,
-.aptus-app code    { max-width: 100%; overflow-x: auto; word-break: break-word; }
+.aptus-app .a-shell-body { display: grid; grid-template-columns: 64px 1fr; overflow: hidden; }
+.aptus-app .a-shell-body.a-expanded { grid-template-columns: 240px 1fr; }
 .aptus-app .a-siderail   {
   background: var(--aptus-surface); border-right: 1px solid var(--aptus-border);
   padding: 12px 8px; display: flex; flex-direction: column; gap: 2px;
