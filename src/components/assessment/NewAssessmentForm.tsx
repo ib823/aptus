@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { GatedButton } from "@/components/ui/gated-button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UI_TEXT } from "@/constants/ui-text";
@@ -270,15 +270,15 @@ export function NewAssessmentForm() {
       )}
 
       <div>
-        <Button
+        <GatedButton
           type="submit"
           className="w-full h-11"
-          disabled={!isValid || loading}
-          aria-disabled={!isValid || loading}
-          aria-describedby={!isValid ? "create-hint" : undefined}
+          gated={!isValid}
+          gatedReason="Complete all fields above to create an assessment."
+          disabled={loading}
         >
           {loading ? "Creating..." : UI_TEXT.assessment.createButton}
-        </Button>
+        </GatedButton>
         {!isValid && (
           <p id="create-hint" className="text-xs text-muted-foreground mt-2 text-center">
             Complete all fields above to create an assessment.

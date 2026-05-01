@@ -11,6 +11,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { GatedButton } from "@/components/ui/gated-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PRESETS } from "@/constants/presets";
@@ -180,12 +181,20 @@ export function CoreEdgeDialog({
             >
               Cancel
             </Button>
-            <Button
+            <GatedButton
               type="submit"
-              disabled={!companyName || selectedIds.size === 0 || (isSubmitting ?? false)}
+              gated={!companyName || selectedIds.size === 0}
+              gatedReason={
+                !companyName && selectedIds.size === 0
+                  ? "Enter a company name and select at least one scope item."
+                  : !companyName
+                    ? "Enter a company name to continue."
+                    : "Select at least one scope item."
+              }
+              disabled={isSubmitting ?? false}
             >
               {isSubmitting ? "Creating..." : `Create Assessment (${selectedIds.size} items)`}
-            </Button>
+            </GatedButton>
           </DialogFooter>
         </form>
       </DialogContent>

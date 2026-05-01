@@ -207,6 +207,22 @@
     outline-offset: 2px;
     border-radius: var(--radius-sm);
   }
+
+  /* Restore pointer cursor on interactive elements.
+   * Tailwind v3+ Preflight removed the browser default `cursor: pointer`
+   * from <button>; v4 keeps that removal. We re-add it once here so every
+   * <button> / [role="button"] / non-disabled [role="link"] feels clickable
+   * without each component needing `cursor-pointer`. Disabled / aria-disabled
+   * elements get `cursor: not-allowed`. */
+  button:not(:disabled):not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="link"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
 }
 
 /* Respect reduced motion preference */

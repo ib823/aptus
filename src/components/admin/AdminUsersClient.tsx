@@ -6,6 +6,7 @@ import {
   Trash2, ShieldOff, RotateCcw, MoreHorizontal, UserPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { GatedButton } from "@/components/ui/gated-button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -486,9 +487,14 @@ function AddUserDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!email || !name || isSubmitting}>
+            <GatedButton
+              type="submit"
+              gated={!email || !name}
+              gatedReason={!email && !name ? "Enter the user's name and email." : !email ? "Enter the user's email." : "Enter the user's name."}
+              disabled={isSubmitting}
+            >
               {isSubmitting ? "Creating..." : "Create & Send Link"}
-            </Button>
+            </GatedButton>
           </DialogFooter>
         </form>
       </DialogContent>

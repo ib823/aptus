@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { GatedButton } from "@/components/ui/gated-button";
 
 import { ProfileCompletenessBar } from "@/components/profile/ProfileCompletenessBar";
 import { PROFILE_COMPLETENESS_GATE } from "@/types/assessment";
@@ -55,20 +56,26 @@ interface CompanyProfileFormProps {
 }
 
 interface SectionProps {
+  /** Stable DOM id — used as the scroll target when the gated CTA jumps to
+   * the first incomplete section. Also used in the parent's open-set. */
+  id: string;
   title: string;
   complete: boolean;
-  defaultOpen?: boolean;
+  /** Open state is controlled by the parent (so the gated-CTA helper can
+   * imperatively expand the next-incomplete section). */
+  open: boolean;
+  onToggle: () => void;
   children: React.ReactNode;
 }
 
-function CollapsibleSection({ title, complete, defaultOpen = false, children }: SectionProps) {
-  const [open, setOpen] = useState(defaultOpen);
-
+function CollapsibleSection({ id, title, complete, open, onToggle, children }: SectionProps) {
   return (
-    <div className="border rounded-lg bg-card">
+    <div id={id} className="border rounded-lg bg-card scroll-mt-24">
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls={`${id}-content`}
         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-accent/50 transition-colors rounded-t-lg"
       >
         <div className="flex items-center gap-2">
@@ -81,10 +88,20 @@ function CollapsibleSection({ title, complete, defaultOpen = false, children }: 
         </div>
         {open ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
       </button>
-      {open && <div className="px-4 pb-4 space-y-4 border-t">{children}</div>}
+      {open && <div id={`${id}-content`} className="px-4 pb-4 space-y-4 border-t">{children}</div>}
     </div>
   );
 }
+
+// Section IDs in DOM order. Order matters: the gated-CTA helper jumps to
+// the FIRST incomplete section in this order.
+const SECTION_ORDER = [
+  { id: "section-basic",        breakdownKey: "basic"        as const },
+  { id: "section-financial",    breakdownKey: "financial"    as const },
+  { id: "section-sap-strategy", breakdownKey: "sapStrategy"  as const },
+  { id: "section-it-landscape", breakdownKey: "itLandscape"  as const },
+  { id: "section-operational",  breakdownKey: "operational"  as const },
+];
 
 export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, userRole }: CompanyProfileFormProps) {
   const router = useRouter();
@@ -94,6 +111,19 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
   const pendingSave = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevScore = useRef(initialProfile.completenessScore);
+  // Controlled open state for the section accordions. Default-open the first
+  // (Basic Information) to match the prior behavior.
+  const [openSections, setOpenSections] = useState<Set<string>>(
+    () => new Set(["section-basic"]),
+  );
+  const toggleSection = useCallback((id: string) => {
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -203,7 +233,13 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
         {/* Left column: Identity & Scale */}
         <div className="space-y-3">
           {/* Section 1: Basic Info */}
-          <CollapsibleSection title="Basic Information" complete={bd.basic} defaultOpen>
+          <CollapsibleSection
+            id="section-basic"
+            title="Basic Information"
+            complete={bd.basic}
+            open={openSections.has("section-basic")}
+            onToggle={() => toggleSection("section-basic")}
+          >
             <div className="grid grid-cols-2 gap-4 pt-3">
               <div>
                 <label htmlFor="profile-company-name" className="text-sm font-medium text-foreground">Company Name</label>
@@ -263,7 +299,13 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
           </CollapsibleSection>
 
           {/* Section 2: Financial & Scale */}
-          <CollapsibleSection title="Financial & Scale" complete={bd.financial}>
+          <CollapsibleSection
+            id="section-financial"
+            title="Financial & Scale"
+            complete={bd.financial}
+            open={openSections.has("section-financial")}
+            onToggle={() => toggleSection("section-financial")}
+          >
             <div className="grid grid-cols-2 gap-4 pt-3">
               <div>
                 <label htmlFor="profile-employee-count" className="text-sm font-medium text-foreground">Employee Count</label>
@@ -336,7 +378,13 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
         <div className="space-y-3">
           {/* Section 3: SAP Strategy — hidden for business roles who can't answer these */}
           {!["process_owner", "executive_sponsor", "viewer"].includes(userRole ?? "") && (
-          <CollapsibleSection title="SAP Strategy" complete={bd.sapStrategy}>
+          <CollapsibleSection
+            id="section-sap-strategy"
+            title="SAP Strategy"
+            complete={bd.sapStrategy}
+            open={openSections.has("section-sap-strategy")}
+            onToggle={() => toggleSection("section-sap-strategy")}
+          >
             <div className="space-y-4 pt-3">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -403,7 +451,13 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
           )}
 
           {/* Section 5: IT Landscape */}
-          <CollapsibleSection title="IT Landscape" complete={bd.itLandscape}>
+          <CollapsibleSection
+            id="section-it-landscape"
+            title="IT Landscape"
+            complete={bd.itLandscape}
+            open={openSections.has("section-it-landscape")}
+            onToggle={() => toggleSection("section-it-landscape")}
+          >
             <div className="space-y-4 pt-3">
               <div>
                 <label htmlFor="profile-erp-version" className="text-sm font-medium text-foreground">Current ERP Version</label>
@@ -434,7 +488,13 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
       </div>
 
       {/* Full-width: Operational Context */}
-      <CollapsibleSection title="Operational Context" complete={bd.operational}>
+      <CollapsibleSection
+        id="section-operational"
+        title="Operational Context"
+        complete={bd.operational}
+        open={openSections.has("section-operational")}
+        onToggle={() => toggleSection("section-operational")}
+      >
         <div className="space-y-4 pt-3">
           <div>
             <label className="text-sm font-medium text-foreground">Key Business Processes</label>
@@ -578,23 +638,27 @@ export function CompanyProfileForm({ assessmentId, initialProfile, isReadOnly, u
             </p>
           </div>
 
-          {profile.completenessScore >= PROFILE_COMPLETENESS_GATE ? (
-            <a
-              href={`/assessment/${assessmentId}/scope`}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors"
-            >
-              Continue to Scope Selection &rarr;
-            </a>
-          ) : (
-            <span
-              role="link"
-              aria-disabled="true"
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-muted-foreground bg-muted rounded-md cursor-not-allowed"
-              title={`${profile.completenessScore}% complete — reach ${PROFILE_COMPLETENESS_GATE}% to continue`}
-            >
-              Continue to Scope Selection &rarr;
-            </span>
-          )}
+          <GatedButton
+            gated={profile.completenessScore < PROFILE_COMPLETENESS_GATE}
+            gatedReason={`${profile.completenessScore}% complete — reach ${PROFILE_COMPLETENESS_GATE}% to continue. Click to jump to the next incomplete section.`}
+            onGatedClick={() => {
+              const next = SECTION_ORDER.find((s) => !bd[s.breakdownKey]);
+              if (!next) return;
+              // Open the section first (state update), then scroll on the
+              // next frame so the expanded layout is in the DOM before we
+              // measure scroll position.
+              setOpenSections((prev) => new Set([...prev, next.id]));
+              requestAnimationFrame(() => {
+                document.getElementById(next.id)?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                });
+              });
+            }}
+            onClick={() => router.push(`/assessment/${assessmentId}/scope`)}
+          >
+            Continue to Scope Selection &rarr;
+          </GatedButton>
         </div>
       </div>
     </div>

@@ -234,7 +234,6 @@ function LoginForm() {
                 variant="outline"
                 className="w-full h-11"
                 disabled={!email || loading}
-                aria-disabled={!email || loading}
               >
                 {loading ? "Sending..." : UI_TEXT.auth.sendMagicLink}
               </Button>
