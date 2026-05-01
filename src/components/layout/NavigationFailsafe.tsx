@@ -25,15 +25,60 @@
 
 import { useEffect } from "react";
 import { toast } from "sonner";
+import { isNavInFlight } from "@/lib/navigation/safe-push";
 
-const NAV_FAILURE_PATTERNS = /Failed to fetch RSC|503|Service Unavailable|NetworkError when attempting/i;
+/**
+ * Patterns that are unambiguously a navigation failure (always toast).
+ *
+ * `Connection closed` is the message Next.js throws when an RSC stream is
+ * cut mid-flight — exactly the 503-mid-stream signature we care about.
+ * `Failed to fetch RSC payload for` is Next.js's primary RSC failure copy.
+ * `NetworkError when attempting to fetch resource` is Firefox's flavor.
+ * Plain `503` / `Service Unavailable` are belt-and-suspenders for cases
+ * where the rejection carries the HTTP status in its message.
+ */
+const NAV_FAIL_UNAMBIGUOUS = [
+  /Failed to fetch RSC payload/i,
+  /NetworkError when attempting to fetch/i,
+  /Connection closed/i,
+  /\b503\b/,
+  /Service Unavailable/i,
+];
+
+/**
+ * Patterns that *can* be navigation failures but also fire in unrelated
+ * contexts (analytics aborted on tab close, image loader aborted on
+ * navigate-away, React strict-mode dev double-render aborts, etc.).
+ *
+ * For these we require an in-flight safePush within the last few seconds
+ * before treating them as a navigation failure. Otherwise we'd toast on
+ * every routine background fetch hiccup.
+ */
+const NAV_FAIL_AMBIGUOUS = [
+  /^Failed to fetch$/i,
+  /^TypeError: Failed to fetch$/i,
+  /AbortError/i,
+];
+
+function classify(reason: unknown): "fire" | "gated" | "ignore" {
+  const message =
+    typeof reason === "string"
+      ? reason
+      : ((reason as { message?: string } | undefined)?.message ?? String(reason ?? ""));
+  if (NAV_FAIL_UNAMBIGUOUS.some((p) => p.test(message))) return "fire";
+  if (NAV_FAIL_AMBIGUOUS.some((p) => p.test(message))) return "gated";
+  return "ignore";
+}
 
 export function NavigationFailsafe(): null {
   useEffect(() => {
     const onUnhandled = (event: PromiseRejectionEvent): void => {
       const reason = event.reason as { message?: string; url?: string } | string | undefined;
-      const message = typeof reason === "string" ? reason : (reason?.message ?? "");
-      if (!NAV_FAILURE_PATTERNS.test(message)) return;
+      const verdict = classify(reason);
+      if (verdict === "ignore") return;
+      // Ambiguous rejections only count when a safePush was recently dispatched,
+      // so we don't toast on unrelated background-fetch hiccups.
+      if (verdict === "gated" && !isNavInFlight()) return;
 
       // Show a non-blocking toast so the user knows something happened.
       toast.error("Couldn't load the next page — please retry.", {
