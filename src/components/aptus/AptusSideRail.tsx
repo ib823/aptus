@@ -16,6 +16,7 @@ import {
   Home,
   LayoutTemplate,
   ListChecks,
+  PlugZap,
   Settings as SettingsIcon,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -51,6 +52,13 @@ const NAV: NavItem[] = [
     href: "/templates",
     icon: <LayoutTemplate size={18} />,
     match: (p) => p.startsWith("/templates"),
+  },
+  {
+    key: "sap-explorer",
+    label: "SAP Ops",
+    href: "/sap-explorer",
+    icon: <PlugZap size={18} />,
+    match: (p) => p.startsWith("/sap-explorer"),
   },
   {
     key: "settings",
