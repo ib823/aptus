@@ -2,7 +2,8 @@
 
 import { Suspense, useState, useCallback, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Mail, CheckCircle, AlertCircle, ArrowLeft, KeyRound } from "lucide-react";
+import Link from "next/link";
+import { Mail, CheckCircle, AlertCircle, ArrowLeft, KeyRound, PlugZap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ABeamLogo } from "@/components/shared/ABeamLogo";
@@ -173,6 +174,13 @@ function LoginForm() {
           )}
 
           <div className="space-y-4">
+            <Button asChild variant="secondary" className="w-full h-11">
+              <Link href="/sap-explorer">
+                <PlugZap className="w-4 h-4 mr-2" />
+                Open SAP Operations
+              </Link>
+            </Button>
+
             {/* Passkey — always visible, primary CTA */}
             <TooltipProvider>
               <Tooltip>

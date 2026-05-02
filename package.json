@@ -47,6 +47,8 @@
     "test:full": "vitest run && playwright test",
     "test:coverage": "vitest run --coverage",
     "verify:data": "tsx scripts/verify-data.ts",
+    "sap:tdd:smoke": "tsx scripts/smoke-s4-public-api.ts",
+    "sap:tdd:inspect": "tsx scripts/inspect-s4-public-service.ts",
     "ingest": "tsx scripts/ingest-sap-zip.ts",
     "catalog:snapshot": "tsx scripts/snapshot-catalog.ts",
     "fixtures:classifier:refresh": "tsx scripts/snapshot-classifier-fixture.ts",
