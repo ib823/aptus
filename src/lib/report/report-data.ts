@@ -29,24 +29,54 @@ export async function getReportSummary(assessmentId: string) {
   const selectedScopeItems = selectedScopeIds.length;
   const maybeScopeItems = scopeSelections.filter((s) => s.relevance === "MAYBE").length;
 
-  // Step response stats
+  // Step response stats. For AI-driven assessments where the workflow writes
+  // ClassificationVerdict directly (1,564 verdicts, no StepResponse rows),
+  // we fall back to the verdict bucket distribution so the verdict block in
+  // Executive Summary reflects the actual classification work — instead of
+  // rendering "0% Standard / 0% Configurable / 0% Needs work".
   const stepResponses = await prisma.stepResponse.findMany({
     where: { assessmentId },
     select: { fitStatus: true },
   });
-  const totalStepsReviewed = stepResponses.length;
-  const fitCount = stepResponses.filter((s) => s.fitStatus === "FIT").length;
-  const configureCount = stepResponses.filter((s) => s.fitStatus === "CONFIGURE").length;
-  const gapCount = stepResponses.filter((s) => s.fitStatus === "GAP").length;
-  const naCount = stepResponses.filter((s) => s.fitStatus === "NA").length;
+  let totalStepsReviewed = stepResponses.length;
+  let fitCount = stepResponses.filter((s) => s.fitStatus === "FIT").length;
+  let configureCount = stepResponses.filter((s) => s.fitStatus === "CONFIGURE").length;
+  let gapCount = stepResponses.filter((s) => s.fitStatus === "GAP").length;
+  let naCount = stepResponses.filter((s) => s.fitStatus === "NA").length;
 
   // Total process steps for selected scope
   const totalProcessSteps = await prisma.processStep.count({
     where: { scopeItemId: { in: selectedScopeIds } },
   });
-  const pendingSteps = totalProcessSteps - totalStepsReviewed;
-  const fitPercent = totalProcessSteps > 0
-    ? Math.round(((fitCount + configureCount) / totalProcessSteps) * 100)
+
+  // Fallback: when no StepResponse exists, use ClassificationVerdict via
+  // ClientRequirement.solutionProviderResponse as the proxy for "reviewed".
+  let effectiveTotalSteps = totalProcessSteps;
+  if (totalStepsReviewed === 0) {
+    const reqs = await prisma.clientRequirement.findMany({
+      where: { assessmentId },
+      select: { solutionProviderResponse: true },
+    });
+    if (reqs.length > 0) {
+      for (const r of reqs) {
+        const b = bucketOf(r.solutionProviderResponse);
+        if (b === "O") fitCount++;
+        else if (b === "C") configureCount++;
+        else if (b === "G") gapCount++;
+        else if (b === "NA") naCount++;
+      }
+      totalStepsReviewed = fitCount + configureCount + gapCount + naCount;
+      // For AI-driven assessments, the analytical universe is ClientRequirement,
+      // not the catalog's full ProcessStep set. Use the requirement count as
+      // the denominator so fitPercent reads "% of analysed requirements that
+      // are FIT/CONFIGURE" — not "% of catalog ProcessSteps reviewed AND fit".
+      effectiveTotalSteps = reqs.length;
+    }
+  }
+
+  const pendingSteps = Math.max(0, effectiveTotalSteps - totalStepsReviewed);
+  const fitPercent = effectiveTotalSteps > 0
+    ? Math.round(((fitCount + configureCount) / effectiveTotalSteps) * 100)
     : 0;
 
   // Gap stats
@@ -77,7 +107,7 @@ export async function getReportSummary(assessmentId: string) {
       maybe: maybeScopeItems,
     },
     steps: {
-      total: totalProcessSteps,
+      total: effectiveTotalSteps,
       reviewed: totalStepsReviewed,
       pending: pendingSteps,
       fit: fitCount,
@@ -496,27 +526,50 @@ function normalizeResolutionType(raw: string | null | undefined): ResolutionType
   return (VALID.has(upper) ? upper : "FIT") as ResolutionType;
 }
 
-/** Per-area outcome distribution derived from GapResolution. Areas without
- * gaps are assumed to be all FIT (the "nothing to build" outcome). */
-async function buildAreaOutcomeMap(assessmentId: string): Promise<Map<string, Partial<Record<ResolutionType, number>>>> {
+/** Map an O/C/G/NA classification bucket to the canonical ResolutionType
+ * used by the Findings + Traceability reports. The bucket comes from the
+ * AI/manual classifier (ClassificationVerdict, surfaced via
+ * ClientRequirement.solutionProviderResponse). */
+function bucketToResolutionType(bucket: ClassificationBucket): ResolutionType {
+  switch (bucket) {
+    case "O": return "FIT";
+    case "C": return "CONFIGURE";
+    case "G": return "CUSTOM_ABAP"; // generic gap; refined per-row via GapResolution if available
+    case "NA": return "OUT_OF_SCOPE";
+    case "Pending": return "FIT"; // safest default for un-classified rows
+  }
+}
+
+/** Resolve a single requirement's outcome. Prefers a GapResolution refinement
+ * (which carries analyst-decided detail like ISV / KEY_USER_EXT / BTP_EXT)
+ * when one exists for the requirement's scope item; otherwise falls back to
+ * the classification bucket on solutionProviderResponse. */
+function deriveRowOutcome(
+  classification: string | null | undefined,
+  gapTypeForScopeItem: string | null | undefined,
+): ResolutionType {
+  const fromBucket = bucketToResolutionType(bucketOf(classification));
+  // Only override with a GapResolution refinement when the row is actually a gap
+  // (bucket=G). Otherwise the analyst's gap-typed answer doesn't apply.
+  if (fromBucket === "CUSTOM_ABAP" && gapTypeForScopeItem) {
+    const refined = normalizeResolutionType(gapTypeForScopeItem);
+    if (refined !== "FIT") return refined;
+  }
+  return fromBucket;
+}
+
+/** Build a per-scope-item map of GapResolution.resolutionType, used to refine
+ * the row outcome when a row's bucket is G. Multiple gaps for the same scope
+ * item: prefer the most recently-decided one. */
+async function buildGapTypeByScopeItem(assessmentId: string): Promise<Map<string, string>> {
   const gaps = await prisma.gapResolution.findMany({
     where: { assessmentId },
-    select: { scopeItemId: true, resolutionType: true },
+    select: { scopeItemId: true, resolutionType: true, decidedAt: true },
+    orderBy: { decidedAt: "desc" },
   });
-  const scopeItemIds = [...new Set(gaps.map((g) => g.scopeItemId))];
-  const scopeItems = await prisma.scopeItem.findMany({
-    where: { id: { in: scopeItemIds } },
-    select: { id: true, functionalArea: true },
-  });
-  const scopeMap = new Map(scopeItems.map((s) => [s.id, s.functionalArea ?? "Unassigned"]));
-
-  const result = new Map<string, Partial<Record<ResolutionType, number>>>();
+  const result = new Map<string, string>();
   for (const g of gaps) {
-    const area = scopeMap.get(g.scopeItemId) ?? "Unassigned";
-    const rt = normalizeResolutionType(g.resolutionType);
-    const bucket = result.get(area) ?? {};
-    bucket[rt] = (bucket[rt] ?? 0) + 1;
-    result.set(area, bucket);
+    if (!result.has(g.scopeItemId)) result.set(g.scopeItemId, g.resolutionType);
   }
   return result;
 }
@@ -545,54 +598,57 @@ export async function getFindingsDataForReport(assessmentId: string): Promise<Fi
       requirementText: true,
       requirementType: true,
       solutionProviderResponse: true,
+      scopeItemIds: true,
       sortOrder: true,
     },
     orderBy: [{ module: "asc" }, { sortOrder: "asc" }],
   });
 
-  const areaOutcomes = await buildAreaOutcomeMap(assessmentId);
+  const gapTypeByScopeItem = await buildGapTypeByScopeItem(assessmentId);
+
+  // Compute each requirement's actual outcome from its classification bucket.
+  // This is the load-bearing change: 489 Configuration verdicts no longer
+  // collapse into FIT just because no GapResolution row mentions them.
+  const reqOutcomes = reqs.map((r) => {
+    const firstScopeItemId = r.scopeItemIds?.split(",")[0]?.trim();
+    const gapType = firstScopeItemId ? gapTypeByScopeItem.get(firstScopeItemId) : null;
+    return { req: r, outcome: deriveRowOutcome(r.solutionProviderResponse, gapType) };
+  });
 
   // Group requirements by module
-  const byModule = new Map<string, typeof reqs>();
-  for (const r of reqs) {
-    const key = r.module || "Unassigned";
+  const byModule = new Map<string, typeof reqOutcomes>();
+  for (const ro of reqOutcomes) {
+    const key = ro.req.module || "Unassigned";
     const list = byModule.get(key) ?? [];
-    list.push(r);
+    list.push(ro);
     byModule.set(key, list);
   }
 
-  // Build totals (across all areas)
+  // Build totals across all rows from each row's actual outcome
   const totalsByOutcome: Partial<Record<ResolutionType, number>> = {};
-  for (const [, dist] of areaOutcomes) {
-    for (const [rt, count] of Object.entries(dist)) {
-      const k = rt as ResolutionType;
-      totalsByOutcome[k] = (totalsByOutcome[k] ?? 0) + (count ?? 0);
-    }
+  for (const { outcome } of reqOutcomes) {
+    totalsByOutcome[outcome] = (totalsByOutcome[outcome] ?? 0) + 1;
   }
-  // Requirements without a corresponding gap → assumed FIT
   const totalReqs = reqs.length;
-  const accountedFor = Object.values(totalsByOutcome).reduce<number>((s, n) => s + (n ?? 0), 0);
-  totalsByOutcome.FIT = (totalsByOutcome.FIT ?? 0) + Math.max(0, totalReqs - accountedFor);
 
-  // Build per-area summaries with sample cards
-  const byArea = [...byModule.entries()].map(([area, areaReqs]) => {
-    const dist = areaOutcomes.get(area) ?? {};
-    const accountedForArea = Object.values(dist).reduce<number>((s, n) => s + (n ?? 0), 0);
-    const distWithFit: Partial<Record<ResolutionType, number>> = {
-      ...dist,
-      FIT: (dist.FIT ?? 0) + Math.max(0, areaReqs.length - accountedForArea),
-    };
-    const dominantOutcome = pickDominantOutcome(distWithFit);
+  // Build per-area summaries with sample cards. Each card carries its OWN
+  // outcome (not the area's dominant one) so a Configuration verdict in a
+  // mostly-FIT area still shows the correct pill.
+  const byArea = [...byModule.entries()].map(([area, areaRows]) => {
+    const dist: Partial<Record<ResolutionType, number>> = {};
+    for (const { outcome } of areaRows) {
+      dist[outcome] = (dist[outcome] ?? 0) + 1;
+    }
 
     return {
       area,
-      total: areaReqs.length,
-      byOutcome: distWithFit,
-      cards: areaReqs.slice(0, 4).map((r) => ({
+      total: areaRows.length,
+      byOutcome: dist,
+      cards: areaRows.slice(0, 4).map(({ req: r, outcome }) => ({
         reqId: r.code,
         yourAsk: r.requirementText,
-        whatSapDoes: r.solutionProviderResponse?.trim() || outcomeMeans(dominantOutcome),
-        resolutionType: dominantOutcome,
+        whatSapDoes: r.solutionProviderResponse?.trim() || outcomeMeans(outcome),
+        resolutionType: outcome,
       })),
     };
   });
@@ -610,21 +666,9 @@ export async function getFindingsDataForReport(assessmentId: string): Promise<Fi
   };
 }
 
-function pickDominantOutcome(dist: Partial<Record<ResolutionType, number>>): ResolutionType {
-  let best: ResolutionType = "FIT";
-  let bestCount = -1;
-  for (const [rt, count] of Object.entries(dist)) {
-    if ((count ?? 0) > bestCount) {
-      best = rt as ResolutionType;
-      bestCount = count ?? 0;
-    }
-  }
-  return best;
-}
-
 /** Build the shape consumed by requirementsTraceabilitySheet.
- * One row per ClientRequirement with derived outcome from the area's
- * gap distribution. */
+ * One row per ClientRequirement with derived outcome from each row's actual
+ * ClassificationVerdict bucket (refined by GapResolution where available). */
 export async function getTraceabilityDataForReport(assessmentId: string): Promise<TraceabilityRow[]> {
   const reqs = await prisma.clientRequirement.findMany({
     where: { assessmentId },
@@ -635,16 +679,18 @@ export async function getTraceabilityDataForReport(assessmentId: string): Promis
       requirementText: true,
       requirementType: true,
       solutionProviderResponse: true,
+      scopeItemIds: true,
       sortOrder: true,
     },
     orderBy: [{ module: "asc" }, { sortOrder: "asc" }],
   });
 
-  const areaOutcomes = await buildAreaOutcomeMap(assessmentId);
+  const gapTypeByScopeItem = await buildGapTypeByScopeItem(assessmentId);
 
   return reqs.map((r) => {
-    const dist = areaOutcomes.get(r.module || "Unassigned") ?? {};
-    const outcome = pickDominantOutcome(dist);
+    const firstScopeItemId = r.scopeItemIds?.split(",")[0]?.trim();
+    const gapType = firstScopeItemId ? gapTypeByScopeItem.get(firstScopeItemId) : null;
+    const outcome = deriveRowOutcome(r.solutionProviderResponse, gapType);
     return {
       reqId: r.code,
       sourceFile: `${r.module}.xlsx`,
@@ -656,7 +702,7 @@ export async function getTraceabilityDataForReport(assessmentId: string): Promis
       yourAsk: r.requirementText,
       outcome,
       whatItMeans: r.solutionProviderResponse?.trim() || outcomeMeans(outcome),
-      effortDays: 0, // TODO: link req → step → gap effortDays in a future phase
+      effortDays: 0,
       owner: "—",
       notes: "",
     };
@@ -723,6 +769,12 @@ export interface SapBestPracticeClassificationData {
     industry: string;
     country: string;
     updatedAt: Date;
+    /** SAP catalog edition the assessment is pinned to: "PUBLIC" | "PRIVATE" |
+     * "ON_PREM". Falls back to "PUBLIC" for legacy assessments missing
+     * catalogVersionId (Phase 1 backfill made this nullable). */
+    catalogEdition: string;
+    /** SAP catalog version the assessment is pinned to (e.g. "2602", "2025-FPS1"). */
+    catalogVersion: string;
   };
   totals: {
     grand: number;
@@ -759,8 +811,17 @@ export async function getSapBestPracticeClassificationData(
 ): Promise<SapBestPracticeClassificationData> {
   const assessment = await prisma.assessment.findUniqueOrThrow({
     where: { id: assessmentId },
-    select: { companyName: true, industry: true, country: true, updatedAt: true },
+    select: {
+      companyName: true,
+      industry: true,
+      country: true,
+      updatedAt: true,
+      sapVersion: true,
+      catalogVersion: { select: { edition: true, version: true } },
+    },
   });
+  const catalogEdition = assessment.catalogVersion?.edition ?? "PUBLIC";
+  const catalogVersion = assessment.catalogVersion?.version ?? assessment.sapVersion ?? "2602";
 
   const reqs = await prisma.clientRequirement.findMany({
     where: { assessmentId },
@@ -831,6 +892,8 @@ export async function getSapBestPracticeClassificationData(
       industry: assessment.industry,
       country: assessment.country,
       updatedAt: assessment.updatedAt,
+      catalogEdition,
+      catalogVersion,
     },
     totals,
     perClass,

@@ -15,6 +15,10 @@ export interface ReadinessScore {
   status: ReadinessStatus;
   findings: string[];
   recommendations: string[];
+  /** True when the category had no items to evaluate. Excluded from the
+   * overall score average and from the go/no-go red-count gate. Renders as
+   * "—" rather than a vacuous 100% green. */
+  notApplicable?: boolean;
 }
 
 export interface ReadinessScorecard {

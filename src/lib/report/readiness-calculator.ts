@@ -27,7 +27,7 @@ export interface ReadinessInput {
 }
 
 function pct(done: number, total: number): number {
-  if (total === 0) return 100;
+  if (total === 0) return 0;
   return Math.round((done / total) * 100);
 }
 
@@ -43,15 +43,26 @@ function buildCategory(
   total: number,
   itemLabel: string,
 ): ReadinessScore {
+  // N/A guard: when the category has no items to evaluate, render as N/A
+  // rather than a vacuous 100% (the prior behaviour, which masked emptiness
+  // as readiness).
+  if (total === 0) {
+    return {
+      category,
+      score: 0,
+      status: "amber",
+      notApplicable: true,
+      findings: [`No ${itemLabel} identified — category not evaluated.`],
+      recommendations: [],
+    };
+  }
+
   const score = pct(done, total);
   const status = statusFromScore(score);
   const findings: string[] = [];
   const recommendations: string[] = [];
 
-  if (total === 0) {
-    findings.push(`No ${itemLabel} identified yet.`);
-    recommendations.push(`Identify and catalog all ${itemLabel}.`);
-  } else if (done < total) {
+  if (done < total) {
     const remaining = total - done;
     findings.push(`${remaining} of ${total} ${itemLabel} still pending.`);
     if (status === "red") {
@@ -78,14 +89,18 @@ export function calculateReadinessScorecard(data: ReadinessInput): ReadinessScor
     buildCategory("Sign-Off Progress", data.completedSignOffs, data.totalSignOffs, "sign-offs"),
   ];
 
+  // N/A categories are excluded from the overall average + the red-count gate.
+  // Without this, an assessment with no stakeholders + no DM/OCM analysis was
+  // either falsely-100% (vacuous green) or counted toward the NO-GO threshold.
+  const evaluated = categories.filter((c) => !c.notApplicable);
   const overallScore =
-    categories.length > 0
-      ? Math.round(categories.reduce((sum, c) => sum + c.score, 0) / categories.length)
+    evaluated.length > 0
+      ? Math.round(evaluated.reduce((sum, c) => sum + c.score, 0) / evaluated.length)
       : 0;
 
   const overallStatus = statusFromScore(overallScore);
 
-  const redCount = categories.filter((c) => c.status === "red").length;
+  const redCount = evaluated.filter((c) => c.status === "red").length;
   let goNoGo: GoNoGoDecision;
   if (redCount === 0) {
     goNoGo = "go";
@@ -95,16 +110,18 @@ export function calculateReadinessScorecard(data: ReadinessInput): ReadinessScor
     goNoGo = "no_go";
   }
 
-  const greenCount = categories.filter((c) => c.status === "green").length;
-  const amberCount = categories.filter((c) => c.status === "amber").length;
+  const greenCount = evaluated.filter((c) => c.status === "green").length;
+  const amberCount = evaluated.filter((c) => c.status === "amber").length;
+  const naCount = categories.length - evaluated.length;
+  const naSuffix = naCount > 0 ? ` (${naCount} not applicable)` : "";
 
   let executiveSummary: string;
   if (goNoGo === "go") {
-    executiveSummary = `Assessment readiness is ${overallScore}%. All ${categories.length} categories are on track. Recommendation: GO.`;
+    executiveSummary = `Assessment readiness is ${overallScore}%. All ${evaluated.length} evaluated categories are on track${naSuffix}. Recommendation: GO.`;
   } else if (goNoGo === "conditional_go") {
-    executiveSummary = `Assessment readiness is ${overallScore}%. ${greenCount} categories green, ${amberCount} amber, ${redCount} red. Recommendation: CONDITIONAL GO — address red areas before proceeding.`;
+    executiveSummary = `Assessment readiness is ${overallScore}%. ${greenCount} categories green, ${amberCount} amber, ${redCount} red${naSuffix}. Recommendation: CONDITIONAL GO — address red areas before proceeding.`;
   } else {
-    executiveSummary = `Assessment readiness is ${overallScore}%. ${redCount} categories are red. Recommendation: NO GO — significant remediation required.`;
+    executiveSummary = `Assessment readiness is ${overallScore}%. ${redCount} categories are red${naSuffix}. Recommendation: NO GO — significant remediation required.`;
   }
 
   return {
