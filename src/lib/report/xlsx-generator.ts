@@ -171,7 +171,15 @@ export function stepDetailSheet(data: Array<Record<string, unknown>>): SheetConf
   };
 }
 
-export function gapRegisterSheet(data: Array<Record<string, unknown>>): SheetConfig {
+export function gapRegisterSheet(
+  data: Array<Record<string, unknown>>,
+  currencyCode: string = "USD",
+): SheetConfig {
+  // Excel numFmt: literal currency prefix in double-quotes followed by a
+  // space, then the number mask. Works in any Excel locale without depending
+  // on system currency settings.
+  const cur = currencyCode.replace(/"/g, "").trim() || "USD";
+  const currencyFmt = `"${cur} "#,##0`;
   return {
     name: "Gap Register",
     columns: [
@@ -182,8 +190,8 @@ export function gapRegisterSheet(data: Array<Record<string, unknown>>): SheetCon
       { header: "Resolution Type", key: "resolutionType", width: 18 },
       { header: "Resolution Description", key: "resolutionDescription", width: 40 },
       { header: "Effort Days", key: "effortDays", width: 12, numFmt: NUMFMT_THOUSANDS },
-      { header: "One-time Cost", key: "oneTimeCost", width: 14, numFmt: '"$"#,##0' },
-      { header: "Recurring Cost", key: "recurringCost", width: 14, numFmt: '"$"#,##0' },
+      { header: `One-time Cost (${cur})`, key: "oneTimeCost", width: 16, numFmt: currencyFmt },
+      { header: `Recurring Cost (${cur})`, key: "recurringCost", width: 16, numFmt: currencyFmt },
       { header: "Risk Level", key: "riskLevel", width: 12 },
       { header: "Upgrade Impact", key: "upgradeImpact", width: 30 },
       { header: "Decided By", key: "decidedBy", width: 25 },
@@ -663,13 +671,15 @@ function labelToTier(label: string): DotTier | null {
   return null;
 }
 
-// ── SAP Best-Practice Classification (independent verdict per 2602) ──────
+// ── SAP Best-Practice Classification (independent verdict) ──────────────
 //
 // Multi-sheet workbook reading exclusively from the analyzer's verdict in
 // `ClientRequirement.solutionProviderResponse` (see report-data.ts
 // `getSapBestPracticeClassificationData`). Stays separate from the
 // existing 16 reports — those aggregate analyst-output (StepResponse +
 // GapResolution) and we never want to mix the two streams in one chart.
+// Catalog edition + version come from the data shape — column headers and
+// labels are built dynamically.
 
 import type {
   SapBestPracticeClassificationData,
@@ -692,18 +702,20 @@ function classificationRow(r: ClassificationRow): Record<string, unknown> {
   };
 }
 
-const ROW_COLUMNS = [
-  { header: "Source Module", key: "module", width: 24 },
-  { header: "Code", key: "code", width: 12 },
-  { header: "Class", key: "requirementClass", width: 12 },
-  { header: "Type", key: "requirementType", width: 14 },
-  { header: "Requirement", key: "requirementText", width: 60 },
-  { header: "Classification", key: "classification", width: 20 },
-  { header: "SAP Module", key: "sapModule", width: 18 },
-  { header: "2602 Scope ID(s)", key: "scopeItemIds", width: 22 },
-  { header: "2602 Scope Name(s)", key: "scopeItemNames", width: 50 },
-  { header: "Aptus Remarks", key: "remarks", width: 70 },
-];
+function buildRowColumns(catalogVersion: string) {
+  return [
+    { header: "Source Module", key: "module", width: 24 },
+    { header: "Code", key: "code", width: 12 },
+    { header: "Class", key: "requirementClass", width: 12 },
+    { header: "Type", key: "requirementType", width: 14 },
+    { header: "Requirement", key: "requirementText", width: 60 },
+    { header: "Classification", key: "classification", width: 20 },
+    { header: "SAP Module", key: "sapModule", width: 18 },
+    { header: `${catalogVersion} Scope ID(s)`, key: "scopeItemIds", width: 22 },
+    { header: `${catalogVersion} Scope Name(s)`, key: "scopeItemNames", width: 50 },
+    { header: "Aptus Remarks", key: "remarks", width: 70 },
+  ];
+}
 
 function summaryRows(data: SapBestPracticeClassificationData): Array<Record<string, unknown>> {
   const rows: Array<Record<string, unknown>> = [];
@@ -754,6 +766,7 @@ export function sapBestPracticeClassificationSheets(
   data: SapBestPracticeClassificationData,
 ): SheetConfig[] {
   const sheets: SheetConfig[] = [];
+  const rowColumns = buildRowColumns(data.assessment.catalogVersion);
 
   sheets.push({
     name: "Summary",
@@ -772,32 +785,32 @@ export function sapBestPracticeClassificationSheets(
 
   sheets.push({
     name: "Out-of-the-Box (O)",
-    columns: ROW_COLUMNS,
+    columns: rowColumns,
     rows: data.byBucket.O.map(classificationRow),
   });
 
   sheets.push({
     name: "Configuration (C)",
-    columns: ROW_COLUMNS,
+    columns: rowColumns,
     rows: data.byBucket.C.map(classificationRow),
   });
 
   sheets.push({
     name: "Gaps (G)",
-    columns: ROW_COLUMNS,
+    columns: rowColumns,
     rows: data.byBucket.G.map(classificationRow),
   });
 
   sheets.push({
     // ExcelJS forbids / : * ? \ [ ] in sheet names — keep it slash-free.
     name: "Out of Scope (NA)",
-    columns: ROW_COLUMNS,
+    columns: rowColumns,
     rows: data.byBucket.NA.map(classificationRow),
   });
 
   sheets.push({
     name: "Pending Classification",
-    columns: ROW_COLUMNS,
+    columns: rowColumns,
     rows: data.byBucket.Pending.map(classificationRow),
   });
 

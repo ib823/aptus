@@ -89,14 +89,21 @@ export async function GET(
     getSapBestPracticeClassificationData(assessmentId),
   ]);
 
-  // Generate readiness scorecard data
-  const [intCount, dmCount, ocmCount, stakeholderCount, signOffCount] = await Promise.all([
+  // Generate readiness scorecard data + fetch the assessment metadata that
+  // downstream report generators need (currencyCode for gap-register currency
+  // formatting, etc.).
+  const [intCount, dmCount, ocmCount, stakeholderCount, signOffCount, assessmentMeta] = await Promise.all([
     prisma.integrationPoint.count({ where: { assessmentId } }),
     prisma.dataMigrationObject.count({ where: { assessmentId } }),
     prisma.ocmImpact.count({ where: { assessmentId } }),
     prisma.assessmentStakeholder.count({ where: { assessmentId } }),
     prisma.assessmentSignOff.count({ where: { assessmentId } }),
+    prisma.assessment.findUnique({
+      where: { id: assessmentId },
+      select: { currencyCode: true },
+    }),
   ]);
+  const currencyCode = assessmentMeta?.currencyCode ?? "USD";
 
   const analyzedInt = await prisma.integrationPoint.count({
     where: { assessmentId, status: { not: "identified" } },
@@ -110,8 +117,10 @@ export async function GET(
   const activeStakeholders = await prisma.assessmentStakeholder.count({
     where: { assessmentId, role: { not: "observer" } },
   });
+  // A sign-off counts as completed only when the signatory has acknowledged.
+  // The prior version mirrored the "total" half exactly, always reporting 100%.
   const completedSignOffs = await prisma.assessmentSignOff.count({
-    where: { assessmentId },
+    where: { assessmentId, acknowledgement: true },
   });
 
   const readinessInput: ReadinessInput = {
@@ -163,7 +172,7 @@ export async function GET(
     generateXlsx([requirementsTraceabilitySheet(traceabilityData)]),
     generateXlsx([scopeCatalogSheet(scopeData)]),
     generateXlsx([stepDetailSheet(stepData)]),
-    generateXlsx([gapRegisterSheet(gapData)]),
+    generateXlsx([gapRegisterSheet(gapData, currencyCode)]),
     generateXlsx([configWorkbookSheet(configData)]),
     generateXlsx(integrationRegisterSheets(integrationData)),
     generateXlsx(dataMigrationRegisterSheets(dmData)),
@@ -192,7 +201,7 @@ export async function GET(
     where: { id: assessmentId },
     select: {
       companyName: true, industry: true, country: true,
-      companySize: true, updatedAt: true,
+      companySize: true, updatedAt: true, currencyCode: true,
     },
   });
   const signOffPdf = generateSignOffPdf(

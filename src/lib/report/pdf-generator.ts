@@ -248,16 +248,21 @@ export function generateExecutiveSummaryPdf(
   ]);
   renderCoverLead(doc,
     `This document summarizes the SAP S/4HANA fit-to-standard assessment for ${summary.assessment.companyName}, ` +
-    `covering ${formatNumber(summary.steps.total)} business requirements across ${formatNumber(summary.scope.selected)} in-scope process items. ` +
+    `covering ${formatNumber(summary.steps.reviewed)} business requirements across ${formatNumber(summary.scope.selected)} in-scope process items. ` +
     `It states the verdict, the effort estimate, and the steering-committee-level recommendations.`,
   );
 
   // Verdict block — bottom-anchored at y = ph - 22 - blockHeight
   const ph = doc.internal.pageSize.getHeight();
   const verdictTop = ph - 22 - 60;
-  const ootbPct = summary.steps.total > 0 ? Math.round((summary.steps.fit / summary.steps.total) * 100) : 0;
-  const cfgPct  = summary.steps.total > 0 ? Math.round((summary.steps.configure / summary.steps.total) * 100) : 0;
-  const gapPct  = summary.steps.total > 0 ? Math.round((summary.steps.gap / summary.steps.total) * 100) : 0;
+  // Verdict pills are "% of analysed work that is FIT/CONFIGURE/GAP" — divide
+  // by the analytical universe (reviewed), not the catalog's full ProcessStep
+  // population (which can be 20× larger and would dilute the verdict to ~3%
+  // for the same 1:1 review).
+  const verdictBase = summary.steps.reviewed;
+  const ootbPct = verdictBase > 0 ? Math.round((summary.steps.fit / verdictBase) * 100) : 0;
+  const cfgPct  = verdictBase > 0 ? Math.round((summary.steps.configure / verdictBase) * 100) : 0;
+  const gapPct  = verdictBase > 0 ? Math.round((summary.steps.gap / verdictBase) * 100) : 0;
   const reviewedPct = summary.steps.total > 0 ? Math.round((summary.steps.reviewed / summary.steps.total) * 100) : 0;
 
   doc.setDrawColor(228, 228, 231);
@@ -287,7 +292,7 @@ export function generateExecutiveSummaryPdf(
   doc.setFontSize(10);
   doc.setTextColor(11, 11, 15);
   doc.text(
-    `${formatNumber(summary.steps.total)} requirements analysed across ${formatNumber(summary.scope.selected)} in-scope items. ` +
+    `${formatNumber(summary.steps.reviewed)} requirements analysed across ${formatNumber(summary.scope.selected)} in-scope items. ` +
     `Estimated effort: ${formatNumber(summary.gaps.totalEffortDays)} days.`,
     28, verdictTop + 44,
   );
@@ -337,7 +342,7 @@ export function generateExecutiveSummaryPdf(
       [outcomeLabel("CONFIGURE"), formatNumber(summary.steps.configure), `${cfgPct}%`],
       ["Needs work",              formatNumber(summary.steps.gap),       `${gapPct}%`],
       ["Not applicable",          formatNumber(summary.steps.na),
-        `${summary.steps.total > 0 ? Math.round((summary.steps.na / summary.steps.total) * 100) : 0}%`],
+        `${verdictBase > 0 ? Math.round((summary.steps.na / verdictBase) * 100) : 0}%`],
     ],
     theme: "grid",
     headStyles: aptusHeadStyles(),
@@ -567,7 +572,7 @@ export function generateReadinessScorecardPdf(
   scorecard: {
     overallScore: number;
     overallStatus: string;
-    categories: Array<{ category: string; score: number; status: string; findings: string[]; recommendations: string[] }>;
+    categories: Array<{ category: string; score: number; status: string; findings: string[]; recommendations: string[]; notApplicable?: boolean }>;
     goNoGo: string;
     executiveSummary: string;
   },
@@ -640,8 +645,8 @@ export function generateReadinessScorecardPdf(
     head: [["Category", "Score", "Status"]],
     body: scorecard.categories.map((c) => [
       c.category,
-      `${c.score} / 100`,
-      c.status.toUpperCase(),
+      c.notApplicable ? "—" : `${c.score} / 100`,
+      c.notApplicable ? "N/A" : c.status.toUpperCase(),
     ]),
     theme: "grid",
     headStyles: aptusHeadStyles(),
@@ -654,6 +659,7 @@ export function generateReadinessScorecardPdf(
         if (val === "GREEN") data.cell.styles.textColor = rgb(DOT_HEX.success);
         if (val === "AMBER") data.cell.styles.textColor = rgb(DOT_HEX.warning);
         if (val === "RED")   data.cell.styles.textColor = rgb(DOT_HEX.danger);
+        if (val === "N/A")   data.cell.styles.textColor = rgb(DOT_HEX.neutral);
       }
     },
   });
@@ -688,8 +694,13 @@ export function generateReadinessScorecardPdf(
     doc.setFont("helvetica", "bold");
     doc.setTextColor(11, 11, 15);
     doc.text(cat.category, 20, y);
-    const tier: DotTier = cat.status === "GREEN" ? "success" : cat.status === "AMBER" ? "warning" : cat.status === "RED" ? "danger" : "neutral";
-    drawPill(doc, pw - 60, y, `${cat.score} / 100`, tier);
+    const tier: DotTier = cat.notApplicable ? "neutral"
+      : cat.status === "green" ? "success"
+      : cat.status === "amber" ? "warning"
+      : cat.status === "red" ? "danger"
+      : "neutral";
+    const pillLabel = cat.notApplicable ? "N/A" : `${cat.score} / 100`;
+    drawPill(doc, pw - 60, y, pillLabel, tier);
     y += 4;
     doc.setDrawColor(11, 11, 15);
     doc.setLineWidth(0.3);
@@ -1291,11 +1302,12 @@ function isResolutionType(s: string): s is ResolutionType {
 // custom chart accents using the client-accent override pattern.
 export { brandColor, type BrandRole };
 
-// ── SAP Best-Practice Classification (independent verdict per 2602) ──────
+// ── SAP Best-Practice Classification (independent verdict) ──────────────
 //
 // PDF for the analyzer's independent O / C / G classification. Stays
 // completely separate from the analyst-output reports above. The shape is
 // produced by report-data.ts `getSapBestPracticeClassificationData`.
+// Catalog edition + version come from the data shape — no hardcoded "2602".
 
 import type {
   SapBestPracticeClassificationData,
@@ -1308,9 +1320,26 @@ function pct(part: number, total: number): string {
   return `${Math.round((part / total) * 100)}%`;
 }
 
+/** Format the catalog reference shown across the report.
+ * Examples: "PRIVATE 2025-FPS1", "PUBLIC 2602", "ON-PREM 2023". */
+function formatCatalogRef(edition: string, version: string): string {
+  const ed = edition === "ON_PREM" ? "ON-PREM" : edition.toUpperCase();
+  return `${ed} ${version}`;
+}
+
+/** Format the catalog baseline phrase for prose. */
+function formatCatalogBaseline(edition: string, version: string): string {
+  const ed = edition === "PUBLIC" ? "Public Edition"
+    : edition === "PRIVATE" ? "Private Edition"
+    : edition === "ON_PREM" ? "On-Premise" : edition;
+  return `SAP S/4HANA Cloud ${ed} ${version}`;
+}
+
 /** Render the verdict block — the executive O / C / G card. */
 function renderVerdictBlock(
-  doc: jsPDF, totals: SapBestPracticeClassificationData["totals"],
+  doc: jsPDF,
+  totals: SapBestPracticeClassificationData["totals"],
+  catalogRef: string,
 ): void {
   const pw = doc.internal.pageSize.getWidth();
   const ph = doc.internal.pageSize.getHeight();
@@ -1322,7 +1351,7 @@ function renderVerdictBlock(
 
   doc.setFontSize(9);
   doc.setTextColor(82, 82, 91);
-  doc.text("INDEPENDENT VERDICT — SAP S/4HANA Cloud 2602 protocol", 28, top + 8);
+  doc.text(`INDEPENDENT VERDICT — SAP S/4HANA Cloud ${catalogRef} protocol`, 28, top + 8);
 
   const aptus = aptusRgb();
   doc.setTextColor(aptus[0], aptus[1], aptus[2]);
@@ -1343,7 +1372,7 @@ function renderVerdictBlock(
   doc.setTextColor(11, 11, 15);
   const naPending = totals.NA + totals.Pending;
   doc.text(
-    `${formatNumber(totals.grand)} requirements analysed against the 2602 catalog. ` +
+    `${formatNumber(totals.grand)} requirements analysed against the ${catalogRef} catalog. ` +
     `${formatNumber(totals.O)} OOTB · ${formatNumber(totals.C)} Configuration · ${formatNumber(totals.G)} Gap${naPending > 0 ? ` · ${formatNumber(naPending)} N/A or Pending` : ""}.`,
     28, top + 44,
   );
@@ -1473,6 +1502,8 @@ export function generateSapBestPracticeClassificationPdf(
 ): Uint8Array {
   const b = branding ?? DEFAULT_BRANDING;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const catalogRef = formatCatalogRef(data.assessment.catalogEdition, data.assessment.catalogVersion);
+  const catalogBaseline = formatCatalogBaseline(data.assessment.catalogEdition, data.assessment.catalogVersion);
 
   // Page 1 — Cover + verdict block
   renderCover(doc, b, "SAP Best-Practice Classification", data.assessment.companyName);
@@ -1482,18 +1513,18 @@ export function generateSapBestPracticeClassificationPdf(
     ["Report date", data.assessment.updatedAt.toLocaleDateString("en-US", {
       year: "numeric", month: "long", day: "numeric",
     })],
-    ["Catalog baseline", "SAP S/4HANA Cloud Public Edition 2602"],
+    ["Catalog baseline", catalogBaseline],
     ["Prepared by", "ABeam Consulting (Aptus)"],
   ]);
   renderCoverLead(doc,
     `Aptus's independent classification of every requirement submitted by ` +
-    `${data.assessment.companyName}, evaluated against the SAP S/4HANA Cloud ` +
-    `Public Edition 2602 catalog. Each requirement is bucketed as Out-of-the-Box ` +
+    `${data.assessment.companyName}, evaluated against the ${catalogBaseline} ` +
+    `catalog. Each requirement is bucketed as Out-of-the-Box ` +
     `(O), Configuration (C), or Gap (G) — with grounded scope-item references ` +
     `for O and C, and explicit categorization for every G. Vendor self-` +
     `classification was deliberately not consulted.`,
   );
-  renderVerdictBlock(doc, data.totals);
+  renderVerdictBlock(doc, data.totals, catalogRef);
 
   // Page 2 — Per-class + per-module breakdown
   doc.addPage();
@@ -1542,7 +1573,7 @@ export function generateSapBestPracticeClassificationPdf(
   renderRequirementSection(
     doc,
     "Out-of-the-Box (O)",
-    "Requirements satisfied by the SAP 2602 baseline without configuration. The 2602 Scope Items column lists the specific best-practice scope items that cover each requirement.",
+    `Requirements satisfied by the SAP ${catalogRef} baseline without configuration. The Scope Items column lists the specific best-practice scope items that cover each requirement.`,
     data.byBucket.O,
     { showScopeItems: true, showRemarks: false },
   );
@@ -1550,7 +1581,7 @@ export function generateSapBestPracticeClassificationPdf(
   renderRequirementSection(
     doc,
     "Configuration (C)",
-    "Requirements satisfied by 2602 with in-app configuration only — SSCUI, Key User Extensibility, Output Management, Manage Workflows, Adapt UI, Adobe Forms, or Communication Arrangements. The Aptus Remarks column names the specific configuration mechanism for each requirement.",
+    `Requirements satisfied by ${catalogRef} with in-app configuration only — SSCUI, Key User Extensibility, Output Management, Manage Workflows, Adapt UI, Adobe Forms, or Communication Arrangements. The Aptus Remarks column names the specific configuration mechanism for each requirement.`,
     data.byBucket.C,
     { showScopeItems: true, showRemarks: true },
   );
@@ -1558,7 +1589,7 @@ export function generateSapBestPracticeClassificationPdf(
   renderRequirementSection(
     doc,
     "Gaps (G) — dedicated section",
-    "Requirements that cannot be met by the 2602 baseline. Each row names the separate-licensed product (SuccessFactors, Ariba, SAC, Commerce, etc.) or 3rd-party tool (Vertex, ONESOURCE, etc.) that would close the gap, and notes any partial workaround within 2602.",
+    `Requirements that cannot be met by the ${catalogRef} baseline. Each row names the separate-licensed product (SuccessFactors, Ariba, SAC, Commerce, etc.) or 3rd-party tool (Vertex, ONESOURCE, etc.) that would close the gap, and notes any partial workaround within ${catalogRef}.`,
     data.byBucket.G,
     { showScopeItems: false, showRemarks: true },
   );
@@ -1567,7 +1598,7 @@ export function generateSapBestPracticeClassificationPdf(
     renderRequirementSection(
       doc,
       "Out of scope (N/A)",
-      "Requirements that are not capability questions for the 2602 catalog — typically vendor commercial pre-qualification, ESG offerings, vendor track-record, or general policy statements. Listed for completeness but not classified as O / C / G.",
+      `Requirements that are not capability questions for the ${catalogRef} catalog — typically vendor commercial pre-qualification, ESG offerings, vendor track-record, or general policy statements. Listed for completeness but not classified as O / C / G.`,
       data.byBucket.NA,
       { showScopeItems: false, showRemarks: true },
     );
