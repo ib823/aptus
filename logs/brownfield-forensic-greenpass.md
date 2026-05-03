@@ -50,9 +50,26 @@ called ODATAV4+Private that the canonical list excluded).
 - of which `status=Released`: **394**
 - of which `status=Deprecated`: **30**
 - (no BETA for this product)
+- `category` populated from canonical rawProductCategory: **424 rows** (added via v2 merge)
+
+**v2 enrichment (2026-05-03 follow-up):** Chrome-Claude returned a v2
+JSON with the catalogDetail endpoint (`/odata/1.0/catalog.svc/APIContent.APIs`)
+joined in, populating `rawProductCategory` for all 424 rows. Distinct
+categories: S4HANAOPAPI (392), INSURANCE (21), Intelligent Clinical Supply
+Management (5), S4HANAOPAPIUTL (3), S4SCSD_DS_API (2), S4HANACloudPrivateEditionAPI (1).
+`scopeItemCodes` confirmed `null` at the source (not retrievable from
+api.sap.com for Cloud PE APIs per chrome-claude inspection of both
+APIContent.APIs and ContentEntities.ContentPackages — that field would
+need a different SAP system to resolve).
 
 Delta report: `logs/api-hub-canonical-vs-heuristic.md`
-Source file: `/workspaces/aptus/Conversion/api-hub-s4hcpe-odatav4.json`
+Source files: `/workspaces/aptus/Conversion/api-hub-s4hcpe-odatav4.json` (v1, basic)
+              `/workspaces/aptus/Conversion/api-hub-s4hcpe-odatav4 v2.json` (v2, with category)
+
+**Identity confirmation:** `fetchedBy` field reads
+"S-User S0025693350 (browser session: ibaharudin@abeam.com)". Chrome-Claude's
+earlier "colleague's account" flag was a misread — both the S-User and
+email are user Ikmal Baharudin's. No identity ambiguity.
 
 ---
 
