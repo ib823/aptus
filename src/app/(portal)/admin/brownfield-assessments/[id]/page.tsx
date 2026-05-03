@@ -96,6 +96,10 @@ export default async function BrownfieldAssessmentDetailPage({
     orderBy: [{ snapshotId: "asc" }, { sortOrder: "asc" }],
   });
 
+  const verdictCount = await prisma.brownfieldVerdict.count({
+    where: { brownfieldAssessmentId: id, isCurrent: true },
+  });
+
   const findingCategoryGroups = await prisma.ewaFinding.groupBy({
     by: ["category"],
     where: { snapshot: { brownfieldAssessmentId: id } },
@@ -202,7 +206,7 @@ export default async function BrownfieldAssessmentDetailPage({
       </div>
 
       {/* Counts */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-4 gap-4 mb-8">
         <div className="bg-card rounded-lg border border-border p-6 text-center">
           <p className="text-3xl font-bold text-foreground">
             {assessment.baselineSnapshots.length}
@@ -219,6 +223,13 @@ export default async function BrownfieldAssessmentDetailPage({
           </p>
           <p className="text-sm text-muted-foreground mt-1">Red Severity</p>
         </div>
+        <Link
+          href={`/admin/brownfield-assessments/${id}/verdicts`}
+          className="bg-card rounded-lg border border-border p-6 text-center hover:border-blue-500 hover:shadow-sm transition-all"
+        >
+          <p className="text-3xl font-bold text-foreground">{verdictCount.toLocaleString()}</p>
+          <p className="text-sm text-muted-foreground mt-1">Verdicts →</p>
+        </Link>
       </div>
 
       {/* Snapshots section */}
