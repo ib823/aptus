@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Home, Building2, BarChart3, Puzzle, ArrowLeftRight,
   Database, Upload, CheckCircle, Landmark, Users, Shield, List, MessageCircleQuestion,
+  Layers, Activity,
 } from "lucide-react";
 
 const NAV_SECTIONS = [
@@ -29,6 +30,13 @@ const NAV_SECTIONS = [
       { href: "/admin/catalog", label: "SAP Catalog", icon: Database },
       { href: "/admin/ingest", label: "ZIP Ingestion", icon: Upload },
       { href: "/admin/verify", label: "Data Verification", icon: CheckCircle },
+    ],
+  },
+  {
+    label: "Brownfield",
+    items: [
+      { href: "/admin/brownfield-catalogs", label: "Brownfield Catalogs", icon: Layers },
+      { href: "/admin/brownfield-assessments", label: "Brownfield Assessments", icon: Activity },
     ],
   },
   {

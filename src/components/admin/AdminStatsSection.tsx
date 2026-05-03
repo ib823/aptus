@@ -1,13 +1,17 @@
 import { prisma } from "@/lib/db/prisma";
 import { getCatalogStats, getIntelligenceStats } from "@/lib/db/cached-queries";
 import { formatNumber } from "@/lib/format/number";
-import { Building2, BarChart3, Puzzle, ArrowLeftRight, Database, FileText, Settings, Activity } from "lucide-react";
+import { Building2, BarChart3, Puzzle, ArrowLeftRight, Database, FileText, Settings, Activity, Layers, Wrench } from "lucide-react";
 
 export async function AdminStatsSection() {
-  const [assessments, catalog, intelligence] = await Promise.all([
+  const [assessments, catalog, intelligence, brownfieldCatalogs, simplificationItems, brownfieldAssessments, ewaFindings] = await Promise.all([
     prisma.assessment.findMany({ where: { deletedAt: null }, select: { status: true } }),
     getCatalogStats(),
     getIntelligenceStats(),
+    prisma.brownfieldCatalogVersion.count(),
+    prisma.simplificationItem.count(),
+    prisma.brownfieldAssessment.count(),
+    prisma.ewaFinding.count(),
   ]);
 
   const totalAssessments = assessments.length;
@@ -72,6 +76,35 @@ export async function AdminStatsSection() {
             <ArrowLeftRight className="w-5 h-5 text-muted-foreground/60 mb-2" />
             <p className="text-xl font-bold text-foreground">{formatNumber(adaptPatternCount)}</p>
             <p className="text-xs text-muted-foreground">Adaptation Patterns</p>
+          </a>
+        </div>
+      </div>
+
+      {/* Brownfield (ECC → S/4HANA conversion) layer */}
+      <div className="bg-card rounded-lg border p-6 mt-8">
+        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">
+          Brownfield (ECC → S/4HANA Conversion)
+        </h3>
+        <div className="grid grid-cols-4 gap-4">
+          <a href="/admin/brownfield-catalogs" className="block bg-muted rounded-lg p-4 hover:bg-muted/80 transition-colors">
+            <Layers className="w-5 h-5 text-muted-foreground/60 mb-2" />
+            <p className="text-xl font-bold text-foreground">{formatNumber(brownfieldCatalogs)}</p>
+            <p className="text-xs text-muted-foreground">SIC Catalogs</p>
+          </a>
+          <a href="/admin/brownfield-catalogs" className="block bg-muted rounded-lg p-4 hover:bg-muted/80 transition-colors">
+            <Database className="w-5 h-5 text-muted-foreground/60 mb-2" />
+            <p className="text-xl font-bold text-foreground">{formatNumber(simplificationItems)}</p>
+            <p className="text-xs text-muted-foreground">Simplification Items</p>
+          </a>
+          <a href="/admin/brownfield-assessments" className="block bg-muted rounded-lg p-4 hover:bg-muted/80 transition-colors">
+            <Wrench className="w-5 h-5 text-muted-foreground/60 mb-2" />
+            <p className="text-xl font-bold text-foreground">{formatNumber(brownfieldAssessments)}</p>
+            <p className="text-xs text-muted-foreground">Conversion Assessments</p>
+          </a>
+          <a href="/admin/brownfield-assessments" className="block bg-muted rounded-lg p-4 hover:bg-muted/80 transition-colors">
+            <Activity className="w-5 h-5 text-muted-foreground/60 mb-2" />
+            <p className="text-xl font-bold text-foreground">{formatNumber(ewaFindings)}</p>
+            <p className="text-xs text-muted-foreground">EWA Findings</p>
           </a>
         </div>
       </div>
