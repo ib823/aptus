@@ -3196,6 +3196,17 @@ model BrownfieldGuide {
   /// Conversion-path filter, e.g. "BROWNFIELD_SUM" | "SELECTIVE_DATA_TRANSITION".
   /// NULL = generic (applies to any path).
   conversionPath           String?
+  /// Asset type tag for partner-library content, e.g. "whitepaper" | "slides"
+  /// | "case_study" | "runbook" | "accelerator". NULL when not categorizable
+  /// (e.g. SAP-published PDFs that aren't from a partner library).
+  assetType                String?
+  /// SAP program / catalog this asset belongs to, e.g.
+  /// "SAP Customer Evolution Program" | "PartnerEdge S/4HANA Movement".
+  /// NULL when sourced directly from help.sap.com.
+  sourceProgram            String?
+  /// SAP-published date as printed on the asset's library card. NULL if not
+  /// stated by SAP.
+  sapPublishedDate         DateTime?
   /// Free-form notes captured at ingest time (e.g. crawl depth, partial ingest).
   notes                    String?   @db.Text
   parsedAt                 DateTime  @default(now())
@@ -3207,6 +3218,8 @@ model BrownfieldGuide {
   @@index([industryTag])
   @@index([conversionPath])
   @@index([mimeType])
+  @@index([assetType])
+  @@index([sourceProgram])
 }
 
 /// Hierarchical TOC node within a BrownfieldGuide. Pages are 1-indexed.

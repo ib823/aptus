@@ -1,0 +1,89 @@
+{
+  "source": "partneredge.sap.com — SAP Customer Evolution Program (formerly 'S/4HANA Movement')",
+  "fetchedAt": "2026-05-03T09:11:00Z",
+  "fetchedBy": "PartnerEdge user ibaharudin@abeam.com (ABeam Consulting Malaysia) — equivalent to S-User S0025693350; SAML federation maps both to the same identity",
+  "filesLocation": "/workspaces/aptus/Conversion/",
+  "assets": [
+    {
+      "filename": "Sales_Quick_Guide_for_Partners_SAPCustomerEvolutionProgram.pdf",
+      "title": "Sales Quick Guide: SAP Customer Evolution Program",
+      "sourceUrl": "https://partneredge.sap.com/en/library/assets/products/ent_mng/dgl/35/41/SAP1013541.html",
+      "fileSizeBytes": 292762,
+      "assetType": "whitepaper",
+      "sapPublishedDate": null,
+      "description": "Brochure providing sales guidance on why and how to move customers' legacy systems to SAP S/4HANA Cloud under the Customer Evolution Program (CEP)."
+    },
+    {
+      "filename": "SAP_Customer_Evolution_Kit_Partner_Value_Proposition_v2.pdf",
+      "title": "SAP Customer Evolution Kit — Value Proposition for Partners",
+      "sourceUrl": "https://partneredge.sap.com/en/library/assets/partnership/dgl/06/08/SAP1080608.html",
+      "fileSizeBytes": 191315,
+      "assetType": "slides",
+      "sapPublishedDate": "2024-08-14",
+      "description": "Sales presentation describing how partners leverage the SAP Customer Evolution Kit — a free, modular engagement model with pre-defined activities — to accelerate customers' transformation to cloud ERP."
+    },
+    {
+      "filename": "Partner_Led_Migrations_SAP_ECS_supported_migration_approaches.pdf",
+      "title": "Partner-Led Migrations — SAP Enterprise Cloud Services Supported Migration Approaches",
+      "sourceUrl": "https://partneredge.sap.com/en/library/assets/partnership/dgl/53/29/SAP1085329.html",
+      "fileSizeBytes": 3173831,
+      "assetType": "slides",
+      "sapPublishedDate": "2026-01-30",
+      "description": "Sales presentation detailing brownfield conversion scenarios and the migration / conversion approaches supported by SAP Enterprise Cloud Services. Highly relevant to brownfield conversion engagements."
+    },
+    {
+      "filename": "Using_BTM_Suite_within_SAP_Activate_methodology.pdf",
+      "title": "Using the Business Transformation Management Suite within the SAP Activate Methodology",
+      "sourceUrl": "https://partneredge.sap.com/en/library/assets/partnership/dgl/19/86/SAP1221986.html",
+      "fileSizeBytes": 4467555,
+      "assetType": "slides",
+      "sapPublishedDate": "2026-04-17",
+      "description": "Sales presentation on Business Transformation Management challenges before, during, and after S/4HANA go-live, mapped to the SAP Activate methodology phases. Covers transition objectives, prioritisation, and stakeholder management."
+    },
+    {
+      "filename": "HB_Fuller_clean_core_strategy_M_and_A.pdf",
+      "title": "H.B. Fuller: Adhering to a clean core strategy on cloud ERP to execute a merger and acquisition strategy",
+      "sourceUrl": "https://partneredge.sap.com/en/library/assets/products/tech_plat/dgl/48/89/SAP1224889.html",
+      "fileSizeBytes": 444871,
+      "assetType": "case_study",
+      "sapPublishedDate": "2025-07-25",
+      "description": "Customer Success Story covering H.B. Fuller's large-scale brownfield migration to SAP S/4HANA Cloud Private Edition using RISE with SAP and SAP Services & Support — clean core strategy underpinning M&A execution."
+    },
+    {
+      "filename": "YASH_Technologies_data_driven_transition.pdf",
+      "title": "YASH Technologies: Adopting data-driven guidance for transitioning to modern ERP in the private cloud",
+      "sourceUrl": "https://partneredge.sap.com/en/library/assets/products/ent_mng/dgl/73/66/SAP1267366.html",
+      "fileSizeBytes": 89664,
+      "assetType": "case_study",
+      "sapPublishedDate": "2025-12-18",
+      "description": "Business Transformation Study showing how YASH Technologies accelerated their move to cloud ERP using a guided data-migration approach via the SAP Business Transformation Center."
+    },
+    {
+      "filename": "KUREHA_phased_transition_full_historical_data.pdf",
+      "title": "KUREHA Corporation: Taking a phased transition to a next-gen business foundation with full historical data",
+      "sourceUrl": "https://partneredge.sap.com/en/library/assets/solutions/dgl/08/87/SAP1030887.html",
+      "fileSizeBytes": 470742,
+      "assetType": "case_study",
+      "sapPublishedDate": "2025-11-13",
+      "description": "Business Transformation Study covering KUREHA's company-code-based phased migration of historical data from legacy ECC to S/4HANA with minimal business disruption."
+    },
+    {
+      "filename": "Migrated_data_validation_tight_timeframe.pdf",
+      "title": "How can companies validate their migrated data in a transition to a new ERP — SAP S/4HANA — in a tight timeframe?",
+      "sourceUrl": "https://partneredge.sap.com/en/library/assets/products/data_mng/dgl/05/20/SAP1150520.html",
+      "fileSizeBytes": 148769,
+      "assetType": "case_study",
+      "sapPublishedDate": "2026-02-25",
+      "description": "Business Transformation Study on a multinational consumer-goods company's 48-hour ERP cutover with high-quality data validation supported by SAP Services & Support."
+    },
+    {
+      "filename": "Clean_core_extensibility_for_SAP_S4HANA_Cloud.pdf",
+      "title": "Clean Core Extensibility for SAP S/4HANA Cloud",
+      "sourceUrl": "https://partneredge.sap.com/en/library/assets/solutions/dgl/55/56/SAP1125556.html",
+      "fileSizeBytes": 3798708,
+      "assetType": "whitepaper",
+      "sapPublishedDate": "2025-10-30",
+      "description": "Thought leadership paper explaining the clean core strategy and SAP S/4HANA Cloud extensibility model — central to brownfield-to-cloud conversion design decisions."
+    }
+  ]
+}
