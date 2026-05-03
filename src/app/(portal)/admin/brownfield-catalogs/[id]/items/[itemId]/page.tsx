@@ -29,6 +29,7 @@ export default async function SimplificationItemDetailPage({ params }: PageProps
       brownfieldCatalog: {
         select: { id: true, label: true, snapshotDate: true },
       },
+      narrative: true,
     },
   });
   if (!item || item.catalogVersionId !== id) notFound();
@@ -85,7 +86,84 @@ export default async function SimplificationItemDetailPage({ params }: PageProps
       <p className="text-sm text-muted-foreground mb-6 font-mono">
         {item.sitemId} · {item.procStatus === "R" ? "Released" : item.procStatus} ·{" "}
         application area {item.applicationArea}
+        {item.narrative && (
+          <> · narrative §{item.narrative.sectionRef ?? "?"}</>
+        )}
       </p>
+
+      {/* Narrative — parsed from SIMPL_OP2025.pdf */}
+      {item.narrative ? (
+        <div className="bg-card rounded-lg border border-border p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+              Narrative
+            </h3>
+            <span className="text-xs text-muted-foreground">
+              {item.narrative.sourceDocument}
+            </span>
+          </div>
+          {item.narrative.applicationComponent && (
+            <div className="mb-4 text-sm">
+              <span className="text-muted-foreground">SAP Application Component: </span>
+              <span className="font-mono text-foreground">
+                {item.narrative.applicationComponent}
+              </span>
+            </div>
+          )}
+          <div className="space-y-5">
+            {item.narrative.descriptionMd && (
+              <NarrativeSection title="Description" body={item.narrative.descriptionMd} />
+            )}
+            {item.narrative.symptomMd && (
+              <NarrativeSection title="Symptom" body={item.narrative.symptomMd} />
+            )}
+            {item.narrative.solutionMd && (
+              <NarrativeSection title="Solution" body={item.narrative.solutionMd} />
+            )}
+            {item.narrative.businessProcessImpactMd && (
+              <NarrativeSection
+                title="Business Process Related Information"
+                body={item.narrative.businessProcessImpactMd}
+              />
+            )}
+            {item.narrative.requiredActionMd && (
+              <NarrativeSection
+                title="Required and Recommended Action(s)"
+                body={item.narrative.requiredActionMd}
+              />
+            )}
+            {item.narrative.relevancyMd && (
+              <NarrativeSection
+                title="How to Determine Relevancy"
+                body={item.narrative.relevancyMd}
+              />
+            )}
+            {item.narrative.transportBehaviorMd && (
+              <NarrativeSection
+                title="Transport Behavior"
+                body={item.narrative.transportBehaviorMd}
+              />
+            )}
+            {item.narrative.additionalSectionsMd && (
+              <NarrativeSection
+                title="Additional Sections"
+                body={item.narrative.additionalSectionsMd}
+              />
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-card rounded-lg border border-border border-dashed p-5 mb-6">
+          <p className="text-sm text-muted-foreground">
+            No narrative parsed for this item from SIMPL_OP2025.pdf yet. The PDF parser
+            matches by item title; ~80% of SIC items currently have narratives. Re-run{" "}
+            <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
+              pnpm tsx scripts/ingest/brownfield-narrative-adapter.ts
+            </code>{" "}
+            after editing the title-match heuristic if this gap matters.
+          </p>
+        </div>
+      )}
 
       {/* Identity card */}
       <div className="bg-card rounded-lg border border-border p-5 mb-6">
@@ -362,6 +440,32 @@ export default async function SimplificationItemDetailPage({ params }: PageProps
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Renders one narrative subsection. Preserves paragraph breaks (double newline)
+ * and bullet markers from pdftotext output, but does not interpret markdown
+ * structure beyond that — the source is plain prose extracted from the PDF.
+ */
+function NarrativeSection({ title, body }: { title: string; body: string }) {
+  // Split into paragraphs on double newlines; collapse single newlines within
+  // a paragraph to spaces (PDF text often hard-wraps mid-paragraph).
+  const paragraphs = body
+    .split(/\n\s*\n/)
+    .map((p) => p.replace(/\n/g, " ").replace(/\s+/g, " ").trim())
+    .filter((p) => p.length > 0);
+  return (
+    <div>
+      <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">
+        {title}
+      </h4>
+      <div className="space-y-2 text-sm text-foreground leading-relaxed">
+        {paragraphs.map((p, i) => (
+          <p key={i}>{p}</p>
+        ))}
       </div>
     </div>
   );
