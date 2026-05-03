@@ -2694,6 +2694,7 @@ model BrownfieldCatalogVersion {
   preCheckNotes             PreCheckNote[]
   businessFunctionDispositions BusinessFunctionDisposition[]
   brownfieldAssessments     BrownfieldAssessment[]
+  classificationProtocols   BrownfieldClassificationProtocol[]
 
   @@index([isActive])
   @@index([snapshotDate])
@@ -2752,6 +2753,7 @@ model SimplificationItem {
   checks            SimplificationItemCheck[]
   notes             RelatedSapNote[]
   narrative         SimplificationItemNarrative?
+  brownfieldVerdicts BrownfieldVerdict[]
 
   @@unique([sapGuid, catalogVersionId])
   @@index([catalogVersionId])
@@ -2930,6 +2932,8 @@ model BrownfieldAssessment {
 
   catalogVersion BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id])
   baselineSnapshots SystemBaselineSnapshot[]
+  classificationPasses BrownfieldClassificationPass[]
+  verdicts             BrownfieldVerdict[]
 
   @@index([catalogVersionId])
   @@index([status])
@@ -3027,4 +3031,127 @@ model SimplificationItemNarrative {
   simplificationItem SimplificationItem @relation(fields: [simplificationItemId], references: [id], onDelete: Cascade)
 
   @@index([sourceDocument])
+}
+
+// =============================================================
+// Phase 14 — Layer 7: Brownfield classification protocol + verdicts
+// =============================================================
+//
+// Parallel structure to greenfield ClassificationProtocol/Pass/Verdict but
+// with a brownfield-specific bucket vocabulary (A/C/R/D/N/R/B) and inputs
+// (SimplificationItem + checks + EWA findings + customer system facts,
+// not ClientRequirement). Reuses the same architectural patterns:
+//   - Append-only verdicts with isCurrent flag (one-true-per-pair)
+//   - Pass model groups verdicts produced by a single actor + protocol
+//   - frozenAt enforced when the parent assessment hits signed_off
+//   - Pin to a catalog version for reproducibility
+
+/// Authoring shape for the brownfield classification rule set. Edited by
+/// SI leads via DB; loaded by the rule engine + emit-prompts scripts.
+model BrownfieldClassificationProtocol {
+  id                       String    @id @default(cuid())
+  /// Display name, e.g. "Brownfield baseline (S/4HANA Cloud Private 2025-FPS1)"
+  name                     String
+  /// Semver-ish, e.g. "1.0.0"
+  version                  String
+  /// FK to the brownfield catalog this protocol classifies against.
+  catalogVersionId         String
+  /// Per-bucket prose: { A: "Auto-handled by SUM/DMO", C: "Configuration / IMG",
+  /// R: "Custom-code adaptation", D: "Data preparation", "N/R": "Not relevant",
+  /// B: "Blocker" }. Stored as JSON for forward compatibility (e.g. v2 may add
+  /// criteria objects per bucket).
+  bucketDefinitions        Json
+  /// Free-form prose: which evidence justifies which bucket. Read by
+  /// consultants and embedded into the LLM system prompt.
+  groundingRules           String    @db.Text
+  /// Template for the per-item classification prompt sent to the LLM
+  /// (or rendered for manual review). Supports placeholders that the
+  /// emit-prompts script substitutes (item title, narrative, checks,
+  /// customer facts, EWA findings).
+  systemPrompt             String    @db.Text
+  /// Rule-engine config (deterministic rules applied before LLM/manual).
+  /// Stored as JSON so the rule set is editable without a code deploy.
+  ruleEngineConfig         Json?
+  isActive                 Boolean   @default(true)
+  deprecatedAt             DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  catalogVersion BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id])
+  passes         BrownfieldClassificationPass[]
+  verdicts       BrownfieldVerdict[]
+
+  @@unique([name, version])
+  @@index([catalogVersionId])
+  @@index([isActive])
+}
+
+/// One row per classification run. Groups verdicts produced by a single
+/// actor + protocol + catalog combination. Snapshot + diff between passes
+/// is the audit story.
+model BrownfieldClassificationPass {
+  id                       String    @id @default(cuid())
+  brownfieldAssessmentId   String
+  protocolVersionId        String
+  catalogVersionId         String
+  startedAt                DateTime  @default(now())
+  completedAt              DateTime?
+  /// Either a user id or a sentinel like "orchestrator" / "rule-engine"
+  actor                    String
+  /// "rule-engine" | "claude-cli" | "manual" | "orchestrator"
+  actorRole                String
+  /// Pass-level summary: bucket distribution, vs-prior diff. Rendered in UI.
+  summaryJson              Json?
+  /// Chain for diff lineage (rerun on top of a prior pass).
+  parentPassId             String?
+
+  brownfieldAssessment BrownfieldAssessment @relation(fields: [brownfieldAssessmentId], references: [id], onDelete: Cascade)
+  protocolVersion      BrownfieldClassificationProtocol @relation(fields: [protocolVersionId], references: [id])
+  parentPass           BrownfieldClassificationPass?    @relation("BrownfieldPassChain", fields: [parentPassId], references: [id])
+  childPasses          BrownfieldClassificationPass[]   @relation("BrownfieldPassChain")
+  verdicts             BrownfieldVerdict[]
+
+  @@index([brownfieldAssessmentId])
+  @@index([brownfieldAssessmentId, startedAt])
+  @@index([parentPassId])
+}
+
+/// One verdict per (assessment, item) per pass. Append-only — the verdict
+/// writer flips prior verdicts' isCurrent=false on new write, so reads
+/// against `where: { isCurrent: true }` give the latest classification.
+model BrownfieldVerdict {
+  id                       String    @id @default(cuid())
+  brownfieldAssessmentId   String
+  simplificationItemId     String
+  passId                   String
+  protocolVersionId        String
+  /// "A" | "C" | "R" | "D" | "N/R" | "B"
+  bucket                   String
+  /// "high" | "medium" | "low" | null
+  confidence               String?
+  /// Markdown-friendly explanation citing the inputs that drove the verdict.
+  rationaleMd              String    @db.Text
+  /// Structured trace of the inputs the actor used: relevant SI-Check ids,
+  /// matching EWA finding ids, customer fact keys, etc.
+  relevantInputsJson       Json?
+  /// User id or sentinel ("rule-engine", "orchestrator").
+  actor                    String
+  /// "RULE" | "MANUAL" | "CLAUDE_CLI" | "REIMPORT"
+  source                   String
+  createdAt                DateTime  @default(now())
+  isCurrent                Boolean   @default(true)
+  /// Set when the parent assessment hits signed_off; writes refused unless
+  /// an explicit unseal reason is provided to the verdict-writer.
+  frozenAt                 DateTime?
+
+  brownfieldAssessment BrownfieldAssessment @relation(fields: [brownfieldAssessmentId], references: [id], onDelete: Cascade)
+  simplificationItem   SimplificationItem   @relation(fields: [simplificationItemId], references: [id], onDelete: Cascade)
+  pass                 BrownfieldClassificationPass @relation(fields: [passId], references: [id], onDelete: Cascade)
+  protocolVersion      BrownfieldClassificationProtocol @relation(fields: [protocolVersionId], references: [id])
+
+  @@index([brownfieldAssessmentId, isCurrent])
+  @@index([brownfieldAssessmentId, bucket])
+  @@index([passId])
+  @@index([simplificationItemId])
+  @@index([source])
 }
