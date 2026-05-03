@@ -1252,6 +1252,15 @@ model ClientRequirement {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// TIME RFT: explicit category for cross-cutting requirements that
+  /// don't anchor to a single business process (e.g. project management,
+  /// risk management, governance, security, IT architecture overlays).
+  /// One of: PROCESS_ANCHORED | PROJECT_MGMT | RISK_GOVERNANCE |
+  /// SECURITY_OVERLAY | IT_ARCHITECTURE | METHODOLOGY | DATA_MIGRATION |
+  /// CHANGE_MGMT | COMMERCIAL_TCO | LEGAL_COMPLIANCE | CROSS_CUTTING_OTHER.
+  /// NULL for non-TIME assessments.
+  crossCuttingTag String?
+
   assessment      Assessment              @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
   verdicts        ClassificationVerdict[]
   vendorResponses VendorResponse[]
@@ -1263,6 +1272,7 @@ model ClientRequirement {
   @@index([assessmentId, module, sortOrder])
   @@index([assessmentId, requirementClass])
   @@index([currentVerdictId])
+  @@index([crossCuttingTag])
 }
 
 // =============================================================
@@ -3350,6 +3360,8 @@ model CustomerProcess {
   assessment       Assessment                       @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
   requirementLinks CustomerProcessRequirementLink[]
   evidenceLinks    CustomerProcessSapEvidenceLink[]
+  options          CustomerProcessOption[]
+  references       CustomerProcessReference[]
 
   @@index([assessmentId])
   @@index([parentSection])
@@ -3400,4 +3412,109 @@ model CustomerProcessSapEvidenceLink {
 
   @@index([customerProcessId])
   @@index([evidenceType, evidenceId])
+}
+
+// =============================================================
+// TIME RFT — App 2(b) full-coverage extraction
+// =============================================================
+//
+// Achieves 100% page + requirement coverage of TIME's App 2(b)
+// 614-page Business Process Assessment Document. Every page is
+// classified; every customer process exposes its To-Be option scoring
+// (Adoption complexity / Priority to implement / Implementation
+// Effort / Organization changes — Poor/Fair/Good); every transaction
+// code, SAP Note, and table name mentioned in the document is captured
+// as a structured reference.
+
+/// Per-page classification for a BrownfieldGuide. Every page (1..N)
+/// gets exactly one row. Multi-tag: `pageTypes[]` allows pages that
+/// combine multiple roles (e.g. an AS_IS_PROCESS slide that also
+/// contains a PAIN_POINTS table).
+model App2bPageClassification {
+  id                      String   @id @default(cuid())
+  guideId                 String
+  pageNumber              Int
+  /// Multi-tag (a page can be both a TO_BE_PROCESS and an OPTION_ANALYSIS):
+  /// COVER | TOC | LANDSCAPE_SUMMARY | CHAPTER_INTRO | AS_IS_PROCESS |
+  /// TO_BE_PROCESS | PAIN_POINTS | OPTION_ANALYSIS | TO_BE_BENEFITS |
+  /// SUMMARY_TABLE | APPENDIX | OTHER
+  pageTypes               String[] @default([])
+  /// Process names referenced on this page (resolved to CustomerProcess.id
+  /// later via the linker if a match exists)
+  detectedProcessNames    String[] @default([])
+  /// Linked CustomerProcess rows (resolved at extraction time)
+  linkedProcessIds        String[] @default([])
+  /// Page title or header — the most prominent text line on the page
+  pageTitle               String?
+  /// Truncated page text for at-a-glance audit (≤2000 chars)
+  textExcerpt             String?  @db.Text
+  /// Confidence of classification: high / medium / low
+  classificationConfidence String   @default("high")
+  createdAt               DateTime @default(now())
+
+  @@unique([guideId, pageNumber])
+  @@index([guideId])
+  @@index([pageNumber])
+}
+
+/// To-Be Option per CustomerProcess. Each To-Be process slide describes
+/// one or more strategic options (Option 1 - DWMS, Option 2 - BPA,
+/// Option 3 - Vendor Solution, etc.) with scoring across 4 dimensions.
+model CustomerProcessOption {
+  id                      String   @id @default(cuid())
+  customerProcessId       String
+  /// "Option 1 - DWMS with SAP Integration" / "Option 2 - BPA" / etc.
+  optionLabel             String
+  /// Numeric position when present
+  optionNumber            Int?
+  /// Strategic category: "DWMS" | "BPA" | "VENDOR" | "CORE" |
+  /// "SUCCESSFACTORS" | "ARIBA" | "CUSTOM" | "OTHER"
+  optionType              String?
+  /// Variant label (the second half of "Option 1 - X"), e.g.
+  /// "DWMS with SAP Integration" or "All SuccessFactors"
+  variantLabel            String?
+  /// 4-dimension scoring (Poor | Fair | Good | null when not stated):
+  adoptionComplexity      String?
+  priorityToImplement     String?
+  implementationEffort    String?
+  organizationChanges     String?
+  /// Comments column from the scoring table (per-dimension narrative)
+  scoringComments         Json?
+  /// "Proposed Solution" + "Key benefits" bullet captures
+  proposedSolutionBullets String[] @default([])
+  keyBenefitsBullets      String[] @default([])
+  /// Source page in App 2(b)
+  sourcePage              Int?
+  createdAt               DateTime @default(now())
+
+  customerProcess CustomerProcess @relation(fields: [customerProcessId], references: [id], onDelete: Cascade)
+
+  @@index([customerProcessId])
+  @@index([optionType])
+}
+
+/// Structured extraction of in-text references from App 2(b) pages.
+/// Captures transaction codes, SAP Notes, table names, BAdIs, function
+/// modules, report IDs, and other technical references. One row per
+/// (process, page, referenceCode, referenceType).
+model CustomerProcessReference {
+  id                String   @id @default(cuid())
+  customerProcessId String?
+  guideId           String   // always set (page belongs to a guide)
+  pageNumber        Int
+  /// "TRANSACTION_CODE" | "SAP_NOTE" | "TABLE_NAME" | "REPORT_ID" |
+  /// "BADI" | "FUNCTION_MODULE" | "EXIT" | "FIORI_APP" | "PROGRAM"
+  referenceType     String
+  /// Canonical code: "MB52" | "Note 2502552" | "MARC" | etc.
+  referenceCode     String
+  /// Surrounding sentence/phrase containing the reference (≤500 chars)
+  context           String?
+  createdAt         DateTime @default(now())
+
+  customerProcess CustomerProcess? @relation(fields: [customerProcessId], references: [id], onDelete: SetNull)
+
+  @@unique([guideId, pageNumber, referenceCode, referenceType])
+  @@index([customerProcessId])
+  @@index([referenceCode])
+  @@index([referenceType])
 }

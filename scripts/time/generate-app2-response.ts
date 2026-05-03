@@ -61,6 +61,69 @@ function buildDocReference(scopeItemIds: string | null): string {
   return codes.slice(0, 5).join(", ");
 }
 
+interface EnrichInput {
+  solutionProviderRemarks: string | null;
+  crossCuttingTag: string | null;
+  customerProcessLinks: Array<{
+    confidence: string | null;
+    customerProcess: {
+      processName: string;
+      painPoints: string[];
+      options: Array<{ optionLabel: string | null; keyBenefitsBullets: string[] }>;
+      references: Array<{ referenceType: string; referenceCode: string }>;
+    };
+  }>;
+}
+
+function enrichRemarks(req: EnrichInput): string {
+  const base = (req.solutionProviderRemarks ?? "").trim();
+  const parts: string[] = [];
+  if (base) parts.push(base);
+
+  // Skip the [Anchor:] tag suffix when remarks are already self-explanatory
+  // (Information-only rows; cross-cutting templates that already convey their type).
+  if (
+    req.crossCuttingTag &&
+    req.crossCuttingTag !== "PROCESS_ANCHORED" &&
+    !/Information only/i.test(base) &&
+    !/Commercial scaffolding/i.test(base) &&
+    !/SAP Activate methodology/i.test(base) &&
+    !/risk \+ governance framework/i.test(base) &&
+    !/standard security framework/i.test(base) &&
+    !/standard 3-tier landscape/i.test(base) &&
+    !/Migration Cockpit/i.test(base) &&
+    !/Flexible Workflow framework/i.test(base) &&
+    !/Embedded Analytics framework/i.test(base) &&
+    !/Integration Suite \(CPI\)/i.test(base) &&
+    !/OCM workstream/i.test(base)
+  ) {
+    parts.push(`[Anchor: ${req.crossCuttingTag.replace(/_/g, " ").toLowerCase()}]`);
+  }
+
+  const procLinks = req.customerProcessLinks ?? [];
+  if (procLinks.length > 0) {
+    const top = procLinks[0]!.customerProcess;
+    const procLabel = `[As-Is: ${top.processName}]`;
+    if (!base.includes(top.processName)) parts.push(procLabel);
+
+    const refs = top.references.slice(0, 6).map((r) => r.referenceCode);
+    if (refs.length > 0) parts.push(`SAP refs: ${refs.join(", ")}.`);
+
+    if (top.painPoints.length > 0) {
+      const pain = top.painPoints[0]!.slice(0, 180);
+      parts.push(`Current pain: ${pain}`);
+    }
+
+    const optBenefits = top.options
+      .flatMap((o) => o.keyBenefitsBullets)
+      .filter((b) => b && b.length > 5)
+      .slice(0, 2);
+    if (optBenefits.length > 0) parts.push(`To-Be benefits: ${optBenefits.join("; ").slice(0, 220)}`);
+  }
+
+  return parts.join(" — ").slice(0, 2000);
+}
+
 function buildSolutionOptions(verdict: string, scopeItemIds: string | null, sapModule: string | null): string {
   // If matched to a greenfield ScopeItem → Core
   if (scopeItemIds && scopeItemIds.length > 0) return "Core";
@@ -87,7 +150,9 @@ async function main(): Promise<void> {
   if (!assessment) throw new Error(`Assessment for ${ASSESSMENT_COMPANY} not found`);
   console.log(`[time-app2-response] Assessment: ${assessment.id}`);
 
-  // Pull all requirements + their current verdicts (via read-cache columns)
+  // Pull all requirements + their current verdicts (via read-cache columns) +
+  // cross-cutting tag + linked CustomerProcess evidence (pain points, options,
+  // tcode/Fiori/table refs) so Remarks can surface deeper grounding.
   const where: { assessmentId: string } = { assessmentId: assessment.id };
   const requirements = await prisma.clientRequirement.findMany({
     where,
@@ -96,6 +161,20 @@ async function main(): Promise<void> {
       solutionProviderResponse: true, solutionProviderRemarks: true,
       sapModule: true, scopeItemIds: true, scopeItemNames: true,
       currentVerdictId: true,
+      crossCuttingTag: true,
+      customerProcessLinks: {
+        select: {
+          confidence: true,
+          customerProcess: {
+            select: {
+              id: true, processName: true, painPoints: true,
+              options: { select: { optionLabel: true, keyBenefitsBullets: true }, take: 3 },
+              references: { select: { referenceType: true, referenceCode: true }, take: 8 },
+            },
+          },
+        },
+        take: 3,
+      },
     },
   });
   const verdictedCount = requirements.filter((r) => r.solutionProviderResponse).length;
@@ -131,7 +210,7 @@ async function main(): Promise<void> {
       const verdict = aptusToTimeVerdict(req.solutionProviderResponse);
       const docRef = buildDocReference(req.scopeItemIds);
       const solnOpts = buildSolutionOptions(req.solutionProviderResponse, req.scopeItemIds, req.sapModule);
-      const remarks = (req.solutionProviderRemarks ?? "").slice(0, 2000); // cap at 2000 chars
+      const remarks = enrichRemarks(req);
 
       // Write only into empty cells OR into the target cells (we own col 3-6)
       row.getCell(COL_VERDICT).value = verdict;
