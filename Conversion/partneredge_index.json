@@ -1,7 +1,7 @@
 {
-  "source": "partneredge.sap.com — SAP Customer Evolution Program (formerly 'S/4HANA Movement')",
-  "fetchedAt": "2026-05-03T09:11:00Z",
-  "fetchedBy": "PartnerEdge user ibaharudin@abeam.com (ABeam Consulting Malaysia) — equivalent to S-User S0025693350; SAML federation maps both to the same identity",
+  "source": "partneredge.sap.com \u2014 SAP Customer Evolution Program (formerly 'S/4HANA Movement')",
+  "fetchedAt": "2026-05-03T09:27:00Z",
+  "fetchedBy": "PartnerEdge user ibaharudin@abeam.com (ABeam Consulting Malaysia) \u2014 equivalent to S-User S0025693350; SAML federation maps both to the same identity (round 2 added 12 assets 2026-05-03)",
   "filesLocation": "/workspaces/aptus/Conversion/",
   "assets": [
     {
@@ -15,16 +15,16 @@
     },
     {
       "filename": "SAP_Customer_Evolution_Kit_Partner_Value_Proposition_v2.pdf",
-      "title": "SAP Customer Evolution Kit — Value Proposition for Partners",
+      "title": "SAP Customer Evolution Kit \u2014 Value Proposition for Partners",
       "sourceUrl": "https://partneredge.sap.com/en/library/assets/partnership/dgl/06/08/SAP1080608.html",
       "fileSizeBytes": 191315,
       "assetType": "slides",
       "sapPublishedDate": "2024-08-14",
-      "description": "Sales presentation describing how partners leverage the SAP Customer Evolution Kit — a free, modular engagement model with pre-defined activities — to accelerate customers' transformation to cloud ERP."
+      "description": "Sales presentation describing how partners leverage the SAP Customer Evolution Kit \u2014 a free, modular engagement model with pre-defined activities \u2014 to accelerate customers' transformation to cloud ERP."
     },
     {
       "filename": "Partner_Led_Migrations_SAP_ECS_supported_migration_approaches.pdf",
-      "title": "Partner-Led Migrations — SAP Enterprise Cloud Services Supported Migration Approaches",
+      "title": "Partner-Led Migrations \u2014 SAP Enterprise Cloud Services Supported Migration Approaches",
       "sourceUrl": "https://partneredge.sap.com/en/library/assets/partnership/dgl/53/29/SAP1085329.html",
       "fileSizeBytes": 3173831,
       "assetType": "slides",
@@ -47,7 +47,7 @@
       "fileSizeBytes": 444871,
       "assetType": "case_study",
       "sapPublishedDate": "2025-07-25",
-      "description": "Customer Success Story covering H.B. Fuller's large-scale brownfield migration to SAP S/4HANA Cloud Private Edition using RISE with SAP and SAP Services & Support — clean core strategy underpinning M&A execution."
+      "description": "Customer Success Story covering H.B. Fuller's large-scale brownfield migration to SAP S/4HANA Cloud Private Edition using RISE with SAP and SAP Services & Support \u2014 clean core strategy underpinning M&A execution."
     },
     {
       "filename": "YASH_Technologies_data_driven_transition.pdf",
@@ -69,7 +69,7 @@
     },
     {
       "filename": "Migrated_data_validation_tight_timeframe.pdf",
-      "title": "How can companies validate their migrated data in a transition to a new ERP — SAP S/4HANA — in a tight timeframe?",
+      "title": "How can companies validate their migrated data in a transition to a new ERP \u2014 SAP S/4HANA \u2014 in a tight timeframe?",
       "sourceUrl": "https://partneredge.sap.com/en/library/assets/products/data_mng/dgl/05/20/SAP1150520.html",
       "fileSizeBytes": 148769,
       "assetType": "case_study",
@@ -83,7 +83,115 @@
       "fileSizeBytes": 3798708,
       "assetType": "whitepaper",
       "sapPublishedDate": "2025-10-30",
-      "description": "Thought leadership paper explaining the clean core strategy and SAP S/4HANA Cloud extensibility model — central to brownfield-to-cloud conversion design decisions."
+      "description": "Thought leadership paper explaining the clean core strategy and SAP S/4HANA Cloud extensibility model \u2014 central to brownfield-to-cloud conversion design decisions."
+    },
+    {
+      "filename": "High_Level_Overview_Transition_Approaches_and_Best_Practices.pdf",
+      "title": "High level overview: Transition approaches and best practices",
+      "sourceUrl": "https://partneredge.sap.com/en/library/assets/solutions/dgl/53/33/SAP1085333.html",
+      "fileSizeBytes": 3745364,
+      "assetType": "slides",
+      "sapPublishedDate": "2026-04-30",
+      "description": "Sales presentation covering transition approaches into SAP S/4HANA Cloud Private Edition, working with SAP Enterprise Cloud Services, and project management best practices for brownfield conversions."
+    },
+    {
+      "filename": "SAP_Cloud_ERP_Private_Implementation_Partner_NeedToKnow_2026.pdf",
+      "title": "Need-to-know for implementation consultants working in SAP Cloud ERP Private",
+      "sourceUrl": "https://partneredge.sap.com/en/library/assets/solutions/dgl/19/47/SAP1291947.html",
+      "fileSizeBytes": 1254354,
+      "assetType": "slides",
+      "sapPublishedDate": "2026-04-16",
+      "description": "Sales presentation outlining the engagement model with SAP Enterprise Cloud Services, roles & responsibilities matrix, qualifications, and existing assets/documentation for consultants migrating customers into SAP private cloud."
+    },
+    {
+      "filename": "SAP_Partner_Accelerator_Build_Successful_Cloud_ERP_Delivery_Practice.pdf",
+      "title": "SAP Partner Accelerator \u2014 How to build a successful SAP Cloud ERP delivery practice",
+      "sourceUrl": "https://partneredge.sap.com/en/library/assets/products/ent_mng/dgl/67/65/SAP1306765.html",
+      "fileSizeBytes": 1763112,
+      "assetType": "slides",
+      "sapPublishedDate": "2026-04-01",
+      "description": "Sales presentation guiding partners through the essential steps to build a stronger, more profitable, market-ready cloud ERP delivery practice \u2014 service-offering / engagement model document."
+    },
+    {
+      "filename": "Erwin_Hymer_Group_RISE_with_SAP_journey.pdf",
+      "title": "Erwin Hymer Group: Readying the business for an AI-enabled journey and scalable growth",
+      "sourceUrl": "https://partneredge.sap.com/en/library/assets/products/ent_mng/dgl/53/58/SAP1295358.html",
+      "fileSizeBytes": 205355,
+      "assetType": "case_study",
+      "sapPublishedDate": "2026-04-30",
+      "description": "Business Transformation Study: how Erwin Hymer Group built a unified ERP foundation on SAP Cloud ERP Private through the RISE with SAP journey with SAP Enterprise Cloud Services."
+    },
+    {
+      "filename": "Partner_Assistance_Services_SAP_Cloud_ERP_Private_L0.pdf",
+      "title": "Partner Assistance Services for SAP Cloud ERP Private \u2014 L0 Presentation",
+      "sourceUrl": "https://partneredge.sap.com/en/partnership/services/partner_services.html",
+      "fileSizeBytes": 1215980,
+      "assetType": "slides",
+      "sapPublishedDate": null,
+      "description": "External L0 deck describing the Partner Assistance Services engagement model for SAP Cloud ERP Private \u2014 service offering catalog and delivery scope. (DOI SAP922039)"
+    },
+    {
+      "filename": "Partner_Assistance_Services_SAP_Cloud_ERP_Private_OnePager.pdf",
+      "title": "Partner Assistance Services for SAP Cloud ERP Private \u2014 One-pager Overview",
+      "sourceUrl": "https://partneredge.sap.com/en/partnership/services/partner_services.html",
+      "fileSizeBytes": 210824,
+      "assetType": "case_study",
+      "sapPublishedDate": null,
+      "description": "One-page overview of the Partner Assistance Service offering for SAP Cloud ERP Private. (DOI SAP841259)"
+    },
+    {
+      "filename": "Downtime_optimized_Conversion_Brief.pptx",
+      "title": "Downtime-optimized Conversion Brief",
+      "sourceUrl": "https://partneredge.sap.com/en/partnership/services/partner_services.html",
+      "fileSizeBytes": 216446,
+      "assetType": "accelerator",
+      "sapPublishedDate": null,
+      "description": "Tool brief explaining the Downtime-optimized Conversion approach \u2014 directly relevant for minimizing business interruption during ECC->S/4HANA brownfield conversions."
+    },
+    {
+      "filename": "Migration_Assessment_App_Brief.pptx",
+      "title": "Migration Assessment App Brief",
+      "sourceUrl": "https://partneredge.sap.com/en/partnership/services/partner_services.html",
+      "fileSizeBytes": 206782,
+      "assetType": "accelerator",
+      "sapPublishedDate": null,
+      "description": "Tool brief for the Migration Assessment App \u2014 used for early-stage scoping/assessment of migration readiness."
+    },
+    {
+      "filename": "SAP_Readiness_Check_Brief.pptx",
+      "title": "SAP Readiness Check Brief",
+      "sourceUrl": "https://partneredge.sap.com/en/partnership/services/partner_services.html",
+      "fileSizeBytes": 203541,
+      "assetType": "accelerator",
+      "sapPublishedDate": null,
+      "description": "Tool brief for SAP Readiness Check \u2014 a primary scoping/readiness instrument for ECC->S/4HANA conversion projects."
+    },
+    {
+      "filename": "L1_presentation_Clean_core.pptx",
+      "title": "L1 presentation: Clean Core",
+      "sourceUrl": "https://partneredge.sap.com/en/library/assets/solutions/dgl/01/79/SAP1200179.html",
+      "fileSizeBytes": 9599454,
+      "assetType": "slides",
+      "sapPublishedDate": null,
+      "description": "Customer-facing L1 deck introducing why clean core matters, its definition, value proposition, and five guiding principles \u2014 foundational methodology slides for conversion planning."
+    },
+    {
+      "filename": "L2_presentation_Clean_core_five_principles.pptx",
+      "title": "L2 presentation: Clean Core \u2014 A closer look at the five core principles",
+      "sourceUrl": "https://partneredge.sap.com/en/library/assets/products/ent_mng/dgl/94/05/SAP1219405.html",
+      "fileSizeBytes": 18471643,
+      "assetType": "slides",
+      "sapPublishedDate": null,
+      "description": "L2 deck building on L1 with first level of detail per clean-core principle/dimension and setup for L3 deep dives."
+    },
+    {
+      "filename": "Executive_Sales_Presentation_RISE_with_SAP_for_ERP_Installed_Base.pptx",
+      "title": "Executive Sales Presentation: RISE with SAP for ERP Installed Base (45-60 min)",
+      "sourceUrl": "https://partneredge.sap.com/en/library/assets/products/ent_mng/s4h-cld/sell/pp_esp_rise_erp_installed_base.html",
+      "fileSizeBytes": 30088489,
+      "assetType": "slides",
+      "sapPublishedDate": null,
+      "description": "Customer pitch deck for introducing RISE with SAP to an installed-base ERP client \u2014 covers RISE introduction, benefits/value, description, and how to get started. The reference customer pitch for ECC->S/4HANA Cloud conversion conversations."
     }
   ]
 }

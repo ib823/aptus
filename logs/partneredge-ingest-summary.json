@@ -1,76 +1,160 @@
 {
-  "completedAt": "2026-05-03T09:15:37.861Z",
+  "completedAt": "2026-05-03T09:35:08.265Z",
   "source": "partneredge.sap.com — SAP Customer Evolution Program (formerly 'S/4HANA Movement')",
-  "fetchedAt": "2026-05-03T09:11:00Z",
-  "fetchedBy": "PartnerEdge user ibaharudin@abeam.com (ABeam Consulting Malaysia) — equivalent to S-User S0025693350; SAML federation maps both to the same identity",
+  "fetchedAt": "2026-05-03T09:27:00Z",
+  "fetchedBy": "PartnerEdge user ibaharudin@abeam.com (ABeam Consulting Malaysia) — equivalent to S-User S0025693350; SAML federation maps both to the same identity (round 2 added 12 assets 2026-05-03)",
   "sourceProgram": "SAP Customer Evolution Program (S/4HANA Movement)",
-  "assetCount": 9,
-  "ingested": 9,
-  "reused": 0,
+  "assetCount": 21,
+  "ingested": 12,
+  "reused": 9,
   "errored": 0,
   "totalSections": 0,
   "results": [
     {
       "filename": "Sales_Quick_Guide_for_Partners_SAPCustomerEvolutionProgram.pdf",
       "title": "Sales Quick Guide: SAP Customer Evolution Program",
-      "status": "ingested",
+      "status": "reused",
       "guideId": "cmopk24ci00016339dfjj03ms",
       "sectionCount": 0
     },
     {
       "filename": "SAP_Customer_Evolution_Kit_Partner_Value_Proposition_v2.pdf",
       "title": "SAP Customer Evolution Kit — Value Proposition for Partners",
-      "status": "ingested",
+      "status": "reused",
       "guideId": "cmopk24j500036339n9ty10un",
       "sectionCount": 0
     },
     {
       "filename": "Partner_Led_Migrations_SAP_ECS_supported_migration_approaches.pdf",
       "title": "Partner-Led Migrations — SAP Enterprise Cloud Services Supported Migration Approaches",
-      "status": "ingested",
+      "status": "reused",
       "guideId": "cmopk255g00056339lc75ukj5",
       "sectionCount": 0
     },
     {
       "filename": "Using_BTM_Suite_within_SAP_Activate_methodology.pdf",
       "title": "Using the Business Transformation Management Suite within the SAP Activate Methodology",
-      "status": "ingested",
+      "status": "reused",
       "guideId": "cmopk261v000763396ndw28y8",
       "sectionCount": 0
     },
     {
       "filename": "HB_Fuller_clean_core_strategy_M_and_A.pdf",
       "title": "H.B. Fuller: Adhering to a clean core strategy on cloud ERP to execute a merger and acquisition strategy",
-      "status": "ingested",
+      "status": "reused",
       "guideId": "cmopk2722000963393hk9sb50",
       "sectionCount": 0
     },
     {
       "filename": "YASH_Technologies_data_driven_transition.pdf",
       "title": "YASH Technologies: Adopting data-driven guidance for transitioning to modern ERP in the private cloud",
-      "status": "ingested",
+      "status": "reused",
       "guideId": "cmopk277t000b633963b0qjgy",
       "sectionCount": 0
     },
     {
       "filename": "KUREHA_phased_transition_full_historical_data.pdf",
       "title": "KUREHA Corporation: Taking a phased transition to a next-gen business foundation with full historical data",
-      "status": "ingested",
+      "status": "reused",
       "guideId": "cmopk27cu000d6339oj9vwalk",
       "sectionCount": 0
     },
     {
       "filename": "Migrated_data_validation_tight_timeframe.pdf",
       "title": "How can companies validate their migrated data in a transition to a new ERP — SAP S/4HANA — in a tight timeframe?",
-      "status": "ingested",
+      "status": "reused",
       "guideId": "cmopk27j3000f6339v3th3vk5",
       "sectionCount": 0
     },
     {
       "filename": "Clean_core_extensibility_for_SAP_S4HANA_Cloud.pdf",
       "title": "Clean Core Extensibility for SAP S/4HANA Cloud",
-      "status": "ingested",
+      "status": "reused",
       "guideId": "cmopk288y000h6339cqu3jzk0",
+      "sectionCount": 0
+    },
+    {
+      "filename": "High_Level_Overview_Transition_Approaches_and_Best_Practices.pdf",
+      "title": "High level overview: Transition approaches and best practices",
+      "status": "ingested",
+      "guideId": "cmopkqvir000163op3uyfmak6",
+      "sectionCount": 0
+    },
+    {
+      "filename": "SAP_Cloud_ERP_Private_Implementation_Partner_NeedToKnow_2026.pdf",
+      "title": "Need-to-know for implementation consultants working in SAP Cloud ERP Private",
+      "status": "ingested",
+      "guideId": "cmopkqw0k000363opf5ocymtk",
+      "sectionCount": 0
+    },
+    {
+      "filename": "SAP_Partner_Accelerator_Build_Successful_Cloud_ERP_Delivery_Practice.pdf",
+      "title": "SAP Partner Accelerator — How to build a successful SAP Cloud ERP delivery practice",
+      "status": "ingested",
+      "guideId": "cmopkqwkz000563oprxf9e6jr",
+      "sectionCount": 0
+    },
+    {
+      "filename": "Erwin_Hymer_Group_RISE_with_SAP_journey.pdf",
+      "title": "Erwin Hymer Group: Readying the business for an AI-enabled journey and scalable growth",
+      "status": "ingested",
+      "guideId": "cmopkqwsp000763opnj9g538w",
+      "sectionCount": 0
+    },
+    {
+      "filename": "Partner_Assistance_Services_SAP_Cloud_ERP_Private_L0.pdf",
+      "title": "Partner Assistance Services for SAP Cloud ERP Private — L0 Presentation",
+      "status": "ingested",
+      "guideId": "cmopkqx0y000963oplfyt712i",
+      "sectionCount": 0
+    },
+    {
+      "filename": "Partner_Assistance_Services_SAP_Cloud_ERP_Private_OnePager.pdf",
+      "title": "Partner Assistance Services for SAP Cloud ERP Private — One-pager Overview",
+      "status": "ingested",
+      "guideId": "cmopkqx86000b63opwpxy0gp0",
+      "sectionCount": 0
+    },
+    {
+      "filename": "Downtime_optimized_Conversion_Brief.pptx",
+      "title": "Downtime-optimized Conversion Brief",
+      "status": "ingested",
+      "guideId": "cmopkqx9x000d63opr46rivw6",
+      "sectionCount": 0
+    },
+    {
+      "filename": "Migration_Assessment_App_Brief.pptx",
+      "title": "Migration Assessment App Brief",
+      "status": "ingested",
+      "guideId": "cmopkqxc6000f63opn8t46la0",
+      "sectionCount": 0
+    },
+    {
+      "filename": "SAP_Readiness_Check_Brief.pptx",
+      "title": "SAP Readiness Check Brief",
+      "status": "ingested",
+      "guideId": "cmopkqxd8000h63opr2kk7tmb",
+      "sectionCount": 0
+    },
+    {
+      "filename": "L1_presentation_Clean_core.pptx",
+      "title": "L1 presentation: Clean Core",
+      "status": "ingested",
+      "guideId": "cmopkqxlw000j63op971a8e3b",
+      "sectionCount": 0
+    },
+    {
+      "filename": "L2_presentation_Clean_core_five_principles.pptx",
+      "title": "L2 presentation: Clean Core — A closer look at the five core principles",
+      "status": "ingested",
+      "guideId": "cmopkqz06000l63opm89cn96r",
+      "sectionCount": 0
+    },
+    {
+      "filename": "Executive_Sales_Presentation_RISE_with_SAP_for_ERP_Installed_Base.pptx",
+      "title": "Executive Sales Presentation: RISE with SAP for ERP Installed Base (45-60 min)",
+      "status": "ingested",
+      "guideId": "cmopkr2ce000n63opz7etqnub",
       "sectionCount": 0
     }
   ]
