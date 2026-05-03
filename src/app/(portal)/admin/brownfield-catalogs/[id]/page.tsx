@@ -57,6 +57,11 @@ export default async function BrownfieldCatalogDetailPage({ params }: PageProps)
     orderBy: { role: "asc" },
   });
 
+  // Narrative coverage (count of SimplificationItem rows with a parsed narrative)
+  const narrativeCount = await prisma.simplificationItemNarrative.count({
+    where: { simplificationItem: { catalogVersionId: id } },
+  });
+
   // Sample simplification items (first 10 alphabetical by titleEn)
   const sampleItems = await prisma.simplificationItem.findMany({
     where: { catalogVersionId: id },
@@ -161,6 +166,42 @@ export default async function BrownfieldCatalogDetailPage({ params }: PageProps)
           </p>
           <p className="text-sm text-muted-foreground mt-1">Business Functions →</p>
         </Link>
+      </div>
+
+      {/* Narrative coverage + search */}
+      <div className="bg-card rounded-lg border border-border p-5 mb-8">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
+              Narrative Corpus (parsed from SIMPL_OP2025.pdf)
+            </h3>
+            <p className="text-sm text-foreground">
+              <span className="font-bold text-2xl tabular-nums">
+                {narrativeCount.toLocaleString()}
+              </span>{" "}
+              of {catalog._count.simplificationItems.toLocaleString()} items have a parsed
+              Symptom / Description / Solution / Required Actions / Relevancy / Transport
+              narrative.{" "}
+              {narrativeCount === 0 && (
+                <span className="text-muted-foreground">
+                  Run{" "}
+                  <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
+                    pnpm tsx scripts/ingest/brownfield-narrative-adapter.ts
+                  </code>
+                  .
+                </span>
+              )}
+            </p>
+          </div>
+          {narrativeCount > 0 && (
+            <Link
+              href={`/admin/brownfield-catalogs/${id}/search`}
+              className="px-4 py-2 rounded border border-blue-500 bg-blue-50 text-sm text-blue-700 hover:bg-blue-100 shrink-0"
+            >
+              🔎 Search narratives →
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-8">

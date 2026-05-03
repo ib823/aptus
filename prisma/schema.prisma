@@ -2751,6 +2751,7 @@ model SimplificationItem {
   brownfieldCatalog BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id], onDelete: Cascade)
   checks            SimplificationItemCheck[]
   notes             RelatedSapNote[]
+  narrative         SimplificationItemNarrative?
 
   @@unique([sapGuid, catalogVersionId])
   @@index([catalogVersionId])
@@ -2980,4 +2981,50 @@ model EwaFinding {
   @@index([snapshotId])
   @@index([category])
   @@index([severity])
+}
+
+/// Narrative companion to a SimplificationItem, parsed from the SAP-published
+/// Simplification List PDF (e.g. SIMPL_OP2025.pdf). One row per matched item.
+///
+/// The SIC database extract carries structured metadata + automated check
+/// rules but no human-readable description. The PDF carries the inverse —
+/// no machine-readable structure but full prose. This model bridges the two
+/// so the consultant-facing UI can show "what is this item, why does it
+/// matter, what do I do about it".
+///
+/// Linkage to the parent SimplificationItem is by FK (resolved during ingest
+/// by matching titleEn case-insensitive). FTS is supported via a tsvector
+/// column added by post-ingest raw SQL (see brownfield-narrative-adapter.ts).
+model SimplificationItemNarrative {
+  id                       String   @id @default(cuid())
+  simplificationItemId     String   @unique
+  /// Source document identifier, e.g. "SIMPL_OP2025.pdf v1.36 2026-02-18"
+  sourceDocument           String
+  /// First page on which the item's narrative starts (for deep-linking)
+  sourcePageStart          Int?
+  /// Section reference from the PDF TOC, e.g. "2.1.1"
+  sectionRef               String?
+  /// SAP application component string, e.g. "BC-DWB-DIC"
+  applicationComponent     String?
+  /// "Related Notes" subsection — array of { noteType, noteNumber, noteDescription }
+  relatedNotesJson         Json?
+  /// Per-section narratives. Markdown-friendly text (mostly plain prose with
+  /// preserved newlines and bullet markers from pdftotext).
+  symptomMd                String?  @db.Text
+  descriptionMd            String?  @db.Text
+  solutionMd               String?  @db.Text
+  businessProcessImpactMd  String?  @db.Text
+  requiredActionMd         String?  @db.Text
+  relevancyMd              String?  @db.Text
+  transportBehaviorMd      String?  @db.Text
+  /// Catch-all for sections not mapped to explicit columns. Newline-separated.
+  additionalSectionsMd     String?  @db.Text
+  /// Full extracted text per item — fallback for FTS + display when section
+  /// splitting fails. Preserves the canonical record in case parsing improves.
+  rawTextMd                String   @db.Text
+  parsedAt                 DateTime @default(now())
+
+  simplificationItem SimplificationItem @relation(fields: [simplificationItemId], references: [id], onDelete: Cascade)
+
+  @@index([sourceDocument])
 }
