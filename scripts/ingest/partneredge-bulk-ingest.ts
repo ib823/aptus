@@ -17,10 +17,45 @@
  *       /workspaces/aptus/Conversion/partneredge_index.json
  */
 
+import { createHash } from "crypto";
 import { readFile, writeFile } from "fs/promises";
 import { join, dirname } from "path";
 import { runPdfGuideIngest } from "./brownfield-pdf-guide-adapter";
 import { prisma } from "../../src/lib/db/prisma";
+
+const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+/**
+ * Generic binary ingest for non-PDF assets (PPTX, XLSX, etc.).
+ * Stores the raw bytes + metadata; no TOC parsing.
+ */
+async function ingestBinaryAsset(
+  filePath: string,
+  mimeType: string,
+  opts: { title: string; sourceUrl?: string; catalogId: string; notes?: string },
+): Promise<{ guideId: string; reused: boolean }> {
+  const buf = await readFile(filePath);
+  const sha256 = createHash("sha256").update(buf).digest("hex");
+  const existing = await prisma.brownfieldGuide.findUnique({ where: { sha256 } });
+  if (existing) {
+    return { guideId: existing.id, reused: true };
+  }
+  const created = await prisma.brownfieldGuide.create({
+    data: {
+      catalogVersionId: opts.catalogId,
+      title: opts.title,
+      sourceDocument: filePath.split(/[/\\]/).pop() ?? filePath,
+      sourceUrl: opts.sourceUrl ?? null,
+      mimeType,
+      fileSizeBytes: buf.byteLength,
+      sha256,
+      content: buf,
+      notes: opts.notes ?? null,
+    },
+  });
+  return { guideId: created.id, reused: false };
+}
 
 interface IndexAsset {
   filename: string;
@@ -76,21 +111,48 @@ async function main(): Promise<void> {
     console.log(``);
     console.log(`[partneredge-bulk] [${results.length + 1}/${idx.assets.length}] ${asset.filename}`);
     try {
-      const opts: Parameters<typeof runPdfGuideIngest>[1] = {
-        title: asset.title,
-        sourceUrl: asset.sourceUrl,
-        catalogId: catalog.id,
-        notes:
-          `Source: ${idx.source}\n` +
-          `Fetched: ${idx.fetchedAt} by ${idx.fetchedBy}\n` +
-          `Asset type: ${asset.assetType}\n` +
-          `SAP-published date: ${asset.sapPublishedDate ?? "(not stated)"}\n` +
-          `\nDescription: ${asset.description}`,
-      };
-      const result = await runPdfGuideIngest(pdfPath, opts);
+      const isPdf = asset.filename.toLowerCase().endsWith(".pdf");
+      const isPptx = asset.filename.toLowerCase().endsWith(".pptx");
+      const isXlsx = asset.filename.toLowerCase().endsWith(".xlsx");
+
+      const notes =
+        `Source: ${idx.source}\n` +
+        `Fetched: ${idx.fetchedAt} by ${idx.fetchedBy}\n` +
+        `Asset type: ${asset.assetType}\n` +
+        `SAP-published date: ${asset.sapPublishedDate ?? "(not stated)"}\n` +
+        `\nDescription: ${asset.description}`;
+
+      let result: { guideId: string; reused: boolean; sectionCount?: number };
+      if (isPdf) {
+        const opts: Parameters<typeof runPdfGuideIngest>[1] = {
+          title: asset.title,
+          sourceUrl: asset.sourceUrl,
+          catalogId: catalog.id,
+          notes,
+        };
+        result = await runPdfGuideIngest(pdfPath, opts);
+      } else if (isPptx) {
+        result = await ingestBinaryAsset(pdfPath, PPTX_MIME, {
+          title: asset.title,
+          sourceUrl: asset.sourceUrl,
+          catalogId: catalog.id,
+          notes,
+        });
+      } else if (isXlsx) {
+        result = await ingestBinaryAsset(pdfPath, XLSX_MIME, {
+          title: asset.title,
+          sourceUrl: asset.sourceUrl,
+          catalogId: catalog.id,
+          notes,
+        });
+      } else {
+        throw new Error(
+          `Unsupported file extension for ${asset.filename}. Expected .pdf, .pptx, or .xlsx.`,
+        );
+      }
 
       // Patch the row with the PartnerEdge-specific metadata fields the
-      // generic adapter doesn't know about
+      // generic adapters don't know about
       await prisma.brownfieldGuide.update({
         where: { id: result.guideId },
         data: {
@@ -105,7 +167,7 @@ async function main(): Promise<void> {
         title: asset.title,
         status: result.reused ? "reused" : "ingested",
         guideId: result.guideId,
-        sectionCount: result.sectionCount,
+        sectionCount: result.sectionCount ?? 0,
       });
     } catch (err) {
       results.push({
