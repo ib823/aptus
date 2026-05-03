@@ -34,11 +34,17 @@ interface CanonicalApi {
   apiName: string;
   apiType: string;
   status: string;
+  /** v2: original API Hub State value (ACTIVE | DEPRECATED) preserved alongside mapped status */
+  stateRaw?: string;
   apiHubUrl: string;
   rawProductCategory: string | null;
   scopeItemCodes: string[];
+  /** v2: SAP ORD identifier for cross-catalog joins */
+  ordId?: string;
   version?: string;
   description?: string;
+  /** v2: release-track tag (e.g. "Default") */
+  releaseInfo?: string;
   modifiedAt?: string;
   createdAt?: string;
   regId?: string;
@@ -126,7 +132,9 @@ async function main(): Promise<void> {
   let inserted = 0;
   const chunkSize = 100;
 
-  // Update existing rows in chunks (apiType=ODATAV4, appliesToPrivate=true, status sync)
+  // Update existing rows in chunks (apiType=ODATAV4, appliesToPrivate=true,
+  // status sync, AND populate category from v2's rawProductCategory when present)
+  let categoryFilled = 0;
   for (let i = 0; i < file.apis.length; i += chunkSize) {
     const slice = file.apis.slice(i, i + chunkSize);
     await prisma.$transaction(
@@ -134,18 +142,29 @@ async function main(): Promise<void> {
         const row = existingByApiId.get(api.apiId);
         if (!row) return [];
         retagged++;
+        const data: {
+          apiType: string;
+          appliesToPrivate: boolean;
+          status: string;
+          category?: string;
+        } = {
+          apiType: "ODATAV4",
+          appliesToPrivate: true,
+          status: api.status,
+        };
+        if (api.rawProductCategory) {
+          data.category = api.rawProductCategory;
+          categoryFilled++;
+        }
         return prisma.sapApiReference.update({
           where: { id: row.id },
-          data: {
-            apiType: "ODATAV4",
-            appliesToPrivate: true,
-            status: api.status,
-          },
+          data,
         });
       }),
     );
   }
   console.log(`[canonical-merge] Retagged ${retagged} existing rows to canonical (apiType=ODATAV4, appliesToPrivate=true)`);
+  console.log(`[canonical-merge] Filled .category from rawProductCategory on ${categoryFilled} rows`);
 
   // Insert net-new rows
   if (newApis.length > 0) {
@@ -155,7 +174,7 @@ async function main(): Promise<void> {
         apiName: a.apiName,
         description: a.description ?? "",
         status: a.status,
-        category: null,
+        category: a.rawProductCategory ?? null,
         appliesToPublic: false,
         appliesToPrivate: true,
         appliesToOnPrem: false,

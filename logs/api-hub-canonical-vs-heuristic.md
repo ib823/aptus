@@ -1,8 +1,8 @@
 # API Hub canonical vs heuristic — delta report
 
-**Generated:** 2026-05-03T08:14:05.368Z
+**Generated:** 2026-05-03T08:26:54.960Z
 **Source:** api.sap.com — SAPS4HANACloudPrivateEdition / odatav4
-**Fetched:** 2026-05-03T08:07:03.259Z by S-User S0025693350
+**Fetched:** 2026-05-03T08:15:40.126Z by S-User S0025693350 (browser session: ibaharudin@abeam.com)
 
 ## Canonical 424
 
@@ -12,7 +12,7 @@
 | Already in DB | 424 |
 | Net-new (inserted) | 0 |
 | Existing rows retagged to canonical | 424 |
-| Heuristic mis-tags cleared | 5 |
+| Heuristic mis-tags cleared | 0 |
 
 ## Status breakdown (canonical)
 
@@ -34,11 +34,7 @@ S/4HANA Cloud Private Edition OData V4 list. Their `apiType` has been
 cleared to NULL — they may still be valid OData v4 APIs, just for a
 different edition (Public, On-Prem, or industry add-on).
 
-- `OP_A_LGLCNTNTMACCESSLVL_CDS_0001`
-- `OP_A_SUPPLIEROPLSCORESAV_CDS_0001`
-- `OP_A_TRSYPOSFLOW_CDS_0001`
-- `OP_C_BEHQUEUEDATA_CDS_0001`
-- `OP_A_TRSYPOSTGJRNLENTRITM_CDS_0001`
+
 
 ## Final state
 
