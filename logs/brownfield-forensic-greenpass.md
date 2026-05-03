@@ -175,7 +175,49 @@ email are user Ikmal Baharudin's. No identity ambiguity.
 
 ## #19 — PartnerEdge S/4HANA Movement kit
 
-**Status:** ⏸ **BLOCKED — pending user action (per agreed plan path (a))**
+**Status:** GREEN — 9 assets ingested 2026-05-03
+
+Chrome-Claude with the user PartnerEdge session (Ikmal Baharudin /
+S-User S0025693350 / ABeam Consulting Malaysia) navigated to the
+S/4HANA Customer Evolution Program (renamed from Movement) library
+and downloaded 9 conversion-relevant assets, totaling 12.5 MB.
+
+| Asset | Type | Size | SAP-published |
+|---|---|--:|---|
+| Sales Quick Guide: SAP Customer Evolution Program | whitepaper | 286 KB | (not stated) |
+| SAP Customer Evolution Kit Partner Value Proposition | slides | 187 KB | 2024-08-14 |
+| Partner-Led Migrations - SAP ECS Supported Migration Approaches | slides | 3.0 MB | 2026-01-30 |
+| Using BTM Suite within SAP Activate Methodology | slides | 4.3 MB | 2026-04-17 |
+| H.B. Fuller: Clean Core Strategy + M&A | case_study | 434 KB | 2025-07-25 |
+| YASH Technologies: Data-Driven Transition | case_study | 88 KB | 2025-12-18 |
+| KUREHA: Phased Transition with Full Historical Data | case_study | 460 KB | 2025-11-13 |
+| Migrated Data Validation in Tight Timeframe | case_study | 145 KB | 2026-02-25 |
+| Clean Core Extensibility for SAP S/4HANA Cloud | whitepaper | 3.6 MB | 2025-10-30 |
+
+**Schema additions to support partner content** (this commit):
+- BrownfieldGuide.assetType (whitepaper, slides, case_study, etc.)
+- BrownfieldGuide.sourceProgram (the SAP program label)
+- BrownfieldGuide.sapPublishedDate
+
+**Ingest:** scripts/ingest/partneredge-bulk-ingest.ts (reads
+Conversion/partneredge_index.json, delegates to brownfield-pdf-guide-adapter,
+patches PartnerEdge-specific fields). Idempotent via sha256.
+
+**Honest notes:**
+- 0 TOC sections parsed across all 9 PDFs - these are slide decks +
+  case studies, not chaptered guides. Full PDF binary is in DB for
+  download via /api/brownfield-guides/[id]/content.
+- All 9 are SAP-published; none excluded on confidentiality basis.
+- Identity flagged again by chrome-claude (ibaharudin@abeam.com vs
+  S-User S0025693350) - confirmed: same user, SAML email-vs-S-User-ID.
+- Skipped per user-defined scope: videos / on-demand replays, marketing
+  campaign hub pages, sizing XLSX accelerators (not in CEP library -
+  live elsewhere on Quick Sizer / SAP Notes).
+
+**Source provenance:**
+- Source URL list: in Conversion/partneredge_index.json (each asset row
+  has its sourceUrl on partneredge.sap.com)
+- Run summary: logs/partneredge-ingest-summary.json
 
 **Forensic finding:** `partneredge.sap.com` requires authentication separate from S-User. Per agreed plan, the user (you) will test in Chrome-Claude whether the existing S-User session (`Ikmal Baharudin S0025693350`) carries SAML-federated partner access.
 
@@ -194,7 +236,7 @@ email are user Ikmal Baharudin's. No identity ambiguity.
 | #16 | Industry-specific guides | 🟡 (258 SIC items inline; PDFs auth-gated) | findings doc + 258 SIC inline tags |
 | #17 | Activate System Conversion roadmap | ✅ | 6 phases + 26 deliverables (PDF-derived) |
 | #18 | BTC / SDT docs | ✅ | 11 guide rows (Playwright crawled) |
-| #19 | PartnerEdge | ⏸ | pending user-test path (a) |
+| #19 | PartnerEdge | ✅ | 9 PDF guides (12.5 MB) - Customer Evolution Program assets |
 
 **Total reference content now in DB:**
 - `BrownfieldGuide` rows: **12** (1 PDF + 11 BTC HTML)

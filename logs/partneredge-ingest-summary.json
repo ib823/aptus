@@ -1,0 +1,77 @@
+{
+  "completedAt": "2026-05-03T09:15:37.861Z",
+  "source": "partneredge.sap.com — SAP Customer Evolution Program (formerly 'S/4HANA Movement')",
+  "fetchedAt": "2026-05-03T09:11:00Z",
+  "fetchedBy": "PartnerEdge user ibaharudin@abeam.com (ABeam Consulting Malaysia) — equivalent to S-User S0025693350; SAML federation maps both to the same identity",
+  "sourceProgram": "SAP Customer Evolution Program (S/4HANA Movement)",
+  "assetCount": 9,
+  "ingested": 9,
+  "reused": 0,
+  "errored": 0,
+  "totalSections": 0,
+  "results": [
+    {
+      "filename": "Sales_Quick_Guide_for_Partners_SAPCustomerEvolutionProgram.pdf",
+      "title": "Sales Quick Guide: SAP Customer Evolution Program",
+      "status": "ingested",
+      "guideId": "cmopk24ci00016339dfjj03ms",
+      "sectionCount": 0
+    },
+    {
+      "filename": "SAP_Customer_Evolution_Kit_Partner_Value_Proposition_v2.pdf",
+      "title": "SAP Customer Evolution Kit — Value Proposition for Partners",
+      "status": "ingested",
+      "guideId": "cmopk24j500036339n9ty10un",
+      "sectionCount": 0
+    },
+    {
+      "filename": "Partner_Led_Migrations_SAP_ECS_supported_migration_approaches.pdf",
+      "title": "Partner-Led Migrations — SAP Enterprise Cloud Services Supported Migration Approaches",
+      "status": "ingested",
+      "guideId": "cmopk255g00056339lc75ukj5",
+      "sectionCount": 0
+    },
+    {
+      "filename": "Using_BTM_Suite_within_SAP_Activate_methodology.pdf",
+      "title": "Using the Business Transformation Management Suite within the SAP Activate Methodology",
+      "status": "ingested",
+      "guideId": "cmopk261v000763396ndw28y8",
+      "sectionCount": 0
+    },
+    {
+      "filename": "HB_Fuller_clean_core_strategy_M_and_A.pdf",
+      "title": "H.B. Fuller: Adhering to a clean core strategy on cloud ERP to execute a merger and acquisition strategy",
+      "status": "ingested",
+      "guideId": "cmopk2722000963393hk9sb50",
+      "sectionCount": 0
+    },
+    {
+      "filename": "YASH_Technologies_data_driven_transition.pdf",
+      "title": "YASH Technologies: Adopting data-driven guidance for transitioning to modern ERP in the private cloud",
+      "status": "ingested",
+      "guideId": "cmopk277t000b633963b0qjgy",
+      "sectionCount": 0
+    },
+    {
+      "filename": "KUREHA_phased_transition_full_historical_data.pdf",
+      "title": "KUREHA Corporation: Taking a phased transition to a next-gen business foundation with full historical data",
+      "status": "ingested",
+      "guideId": "cmopk27cu000d6339oj9vwalk",
+      "sectionCount": 0
+    },
+    {
+      "filename": "Migrated_data_validation_tight_timeframe.pdf",
+      "title": "How can companies validate their migrated data in a transition to a new ERP — SAP S/4HANA — in a tight timeframe?",
+      "status": "ingested",
+      "guideId": "cmopk27j3000f6339v3th3vk5",
+      "sectionCount": 0
+    },
+    {
+      "filename": "Clean_core_extensibility_for_SAP_S4HANA_Cloud.pdf",
+      "title": "Clean Core Extensibility for SAP S/4HANA Cloud",
+      "status": "ingested",
+      "guideId": "cmopk288y000h6339cqu3jzk0",
+      "sectionCount": 0
+    }
+  ]
+}
