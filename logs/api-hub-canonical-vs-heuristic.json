@@ -1,0 +1,27 @@
+{
+  "canonicalCount": 424,
+  "fetchedAt": "2026-05-03T08:07:03.259Z",
+  "fetchedBy": "S-User S0025693350",
+  "source": "api.sap.com — SAPS4HANACloudPrivateEdition / odatav4",
+  "alreadyInDb": 424,
+  "insertedNew": 0,
+  "retaggedToCanonical": 424,
+  "heuristicMistagsCleared": 5,
+  "heuristicMistagSamples": [
+    "OP_A_LGLCNTNTMACCESSLVL_CDS_0001",
+    "OP_A_SUPPLIEROPLSCORESAV_CDS_0001",
+    "OP_A_TRSYPOSFLOW_CDS_0001",
+    "OP_C_BEHQUEUEDATA_CDS_0001",
+    "OP_A_TRSYPOSTGJRNLENTRITM_CDS_0001"
+  ],
+  "statusBreakdown": {
+    "Released": 394,
+    "Deprecated": 30
+  },
+  "patternBreakdown": {
+    "IS_": 9,
+    "sap-s4-": 143,
+    "OP_": 267,
+    "SAP_ICSM_": 5
+  }
+}

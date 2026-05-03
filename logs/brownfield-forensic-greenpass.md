@@ -30,7 +30,35 @@
 
 ## #8 — API Hub focused subset (S/4HANA Cloud PE OData V4)
 
-**Status:** 🟡 **GREEN — best-effort heuristic, with documented limitation**
+**Status:** ✅ **GREEN — canonical 424 ingested 2026-05-03**
+
+**Update 2026-05-03:** Chrome-Claude with the user S-User session fetched
+the canonical list from api.sap.com via the discovered endpoint:
+
+```
+GET https://api.sap.com/api/1.0/container/SAPS4HANACloudPrivateEdition/artifacts
+    ?$filter=Type eq 'API' and SubType eq 'ODATAV4'&$top=1000
+```
+
+Returned the full 424 in a single call (no pagination). All 424 IDs
+already existed in the DB — the merge replaced heuristic tags with
+canonical authority and cleared 5 heuristic mis-tags (rows my heuristic
+called ODATAV4+Private that the canonical list excluded).
+
+**Final DB state:**
+- `apiType=ODATAV4 AND appliesToPrivate=true`: **424 rows**
+- of which `status=Released`: **394**
+- of which `status=Deprecated`: **30**
+- (no BETA for this product)
+
+Delta report: `logs/api-hub-canonical-vs-heuristic.md`
+Source file: `/workspaces/aptus/Conversion/api-hub-s4hcpe-odatav4.json`
+
+---
+
+### Original heuristic findings (kept for audit)
+
+**Status before canonical:** 🟡 best-effort heuristic, with documented limitation
 
 **Honest finding:** `api.sap.com` gates the product-scoped JSON listing endpoints behind the SAP Public Catalog OAuth2 flow (`sappubliccatalog.authentication.eu10.hana.ondemand.com`). Both bare `fetch()` and headless Playwright in this codespace returned `401` / OAuth redirect. The canonical 424-row "S/4HANA Cloud Private Edition OData V4" subset cannot be authoritatively enumerated from this environment without S-User credentials.
 
