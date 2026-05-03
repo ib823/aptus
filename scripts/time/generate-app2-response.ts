@@ -64,6 +64,7 @@ function buildDocReference(scopeItemIds: string | null): string {
 interface EnrichInput {
   solutionProviderRemarks: string | null;
   crossCuttingTag: string | null;
+  verdicts: Array<{ confidence: string | null; source: string; actor: string }>;
   customerProcessLinks: Array<{
     confidence: string | null;
     customerProcess: {
@@ -78,6 +79,23 @@ interface EnrichInput {
 function enrichRemarks(req: EnrichInput): string {
   const base = (req.solutionProviderRemarks ?? "").trim();
   const parts: string[] = [];
+
+  // Inline review flag (HIGH/MED confidence rows): leads the Remarks so
+  // ABeam's reviewer sees it the moment they open the cell.
+  // Suppressed when verdict.source === "MANUAL" (reviewer-endorsed verdicts
+  // already carry their own [REJECTED]/[ON HOLD] prefix in remarksMd or
+  // are clean Approve/Edit endorsements).
+  const v = req.verdicts[0];
+  const conf = v?.confidence ?? null;
+  const isReviewerEndorsed = v?.source === "MANUAL";
+  if (!isReviewerEndorsed) {
+    if (conf === "low") {
+      parts.push("[REVIEW NEEDED — low confidence; verify before submission]");
+    } else if (conf === "medium") {
+      parts.push("[REVIEW — medium confidence; spot-check recommended]");
+    }
+  }
+
   if (base) parts.push(base);
 
   // Skip the [Anchor:] tag suffix when remarks are already self-explanatory
@@ -153,6 +171,8 @@ async function main(): Promise<void> {
   // Pull all requirements + their current verdicts (via read-cache columns) +
   // cross-cutting tag + linked CustomerProcess evidence (pain points, options,
   // tcode/Fiori/table refs) so Remarks can surface deeper grounding.
+  // Also pull verdict.confidence so we can inline-flag low/medium-confidence
+  // rows for ABeam's reviewer pass directly inside the response Remarks.
   const where: { assessmentId: string } = { assessmentId: assessment.id };
   const requirements = await prisma.clientRequirement.findMany({
     where,
@@ -162,6 +182,11 @@ async function main(): Promise<void> {
       sapModule: true, scopeItemIds: true, scopeItemNames: true,
       currentVerdictId: true,
       crossCuttingTag: true,
+      verdicts: {
+        where: { isCurrent: true },
+        select: { confidence: true, source: true, actor: true },
+        take: 1,
+      },
       customerProcessLinks: {
         select: {
           confidence: true,
@@ -221,6 +246,26 @@ async function main(): Promise<void> {
       // Light cell formatting (preserve original styling otherwise)
       row.getCell(COL_VERDICT).alignment = { horizontal: "center", vertical: "middle" };
       row.getCell(COL_REMARKS).alignment = { wrapText: true, vertical: "top" };
+
+      // Inline review flag — color the verdict cell so ABeam can skim for
+      // priority rows without reading every Remarks string. Suppressed for
+      // MANUAL-source verdicts (already reviewed). Rejected/Hold rows get
+      // amber regardless of confidence.
+      const v = req.verdicts[0];
+      const conf = v?.confidence ?? null;
+      const isReviewerEndorsed = v?.source === "MANUAL";
+      const remarksText = String(req.solutionProviderRemarks ?? "");
+      if (remarksText.startsWith("[REJECTED")) {
+        row.getCell(COL_VERDICT).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFCCCC" } };
+        row.getCell(COL_VERDICT).font = { bold: true, color: { argb: "FF990000" } };
+      } else if (remarksText.startsWith("[ON HOLD")) {
+        row.getCell(COL_VERDICT).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFE9B0" } };
+      } else if (!isReviewerEndorsed && conf === "low") {
+        row.getCell(COL_VERDICT).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFCCCC" } };
+        row.getCell(COL_VERDICT).font = { bold: true, color: { argb: "FF990000" } };
+      } else if (!isReviewerEndorsed && conf === "medium") {
+        row.getCell(COL_VERDICT).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFE9B0" } };
+      }
 
       writes++;
       cellsWritten++;
