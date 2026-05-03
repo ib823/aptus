@@ -6,9 +6,10 @@ import type { TestUser } from "@/lib/auth/dev-login";
 
 interface Props {
   users: readonly TestUser[];
+  redirectTo?: string;
 }
 
-export function DevLoginForm({ users }: Props) {
+export function DevLoginForm({ users, redirectTo = "/assessments" }: Props) {
   const [secret, setSecret] = useState("");
   const [loadingFor, setLoadingFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +37,7 @@ export function DevLoginForm({ users }: Props) {
         setLoadingFor(null);
         return;
       }
-      router.push("/assessments");
+      router.push(redirectTo);
       router.refresh();
     } catch {
       setError("Network error");

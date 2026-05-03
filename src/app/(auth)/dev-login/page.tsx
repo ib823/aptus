@@ -6,10 +6,25 @@ import { DevLoginForm } from "./DevLoginForm";
 export const metadata: Metadata = { title: "Dev Login" };
 export const dynamic = "force-dynamic";
 
-export default function DevLoginPage() {
+function safeCallbackUrl(raw: string | string[] | undefined): string {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value) return "/assessments";
+  // Only allow same-origin absolute paths; reject protocol-relative and external URLs.
+  if (!value.startsWith("/") || value.startsWith("//")) return "/assessments";
+  return value;
+}
+
+export default async function DevLoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ callbackUrl?: string | string[] }>;
+}) {
   if (!isDevLoginEnabled()) {
     notFound();
   }
+
+  const { callbackUrl } = await searchParams;
+  const redirectTo = safeCallbackUrl(callbackUrl);
 
   return (
     <div className="max-w-md mx-auto py-12 px-4">
@@ -18,7 +33,7 @@ export default function DevLoginPage() {
         Internal-testing bypass for the magic-link flow. Pick a role to sign in
         as. Real production users are not accessible from this page.
       </p>
-      <DevLoginForm users={TEST_USERS} />
+      <DevLoginForm users={TEST_USERS} redirectTo={redirectTo} />
     </div>
   );
 }
