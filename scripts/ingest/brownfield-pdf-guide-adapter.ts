@@ -16,8 +16,9 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { createHash } from "crypto";
-import { readFile } from "fs/promises";
-import { basename } from "path";
+import { readFile, mkdtemp, rm } from "fs/promises";
+import { basename, join } from "path";
+import { tmpdir } from "os";
 import { prisma } from "../../src/lib/db/prisma";
 
 const pExecFile = promisify(execFile);
@@ -38,11 +39,20 @@ interface ParsedSection {
  * common in SAP-published guides).
  */
 async function extractText(pdfPath: string): Promise<{ text: string; numPages: number }> {
-  const { stdout: rawText } = await pExecFile("pdftotext", ["-layout", pdfPath, "-"]);
-  const { stdout: infoStdout } = await pExecFile("pdfinfo", [pdfPath]);
-  const pagesMatch = /^Pages:\s+(\d+)/m.exec(infoStdout);
-  const numPages = pagesMatch ? Number(pagesMatch[1]) : 0;
-  return { text: rawText, numPages };
+  // Write to a temp file so we don't hit Node's child_process maxBuffer (1MB default).
+  // The 614-page TIME App 2(b) deck produces ~3MB of text, which overflows stdout.
+  const dir = await mkdtemp(join(tmpdir(), "pdfguide-"));
+  const txtPath = join(dir, "out.txt");
+  try {
+    await pExecFile("pdftotext", ["-layout", pdfPath, txtPath]);
+    const rawText = await readFile(txtPath, "utf8");
+    const { stdout: infoStdout } = await pExecFile("pdfinfo", [pdfPath]);
+    const pagesMatch = /^Pages:\s+(\d+)/m.exec(infoStdout);
+    const numPages = pagesMatch ? Number(pagesMatch[1]) : 0;
+    return { text: rawText, numPages };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 /**

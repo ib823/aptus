@@ -800,8 +800,15 @@ model Assessment {
   // always Aptus-brand regardless. Spec §5.7. Null = no override.
   clientAccent String?
 
+  // TIME RFT Phase 1 — link to a brownfield SIC catalog when this assessment
+  // covers a hybrid (greenfield + brownfield) engagement (e.g. ECC → S/4HANA
+  // conversion bid). NULL for pure greenfield engagements (Bursa, SKM).
+  brownfieldCatalogVersionId String?
+
   organization            Organization             @relation(fields: [organizationId], references: [id])
   catalogVersion          ScopeCatalogVersion?     @relation(fields: [catalogVersionId], references: [id])
+  brownfieldCatalogVersion BrownfieldCatalogVersion? @relation("AssessmentBrownfieldCatalog", fields: [brownfieldCatalogVersionId], references: [id])
+  customerProcesses       CustomerProcess[]
   classificationPasses    ClassificationPass[]
   vendorSubmissions       VendorSubmission[]
   shareLinks              AssessmentShareLink[]
@@ -1248,6 +1255,7 @@ model ClientRequirement {
   assessment      Assessment              @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
   verdicts        ClassificationVerdict[]
   vendorResponses VendorResponse[]
+  customerProcessLinks CustomerProcessRequirementLink[]
 
   @@unique([assessmentId, module, code])
   @@index([assessmentId])
@@ -2703,6 +2711,7 @@ model BrownfieldCatalogVersion {
   classificationProtocols   BrownfieldClassificationProtocol[]
   guides                    BrownfieldGuide[]
   methodologyPhases         ConversionMethodologyPhase[]
+  hybridAssessments         Assessment[]              @relation("AssessmentBrownfieldCatalog")
 
   @@index([isActive])
   @@index([snapshotDate])
@@ -3292,4 +3301,103 @@ model ConversionMethodologyDeliverable {
   phase ConversionMethodologyPhase @relation(fields: [phaseId], references: [id], onDelete: Cascade)
 
   @@index([phaseId])
+}
+
+// =============================================================
+// TIME RFT — CustomerProcess (App 2(b) As-Is process landscape)
+// =============================================================
+//
+// For hybrid greenfield + brownfield engagements (e.g. ECC → S/4HANA
+// conversion bids), the customer's RFT typically includes a "current state"
+// process landscape document (TIME's App 2(b) is 614 pages of PowerPoint
+// describing CBS billing, zSMART, e-ARIF, WOC, COFR, ESS, PEOPLE, Treasury
+// TRECS, etc.). We extract canonical processes from that document, link
+// each to relevant requirements (App 2 functional matrix), and link each
+// to relevant SAP catalog evidence (greenfield ScopeItems + brownfield
+// SimplificationItems + PreCheckNotes + APIs + EWA findings).
+//
+// The classifier consumes these links per-requirement to ground its
+// dual-catalog Remarks output.
+
+model CustomerProcess {
+  id                       String   @id @default(cuid())
+  assessmentId             String
+  /// Human-readable canonical process name, e.g. "PEOPLE — Employee Self-Service Portal"
+  processName              String
+  /// Section breadcrumb from the source document (e.g. "8. HCM > Employee Transactions")
+  parentSection            String?
+  /// Page numbers in the source document where this process appears
+  pageRefs                 Int[]    @default([])
+  /// Extracted As-Is description (markdown-friendly prose)
+  asIsDescription          String?  @db.Text
+  /// Source systems involved, e.g. ["PEOPLE (custom)", "SAP HCM (ECC PA/OM/PT)"]
+  sourceSystems            String[] @default([])
+  /// Customer-built apps mentioned, e.g. ["PEOPLE Portal", "e-ARIF"]
+  customApps               String[] @default([])
+  /// Integration touchpoints — JSON shape: [{target, method, direction?}]
+  integrations             Json?
+  /// Pain points / improvement opportunities
+  painPoints               String[] @default([])
+  /// SAP modules referenced by the process, e.g. ["HCM-PA", "HCM-OM", "HCM-PT"]
+  modules                  String[] @default([])
+  /// FK to the BrownfieldGuide row that holds the source PDF (App 2(b) etc.)
+  extractedFromGuideId     String?
+  /// Confidence of the extraction: high/medium/low
+  extractionConfidence     String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  assessment       Assessment                       @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  requirementLinks CustomerProcessRequirementLink[]
+  evidenceLinks    CustomerProcessSapEvidenceLink[]
+
+  @@index([assessmentId])
+  @@index([parentSection])
+  @@index([extractedFromGuideId])
+}
+
+/// Many-to-many junction: a CustomerProcess relates to one or more
+/// ClientRequirements that touch it (or vice versa).
+model CustomerProcessRequirementLink {
+  id                       String   @id @default(cuid())
+  customerProcessId        String
+  requirementId            String
+  /// "KEYWORD" | "LLM_VERIFIED" | "MANUAL" — provenance of the link
+  matchType                String
+  /// "high" | "medium" | "low"
+  confidence               String
+  /// Free-form rationale captured at link creation
+  rationale                String?  @db.Text
+  createdAt                DateTime @default(now())
+
+  customerProcess CustomerProcess   @relation(fields: [customerProcessId], references: [id], onDelete: Cascade)
+  requirement     ClientRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  @@unique([customerProcessId, requirementId])
+  @@index([customerProcessId])
+  @@index([requirementId])
+}
+
+/// Links a CustomerProcess to a piece of SAP catalog evidence that grounds
+/// the classifier's verdicts for requirements touching this process.
+/// Polymorphic via (evidenceType, evidenceId) — not enforced as Prisma FK
+/// because the evidence can come from any of several different tables.
+model CustomerProcessSapEvidenceLink {
+  id                       String   @id @default(cuid())
+  customerProcessId        String
+  /// "GREENFIELD_SCOPE_ITEM" | "BROWNFIELD_SIMPLIFICATION_ITEM" |
+  /// "PRECHECK_NOTE" | "EWA_FINDING" | "API_REFERENCE" | "GUIDE_SECTION" |
+  /// "METHODOLOGY_DELIVERABLE"
+  evidenceType             String
+  /// FK target by type — e.g. ScopeItem.id when evidenceType=GREENFIELD_SCOPE_ITEM
+  evidenceId               String
+  /// "PRIMARY" | "SECONDARY" | "SUPPORTING"
+  role                     String
+  rationaleMd              String?  @db.Text
+  createdAt                DateTime @default(now())
+
+  customerProcess CustomerProcess @relation(fields: [customerProcessId], references: [id], onDelete: Cascade)
+
+  @@index([customerProcessId])
+  @@index([evidenceType, evidenceId])
 }

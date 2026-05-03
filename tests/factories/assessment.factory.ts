@@ -36,6 +36,7 @@ function createBase(overrides: AssessmentOverrides = {}): Assessment {
     currentErp: overrides.currentErp ?? "SAP ECC",
     sapVersion: overrides.sapVersion ?? "2508",
     catalogVersionId: overrides.catalogVersionId ?? null,
+    brownfieldCatalogVersionId: overrides.brownfieldCatalogVersionId ?? null,
     status: overrides.status ?? "draft",
     createdBy: overrides.createdBy ?? nextId(),
     organizationId: overrides.organizationId ?? nextId(),
