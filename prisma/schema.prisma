@@ -2653,3 +2653,331 @@ model DependencyPropagationLog {
   @@index([affectedStepId])
   @@index([dependencyId])
 }
+
+// =============================================================
+// Phase 14 — Brownfield Catalog (ECC → S/4HANA Conversion)
+// =============================================================
+//
+// Parallel to ScopeCatalogVersion / ScopeItem (greenfield) but for system
+// conversion. Spine = SAP Simplification Item Catalog (SIC), supplemented
+// with Pre-Check Notes (Note 2502552 umbrella) + Always-On Business Function
+// list (Note 2240360 attachment) + Conversion Guide PDF.
+//
+// Per-customer system scans (EWA / SRC / ATC / SUSG) live in
+// BrownfieldAssessment + SystemBaselineSnapshot + EwaFinding.
+
+/// One row per ingest of a SIC archive. Enables multiple target releases
+/// (2025-FPS1, 2602, etc.) to coexist without overwriting.
+model BrownfieldCatalogVersion {
+  id                String    @id @default(cuid())
+  /// Catalog snapshot date (yyyymmdd parsed from filename), e.g. "2026-05-03"
+  snapshotDate      DateTime
+  /// SIC application version from header.xml, e.g. "1806CS02"
+  applicationVersion String?
+  /// SIC source system ID, e.g. "898777"
+  sourceSystemId    String?
+  /// Free-form label for the catalog snapshot (manually set), e.g. "May 2026 SIC"
+  label             String?
+  /// SHA-256 of the source archive — same archive re-ingest is a no-op
+  sourceArchiveHash String    @unique
+  sourceArchivePath String?
+  ingestedAt        DateTime  @default(now())
+  notes             String?   @db.Text
+  isActive          Boolean   @default(true)
+  supersededById    String?
+
+  simplificationItems       SimplificationItem[]
+  simplificationItemChecks  SimplificationItemCheck[]
+  relatedSapNotes           RelatedSapNote[]
+  linesOfBusiness           BrownfieldLineOfBusiness[]
+  applicationAreas          BrownfieldApplicationArea[]
+  preCheckNotes             PreCheckNote[]
+  businessFunctionDispositions BusinessFunctionDisposition[]
+  brownfieldAssessments     BrownfieldAssessment[]
+
+  @@index([isActive])
+  @@index([snapshotDate])
+}
+
+/// The spine — one per SAP Simplification Item.
+/// Source: sdb_transition_db_item.xml (951 rows in May 2026 snapshot).
+model SimplificationItem {
+  id                       String   @id @default(cuid())
+  catalogVersionId         String
+  /// SAP-assigned 32-char hex GUID (primary identity within the catalog).
+  sapGuid                  String
+  /// Human-facing item ID, e.g. "SI11: Logistics_PS" or "S4TWL_FIN_004".
+  /// Format is non-uniform across SAP — keep as free-form text.
+  sitemId                  String
+  /// Localized title, e.g. "S4TWL - Workforce Planning"
+  titleEn                  String
+  applicationArea          String
+  /// SAP processing status. R = Released; values like P = Processing exist.
+  procStatus               String
+  procStatusTextEn         String
+  /// "OR" | "AND" — how the item's checks combine (sdb_check_new.xml join key).
+  checkCondition           String?
+  /// SAP Note ID describing business impact (e.g. "0002267189"). Cross-link
+  /// to RelatedSapNote.sapNote when present.
+  impactNote               String?
+  /// FK-by-string to the LOB / Business Area GUID system (sdb_lob.xml).
+  businessAreaGuid         String?
+  lobTechnologyGuid        String?
+  /// Source-release applicability bounds (* = unbounded).
+  startRelValidFromPrdVer  String?
+  startRelValidFromStack   String?
+  startRelValidToPrdVer    String?
+  startRelValidToStack     String?
+  /// Reference / copy chain (rare).
+  referGuid                String?
+  copyGuid                 String?
+  copyStatus               String?
+  /// Audit trail from SIC export.
+  createdBySap             String?
+  changedBySap             String?
+  /// Linkage to greenfield catalog: where this brownfield item references
+  /// scope codes we already curate (e.g. simplification of "J60 - Asset
+  /// Accounting"). Denormalized String[] like SapApiReference.scopeItemCodes.
+  affectedScopeCodes       String[] @default([])
+
+  ingestedAt               DateTime @default(now())
+
+  /// Optional pointer to a greenfield ScopeCatalogVersion id when this item
+  /// has been reconciled to a known release. Plain String (no FK) to mirror
+  /// the SapApiReference.scopeItemCodes convention — set in a follow-up
+  /// reconciliation pass, not at ingest.
+  linkedScopeCatalogVersionId String?
+
+  brownfieldCatalog BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id], onDelete: Cascade)
+  checks            SimplificationItemCheck[]
+  notes             RelatedSapNote[]
+
+  @@unique([sapGuid, catalogVersionId])
+  @@index([catalogVersionId])
+  @@index([applicationArea])
+  @@index([procStatus])
+}
+
+/// Per-item automated check rules (the SI-Check engine consumes these).
+/// Source: sdb_check_new.xml (4,508 rows in May 2026 snapshot).
+model SimplificationItemCheck {
+  id                String  @id @default(cuid())
+  catalogVersionId  String
+  simplificationItemId String? // resolved during ingest from sitemGuid
+  /// SAP GUIDs on the check side.
+  sitemGuid         String
+  checkGuid         String
+  /// "ENTRY_POINT" | "USAGE" | "DDIC" | "TABLE_USAGE" | etc.
+  checkType         String
+  /// SAP-internal check-class identifier, e.g. "CX00N" or "S4TWL_LOG_PS_4".
+  checkIdentifier   String
+  checkSubIdentifier String?
+  sapNote           String?
+  /// Threshold operator: "GT" | "LT" | "EQ" | "NE" | "GE" | "LE".
+  checkCountOption  String?
+  checkCount        Int?    @default(0)
+  checkClassUsage   String?
+  bfChkState        String?
+  checkCondition    String?
+
+  catalogVersion BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id], onDelete: Cascade)
+  simplificationItem SimplificationItem? @relation(fields: [simplificationItemId], references: [id])
+
+  @@index([catalogVersionId])
+  @@index([sitemGuid])
+  @@index([sapNote])
+  @@index([simplificationItemId])
+}
+
+/// Cross-reference from SIC sdb_note.xml — links Simplification Items to
+/// SAP Notes (Business Impact, Pre-Check, etc.). 962 rows in May 2026 snapshot.
+model RelatedSapNote {
+  id                   String  @id @default(cuid())
+  catalogVersionId     String
+  simplificationItemId String? // resolved during ingest
+  sitemGuid            String? // raw GUID from XML; some notes are catalog-wide
+  noteGuid             String  // V_SIC_NOTE.GUID — uniquely identifies row
+  noteType             String  // "BI" = Business Impact, etc.
+  noteTypeTextEn       String?
+  sapNote              String  // 10-digit zero-padded SAP Note ID
+
+  catalogVersion BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id], onDelete: Cascade)
+  simplificationItem SimplificationItem? @relation(fields: [simplificationItemId], references: [id])
+
+  @@unique([noteGuid, catalogVersionId])
+  @@index([catalogVersionId])
+  @@index([sapNote])
+  @@index([simplificationItemId])
+}
+
+/// SAP Line-of-Business taxonomy from sdb_lob.xml. 89 rows.
+/// Renamed (BrownfieldLineOfBusiness) to avoid collision with any future
+/// greenfield LOB model.
+model BrownfieldLineOfBusiness {
+  id               String  @id @default(cuid())
+  catalogVersionId String
+  sapId            String  // 32-char hex
+  name             String
+  type             String  // "BA" | "LOB"
+  owningContextId  String?
+  parentSapId      String?
+  status           String?
+  lifecycleStatus  String?
+  rank             Int?    @default(0)
+
+  catalogVersion BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([sapId, catalogVersionId])
+  @@index([catalogVersionId])
+  @@index([type])
+}
+
+/// SAP Application Area registry from sdb_application_area.xml. 73 rows.
+model BrownfieldApplicationArea {
+  id               String @id @default(cuid())
+  catalogVersionId String
+  areaKey          String
+  areaName         String
+
+  catalogVersion BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([areaKey, catalogVersionId])
+  @@index([catalogVersionId])
+}
+
+/// SAP Notes referenced by the umbrella note (2502552). Categorized by role
+/// so consultants can distinguish "must implement" prerequisites from
+/// "informational" cross-references.
+model PreCheckNote {
+  id                String  @id @default(cuid())
+  catalogVersionId  String?
+  /// 10-digit SAP Note ID (zero-padded for sortability).
+  sapNoteId         String
+  /// "UMBRELLA" | "PREREQUISITE" | "REFERENCES" | "REFERENCED_BY"
+  role              String
+  /// The note that pointed to this one (e.g. "2502552" for the umbrella's children).
+  parentNoteId      String?
+  title             String?
+  /// SAP component, e.g. "CA-TRS-PRCK"
+  component         String?
+  /// Software-component scoping (only set on PREREQUISITE rows from the
+  /// umbrella's prerequisite-list table).
+  softwareComponent String?
+  releaseFrom       String?
+  releaseTo         String?
+  url               String?
+
+  catalogVersion BrownfieldCatalogVersion? @relation(fields: [catalogVersionId], references: [id], onDelete: SetNull)
+
+  // Composite uniqueness preserves the per-(note × software component × release-range)
+  // grain that the umbrella's Prerequisites table carries — same noteId
+  // may legitimately appear once per SWC scope.
+  @@unique([sapNoteId, role, softwareComponent, releaseFrom, releaseTo, catalogVersionId])
+  @@index([catalogVersionId])
+  @@index([sapNoteId])
+  @@index([role])
+}
+
+/// Always-On / Customer-Choice / Always-Off business functions per release.
+/// Source: SAP Note 2240360 attachments (TXT files).
+model BusinessFunctionDisposition {
+  id                  String @id @default(cuid())
+  catalogVersionId    String
+  /// Business Function technical name, e.g. "/AIF/EXTENDED_FEATURES"
+  businessFunctionId  String
+  /// "ALWAYS_ON" | "CUSTOMER_CHOICE" | "ALWAYS_OFF"
+  disposition         String
+  /// Source release tag (e.g. "S4H_2025") — pinned because BFR list ships
+  /// per release and a customer system may target a different release than
+  /// the catalog snapshot.
+  sourceReleaseTag    String
+
+  catalogVersion BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([businessFunctionId, sourceReleaseTag, catalogVersionId])
+  @@index([catalogVersionId])
+  @@index([disposition])
+}
+
+// -------------------------------------------------------------
+// Per-customer brownfield assessment (separate from greenfield Assessment)
+// -------------------------------------------------------------
+
+model BrownfieldAssessment {
+  id               String   @id @default(cuid())
+  /// Free-form name, e.g. "TT dotCom — ECC EhP6 → S/4HANA 2025"
+  name             String
+  customerName     String
+  /// Optional link to an existing greenfield Assessment (for combined engagements)
+  greenfieldAssessmentId String?
+  /// Pinned brownfield catalog version (the SIC release we're scoring against)
+  catalogVersionId String
+  /// Source ECC system facts captured from EWA / SRC / Maintenance Planner.
+  sourceSystemId         String?  // e.g. "PRD"
+  sourceProduct          String?  // e.g. "SAP ERP ENHANCE PACKAGE 6.05"
+  sourceDatabase         String?  // e.g. "ORACLE"
+  sourceDatabaseVersion  String?
+  sourceProductType      String?  // "Productive" | "Test" | "Quality"
+  sourceCountry          String?  // ISO 2-letter
+  sapInstallationNumber  String?
+  sapCustomerNumber      String?
+  /// Target release we're converting to (matches a S/4HANA release tag).
+  targetRelease          String?  // e.g. "2025-FPS1"
+  status                 String   @default("draft") // draft | scanning | reviewed | signed_off
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  catalogVersion BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id])
+  baselineSnapshots SystemBaselineSnapshot[]
+
+  @@index([catalogVersionId])
+  @@index([status])
+}
+
+/// One per ingested customer artifact (EWA, SRC export, ATC worklist, etc.).
+model SystemBaselineSnapshot {
+  id                     String   @id @default(cuid())
+  brownfieldAssessmentId String
+  /// "EWA" | "SRC" | "ATC" | "SUSG" | "MAINTENANCE_PLANNER" | "QUICKSIZER"
+  sourceType             String
+  sourceFilePath         String
+  sourceFileHash         String
+  /// When the source data was captured (e.g. EWA report period start).
+  capturedAt             DateTime?
+  /// When ingested into Aptus.
+  ingestedAt             DateTime @default(now())
+  /// Structured facts harvested by the adapter (per-source schema in JSON).
+  facts                  Json?
+  /// Raw extracted text for the ingest-side audit trail (helpful for debug).
+  rawText                String?  @db.Text
+
+  brownfieldAssessment BrownfieldAssessment @relation(fields: [brownfieldAssessmentId], references: [id], onDelete: Cascade)
+  ewaFindings          EwaFinding[]
+
+  @@unique([sourceFileHash, brownfieldAssessmentId])
+  @@index([brownfieldAssessmentId])
+  @@index([sourceType])
+}
+
+/// One alert / issue extracted from an EWA report.
+model EwaFinding {
+  id              String  @id @default(cuid())
+  snapshotId      String
+  /// "Maintenance" | "Security" | "Performance" | "Database" | "Hardware" |
+  /// "Configuration" | "ABAP_DUMP" | "Service_Notes" | "Other"
+  category        String
+  /// "Red" | "Yellow" | "Green" | "Info" — SAP's traffic-light severity.
+  severity        String
+  title           String
+  description     String? @db.Text
+  /// Free-form recommendation harvested from the alert body.
+  recommendation  String? @db.Text
+  /// Position in the source EWA's alert overview (preserves SAP ordering).
+  sortOrder       Int     @default(0)
+
+  snapshot SystemBaselineSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([snapshotId])
+  @@index([category])
+  @@index([severity])
+}
