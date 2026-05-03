@@ -57,6 +57,28 @@ export default async function BrownfieldCatalogDetailPage({ params }: PageProps)
     orderBy: { role: "asc" },
   });
 
+  // Reference guides (PDFs + crawled HTML docs) tied to this catalog
+  const guides = await prisma.brownfieldGuide.findMany({
+    where: { catalogVersionId: id },
+    orderBy: [{ mimeType: "asc" }, { title: "asc" }],
+    select: {
+      id: true,
+      title: true,
+      sourceDocument: true,
+      sourceUrl: true,
+      mimeType: true,
+      fileSizeBytes: true,
+      industryTag: true,
+      conversionPath: true,
+      _count: { select: { sections: true } },
+    },
+  });
+
+  // Methodology phases (SAP Activate)
+  const methodologyPhaseCount = await prisma.conversionMethodologyPhase.count({
+    where: { catalogVersionId: id },
+  });
+
   // Narrative coverage (count of SimplificationItem rows with a parsed narrative)
   const narrativeCount = await prisma.simplificationItemNarrative.count({
     where: { simplificationItem: { catalogVersionId: id } },
@@ -166,6 +188,62 @@ export default async function BrownfieldCatalogDetailPage({ params }: PageProps)
           </p>
           <p className="text-sm text-muted-foreground mt-1">Business Functions →</p>
         </Link>
+      </div>
+
+      {/* Reference Documents — Brownfield Guides + Methodology */}
+      <div className="bg-card rounded-lg border border-border p-5 mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Reference Documents
+          </h3>
+          {methodologyPhaseCount > 0 && (
+            <Link
+              href={`/admin/brownfield-catalogs/${id}/methodology`}
+              className="px-3 py-1.5 rounded border border-blue-500 bg-blue-50 text-xs text-blue-700 hover:bg-blue-100"
+            >
+              📋 Conversion Methodology ({methodologyPhaseCount} phases) →
+            </Link>
+          )}
+        </div>
+        {guides.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No reference documents ingested yet. Run{" "}
+            <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
+              pnpm tsx scripts/ingest/brownfield-pdf-guide-adapter.ts
+            </code>{" "}
+            or{" "}
+            <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
+              pnpm tsx scripts/ingest/btc-docs-crawler.ts
+            </code>
+            .
+          </p>
+        ) : (
+          <div className="space-y-1.5">
+            {guides.map((g) => (
+              <Link
+                key={g.id}
+                href={`/admin/brownfield-catalogs/${id}/guides/${g.id}`}
+                className="flex items-center justify-between gap-3 py-1.5 px-2 rounded hover:bg-muted/50 text-sm"
+              >
+                <span className="text-foreground flex-1 truncate">{g.title}</span>
+                <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                  {g.mimeType === "application/pdf" ? "📄" : "📰"} {(g.fileSizeBytes / 1024).toFixed(0)} KB
+                  {g._count.sections > 0 && <> · {g._count.sections} §</>}
+                </span>
+                {g.industryTag && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-blue-100 text-blue-700 shrink-0">
+                    {g.industryTag}
+                  </span>
+                )}
+                {g.conversionPath && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-purple-100 text-purple-700 shrink-0">
+                    {g.conversionPath.replace(/_/g, " ").toLowerCase()}
+                  </span>
+                )}
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Narrative coverage + search */}

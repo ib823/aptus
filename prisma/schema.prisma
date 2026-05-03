@@ -347,6 +347,11 @@ model SapApiReference {
   appliesToPrivate Boolean @default(false)
   appliesToOnPrem  Boolean @default(false)
 
+  /// API protocol/type, e.g. "ODATAV4" | "ODATAV2" | "REST" | "SOAP" | "EVENT".
+  /// Backfilled by scripts/ingest/refresh-api-types.ts from api.sap.com's
+  /// product-scoped listing. NULL when not yet classified.
+  apiType String?
+
   /// Linkage to scope items — denormalized String[] (not FK). SAP's API tags
   /// reference scope codes (e.g. "J60") which may exist in multiple catalog
   /// versions or none. Matching at classification time uses (scopeCode,
@@ -367,6 +372,7 @@ model SapApiReference {
   // index alongside the migration if query latency becomes an issue.
 
   @@index([status])
+  @@index([apiType])
   @@index([apiId])
   @@index([appliesToPublic])
   @@index([appliesToPrivate])
@@ -2695,6 +2701,8 @@ model BrownfieldCatalogVersion {
   businessFunctionDispositions BusinessFunctionDisposition[]
   brownfieldAssessments     BrownfieldAssessment[]
   classificationProtocols   BrownfieldClassificationProtocol[]
+  guides                    BrownfieldGuide[]
+  methodologyPhases         ConversionMethodologyPhase[]
 
   @@index([isActive])
   @@index([snapshotDate])
@@ -3154,4 +3162,121 @@ model BrownfieldVerdict {
   @@index([passId])
   @@index([simplificationItemId])
   @@index([source])
+}
+
+// =============================================================
+// Phase 14 — Forensic-green: reference documents + methodology
+// =============================================================
+//
+// Generic ingest target for SAP-published reference PDFs (Conversion Guide,
+// industry-specific conversion guides, BTC docs as text, etc.) AND the
+// SAP Activate methodology roadmap. Stores binary content in Postgres bytea
+// for files ≤ ~2 MB; larger artifacts switch to Vercel Blob via blobUrl.
+
+model BrownfieldGuide {
+  id                       String    @id @default(cuid())
+  catalogVersionId         String?
+  /// Display title, e.g. "Conversion Guide for SAP S/4HANA Cloud Private Edition 2025"
+  title                    String
+  /// Filename / source-document identifier, e.g. "CONV_PE2025.pdf"
+  sourceDocument           String
+  /// Canonical URL on help.sap.com / me.sap.com if known
+  sourceUrl                String?
+  /// MIME, e.g. "application/pdf" | "text/html" | "text/markdown"
+  mimeType                 String
+  fileSizeBytes            Int
+  sha256                   String    @unique
+  /// Inline binary for small files (≤ ~2 MB). Set to NULL when blobUrl is used.
+  content                  Bytes?
+  /// Vercel Blob URL for large files. NULL when content is inline.
+  blobUrl                  String?
+  /// Industry filter — uppercase ISO-style tag, e.g. "BANKING" | "MANUFACTURING".
+  /// NULL = applies to all industries.
+  industryTag              String?
+  /// Conversion-path filter, e.g. "BROWNFIELD_SUM" | "SELECTIVE_DATA_TRANSITION".
+  /// NULL = generic (applies to any path).
+  conversionPath           String?
+  /// Free-form notes captured at ingest time (e.g. crawl depth, partial ingest).
+  notes                    String?   @db.Text
+  parsedAt                 DateTime  @default(now())
+
+  catalogVersion BrownfieldCatalogVersion? @relation(fields: [catalogVersionId], references: [id], onDelete: SetNull)
+  sections       BrownfieldGuideSection[]
+
+  @@index([catalogVersionId])
+  @@index([industryTag])
+  @@index([conversionPath])
+  @@index([mimeType])
+}
+
+/// Hierarchical TOC node within a BrownfieldGuide. Pages are 1-indexed.
+/// parentSectionId allows multi-level TOC (e.g. "2.1.3" has parent "2.1").
+model BrownfieldGuideSection {
+  id                String   @id @default(cuid())
+  guideId           String
+  parentSectionId   String?
+  /// Hierarchical reference, e.g. "2.1.3" or "Chapter 4"
+  sectionRef        String
+  title             String
+  /// 1-indexed page where the section starts in the source doc.
+  pageStart         Int
+  /// Inclusive end page (NULL when not derivable; usually pageStart + N)
+  pageEnd           Int?
+  /// Tree depth (1 = top-level chapter; 2 = section; 3 = subsection; ...)
+  depth             Int       @default(1)
+  /// Sequence within the same parent (for ORDER BY)
+  sequence          Int       @default(0)
+
+  guide          BrownfieldGuide          @relation(fields: [guideId], references: [id], onDelete: Cascade)
+  parentSection  BrownfieldGuideSection?  @relation("GuideSectionTree", fields: [parentSectionId], references: [id])
+  childSections  BrownfieldGuideSection[] @relation("GuideSectionTree")
+
+  @@index([guideId])
+  @@index([parentSectionId])
+  @@index([depth])
+}
+
+/// Phase in a SAP-published methodology (e.g. SAP Activate System Conversion).
+/// Source: Roadmap Viewer SPA, scraped by sap-activate-roadmap-adapter.ts.
+model ConversionMethodologyPhase {
+  id                String   @id @default(cuid())
+  /// Catalog the methodology applies to (NULL = generic across catalogs)
+  catalogVersionId  String?
+  /// "SAP Activate" | "SAP Move" | etc.
+  sourceMethodology String
+  /// e.g. "Discover" | "Prepare" | "Explore" | "Realize" | "Deploy" | "Run"
+  phaseName         String
+  /// 1..N
+  phaseSequence     Int
+  /// Phase-level summary
+  phaseDescription  String?  @db.Text
+  /// Roadmap Viewer SPA URL fragment for this phase (deep-link)
+  sourceUrl         String?
+  /// Snapshot timestamp + raw HTML (audit evidence for the scrape)
+  scrapedAt         DateTime @default(now())
+
+  catalogVersion BrownfieldCatalogVersion? @relation(fields: [catalogVersionId], references: [id], onDelete: SetNull)
+  deliverables   ConversionMethodologyDeliverable[]
+
+  @@unique([sourceMethodology, phaseName, catalogVersionId])
+  @@index([catalogVersionId])
+  @@index([sourceMethodology])
+}
+
+/// Atomic deliverable / activity within a methodology phase.
+model ConversionMethodologyDeliverable {
+  id                       String   @id @default(cuid())
+  phaseId                  String
+  deliverableName          String
+  sequence                 Int      @default(0)
+  description              String?  @db.Text
+  /// SAP role accountable for the deliverable (e.g. "Solution Architect")
+  responsibleRole          String?
+  /// Optional cross-link to SimplificationItems this deliverable touches
+  /// (denormalized String[] of SAP GUIDs; matched by reconciliation pass).
+  linkedSimplificationGuids String[] @default([])
+
+  phase ConversionMethodologyPhase @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+
+  @@index([phaseId])
 }
