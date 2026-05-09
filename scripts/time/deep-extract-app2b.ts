@@ -166,7 +166,7 @@ function classifyPage(page: PageContent): PageClassification {
   for (const h of processHeaders) {
     const m = PROCESS_HEADER_RX.exec(h);
     if (!m) continue;
-    let name = m[1]!.trim().replace(/\s*RTM\s*ID\s*:.*$/i, "").trim();
+    const name = m[1]!.trim().replace(/\s*RTM\s*ID\s*:.*$/i, "").trim();
     if (name.length < 4) continue;
     if (AS_IS_MARKER_RX.test(h)) isAsIs = true;
     if (TO_BE_MARKER_RX.test(h)) isToBe = true;
@@ -252,7 +252,7 @@ function detectHeaders(page: PageContent): ProcessOccurrence[] {
     if (!/Process:/i.test(trimmed)) continue;
     const m = PROCESS_HEADER_RX.exec(trimmed);
     if (!m) continue;
-    let rawProcessName = m[1]!.trim().replace(/\s*RTM\s*ID\s*:.*$/i, "").trim();
+    const rawProcessName = m[1]!.trim().replace(/\s*RTM\s*ID\s*:.*$/i, "").trim();
     if (rawProcessName.length < 4) continue;
     const direction: "AS_IS" | "TO_BE" | "UNKNOWN" = AS_IS_MARKER_RX.test(trimmed) ? "AS_IS"
       : TO_BE_MARKER_RX.test(trimmed) ? "TO_BE" : "UNKNOWN";

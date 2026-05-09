@@ -462,7 +462,7 @@ export async function runNarrativeIngest(
 
   const sourceDocument = `SIMPL_OP2025.pdf v1.36 2026-02-18`;
   let matched = 0;
-  let unmatched: ParsedItem[] = [];
+  const unmatched: ParsedItem[] = [];
   let upserted = 0;
 
   // Cache to detect duplicate matches (one SIC item shouldn't get 2 narratives)

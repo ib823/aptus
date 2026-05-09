@@ -12,7 +12,7 @@
  * spec moves to v1.3, generate a new mocks folder and a fresh baseline set.
  * Baselines are NEVER updated silently — that's a policy violation. */
 
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 
@@ -32,7 +32,7 @@ const SCAFFOLDING_MOCKS = ["index.html", "contact_sheet.html"];
 
 /** Wait for the page to be visually stable — fonts loaded, no in-flight
  * network requests, layout settled. */
-async function waitForRenderStable(page: import("@playwright/test").Page) {
+async function waitForRenderStable(page: Page) {
   // 1. Wait for the network to settle (Google Fonts CSS/woff requests).
   await page.waitForLoadState("networkidle");
   // 2. Wait for all fonts declared in CSS @font-face to actually load.

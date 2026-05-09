@@ -11,7 +11,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
+import { isAssessmentAccessError, requireAssessmentAccess } from "@/lib/auth/assessment-guard";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { generateShareLinkToken } from "@/lib/auth/share-link";
 
 const POSITIVE_INT = z.number().int().positive();
@@ -26,18 +27,8 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   const { id: assessmentId } = await ctx.params;
-
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const assessment = await prisma.assessment.findUnique({
-    where: { id: assessmentId, deletedAt: null },
-    select: { id: true, organizationId: true },
-  });
-  if (!assessment) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (user.organizationId !== assessment.organizationId && user.role !== "platform_admin") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) return access;
 
   const links = await prisma.assessmentShareLink.findMany({
     where: { assessmentId, revokedAt: null },
@@ -57,22 +48,14 @@ export async function POST(
   ctx: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   const { id: assessmentId } = await ctx.params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) return access;
+  const { user } = access;
 
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const assessment = await prisma.assessment.findUnique({
-    where: { id: assessmentId, deletedAt: null },
-    select: { id: true, organizationId: true },
-  });
-  if (!assessment) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (user.organizationId !== assessment.organizationId && user.role !== "platform_admin") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  let body: unknown = {};
-  try { body = await request.json(); } catch { /* empty OK */ }
-  const parsed = createSchema.safeParse(body);
+  // Empty body is OK — every field optional.
+  const bodyResult = await safeParseJsonBody(request);
+  const rawBody = bodyResult.ok ? bodyResult.data : {};
+  const parsed = createSchema.safeParse(rawBody);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 });
   }
