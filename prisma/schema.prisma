@@ -92,6 +92,7 @@ model ClassificationPass {
   @@index([assessmentId])
   @@index([assessmentId, startedAt])
   @@index([parentPassId])
+  @@index([protocolVersionId])
 }
 
 // Phase 3 — AD-1: ClassificationVerdict as a first-class entity.
@@ -125,6 +126,7 @@ model ClassificationVerdict {
   @@index([requirementId, createdAt])
   @@index([source])
   @@index([sapModule])
+  @@index([protocolVersionId])
 }
 
 // Phase 3 — AD-6: catalog FK enforcement, not free text.
@@ -805,27 +807,27 @@ model Assessment {
   // conversion bid). NULL for pure greenfield engagements (Bursa, SKM).
   brownfieldCatalogVersionId String?
 
-  organization            Organization             @relation(fields: [organizationId], references: [id])
-  catalogVersion          ScopeCatalogVersion?     @relation(fields: [catalogVersionId], references: [id])
+  organization             Organization              @relation(fields: [organizationId], references: [id])
+  catalogVersion           ScopeCatalogVersion?      @relation(fields: [catalogVersionId], references: [id])
   brownfieldCatalogVersion BrownfieldCatalogVersion? @relation("AssessmentBrownfieldCatalog", fields: [brownfieldCatalogVersionId], references: [id])
-  customerProcesses       CustomerProcess[]
-  classificationPasses    ClassificationPass[]
-  vendorSubmissions       VendorSubmission[]
-  shareLinks              AssessmentShareLink[]
-  stakeholders            AssessmentStakeholder[]
-  scopeSelections         ScopeSelection[]
-  configSelections        ConfigSelection[]
-  stepResponses           StepResponse[]
-  gapResolutions          GapResolution[]
-  decisionLog             DecisionLogEntry[]
-  signOffs                AssessmentSignOff[]
-  flowDiagrams            ProcessFlowDiagram[]
-  functionalAreaOverviews FunctionalAreaOverview[]
-  remainingItems          RemainingItem[]
-  clientRequirements      ClientRequirement[]
-  integrationPoints       IntegrationPoint[]
-  dataMigrationObjects    DataMigrationObject[]
-  ocmImpacts              OcmImpact[]
+  customerProcesses        CustomerProcess[]
+  classificationPasses     ClassificationPass[]
+  vendorSubmissions        VendorSubmission[]
+  shareLinks               AssessmentShareLink[]
+  stakeholders             AssessmentStakeholder[]
+  scopeSelections          ScopeSelection[]
+  configSelections         ConfigSelection[]
+  stepResponses            StepResponse[]
+  gapResolutions           GapResolution[]
+  decisionLog              DecisionLogEntry[]
+  signOffs                 AssessmentSignOff[]
+  flowDiagrams             ProcessFlowDiagram[]
+  functionalAreaOverviews  FunctionalAreaOverview[]
+  remainingItems           RemainingItem[]
+  clientRequirements       ClientRequirement[]
+  integrationPoints        IntegrationPoint[]
+  dataMigrationObjects     DataMigrationObject[]
+  ocmImpacts               OcmImpact[]
 
   // Phase 18: Assessment Lifecycle
   phaseProgress     AssessmentPhaseProgress[]
@@ -872,6 +874,8 @@ model Assessment {
   @@index([deletedAt])
   @@index([parentAssessmentId])
   @@index([phaseNumber])
+  @@index([catalogVersionId])
+  @@index([brownfieldCatalogVersionId])
 }
 
 model AssessmentStakeholder {
@@ -1261,9 +1265,9 @@ model ClientRequirement {
   /// NULL for non-TIME assessments.
   crossCuttingTag String?
 
-  assessment      Assessment              @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
-  verdicts        ClassificationVerdict[]
-  vendorResponses VendorResponse[]
+  assessment           Assessment                       @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  verdicts             ClassificationVerdict[]
+  vendorResponses      VendorResponse[]
   customerProcessLinks CustomerProcessRequirementLink[]
 
   @@unique([assessmentId, module, code])
@@ -2519,6 +2523,7 @@ model EditingLock {
   @@unique([assessmentId, entityType, entityId])
   @@index([assessmentId, isActive])
   @@index([expiresAt])
+  @@index([lockedById])
 }
 
 model PresenceRecord {
@@ -2693,35 +2698,35 @@ model DependencyPropagationLog {
 /// One row per ingest of a SIC archive. Enables multiple target releases
 /// (2025-FPS1, 2602, etc.) to coexist without overwriting.
 model BrownfieldCatalogVersion {
-  id                String    @id @default(cuid())
+  id                 String   @id @default(cuid())
   /// Catalog snapshot date (yyyymmdd parsed from filename), e.g. "2026-05-03"
-  snapshotDate      DateTime
+  snapshotDate       DateTime
   /// SIC application version from header.xml, e.g. "1806CS02"
   applicationVersion String?
   /// SIC source system ID, e.g. "898777"
-  sourceSystemId    String?
+  sourceSystemId     String?
   /// Free-form label for the catalog snapshot (manually set), e.g. "May 2026 SIC"
-  label             String?
+  label              String?
   /// SHA-256 of the source archive — same archive re-ingest is a no-op
-  sourceArchiveHash String    @unique
-  sourceArchivePath String?
-  ingestedAt        DateTime  @default(now())
-  notes             String?   @db.Text
-  isActive          Boolean   @default(true)
-  supersededById    String?
+  sourceArchiveHash  String   @unique
+  sourceArchivePath  String?
+  ingestedAt         DateTime @default(now())
+  notes              String?  @db.Text
+  isActive           Boolean  @default(true)
+  supersededById     String?
 
-  simplificationItems       SimplificationItem[]
-  simplificationItemChecks  SimplificationItemCheck[]
-  relatedSapNotes           RelatedSapNote[]
-  linesOfBusiness           BrownfieldLineOfBusiness[]
-  applicationAreas          BrownfieldApplicationArea[]
-  preCheckNotes             PreCheckNote[]
+  simplificationItems          SimplificationItem[]
+  simplificationItemChecks     SimplificationItemCheck[]
+  relatedSapNotes              RelatedSapNote[]
+  linesOfBusiness              BrownfieldLineOfBusiness[]
+  applicationAreas             BrownfieldApplicationArea[]
+  preCheckNotes                PreCheckNote[]
   businessFunctionDispositions BusinessFunctionDisposition[]
-  brownfieldAssessments     BrownfieldAssessment[]
-  classificationProtocols   BrownfieldClassificationProtocol[]
-  guides                    BrownfieldGuide[]
-  methodologyPhases         ConversionMethodologyPhase[]
-  hybridAssessments         Assessment[]              @relation("AssessmentBrownfieldCatalog")
+  brownfieldAssessments        BrownfieldAssessment[]
+  classificationProtocols      BrownfieldClassificationProtocol[]
+  guides                       BrownfieldGuide[]
+  methodologyPhases            ConversionMethodologyPhase[]
+  hybridAssessments            Assessment[]                       @relation("AssessmentBrownfieldCatalog")
 
   @@index([isActive])
   @@index([snapshotDate])
@@ -2730,45 +2735,45 @@ model BrownfieldCatalogVersion {
 /// The spine — one per SAP Simplification Item.
 /// Source: sdb_transition_db_item.xml (951 rows in May 2026 snapshot).
 model SimplificationItem {
-  id                       String   @id @default(cuid())
-  catalogVersionId         String
+  id                      String   @id @default(cuid())
+  catalogVersionId        String
   /// SAP-assigned 32-char hex GUID (primary identity within the catalog).
-  sapGuid                  String
+  sapGuid                 String
   /// Human-facing item ID, e.g. "SI11: Logistics_PS" or "S4TWL_FIN_004".
   /// Format is non-uniform across SAP — keep as free-form text.
-  sitemId                  String
+  sitemId                 String
   /// Localized title, e.g. "S4TWL - Workforce Planning"
-  titleEn                  String
-  applicationArea          String
+  titleEn                 String
+  applicationArea         String
   /// SAP processing status. R = Released; values like P = Processing exist.
-  procStatus               String
-  procStatusTextEn         String
+  procStatus              String
+  procStatusTextEn        String
   /// "OR" | "AND" — how the item's checks combine (sdb_check_new.xml join key).
-  checkCondition           String?
+  checkCondition          String?
   /// SAP Note ID describing business impact (e.g. "0002267189"). Cross-link
   /// to RelatedSapNote.sapNote when present.
-  impactNote               String?
+  impactNote              String?
   /// FK-by-string to the LOB / Business Area GUID system (sdb_lob.xml).
-  businessAreaGuid         String?
-  lobTechnologyGuid        String?
+  businessAreaGuid        String?
+  lobTechnologyGuid       String?
   /// Source-release applicability bounds (* = unbounded).
-  startRelValidFromPrdVer  String?
-  startRelValidFromStack   String?
-  startRelValidToPrdVer    String?
-  startRelValidToStack     String?
+  startRelValidFromPrdVer String?
+  startRelValidFromStack  String?
+  startRelValidToPrdVer   String?
+  startRelValidToStack    String?
   /// Reference / copy chain (rare).
-  referGuid                String?
-  copyGuid                 String?
-  copyStatus               String?
+  referGuid               String?
+  copyGuid                String?
+  copyStatus              String?
   /// Audit trail from SIC export.
-  createdBySap             String?
-  changedBySap             String?
+  createdBySap            String?
+  changedBySap            String?
   /// Linkage to greenfield catalog: where this brownfield item references
   /// scope codes we already curate (e.g. simplification of "J60 - Asset
   /// Accounting"). Denormalized String[] like SapApiReference.scopeItemCodes.
-  affectedScopeCodes       String[] @default([])
+  affectedScopeCodes      String[] @default([])
 
-  ingestedAt               DateTime @default(now())
+  ingestedAt DateTime @default(now())
 
   /// Optional pointer to a greenfield ScopeCatalogVersion id when this item
   /// has been reconciled to a known release. Plain String (no FK) to mirror
@@ -2776,10 +2781,10 @@ model SimplificationItem {
   /// reconciliation pass, not at ingest.
   linkedScopeCatalogVersionId String?
 
-  brownfieldCatalog BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id], onDelete: Cascade)
-  checks            SimplificationItemCheck[]
-  notes             RelatedSapNote[]
-  narrative         SimplificationItemNarrative?
+  brownfieldCatalog  BrownfieldCatalogVersion     @relation(fields: [catalogVersionId], references: [id], onDelete: Cascade)
+  checks             SimplificationItemCheck[]
+  notes              RelatedSapNote[]
+  narrative          SimplificationItemNarrative?
   brownfieldVerdicts BrownfieldVerdict[]
 
   @@unique([sapGuid, catalogVersionId])
@@ -2791,27 +2796,27 @@ model SimplificationItem {
 /// Per-item automated check rules (the SI-Check engine consumes these).
 /// Source: sdb_check_new.xml (4,508 rows in May 2026 snapshot).
 model SimplificationItemCheck {
-  id                String  @id @default(cuid())
-  catalogVersionId  String
+  id                   String  @id @default(cuid())
+  catalogVersionId     String
   simplificationItemId String? // resolved during ingest from sitemGuid
   /// SAP GUIDs on the check side.
-  sitemGuid         String
-  checkGuid         String
+  sitemGuid            String
+  checkGuid            String
   /// "ENTRY_POINT" | "USAGE" | "DDIC" | "TABLE_USAGE" | etc.
-  checkType         String
+  checkType            String
   /// SAP-internal check-class identifier, e.g. "CX00N" or "S4TWL_LOG_PS_4".
-  checkIdentifier   String
-  checkSubIdentifier String?
-  sapNote           String?
+  checkIdentifier      String
+  checkSubIdentifier   String?
+  sapNote              String?
   /// Threshold operator: "GT" | "LT" | "EQ" | "NE" | "GE" | "LE".
-  checkCountOption  String?
-  checkCount        Int?    @default(0)
-  checkClassUsage   String?
-  bfChkState        String?
-  checkCondition    String?
+  checkCountOption     String?
+  checkCount           Int?    @default(0)
+  checkClassUsage      String?
+  bfChkState           String?
+  checkCondition       String?
 
-  catalogVersion BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id], onDelete: Cascade)
-  simplificationItem SimplificationItem? @relation(fields: [simplificationItemId], references: [id])
+  catalogVersion     BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id], onDelete: Cascade)
+  simplificationItem SimplificationItem?      @relation(fields: [simplificationItemId], references: [id])
 
   @@index([catalogVersionId])
   @@index([sitemGuid])
@@ -2826,13 +2831,13 @@ model RelatedSapNote {
   catalogVersionId     String
   simplificationItemId String? // resolved during ingest
   sitemGuid            String? // raw GUID from XML; some notes are catalog-wide
-  noteGuid             String  // V_SIC_NOTE.GUID — uniquely identifies row
-  noteType             String  // "BI" = Business Impact, etc.
+  noteGuid             String // V_SIC_NOTE.GUID — uniquely identifies row
+  noteType             String // "BI" = Business Impact, etc.
   noteTypeTextEn       String?
-  sapNote              String  // 10-digit zero-padded SAP Note ID
+  sapNote              String // 10-digit zero-padded SAP Note ID
 
-  catalogVersion BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id], onDelete: Cascade)
-  simplificationItem SimplificationItem? @relation(fields: [simplificationItemId], references: [id])
+  catalogVersion     BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id], onDelete: Cascade)
+  simplificationItem SimplificationItem?      @relation(fields: [simplificationItemId], references: [id])
 
   @@unique([noteGuid, catalogVersionId])
   @@index([catalogVersionId])
@@ -2846,9 +2851,9 @@ model RelatedSapNote {
 model BrownfieldLineOfBusiness {
   id               String  @id @default(cuid())
   catalogVersionId String
-  sapId            String  // 32-char hex
+  sapId            String // 32-char hex
   name             String
-  type             String  // "BA" | "LOB"
+  type             String // "BA" | "LOB"
   owningContextId  String?
   parentSapId      String?
   status           String?
@@ -2911,16 +2916,16 @@ model PreCheckNote {
 /// Always-On / Customer-Choice / Always-Off business functions per release.
 /// Source: SAP Note 2240360 attachments (TXT files).
 model BusinessFunctionDisposition {
-  id                  String @id @default(cuid())
-  catalogVersionId    String
+  id                 String @id @default(cuid())
+  catalogVersionId   String
   /// Business Function technical name, e.g. "/AIF/EXTENDED_FEATURES"
-  businessFunctionId  String
+  businessFunctionId String
   /// "ALWAYS_ON" | "CUSTOMER_CHOICE" | "ALWAYS_OFF"
-  disposition         String
+  disposition        String
   /// Source release tag (e.g. "S4H_2025") — pinned because BFR list ships
   /// per release and a customer system may target a different release than
   /// the catalog snapshot.
-  sourceReleaseTag    String
+  sourceReleaseTag   String
 
   catalogVersion BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id], onDelete: Cascade)
 
@@ -2934,31 +2939,31 @@ model BusinessFunctionDisposition {
 // -------------------------------------------------------------
 
 model BrownfieldAssessment {
-  id               String   @id @default(cuid())
+  id                     String   @id @default(cuid())
   /// Free-form name, e.g. "TT dotCom — ECC EhP6 → S/4HANA 2025"
-  name             String
-  customerName     String
+  name                   String
+  customerName           String
   /// Optional link to an existing greenfield Assessment (for combined engagements)
   greenfieldAssessmentId String?
   /// Pinned brownfield catalog version (the SIC release we're scoring against)
-  catalogVersionId String
+  catalogVersionId       String
   /// Source ECC system facts captured from EWA / SRC / Maintenance Planner.
-  sourceSystemId         String?  // e.g. "PRD"
-  sourceProduct          String?  // e.g. "SAP ERP ENHANCE PACKAGE 6.05"
-  sourceDatabase         String?  // e.g. "ORACLE"
+  sourceSystemId         String? // e.g. "PRD"
+  sourceProduct          String? // e.g. "SAP ERP ENHANCE PACKAGE 6.05"
+  sourceDatabase         String? // e.g. "ORACLE"
   sourceDatabaseVersion  String?
-  sourceProductType      String?  // "Productive" | "Test" | "Quality"
-  sourceCountry          String?  // ISO 2-letter
+  sourceProductType      String? // "Productive" | "Test" | "Quality"
+  sourceCountry          String? // ISO 2-letter
   sapInstallationNumber  String?
   sapCustomerNumber      String?
   /// Target release we're converting to (matches a S/4HANA release tag).
-  targetRelease          String?  // e.g. "2025-FPS1"
+  targetRelease          String? // e.g. "2025-FPS1"
   status                 String   @default("draft") // draft | scanning | reviewed | signed_off
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
-  catalogVersion BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id])
-  baselineSnapshots SystemBaselineSnapshot[]
+  catalogVersion       BrownfieldCatalogVersion       @relation(fields: [catalogVersionId], references: [id])
+  baselineSnapshots    SystemBaselineSnapshot[]
   classificationPasses BrownfieldClassificationPass[]
   verdicts             BrownfieldVerdict[]
 
@@ -2968,7 +2973,7 @@ model BrownfieldAssessment {
 
 /// One per ingested customer artifact (EWA, SRC export, ATC worklist, etc.).
 model SystemBaselineSnapshot {
-  id                     String   @id @default(cuid())
+  id                     String    @id @default(cuid())
   brownfieldAssessmentId String
   /// "EWA" | "SRC" | "ATC" | "SUSG" | "MAINTENANCE_PLANNER" | "QUICKSIZER"
   sourceType             String
@@ -2977,11 +2982,11 @@ model SystemBaselineSnapshot {
   /// When the source data was captured (e.g. EWA report period start).
   capturedAt             DateTime?
   /// When ingested into Aptus.
-  ingestedAt             DateTime @default(now())
+  ingestedAt             DateTime  @default(now())
   /// Structured facts harvested by the adapter (per-source schema in JSON).
   facts                  Json?
   /// Raw extracted text for the ingest-side audit trail (helpful for debug).
-  rawText                String?  @db.Text
+  rawText                String?   @db.Text
 
   brownfieldAssessment BrownfieldAssessment @relation(fields: [brownfieldAssessmentId], references: [id], onDelete: Cascade)
   ewaFindings          EwaFinding[]
@@ -2993,19 +2998,19 @@ model SystemBaselineSnapshot {
 
 /// One alert / issue extracted from an EWA report.
 model EwaFinding {
-  id              String  @id @default(cuid())
-  snapshotId      String
+  id             String  @id @default(cuid())
+  snapshotId     String
   /// "Maintenance" | "Security" | "Performance" | "Database" | "Hardware" |
   /// "Configuration" | "ABAP_DUMP" | "Service_Notes" | "Other"
-  category        String
+  category       String
   /// "Red" | "Yellow" | "Green" | "Info" — SAP's traffic-light severity.
-  severity        String
-  title           String
-  description     String? @db.Text
+  severity       String
+  title          String
+  description    String? @db.Text
   /// Free-form recommendation harvested from the alert body.
-  recommendation  String? @db.Text
+  recommendation String? @db.Text
   /// Position in the source EWA's alert overview (preserves SAP ordering).
-  sortOrder       Int     @default(0)
+  sortOrder      Int     @default(0)
 
   snapshot SystemBaselineSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
 
@@ -3027,33 +3032,33 @@ model EwaFinding {
 /// by matching titleEn case-insensitive). FTS is supported via a tsvector
 /// column added by post-ingest raw SQL (see brownfield-narrative-adapter.ts).
 model SimplificationItemNarrative {
-  id                       String   @id @default(cuid())
-  simplificationItemId     String   @unique
+  id                      String   @id @default(cuid())
+  simplificationItemId    String   @unique
   /// Source document identifier, e.g. "SIMPL_OP2025.pdf v1.36 2026-02-18"
-  sourceDocument           String
+  sourceDocument          String
   /// First page on which the item's narrative starts (for deep-linking)
-  sourcePageStart          Int?
+  sourcePageStart         Int?
   /// Section reference from the PDF TOC, e.g. "2.1.1"
-  sectionRef               String?
+  sectionRef              String?
   /// SAP application component string, e.g. "BC-DWB-DIC"
-  applicationComponent     String?
+  applicationComponent    String?
   /// "Related Notes" subsection — array of { noteType, noteNumber, noteDescription }
-  relatedNotesJson         Json?
+  relatedNotesJson        Json?
   /// Per-section narratives. Markdown-friendly text (mostly plain prose with
   /// preserved newlines and bullet markers from pdftotext).
-  symptomMd                String?  @db.Text
-  descriptionMd            String?  @db.Text
-  solutionMd               String?  @db.Text
-  businessProcessImpactMd  String?  @db.Text
-  requiredActionMd         String?  @db.Text
-  relevancyMd              String?  @db.Text
-  transportBehaviorMd      String?  @db.Text
+  symptomMd               String?  @db.Text
+  descriptionMd           String?  @db.Text
+  solutionMd              String?  @db.Text
+  businessProcessImpactMd String?  @db.Text
+  requiredActionMd        String?  @db.Text
+  relevancyMd             String?  @db.Text
+  transportBehaviorMd     String?  @db.Text
   /// Catch-all for sections not mapped to explicit columns. Newline-separated.
-  additionalSectionsMd     String?  @db.Text
+  additionalSectionsMd    String?  @db.Text
   /// Full extracted text per item — fallback for FTS + display when section
   /// splitting fails. Preserves the canonical record in case parsing improves.
-  rawTextMd                String   @db.Text
-  parsedAt                 DateTime @default(now())
+  rawTextMd               String   @db.Text
+  parsedAt                DateTime @default(now())
 
   simplificationItem SimplificationItem @relation(fields: [simplificationItemId], references: [id], onDelete: Cascade)
 
@@ -3076,35 +3081,35 @@ model SimplificationItemNarrative {
 /// Authoring shape for the brownfield classification rule set. Edited by
 /// SI leads via DB; loaded by the rule engine + emit-prompts scripts.
 model BrownfieldClassificationProtocol {
-  id                       String    @id @default(cuid())
+  id                String    @id @default(cuid())
   /// Display name, e.g. "Brownfield baseline (S/4HANA Cloud Private 2025-FPS1)"
-  name                     String
+  name              String
   /// Semver-ish, e.g. "1.0.0"
-  version                  String
+  version           String
   /// FK to the brownfield catalog this protocol classifies against.
-  catalogVersionId         String
+  catalogVersionId  String
   /// Per-bucket prose: { A: "Auto-handled by SUM/DMO", C: "Configuration / IMG",
   /// R: "Custom-code adaptation", D: "Data preparation", "N/R": "Not relevant",
   /// B: "Blocker" }. Stored as JSON for forward compatibility (e.g. v2 may add
   /// criteria objects per bucket).
-  bucketDefinitions        Json
+  bucketDefinitions Json
   /// Free-form prose: which evidence justifies which bucket. Read by
   /// consultants and embedded into the LLM system prompt.
-  groundingRules           String    @db.Text
+  groundingRules    String    @db.Text
   /// Template for the per-item classification prompt sent to the LLM
   /// (or rendered for manual review). Supports placeholders that the
   /// emit-prompts script substitutes (item title, narrative, checks,
   /// customer facts, EWA findings).
-  systemPrompt             String    @db.Text
+  systemPrompt      String    @db.Text
   /// Rule-engine config (deterministic rules applied before LLM/manual).
   /// Stored as JSON so the rule set is editable without a code deploy.
-  ruleEngineConfig         Json?
-  isActive                 Boolean   @default(true)
-  deprecatedAt             DateTime?
-  createdAt                DateTime  @default(now())
-  updatedAt                DateTime  @updatedAt
+  ruleEngineConfig  Json?
+  isActive          Boolean   @default(true)
+  deprecatedAt      DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  catalogVersion BrownfieldCatalogVersion @relation(fields: [catalogVersionId], references: [id])
+  catalogVersion BrownfieldCatalogVersion       @relation(fields: [catalogVersionId], references: [id])
   passes         BrownfieldClassificationPass[]
   verdicts       BrownfieldVerdict[]
 
@@ -3117,22 +3122,22 @@ model BrownfieldClassificationProtocol {
 /// actor + protocol + catalog combination. Snapshot + diff between passes
 /// is the audit story.
 model BrownfieldClassificationPass {
-  id                       String    @id @default(cuid())
-  brownfieldAssessmentId   String
-  protocolVersionId        String
-  catalogVersionId         String
-  startedAt                DateTime  @default(now())
-  completedAt              DateTime?
+  id                     String    @id @default(cuid())
+  brownfieldAssessmentId String
+  protocolVersionId      String
+  catalogVersionId       String
+  startedAt              DateTime  @default(now())
+  completedAt            DateTime?
   /// Either a user id or a sentinel like "orchestrator" / "rule-engine"
-  actor                    String
+  actor                  String
   /// "rule-engine" | "claude-cli" | "manual" | "orchestrator"
-  actorRole                String
+  actorRole              String
   /// Pass-level summary: bucket distribution, vs-prior diff. Rendered in UI.
-  summaryJson              Json?
+  summaryJson            Json?
   /// Chain for diff lineage (rerun on top of a prior pass).
-  parentPassId             String?
+  parentPassId           String?
 
-  brownfieldAssessment BrownfieldAssessment @relation(fields: [brownfieldAssessmentId], references: [id], onDelete: Cascade)
+  brownfieldAssessment BrownfieldAssessment             @relation(fields: [brownfieldAssessmentId], references: [id], onDelete: Cascade)
   protocolVersion      BrownfieldClassificationProtocol @relation(fields: [protocolVersionId], references: [id])
   parentPass           BrownfieldClassificationPass?    @relation("BrownfieldPassChain", fields: [parentPassId], references: [id])
   childPasses          BrownfieldClassificationPass[]   @relation("BrownfieldPassChain")
@@ -3141,39 +3146,40 @@ model BrownfieldClassificationPass {
   @@index([brownfieldAssessmentId])
   @@index([brownfieldAssessmentId, startedAt])
   @@index([parentPassId])
+  @@index([protocolVersionId])
 }
 
 /// One verdict per (assessment, item) per pass. Append-only — the verdict
 /// writer flips prior verdicts' isCurrent=false on new write, so reads
 /// against `where: { isCurrent: true }` give the latest classification.
 model BrownfieldVerdict {
-  id                       String    @id @default(cuid())
-  brownfieldAssessmentId   String
-  simplificationItemId     String
-  passId                   String
-  protocolVersionId        String
+  id                     String    @id @default(cuid())
+  brownfieldAssessmentId String
+  simplificationItemId   String
+  passId                 String
+  protocolVersionId      String
   /// "A" | "C" | "R" | "D" | "N/R" | "B"
-  bucket                   String
+  bucket                 String
   /// "high" | "medium" | "low" | null
-  confidence               String?
+  confidence             String?
   /// Markdown-friendly explanation citing the inputs that drove the verdict.
-  rationaleMd              String    @db.Text
+  rationaleMd            String    @db.Text
   /// Structured trace of the inputs the actor used: relevant SI-Check ids,
   /// matching EWA finding ids, customer fact keys, etc.
-  relevantInputsJson       Json?
+  relevantInputsJson     Json?
   /// User id or sentinel ("rule-engine", "orchestrator").
-  actor                    String
+  actor                  String
   /// "RULE" | "MANUAL" | "CLAUDE_CLI" | "REIMPORT"
-  source                   String
-  createdAt                DateTime  @default(now())
-  isCurrent                Boolean   @default(true)
+  source                 String
+  createdAt              DateTime  @default(now())
+  isCurrent              Boolean   @default(true)
   /// Set when the parent assessment hits signed_off; writes refused unless
   /// an explicit unseal reason is provided to the verdict-writer.
-  frozenAt                 DateTime?
+  frozenAt               DateTime?
 
-  brownfieldAssessment BrownfieldAssessment @relation(fields: [brownfieldAssessmentId], references: [id], onDelete: Cascade)
-  simplificationItem   SimplificationItem   @relation(fields: [simplificationItemId], references: [id], onDelete: Cascade)
-  pass                 BrownfieldClassificationPass @relation(fields: [passId], references: [id], onDelete: Cascade)
+  brownfieldAssessment BrownfieldAssessment             @relation(fields: [brownfieldAssessmentId], references: [id], onDelete: Cascade)
+  simplificationItem   SimplificationItem               @relation(fields: [simplificationItemId], references: [id], onDelete: Cascade)
+  pass                 BrownfieldClassificationPass     @relation(fields: [passId], references: [id], onDelete: Cascade)
   protocolVersion      BrownfieldClassificationProtocol @relation(fields: [protocolVersionId], references: [id])
 
   @@index([brownfieldAssessmentId, isCurrent])
@@ -3181,6 +3187,7 @@ model BrownfieldVerdict {
   @@index([passId])
   @@index([simplificationItemId])
   @@index([source])
+  @@index([protocolVersionId])
 }
 
 // =============================================================
@@ -3193,42 +3200,42 @@ model BrownfieldVerdict {
 // for files ≤ ~2 MB; larger artifacts switch to Vercel Blob via blobUrl.
 
 model BrownfieldGuide {
-  id                       String    @id @default(cuid())
-  catalogVersionId         String?
+  id               String    @id @default(cuid())
+  catalogVersionId String?
   /// Display title, e.g. "Conversion Guide for SAP S/4HANA Cloud Private Edition 2025"
-  title                    String
+  title            String
   /// Filename / source-document identifier, e.g. "CONV_PE2025.pdf"
-  sourceDocument           String
+  sourceDocument   String
   /// Canonical URL on help.sap.com / me.sap.com if known
-  sourceUrl                String?
+  sourceUrl        String?
   /// MIME, e.g. "application/pdf" | "text/html" | "text/markdown"
-  mimeType                 String
-  fileSizeBytes            Int
-  sha256                   String    @unique
+  mimeType         String
+  fileSizeBytes    Int
+  sha256           String    @unique
   /// Inline binary for small files (≤ ~2 MB). Set to NULL when blobUrl is used.
-  content                  Bytes?
+  content          Bytes?
   /// Vercel Blob URL for large files. NULL when content is inline.
-  blobUrl                  String?
+  blobUrl          String?
   /// Industry filter — uppercase ISO-style tag, e.g. "BANKING" | "MANUFACTURING".
   /// NULL = applies to all industries.
-  industryTag              String?
+  industryTag      String?
   /// Conversion-path filter, e.g. "BROWNFIELD_SUM" | "SELECTIVE_DATA_TRANSITION".
   /// NULL = generic (applies to any path).
-  conversionPath           String?
+  conversionPath   String?
   /// Asset type tag for partner-library content, e.g. "whitepaper" | "slides"
   /// | "case_study" | "runbook" | "accelerator". NULL when not categorizable
   /// (e.g. SAP-published PDFs that aren't from a partner library).
-  assetType                String?
+  assetType        String?
   /// SAP program / catalog this asset belongs to, e.g.
   /// "SAP Customer Evolution Program" | "PartnerEdge S/4HANA Movement".
   /// NULL when sourced directly from help.sap.com.
-  sourceProgram            String?
+  sourceProgram    String?
   /// SAP-published date as printed on the asset's library card. NULL if not
   /// stated by SAP.
-  sapPublishedDate         DateTime?
+  sapPublishedDate DateTime?
   /// Free-form notes captured at ingest time (e.g. crawl depth, partial ingest).
-  notes                    String?   @db.Text
-  parsedAt                 DateTime  @default(now())
+  notes            String?   @db.Text
+  parsedAt         DateTime  @default(now())
 
   catalogVersion BrownfieldCatalogVersion? @relation(fields: [catalogVersionId], references: [id], onDelete: SetNull)
   sections       BrownfieldGuideSection[]
@@ -3244,24 +3251,24 @@ model BrownfieldGuide {
 /// Hierarchical TOC node within a BrownfieldGuide. Pages are 1-indexed.
 /// parentSectionId allows multi-level TOC (e.g. "2.1.3" has parent "2.1").
 model BrownfieldGuideSection {
-  id                String   @id @default(cuid())
-  guideId           String
-  parentSectionId   String?
+  id              String  @id @default(cuid())
+  guideId         String
+  parentSectionId String?
   /// Hierarchical reference, e.g. "2.1.3" or "Chapter 4"
-  sectionRef        String
-  title             String
+  sectionRef      String
+  title           String
   /// 1-indexed page where the section starts in the source doc.
-  pageStart         Int
+  pageStart       Int
   /// Inclusive end page (NULL when not derivable; usually pageStart + N)
-  pageEnd           Int?
+  pageEnd         Int?
   /// Tree depth (1 = top-level chapter; 2 = section; 3 = subsection; ...)
-  depth             Int       @default(1)
+  depth           Int     @default(1)
   /// Sequence within the same parent (for ORDER BY)
-  sequence          Int       @default(0)
+  sequence        Int     @default(0)
 
-  guide          BrownfieldGuide          @relation(fields: [guideId], references: [id], onDelete: Cascade)
-  parentSection  BrownfieldGuideSection?  @relation("GuideSectionTree", fields: [parentSectionId], references: [id])
-  childSections  BrownfieldGuideSection[] @relation("GuideSectionTree")
+  guide         BrownfieldGuide          @relation(fields: [guideId], references: [id], onDelete: Cascade)
+  parentSection BrownfieldGuideSection?  @relation("GuideSectionTree", fields: [parentSectionId], references: [id])
+  childSections BrownfieldGuideSection[] @relation("GuideSectionTree")
 
   @@index([guideId])
   @@index([parentSectionId])
@@ -3287,7 +3294,7 @@ model ConversionMethodologyPhase {
   /// Snapshot timestamp + raw HTML (audit evidence for the scrape)
   scrapedAt         DateTime @default(now())
 
-  catalogVersion BrownfieldCatalogVersion? @relation(fields: [catalogVersionId], references: [id], onDelete: SetNull)
+  catalogVersion BrownfieldCatalogVersion?          @relation(fields: [catalogVersionId], references: [id], onDelete: SetNull)
   deliverables   ConversionMethodologyDeliverable[]
 
   @@unique([sourceMethodology, phaseName, catalogVersionId])
@@ -3297,13 +3304,13 @@ model ConversionMethodologyPhase {
 
 /// Atomic deliverable / activity within a methodology phase.
 model ConversionMethodologyDeliverable {
-  id                       String   @id @default(cuid())
-  phaseId                  String
-  deliverableName          String
-  sequence                 Int      @default(0)
-  description              String?  @db.Text
+  id                        String   @id @default(cuid())
+  phaseId                   String
+  deliverableName           String
+  sequence                  Int      @default(0)
+  description               String?  @db.Text
   /// SAP role accountable for the deliverable (e.g. "Solution Architect")
-  responsibleRole          String?
+  responsibleRole           String?
   /// Optional cross-link to SimplificationItems this deliverable touches
   /// (denormalized String[] of SAP GUIDs; matched by reconciliation pass).
   linkedSimplificationGuids String[] @default([])
@@ -3330,32 +3337,32 @@ model ConversionMethodologyDeliverable {
 // dual-catalog Remarks output.
 
 model CustomerProcess {
-  id                       String   @id @default(cuid())
-  assessmentId             String
+  id                   String   @id @default(cuid())
+  assessmentId         String
   /// Human-readable canonical process name, e.g. "PEOPLE — Employee Self-Service Portal"
-  processName              String
+  processName          String
   /// Section breadcrumb from the source document (e.g. "8. HCM > Employee Transactions")
-  parentSection            String?
+  parentSection        String?
   /// Page numbers in the source document where this process appears
-  pageRefs                 Int[]    @default([])
+  pageRefs             Int[]    @default([])
   /// Extracted As-Is description (markdown-friendly prose)
-  asIsDescription          String?  @db.Text
+  asIsDescription      String?  @db.Text
   /// Source systems involved, e.g. ["PEOPLE (custom)", "SAP HCM (ECC PA/OM/PT)"]
-  sourceSystems            String[] @default([])
+  sourceSystems        String[] @default([])
   /// Customer-built apps mentioned, e.g. ["PEOPLE Portal", "e-ARIF"]
-  customApps               String[] @default([])
+  customApps           String[] @default([])
   /// Integration touchpoints — JSON shape: [{target, method, direction?}]
-  integrations             Json?
+  integrations         Json?
   /// Pain points / improvement opportunities
-  painPoints               String[] @default([])
+  painPoints           String[] @default([])
   /// SAP modules referenced by the process, e.g. ["HCM-PA", "HCM-OM", "HCM-PT"]
-  modules                  String[] @default([])
+  modules              String[] @default([])
   /// FK to the BrownfieldGuide row that holds the source PDF (App 2(b) etc.)
-  extractedFromGuideId     String?
+  extractedFromGuideId String?
   /// Confidence of the extraction: high/medium/low
-  extractionConfidence     String?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  extractionConfidence String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   assessment       Assessment                       @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
   requirementLinks CustomerProcessRequirementLink[]
@@ -3371,16 +3378,16 @@ model CustomerProcess {
 /// Many-to-many junction: a CustomerProcess relates to one or more
 /// ClientRequirements that touch it (or vice versa).
 model CustomerProcessRequirementLink {
-  id                       String   @id @default(cuid())
-  customerProcessId        String
-  requirementId            String
+  id                String   @id @default(cuid())
+  customerProcessId String
+  requirementId     String
   /// "KEYWORD" | "LLM_VERIFIED" | "MANUAL" — provenance of the link
-  matchType                String
+  matchType         String
   /// "high" | "medium" | "low"
-  confidence               String
+  confidence        String
   /// Free-form rationale captured at link creation
-  rationale                String?  @db.Text
-  createdAt                DateTime @default(now())
+  rationale         String?  @db.Text
+  createdAt         DateTime @default(now())
 
   customerProcess CustomerProcess   @relation(fields: [customerProcessId], references: [id], onDelete: Cascade)
   requirement     ClientRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
@@ -3395,18 +3402,18 @@ model CustomerProcessRequirementLink {
 /// Polymorphic via (evidenceType, evidenceId) — not enforced as Prisma FK
 /// because the evidence can come from any of several different tables.
 model CustomerProcessSapEvidenceLink {
-  id                       String   @id @default(cuid())
-  customerProcessId        String
+  id                String   @id @default(cuid())
+  customerProcessId String
   /// "GREENFIELD_SCOPE_ITEM" | "BROWNFIELD_SIMPLIFICATION_ITEM" |
   /// "PRECHECK_NOTE" | "EWA_FINDING" | "API_REFERENCE" | "GUIDE_SECTION" |
   /// "METHODOLOGY_DELIVERABLE"
-  evidenceType             String
+  evidenceType      String
   /// FK target by type — e.g. ScopeItem.id when evidenceType=GREENFIELD_SCOPE_ITEM
-  evidenceId               String
+  evidenceId        String
   /// "PRIMARY" | "SECONDARY" | "SUPPORTING"
-  role                     String
-  rationaleMd              String?  @db.Text
-  createdAt                DateTime @default(now())
+  role              String
+  rationaleMd       String?  @db.Text
+  createdAt         DateTime @default(now())
 
   customerProcess CustomerProcess @relation(fields: [customerProcessId], references: [id], onDelete: Cascade)
 
@@ -3431,26 +3438,26 @@ model CustomerProcessSapEvidenceLink {
 /// combine multiple roles (e.g. an AS_IS_PROCESS slide that also
 /// contains a PAIN_POINTS table).
 model App2bPageClassification {
-  id                      String   @id @default(cuid())
-  guideId                 String
-  pageNumber              Int
+  id                       String   @id @default(cuid())
+  guideId                  String
+  pageNumber               Int
   /// Multi-tag (a page can be both a TO_BE_PROCESS and an OPTION_ANALYSIS):
   /// COVER | TOC | LANDSCAPE_SUMMARY | CHAPTER_INTRO | AS_IS_PROCESS |
   /// TO_BE_PROCESS | PAIN_POINTS | OPTION_ANALYSIS | TO_BE_BENEFITS |
   /// SUMMARY_TABLE | APPENDIX | OTHER
-  pageTypes               String[] @default([])
+  pageTypes                String[] @default([])
   /// Process names referenced on this page (resolved to CustomerProcess.id
   /// later via the linker if a match exists)
-  detectedProcessNames    String[] @default([])
+  detectedProcessNames     String[] @default([])
   /// Linked CustomerProcess rows (resolved at extraction time)
-  linkedProcessIds        String[] @default([])
+  linkedProcessIds         String[] @default([])
   /// Page title or header — the most prominent text line on the page
-  pageTitle               String?
+  pageTitle                String?
   /// Truncated page text for at-a-glance audit (≤2000 chars)
-  textExcerpt             String?  @db.Text
+  textExcerpt              String?  @db.Text
   /// Confidence of classification: high / medium / low
   classificationConfidence String   @default("high")
-  createdAt               DateTime @default(now())
+  createdAt                DateTime @default(now())
 
   @@unique([guideId, pageNumber])
   @@index([guideId])
@@ -3500,7 +3507,7 @@ model CustomerProcessOption {
 model CustomerProcessReference {
   id                String   @id @default(cuid())
   customerProcessId String?
-  guideId           String   // always set (page belongs to a guide)
+  guideId           String // always set (page belongs to a guide)
   pageNumber        Int
   /// "TRANSACTION_CODE" | "SAP_NOTE" | "TABLE_NAME" | "REPORT_ID" |
   /// "BADI" | "FUNCTION_MODULE" | "EXIT" | "FIORI_APP" | "PROGRAM"
