@@ -1,4 +1,6 @@
+import { timingSafeEqual } from "crypto";
 import { NextResponse, type NextRequest } from "next/server";
+import { isAdminError, requireAdmin } from "@/lib/auth/admin-guard";
 import {
   createSapEntitySetRecord,
   getSapService,
@@ -27,10 +29,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+/**
+ * Fail-closed: if S4_TDD_WRITE_SECRET is unset, the endpoint must reject.
+ * Prior behaviour returned true on missing secret, allowing unauthenticated
+ * writes when the operator forgot to configure the secret.
+ */
 function validateWriteSecret(writeSecret: unknown): boolean {
   const requiredSecret = process.env.S4_TDD_WRITE_SECRET;
-  if (!requiredSecret) return true;
-  return writeSecret === requiredSecret;
+  if (!requiredSecret) return false;
+  if (typeof writeSecret !== "string") return false;
+
+  const a = Buffer.from(writeSecret);
+  const b = Buffer.from(requiredSecret);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
 
 export async function GET(): Promise<NextResponse> {
@@ -50,6 +62,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { status: 403 },
     );
   }
+
+  // Authenticate + require admin role even when a write secret is present.
+  // Defence in depth: secret is the second factor, not the only factor.
+  const auth = await requireAdmin();
+  if (isAdminError(auth)) return auth;
 
   let body: SapWriteRequestBody;
   try {

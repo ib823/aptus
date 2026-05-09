@@ -36,13 +36,26 @@ const origin = process.env.WEBAUTHN_ORIGIN ?? _derived.origin;
 
 const CHALLENGE_COOKIE_NAME = "webauthn-challenge";
 const CHALLENGE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const HMAC_SECRET = process.env.NEXTAUTH_SECRET ?? "dev-secret-change-me";
+
+/**
+ * HMAC secret for the WebAuthn challenge cookie. Fail-closed in any environment
+ * other than `test`: a literal fallback secret would let any attacker who knows
+ * the constant mint valid challenges and bypass the one-time-use replay guard.
+ */
+function getHmacSecret(): string {
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (secret && secret.length >= 16) return secret;
+  if (process.env.NODE_ENV === "test") return "test-only-webauthn-hmac-secret-do-not-use";
+  throw new Error(
+    "NEXTAUTH_SECRET must be set (>=16 chars) for WebAuthn challenge signing",
+  );
+}
 
 // --- Challenge cookie helpers (HMAC-SHA256 signed, no DB round-trip) ---
 
 function signChallenge(challenge: string, expiresAt: number): string {
   const payload = `${challenge}.${expiresAt}`;
-  const hmac = createHmac("sha256", HMAC_SECRET).update(payload).digest("hex");
+  const hmac = createHmac("sha256", getHmacSecret()).update(payload).digest("hex");
   return `${payload}.${hmac}`;
 }
 
@@ -56,7 +69,7 @@ function verifyChallengeCookie(cookieValue: string): string | null {
   const expiresAt = parseInt(expiresAtStr, 10);
   if (isNaN(expiresAt) || Date.now() > expiresAt) return null;
 
-  const expectedHmac = createHmac("sha256", HMAC_SECRET)
+  const expectedHmac = createHmac("sha256", getHmacSecret())
     .update(`${challenge}.${expiresAtStr}`)
     .digest("hex");
 
