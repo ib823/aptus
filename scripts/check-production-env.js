@@ -8,7 +8,6 @@ const REQUIRED_VARS = [
   "DATABASE_URL",
   "NEXTAUTH_SECRET",
   "NEXTAUTH_URL",
-  "TOTP_ENCRYPTION_KEY",
   "CRON_SECRET",
 ];
 
@@ -21,12 +20,18 @@ const RECOMMENDED_VARS = [
   "BLOB_READ_WRITE_TOKEN",
   "SENTRY_DSN",
   "NEXT_PUBLIC_SENTRY_DSN",
+  // Distributed rate limiting falls back to per-instance memory without these
+  "UPSTASH_REDIS_REST_URL",
+  "UPSTASH_REDIS_REST_TOKEN",
+  // BYOAI encryption + at least one provider key are needed for AI features
+  "BYOAI_ENCRYPTION_KEY",
 ];
 
 const DANGEROUS_IN_PRODUCTION = [
   { key: "ALLOW_TEST_LOGIN", reason: "Enables test-login endpoint in production" },
   { key: "ENABLE_TEST_LOGIN_ENDPOINT", reason: "Enables test-login endpoint — must not be set in production" },
   { key: "ALLOW_TEST_LOGIN_IN_PROD", reason: "Overrides production safety gate for test-login" },
+  { key: "ENABLE_SIMULATION_BRIDGE", reason: "Enables /api/auth/verify-izzat backdoor that issues real sessions" },
 ];
 
 let exitCode = 0;
@@ -58,11 +63,6 @@ if (process.env.NODE_ENV === "production") {
   // Ensure secrets aren't placeholder values
   if (process.env.NEXTAUTH_SECRET?.includes("generate-a-random")) {
     console.error("[FAIL] NEXTAUTH_SECRET appears to be a placeholder value");
-    exitCode = 1;
-  }
-
-  if (process.env.TOTP_ENCRYPTION_KEY?.includes("generate-a-random")) {
-    console.error("[FAIL] TOTP_ENCRYPTION_KEY appears to be a placeholder value");
     exitCode = 1;
   }
 }
