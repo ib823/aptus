@@ -1,5 +1,7 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
+import { isMfaRequired } from "@/lib/auth/permissions";
 import { getOrganizationSubscription } from "@/lib/db/organizations";
 import { OnboardingGuard } from "@/components/onboarding/OnboardingGuard";
 import { SubscriptionStatusBanner } from "@/components/commercial/SubscriptionStatusBanner";
@@ -38,6 +40,18 @@ export default async function PortalLayout({
 
   if (!user) {
     redirect("/login");
+  }
+
+  // MFA step-up gate. Triggered when a user has a passkey enrolled AND either
+  // the org policy is "required" OR they personally opted in (mfaEnabled), AND
+  // the current session hasn't satisfied the second factor yet. The verify-mfa
+  // page runs the WebAuthn authenticate flow, marks the session, then bounces
+  // the user back to where they came from via ?next.
+  // Users without a passkey are not blocked here — see lib/auth/permissions.ts.
+  if (isMfaRequired(user)) {
+    const pathname = (await headers()).get("x-pathname") ?? "/dashboard";
+    const next = encodeURIComponent(pathname);
+    redirect(`/verify-mfa?next=${next}`);
   }
 
   // Fetch org subscription status for banner
