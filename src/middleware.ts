@@ -130,9 +130,13 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
     return NextResponse.redirect(bridgeUrl);
   }
 
-  // Set pathname header for server components (used by OnboardingGuard)
-  const response = NextResponse.next();
-  response.headers.set("x-pathname", pathname);
+  // Propagate pathname to server components via REQUEST headers (so the
+  // (portal) layout can build a `?next=` redirect for the MFA step-up flow).
+  // Setting it on the response — as the prior code did — was a no-op because
+  // server components only see the request side.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", pathname);
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
   return withObservabilityHeaders(response, requestId, requestStart);
 }
 
