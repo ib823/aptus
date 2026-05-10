@@ -38,7 +38,9 @@ export async function checkAssessmentLimit(organizationId: string): Promise<{
     where: {
       organizationId,
       deletedAt: null,
-      status: { notIn: ["archived", "canceled"] },
+      // "canceled" was previously listed defensively but is not a real
+       // AssessmentStatus value — dropped now that the column is enum-typed.
+      status: { notIn: ["archived"] },
     },
   });
 
@@ -79,7 +81,9 @@ export async function getUsageMetrics(organizationId: string) {
       where: {
         organizationId,
         deletedAt: null,
-        status: { notIn: ["archived", "canceled"] },
+        // "canceled" was previously listed defensively but is not a real
+       // AssessmentStatus value — dropped now that the column is enum-typed.
+      status: { notIn: ["archived"] },
       },
     }),
     prisma.user.count({
