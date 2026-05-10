@@ -50,7 +50,7 @@
  * Idempotent: re-runs upsert by apiId. Existing rows are updated.
  */
 
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 
@@ -343,7 +343,7 @@ async function main(): Promise<void> {
 
   let inserted = 0;
   let updated = 0;
-  let unchanged = 0;
+  const unchanged = 0;
   let skipped = 0;
   let publicCount = 0;
   let privateCount = 0;

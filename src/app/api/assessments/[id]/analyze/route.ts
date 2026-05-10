@@ -15,7 +15,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
+import { isAssessmentAccessError, requireAssessmentAccess } from "@/lib/auth/assessment-guard";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import {
   classifyBatch,
   selectRelevantCandidates,
@@ -35,43 +36,30 @@ export async function POST(
   request: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   const { id: assessmentId } = await ctx.params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) return access;
 
-  const assessment = await prisma.assessment.findUnique({
-    where: { id: assessmentId, deletedAt: null },
-    select: { id: true, organizationId: true, catalogVersionId: true },
-  });
-  if (!assessment) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-  if (
-    user.organizationId !== assessment.organizationId &&
-    user.role !== "platform_admin"
-  ) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  // Need catalogVersionId beyond what the shared guard's select returns.
+  const { catalogVersionId } = (await prisma.assessment.findUniqueOrThrow({
+    where: { id: assessmentId },
+    select: { catalogVersionId: true },
+  }));
+
   // Phase 13.3 — AD-13.6: every assessment must be pinned to a catalog version
   // before classification can run. Without this, the classifier doesn't know
   // which edition's scope items + protocol to use.
-  if (!assessment.catalogVersionId) {
+  if (!catalogVersionId) {
     return NextResponse.json(
       { error: "Assessment is not pinned to a catalog version. Set Assessment.catalogVersionId before analyzing." },
       { status: 409 },
     );
   }
-  const catalogVersionId = assessment.catalogVersionId;
 
-  let body: unknown = {};
-  try {
-    body = await request.json();
-  } catch {
-    // empty body OK
-  }
-  const parsed = requestSchema.safeParse(body);
+  // Empty body OK — every field is optional.
+  const bodyResult = await safeParseJsonBody(request);
+  const rawBody = bodyResult.ok ? bodyResult.data : {};
+  const parsed = requestSchema.safeParse(rawBody);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Invalid request" },

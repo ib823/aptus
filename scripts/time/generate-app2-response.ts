@@ -214,7 +214,7 @@ async function main(): Promise<void> {
   await wb.xlsx.readFile(TEMPLATE_PATH);
 
   let cellsWritten = 0;
-  let perSheetWrites: Record<string, number> = {};
+  const perSheetWrites: Record<string, number> = {};
 
   for (const sheetName of FUNCTIONAL_SHEETS) {
     const ws = wb.getWorksheet(sheetName);

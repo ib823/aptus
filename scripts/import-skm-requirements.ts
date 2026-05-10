@@ -262,7 +262,7 @@ async function main(): Promise<void> {
   if (!priv) throw new Error("Private 2025-FPS1 catalog missing — Phase 13.2 must run first");
 
   // Find an organization to scope this under (use first available, or create a stub)
-  let org = await prisma.organization.findFirst({ select: { id: true, name: true } });
+  const org = await prisma.organization.findFirst({ select: { id: true, name: true } });
   if (!org) throw new Error("No organization found in DB; create one before running this import");
   console.log(`\nUsing organization: ${org.name} (${org.id})`);
 

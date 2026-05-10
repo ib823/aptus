@@ -56,11 +56,14 @@ describe("calculateReadinessScorecard", () => {
     expect(result.categories.every((c) => c.status === "green")).toBe(true);
   });
 
-  it("returns 100% for all-zero totals (nothing to do)", () => {
+  it("marks all-zero totals as N/A and excludes them from the average", () => {
     const result = calculateReadinessScorecard(makeInput());
-    // When total is 0, pct returns 100 (nothing to do = done)
-    expect(result.overallScore).toBe(100);
-    expect(result.overallStatus).toBe("green");
+    // Per the calculator's N/A guard (readiness-calculator.ts:46-48), zero-total
+    // categories are no longer rendered as a vacuous 100%; they are excluded
+    // from the average. With no evaluated categories the score is 0.
+    expect(result.overallScore).toBe(0);
+    expect(result.categories.every((c) => c.notApplicable === true)).toBe(true);
+    // No red categories (all N/A) → goNoGo is still "go".
     expect(result.goNoGo).toBe("go");
   });
 
@@ -257,12 +260,14 @@ describe("calculateReadinessScorecard", () => {
     expect(cat?.findings[0]).toContain("All 5");
   });
 
-  it("generates findings for zero-total categories", () => {
+  it("generates an N/A finding for zero-total categories", () => {
     const result = calculateReadinessScorecard(makeInput({
       totalGaps: 0,
     }));
     const cat = result.categories.find((c) => c.category === "Gap Resolution");
-    expect(cat?.findings[0]).toContain("No gaps identified yet");
+    expect(cat?.notApplicable).toBe(true);
+    expect(cat?.findings[0]).toContain("No gaps identified");
+    expect(cat?.findings[0]).toContain("category not evaluated");
   });
 
   it("includes executive summary mentioning overall score", () => {
@@ -271,15 +276,16 @@ describe("calculateReadinessScorecard", () => {
     expect(result.executiveSummary).toContain("GO");
   });
 
-  it("overall score is average of all categories", () => {
+  it("overall score averages only evaluated (non-N/A) categories", () => {
     const result = calculateReadinessScorecard(makeInput({
       totalScopeItems: 100,
       decidedScopeItems: 100,
       totalSteps: 100,
       reviewedSteps: 0,
     }));
-    // Categories: scope=100, steps=0, rest=100 (zero totals)
-    // 100+0+100+100+100+100+100+100 = 700 / 8 = 87.5 -> 88
-    expect(result.overallScore).toBe(88);
+    // Scope=100 (green, evaluated), Process=0 (red, evaluated), 6 others N/A.
+    // Average across the 2 evaluated = (100+0)/2 = 50.
+    expect(result.overallScore).toBe(50);
+    expect(result.categories.filter((c) => c.notApplicable).length).toBe(6);
   });
 });

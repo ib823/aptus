@@ -10,31 +10,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
+import { isAssessmentAccessError, requireAssessmentAccess } from "@/lib/auth/assessment-guard";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 import { listPasses } from "@/lib/classification/pass-data";
-
-async function authorize(assessmentId: string) {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Unauthorized", status: 401 } as const;
-
-  const assessment = await prisma.assessment.findUnique({
-    where: { id: assessmentId, deletedAt: null },
-    select: { id: true, organizationId: true, catalogVersionId: true },
-  });
-  if (!assessment) return { error: "Not found", status: 404 } as const;
-  if (user.organizationId !== assessment.organizationId && user.role !== "platform_admin") {
-    return { error: "Forbidden", status: 403 } as const;
-  }
-  return { user, assessment } as const;
-}
 
 export async function GET(
   _request: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   const { id: assessmentId } = await ctx.params;
-  const auth = await authorize(assessmentId);
-  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status as number });
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) return access;
 
   const passes = await listPasses(assessmentId);
   return NextResponse.json({ passes });
@@ -51,19 +37,28 @@ export async function POST(
   ctx: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   const { id: assessmentId } = await ctx.params;
-  const auth = await authorize(assessmentId);
-  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status as number });
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) return access;
+  const { user } = access;
 
-  if (!auth.assessment.catalogVersionId) {
+  // The shared guard's select doesn't include catalogVersionId; fetch it
+  // narrowly here. The assessment is guaranteed to exist by the guard.
+  const { catalogVersionId } = (await prisma.assessment.findUniqueOrThrow({
+    where: { id: assessmentId },
+    select: { catalogVersionId: true },
+  }));
+
+  if (!catalogVersionId) {
     return NextResponse.json(
       { error: "Assessment has no catalogVersionId — backfill required (Phase 1 cutover)" },
       { status: 409 },
     );
   }
 
-  let body: unknown = {};
-  try { body = await request.json(); } catch { /* empty body OK */ }
-  const parsed = createSchema.safeParse(body);
+  // Empty body is OK (all fields optional) → fall through with {}.
+  const bodyResult = await safeParseJsonBody(request);
+  const rawBody = bodyResult.ok ? bodyResult.data : {};
+  const parsed = createSchema.safeParse(rawBody);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 });
   }
@@ -72,7 +67,7 @@ export async function POST(
   const protocol = parsed.data.protocolVersionId
     ? await prisma.classificationProtocol.findUnique({ where: { id: parsed.data.protocolVersionId } })
     : await prisma.classificationProtocol.findFirst({
-        where: { isActive: true, catalogVersionId: auth.assessment.catalogVersionId },
+        where: { isActive: true, catalogVersionId },
         orderBy: { createdAt: "desc" },
       });
 
@@ -87,8 +82,8 @@ export async function POST(
     data: {
       assessmentId,
       protocolVersionId: protocol.id,
-      catalogVersionId: auth.assessment.catalogVersionId,
-      actor: auth.user.id,
+      catalogVersionId,
+      actor: user.id,
       actorRole: parsed.data.actorRole,
       parentPassId: parsed.data.parentPassId ?? null,
       summaryJson: { source: "in-app workspace" },
