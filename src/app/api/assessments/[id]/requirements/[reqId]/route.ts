@@ -8,7 +8,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
+import { isAssessmentAccessError, requireAssessmentAccess } from "@/lib/auth/assessment-guard";
+import { safeParseJsonBody } from "@/lib/http/safe-json-body";
 
 const patchSchema = z
   .object({
@@ -28,37 +29,15 @@ export async function PATCH(
   request: NextRequest,
   ctx: { params: Promise<{ id: string; reqId: string }> },
 ): Promise<NextResponse> {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { id: assessmentId, reqId } = await ctx.params;
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) return access;
 
-  // Verify the assessment exists and the user has access via org membership
-  const assessment = await prisma.assessment.findUnique({
-    where: { id: assessmentId, deletedAt: null },
-    select: { id: true, organizationId: true },
-  });
-  if (!assessment) {
-    return NextResponse.json({ error: "Assessment not found" }, { status: 404 });
-  }
-
-  if (
-    user.organizationId !== assessment.organizationId &&
-    user.role !== "platform_admin"
-  ) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
+  const bodyResult = await safeParseJsonBody(request);
+  if (!bodyResult.ok) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-
-  const parsed = patchSchema.safeParse(body);
+  const parsed = patchSchema.safeParse(bodyResult.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Invalid request" },

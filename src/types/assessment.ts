@@ -308,6 +308,8 @@ export interface SessionUser {
   image?: string | null;
   role: UserRole;
   organizationId: string | null;
+  /** "disabled" | "optional" | "required" — null when user has no organization */
+  organizationMfaPolicy: string | null;
   mfaEnabled: boolean;
   mfaVerified: boolean;
   hasWebAuthn: boolean;

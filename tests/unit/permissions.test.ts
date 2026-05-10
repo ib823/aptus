@@ -9,6 +9,7 @@ function makeUser(overrides: Partial<SessionUser> = {}): SessionUser {
     name: "Test User",
     role: "consultant",
     organizationId: "test-org",
+    organizationMfaPolicy: "optional",
     mfaEnabled: true,
     mfaVerified: true,
     hasWebAuthn: false,
@@ -197,30 +198,34 @@ describe("Permission Utilities", () => {
   });
 
   describe("isMfaRequired", () => {
-    // Post-simplification contract: magic link is sufficient on its own, passkey is
-    // an optional upgrade. isMfaRequired() always returns false regardless of role,
-    // mfaEnabled, mfaVerified, or hasWebAuthn — there is no role-gated TOTP path.
-    it("never requires MFA — magic link is sufficient on its own", () => {
-      expect(isMfaRequired(makeUser({ role: "process_owner", mfaVerified: false }))).toBe(false);
-      expect(isMfaRequired(makeUser({ role: "it_lead", mfaVerified: false }))).toBe(false);
-      expect(isMfaRequired(makeUser({ role: "executive_sponsor" as UserRole, mfaVerified: false }))).toBe(false);
-      expect(isMfaRequired(makeUser({ role: "viewer" as UserRole, mfaVerified: false }))).toBe(false);
-      expect(isMfaRequired(makeUser({ role: "client_admin" as UserRole, mfaVerified: false }))).toBe(false);
-      expect(isMfaRequired(makeUser({ role: "consultant", mfaEnabled: true, mfaVerified: false }))).toBe(false);
-      expect(isMfaRequired(makeUser({ role: "platform_admin" as UserRole, mfaEnabled: true, mfaVerified: false }))).toBe(false);
+    // Contract: magic link is sufficient by default. MFA enforcement only kicks
+    // in for users who already have a passkey (hasWebAuthn=true). Users without
+    // passkeys are never blocked — there is no /verify-mfa step-up flow yet.
+    it("never requires MFA when the user has no passkey enrolled", () => {
+      expect(isMfaRequired(makeUser({ mfaEnabled: false, mfaVerified: false, hasWebAuthn: false }))).toBe(false);
+      expect(isMfaRequired(makeUser({ mfaEnabled: true, mfaVerified: false, hasWebAuthn: false, organizationMfaPolicy: "required" }))).toBe(false);
     });
 
-    it("should treat partner_lead as internal role", () => {
-      expect(isMfaRequired(makeUser({ role: "partner_lead" as UserRole, mfaEnabled: false, mfaVerified: false }))).toBe(false);
+    it("never requires MFA when the session is already verified", () => {
+      expect(isMfaRequired(makeUser({ mfaEnabled: true, mfaVerified: true, hasWebAuthn: true, organizationMfaPolicy: "required" }))).toBe(false);
     });
 
-    it("should never require MFA for users with a passkey (hasWebAuthn)", () => {
-      // External role, not verified, but has passkey → no MFA needed
-      expect(isMfaRequired(makeUser({ role: "process_owner", mfaVerified: false, hasWebAuthn: true }))).toBe(false);
-      // Internal role, MFA enabled, not verified, but has passkey → no MFA needed
-      expect(isMfaRequired(makeUser({ role: "platform_admin" as UserRole, mfaEnabled: true, mfaVerified: false, hasWebAuthn: true }))).toBe(false);
-      // Consultant with passkey → no MFA needed regardless of verification state
-      expect(isMfaRequired(makeUser({ role: "consultant", mfaEnabled: true, mfaVerified: false, hasWebAuthn: true }))).toBe(false);
+    it("requires MFA when the user opted in (mfaEnabled) and has a passkey", () => {
+      expect(isMfaRequired(makeUser({ mfaEnabled: true, mfaVerified: false, hasWebAuthn: true, organizationMfaPolicy: "optional" }))).toBe(true);
+    });
+
+    it("requires MFA when the org policy is 'required' and the user has a passkey", () => {
+      expect(isMfaRequired(makeUser({ mfaEnabled: false, mfaVerified: false, hasWebAuthn: true, organizationMfaPolicy: "required" }))).toBe(true);
+    });
+
+    it("does not require MFA when org policy is 'disabled' even if user opted in", () => {
+      // mfaEnabled overrides — user-level opt-in always wins for the user's own session.
+      expect(isMfaRequired(makeUser({ mfaEnabled: true, mfaVerified: false, hasWebAuthn: true, organizationMfaPolicy: "disabled" }))).toBe(true);
+    });
+
+    it("does not require MFA when neither org nor user opted in", () => {
+      expect(isMfaRequired(makeUser({ mfaEnabled: false, mfaVerified: false, hasWebAuthn: true, organizationMfaPolicy: "optional" }))).toBe(false);
+      expect(isMfaRequired(makeUser({ mfaEnabled: false, mfaVerified: false, hasWebAuthn: true, organizationMfaPolicy: null }))).toBe(false);
     });
   });
 

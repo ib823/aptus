@@ -46,6 +46,11 @@ const eslintConfig = [
     files: ["scripts/**/*.ts", "scripts/**/*.mjs", "scripts/**/*.js"],
     rules: {
       "no-console": "off",
+      // Browser-targeted rule; scripts/ are Node CLI tools where `module` is a legit name.
+      "@next/next/no-assign-module-variable": "off",
+      // Most scripts are one-shot ops/backfill jobs; tolerate dead constants.
+      "@typescript-eslint/no-unused-vars": "off",
+      "prefer-const": "off",
     },
   },
   {

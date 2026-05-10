@@ -11,7 +11,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
+import { isAssessmentAccessError, requireAssessmentAccess } from "@/lib/auth/assessment-guard";
 
 export async function POST(
   _request: NextRequest,
@@ -20,17 +20,9 @@ export async function POST(
   const { id: assessmentId, passId, module } = await ctx.params;
   const decodedModule = decodeURIComponent(module);
 
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const assessment = await prisma.assessment.findUnique({
-    where: { id: assessmentId, deletedAt: null },
-    select: { id: true, organizationId: true, status: true },
-  });
-  if (!assessment) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (user.organizationId !== assessment.organizationId && user.role !== "platform_admin") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const access = await requireAssessmentAccess(assessmentId);
+  if (isAssessmentAccessError(access)) return access;
+  const { user, assessment } = access;
 
   // Frozen-assessment check (AD-7)
   if (assessment.status === "signed_off") {
