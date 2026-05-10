@@ -43,11 +43,13 @@ async function main() {
   let phaseRecordsCreated = 0;
   let transitionsLogged = 0;
 
-  // 1. Find assessments with V1-only statuses that need mapping
-  const v1OnlyStatuses = ["completed", "reviewed"];
+  // 1. Find assessments with V1-only statuses that need mapping. Both values
+  // are valid AssessmentStatus enum members (kept for backward compat); the
+  // cast satisfies the post-enum-promotion type signature.
+  const v1OnlyStatuses = ["completed", "reviewed"] as const;
   const assessmentsToMigrate = await prisma.assessment.findMany({
     where: {
-      status: { in: v1OnlyStatuses },
+      status: { in: v1OnlyStatuses as unknown as ("completed" | "reviewed")[] },
       deletedAt: null,
     },
     select: { id: true, status: true, companyName: true },
@@ -61,7 +63,9 @@ async function main() {
 
     await prisma.assessment.update({
       where: { id: assessment.id },
-      data: { status: newStatus },
+      // newStatus is the V2 mapping of a V1-only value; both source and
+      // target are valid AssessmentStatus enum members post-promotion.
+      data: { status: newStatus as "pending_validation" | "validated" },
     });
 
     await prisma.statusTransitionLog.create({

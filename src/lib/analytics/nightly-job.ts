@@ -1,5 +1,6 @@
 /** Phase 26: Nightly analytics computation job */
 
+import type { AssessmentStatus } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { mean, median, percentile } from "./benchmark-engine";
 import { computePortfolioSummary, computeFitRateByIndustry, computeTopGaps } from "./portfolio-engine";
@@ -18,7 +19,17 @@ async function computeBenchmarkSnapshot(
   industry: string,
   companySize: string | null,
 ): Promise<boolean> {
-  const qualifyingStatuses = ["in_progress", "completed", "signed_off", "handed_off", "reviewed", "validated"];
+  // Statuses included in benchmark snapshots — anything past `in_progress`.
+  // Includes the V1 legacy values (completed, reviewed) for backwards-compat
+  // with any cold seed data; live assessments use the V2 successors.
+  const qualifyingStatuses: AssessmentStatus[] = [
+    "in_progress",
+    "completed",
+    "signed_off",
+    "handed_off",
+    "reviewed",
+    "validated",
+  ];
 
   const assessments = await prisma.assessment.findMany({
     where: {

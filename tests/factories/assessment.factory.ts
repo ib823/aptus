@@ -1,26 +1,29 @@
-import type { Assessment } from "@prisma/client";
+import type { Assessment, AssessmentStatus } from "@prisma/client";
 
 let counter = 0;
 const nextId = () => `test-${++counter}`;
 
 type AssessmentOverrides = Partial<Assessment>;
 
+// VALID_STATUSES previously listed an invented taxonomy ("setup",
+// "scope_in_progress", "ocm_assessment", "reassessment_needed", etc.) that
+// never matched the actual schema. After the AssessmentStatus enum promotion,
+// the factory MUST emit real enum values or every consumer test fails type
+// checking. Aligned with the V2 lifecycle in lib/assessment/status-machine.ts.
 const VALID_STATUSES = [
   "draft",
-  "setup",
-  "scope_in_progress",
-  "scope_locked",
-  "process_review",
+  "scoping",
+  "in_progress",
+  "workshop_active",
+  "review_cycle",
   "gap_resolution",
-  "integration_assessment",
-  "data_migration_assessment",
-  "ocm_assessment",
-  "validation",
+  "pending_validation",
+  "validated",
   "pending_sign_off",
   "signed_off",
   "handed_off",
-  "reassessment_needed",
-] as const;
+  "archived",
+] as const satisfies readonly AssessmentStatus[];
 
 function createBase(overrides: AssessmentOverrides = {}): Assessment {
   const id = overrides.id ?? nextId();
@@ -91,7 +94,7 @@ export function createAtState(
 export function createFullyPopulated(overrides: AssessmentOverrides = {}): Assessment {
   const now = new Date();
   return createBase({
-    status: "validation",
+    status: "validated",
     companyName: "Acme Corp",
     industry: "Manufacturing",
     country: "US",
@@ -156,8 +159,10 @@ export function createWithPhase2Clone(overrides: AssessmentOverrides = {}): Asse
 
 export function createWithChangeRequest(overrides: AssessmentOverrides = {}): Assessment {
   const snapshotId = nextId();
+  // No "reassessment_needed" status exists in the lifecycle; a change-request
+  // assessment lives in gap_resolution while the change is being scoped.
   return createBase({
-    status: "reassessment_needed",
+    status: "gap_resolution",
     currentSnapshotId: snapshotId,
     ...overrides,
   });

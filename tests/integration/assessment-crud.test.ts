@@ -10,6 +10,7 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
+import type { AssessmentStatus } from "@prisma/client";
 import { createMockMeterEvent } from "../helpers/stripe";
 import * as OrgFactory from "../factories/organization.factory";
 import * as UserFactory from "../factories/user.factory";
@@ -280,12 +281,12 @@ function archiveAssessment(assessmentId: string) {
   const assessment = store.assessments.get(assessmentId);
   if (!assessment) throw new Error("Assessment not found");
 
-  const archived = { ...assessment, status: "archived", updatedAt: new Date() };
+  const archived = { ...assessment, status: "archived" as const, updatedAt: new Date() };
   store.assessments.set(assessmentId, archived);
   return archived;
 }
 
-function transitionStatus(assessmentId: string, newStatus: string) {
+function transitionStatus(assessmentId: string, newStatus: AssessmentStatus) {
   const assessment = store.assessments.get(assessmentId);
   if (!assessment) throw new Error("Assessment not found");
 

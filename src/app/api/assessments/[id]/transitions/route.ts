@@ -2,6 +2,7 @@
 /** POST: Execute a status transition */
 
 import { NextResponse, type NextRequest } from "next/server";
+import type { AssessmentStatus } from "@prisma/client";
 import {
   requireAssessmentAccess,
   isAssessmentAccessError,
@@ -109,10 +110,12 @@ export async function POST(
 
   const previousStatus = assessment.status;
 
-  // Update status
+  // Update status. The Zod schema accepts any non-empty string; canTransition
+  // (above) is the runtime gate that rejects values outside the V2 lifecycle.
+  // Cast is safe here — anything unsafe is rejected before this point.
   const updated = await prisma.assessment.update({
     where: { id },
-    data: { status: parsed.data.toStatus },
+    data: { status: parsed.data.toStatus as AssessmentStatus },
     select: { id: true, status: true, updatedAt: true },
   });
 
