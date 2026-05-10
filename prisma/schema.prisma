@@ -767,7 +767,7 @@ model Assessment {
   // remain reproducible after biannual SAP catalog ingests.
   // Nullable during Phase 1 backfill; flipped to non-nullable after dual-mode period.
   catalogVersionId   String?
-  status             String    @default("draft")
+  status             AssessmentStatus @default(draft)
   createdBy          String
   organizationId     String
   deletedAt          DateTime?
@@ -2587,6 +2587,33 @@ model PerformanceBaseline {
 // =============================================================
 // Phase: Dependency Engine
 // =============================================================
+
+// Phase 18 + V1 backwards-compat: the Assessment lifecycle status. The 12
+// V2 values are the canonical state machine (see lib/assessment/status-machine.ts).
+// The 2 V1-only values (completed, reviewed) are kept in the enum because
+//   (a) the `AssessmentStatus` TS alias in types/assessment.ts still includes
+//       them and several legacy comparisons (e.g. profile/config read-only
+//       gates) check for "reviewed";
+//   (b) prod data may have been seeded with V1 values in the past — including
+//       them keeps the column-type migration safe under any seed snapshot.
+// Once every code path has migrated to V2 and a DB scan confirms no rows hold
+// "completed"/"reviewed", these two members can be removed in a follow-up.
+enum AssessmentStatus {
+  draft
+  scoping
+  in_progress
+  workshop_active
+  review_cycle
+  gap_resolution
+  pending_validation
+  validated
+  pending_sign_off
+  signed_off
+  handed_off
+  archived
+  completed   // V1 legacy — see comment above
+  reviewed    // V1 legacy — see comment above
+}
 
 enum DependencyType {
   HARD_SEQUENTIAL
