@@ -72,11 +72,14 @@ export async function getTrialStatus(organizationId: string): Promise<{
   };
 }
 
+/**
+ * Activate a paid plan for an organization. Used by internal admin tooling
+ * (no payment processor is wired); validates the lifecycle transition is
+ * legal before applying.
+ */
 export async function activateSubscription(
   organizationId: string,
   plan: string,
-  stripeCustomerId?: string | undefined,
-  stripeSubscriptionId?: string | undefined,
 ): Promise<void> {
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: organizationId },
@@ -88,16 +91,12 @@ export async function activateSubscription(
     throw new Error(`Cannot transition from ${from} to ACTIVE`);
   }
 
-  const updateData: Record<string, unknown> = {
-    plan,
-    subscriptionStatus: "ACTIVE",
-  };
-  if (stripeCustomerId) updateData.stripeCustomerId = stripeCustomerId;
-  if (stripeSubscriptionId) updateData.stripeSubscriptionId = stripeSubscriptionId;
-
   await prisma.organization.update({
     where: { id: organizationId },
-    data: updateData,
+    data: {
+      plan,
+      subscriptionStatus: "ACTIVE",
+    },
   });
 }
 

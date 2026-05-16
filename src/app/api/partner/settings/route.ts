@@ -57,7 +57,6 @@ export async function GET(): Promise<NextResponse> {
       plan: true,
       subscriptionStatus: true,
       trialEndsAt: true,
-      billingEmail: true,
       maxActiveAssessments: true,
       maxPartnerUsers: true,
       primaryColor: true,

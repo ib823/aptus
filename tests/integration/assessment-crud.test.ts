@@ -11,8 +11,13 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import type { AssessmentStatus } from "@prisma/client";
-import { createMockMeterEvent } from "../helpers/stripe";
 import * as OrgFactory from "../factories/organization.factory";
+
+// Internal usage-event helper (replaces the removed Stripe meter mock).
+// Mirrors the shape the test previously consumed.
+function createMockUsageEvent(eventName: string, value: number) {
+  return { event_name: eventName, value };
+}
 import * as UserFactory from "../factories/user.factory";
 import * as AssessmentFactory from "../factories/assessment.factory";
 import * as StepFactory from "../factories/step.factory";
@@ -97,8 +102,8 @@ function createAssessmentWithRelated(
     { phase: "sign_off", status: "not_started", completionPct: 0 },
   ]);
 
-  // Fire Stripe meter event for assessment creation
-  const meterEvent = createMockMeterEvent("assessment_created", 1);
+  // Record usage event for assessment creation
+  const meterEvent = createMockUsageEvent("assessment_created", 1);
   store.meterEvents.push({
     eventName: meterEvent.event_name,
     value: meterEvent.value,
@@ -267,7 +272,7 @@ function deleteAssessment(assessmentId: string) {
   store.phaseProgress.delete(assessmentId);
 
   if (existed) {
-    const meterEvent = createMockMeterEvent("assessment_deleted", -1);
+    const meterEvent = createMockUsageEvent("assessment_deleted", -1);
     store.meterEvents.push({
       eventName: meterEvent.event_name,
       value: meterEvent.value,
@@ -345,7 +350,7 @@ describe("Assessment CRUD & Lifecycle (T-CRUD)", () => {
       expect(progress.every((p) => p.status === "not_started")).toBe(true);
     });
 
-    it("T-CRUD-002: Create assessment fires Stripe meter event", () => {
+    it("T-CRUD-002: Create assessment records usage event", () => {
       const assessment = createAssessmentWithRelated({
         companyName: "Billing Test Corp",
         industry: "Retail",
@@ -761,7 +766,7 @@ describe("Assessment CRUD & Lifecycle (T-CRUD)", () => {
       expect(store.phaseProgress.has(assessment.id)).toBe(false);
     });
 
-    it("T-CRUD-013: Delete assessment fires Stripe meter event (decrement)", () => {
+    it("T-CRUD-013: Delete assessment records usage event (decrement)", () => {
       const assessment = createAssessmentWithRelated({
         companyName: "Billing Delete Test",
         industry: "Manufacturing",

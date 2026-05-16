@@ -1,5 +1,24 @@
 # P0+P1 Gap Closure Plan — Target: ~88-90% Alignment
 
+> **OBSOLETE (2026-05-16).** This plan was drafted to close the gap
+> between V2 test specifications and the real codebase. Two of its
+> three phases are no longer applicable:
+>
+> - **Phase A (Stripe Webhook Handler)** is moot — paid billing is no
+>   longer in scope. The Stripe SDK, webhook handler, checkout/portal
+>   routes, and `tests/unit/billing/stripe-webhooks.test.ts` have been
+>   removed entirely. See `BUILD-PHASES-STATUS.md` Phase 29 (DESCOPED).
+> - **Phase B (Permission Matrix Expansion)** was not implemented as
+>   written; the 14-boolean shape remains canonical. The V2 spec's
+>   25-operation matrix lives in test code only.
+> - **Phase C (Step Type Tag Mapping)** is the only piece that's worth
+>   carrying forward; see `tests/unit/parsers/step-type-classifier.test.ts`.
+> - **Phase D / E** (test wiring, V2 index updates) are partially superseded
+>   by the broader reconciliation in the latest session.
+>
+> Kept as historical reference. Do not act on this plan; consult
+> `BUILD-PHASES-STATUS.md` and `HANDOFF.md` instead.
+
 ## Phase A: Stripe Webhook Handler (P0)
 **Goal**: Create `src/lib/stripe/webhook-handler.ts` with pure-function logic matching V2 test spec, then wire the test.
 

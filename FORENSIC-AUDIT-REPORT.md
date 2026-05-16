@@ -2,6 +2,31 @@
 
 > **Generated**: 2026-03-01 | **Mode**: Static analysis only (read-only) | **Scope**: Every layer from database to browser
 
+> **Reconciliation (2026-05-16):** Several inventory entries below are
+> stale after the security/scope changes on branch
+> `claude/codebase-assessment-F0dPB`. The original content is preserved
+> for historical reference; the most important corrections:
+>
+> - **Stripe / Phase 29 removed.** `src/lib/commercial/stripe-client.ts`,
+>   `src/app/api/stripe/*`, `src/app/api/webhooks/stripe/*`, the
+>   `StripeWebhookEvent` table, `Organization.stripeCustomerId /
+>   stripeSubscriptionId / billingEmail`, `UsageEvent.stripeSent /
+>   stripeError`, `tests/helpers/stripe.ts`, `tests/unit/billing/
+>   stripe-webhooks.test.ts`, and `tests/unit/state-machines/
+>   subscription-lifecycle.test.ts` are gone. Plan / limits / trial /
+>   usage scaffolding stays for internal feature gating.
+> - **`Session.token` → `Session.tokenHash`** (SHA-256). The DB never
+>   sees the unhashed token after the migration
+>   `20260516220000_session_token_hashing`.
+> - **Phase 17 SSO is scaffolded but NOT wired.** `auth-options.ts`
+>   still only registers `EmailProvider`; SSO config UI / DB fields
+>   exist but no NextAuth OAuth/SAML provider is registered.
+> - **Hierarchy tables (`SolutionProcess` / `ProcessFlow` / `Activity`)
+>   are populated by `scripts/extract-hierarchy-entities.ts`** — see
+>   `docs/runbooks/hierarchy-extraction.md`. Until this runs in a given
+>   environment they ship empty by design.
+> - **ConversationTemplate** is now seeded by `prisma/seed.ts`.
+
 ---
 
 ## TABLE OF CONTENTS
@@ -34,7 +59,7 @@ ABEAM V2 is a Next.js 15 / React 19 SAP readiness assessment platform. It guides
 | ORM | Prisma | 6.19.2 |
 | Database | PostgreSQL | — |
 | Auth | NextAuth v4 + custom session layer | — |
-| Payments | Stripe | 20.3.1 |
+| Payments | _(removed 2026-05-16 — no paid billing)_ | — |
 | Validation | Zod | 4.3.6 |
 | Testing | Vitest + Playwright | 4.0.18 / 1.58.2 |
 | Animation | Motion | — |
@@ -140,11 +165,11 @@ Each level uses a FK chain. ProcessStep has both `scopeItemId` (direct) and `act
 | `User` | `email` (unique), `role`, `organizationId` FK, `mfaEnabled`, `mfaMethod`, `totpSecret` (encrypted), `isActive`, `loginCount` + Phase 17 fields (`displayRole`, `jobTitle`, `department`, `phone`) | 30+ fields including collaboration relations |
 | `Account` | `userId` FK, `provider`, `providerAccountId` | NextAuth adapter requirement |
 | `VerificationToken` | `identifier`, `token`, `expires` | Magic link email flow |
-| `Session` | `userId` FK, `token` (unique), `expiresAt`, `mfaVerified`, `isRevoked`, `revokedReason`, `ipAddress`, `deviceFingerprint` | Custom session with MFA tracking |
+| `Session` | `userId` FK, `tokenHash` (unique SHA-256; was `token` plaintext before 2026-05-16), `expiresAt`, `mfaVerified`, `isRevoked`, `revokedReason`, `ipAddress`, `deviceFingerprint` | Custom session with MFA tracking |
 | `MfaChallenge` | `userId` FK, `challengeType`, `code`, `attempts`, `maxAttempts` (5), `expiresAt` | TOTP verification challenges |
 | `WebAuthnCredential` | `userId` FK, `credentialId` (unique), `publicKey` (bytea), `counter`, `transports[]` | Passkey/WebAuthn credentials |
 | `MagicLinkToken` | `email`, `token` (unique), `expiresAt`, `assessmentId` | Magic link with optional assessment context |
-| `Organization` | `name`, `slug` (unique), `orgType`, `plan` (TRIAL/STARTER/PROFESSIONAL/ENTERPRISE), `subscriptionStatus`, `stripeCustomerId`, `mfaPolicy`, `maxActiveAssessments`, `maxPartnerUsers` + SSO/SCIM fields | Multi-tenant org with commercial tier |
+| `Organization` | `name`, `slug` (unique), `orgType`, `plan` (TRIAL/STARTER/PROFESSIONAL/ENTERPRISE), `subscriptionStatus`, `mfaPolicy`, `maxActiveAssessments`, `maxPartnerUsers` + SSO/SCIM fields _(stripeCustomerId / stripeSubscriptionId / billingEmail dropped 2026-05-16)_ | Multi-tenant org; plan is internal-only (no payment processor) |
 
 ### Layer 5: Organization Invitations
 
@@ -210,7 +235,7 @@ Each level uses a FK chain. ProcessStep has both `scopeItemId` (direct) and `act
 | Model | Key Fields | Purpose |
 |-------|-----------|---------|
 | `AssessmentTemplate` | `organizationId` FK, `name`, `industry`, `scopeItemIds[]`, `isDemo`, `isPublished`, `timesUsed` + Phase 26 pattern fields | Reusable assessment templates |
-| `UsageEvent` | `organizationId` FK, `eventType`, `entityId`, `stripeSent` | Stripe usage metering |
+| `UsageEvent` | `organizationId` FK, `eventType`, `entityId` _(stripeSent / stripeError dropped 2026-05-16)_ | Internal usage metering (no payment processor) |
 
 ### Phase 30: Sign-Off & Handoff
 
@@ -555,9 +580,9 @@ Each level uses a FK chain. ProcessStep has both `scopeItemId` (direct) and `act
 | `partner/settings/profile/route.ts` | PUT | Partner profile |
 | `partner/settings/subscription/route.ts` | GET | Subscription details |
 | `partner/settings/usage/route.ts` | GET | Usage metrics |
-| `stripe/checkout/route.ts` | POST | Stripe checkout session |
-| `stripe/portal/route.ts` | POST | Stripe billing portal |
-| `webhooks/stripe/route.ts` | POST | Stripe webhook handler |
+| ~~`stripe/checkout/route.ts`~~ | — | _removed 2026-05-16_ |
+| ~~`stripe/portal/route.ts`~~ | — | _removed 2026-05-16_ |
+| ~~`webhooks/stripe/route.ts`~~ | — | _removed 2026-05-16_ |
 | `workshops/join/route.ts` | POST | Join workshop by code |
 | `sync/route.ts` | POST | Offline sync queue processor |
 | `push/subscribe/route.ts` | POST | Push notification subscribe |
@@ -1123,7 +1148,7 @@ All V1 phases confirmed implemented with 197 tests passing and 69 routes buildin
 | 26: Analytics | 7 tasks | BenchmarkSnapshot, PortfolioMetric, AssessmentPhaseLink, templates, cross-phase APIs | **IMPLEMENTED** |
 | 27: PWA | 12 tasks | OfflineSyncQueue, PerformanceBaseline, service worker, offline page, rate limiting, CSP headers, Sentry | **IMPLEMENTED** |
 | 28: Collaboration | 7 tasks | Comment (threaded), EditingLock, Conflict, PresenceRecord, ActivityFeedEntry, SSE | **IMPLEMENTED** |
-| 29: Commercial | 10 tasks | Organization plan/subscription fields, Stripe integration, feature-gate.ts, trial-manager.ts | **IMPLEMENTED** |
+| 29: Commercial | DESCOPED 2026-05-16 | Plan/subscription fields, feature-gate.ts, trial-manager.ts retained for internal feature gating; Stripe SDK, webhook, checkout/portal routes, StripeWebhookEvent table, and Stripe DB columns removed | **PARTIAL — billing surface removed** |
 | 30: Sign-Off | 12 tasks | SignOffProcess, AreaValidation, TechnicalValidation, CrossFunctionalValidation, SignatureRecord, AlmExportRecord, HandoffPackage | **IMPLEMENTED** |
 | 31: Lifecycle Continuity | 9 tasks | ChangeRequest, ReassessmentTrigger, SnapshotComparison, Assessment parent/child, carryForwardConfig | **IMPLEMENTED** |
 
@@ -1171,7 +1196,7 @@ All V1 phases confirmed implemented with 197 tests passing and 69 routes buildin
 **Core business logic**: activity-aggregator, activity-steps, admin, anonymization-engine, benchmark-engine, config-matrix, content-parser, dashboard-widgets, delta-engine, dependency-graph, flow-layout, gap-analytics, gap-comparison, gap-rollups, gap-suggest, hash-engine, hierarchical-layout, hierarchy-grouper, hierarchy-tree, mention-parser, minutes-renderer, notification-dispatch, ocm-scoring, onboarding-flows, performance-utils, permissions, plan-engine, polish, portfolio-engine, profile-completeness, pwa-types, readiness-calculator, register-helpers, register-validation, report-generation, risk-score, role-permissions, scope-delta, scope-selection (v1 + v2), security-headers, security, session-code, setup, signoff-state-machine, status-machine, step-classifier, step-response, sync-engine, tree-engine, vote-tally
 
 **Subdirectories**:
-- `billing/` (2): plan-enforcement, stripe-webhooks
+- `billing/` (1): plan-enforcement _(stripe-webhooks.test.ts removed 2026-05-16)_
 - `crypto/` (2): certificate-generation, snapshot-hashing
 - `parsers/` (3): content-section-parser, step-grouping, step-type-classifier
 - `permissions/` (1): permission-matrix (993 test cases — 11 roles × 25+ operations)
@@ -1205,7 +1230,7 @@ All V1 phases confirmed implemented with 197 tests passing and 69 routes buildin
 
 | Directory | Files | Purpose |
 |-----------|-------|---------|
-| `tests/helpers/` | 4 | auth.ts (11-role mocks), db.ts (tx isolation), stripe.ts (webhook mocks), websocket.ts (WS mocks) |
+| `tests/helpers/` | 3 | auth.ts (11-role mocks), db.ts (tx isolation), websocket.ts (WS mocks) _(stripe.ts removed 2026-05-16)_ |
 | `tests/factories/` | 13 | Typed factories: assessment (7 variants), change-request (4), comment (4), data-migration (3), gap (4), integration-point (3), ocm-impact (2), organization (8), sign-off (4), snapshot (3), step (4), template (3), user (6) |
 | `tests/seed/` | 13 | Deterministic scenarios: empty-trial, setup-assessment, scope-locked, process-review, gap-resolution, pending-sign-off, signed-off, phase2, enterprise (50 users/10 assessments), expired-trial, past-due, active-workshop |
 | `tests/e2e/pages/` | 7 | Page objects: base, assessment, auth, dashboard, settings, sign-off, workshop |
@@ -1251,7 +1276,7 @@ test:coverage  — vitest run --coverage
 | `EMAIL_FROM` | Sender email |
 | `WEBAUTHN_RP_ID/RP_NAME/ORIGIN` | WebAuthn relying party |
 | `VAPID_PUBLIC_KEY/PRIVATE_KEY/EMAIL` | Web push notifications |
-| `STRIPE_SECRET_KEY/PUBLISHABLE_KEY/WEBHOOK_SECRET` | Stripe billing |
+| ~~`STRIPE_SECRET_KEY/PUBLISHABLE_KEY/WEBHOOK_SECRET`~~ | _removed 2026-05-16 (no paid billing)_ |
 | `NEXT_PUBLIC_SENTRY_DSN` | Sentry error tracking |
 | `CRON_SECRET` | Cron job authentication |
 

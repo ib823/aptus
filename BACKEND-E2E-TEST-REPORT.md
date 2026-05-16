@@ -1,5 +1,16 @@
 # ABEAM V2 — Backend Integration Test Report
 
+> **Reconciliation (2026-05-16):** The two "data issues" flagged in this
+> report have known remediations:
+> - **Hierarchy tables empty:** populated by
+>   `scripts/extract-hierarchy-entities.ts`. See
+>   `docs/runbooks/hierarchy-extraction.md` — the script is idempotent
+>   and safe to run per environment.
+> - **ConversationTemplate empty:** now seeded by `prisma/seed.ts` and
+>   `prisma/seeds/conversation-templates.ts` (one baseline generic
+>   flow per ScopeItem). Run `pnpm db:seed` after migration.
+> The historical findings below are preserved for reference.
+
 **Date:** 2026-03-02T02:24:22Z
 **Server:** http://localhost:3003 (Next.js dev, port 3003)
 **Auth Method:** `POST /api/auth/test-login` with `E2E_TEST_SECRET` → `ABeam-session` cookie, role: `platform_admin`
@@ -23,7 +34,7 @@
 | 9: Workshop Management | 4 | 4 | 0 | 0 | 100% | Full CRUD verified |
 | 10: Data Isolation | 4 | 3 | 1 | 0 | 75% | Minor leakage (see below) |
 | 11: RBAC | 2 | 1 | 0 | 1 | 50% | Session limit blocks multi-role |
-| 12: Conversation Mode | 3 | 2 | 1 | 0 | 67% | Templates table empty |
+| 12: Conversation Mode | 3 | 2 | 1 | 0 | 67% | Templates table empty at audit time — now seeded via `pnpm db:seed` (2026-05-16) |
 | 13: Performance | 6 | 6 | 0 | 0 | 100% | All within thresholds |
 | **TOTAL** | **179** | **149** | **29** | **1** | **83%** | |
 
@@ -43,6 +54,8 @@
 *Note: The `isClassifiable` column in DB is `true` for ALL 102,261 steps (including LOGON/INFORMATION types). The catalog API does not return `isClassifiable` in the response. Classifiable counts above are estimated by filtering out LOGON/LOGOFF/ACCESS_APP/INFORMATION/NAVIGATION step types.
 
 **DATA ISSUE:** The `SolutionProcess`, `ProcessFlow`, and `Activity` tables are all EMPTY (0 rows). The `ProcessStep` table has 102,261 rows but with `NULL` values for `activityId`, `solutionProcessFlowName`, and `processFlowGroup`. This means the hierarchy endpoint returns `processes: []` for all scope items. Steps exist in a flat structure only.
+
+> **Remediation (2026-05-16):** Run `pnpm tsx scripts/extract-hierarchy-entities.ts && pnpm tsx scripts/verify-hierarchy.ts`. The script is idempotent and reads only from `ProcessStep`. See `docs/runbooks/hierarchy-extraction.md`.
 
 ---
 
@@ -207,6 +220,8 @@
 2. **GET Gap Detail Endpoint Missing:** `/api/assessments/{id}/gaps/{gapId}` only supports PUT, not GET. There's no way to fetch individual gap details via the API.
 
 3. **Conversation Templates Empty:** The ConversationTemplate table has 0 rows and no admin endpoint was tested for creating them. The conversation flow endpoint returns 200 but with empty data.
+
+> **Remediation (2026-05-16):** The new `prisma/seed.ts` + `prisma/seeds/conversation-templates.ts` seed a baseline generic flow per `ScopeItem` (idempotent). Run `pnpm db:seed`. Admins author scope-specific templates from the admin UI (`/admin/conversation-templates`) afterward.
 
 4. **RBAC Testing Limited:** The concurrent session limit (1 per user) means creating a viewer-role session immediately revokes the admin session. Multi-role testing would require separate test users or a session-limit override.
 

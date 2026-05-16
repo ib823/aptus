@@ -11,6 +11,21 @@ const REQUIRED_VARS = [
   "CRON_SECRET",
 ];
 
+// Required in production deployments specifically. Dev can run without these
+// (rate limiter degrades to per-process memory, which is fine on a single
+// dev server). On Vercel / serverless, the in-memory limiter is reset on
+// every invocation, so missing Redis is equivalent to no rate limiting.
+const REQUIRED_IN_PRODUCTION = [
+  {
+    key: "UPSTASH_REDIS_REST_URL",
+    reason: "Distributed rate limiting; in-memory fallback is ineffective on serverless",
+  },
+  {
+    key: "UPSTASH_REDIS_REST_TOKEN",
+    reason: "Distributed rate limiting; in-memory fallback is ineffective on serverless",
+  },
+];
+
 const RECOMMENDED_VARS = [
   "SMTP_HOST",
   "SMTP_PORT",
@@ -20,9 +35,6 @@ const RECOMMENDED_VARS = [
   "BLOB_READ_WRITE_TOKEN",
   "SENTRY_DSN",
   "NEXT_PUBLIC_SENTRY_DSN",
-  // Distributed rate limiting falls back to per-instance memory without these
-  "UPSTASH_REDIS_REST_URL",
-  "UPSTASH_REDIS_REST_TOKEN",
   // BYOAI encryption + at least one provider key are needed for AI features
   "BYOAI_ENCRYPTION_KEY",
 ];
@@ -56,6 +68,14 @@ if (process.env.NODE_ENV === "production") {
   for (const { key, reason } of DANGEROUS_IN_PRODUCTION) {
     if (process.env[key]) {
       console.error(`[FAIL] Dangerous env var set in production: ${key} — ${reason}`);
+      exitCode = 1;
+    }
+  }
+
+  // Required-in-production vars (block deploy if missing)
+  for (const { key, reason } of REQUIRED_IN_PRODUCTION) {
+    if (!process.env[key]) {
+      console.error(`[FAIL] Missing required production env var: ${key} — ${reason}`);
       exitCode = 1;
     }
   }

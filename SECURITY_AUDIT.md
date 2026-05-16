@@ -6,6 +6,24 @@
 **Target:** https://ABeam-sandy.vercel.app
 **Framework:** Next.js 15 App Router on Vercel, PostgreSQL (Neon), Prisma ORM
 
+> **Update (2026-05-16):** Two further security improvements landed since
+> this audit (see PRODUCTION-READINESS-AUDIT.md for the parallel findings):
+>
+> - **Session tokens are now hashed (SHA-256) before storage.** The
+>   `Session.token` column became `Session.tokenHash`; the unhashed
+>   token only ever lives in the cookie. Resolves MED-7 of the parallel
+>   production-readiness audit.
+> - **Content-Disposition is now sanitized via a canonical
+>   `src/lib/security/filename.ts`** (safeFilename + contentDisposition,
+>   RFC 6266 + RFC 5987 compliant). Applied across every download
+>   surface, including the 4 routes that had been bypassing the existing
+>   helper.
+> - **Upstash Redis is now required-in-production** for distributed rate
+>   limiting (`scripts/check-production-env.js` fails the deploy
+>   without it).
+>
+> The historical findings below are preserved for the record.
+
 ---
 
 ## Executive Summary

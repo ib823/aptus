@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { jsPDF } from "jspdf";
 import { requireAssessmentAccess, isAssessmentAccessError } from "@/lib/auth/assessment-guard";
+import { contentDisposition } from "@/lib/security/filename";
 
 export async function GET(
   request: NextRequest,
@@ -42,7 +43,7 @@ export async function GET(
     return new NextResponse(diagram.svgContent, {
       headers: {
         "Content-Type": "image/svg+xml",
-        "Content-Disposition": `attachment; filename="${baseName}.svg"`,
+        "Content-Disposition": contentDisposition(`${baseName}.svg`),
       },
     });
   }
@@ -58,7 +59,7 @@ export async function GET(
     return new NextResponse(pngBuffer as unknown as BodyInit, {
       headers: {
         "Content-Type": "image/png",
-        "Content-Disposition": `attachment; filename="${baseName}.png"`,
+        "Content-Disposition": contentDisposition(`${baseName}.png`),
       },
     });
   }
@@ -80,7 +81,7 @@ export async function GET(
     return new NextResponse(pdf as unknown as BodyInit, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${baseName}.pdf"`,
+        "Content-Disposition": contentDisposition(`${baseName}.pdf`),
       },
     });
   }

@@ -1,5 +1,17 @@
 # Build Phases Status
 
+> **Status reconciliation summary (2026-05-16).** A cross-cutting code
+> audit found the following deltas between this checklist and the
+> actual repository state. Each is now reflected inline below.
+>
+> | Phase | Reconciliation |
+> |---|---|
+> | 17 (Roles & SSO) | SSO **configuration** is shipped; SSO **login flow** is not (NextAuth still uses EmailProvider only). Marked PARTIAL with task 17.10 added. |
+> | 22 (Conversation Mode) | Code shipped, but the ConversationTemplate table was empty. Baseline seed (`prisma/seeds/conversation-templates.ts`) now plants a generic flow per ScopeItem; admins author scope-specific templates via the admin UI. |
+> | 29 (Commercial) | Paid billing is out of scope. Stripe SDK, webhook, checkout/portal, subscription upgrade UI, `StripeWebhookEvent` table, and Stripe DB columns have been removed. Plan/limits scaffolding stays for internal feature gating. |
+> | Hierarchy data | SolutionProcess / ProcessFlow / Activity tables ship empty by default; flat `ProcessStep` rows carry the data. To populate the normalized hierarchy, run `pnpm tsx scripts/extract-hierarchy-entities.ts` followed by `pnpm tsx scripts/verify-hierarchy.ts`. The extraction is idempotent. |
+> | Phase 31 (Lifecycle continuity) | Was previously flagged as hollow; `src/lib/lifecycle/delta-engine.ts` is in fact wired through change-requests and snapshot-compare. Fully shipped. |
+
 ## Phase 0: Project Scaffolding — COMPLETE
 
 | # | Task | Done |
@@ -265,7 +277,15 @@
 
 ## Wave 3: Roles & Lifecycle
 
-### Phase 17: Role System & Organization Model — COMPLETE
+### Phase 17: Role System & Organization Model — PARTIAL (SSO scaffolded, not wired)
+
+> **Status reconciliation (2026-05-16):** Roles, permission matrix,
+> invitations, and the SSO **configuration surface** are complete. The
+> SSO **authentication flow** is not wired — `auth-options.ts` only
+> registers `EmailProvider`. Storing SSO metadata in `Organization.sso*`
+> fields does not currently route logins through that IdP. Treat SSO as
+> "schema + admin UI present; login path is still email magic-link only"
+> until a NextAuth OAuth / SAML provider is added.
 
 | # | Task | Done |
 |---|------|------|
@@ -278,6 +298,7 @@
 | 17.7 | Organization management UI (admin org list + detail + InviteUserDialog) | [x] |
 | 17.8 | Invitation accept API (/invitations/[token]/accept) | [x] |
 | 17.9 | User model extensions (jobTitle, department, phone, lastActiveAt) | [x] |
+| 17.10 | **Wire NextAuth OAuth / SAML provider against Organization.sso\* fields** | [ ] |
 
 ### Phase 18: Assessment Lifecycle — COMPLETE
 
@@ -347,6 +368,12 @@
 
 ### Phase 22: Conversation Mode — COMPLETE
 
+> **Note:** The `ConversationTemplate` table now seeds a baseline
+> generic flow per ScopeItem via `prisma/seed.ts`. Admins author
+> scope-specific templates from the admin UI; without seeding, the
+> conversation surface ships empty. Run `pnpm db:seed` after migrating
+> to populate baseline templates.
+
 | # | Task | Done |
 |---|------|------|
 | 22.1 | ConversationTemplate model and decision tree | [x] |
@@ -356,6 +383,7 @@
 | 22.5 | Session resumption (ConversationSession CRUD) | [x] |
 | 22.6 | Template editor (admin) — ConversationTemplateEditor | [x] |
 | 22.7 | Unit and integration tests | [x] |
+| 22.8 | Baseline ConversationTemplate seed (prisma/seeds/conversation-templates.ts) | [x] |
 
 ### Phase 23: Intelligent Dashboard — COMPLETE
 
@@ -400,20 +428,30 @@
 | 25.10 | Flow Atlas PDF generator (generateFlowAtlasPdf in pdf-generator.ts) | [x] |
 | 25.11 | Wave 7 migration SQL (ReportGeneration, ReportBranding, commercial fields, templates, usage events) | [x] |
 
-### Phase 29: Platform Commercial & Self-Service — COMPLETE
+### Phase 29: Platform Commercial & Self-Service — DESCOPED (Stripe removed)
 
-| # | Task | Done |
-|---|------|------|
-| 29.1 | Self-service signup flow (/signup page + /api/auth/signup route) | [x] |
-| 29.2 | 14-day trial (trial-manager.ts + createTrial + checkAndExpireTrials) | [x] |
-| 29.3 | Stripe Billing (stripe-client.ts + webhook handler + checkout + portal) | [x] |
-| 29.4 | Partner admin (subscription page + partner settings routes) | [x] |
-| 29.5 | Plan tier enforcement (feature-gate.ts + checkFeatureAccess + isOrgReadOnly) | [x] |
-| 29.6 | Usage metering (usage-metering.ts + recordUsageEvent + limit checks) | [x] |
-| 29.7 | Subscription lifecycle (trial-manager + Stripe webhooks + status transitions) | [x] |
-| 29.8 | Demo/sandbox mode (sample assessment via onboarding — already exists) | [x] |
-| 29.9 | Pricing page (/pricing — public) | [x] |
-| 29.10 | Stripe webhook idempotency (all 5 handlers check current state before updating) | [x] |
+> **Status reconciliation (2026-05-16):** Paid billing is **out of scope**
+> for this product. The Stripe SDK, webhook handler, checkout/portal
+> routes, subscription upgrade UI, `StripeWebhookEvent` table, and the
+> `stripe*` / `billingEmail` columns on Organization have been removed
+> (see commit "remove Stripe and the paid-billing surface"). What
+> remains is the **internal plan/limits scaffolding**: PlanTier,
+> PLAN_LIMITS, trial-manager, usage-metering, and the read-only
+> subscription settings page. Plan transitions are managed by admin
+> tooling rather than a payment processor.
+
+| # | Task | Status |
+|---|------|--------|
+| 29.1 | Self-service signup flow (/signup page + /api/auth/signup route) | [x] retained |
+| 29.2 | 14-day trial (trial-manager.ts + createTrial + checkAndExpireTrials) | [x] retained |
+| 29.3 | Stripe Billing (stripe-client.ts + webhook handler + checkout + portal) | [removed] |
+| 29.4 | Partner admin (subscription page is read-only "current plan + usage") | [x] retained |
+| 29.5 | Plan tier enforcement (feature-gate.ts + checkFeatureAccess + isOrgReadOnly) | [x] retained |
+| 29.6 | Usage metering (usage-metering.ts + recordUsageEvent + limit checks) | [x] retained (internal-only — no payment processor) |
+| 29.7 | Subscription lifecycle (trial-manager + status transitions) | [x] retained (Stripe webhook half removed) |
+| 29.8 | Demo/sandbox mode (sample assessment via onboarding — already exists) | [x] retained |
+| 29.9 | Pricing page (/pricing — public) | [x] retained (informational) |
+| 29.10 | Stripe webhook idempotency | [removed] |
 
 ## Wave 8: Sign-Off & Continuity
 

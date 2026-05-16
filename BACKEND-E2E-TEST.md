@@ -1016,9 +1016,11 @@ Using ASSESSMENT_C_ID (which has BDW selected but NO classifications):
 ```
   Check if any templates exist:
     SELECT COUNT(*) FROM "ConversationTemplate";
-    [ ] Expected: 0 (table was empty per extraction report)
+    [ ] Expected (after `pnpm db:seed`): one row per ScopeItem (baseline
+        generic flow planted by prisma/seeds/conversation-templates.ts).
+    [ ] Expected (before seeding, fresh DB): 0 — run `pnpm db:seed`.
 
-  If 0: Create one via admin API:
+  If you need scope-specific behaviour beyond the baseline, create via admin API:
     POST /api/admin/conversation-templates
     Body: {
       scopeItemId: "J60",

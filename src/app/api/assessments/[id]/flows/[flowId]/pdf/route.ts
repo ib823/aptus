@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { jsPDF } from "jspdf";
 import { requireAssessmentAccess, isAssessmentAccessError } from "@/lib/auth/assessment-guard";
+import { contentDisposition } from "@/lib/security/filename";
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string; flowId: string }> },
@@ -40,7 +41,9 @@ export async function GET(
   return new NextResponse(pdf as unknown as BodyInit, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${diagram.scopeItemId}_${diagram.processFlowName}_Flow_Diagram.pdf"`,
+      "Content-Disposition": contentDisposition(
+        `${diagram.scopeItemId}_${diagram.processFlowName}_Flow_Diagram.pdf`,
+      ),
     },
   });
 }

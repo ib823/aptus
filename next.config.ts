@@ -11,7 +11,6 @@ const nextConfig: NextConfig = {
     "web-push",
     "jspdf",
     "archiver",
-    "stripe",
     "sanitize-html",
     "sharp",
     "@prisma/client",

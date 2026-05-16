@@ -127,8 +127,11 @@ export async function checkRateLimit(
 
   if (!hasSharedBackend && process.env.NODE_ENV === "production" && !warnedAboutMissingBackend) {
     warnedAboutMissingBackend = true;
+    // CI/CD must catch this via scripts/check-production-env.js; this log
+    // is the runtime backstop if a deploy slipped through without Redis.
     console.error(
-      "[RATE LIMIT] UPSTASH_REDIS_REST_URL/TOKEN are not configured; in-memory fallback is ineffective in serverless.",
+      "[RATE LIMIT] FATAL CONFIG: UPSTASH_REDIS_REST_URL/TOKEN missing in production. " +
+        "Per-instance memory limiter is ineffective in serverless — rate limiting is effectively disabled.",
     );
   }
 

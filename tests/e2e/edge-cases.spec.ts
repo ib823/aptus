@@ -43,10 +43,11 @@ test.describe("T-EDGE — Destructive & Edge Case Tests", () => {
     // The test passes if no unhandled promise rejection occurs
   });
 
-  // ── T-EDGE-002: Network timeout during payment ──────────────
-  test("T-EDGE-002 — Network timeout during payment/subscription", async ({ page }) => {
-    // Simulate payment backend unavailability without relying on unstable CDP throttling.
-    await page.route("**/api/stripe/**", async (route) => {
+  // ── T-EDGE-002: Subscription endpoint unavailable ───────────
+  test("T-EDGE-002 — Subscription endpoint timeout is non-fatal", async ({ page }) => {
+    // Simulate /api/partner/settings/subscription being unreachable. The
+    // settings page should degrade gracefully instead of crashing.
+    await page.route("**/api/partner/settings/subscription", async (route) => {
       await page.waitForTimeout(500);
       await route.abort("timedout");
     });
@@ -55,7 +56,6 @@ test.describe("T-EDGE — Destructive & Edge Case Tests", () => {
     await settings.goToOrganization();
     await settings.waitForPageLoad();
 
-    // Page should remain usable even when payment/subscription calls time out.
     expect(page.isClosed()).toBe(false);
     const body = await getBodyText(page);
     expect(body).not.toContain("Internal Server Error");

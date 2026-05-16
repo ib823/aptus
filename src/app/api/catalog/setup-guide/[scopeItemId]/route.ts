@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
+import { contentDisposition } from "@/lib/security/filename";
 
 export async function GET(
   _request: NextRequest,
@@ -67,7 +68,7 @@ export async function GET(
     return new NextResponse(upstream.body, {
       headers: {
         "Content-Type": upstream.headers.get("content-type") ?? "application/pdf",
-        "Content-Disposition": `inline; filename="${guide.filename}"`,
+        "Content-Disposition": contentDisposition(guide.filename, "inline"),
         "Cache-Control": "private, max-age=300",
       },
     });
@@ -84,7 +85,7 @@ export async function GET(
   return new NextResponse(guide.pdfBlob, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="${guide.filename}"`,
+      "Content-Disposition": contentDisposition(guide.filename, "inline"),
     },
   });
 }

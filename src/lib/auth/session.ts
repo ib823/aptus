@@ -1,7 +1,7 @@
 /** Session management utilities */
 
 import { cache } from "react";
-import { randomBytes } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import { prisma } from "@/lib/db/prisma";
 import { APP_CONFIG } from "@/constants/config";
 import type { SessionUser } from "@/types/assessment";
@@ -18,8 +18,18 @@ export function generateSessionToken(): string {
 }
 
 /**
+ * Hash a session token for database storage / lookup. SHA-256 is sufficient
+ * here — the token is high-entropy (32 random bytes), so we don't need a
+ * KDF; we just want to ensure DB reads don't yield usable tokens.
+ */
+export function hashSessionToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+/**
  * Create a new session for a user, revoking any existing sessions.
- * Returns the token and whether an existing session was displaced.
+ * Returns the raw token (caller sets it in the cookie) and whether an
+ * existing session was displaced.
  */
 export async function createSession(
   userId: string,
@@ -40,6 +50,7 @@ export async function createSession(
   });
 
   const token = generateSessionToken();
+  const tokenHash = hashSessionToken(token);
   const expiresAt = new Date(
     Date.now() + APP_CONFIG.sessionMaxAgeHours * 60 * 60 * 1000,
   );
@@ -48,7 +59,7 @@ export async function createSession(
     prisma.session.create({
       data: {
         userId,
-        token,
+        tokenHash,
         expiresAt,
         ipAddress,
         userAgent,
@@ -69,12 +80,14 @@ export async function createSession(
 
 /**
  * Validate a session token and return the user if valid.
+ * The raw token comes from the cookie; we hash it before lookup so the
+ * database never sees the unhashed value.
  */
 export async function validateSession(
   token: string,
 ): Promise<SessionUser | null> {
   const session = await prisma.session.findUnique({
-    where: { token },
+    where: { tokenHash: hashSessionToken(token) },
     select: {
       id: true,
       isRevoked: true,
@@ -135,7 +148,7 @@ export async function rotateSessionToken(
   oldToken: string,
 ): Promise<string | null> {
   const session = await prisma.session.findUnique({
-    where: { token: oldToken },
+    where: { tokenHash: hashSessionToken(oldToken) },
     select: { id: true, isRevoked: true, expiresAt: true },
   });
 
@@ -146,7 +159,7 @@ export async function rotateSessionToken(
   const newToken = generateSessionToken();
   await prisma.session.update({
     where: { id: session.id },
-    data: { token: newToken },
+    data: { tokenHash: hashSessionToken(newToken) },
   });
 
   return newToken;
@@ -157,7 +170,7 @@ export async function rotateSessionToken(
  */
 export async function markSessionMfaVerified(token: string): Promise<void> {
   await prisma.session.update({
-    where: { token },
+    where: { tokenHash: hashSessionToken(token) },
     data: {
       mfaVerified: true,
       mfaVerifiedAt: new Date(),
@@ -173,7 +186,7 @@ export async function revokeSession(
   reason: string,
 ): Promise<void> {
   await prisma.session.update({
-    where: { token },
+    where: { tokenHash: hashSessionToken(token) },
     data: {
       isRevoked: true,
       revokedAt: new Date(),

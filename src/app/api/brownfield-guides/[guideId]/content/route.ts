@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { contentDisposition } from "@/lib/security/filename";
 
 interface RouteParams {
   params: Promise<{ guideId: string }>;
@@ -38,13 +39,12 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<R
   // Inline stream from bytea
   if (guide.content) {
     const buf = Buffer.from(guide.content);
-    const filenameSafe = guide.sourceDocument.replace(/[^a-zA-Z0-9._-]+/g, "_");
     return new Response(buf, {
       status: 200,
       headers: {
         "Content-Type": guide.mimeType,
         "Content-Length": String(buf.byteLength),
-        "Content-Disposition": `inline; filename="${filenameSafe}"`,
+        "Content-Disposition": contentDisposition(guide.sourceDocument, "inline"),
         "Cache-Control": "private, max-age=3600",
       },
     });
