@@ -190,15 +190,21 @@ jobs:
 
       - name: Check that baselines exist
         id: check-baselines
+        shell: bash
         run: |
-          if [ -d tests/visual-regression-app/redesigned-screens.spec.ts-snapshots ] \
-             && [ -n "$(ls -A tests/visual-regression-app/redesigned-screens.spec.ts-snapshots 2>/dev/null)" ]; then
-            echo "have_baselines=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "have_baselines=false" >> "$GITHUB_OUTPUT"
-            echo "::warning ::No visual-app baselines committed yet. Skipping the run."
-            echo "::warning ::Generate them locally with 'pnpm test:visual-app:update' and commit the snapshots."
+          set +e
+          DIR="tests/visual-regression-app/redesigned-screens.spec.ts-snapshots"
+          HAS=false
+          if [ -d "$DIR" ] && [ -n "$(ls -A "$DIR" 2>/dev/null || true)" ]; then
+            HAS=true
           fi
+          echo "have_baselines=$HAS" >> "$GITHUB_OUTPUT"
+          if [ "$HAS" = "true" ]; then
+            echo "Baselines present — running visual-app suite."
+          else
+            echo "::warning::No visual-app baselines committed. Generate with 'pnpm test:visual-app:update' and commit snapshots; skipping run."
+          fi
+          exit 0
 
       - name: Install dependencies
         if: steps.check-baselines.outputs.have_baselines == 'true'
