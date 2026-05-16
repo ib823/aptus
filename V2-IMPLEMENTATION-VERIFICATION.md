@@ -1,5 +1,11 @@
 # V2 Implementation Verification Report
 
+> **Update (2026-05-16):** Several rows below have since changed:
+> - Phase 22 ConversationTemplate is now seeded (`prisma/seeds/conversation-templates.ts`); the original report flagged it as not having data
+> - `tests/unit/billing/stripe-webhooks.test.ts` and `tests/unit/state-machines/subscription-lifecycle.test.ts` have been removed along with the entire Stripe surface
+> - `tests/unit/billing/plan-enforcement.test.ts` continues to test the retained internal plan-engine.ts (paid-billing references removed)
+> - See BUILD-PHASES-STATUS.md "Status reconciliation summary" for the full delta
+
 **Generated:** 2026-02-22T22:25:00Z
 **Total Prisma models:** 77
 **Total source files (src/):** 554
@@ -111,9 +117,9 @@
 | tests/integration/exports/jira.test.ts | Export adapter specification test | Self-contained specification |
 | tests/integration/exports/azure-devops.test.ts | Export adapter specification test | Self-contained specification |
 | tests/integration/exports/confluence.test.ts | Export adapter specification test | Self-contained specification |
-| tests/unit/billing/stripe-webhooks.test.ts | Stripe webhook specification test | Self-contained specification |
-| tests/unit/billing/plan-enforcement.test.ts | Imports types from @/types/commercial but defines enforcement logic inline | Mixed |
-| tests/unit/state-machines/subscription-lifecycle.test.ts | Imports from @/lib/commercial/plan-engine | Wired |
+| ~~tests/unit/billing/stripe-webhooks.test.ts~~ | _removed 2026-05-16 (Stripe descoped)_ | — |
+| tests/unit/billing/plan-enforcement.test.ts | Imports types from @/types/commercial; tests retained plan-engine logic (no payment processor) | Wired |
+| ~~tests/unit/state-machines/subscription-lifecycle.test.ts~~ | _removed 2026-05-16 — webhook scenarios irrelevant; plan-engine.test.ts still covers state transitions_ | — |
 
 **Wiring Rate: ~90% wired to real application code**
 

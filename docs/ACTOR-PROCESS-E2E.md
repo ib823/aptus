@@ -144,7 +144,7 @@ The Partner Lead manages the partner firm's engagement with ABeam — assessment
 
 2. SUBSCRIPTION MANAGEMENT
    ├─ Select plan tier (Trial → Starter → Professional → Enterprise)
-   ├─ Manage billing and payment methods via Stripe
+   ├─ ~~Manage billing and payment methods via Stripe~~ _(Phase 29 DESCOPED 2026-05-16; plans are managed via admin tooling — no payment processor)_
    ├─ Upgrade: features unlock immediately
    ├─ Downgrade: excess assessments become read-only (oldest first)
    └─ Monitor usage against plan limits
@@ -722,7 +722,7 @@ The Viewer has strictly read-only access — dashboards and reports only. No com
        │
        ├── Hits assessment limit → prompted to upgrade
        ├── Selects plan (Starter / Professional / Enterprise)
-       ├── Stripe payment processed
+       ├── ~~Stripe payment processed~~ _(no payment processor — Phase 29 DESCOPED 2026-05-16)_
        │       │
        │       ├── TRIALING → ACTIVE
        │       ├── Features unlock immediately

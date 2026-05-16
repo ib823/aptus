@@ -121,8 +121,8 @@ Marcus starts on the Trial plan (1 assessment, 5 users). For the NovaTech engage
 
 ```
 Action:    Upgrade subscription: Trial → Professional
-Payment:   Stripe checkout → payment processed
-Result:    TRIALING → ACTIVE
+Payment:   _Not part of the product — Phase 29 DESCOPED 2026-05-16. Internal plan/limits scaffolding only._
+Result:    TRIALING → ACTIVE (via admin tooling)
 Limits:    10 active assessments, 30 partner users
 Features:  core_assessment, standard_reports, registers, workshop_mode, analytics
 Audit:     SUBSCRIPTION_UPGRADED
@@ -1176,7 +1176,7 @@ Result:    Hits assessment limit immediately
 
 ```
 Action:    Upgrade: Trial → Starter
-Payment:   Stripe → TRIALING → ACTIVE
+Subscription: TRIALING → ACTIVE via admin tooling (no payment processor — see HANDOFF.md "What changed in the latest session")
 Limits:    3 assessments, 10 users
 Features:  + standard_reports
 Action:    Create 2 more assessments for different clients

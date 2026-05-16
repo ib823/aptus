@@ -5,6 +5,19 @@
 **Stack:** Next.js 15.5 / React 19 / Prisma 6 / PostgreSQL / Vercel
 **Branch:** `claude/production-readiness-audit-Ze7bS`
 
+> **Update (2026-05-16):** The following findings have been resolved on
+> branch `claude/codebase-assessment-F0dPB`. The original analysis below
+> is preserved for historical record; resolution status is annotated
+> inline on each finding.
+>
+> | Finding | Status | Where to verify |
+> |---|---|---|
+> | MED-2 (in-memory rate limiter) | RESOLVED | scripts/check-production-env.js now requires UPSTASH_REDIS_REST_URL/TOKEN in production; rate-limit.ts logs FATAL CONFIG when missing |
+> | MED-3 (1% coverage thresholds) | RESOLVED | vitest.config.ts now uses tiered thresholds (90% pure logic / 80% domain / 65% API routes) |
+> | MED-4 (Content-Disposition not sanitized) | RESOLVED | src/lib/security/filename.ts (safeFilename + contentDisposition); applied to all 23 download routes |
+> | MED-7 (session token plaintext) | RESOLVED | Session.token → Session.tokenHash (SHA-256); migration 20260516220000_session_token_hashing |
+> | MIN-2 (`as any` in stripe-client) | NO LONGER APPLIES | Stripe removed entirely (see BUILD-PHASES-STATUS Phase 29 DESCOPED) |
+
 ---
 
 ## Executive Summary
@@ -66,20 +79,23 @@ The codebase is **well-architected** with strong foundations for production use.
 **Affected:** steps, scope, stakeholders, dependencies, config, comments, presence, workshops, registers, sign-off, snapshots, activity, profile, transitions, change-requests, and more.
 **Recommendation:** Create middleware or a shared `withAssessmentAuth()` wrapper that automatically enforces access checks for all `/api/assessments/[id]/*` routes. Only 3 of 30+ sub-routes currently use the shared utility.
 
-### MED-2: In-Memory Rate Limiter Not Suitable for Multi-Instance
+### MED-2: In-Memory Rate Limiter Not Suitable for Multi-Instance — **RESOLVED 2026-05-16**
 **File:** `src/lib/security/rate-limit.ts`
 **Impact:** The rate limiter uses an in-memory `Map`. On Vercel (serverless), each function invocation gets its own memory — the rate limiter is effectively a no-op in production.
 **Recommendation:** Use Vercel KV (Redis), Upstash, or `@vercel/edge-config` for distributed rate limiting. Alternatively, use Vercel's built-in WAF rate limiting.
+**Resolution:** `scripts/check-production-env.js` now treats `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` as required-in-production; missing them fails the pre-deploy check. The runtime warning in rate-limit.ts is also escalated to a FATAL CONFIG line.
 
-### MED-3: Coverage Thresholds at 1%
+### MED-3: Coverage Thresholds at 1% — **RESOLVED 2026-05-16**
 **File:** `vitest.config.ts`
 **Impact:** The coverage thresholds (`lines: 1, branches: 0, functions: 1, statements: 1`) provide no meaningful quality gate.
 **Recommendation:** Progressively raise thresholds. Start with `lines: 40, branches: 20, functions: 30, statements: 40` and increase with each sprint.
+**Resolution:** Replaced with tiered per-area thresholds — 90% for `lib/auth`, `lib/security`, `lib/commercial`; 80% for `lib/assessment`, `lib/conversation`, `lib/lifecycle`; 65% for API routes; components/types/constants excluded. Global floor 70%/60%.
 
-### MED-4: No Content-Disposition Header Sanitization on Report Downloads
+### MED-4: No Content-Disposition Header Sanitization on Report Downloads — **RESOLVED 2026-05-16**
 **File:** `src/app/api/assessments/[id]/report/executive-summary/route.ts`
 **Impact:** `companyName` is interpolated directly into the `Content-Disposition` filename without sanitizing special characters. A company name containing quotes or newlines could cause header injection.
 **Recommendation:** Sanitize `companyName` by stripping non-alphanumeric/space chars before using in filename headers.
+**Resolution:** New canonical helper `src/lib/security/filename.ts` (`safeFilename` + `contentDisposition`) strips control chars, bidi codepoints, path separators, and quotes; emits RFC 6266 + RFC 5987 headers. Re-exported as `sanitizeFilename` from `src/lib/report/report-auth.ts` so all 17 report routes harden automatically. The 4 previously-unsanitized routes (setup-guide, requirements export, flow PDF, flow exports) now use it explicitly.
 
 ### MED-5: SSE Notification Stream Unbounded Cache
 **File:** `src/app/api/notifications/stream/route.ts`
@@ -91,10 +107,11 @@ The codebase is **well-architected** with strong foundations for production use.
 **Impact:** When `SMTP_USER` is not configured, the magic link URL is logged with `console.log`. If logs are shipped to a monitoring service, this exposes the authentication token.
 **Recommendation:** Only log in development mode (`process.env.NODE_ENV === "development"`).
 
-### MED-7: Session Token Stored as Plain Text in Database
+### MED-7: Session Token Stored as Plain Text in Database — **RESOLVED 2026-05-16**
 **File:** `src/lib/auth/session.ts`
 **Impact:** Session tokens are stored as plaintext hex strings. If the database is compromised, all active sessions are immediately usable.
 **Recommendation:** Store a SHA-256 hash of the token in the database. Compare by hashing the cookie value.
+**Resolution:** `Session.token` (plaintext) replaced with `Session.tokenHash` (SHA-256). `validateSession` / `revokeSession` / `rotateSessionToken` / `markSessionMfaVerified` all hash before lookup. Migration `20260516220000_session_token_hashing` revokes existing sessions and renames the column atomically; users re-login once after deploy.
 
 ### MED-8: Missing `Secure` Flag on Session Cookie in Development
 **File:** `src/app/api/auth/test-login/route.ts:159`
@@ -108,9 +125,9 @@ The codebase is **well-architected** with strong foundations for production use.
 ### MIN-1: No `@ts-ignore` or `@ts-expect-error` directives found
 **Status:** Excellent. Zero type safety bypasses.
 
-### MIN-2: Only 1 instance of `as any` (Stripe API version)
-**File:** `src/lib/commercial/stripe-client.ts:22`
-**Status:** Acceptable — Stripe SDK version mismatch is a known issue.
+### MIN-2: Only 1 instance of `as any` (Stripe API version) — **NO LONGER APPLIES**
+**File:** `src/lib/commercial/stripe-client.ts:22` (removed 2026-05-16)
+**Status:** Stripe SDK has been removed entirely along with the file. See `BUILD-PHASES-STATUS.md` Phase 29 (DESCOPED).
 
 ### MIN-3: No TODO/FIXME/HACK comments found
 **Status:** Excellent. Clean codebase.
@@ -166,10 +183,10 @@ The codebase is **well-architected** with strong foundations for production use.
 ## Recommended Next Steps (Priority Order)
 
 1. **[P0]** Add `verifyAssessmentAccess()` to all remaining `/api/assessments/[id]/*` sub-routes (MED-1)
-2. **[P0]** Switch to distributed rate limiting for Vercel deployment (MED-2)
-3. **[P1]** Hash session tokens in database (MED-7)
-4. **[P1]** Sanitize Content-Disposition filenames (MED-4)
-5. **[P1]** Raise coverage thresholds progressively (MED-3)
+2. ~~**[P0]** Switch to distributed rate limiting for Vercel deployment (MED-2)~~ ✅ DONE 2026-05-16
+3. ~~**[P1]** Hash session tokens in database (MED-7)~~ ✅ DONE 2026-05-16
+4. ~~**[P1]** Sanitize Content-Disposition filenames (MED-4)~~ ✅ DONE 2026-05-16
+5. ~~**[P1]** Raise coverage thresholds progressively (MED-3)~~ ✅ DONE 2026-05-16 (tiered)
 6. **[P2]** Gate magic link console logging to development only (MED-6)
 7. **[P2]** Add Sentry reporting to error boundary components
 8. **[P2]** Add E2E tests to CI pipeline (at least smoke tests)

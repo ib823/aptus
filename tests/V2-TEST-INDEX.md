@@ -1,5 +1,17 @@
 # V2 Test Suite — Master Index
 
+> **Update (2026-05-16):** Stripe-related test files have been removed
+> alongside the broader Stripe descope:
+> - `tests/unit/billing/stripe-webhooks.test.ts` (deleted)
+> - `tests/unit/state-machines/subscription-lifecycle.test.ts` (deleted — webhook-heavy; pure state-transition coverage stays in `tests/unit/plan-engine.test.ts`)
+> - `tests/helpers/stripe.ts` (deleted)
+> - `tests/e2e/journeys/j04-trial-to-paid.spec.ts` (deleted)
+>
+> Other test files remain. New tests added in the same session:
+> - `tests/unit/security/filename.test.ts` (16 cases)
+> - `tests/unit/security/session-token-hashing.test.ts` (7 cases)
+> - `tests/unit/seed/conversation-templates.test.ts` (5 cases)
+
 Generated from V2-TEST-SPECIFICATION.md. All test case IDs from the spec are mapped to test files.
 
 ## Summary
@@ -21,11 +33,11 @@ Generated from V2-TEST-SPECIFICATION.md. All test case IDs from the spec are map
 |---|---|---|---|
 | `crypto/snapshot-hashing.test.ts` | **WIRED** | `src/lib/signoff/hash-engine.ts` | Identical functions — `computeCanonicalHash`, `verifyHash` |
 | `state-machines/sign-off-lifecycle.test.ts` | **WIRED (adapter)** | `src/lib/signoff/state-machine.ts` | Name mapping layer (V2 → real state names) |
-| `state-machines/subscription-lifecycle.test.ts` | **WIRED (hybrid)** | `src/lib/commercial/plan-engine.ts` | 5/6 states overlap; SUSPENDED kept inline |
+| ~~`state-machines/subscription-lifecycle.test.ts`~~ | _removed 2026-05-16 (Stripe descoped)_ | — | Pure transitions covered by `tests/unit/plan-engine.test.ts` |
 | `state-machines/assessment-lifecycle.test.ts` | **WIRED (partial)** | `src/lib/assessment/status-machine.ts` | Different topology — real module imported for cross-reference tests |
 | `parsers/step-grouping.test.ts` | **PARTIAL WIRE** | `src/lib/assessment/step-classifier.ts` | `isStepClassifiable` wired; `groupSteps` kept inline |
-| `billing/plan-enforcement.test.ts` | **Already typed** | `src/lib/commercial/plan-engine.ts` | Imports types from `@/types/commercial` |
-| `billing/stripe-webhooks.test.ts` | **Already typed** | `src/app/api/webhooks/stripe/` | Imports types from `@/types/commercial` |
+| `billing/plan-enforcement.test.ts` | **Already typed** | `src/lib/commercial/plan-engine.ts` | Imports types from `@/types/commercial`; tests retained for internal plan/limits |
+| ~~`billing/stripe-webhooks.test.ts`~~ | _removed 2026-05-16 (Stripe descoped)_ | — | — |
 | `permissions/permission-matrix.test.ts` | **Self-contained** | `src/lib/auth/role-permissions.ts` | Incompatible granularity (14 vs 25 operations) |
 | `parsers/step-type-classifier.test.ts` | **Self-contained** | `src/lib/assessment/step-classifier.ts` | Different input format |
 | `parsers/content-section-parser.test.ts` | **Self-contained** | `src/lib/assessment/step-classifier.ts` | Different output structure |
