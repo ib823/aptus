@@ -45,10 +45,7 @@ export function isErrorResponse(result: AuthResult | NextResponse): result is Ne
   return result instanceof NextResponse;
 }
 
-/** Sanitize a string for use in Content-Disposition filename parameter */
-export function sanitizeFilename(name: string): string {
-  return name
-    .replace(/[^\w\s.-]/g, "_")
-    .replace(/\s+/g, "_")
-    .slice(0, 100);
-}
+// Re-export the canonical filename sanitizer so existing report routes
+// continue to import `sanitizeFilename` from this module. The hardened
+// implementation lives in `@/lib/security/filename`.
+export { safeFilename as sanitizeFilename } from "@/lib/security/filename";

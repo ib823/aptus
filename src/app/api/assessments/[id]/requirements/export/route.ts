@@ -9,6 +9,7 @@ import { type NextRequest } from "next/server";
 import ExcelJS from "exceljs";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
+import { contentDisposition } from "@/lib/security/filename";
 
 export async function GET(
   _request: NextRequest,
@@ -91,14 +92,14 @@ export async function GET(
   }
 
   const buffer = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
-  const filename = `${assessment.companyName.replace(/[^A-Za-z0-9_-]/g, "_")}_Requirements.xlsx`;
+  const filename = `${assessment.companyName}_Requirements.xlsx`;
 
   return new Response(buffer, {
     status: 200,
     headers: {
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Disposition": contentDisposition(filename),
       "Cache-Control": "no-store",
     },
   });
