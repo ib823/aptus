@@ -20,20 +20,45 @@ export default defineConfig({
       reportsDirectory: "./coverage",
       include: ["src/**/*.{ts,tsx}"],
       exclude: [
+        // Type-only files and generated/declaration code.
         "src/**/*.d.ts",
-        "src/**/types.ts",
+        "src/types/**",
+        // Constants tables (large data files, not testable logic).
+        "src/constants/**",
+        // Next.js framework boilerplate (layouts, error boundaries, loaders).
         "src/app/**/layout.tsx",
         "src/app/**/loading.tsx",
         "src/app/**/error.tsx",
         "src/app/**/not-found.tsx",
+        "src/app/**/page.tsx",
+        // shadcn-generated primitives (re-exports of Radix UI).
         "src/components/ui/**",
+        // Components: covered by Playwright + visual regression, not vitest.
+        "src/components/**",
+        // Server actions and middleware-level glue tested via integration/e2e.
+        "src/middleware.ts",
       ],
-      // Target: raise to 80%+ as test coverage expands
+      // Tiered thresholds. Logic modules carry strict gates because regressions
+      // there are silent; API routes and lower layers rely on integration /
+      // e2e tests for the rest of their assurance. Excluded areas above are
+      // not measured at all to keep this signal meaningful.
       thresholds: {
-        lines: 35,
-        branches: 25,
-        functions: 35,
-        statements: 35,
+        // Global floor.
+        lines: 70,
+        branches: 60,
+        functions: 70,
+        statements: 70,
+        // Pure-logic modules — high bar.
+        "src/lib/auth/**": { lines: 90, branches: 80, functions: 90, statements: 90 },
+        "src/lib/security/**": { lines: 90, branches: 80, functions: 90, statements: 90 },
+        "src/lib/assessment/**": { lines: 80, branches: 70, functions: 80, statements: 80 },
+        "src/lib/commercial/**": { lines: 85, branches: 75, functions: 85, statements: 85 },
+        "src/lib/conversation/**": { lines: 80, branches: 70, functions: 80, statements: 80 },
+        "src/lib/lifecycle/**": { lines: 80, branches: 70, functions: 80, statements: 80 },
+        // DB query helpers — paired with integration tests.
+        "src/lib/db/**": { lines: 70, branches: 60, functions: 70, statements: 70 },
+        // API routes — coverage less informative; integration/e2e fill the gap.
+        "src/app/api/**": { lines: 65, branches: 55, functions: 65, statements: 65 },
       },
     },
   },
