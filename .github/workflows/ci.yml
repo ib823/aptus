@@ -170,12 +170,58 @@ jobs:
             playwright-visual-report/
           if-no-files-found: ignore
 
-# NOTE: visual-regression-app CI job intentionally NOT enabled in this commit.
-# The infrastructure (playwright.visual-app.config.ts + tests/visual-regression-app/)
-# is shipped but baselines need to be generated first. To enable:
-#   1. A maintainer runs `pnpm test:visual-app:update` on a machine that can
-#      complete `pnpm build` (~3 GB memory required — codespaces typically can't)
-#   2. Commits the generated baselines under tests/visual-regression-app/*.spec.ts-snapshots/
-#   3. Adds a CI job here mirroring the visual-regression job above but
-#      calling `pnpm test:visual-app` instead of `pnpm test:visual`
-# See CONTRIBUTING.md "Visual regression — live app" for the full workflow.
+  visual-regression-app:
+    name: Visual Regression (live app)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --ipc=host
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+
+      - name: Check that baselines exist
+        id: check-baselines
+        run: |
+          if [ -d tests/visual-regression-app/redesigned-screens.spec.ts-snapshots ] \
+             && [ -n "$(ls -A tests/visual-regression-app/redesigned-screens.spec.ts-snapshots 2>/dev/null)" ]; then
+            echo "have_baselines=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "have_baselines=false" >> "$GITHUB_OUTPUT"
+            echo "::warning ::No visual-app baselines committed yet. Skipping the run."
+            echo "::warning ::Generate them locally with 'pnpm test:visual-app:update' and commit the snapshots."
+          fi
+
+      - name: Install dependencies
+        if: steps.check-baselines.outputs.have_baselines == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        if: steps.check-baselines.outputs.have_baselines == 'true'
+        run: pnpm db:generate
+
+      - name: Build app
+        if: steps.check-baselines.outputs.have_baselines == 'true'
+        run: pnpm build
+
+      - name: Run visual-app suite
+        if: steps.check-baselines.outputs.have_baselines == 'true'
+        run: pnpm test:visual-app
+
+      - name: Upload diff images on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-regression-app-diffs
+          path: |
+            test-results/
+            playwright-visual-app-report/
+          if-no-files-found: ignore

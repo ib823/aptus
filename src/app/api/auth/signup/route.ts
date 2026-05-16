@@ -79,7 +79,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         slug,
         type: "PARTNER",
         orgType: "partner",
-        billingEmail: email,
         contactEmail: email,
       },
     });

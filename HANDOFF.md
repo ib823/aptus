@@ -1,6 +1,40 @@
 # Handoff Document — ABeam
 
-## Current State
+## Current State (2026-05-16)
+
+**Branch:** `claude/codebase-assessment-F0dPB` — 9 commits ahead of `main`
+
+The build phases below are still substantially complete (V1 phases 0–9 plus V2 phases 10–31), but several were reconciled against the actual repo state in the latest session. The authoritative checklist is `BUILD-PHASES-STATUS.md`; this file's per-phase narrative below predates the V2 work and is preserved as a historical reference for the V1 design.
+
+### What changed in the latest session
+
+| Area | Change | Impact |
+|---|---|---|
+| **Paid billing** | Stripe SDK, webhook handler, checkout/portal routes, subscription upgrade UI, `StripeWebhookEvent` table, and Stripe DB columns (`Organization.stripeCustomerId / stripeSubscriptionId / billingEmail`, `UsageEvent.stripeSent / stripeError`) all removed. Plan / limits / trial / usage scaffolding **retained** for internal feature gating. | Phase 29 = **DESCOPED**. No payment processor going forward. |
+| **Session token hashing** | `Session.token` (plaintext) → `Session.tokenHash` (SHA-256). All `validateSession` / `revokeSession` / `rotateSessionToken` / `markSessionMfaVerified` call sites hash before lookup. | Resolves PRODUCTION-READINESS-AUDIT MED-7. Migration `20260516220000_session_token_hashing` revokes existing sessions — users re-login once after deploy. |
+| **Content-Disposition sanitization** | New canonical helper `src/lib/security/filename.ts` (`safeFilename` + `contentDisposition`); applied to the 4 previously-unsanitized download routes. Re-exported via `report-auth.ts` so the 17 report routes harden automatically. | Resolves PRODUCTION-READINESS-AUDIT MED-4. |
+| **Upstash Redis** | Moved from "recommended" to required-in-production via `scripts/check-production-env.js`. Runtime warning when missing in prod escalated to FATAL CONFIG. | Resolves PRODUCTION-READINESS-AUDIT MED-2 (in-memory limiter is ineffective on serverless). |
+| **ConversationTemplate seed** | Created the previously-missing `prisma/seed.ts` plus `prisma/seeds/conversation-templates.ts`. Idempotent baseline flow planted per ScopeItem. | Phase 22 (Conversation Mode) is no longer hollow. |
+| **Coverage thresholds** | Tiered per-area thresholds in `vitest.config.ts` — 90% (lib/auth, lib/security, lib/commercial); 80% (lib/assessment, lib/conversation, lib/lifecycle); 65% (API routes); components/types/constants excluded. | Resolves PRODUCTION-READINESS-AUDIT MED-3. Thresholds are forward-looking — running `pnpm test:coverage` now reports the gap. |
+| **Visual-regression-app CI** | Workflow `visual-regression-app` job wired with a baseline-existence guard. The job skips with a warning until a maintainer commits baselines (build needs ~3 GB headroom). | CI is ready; just run `pnpm test:visual-app:update` locally and commit `tests/visual-regression-app/redesigned-screens.spec.ts-snapshots/`. |
+| **Documentation reconciliation** | `BUILD-PHASES-STATUS.md` now flags Phase 17 (SSO) as PARTIAL — scaffolded but `auth-options.ts` only registers `EmailProvider`. Phase 22 annotated as now-seeded. Phase 29 marked DESCOPED. | The "all phases complete" claim is now accurate within the scope of what was reconciled. |
+| **Hierarchy extraction runbook** | New `docs/runbooks/hierarchy-extraction.md`. `scripts/extract-hierarchy-entities.ts` was already in the repo but undocumented; without running it, the `SolutionProcess` / `ProcessFlow` / `Activity` tables stay empty and process-map UIs render nothing. | Operational gap closed. |
+
+### Three things to run before next session
+
+1. **Apply migrations.** `pnpm db:push` (or `prisma migrate deploy` in prod). Two new migrations: `20260516220000_session_token_hashing` and `20260516221000_remove_stripe`. The first logs every active user out once.
+2. **Run `pnpm db:seed`.** Plants the baseline ConversationTemplate rows. Idempotent.
+3. **Run the hierarchy extraction once per environment.** `pnpm tsx scripts/extract-hierarchy-entities.ts && pnpm tsx scripts/verify-hierarchy.ts`. See `docs/runbooks/hierarchy-extraction.md`.
+
+### Known open work (intentionally not done in the latest session)
+
+- **Phase 17 SSO wiring.** `auth-options.ts` only registers `EmailProvider`; OAuth/SAML provider registration is deferred. Org-side config UI and DB fields exist.
+- **Live-app visual baselines** not yet generated in CI; documented above.
+- **26 inline assessment-access checks** could be consolidated onto the canonical `requireAssessmentAccess()` guard for maintenance hygiene. Audit found 0 actual IDOR gaps — all 141 routes are protected, just inconsistently styled.
+
+---
+
+## Historical: V1 phases (pre-2026 V2 work)
 
 **ALL PHASES COMPLETE — Phase 9: Polish & Production Readiness — COMPLETE**
 
@@ -234,7 +268,7 @@ None.
 - Intelligent role-aware dashboards
 - Per-role onboarding wizards
 - Enhanced reporting with branding
-- Platform commercial layer (Stripe billing, self-service signup, partner admin)
+- ~~Platform commercial layer (Stripe billing, self-service signup, partner admin)~~ — _Phase 29 DESCOPED 2026-05-16; Stripe surface removed, internal plan/limits scaffolding retained_
 - Multi-layer sign-off with cryptographic verification + ALM export
 - Assessment lifecycle continuity (versioning, cloning, change control)
 - Analytics, benchmarking, and templates
@@ -272,7 +306,7 @@ None.
 
 #### Wave 7: Reports & Commercial (4–6 weeks)
 - **Phase 25**: Report Generation V2 (M) — new reports, readiness scorecard, branding
-- **Phase 29**: Platform Commercial (XL) — self-service signup, Stripe, partner admin, trials
+- **Phase 29**: ~~Platform Commercial~~ DESCOPED 2026-05-16 — self-service signup + internal trials retained; Stripe / paid billing removed
 
 #### Wave 8: Sign-Off & Continuity (4–6 weeks)
 - **Phase 30**: Handoff & Sign-Off (XL) — multi-layer validation, crypto sign-off, ALM adapters

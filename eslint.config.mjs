@@ -43,7 +43,7 @@ const eslintConfig = [
     },
   },
   {
-    files: ["scripts/**/*.ts", "scripts/**/*.mjs", "scripts/**/*.js"],
+    files: ["scripts/**/*.ts", "scripts/**/*.mjs", "scripts/**/*.js", "prisma/**/*.ts"],
     rules: {
       "no-console": "off",
       // Browser-targeted rule; scripts/ are Node CLI tools where `module` is a legit name.

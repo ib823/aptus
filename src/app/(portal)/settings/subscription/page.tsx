@@ -2,14 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
 
 interface SubscriptionData {
   plan: string;
   subscriptionStatus: string;
   trialEndsAt: string | null;
-  billingEmail: string | null;
   usage: {
     assessments: { current: number; limit: number };
     users: { current: number; limit: number };
@@ -34,8 +32,6 @@ const STATUS_COLORS: Record<string, string> = {
 export default function SubscriptionPage() {
   const [data, setData] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [upgrading, setUpgrading] = useState(false);
-
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -59,31 +55,6 @@ export default function SubscriptionPage() {
     load();
   }, []);
 
-  const handleUpgrade = async (plan: string) => {
-    setUpgrading(true);
-    try {
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan }),
-      });
-      if (res.ok) {
-        const json = await res.json() as { data: { url: string } };
-        window.location.href = json.data.url;
-      }
-    } finally {
-      setUpgrading(false);
-    }
-  };
-
-  const handleManageBilling = async () => {
-    const res = await fetch("/api/stripe/portal", { method: "POST" });
-    if (res.ok) {
-      const json = await res.json() as { data: { url: string } };
-      window.location.href = json.data.url;
-    }
-  };
-
   if (loading) {
     return <div className="max-w-3xl mx-auto py-8"><p className="text-muted-foreground">Loading...</p></div>;
   }
@@ -92,7 +63,6 @@ export default function SubscriptionPage() {
     return <div className="max-w-3xl mx-auto py-8"><p className="text-muted-foreground">{error ?? "Unable to load subscription data."}</p></div>;
   }
 
-  const isActive = data.subscriptionStatus === "ACTIVE" || data.subscriptionStatus === "TRIALING";
   const daysRemaining = data.trialEndsAt
     ? Math.max(0, Math.ceil((new Date(data.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
@@ -101,7 +71,7 @@ export default function SubscriptionPage() {
     <div className="max-w-3xl mx-auto">
       <PageHeader
         title="Subscription"
-        description="Manage your organization's plan and billing"
+        description="Your organization's plan and usage"
       />
 
       {/* Current plan */}
@@ -116,20 +86,15 @@ export default function SubscriptionPage() {
               )}
             </div>
           </div>
-          {isActive && data.subscriptionStatus !== "TRIALING" && (
-            <Button variant="outline" onClick={handleManageBilling}>
-              Manage Billing
-            </Button>
-          )}
         </div>
-
-        {data.billingEmail && (
-          <p className="text-sm text-muted-foreground">Billing email: {data.billingEmail}</p>
-        )}
+        <p className="text-sm text-muted-foreground">
+          Plan changes are managed by your account administrator. Contact your administrator
+          if you need to update limits or upgrade.
+        </p>
       </div>
 
       {/* Usage */}
-      <div className="bg-card border rounded-lg p-6 mb-6">
+      <div className="bg-card border rounded-lg p-6">
         <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">Usage</h3>
         <div className="grid grid-cols-2 gap-6">
           <UsageBar
@@ -144,39 +109,6 @@ export default function SubscriptionPage() {
           />
         </div>
       </div>
-
-      {/* Upgrade options */}
-      {(data.plan === "TRIAL" || data.plan === "STARTER") && (
-        <div className="bg-card border rounded-lg p-6">
-          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">Upgrade Plan</h3>
-          <div className="grid grid-cols-2 gap-4">
-            {data.plan === "TRIAL" && (
-              <PlanCard
-                name="Starter"
-                price="$299/mo"
-                features={["3 assessments", "10 users", "Standard reports"]}
-                onSelect={() => handleUpgrade("STARTER")}
-                loading={upgrading}
-              />
-            )}
-            <PlanCard
-              name="Professional"
-              price="$799/mo"
-              features={["10 assessments", "30 users", "Registers", "Workshops", "Analytics"]}
-              onSelect={() => handleUpgrade("PROFESSIONAL")}
-              loading={upgrading}
-              highlighted
-            />
-            <PlanCard
-              name="Enterprise"
-              price="Custom"
-              features={["Unlimited", "SSO/SCIM", "Custom branding", "API access", "Dedicated CSM"]}
-              onSelect={() => handleUpgrade("ENTERPRISE")}
-              loading={upgrading}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -199,42 +131,6 @@ function UsageBar({ label, current, limit }: { label: string; current: number; l
           style={{ width: `${pct}%` }}
         />
       </div>
-    </div>
-  );
-}
-
-function PlanCard({
-  name,
-  price,
-  features,
-  onSelect,
-  loading,
-  highlighted,
-}: {
-  name: string;
-  price: string;
-  features: string[];
-  onSelect: () => void;
-  loading: boolean;
-  highlighted?: boolean | undefined;
-}) {
-  return (
-    <div className={`border rounded-lg p-4 ${highlighted ? "border-primary ring-1 ring-primary" : ""}`}>
-      <h4 className="font-semibold">{name}</h4>
-      <p className="text-2xl font-bold mt-1">{price}</p>
-      <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
-        {features.map((f) => (
-          <li key={f}>{f}</li>
-        ))}
-      </ul>
-      <Button
-        className="w-full mt-4"
-        variant={highlighted ? "default" : "outline"}
-        onClick={onSelect}
-        disabled={loading}
-      >
-        {loading ? "Processing..." : "Select"}
-      </Button>
     </div>
   );
 }

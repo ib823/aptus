@@ -1519,13 +1519,12 @@ model Organization {
   brandLogoUrl      String?
   reportLogoUrl     String?
 
-  // Phase 29: Commercial / Multi-Tenant
+  // Plan / limits — used for internal feature gating. No payment processor is
+  // wired; plan transitions are managed via admin tooling (see
+  // src/lib/commercial/trial-manager.ts and src/lib/commercial/plan-engine.ts).
   plan                 String    @default("TRIAL")
   subscriptionStatus   String    @default("TRIALING")
   trialEndsAt          DateTime?
-  stripeCustomerId     String?   @unique
-  stripeSubscriptionId String?   @unique
-  billingEmail         String?
   ssoMetadataUrl       String?
   ssoClientId          String?
   ssoClientSecret      String?
@@ -1560,24 +1559,15 @@ model Organization {
   @@index([slug])
   @@index([plan])
   @@index([subscriptionStatus])
-  @@index([stripeCustomerId])
-}
-
-// Phase 29: Stripe webhook idempotency. Insert on receipt; unique-constraint
-// violation on `id` means this event was already processed (safe to drop).
-model StripeWebhookEvent {
-  id          String   @id
-  type        String
-  processedAt DateTime @default(now())
-
-  @@index([type])
-  @@index([processedAt])
 }
 
 model Session {
   id            String    @id @default(cuid())
   userId        String
-  token         String    @unique
+  // SHA-256 hex of the raw session token. The raw token only ever lives in
+  // the user's cookie, never in the database. Lookup is by hash of the
+  // incoming cookie value.
+  tokenHash     String    @unique
   expiresAt     DateTime
   mfaVerified   Boolean   @default(false)
   mfaVerifiedAt DateTime?
@@ -1596,7 +1586,7 @@ model Session {
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
-  @@index([token])
+  @@index([tokenHash])
   @@index([userId, isRevoked])
   @@index([expiresAt])
 }
@@ -2182,8 +2172,6 @@ model UsageEvent {
   eventType      String
   entityId       String?
   metadata       Json?
-  stripeSent     Boolean  @default(false)
-  stripeError    String?
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id])
@@ -2191,7 +2179,6 @@ model UsageEvent {
   @@index([organizationId])
   @@index([organizationId, eventType])
   @@index([createdAt])
-  @@index([stripeSent])
 }
 
 // =============================================================

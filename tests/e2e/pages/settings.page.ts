@@ -138,7 +138,7 @@ export class SettingsPage extends BasePage {
 
   get cardNumberInput(): Locator {
     return this.page.locator(
-      "[data-testid='card-number'], input[name='cardNumber'], iframe[name*='stripe']"
+      "[data-testid='card-number'], input[name='cardNumber']"
     );
   }
 
