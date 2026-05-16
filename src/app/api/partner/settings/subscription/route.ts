@@ -46,11 +46,8 @@ export async function GET(): Promise<NextResponse> {
       plan: true,
       subscriptionStatus: true,
       trialEndsAt: true,
-      billingEmail: true,
       maxActiveAssessments: true,
       maxPartnerUsers: true,
-      stripeCustomerId: true,
-      stripeSubscriptionId: true,
     },
   });
 
@@ -82,7 +79,6 @@ export async function GET(): Promise<NextResponse> {
       plan: org.plan,
       subscriptionStatus: org.subscriptionStatus,
       trialEndsAt: org.trialEndsAt,
-      billingEmail: org.billingEmail,
       limits,
       usage: {
         assessments: {
