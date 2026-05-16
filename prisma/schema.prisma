@@ -1577,7 +1577,10 @@ model StripeWebhookEvent {
 model Session {
   id            String    @id @default(cuid())
   userId        String
-  token         String    @unique
+  // SHA-256 hex of the raw session token. The raw token only ever lives in
+  // the user's cookie, never in the database. Lookup is by hash of the
+  // incoming cookie value.
+  tokenHash     String    @unique
   expiresAt     DateTime
   mfaVerified   Boolean   @default(false)
   mfaVerifiedAt DateTime?
@@ -1596,7 +1599,7 @@ model Session {
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
-  @@index([token])
+  @@index([tokenHash])
   @@index([userId, isRevoked])
   @@index([expiresAt])
 }

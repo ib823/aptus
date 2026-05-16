@@ -4,7 +4,7 @@
  */
 
 import { PrismaClient } from "@prisma/client";
-import { randomBytes } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import path from "path";
 import fs from "fs";
 import { config } from "dotenv";
@@ -77,6 +77,7 @@ async function createUserAndSession(
   });
 
   const token = randomBytes(32).toString("hex");
+  const tokenHash = createHash("sha256").update(token).digest("hex");
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
   const needsMfa = isExternal;
@@ -84,7 +85,7 @@ async function createUserAndSession(
   await prisma.session.create({
     data: {
       userId: dbUser.id,
-      token,
+      tokenHash,
       expiresAt,
       ipAddress: "127.0.0.1",
       userAgent: `Playwright E2E (${user.role})`,
