@@ -13,20 +13,38 @@
 -- the stored value with a per-row sentinel that cannot collide with any
 -- valid SHA-256 hash (the prefix is not in the hex alphabet). Users
 -- re-login once after deploy.
+--
+-- Wrapped in DO $$ ... $$ so it's idempotent: only fires when the legacy
+-- "token" column is still present. Once the rename has happened, every
+-- subsequent invocation is a no-op — safe to re-run after the unlikely
+-- case where it half-applied and rolled back, or to apply over a DB that
+-- has been manually migrated.
 
--- 1. Revoke every active session.
-UPDATE "Session"
-SET "isRevoked" = true,
-    "revokedAt" = NOW(),
-    "revokedReason" = 'token_hash_migration'
-WHERE "isRevoked" = false;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = current_schema()
+      AND table_name   = 'Session'
+      AND column_name  = 'token'
+  ) THEN
+    -- Revoke every active session.
+    UPDATE "Session"
+    SET "isRevoked" = true,
+        "revokedAt" = NOW(),
+        "revokedReason" = 'token_hash_migration'
+    WHERE "isRevoked" = false;
 
--- 2. Rename column + matching constraint and index. RENAME preserves data
---    and the unique constraint atomically.
-ALTER TABLE "Session" RENAME COLUMN "token" TO "tokenHash";
-ALTER TABLE "Session" RENAME CONSTRAINT "Session_token_key" TO "Session_tokenHash_key";
-ALTER INDEX "Session_token_idx" RENAME TO "Session_tokenHash_idx";
+    -- Rename the column and its indexes. Prisma's @unique translates to
+    -- CREATE UNIQUE INDEX, so the unique key is an INDEX object — rename
+    -- via ALTER INDEX, not ALTER TABLE RENAME CONSTRAINT.
+    ALTER TABLE "Session" RENAME COLUMN "token" TO "tokenHash";
+    ALTER INDEX "Session_token_key" RENAME TO "Session_tokenHash_key";
+    ALTER INDEX "Session_token_idx" RENAME TO "Session_tokenHash_idx";
 
--- 3. Overwrite the now-misnamed plaintext values with non-lookupable
---    sentinels. Uses the row id to keep the unique constraint satisfied.
-UPDATE "Session" SET "tokenHash" = 'invalidated_' || "id";
+    -- Overwrite the now-misnamed plaintext values with non-lookupable
+    -- sentinels. The 'invalidated_' prefix is not in the hex alphabet,
+    -- so these can never collide with a real SHA-256 lookup.
+    UPDATE "Session" SET "tokenHash" = 'invalidated_' || "id";
+  END IF;
+END $$;

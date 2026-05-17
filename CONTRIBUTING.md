@@ -54,6 +54,30 @@ git commit -m "test(visual-app): pin baselines for redesigned screens"
 
 After the baselines are committed, every PR will run the suite and fail on any pixel drift.
 
+### Visual regression — image drift
+
+`mcr.microsoft.com/playwright:v1.58.2-noble` (the Docker container that runs both visual-regression jobs) is **not pinned by digest**. Microsoft rebuilds the tag periodically; in May 2026 a rebuild changed font / sub-pixel rendering enough to push 14 of the 27 report-mock baselines past the 0.5% tolerance with no code changes.
+
+`visual-regression` (report mocks) is therefore marked `continue-on-error: true` in the workflow — failures are visible but don't gate merges. To restore strict gating:
+
+1. Refresh the baselines from inside the current image:
+   ```bash
+   docker run --rm -v "$PWD:/app" -w /app mcr.microsoft.com/playwright:v1.58.2-noble \
+     bash -c "corepack pnpm install --frozen-lockfile && corepack pnpm test:visual:update"
+   git add tests/visual-regression/reports.spec.ts-snapshots/
+   git commit -m "test(visual): refresh report-mock baselines after image rebuild"
+   ```
+   *(or run `pnpm test:visual:update` natively if your local chromium revision matches Playwright 1.58.2's bundled one)*
+2. Pin the image by SHA digest in `.github/workflows/ci.yml`:
+   ```yaml
+   container:
+     image: mcr.microsoft.com/playwright@sha256:<digest>
+   ```
+   Find the current digest with `docker buildx imagetools inspect mcr.microsoft.com/playwright:v1.58.2-noble`.
+3. Remove the `continue-on-error: true` line from the `visual-regression` job.
+
+Until step 3 happens, treat a red `visual-regression` check as a known-flaky signal rather than a real failure — but verify the diffs aren't masking an actual visual regression you introduced.
+
 ## Local validation before push
 
 The pre-push hook handles `next build` (~80s on this repo). For faster iteration loops while developing:
