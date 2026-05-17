@@ -754,7 +754,7 @@ model AdaptationPattern {
 // =============================================================
 
 model Assessment {
-  id                 String    @id @default(cuid())
+  id                 String           @id @default(cuid())
   companyName        String
   industry           String
   country            String
@@ -762,7 +762,7 @@ model Assessment {
   companySize        String
   revenueBand        String?
   currentErp         String?
-  sapVersion         String    @default("2602")
+  sapVersion         String           @default("2602")
   // Phase 1 — AD-3: pin assessment to a frozen catalog version so verdicts
   // remain reproducible after biannual SAP catalog ingests.
   // Nullable during Phase 1 backfill; flipped to non-nullable after dual-mode period.
@@ -771,8 +771,8 @@ model Assessment {
   createdBy          String
   organizationId     String
   deletedAt          DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   // Phase 10: Company Profile Enrichment
   employeeCount        Int?
@@ -2598,8 +2598,8 @@ enum AssessmentStatus {
   signed_off
   handed_off
   archived
-  completed   // V1 legacy — see comment above
-  reviewed    // V1 legacy — see comment above
+  completed // V1 legacy — see comment above
+  reviewed // V1 legacy — see comment above
 }
 
 enum DependencyType {
