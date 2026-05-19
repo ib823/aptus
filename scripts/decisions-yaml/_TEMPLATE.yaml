@@ -1,0 +1,50 @@
+# =============================================================================
+# TIER 1 DECISIONS TEMPLATE - rename file to <SCOPE_CODE>.yaml (e.g. 1IQ.yaml)
+# =============================================================================
+# Tier 1 = strategic, executive-level decisions that can be resolved in a
+# 30-45 minute pre-onboarding session with the client sponsor.
+#
+# Aim for 5-10 decisions per scope item. More than 10 = you've drifted into
+# Tier 2 territory (operational decisions for process owners in Explore phase).
+#
+# Each decision needs:
+#   id              - short stable identifier (d1, d2, ...)
+#   title           - 3-6 word title shown in the workbench
+#   summary         - 1-2 sentence plain-language description of the choice
+#   sscui           - reference text shown under the title (e.g. "102495 - Configure Sales Document Types")
+#   sscui_id        - the bare SSCUI ID for the Excel export
+#   sscui_name      - the SSCUI display name for the Excel export
+#   std_desc        - what "accept standard" means here
+#   cfg_desc        - what "configure via SSCUI" means here
+#   cst_desc        - what "custom development" means here, with effort estimate
+#   effort          - estimated days for the custom option (used in summary + Excel)
+#   custom_type     - extensibility approach for the team backlog
+#                     (e.g. "Key User Extensibility", "Developer Extensibility",
+#                     "Adobe Forms", "Flexible Workflow")
+#   ext_impact      - upgrade impact: "Low", "Medium", "Medium-High", "High"
+#                     (drives regression test frequency in Excel export)
+#   ricefw_class    - RICEFW classification: R/I/C/E/F/W
+#                     R=Report, I=Interface, C=Conversion, E=Enhancement,
+#                     F=Form, W=Workflow
+
+decisions:
+  - id: d1
+    title: SHORT TITLE
+    summary: >
+      One- or two-sentence plain-language description of what this decision is
+      about.
+    sscui: "ID - SSCUI Name"
+    sscui_id: "ID"
+    sscui_name: "SSCUI display name"
+    std_desc: What accepting SAP standard looks like.
+    cfg_desc: What configuring via SSCUI looks like (included in base scope).
+    cst_desc: What custom development looks like (chargeable, ~N days).
+    effort: 3
+    custom_type: "Key User Extensibility / Developer Extensibility / Other"
+    ext_impact: "Medium - retest each release"
+    ricefw_class: "E (Enhancement)"
+
+  - id: d2
+    title: ...
+    summary: ...
+    # ...etc
