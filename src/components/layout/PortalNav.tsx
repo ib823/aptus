@@ -75,18 +75,6 @@ export function PortalNav({ user }: PortalNavProps) {
       show: true,
     },
     {
-      label: "Workbench",
-      href: "/workbench",
-      show: [
-        "consultant",
-        "partner_lead",
-        "platform_admin",
-        "admin",
-        "executive_sponsor",
-        "project_manager",
-      ].includes(user.role),
-    },
-    {
       label: UI_TEXT.nav.organization,
       href: "/organization",
       show: true,

@@ -18,6 +18,7 @@ import {
   ListChecks,
   PlugZap,
   Settings as SettingsIcon,
+  Workflow,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { SafeLink } from "@/components/ui/safe-link";
@@ -52,6 +53,13 @@ const NAV: NavItem[] = [
     href: "/templates",
     icon: <LayoutTemplate size={18} />,
     match: (p) => p.startsWith("/templates"),
+  },
+  {
+    key: "workbench",
+    label: "Workbench",
+    href: "/workbench",
+    icon: <Workflow size={18} />,
+    match: (p) => p.startsWith("/workbench"),
   },
   {
     key: "sap-explorer",
