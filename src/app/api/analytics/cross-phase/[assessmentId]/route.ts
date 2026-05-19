@@ -3,6 +3,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
+import { verifyAssessmentAccess } from "@/lib/auth/verify-assessment-access";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { computeFitRate } from "@/lib/analytics/benchmark-engine";
@@ -28,6 +29,26 @@ export async function GET(
   }
 
   const { assessmentId } = await params;
+
+  const assessment = await prisma.assessment.findUnique({
+    where: { id: assessmentId },
+    select: { id: true, organizationId: true },
+  });
+
+  if (!assessment) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.NOT_FOUND, message: "Assessment not found" } },
+      { status: 404 },
+    );
+  }
+
+  const hasAssessmentAccess = await verifyAssessmentAccess(user, assessmentId, assessment.organizationId);
+  if (!hasAssessmentAccess) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "Access denied" } },
+      { status: 403 },
+    );
+  }
 
   // Find phase links involving this assessment
   const links = await prisma.assessmentPhaseLink.findMany({
@@ -72,15 +93,14 @@ export async function GET(
     },
   });
 
-  // Verify org access
-  if (user.organizationId) {
-    const hasAccess = assessments.every((a) => a.organizationId === user.organizationId);
-    if (!hasAccess) {
-      return NextResponse.json(
-        { error: { code: ERROR_CODES.FORBIDDEN, message: "Assessments do not belong to your organization" } },
-        { status: 403 },
-      );
-    }
+  const hasRelatedAccess = await Promise.all(
+    assessments.map((a) => verifyAssessmentAccess(user, a.id, a.organizationId)),
+  );
+  if (hasRelatedAccess.some((allowed) => !allowed)) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "Assessments do not belong to your organization" } },
+      { status: 403 },
+    );
   }
 
   const phaseSummaries = assessments.map((a) => {

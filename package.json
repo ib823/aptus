@@ -20,7 +20,7 @@
     "predb:seed": "node scripts/check-node-version.mjs",
     "dev": "next dev -p 3003",
     "build": "prisma generate && next build",
-    "vercel-build": "node scripts/migrate-deploy-with-retry.mjs && prisma generate && next build",
+    "vercel-build": "node scripts/check-production-env.js && node scripts/migrate-deploy-with-retry.mjs && prisma generate && next build",
     "prebuild:production": "node scripts/check-production-env.js",
     "start": "next start -p 3003",
     "lint": "eslint",
@@ -71,9 +71,7 @@
     "@sentry/nextjs": "^10.42.0",
     "@simplewebauthn/browser": "^13.2.2",
     "@simplewebauthn/server": "^13.2.3",
-    "@tanstack/query-sync-storage-persister": "^5.90.24",
     "@tanstack/react-query": "^5.90.21",
-    "@tanstack/react-query-persist-client": "^5.90.24",
     "@tanstack/react-table": "^8.21.3",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.36.4",
@@ -96,7 +94,7 @@
     "next": "15.5.18",
     "next-auth": "^4.24.13",
     "next-themes": "^0.4.6",
-    "nodemailer": "^7.0.13",
+    "nodemailer": "^8.0.7",
     "otpauth": "^9.5.0",
     "prisma": "^6.19.2",
     "qrcode": "^1.5.4",
@@ -122,7 +120,7 @@
     "@types/adm-zip": "^0.5.7",
     "@types/archiver": "^7.0.0",
     "@types/node": "^22.19.15",
-    "@types/nodemailer": "^7.0.11",
+    "@types/nodemailer": "^8.0.0",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
@@ -160,7 +158,17 @@
       "effect": ">=3.20.0",
       "fast-uri": ">=3.1.1",
       "picomatch": ">=4.0.4",
+      "postcss@<8.5.10": "8.5.15",
+      "dompurify@<3.4.0": "3.4.5",
+      "brace-expansion@<1.1.13": "1.1.13",
+      "brace-expansion@>=2.0.0 <2.0.3": "2.0.3",
+      "brace-expansion@>=4.0.0 <5.0.6": "5.0.6",
       "@vercel/blob>undici": ">=7.24.0"
+    },
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "nodemailer": "8"
+      }
     }
   },
   "volta": {

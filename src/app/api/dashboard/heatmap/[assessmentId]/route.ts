@@ -3,6 +3,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
+import { isMfaRequired } from "@/lib/auth/permissions";
+import { verifyAssessmentAccess } from "@/lib/auth/verify-assessment-access";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { getHeatmapColor } from "@/lib/dashboard/widgets";
@@ -16,6 +18,13 @@ export async function GET(
     return NextResponse.json(
       { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
       { status: 401 },
+    );
+  }
+
+  if (isMfaRequired(user)) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
+      { status: 403 },
     );
   }
 
@@ -33,7 +42,8 @@ export async function GET(
     );
   }
 
-  if (user.organizationId && assessment.organizationId !== user.organizationId) {
+  const hasAccess = await verifyAssessmentAccess(user, assessmentId, assessment.organizationId);
+  if (!hasAccess) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Access denied" } },
       { status: 403 },

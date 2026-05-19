@@ -3,6 +3,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
+import { verifyAssessmentAccess } from "@/lib/auth/verify-assessment-access";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { computeFitRate, computeBenchmarkComparison, generateInsights } from "@/lib/analytics/benchmark-engine";
@@ -50,7 +51,8 @@ export async function GET(
     );
   }
 
-  if (user.organizationId && assessment.organizationId !== user.organizationId) {
+  const hasAccess = await verifyAssessmentAccess(user, assessmentId, assessment.organizationId);
+  if (!hasAccess) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Assessment does not belong to your organization" } },
       { status: 403 },

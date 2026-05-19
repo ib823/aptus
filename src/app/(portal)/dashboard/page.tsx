@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth/session";
+import { mapLegacyRole } from "@/lib/auth/role-migration";
+import { getVisibleAssessmentWhere } from "@/lib/auth/assessment-visibility";
 
 export const metadata: Metadata = { title: "Dashboard" };
 import { prisma } from "@/lib/db/prisma";
@@ -46,11 +48,9 @@ export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const role = user.role as UserRole;
+  const role = mapLegacyRole(user.role);
 
-  const whereClause = user.organizationId
-    ? { organizationId: user.organizationId, deletedAt: null }
-    : { deletedAt: null };
+  const whereClause = getVisibleAssessmentWhere(user);
 
   const [widgets, assessments] = await Promise.all([
     loadWidgets(user.id, role),
@@ -64,7 +64,7 @@ export default async function DashboardPage() {
 
   const primaryAssessmentId = assessments[0]?.id ?? null;
 
-  const canCreate = ["consultant", "platform_admin", "admin", "partner_lead"].includes(role);
+  const canCreate = ["consultant", "platform_admin", "partner_lead"].includes(role);
 
   if (assessments.length === 0) {
     return (

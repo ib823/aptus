@@ -2,6 +2,8 @@
 
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
+import { isMfaRequired } from "@/lib/auth/permissions";
+import { getVisibleAssessmentWhere } from "@/lib/auth/assessment-visibility";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 import { getDefaultWidgets } from "@/lib/dashboard/widgets";
@@ -12,6 +14,13 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json(
       { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
       { status: 401 },
+    );
+  }
+
+  if (isMfaRequired(user)) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
+      { status: 403 },
     );
   }
 
@@ -33,10 +42,7 @@ export async function GET(): Promise<NextResponse> {
 
   // Get assessments the user has access to
   const assessments = await prisma.assessment.findMany({
-    where: {
-      deletedAt: null,
-      ...(user.organizationId ? { organizationId: user.organizationId } : {}),
-    },
+    where: getVisibleAssessmentWhere(user),
     select: {
       id: true,
       companyName: true,

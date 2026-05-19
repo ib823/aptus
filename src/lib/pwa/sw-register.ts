@@ -2,7 +2,7 @@
 
 const PWA_ENABLED = process.env.NEXT_PUBLIC_ENABLE_PWA === "true";
 
-async function clearAbeamCaches(): Promise<void> {
+async function clearApplicationCaches(): Promise<void> {
   if (typeof window === "undefined" || !("caches" in window)) {
     return;
   }
@@ -10,7 +10,7 @@ async function clearAbeamCaches(): Promise<void> {
   const cacheKeys = await caches.keys();
   await Promise.all(
     cacheKeys
-      .filter((key) => key.startsWith("abeam-"))
+      .filter((key) => key.startsWith("abeam-") || key.startsWith("aptus-"))
       .map((key) => caches.delete(key)),
   );
 }
@@ -35,7 +35,7 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 
   if (!PWA_ENABLED) {
     await unregisterExistingServiceWorkers();
-    await clearAbeamCaches();
+    await clearApplicationCaches();
     return null;
   }
 

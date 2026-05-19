@@ -2,9 +2,11 @@
 /** POST: Create a new assessment */
 
 import { NextResponse, type NextRequest } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired } from "@/lib/auth/permissions";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
+import { canViewAllAssessments, getVisibleAssessmentWhere } from "@/lib/auth/assessment-visibility";
 import { getCapabilities } from "@/lib/auth/role-permissions";
 import {
   createAssessment,
@@ -36,6 +38,65 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(200).default(50),
 });
 
+async function listAssessmentsByWhere(
+  where: Prisma.AssessmentWhereInput,
+  input: { limit: number; cursor?: string },
+) {
+  const decodedCursor = decodeAssessmentCursor(input.cursor);
+  const cursorFilter: Prisma.AssessmentWhereInput | undefined = decodedCursor
+    ? {
+        OR: [
+          { updatedAt: { lt: decodedCursor.updatedAt } },
+          {
+            updatedAt: decodedCursor.updatedAt,
+            id: { lt: decodedCursor.id },
+          },
+        ],
+      }
+    : undefined;
+
+  const assessments = await prisma.assessment.findMany({
+    where: cursorFilter ? { AND: [where, cursorFilter] } : where,
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    take: input.limit + 1,
+    select: {
+      id: true,
+      companyName: true,
+      industry: true,
+      country: true,
+      companySize: true,
+      status: true,
+      createdBy: true,
+      organizationId: true,
+      createdAt: true,
+      updatedAt: true,
+      _count: {
+        select: {
+          scopeSelections: { where: { selected: true } },
+          stepResponses: true,
+          gapResolutions: true,
+          stakeholders: true,
+        },
+      },
+    },
+  });
+
+  const hasMore = assessments.length > input.limit;
+  if (hasMore) assessments.pop();
+  const cursorAssessment = assessments.at(-1);
+
+  return {
+    data: assessments,
+    nextCursor: hasMore && cursorAssessment
+      ? encodeAssessmentCursor({
+          id: cursorAssessment.id,
+          updatedAt: cursorAssessment.updatedAt,
+        })
+      : null,
+    hasMore,
+  };
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
   if (!user) {
@@ -62,9 +123,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
   const { cursor, limit } = parsedQuery.data;
 
-  // Platform admins, partner leads, and consultants without org see all assessments
-  const role = mapLegacyRole(user.role);
-  const caps = getCapabilities(role);
   const decodedCursor = decodeAssessmentCursor(cursor);
   if (cursor && !decodedCursor) {
     return NextResponse.json(
@@ -73,63 +131,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  if (!user.organizationId && (caps.canViewAllAssessments || role === "consultant")) {
-    const assessments = await prisma.assessment.findMany({
-      where: {
-        deletedAt: null,
-        ...(decodedCursor
-          ? {
-              OR: [
-                { updatedAt: { lt: decodedCursor.updatedAt } },
-                {
-                  updatedAt: decodedCursor.updatedAt,
-                  id: { lt: decodedCursor.id },
-                },
-              ],
-            }
-          : {}),
-      },
-      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-      take: limit + 1,
-      select: {
-        id: true,
-        companyName: true,
-        industry: true,
-        country: true,
-        companySize: true,
-        status: true,
-        createdBy: true,
-        organizationId: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: {
-          select: {
-            scopeSelections: { where: { selected: true } },
-            stepResponses: true,
-            gapResolutions: true,
-            stakeholders: true,
-          },
-        },
-      },
-    });
-    const hasMore = assessments.length > limit;
-    if (hasMore) assessments.pop();
-    const cursorAssessment = assessments.at(-1);
-
-    return NextResponse.json({
-      data: assessments,
-      nextCursor: hasMore && cursorAssessment
-        ? encodeAssessmentCursor({
-            id: cursorAssessment.id,
-            updatedAt: cursorAssessment.updatedAt,
-          })
-        : null,
-      hasMore,
-    });
+  if (canViewAllAssessments(user)) {
+    return NextResponse.json(
+      await listAssessmentsByWhere({ deletedAt: null }, { limit, ...(cursor ? { cursor } : {}) }),
+    );
   }
 
   if (!user.organizationId) {
-    return NextResponse.json({ data: [], nextCursor: null, hasMore: false });
+    return NextResponse.json(
+      await listAssessmentsByWhere(
+        getVisibleAssessmentWhere(user),
+        { limit, ...(cursor ? { cursor } : {}) },
+      ),
+    );
   }
 
   const assessments = await listAssessmentsPaginated(user.organizationId, {
@@ -166,6 +180,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const parsedBody = await safeParseJsonBody(request);
   if (!parsedBody.ok) {
+    console.warn("[API] POST /api/assessments rejected: invalid JSON body", { reason: parsedBody.reason, userId: user.id });
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid JSON body" } },
       { status: 400 },
@@ -174,12 +189,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const parsed = createSchema.safeParse(parsedBody.data);
   if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    console.warn("[API] POST /api/assessments validation failed", { userId: user.id, fieldErrors });
     return NextResponse.json(
       {
         error: {
           code: ERROR_CODES.VALIDATION_ERROR,
           message: "Validation failed",
-          details: parsed.error.flatten().fieldErrors as Record<string, string>,
+          details: fieldErrors as Record<string, string>,
         },
       },
       { status: 400 },
@@ -192,6 +209,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Check assessment limit before creating
     const limitCheck = await checkAssessmentLimit(organizationId);
     if (!limitCheck.allowed) {
+      console.warn("[API] POST /api/assessments rejected: limit reached", { userId: user.id, organizationId, current: limitCheck.current, limit: limitCheck.limit });
       return NextResponse.json(
         { error: { code: ERROR_CODES.VALIDATION_ERROR, message: `Assessment limit reached (${limitCheck.current}/${limitCheck.limit}). Upgrade your plan.` } },
         { status: 400 },

@@ -60,7 +60,7 @@ export const ROLE_CAPABILITIES = {
     canEditRegisters: false,
     canApproveGaps: false,
     canSignOff: false,
-    canViewAllAssessments: true,
+    canViewAllAssessments: false,
     isAreaLocked: false,
   },
   consultant: {

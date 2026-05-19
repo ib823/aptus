@@ -332,8 +332,8 @@ describe("Session Token Generation", () => {
 // ── Permission Boundaries ─────────────────────────────────────────────────
 describe("Permission Boundaries", () => {
   // Post-simplification: there is no role-gated TOTP. Magic link is sufficient
-  // on its own; passkey is an optional upgrade. isMfaRequired() always returns false.
-  test("isMfaRequired always returns false (magic link is sufficient)", async () => {
+  // on its own unless the organization requires passkey MFA.
+  test("isMfaRequired only blocks default magic-link users when org policy requires it", async () => {
     const { isMfaRequired } = await import("@/lib/auth/permissions");
 
     const externalUser = {
@@ -349,6 +349,13 @@ describe("Permission Boundaries", () => {
       organizationId: null, organizationMfaPolicy: null, mfaEnabled: false, mfaVerified: false, hasWebAuthn: false,
     };
     expect(isMfaRequired(adminNoMfa)).toBe(false);
+
+    const requiredOrgUser = {
+      id: "3", email: "required@test.com", name: "Required",
+      role: "process_owner" as const,
+      organizationId: "org-1", organizationMfaPolicy: "required" as const, mfaEnabled: false, mfaVerified: false, hasWebAuthn: false,
+    };
+    expect(isMfaRequired(requiredOrgUser)).toBe(true);
   });
 
   test("executives cannot edit step responses", async () => {

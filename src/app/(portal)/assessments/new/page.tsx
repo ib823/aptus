@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
+import { mapLegacyRole } from "@/lib/auth/role-migration";
+import { getCapabilities } from "@/lib/auth/role-permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UI_TEXT } from "@/constants/ui-text";
 import { NewAssessmentForm } from "@/components/assessment/NewAssessmentForm";
@@ -8,7 +10,7 @@ export default async function NewAssessmentPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  if (!["consultant", "platform_admin", "admin", "partner_lead"].includes(user.role)) {
+  if (!getCapabilities(mapLegacyRole(user.role)).canCreateAssessment) {
     redirect("/assessments");
   }
 

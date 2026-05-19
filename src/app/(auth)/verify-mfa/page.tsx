@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
+import { isMfaRequired, requiresMfaEnrollment } from "@/lib/auth/permissions";
 import { VerifyMfaForm } from "@/components/auth/VerifyMfaForm";
 
 export const dynamic = "force-dynamic";
@@ -42,21 +42,17 @@ export default async function VerifyMfaPage({
     redirect("/login");
   }
 
+  const next = safeNext((await searchParams).next);
+
+  if (requiresMfaEnrollment(user)) {
+    redirect(`/settings/security?mfa=required&next=${encodeURIComponent(next)}`);
+  }
+
   // If MFA is no longer required (e.g. user already verified in another tab),
   // skip straight to where they were going. Avoids stale page UX.
   if (!isMfaRequired(user)) {
-    const next = safeNext((await searchParams).next);
     redirect(next);
   }
-
-  // Defensive: if the user has no passkey enrolled, the gate would never
-  // resolve (isMfaRequired only returns true when hasWebAuthn). The
-  // permissions module enforces this invariant; this branch is a safety net.
-  if (!user.hasWebAuthn) {
-    redirect("/settings/security");
-  }
-
-  const next = safeNext((await searchParams).next);
 
   return (
     <div className="space-y-6">

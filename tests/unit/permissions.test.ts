@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hasRole, canManageStakeholders, canTransitionStatus, isMfaRequired, isAdminRole } from "@/lib/auth/permissions";
+import { hasRole, canManageStakeholders, canTransitionStatus, isMfaRequired, requiresMfaEnrollment, isAdminRole } from "@/lib/auth/permissions";
 import type { SessionUser, UserRole } from "@/types/assessment";
 
 function makeUser(overrides: Partial<SessionUser> = {}): SessionUser {
@@ -198,12 +198,11 @@ describe("Permission Utilities", () => {
   });
 
   describe("isMfaRequired", () => {
-    // Contract: magic link is sufficient by default. MFA enforcement only kicks
-    // in for users who already have a passkey (hasWebAuthn=true). Users without
-    // passkeys are never blocked — there is no /verify-mfa step-up flow yet.
-    it("never requires MFA when the user has no passkey enrolled", () => {
+    // Contract: magic link is sufficient by default. Required org policy blocks
+    // until the user enrolls a passkey or verifies the current session.
+    it("does not require MFA for a user with no passkey unless org policy requires it", () => {
       expect(isMfaRequired(makeUser({ mfaEnabled: false, mfaVerified: false, hasWebAuthn: false }))).toBe(false);
-      expect(isMfaRequired(makeUser({ mfaEnabled: true, mfaVerified: false, hasWebAuthn: false, organizationMfaPolicy: "required" }))).toBe(false);
+      expect(isMfaRequired(makeUser({ mfaEnabled: true, mfaVerified: false, hasWebAuthn: false, organizationMfaPolicy: "required" }))).toBe(true);
     });
 
     it("never requires MFA when the session is already verified", () => {
@@ -226,6 +225,12 @@ describe("Permission Utilities", () => {
     it("does not require MFA when neither org nor user opted in", () => {
       expect(isMfaRequired(makeUser({ mfaEnabled: false, mfaVerified: false, hasWebAuthn: true, organizationMfaPolicy: "optional" }))).toBe(false);
       expect(isMfaRequired(makeUser({ mfaEnabled: false, mfaVerified: false, hasWebAuthn: true, organizationMfaPolicy: null }))).toBe(false);
+    });
+
+    it("identifies users who must enroll a passkey to satisfy required org MFA", () => {
+      expect(requiresMfaEnrollment(makeUser({ mfaVerified: false, hasWebAuthn: false, organizationMfaPolicy: "required" }))).toBe(true);
+      expect(requiresMfaEnrollment(makeUser({ mfaVerified: false, hasWebAuthn: true, organizationMfaPolicy: "required" }))).toBe(false);
+      expect(requiresMfaEnrollment(makeUser({ mfaVerified: true, hasWebAuthn: false, organizationMfaPolicy: "required" }))).toBe(false);
     });
   });
 
