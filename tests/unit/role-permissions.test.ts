@@ -91,6 +91,10 @@ describe("Role Permissions (Phase 17)", () => {
       expect(caps.canManageStakeholders).toBe(true);
       expect(caps.canEditStepResponses).toBe(false);
     });
+
+    it("partner_lead should not have global assessment visibility", () => {
+      expect(ROLE_CAPABILITIES.partner_lead.canViewAllAssessments).toBe(false);
+    });
   });
 
   describe("getCapabilities", () => {

@@ -1,11 +1,10 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
-import { isMfaRequired } from "@/lib/auth/permissions";
+import { isMfaRequired, requiresMfaEnrollment } from "@/lib/auth/permissions";
 import { getOrganizationSubscription } from "@/lib/db/organizations";
 import { OnboardingGuard } from "@/components/onboarding/OnboardingGuard";
 import { SubscriptionStatusBanner } from "@/components/commercial/SubscriptionStatusBanner";
-// Passkey enrollment is offered as a soft, dismissable prompt below — never a hard gate
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { PasskeyEnrollmentPrompt } from "@/components/auth/PasskeyEnrollmentPrompt";
 import { TourProvider } from "@/components/tour/TourProvider";
@@ -42,16 +41,19 @@ export default async function PortalLayout({
     redirect("/login");
   }
 
-  // MFA step-up gate. Triggered when a user has a passkey enrolled AND either
-  // the org policy is "required" OR they personally opted in (mfaEnabled), AND
-  // the current session hasn't satisfied the second factor yet. The verify-mfa
-  // page runs the WebAuthn authenticate flow, marks the session, then bounces
-  // the user back to where they came from via ?next.
-  // Users without a passkey are not blocked here — see lib/auth/permissions.ts.
+  const pathname = (await headers()).get("x-pathname") ?? "/dashboard";
+
+  // MFA step-up gate. Required org policy also blocks users with no passkey,
+  // but lets /settings/security render so they can enroll instead of looping.
   if (isMfaRequired(user)) {
-    const pathname = (await headers()).get("x-pathname") ?? "/dashboard";
     const next = encodeURIComponent(pathname);
-    redirect(`/verify-mfa?next=${next}`);
+    if (requiresMfaEnrollment(user)) {
+      if (!pathname.startsWith("/settings/security")) {
+        redirect(`/settings/security?mfa=required&next=${next}`);
+      }
+    } else {
+      redirect(`/verify-mfa?next=${next}`);
+    }
   }
 
   // Fetch org subscription status for banner

@@ -2,7 +2,6 @@
 
 const CACHE_VERSION = "aptus-v2";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
-const API_CACHE = `${CACHE_VERSION}-api`;
 
 const STATIC_ASSETS = [
   "/offline",
@@ -25,7 +24,7 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys
-          .filter((key) => key !== STATIC_CACHE && key !== API_CACHE)
+          .filter((key) => key !== STATIC_CACHE)
           .map((key) => caches.delete(key)),
       ),
     ),
@@ -62,9 +61,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // API routes: NetworkFirst with 3s timeout
+  // API routes can contain tenant and assessment data. Keep them network-only
+  // and do not store responses in the Cache API.
   if (url.pathname.startsWith("/api/")) {
-    event.respondWith(networkFirst(request, API_CACHE, 3000));
     return;
   }
 
@@ -91,25 +90,6 @@ self.addEventListener("fetch", (event) => {
   // converts transient network errors into hard failures (503) that can
   // trigger infinite reload loops in Next.js.
 });
-
-// NetworkFirst: try network, fallback to cache
-async function networkFirst(request, cacheName, timeoutMs) {
-  try {
-    const response = await withTimeout(fetch(request), timeoutMs);
-    if (response.ok) {
-      const cache = await caches.open(cacheName);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch {
-    const cached = await caches.match(request);
-    if (cached) return cached;
-    return new Response(JSON.stringify({ error: "offline" }), {
-      status: 503,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-}
 
 // CacheFirst: try cache, fallback to network
 async function cacheFirst(request, cacheName) {

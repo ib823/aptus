@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Assessments" };
 import { getCurrentUser } from "@/lib/auth/session";
+import { mapLegacyRole } from "@/lib/auth/role-migration";
+import { getVisibleAssessmentWhere } from "@/lib/auth/assessment-visibility";
 import { prisma } from "@/lib/db/prisma";
 import { AptusAssessmentsList } from "@/components/aptus";
 import { redirect } from "next/navigation";
@@ -19,12 +21,8 @@ export default async function AssessmentsPage({ searchParams }: AssessmentsPageP
   const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const pageSize = 50;
 
-  // Fetch assessments based on user role
-  const whereClause = user.organizationId
-    ? { organizationId: user.organizationId, deletedAt: null }
-    : (["platform_admin", "admin", "consultant", "partner_lead"].includes(user.role))
-      ? { deletedAt: null }
-      : { deletedAt: null, stakeholders: { some: { userId: user.id } } };
+  const role = mapLegacyRole(user.role);
+  const whereClause = getVisibleAssessmentWhere(user);
 
   const totalCount = await prisma.assessment.count({ where: whereClause });
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -52,7 +50,7 @@ export default async function AssessmentsPage({ searchParams }: AssessmentsPageP
     },
   });
 
-  const canCreate = ["consultant", "platform_admin", "admin", "partner_lead"].includes(user.role);
+  const canCreate = ["consultant", "platform_admin", "partner_lead"].includes(role);
 
   return (
     <AptusAssessmentsList

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
+import { sanitizeHtmlContent } from "@/lib/security/sanitize";
 
 export const metadata: Metadata = { title: "Search Narratives" };
 export const dynamic = "force-dynamic";
@@ -215,7 +216,7 @@ export default async function NarrativeSearchPage({ params, searchParams }: Page
                   </p>
                   <p
                     className="text-sm text-foreground leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: h.snippet }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(h.snippet) }}
                   />
                 </Link>
               ))}

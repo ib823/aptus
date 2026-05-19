@@ -10,6 +10,7 @@
 import { ChevronDown, FileText, HelpCircle, LogOut, Settings as SettingsIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { clearClientSessionCaches } from "@/lib/pwa/client-cache";
 
 export interface AptusUserMenuUser {
   name: string;
@@ -23,6 +24,7 @@ interface AptusUserMenuProps {
 
 export function AptusUserMenu({ user }: AptusUserMenuProps) {
   const [open, setOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,6 +36,18 @@ export function AptusUserMenu({ user }: AptusUserMenuProps) {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await clearClientSessionCaches();
+    } catch (err) {
+      console.warn("[client-cache] Failed to clear client session caches", err);
+    } finally {
+      window.location.assign("/api/auth/logout");
+    }
+  }
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -86,7 +100,7 @@ export function AptusUserMenu({ user }: AptusUserMenuProps) {
           <MenuItem href="/help" icon={<HelpCircle size={14} />} label="Help & docs" />
           <MenuItem icon={<FileText size={14} />} label="Keyboard shortcuts" trailing="?" />
           <div className="a-divider" style={{ margin: "4px 0" }} />
-          <MenuItem href="/api/auth/logout" icon={<LogOut size={14} />} label="Sign out" />
+          <MenuItem icon={<LogOut size={14} />} label={signingOut ? "Signing out" : "Sign out"} onClick={handleSignOut} />
         </div>
       )}
     </div>

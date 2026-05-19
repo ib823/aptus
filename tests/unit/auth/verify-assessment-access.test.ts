@@ -30,15 +30,31 @@ describe("verifyAssessmentAccess — cross-org gate", () => {
     await expect(verifyAssessmentAccess(user, ASSESSMENT_ID)).resolves.toBe(true);
   });
 
-  it("grants partner_lead access to any org", async () => {
+  it("denies partner_lead access to another org without stakeholder membership", async () => {
+    const user = { id: "u", role: "partner_lead", organizationId: ORG_B };
+    await expect(verifyAssessmentAccess(user, ASSESSMENT_ID)).resolves.toBe(false);
+  });
+
+  it("grants partner_lead access in the same org", async () => {
+    const user = { id: "u", role: "partner_lead", organizationId: ORG_A };
+    await expect(verifyAssessmentAccess(user, ASSESSMENT_ID)).resolves.toBe(true);
+  });
+
+  it("grants partner_lead access when they are a stakeholder", async () => {
+    mocks.findFirstStakeholder.mockResolvedValue({ id: "stk-1" });
     const user = { id: "u", role: "partner_lead", organizationId: ORG_B };
     await expect(verifyAssessmentAccess(user, ASSESSMENT_ID)).resolves.toBe(true);
   });
 
-  // Regression: prior gate placed `consultant` in CROSS_ORG_ROLES, contradicting
-  // the role matrix's canViewAllAssessments=false. Tenant isolation breach.
+  // Regression: cross-org roles must not bypass tenant isolation unless they are
+  // platform admins.
   it("denies consultant from a different org without stakeholder membership", async () => {
     const user = { id: "u", role: "consultant", organizationId: ORG_B };
+    await expect(verifyAssessmentAccess(user, ASSESSMENT_ID)).resolves.toBe(false);
+  });
+
+  it("denies org-less consultant without stakeholder membership", async () => {
+    const user = { id: "u", role: "consultant", organizationId: null };
     await expect(verifyAssessmentAccess(user, ASSESSMENT_ID)).resolves.toBe(false);
   });
 

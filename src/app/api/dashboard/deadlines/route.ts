@@ -3,6 +3,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
+import { isMfaRequired } from "@/lib/auth/permissions";
+import { getVisibleAssessmentSql } from "@/lib/auth/assessment-visibility";
+import { verifyAssessmentAccess } from "@/lib/auth/verify-assessment-access";
 import { prisma } from "@/lib/db/prisma";
 import { logDecision } from "@/lib/audit/decision-logger";
 import { ERROR_CODES } from "@/types/api";
@@ -27,12 +30,20 @@ export async function GET(): Promise<NextResponse> {
     );
   }
 
+  if (isMfaRequired(user)) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
+      { status: 403 },
+    );
+  }
+
+  const assessmentSqlFilter = getVisibleAssessmentSql(user);
   const deadlines = await prisma.$queryRaw<DeadlineRow[]>(Prisma.sql`
     SELECT d.id, d.title, d.description, d."dueDate", d.status, d."assignedRole"
     FROM "DashboardDeadline" d
     JOIN "Assessment" a ON a.id = d."assessmentId"
     WHERE a."deletedAt" IS NULL
-    ${user.organizationId ? Prisma.sql`AND a."organizationId" = ${user.organizationId}` : Prisma.empty}
+    ${assessmentSqlFilter}
     ORDER BY d."dueDate" ASC
     LIMIT 50
   `);
@@ -59,12 +70,27 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  if (isMfaRequired(user)) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
+      { status: 403 },
+    );
+  }
+
   const body: unknown = await request.json();
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: parsed.error.issues[0]?.message ?? "Validation failed" } },
       { status: 400 },
+    );
+  }
+
+  const hasAccess = await verifyAssessmentAccess(user, parsed.data.assessmentId);
+  if (!hasAccess) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "You do not have access to this assessment" } },
+      { status: 403 },
     );
   }
 

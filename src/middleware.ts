@@ -57,18 +57,23 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
     if (!isExempt) {
       const clientIp = getClientIp(request.headers);
       const isAuthMutation = pathname.startsWith("/api/auth");
+      const isReportRoute = pathname.startsWith("/api/assessments/") && pathname.includes("/report/");
 
-      // Auth mutations (signin, callback, signout) get tighter limits
-      // Other endpoints use method-based limits
+      // Auth mutations and report generation get tighter limits. Other
+      // endpoints use method-based limits.
       const config = isAuthMutation
         ? RATE_LIMITS.auth
-        : request.method === "GET" || request.method === "HEAD"
+        : isReportRoute
+          ? RATE_LIMITS.report
+          : request.method === "GET" || request.method === "HEAD"
           ? RATE_LIMITS.apiRead
           : RATE_LIMITS.apiMutation;
 
       const key = isAuthMutation
         ? `auth:${clientIp}`
-        : `api:${request.method}:${clientIp}`;
+        : isReportRoute
+          ? `report:${clientIp}`
+          : `api:${request.method}:${clientIp}`;
 
       const result = await checkRateLimit(key, config);
 

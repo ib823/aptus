@@ -340,27 +340,26 @@ export async function canTransitionStatus(
 }
 
 /**
- * Check if MFA is required for the current request. The only second factor
- * here is passkey/WebAuthn — there is no TOTP. By default, magic-link is
- * sufficient and passkey is an optional upgrade. MFA is enforced when:
+ * Check if MFA is required for the current request. The second factor here is
+ * passkey/WebAuthn — there is no TOTP. By default, magic-link is sufficient
+ * and passkey is an optional upgrade. MFA is enforced when:
  *
  *  - The session is already MFA-verified  → never block (false)
- *  - The user's organization has mfaPolicy="required" AND the user has a
- *    passkey enrolled (hasWebAuthn) → require this session to verify
+ *  - The user's organization has mfaPolicy="required" → require passkey
+ *    enrollment or session verification
  *  - The user has personally opted in (mfaEnabled=true) AND has a passkey
  *    enrolled → require this session to verify
- *
- * Users without a passkey enrolled are NEVER blocked here — there is no
- * /verify-mfa step-up flow yet, so an enforced policy without enrollment
- * would lock them out of the app. Org admins must mandate passkey enrollment
- * via onboarding before relying on the "required" policy.
  */
 export function isMfaRequired(user: SessionUser): boolean {
   if (user.mfaVerified) return false;
-  if (!user.hasWebAuthn) return false;
   if (user.organizationMfaPolicy === "required") return true;
+  if (!user.hasWebAuthn) return false;
   if (user.mfaEnabled) return true;
   return false;
+}
+
+export function requiresMfaEnrollment(user: SessionUser): boolean {
+  return !user.mfaVerified && user.organizationMfaPolicy === "required" && !user.hasWebAuthn;
 }
 
 /**

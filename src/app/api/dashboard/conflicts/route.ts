@@ -2,6 +2,8 @@
 
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
+import { isMfaRequired } from "@/lib/auth/permissions";
+import { getVisibleAssessmentWhere } from "@/lib/auth/assessment-visibility";
 import { prisma } from "@/lib/db/prisma";
 import { ERROR_CODES } from "@/types/api";
 
@@ -14,13 +16,17 @@ export async function GET(): Promise<NextResponse> {
     );
   }
 
+  if (isMfaRequired(user)) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.MFA_REQUIRED, message: "MFA verification required" } },
+      { status: 403 },
+    );
+  }
+
   const conflicts = await prisma.conflict.findMany({
     where: {
       status: "OPEN",
-      assessment: {
-        deletedAt: null,
-        ...(user.organizationId ? { organizationId: user.organizationId } : {}),
-      },
+      assessment: getVisibleAssessmentWhere(user),
     },
     orderBy: { createdAt: "desc" },
     take: 50,

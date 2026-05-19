@@ -6,10 +6,13 @@
  */
 
 import { Ratelimit } from "@upstash/ratelimit";
-// Default export of @upstash/redis works on Vercel Edge runtime.
-// The "/cloudflare" subpath is Cloudflare-Workers-only and silently fails on Vercel,
-// degrading the limiter to its per-instance in-memory fallback.
-import { Redis } from "@upstash/redis";
+// This module is imported from src/middleware.ts, which runs on Vercel Edge.
+// The "/cloudflare" entry of @upstash/redis ships the Web-API client (fetch +
+// Web Crypto only) and is the supported path for any V8-isolate runtime —
+// Cloudflare Workers, Vercel Edge, Next.js middleware. The default "." entry
+// pulls in node:crypto and is reserved for Node API routes; using it from
+// middleware bloats the Edge bundle. Same Redis class, same wire format.
+import { Redis } from "@upstash/redis/cloudflare";
 
 interface RateLimitEntry {
   timestamps: number[];

@@ -1,14 +1,13 @@
 /**
  * Shared utility for verifying user access to an assessment.
- * Cross-org access is gated by the role-capability matrix (canViewAllAssessments),
- * NOT a hardcoded role list — keeping the matrix as the single source of truth
- * prevents drift between the gate and per-capability checks elsewhere.
+ * Platform admins have global assessment access. Other users need either
+ * same-organization membership or explicit stakeholder membership.
  *
  * Fallback path: matching organizationId OR stakeholder membership.
  */
 
 import { prisma } from "@/lib/db/prisma";
-import { getCapabilities } from "@/lib/auth/role-permissions";
+import { mapLegacyRole } from "@/lib/auth/role-migration";
 
 interface MinimalUser {
   id: string;
@@ -25,8 +24,7 @@ export async function verifyAssessmentAccess(
   assessmentId: string,
   assessmentOrganizationId?: string,
 ): Promise<boolean> {
-  // Cross-org roles have access to all assessments — driven by the capability matrix
-  if (getCapabilities(user.role).canViewAllAssessments) return true;
+  if (mapLegacyRole(user.role) === "platform_admin") return true;
 
   // Check if the assessment belongs to the user's organization
   const organizationId = assessmentOrganizationId ?? (
