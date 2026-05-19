@@ -1,0 +1,111 @@
+# Scope item BDG - Sales Quotation
+# Tier 1 decisions for the Fit-to-Standard pre-onboarding workbench
+
+decisions:
+  - id: d1
+    title: Quotation document type
+    summary: >
+      SAP delivers a standard quotation type (QT). Do you need additional types
+      (e.g., "Service Quotation", "Project Quotation")?
+    sscui: "102495 - Configure Sales Document Types"
+    sscui_id: "102495"
+    sscui_name: "Configure Sales Document Types"
+    std_desc: Use SAP standard quotation type QT. Fastest path.
+    cfg_desc: Add additional quotation types via SSCUI. Included.
+    cst_desc: Custom quotation type with custom fields, logic, and integrations. ~4 days.
+    effort: 4
+    custom_type: "Key User Extensibility + Custom Sales Doc Type"
+    ext_impact: "Medium - custom fields need regression test each release"
+    ricefw_class: "E (Enhancement)"
+
+  - id: d2
+    title: Quotation validity period
+    summary: How long should quotations remain valid? Standard is 30 days from creation date.
+    sscui: "Quotation Validity Configuration"
+    sscui_id: "QV"
+    sscui_name: "Validity Period for Sales Documents"
+    std_desc: Standard 30-day validity. Quote expires automatically.
+    cfg_desc: Configure validity per document type or per customer segment (e.g., 60 days for tier-1 customers). Included.
+    cst_desc: Dynamic validity based on product, market conditions, or external pricing inputs. ~3 days.
+    effort: 3
+    custom_type: "Developer Extensibility (custom validity routine)"
+    ext_impact: "Medium - retest on each release"
+    ricefw_class: "E (Enhancement)"
+
+  - id: d3
+    title: Pricing binding at quotation
+    summary: >
+      Is the price quoted binding once the customer accepts, or only indicative
+      and re-priced at order? Important for FX-sensitive sales.
+    sscui: "Pricing Date / Copying Control"
+    sscui_id: "PC"
+    sscui_name: "Copying Control - Quotation to Order Pricing"
+    std_desc: Standard SAP - pricing recalculated at order creation using quotation date. Binding within validity.
+    cfg_desc: Configure copying control so order locks the quotation price exactly. Included.
+    cst_desc: Custom pricing rules (e.g., lock-in for tier-1 customers, recalc for others). ~4 days.
+    effort: 4
+    custom_type: "Developer Extensibility (custom pricing routine)"
+    ext_impact: "High - touches all downstream sales docs"
+    ricefw_class: "E (Enhancement)"
+
+  - id: d4
+    title: Output to customer
+    summary: How should the quotation be delivered to the customer? Auto-email? PDF format?
+    sscui: "Output Management Configuration"
+    sscui_id: "OM"
+    sscui_name: "Output Management - Quotation Form"
+    std_desc: Manual output. Rep clicks Print/Email when ready.
+    cfg_desc: Auto-email quotation using standard SAP form on save or approval. Included.
+    cst_desc: Custom-branded quotation PDF with company logo, multilingual, dynamic content per customer tier. ~5 days.
+    effort: 5
+    custom_type: "Adobe Forms + Key User Extensibility"
+    ext_impact: "Low - form templates are upgrade-stable"
+    ricefw_class: "F (Form)"
+
+  - id: d5
+    title: Approval before sending to customer
+    summary: >
+      Do quotations above a value threshold need internal approval before being
+      sent? Important for margin protection.
+    sscui: "Flexible Workflow for Sales Documents"
+    sscui_id: "FW"
+    sscui_name: "Flexible Workflow - Quotation Approval"
+    std_desc: No approval required. Reps can send quotations directly.
+    cfg_desc: Threshold-based approval via SAP Flexible Workflow (e.g., > MYR 50k = manager approval). Included.
+    cst_desc: Multi-stage approval with custom criteria (margin %, customer tier, product mix). ~6 days.
+    effort: 6
+    custom_type: "Workflow Developer Extension"
+    ext_impact: "Medium-High - workflow logic regression each release"
+    ricefw_class: "W (Workflow)"
+
+  - id: d6
+    title: Quote-to-order conversion
+    summary: >
+      When the customer accepts, how does the quotation become a sales order?
+      One-click conversion or new document required?
+    sscui: "Copying Control - Quotation to Order"
+    sscui_id: "102905"
+    sscui_name: "Set Copying Control - Sales Document to Sales Document"
+    std_desc: One-click conversion. SAP copies all data to a new sales order; rep just confirms.
+    cfg_desc: Adjust copying control to require additional fields, or split quotation across multiple orders. Included.
+    cst_desc: Custom conversion logic (e.g., conditional split, integration with external sales platform). ~4 days.
+    effort: 4
+    custom_type: "Developer Extensibility (copying control BAdI)"
+    ext_impact: "Medium - copying control regression each release"
+    ricefw_class: "E (Enhancement)"
+
+  - id: d7
+    title: Quotation status reporting
+    summary: >
+      How do you want to track quotation pipeline (sent, accepted, rejected,
+      expired)? Standard reporting or custom dashboard?
+    sscui: "Sales Reports / SAC Stories"
+    sscui_id: "SR"
+    sscui_name: "Sales Reports / Analytics Configuration"
+    std_desc: Use SAP standard Fiori apps - Sales Performance, Quotation Status. Sufficient for most.
+    cfg_desc: Configure custom KPI tiles and SAC stories using standard data. Included.
+    cst_desc: Custom dashboard with external CRM integration, conversion rate ML, predictive analytics. ~10 days.
+    effort: 10
+    custom_type: "Custom SAC Stories + External Integration + ML"
+    ext_impact: "Medium - external system + analytics regression"
+    ricefw_class: "R (Report)"
