@@ -11,12 +11,11 @@
  * targets: Outlook desktop, Gmail web, Apple Mail. Render uses inline
  * styles and table-based layout (Outlook reality), no external CSS.
  *
- * Transport: Resend when RESEND_API_KEY is set, dev-fallback logger
- * otherwise. The fallback prints the recipient + subject + first 200
- * chars of the text body so a local developer can see what would have
- * gone out. The logger never silently drops in production — if
- * NODE_ENV='production' and the key is missing, the dispatch throws so
- * the operator notices before deploying without it.
+ * Transport: Brevo SMTP via nodemailer (the same transport NextAuth
+ * magic-link auth uses elsewhere in the codebase). We do NOT introduce a
+ * second transport (originally specced as Resend, dropped to keep email
+ * infrastructure to a single provider). Dev fallback (no SMTP_USER) logs
+ * to console; production with missing creds will fail at sendEmail.
  *
  * Audit semantics: pdf_emailed audit rows are written by the SENDER for
  * each PDF-bearing send (signoff-confirm + pdf-delivery). magic-link and
@@ -24,7 +23,7 @@
  * otp_sent).
  */
 
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 
 export interface EmailMessage {
   to: string;
@@ -36,20 +35,31 @@ export interface EmailMessage {
   replyTo?: string;
 }
 
-let resendClient: Resend | null | undefined;
-function getResend(): Resend | null {
-  if (resendClient !== undefined) return resendClient;
-  const apiKey = process.env.RESEND_API_KEY;
-  resendClient = apiKey ? new Resend(apiKey) : null;
-  return resendClient;
+function fromAddress(): string {
+  const from = process.env.PRESALES_EMAIL_FROM ?? process.env.EMAIL_FROM;
+  if (from) {
+    // If the env var is already a full mailbox (Name <addr>), use as-is.
+    if (from.includes('<')) return from;
+    const senderName = process.env.EMAIL_SENDER_NAME ?? 'ABeam Workbench';
+    return `"${senderName}" <${from}>`;
+  }
+  return '"ABeam Workbench" <no-reply@example.com>';
 }
 
-function fromAddress(): string {
-  return (
-    process.env.PRESALES_EMAIL_FROM ??
-    process.env.EMAIL_FROM ??
-    'ABeam Workbench <no-reply@abeam.example>'
-  );
+function smtpAvailable(): boolean {
+  return Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+}
+
+function getTransport(): nodemailer.Transporter {
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST ?? 'smtp-relay.brevo.com',
+    port: Number(process.env.SMTP_PORT ?? 587),
+    secure: false, // STARTTLS on 587
+    auth: {
+      user: process.env.SMTP_USER ?? '',
+      pass: process.env.SMTP_PASS ?? '',
+    },
+  });
 }
 
 export interface DispatchResult {
@@ -69,12 +79,17 @@ export async function dispatchEmail(
   message: EmailMessage,
   opts: { bestEffort?: boolean } = {},
 ): Promise<DispatchResult> {
-  const client = getResend();
-  if (!client) {
+  if (!smtpAvailable()) {
     if (process.env.NODE_ENV === 'production') {
-      throw new Error(
-        'Resend transport unavailable: RESEND_API_KEY must be set in production',
+      const err = new Error(
+        'SMTP transport unavailable: SMTP_USER + SMTP_PASS must be set in production',
       );
+      if (opts.bestEffort) {
+        // eslint-disable-next-line no-console
+        console.warn('[presales-email] best-effort send skipped:', err.message);
+        return { delivered: false, bestEffortFailed: true };
+      }
+      throw err;
     }
     // Dev fallback. Print enough to debug; never the attachment contents.
     // eslint-disable-next-line no-console
@@ -83,8 +98,10 @@ export async function dispatchEmail(
     );
     return { delivered: false, bestEffortFailed: false };
   }
+
   try {
-    const sendPayload: Parameters<typeof client.emails.send>[0] = {
+    const transport = getTransport();
+    const sendPayload: nodemailer.SendMailOptions = {
       from: fromAddress(),
       to: message.to,
       subject: message.subject,
@@ -95,21 +112,16 @@ export async function dispatchEmail(
     if (message.attachments && message.attachments.length > 0) {
       sendPayload.attachments = message.attachments.map((a) => ({
         filename: a.filename,
-        content: a.content.toString('base64'),
+        content: a.content,
+        contentType: a.contentType ?? 'application/octet-stream',
       }));
     }
-    const result = await client.emails.send(sendPayload);
-    if (result.error) {
-      if (opts.bestEffort) {
-        console.warn(`[presales-email] send failed (best-effort): ${result.error.message}`);
-        return { delivered: false, bestEffortFailed: true };
-      }
-      throw new Error(`Resend send failed: ${result.error.message}`);
-    }
-    return { delivered: true, messageId: result.data?.id };
+    const info = await transport.sendMail(sendPayload);
+    return { delivered: true, messageId: info.messageId ?? `smtp-${Date.now()}` };
   } catch (err) {
     if (opts.bestEffort) {
-      console.warn(`[presales-email] send threw (best-effort):`, err);
+      // eslint-disable-next-line no-console
+      console.warn('[presales-email] send threw (best-effort):', err);
       return { delivered: false, bestEffortFailed: true };
     }
     throw err;

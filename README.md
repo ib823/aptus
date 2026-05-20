@@ -124,12 +124,12 @@ Production:
 | `NEXTAUTH_SECRET` | Portal session JWT signing |
 | `PRESALES_CSRF_SECRET` | Distinct from `NEXTAUTH_SECRET`, ≥32 chars (enforced by `scripts/check-production-env.js`) |
 | `PRESALES_INTERNAL_SECRET` | `/api/presales/sign-pdf` server-to-server auth |
-| `RESEND_API_KEY` | Email transport |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | Brevo SMTP transport (shared with NextAuth magic-link) |
 | `PRESALES_EMAIL_FROM` (or `EMAIL_FROM`) | Sender identity |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob for signed PDFs |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Distributed rate limit |
 
-Dev fallbacks: missing Resend → console log; missing Blob → data URL;
+Dev fallbacks: missing SMTP_USER → console log; missing Blob → data URL;
 missing internal secret → returns 401 (so the sign route surfaces "PDF
 generation skipped").
 
