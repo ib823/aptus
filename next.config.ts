@@ -23,6 +23,17 @@ const nextConfig: NextConfig = {
         source: "/(.*)",
         headers: getSecurityHeaders(),
       },
+      {
+        // Presales external route group. Per locked decision: never cache
+        // the guest-rendered HTML (signed PDF + IP-bearing fields cannot
+        // sit in a proxy), and strip the Referer so client URLs do not
+        // leak the grant token to upstream analytics or CDN logs.
+        source: "/c/:path*",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "Cache-Control", value: "no-store" },
+        ],
+      },
     ];
   },
 };

@@ -24,6 +24,10 @@ const REQUIRED_IN_PRODUCTION = [
     key: "UPSTASH_REDIS_REST_TOKEN",
     reason: "Distributed rate limiting; in-memory fallback is ineffective on serverless",
   },
+  {
+    key: "PRESALES_CSRF_SECRET",
+    reason: "Presales /c POST nonces require a dedicated secret in production (NEXTAUTH_SECRET fallback is dev-only)",
+  },
 ];
 
 const RECOMMENDED_VARS = [
@@ -83,6 +87,28 @@ if (process.env.NODE_ENV === "production") {
   // Ensure secrets aren't placeholder values
   if (process.env.NEXTAUTH_SECRET?.includes("generate-a-random")) {
     console.error("[FAIL] NEXTAUTH_SECRET appears to be a placeholder value");
+    exitCode = 1;
+  }
+
+  // Presales CSRF must not equal NEXTAUTH_SECRET (defense-in-depth: distinct
+  // keys mean compromise of one doesn't compromise the other).
+  if (
+    process.env.PRESALES_CSRF_SECRET &&
+    process.env.NEXTAUTH_SECRET &&
+    process.env.PRESALES_CSRF_SECRET === process.env.NEXTAUTH_SECRET
+  ) {
+    console.error(
+      "[FAIL] PRESALES_CSRF_SECRET must not equal NEXTAUTH_SECRET — generate a distinct key",
+    );
+    exitCode = 1;
+  }
+  if (
+    process.env.PRESALES_CSRF_SECRET &&
+    process.env.PRESALES_CSRF_SECRET.length < 32
+  ) {
+    console.error(
+      "[FAIL] PRESALES_CSRF_SECRET must be at least 32 chars in production",
+    );
     exitCode = 1;
   }
 }

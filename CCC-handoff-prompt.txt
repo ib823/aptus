@@ -1,0 +1,63 @@
+# Handoff to Claude Code CLI — Implementation kickoff
+
+## Where we are
+
+Design phase complete. Nine specification passes plus the lifecycle-screen pass before that. Approximately 35 mockups documented in `ABeam-Workbench-Design-System.docx` (in this repo root). Data model Pass 1 was completed previously and is awaiting four refinements before the redaction layer pass begins.
+
+## Architectural decisions already locked in (do not relitigate)
+
+These were agreed across the feasibility check and the design-phase Q&A. They drive the implementation:
+
+1. **External access**: custom guest cookie session, NOT NextAuth. Idempotent GET landing → POST redeem with CSRF nonce. Tokenless URL after cookie set via 303 redirect.
+2. **OTP gate**: ON. Required on first redemption from any new device. Email-OTP, 6-digit, 10-minute expiry, lockout at 5 wrong attempts (permanent until consultant reissues; consultant alerted by email).
+3. **Snapshot decisions at bundle creation**: `PresalesBundle.contentSnapshotJson` stores frozen ScopeItemContent[]. Live library edits do not affect active bundles. `signedDecisionsJson` consolidates at signoff.
+4. **Engagement model**: presales bundle attaches to existing Assessment via `PresalesBundle.assessmentId`. Presales is a lifecycle phase of an Assessment.
+5. **Excel export**: use existing `exceljs` package. Do NOT install `xlsx@0.18.5` (two known CVEs). Three-tab workbook: Summary, Configure Backlog, Custom RICEFW Backlog.
+6. **PDF generation**: server-side Chromium via `@sparticuz/chromium` in a separate Vercel Function (`/api/presales/sign`) with 1024MB memory. NOT client-side jsPDF. NOT third-party PDF API.
+7. **Cookie lifetime**: 8 hours absolute / 60 minutes sliding idle. Adjust to 90-minute idle only if beta feedback indicates real friction.
+8. **Mobile in v1**: NO for parity. Mobile renders the workbench in a degraded "preview & light editing" mode with a "open on laptop for signoff" advisory.
+9. **Concurrent edits**: last-write-wins, audit-logged. No conflict-resolution UI in v1.
+10. **Conversion-to-paid migration**: manual in v1. Consultant manually attaches signed bundle to new tenant when prospect converts.
+11. **PDF stays cream-colored in both light and dark mode**. The screen preview matches the printed artifact. This is a principled exception to the dark-mode inversion rule.
+12. **Output gating critical for IP protection**: external client view shows decision counts only, never effort days. The redaction layer is the load-bearing piece — single most important test in the codebase.
+
+## Four refinements to apply BEFORE redaction layer pass
+
+Apply these to the Pass-1 data model you previously drafted, then proceed:
+
+**1. Snapshot mutability before send.** Add a server-side guard on every PresalesBundle mutation route that checks the bundle_sent audit event hasn't fired. While in draft state, `contentSnapshotJson` and `scopeCodes` can be edited. After `bundle_sent` fires, both fields lock — any further mutation returns 409.
+
+**2. OTP lockout behavior.** When `otpAttemptCount` reaches 5: (a) grant auto-revokes, (b) email alert sent to bundle creator (Sarah-equivalent), (c) lockout is permanent until consultant manually issues a fresh grant via the re-issue flow. No timed re-arm.
+
+**3. Document the auto-forwarder residual risk.** Add to the README that email-OTP defeats manual link forwarding but does NOT defeat auto-forwarder rules at the mail server. For highest-sensitivity bundles in future, SMS-OTP would be needed (out of scope for v1).
+
+**4. Add four missing audit event types.** Append to your eventType enum: `bundle_branding_updated`, `grant_email_corrected`, `external_action_denied`, `pdf_emailed`.
+
+## Build sequence (do in this order)
+
+1. **Apply the four refinements above to the data model.** Show me the updated Prisma schema for sign-off.
+2. **Redaction layer.** Build `getScopeItemForExternal(scopeCode, bundleId)` that operates on `contentSnapshotJson` and strips: `decision.effort`, `decision.custom_type`, `decision.ext_impact`, `decision.ricefw_class`, the entire `sscui_refs` array. Write the redaction-layer test that fetches the external page server-side, parses the React hydration JSON, and asserts no `effort` field appears anywhere. This is the single most important test in the codebase.
+3. **Routes and middleware.** External route group `(external)/c/[token]/` with idempotent GET landing → POST redeem. Tokenless redirect to `/c/s/[scopeCode]` after cookie set. Custom guest cookie middleware. Expired-state page (polymorphic for expired / revoked / superseded / OTP-exhausted). `Referrer-Policy: no-referrer` and `Cache-Control: no-store` on this route group via `next.config.ts`.
+4. **Components** in the order from the design system document (Pass 1 section): Button, Input, Pill, Card, Modal, Toast, Avatar, FileUpload, Loading/Skeleton, Empty states, Tooltip, FormControls, Table, Breadcrumb+Divider. Apply the focus-ring decision (18% alpha) and active-scale (0.96) globally.
+5. **Pages in lifecycle order**: landing → OTP → workbench (external) → signoff DRAFT → SIGNED state → expired/revoked. Then consultant pages: dashboard → bundle creation → audit log → change request → settings.
+6. **PDF generator** in its own Vercel Function with `@sparticuz/chromium`. Use the same Chromium-rendered template for both in-browser DRAFT preview and the final signed PDF — pixel-identical.
+7. **Email templates** via Resend. Four templates documented in the design system (magic link, OTP, signoff confirmation to signatory, PDF delivery to ABeam).
+8. **Localization framework**: not required for v1 launch. Stub the language selector and the per-grant `acknowledgement_text_version` field, but ship in English only. BM + Chinese designed and documented for v1.1.
+
+## Non-negotiable guards during build
+
+- **Redaction layer test must pass before any external page can be merged.** Write the test first; build the page second.
+- **Signoff transaction**: row lock on PresalesBundle, idempotent `UPDATE … WHERE signedAt IS NULL`, first-writer-wins, others get 409. 5-minute grace window: `WHERE now < bundle.expiresAt + 5min`. Audit logs the actual `signedAt` vs the nominal `expiresAt`.
+- **Every "Custom" or destructive consultant action opens a confirmation modal.** Destructive button is NEVER the point of no return.
+- **Sign and Send buttons must be the only filled-red CTAs on their screens.** One red per screen, maximum.
+- **No `outline: none` on any interactive element without a custom focus ring replacement.**
+- **No `xlsx` package.** If you find yourself reaching for it, stop and use `exceljs`.
+- **Cookie scope**: presales-session cookie set with `Path=/c`, `SameSite=Strict`, `HttpOnly`. Never accessible from `/dashboard` or `/admin` paths.
+
+## What I want from you next
+
+1. Apply the four refinements to the data model. Show me the updated Prisma schema.
+2. After I approve the schema, proceed to redaction layer + the redaction test.
+3. Pause after the redaction layer for my review before moving to routes.
+
+Reference document: `ABeam-Workbench-Design-System.docx` in this repo root. Pin it to your implementation README so the rules don't drift during build.

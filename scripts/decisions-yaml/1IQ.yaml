@@ -13,7 +13,7 @@ decisions:
     sscui_name: "Configure Sales Document Types"
     std_desc: Use SAP standard inquiry type IN. Fastest path.
     cfg_desc: Add one or two additional inquiry types via SSCUI. Included in base scope.
-    cst_desc: Build a custom inquiry document type with custom fields/logic. ~3-5 days extra effort.
+    cst_desc: Build a custom inquiry document type with custom fields and logic. Effort estimated separately in your SOW.
     effort: 4
     custom_type: "Key User Extensibility (custom fields) + Custom Sales Doc Type"
     ext_impact: "Medium - custom fields need regression test each release"
@@ -27,7 +27,7 @@ decisions:
     sscui_name: "Define Number Ranges for Sales Documents"
     std_desc: Accept SAP standard internal numbering.
     cfg_desc: Define your own number range pattern via SSCUI (e.g., prefix by year). Included.
-    cst_desc: Number generation logic tied to external system / custom prefix scheme. ~2 days.
+    cst_desc: Number generation logic tied to external system or custom prefix scheme. Effort estimated separately in your SOW.
     effort: 2
     custom_type: "Developer Extensibility (custom number range BAdI)"
     ext_impact: "Medium - BAdI implementation, retest on each release"
@@ -43,7 +43,7 @@ decisions:
     sscui_name: "Define Reasons for Rejection"
     std_desc: Use SAP standard rejection reasons. Most clients find these sufficient.
     cfg_desc: Add or rename rejection reasons. Included.
-    cst_desc: Conditional rejection logic (e.g., auto-route certain reasons to approval). ~3 days.
+    cst_desc: Conditional rejection logic (e.g., auto-route certain reasons to approval). Effort estimated separately in your SOW.
     effort: 3
     custom_type: "Developer Extensibility + Flexible Workflow"
     ext_impact: "Medium - conditional logic + workflow integration"
@@ -57,7 +57,7 @@ decisions:
     sscui_name: "Pricing Date - Parameter Catalog / Formulas / Custom Routines"
     std_desc: Standard pricing runs at inquiry creation. No commitment, just an indicative price.
     cfg_desc: Adjust pricing date logic (e.g., use requested delivery date, not inquiry date). Included.
-    cst_desc: Custom pricing routine for inquiries (e.g., apply promo logic only at inquiry stage). ~5 days.
+    cst_desc: Custom pricing routine for inquiries (e.g., apply promo logic only at inquiry stage). Effort estimated separately in your SOW.
     effort: 5
     custom_type: "Developer Extensibility (custom pricing routine)"
     ext_impact: "High - custom pricing impacts all downstream sales docs, full regression each release"
@@ -70,8 +70,8 @@ decisions:
     sscui_id: "103827"
     sscui_name: "Requested Delivery Date - Parameters / Formulas / Rules / Custom Routines"
     std_desc: Default = today + standard lead time. Standard behavior.
-    cfg_desc: Customize default formula via SSCUI (e.g., today + 14 days, skip weekends). Included.
-    cst_desc: Custom routine to look up delivery date from external planning system. ~4 days.
+    cfg_desc: Customize default formula via SSCUI (e.g., today plus a fixed lead time, skip weekends). Included.
+    cst_desc: Custom routine to look up delivery date from external planning system. Effort estimated separately in your SOW.
     effort: 4
     custom_type: "Developer Extensibility (custom date routine) + Integration"
     ext_impact: "Medium-High - external system dependency, integration regression each release"
@@ -85,7 +85,7 @@ decisions:
     sscui_name: "Output Management Configuration"
     std_desc: No automatic output. Rep chooses Print/Email manually.
     cfg_desc: Auto-email inquiry confirmation to customer using standard SAP form. Included.
-    cst_desc: Custom PDF layout with company branding / custom fields. ~3 days per form variant.
+    cst_desc: Custom PDF layout with company branding and custom fields. Effort estimated separately in your SOW (per form variant).
     effort: 3
     custom_type: "Adobe Forms (Form Template) + Key User Extensibility"
     ext_impact: "Low - form templates are upgrade-stable"
@@ -99,7 +99,7 @@ decisions:
     sscui_name: "Flexible Workflow Configuration"
     std_desc: No approval. Any inquiry can be converted to quotation directly.
     cfg_desc: Use SAP Flexible Workflow with threshold-based approval (e.g., > MYR 100k). Included.
-    cst_desc: Multi-stage approval with custom routing logic and integration to external approval tool. ~7 days.
+    cst_desc: Multi-stage approval with custom routing logic and integration to external approval tool. Effort estimated separately in your SOW.
     effort: 7
     custom_type: "Workflow Developer Extension + Integration"
     ext_impact: "High - multi-stage approval logic + external system, full retest each release"
