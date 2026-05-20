@@ -16,6 +16,8 @@ import { WorkbenchLoginForm } from './WorkbenchLoginForm';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+export const metadata = { title: { absolute: 'Sign in — Workbench' } };
+
 export default function WorkbenchLoginPage() {
   return (
     <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'grid', placeItems: 'center', padding: '24px 16px' }}>

@@ -27,6 +27,8 @@ import { StakeholderRows } from './StakeholderRows';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+export const metadata = { title: { absolute: 'New bundle — Workbench' } };
+
 export default async function PresalesNewBundlePage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
