@@ -1,6 +1,11 @@
 /**
  * Playwright global setup — seeds test users for each role and creates
  * authenticated sessions with separate storageState files.
+ *
+ * Also seeds a presales fixture (PresalesBundle + Grant + Session) and
+ * exports PRESALES_TEST_BUNDLE_ID, PRESALES_TEST_SCOPE_CODE,
+ * PRESALES_TEST_SESSION_COOKIE into process.env so the redaction integration
+ * test (tests/e2e/external-redaction.unauth.spec.ts) can pick them up.
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -8,6 +13,14 @@ import { createHash, randomBytes } from "crypto";
 import path from "path";
 import fs from "fs";
 import { config } from "dotenv";
+import { scopeItems } from "../../src/lib/fts/data";
+import { hashUserAgent } from "../../src/lib/presales/ua-fingerprint";
+import {
+  PRESALES_TEST_BUNDLE_ID,
+  PRESALES_TEST_GRANT_ID,
+  PRESALES_TEST_SCOPE_CODE,
+  PRESALES_TEST_UA,
+} from "./fixtures/presales-constants";
 
 config({ path: path.join(__dirname, "../../.env.local") });
 
@@ -145,6 +158,127 @@ async function warmUpApp(baseUrl: string): Promise<void> {
   }
 }
 
+async function seedPresalesFixture(prisma: PrismaClient, opts: {
+  organizationId: string;
+  creatorUserId: string;
+  assessmentId: string;
+}): Promise<void> {
+  // The five deleteMany calls below rely on the CASCADE strategy from
+  // migration 20260520000000_presales_workbench_pass1 §4. Specifically:
+  // deleting a PresalesBundle cascades to PresalesAccessGrant,
+  // PresalesSession, PresalesBundleDecision, and PresalesAuditEvent rows.
+  // The explicit per-table deletions are belt-and-braces for environments
+  // where the seeder is partially applied; CASCADE handles the canonical
+  // case. If a future maintainer flips any of those FKs from CASCADE to
+  // RESTRICT, the deletion order below stops being sufficient and this
+  // seeder will leave orphaned rows that fail the unique-token-hash
+  // constraint on re-run. Revisit the deletion order before changing the
+  // CASCADE strategy in the migration.
+  //
+  // Build a snapshot that DELIBERATELY carries the IP-bearing fields. The
+  // redaction integration test will fail if any of these survive to the
+  // hydration JSON at /c/s/[scopeCode]. That's the whole point of the test.
+  const bd9 = scopeItems.BD9;
+  const bdg = scopeItems.BDG;
+  if (!bd9 || !bdg) {
+    throw new Error("[E2E Setup] BD9/BDG scope content missing from src/lib/fts/data");
+  }
+  const snapshot = [bd9, bdg];
+
+  const bundleId = PRESALES_TEST_BUNDLE_ID;
+  const grantId = PRESALES_TEST_GRANT_ID;
+  const sessionId = randomBytes(24).toString("hex");
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  const sessionExpiresAt = new Date(now.getTime() + 8 * 60 * 60 * 1000); // 8h cap
+
+  // Idempotent: nuke any prior fixture rows, recreate cleanly.
+  await prisma.presalesSession.deleteMany({ where: { bundleId } });
+  await prisma.presalesAuditEvent.deleteMany({ where: { bundleId } });
+  await prisma.presalesBundleDecision.deleteMany({ where: { bundleId } });
+  await prisma.presalesAccessGrant.deleteMany({ where: { bundleId } });
+  await prisma.presalesBundle.deleteMany({ where: { id: bundleId } });
+
+  await prisma.presalesBundle.create({
+    data: {
+      id: bundleId,
+      name: "E2E Presales Bundle",
+      assessmentId: opts.assessmentId,
+      organizationId: opts.organizationId,
+      createdBy: opts.creatorUserId,
+      scopeCodes: ["BD9", "BDG"],
+      defaultScopeCode: PRESALES_TEST_SCOPE_CODE,
+      contentSnapshotJson: snapshot as unknown as object,
+      clientCompanyName: "Acme Corp (E2E)",
+      startsAt: now,
+      expiresAt,
+      acknowledgementTextVersion: "v1",
+      pdpaNoticeTextVersion: "v1",
+    },
+  });
+
+  const tokenRaw = "e2e-presales-token-" + randomBytes(16).toString("hex");
+  const tokenHash = createHash("sha256").update(tokenRaw).digest("hex");
+
+  await prisma.presalesAccessGrant.create({
+    data: {
+      id: grantId,
+      bundleId,
+      email: "e2e-prospect@acme.test",
+      displayName: "E2E Prospect",
+      canSignOff: true,
+      tokenHash,
+      startsAt: now,
+      expiresAt,
+      acknowledgedAt: now,
+      acknowledgedIp: "127.0.0.1",
+      acknowledgedUa: "Playwright E2E",
+      acknowledgementTextVersion: "v1",
+      pdpaConsentCrossBorder: true,
+      pdpaConsentTextVersion: "v1",
+      otpAttemptCount: 0,
+    },
+  });
+
+  // Pre-write the otp_verified audit so /c/s/[scopeCode] does not redirect
+  // to /c/verify. The redaction test focuses on the workbench surface; the
+  // OTP gate is exercised in a separate test.
+  //
+  // The per-device OTP check matches on payload.uaHash, so we hash the
+  // pinned test UA and write that into the row. The integration test sends
+  // the same UA via Playwright's user-agent override on every request.
+  await prisma.presalesAuditEvent.create({
+    data: {
+      bundleId,
+      grantId,
+      eventType: "otp_verified",
+      payload: { uaHash: hashUserAgent(PRESALES_TEST_UA) },
+    },
+  });
+
+  await prisma.presalesSession.create({
+    data: {
+      id: sessionId,
+      grantId,
+      bundleId,
+      ipAtIssuance: "127.0.0.1",
+      userAgentAtIssuance: "Playwright E2E",
+      issuedAt: now,
+      expiresAt: sessionExpiresAt,
+      lastActivityAt: now,
+      idleTimeoutSec: 3600,
+    },
+  });
+
+  process.env.PRESALES_TEST_BUNDLE_ID = bundleId;
+  process.env.PRESALES_TEST_SCOPE_CODE = PRESALES_TEST_SCOPE_CODE;
+  process.env.PRESALES_TEST_SESSION_COOKIE = sessionId;
+
+  console.log(
+    `[E2E Setup] Presales fixture seeded (bundle=${bundleId}, scope=${PRESALES_TEST_SCOPE_CODE})`,
+  );
+}
+
 async function globalSetup(): Promise<void> {
   const prisma = new PrismaClient();
   const baseUrl = process.env.BASE_URL ?? "http://localhost:3003";
@@ -214,6 +348,17 @@ async function globalSetup(): Promise<void> {
     }
 
     console.log("[E2E Setup] Test users, sessions, and assessment created");
+
+    const assessment = await prisma.assessment.findFirst({
+      where: { companyName: "E2E Test Corp", deletedAt: null },
+    });
+    if (assessment) {
+      await seedPresalesFixture(prisma, {
+        organizationId: org.id,
+        creatorUserId: adminId,
+        assessmentId: assessment.id,
+      });
+    }
   } finally {
     await prisma.$disconnect();
   }

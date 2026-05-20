@@ -12,7 +12,7 @@ decisions:
     sscui_name: "Configure Sales Document Types"
     std_desc: Use SAP standard quotation type QT. Fastest path.
     cfg_desc: Add additional quotation types via SSCUI. Included.
-    cst_desc: Custom quotation type with custom fields, logic, and integrations. ~4 days.
+    cst_desc: Custom quotation type with custom fields, logic, and integrations. Effort estimated separately in your SOW.
     effort: 4
     custom_type: "Key User Extensibility + Custom Sales Doc Type"
     ext_impact: "Medium - custom fields need regression test each release"
@@ -20,13 +20,13 @@ decisions:
 
   - id: d2
     title: Quotation validity period
-    summary: How long should quotations remain valid? Standard is 30 days from creation date.
+    summary: How long should quotations remain valid? SAP delivers a standard validity period from creation date.
     sscui: "Quotation Validity Configuration"
     sscui_id: "QV"
     sscui_name: "Validity Period for Sales Documents"
     std_desc: Standard 30-day validity. Quote expires automatically.
-    cfg_desc: Configure validity per document type or per customer segment (e.g., 60 days for tier-1 customers). Included.
-    cst_desc: Dynamic validity based on product, market conditions, or external pricing inputs. ~3 days.
+    cfg_desc: Configure validity per document type or per customer segment (e.g., longer windows for tier-1 customers). Included.
+    cst_desc: Dynamic validity based on product, market conditions, or external pricing inputs. Effort estimated separately in your SOW.
     effort: 3
     custom_type: "Developer Extensibility (custom validity routine)"
     ext_impact: "Medium - retest on each release"
@@ -42,7 +42,7 @@ decisions:
     sscui_name: "Copying Control - Quotation to Order Pricing"
     std_desc: Standard SAP - pricing recalculated at order creation using quotation date. Binding within validity.
     cfg_desc: Configure copying control so order locks the quotation price exactly. Included.
-    cst_desc: Custom pricing rules (e.g., lock-in for tier-1 customers, recalc for others). ~4 days.
+    cst_desc: Custom pricing rules (e.g., lock-in for tier-1 customers, recalc for others). Effort estimated separately in your SOW.
     effort: 4
     custom_type: "Developer Extensibility (custom pricing routine)"
     ext_impact: "High - touches all downstream sales docs"
@@ -56,7 +56,7 @@ decisions:
     sscui_name: "Output Management - Quotation Form"
     std_desc: Manual output. Rep clicks Print/Email when ready.
     cfg_desc: Auto-email quotation using standard SAP form on save or approval. Included.
-    cst_desc: Custom-branded quotation PDF with company logo, multilingual, dynamic content per customer tier. ~5 days.
+    cst_desc: Custom-branded quotation PDF with company logo, multilingual, dynamic content per customer tier. Effort estimated separately in your SOW.
     effort: 5
     custom_type: "Adobe Forms + Key User Extensibility"
     ext_impact: "Low - form templates are upgrade-stable"
@@ -72,7 +72,7 @@ decisions:
     sscui_name: "Flexible Workflow - Quotation Approval"
     std_desc: No approval required. Reps can send quotations directly.
     cfg_desc: Threshold-based approval via SAP Flexible Workflow (e.g., > MYR 50k = manager approval). Included.
-    cst_desc: Multi-stage approval with custom criteria (margin %, customer tier, product mix). ~6 days.
+    cst_desc: Multi-stage approval with custom criteria (margin %, customer tier, product mix). Effort estimated separately in your SOW.
     effort: 6
     custom_type: "Workflow Developer Extension"
     ext_impact: "Medium-High - workflow logic regression each release"
@@ -88,7 +88,7 @@ decisions:
     sscui_name: "Set Copying Control - Sales Document to Sales Document"
     std_desc: One-click conversion. SAP copies all data to a new sales order; rep just confirms.
     cfg_desc: Adjust copying control to require additional fields, or split quotation across multiple orders. Included.
-    cst_desc: Custom conversion logic (e.g., conditional split, integration with external sales platform). ~4 days.
+    cst_desc: Custom conversion logic (e.g., conditional split, integration with external sales platform). Effort estimated separately in your SOW.
     effort: 4
     custom_type: "Developer Extensibility (copying control BAdI)"
     ext_impact: "Medium - copying control regression each release"
@@ -104,7 +104,7 @@ decisions:
     sscui_name: "Sales Reports / Analytics Configuration"
     std_desc: Use SAP standard Fiori apps - Sales Performance, Quotation Status. Sufficient for most.
     cfg_desc: Configure custom KPI tiles and SAC stories using standard data. Included.
-    cst_desc: Custom dashboard with external CRM integration, conversion rate ML, predictive analytics. ~10 days.
+    cst_desc: Custom dashboard with external CRM integration, conversion rate ML, predictive analytics. Effort estimated separately in your SOW.
     effort: 10
     custom_type: "Custom SAC Stories + External Integration + ML"
     ext_impact: "Medium - external system + analytics regression"

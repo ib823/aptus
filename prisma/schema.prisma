@@ -867,6 +867,9 @@ model Assessment {
   // Phase: Dependency Engine
   propagationLogs DependencyPropagationLog[]
 
+  // ABeam Workbench — Presales (lifecycle phase of an Assessment)
+  presalesBundles PresalesBundle[]
+
   @@index([status])
   @@index([createdBy])
   @@index([organizationId])
@@ -1451,6 +1454,12 @@ model User {
   onboardingProgress OnboardingProgress?
   onboardingTooltips OnboardingTooltip[]
 
+  // ABeam Workbench — Presales (consultant-side relations)
+  presalesBundlesCreated  PresalesBundle[]      @relation("BundlesCreated")
+  presalesBundlesRevoked  PresalesBundle[]      @relation("BundlesRevoked")
+  presalesGrantsRevoked   PresalesAccessGrant[] @relation("GrantsRevoked")
+  presalesAuditActions    PresalesAuditEvent[]  @relation("PresalesAuditActions")
+
   @@index([role])
   @@index([organizationId])
   @@index([email])
@@ -1555,6 +1564,9 @@ model Organization {
   invitations      OrgInvitation[]
   // Phase 26
   portfolioMetrics PortfolioMetric[]
+
+  // ABeam Workbench — Presales (denormalized tenant scoping)
+  presalesBundles PresalesBundle[]
 
   @@index([slug])
   @@index([plan])
@@ -3538,4 +3550,279 @@ model CustomerProcessReference {
   @@index([customerProcessId])
   @@index([referenceCode])
   @@index([referenceType])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ABeam Workbench — Presales (Fit-to-Standard pre-onboarding)
+//
+// HARD-DELETE POLICY: PresalesBundle is never hard-deleted in normal operation.
+// All lifecycle transitions are soft (revokedAt, expiresAt, signedAt). Hard-
+// delete is reserved for: (1) PDPA right-to-erasure requests, (2) non-prod
+// test data cleanup. Both cases REQUIRE the cascade-delete behavior on grants,
+// sessions, decisions, and audit events specified in §4 of the initial
+// migration (20260520000000_presales_workbench_pass1). If a future requirement
+// emerges to hard-delete a bundle while preserving its audit log for
+// compliance, this policy must be revisited and the audit FK changed to
+// SET NULL before that work proceeds.
+//
+// Five models below comprise Pass-1 of the presales data model, with four
+// refinements applied:
+//
+//   R1  Snapshot mutability before send. While bundle is draft,
+//       contentSnapshotJson and scopeCodes are mutable. Once the bundle_sent
+//       audit event has been written, both fields lock. Enforced in
+//       application code (see src/lib/presales/guards.ts); schema only
+//       records intent — no DB-level trigger.
+//
+//   R2  OTP lockout. When PresalesAccessGrant.otpAttemptCount reaches 5:
+//       (a) grant.revokedAt = now()
+//       (b) grant.revokedBy = bundle.createdBy
+//       (c) PresalesAuditEvent {external_action_denied, payload.reason="otp_exhausted"}
+//       (d) email alert dispatched to bundle.createdBy via Resend.
+//       Permanent until consultant issues a fresh grant via re-issue flow
+//       (supersededByGrantId chain). No timer-based re-arm.
+//       Enforced in src/lib/presales/guards.ts.
+//
+//   R3  Auto-forwarder residual risk documented in README.md
+//       (§ "Presales OTP threat model"). No code change.
+//
+//   R4  Four eventType values appended to the canonical TS union in
+//       src/lib/presales/audit-events.ts:
+//         bundle_branding_updated, grant_email_corrected,
+//         external_action_denied, pdf_emailed.
+//       eventType remains String in Prisma (not a DB enum) so we can append
+//       new event types without a migration; the TS union is the authority.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// One per prospect engagement. Locks at signoff. Lives as a phase of an
+/// Assessment via assessmentId. Snapshot fields freeze at bundle_sent (R1).
+model PresalesBundle {
+  id   String @id @default(cuid())
+  name String // internal display, e.g. "Acme Corp — O2C Presales"
+
+  // Tenancy / ownership
+  assessmentId   String
+  organizationId String // denormalized from Assessment for fast tenant scoping
+  createdBy      String // FK to User — the consultant ("Sarah-equivalent" in R2)
+
+  // Bundle content. Mutable while draft; locked once a `bundle_sent` audit
+  // event exists for this bundle (R1, enforced in application layer).
+  scopeCodes          String[] // e.g. ["1IQ", "BD9", "BDG"]
+  defaultScopeCode    String   // first scope shown on redemption
+  contentSnapshotJson Json // ScopeItemContent[] frozen at creation
+
+  // Client-facing branding
+  clientCompanyName String
+  clientLogoUrl     String?
+  clientAccentColor String?
+
+  // Window
+  startsAt  DateTime // usually NOW() at send
+  expiresAt DateTime // required, set by consultant
+
+  // Per-scope completion checkpoints
+  // Shape: { [scopeCode]: { completedAt: ISO8601, completedByGrantId: string } }
+  scopeCompletionsJson Json @default("{}")
+
+  // Acknowledgement / consent versioning (PDPA traceability).
+  //
+  // pdpaNoticeTextVersion = the version of the PDPA notice SHOWN at bundle
+  // creation, frozen for the lifetime of the bundle. The matching field on
+  // PresalesAccessGrant — pdpaConsentTextVersion — records the version each
+  // grantee actually ACCEPTED at acknowledgement. They are equal 99% of the
+  // time; they diverge when legal pushes a notice update mid-engagement. We
+  // keep both deliberately: forensic per-grantee precision, paired with the
+  // per-grantee pdpaConsentCrossBorder flag (cross-border consent is an
+  // individual act, not a bundle property). Do not deduplicate.
+  acknowledgementTextVersion String
+  pdpaNoticeTextVersion      String
+
+  // Signoff (frozen state)
+  signedAt            DateTime?
+  signedByGrantId     String? // FK to PresalesAccessGrant
+  signedDecisionsJson Json? // consolidated frozen choices at signoff
+  signedPdfBlobUrl    String?
+  signedPdfHash       String? // SHA-256 of the PDF binary
+  signedWithinGrace   Boolean   @default(false) // 5-min grace window
+
+  // Revocation (consultant-pulled before signoff)
+  revokedAt     DateTime?
+  revokedBy     String? // FK to User
+  revokedReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assessment    Assessment           @relation(fields: [assessmentId], references: [id])
+  organization  Organization         @relation(fields: [organizationId], references: [id])
+  creator       User                 @relation("BundlesCreated", fields: [createdBy], references: [id])
+  revoker       User?                @relation("BundlesRevoked", fields: [revokedBy], references: [id])
+  signedByGrant PresalesAccessGrant? @relation("BundleSignedBy", fields: [signedByGrantId], references: [id])
+
+  grants      PresalesAccessGrant[]
+  decisions   PresalesBundleDecision[]
+  auditEvents PresalesAuditEvent[]
+  sessions    PresalesSession[]
+
+  @@index([assessmentId])
+  @@index([organizationId])
+  @@index([createdBy])
+  @@index([expiresAt])
+  @@index([signedAt])
+}
+
+/// One row per invited prospect email per bundle. otpAttemptCount==5 triggers
+/// the R2 lockout cascade in src/lib/presales/guards.ts.
+model PresalesAccessGrant {
+  id       String @id @default(cuid())
+  bundleId String
+
+  // Identity (the prospect)
+  email       String
+  displayName String?
+  canSignOff  Boolean @default(false) // at most ONE per bundle = true
+
+  // Token (the credential) — SHA-256 of the raw token; raw lives only in URL/cookie
+  tokenHash String   @unique // 64 hex chars
+  startsAt  DateTime
+  expiresAt DateTime // usually inherits bundle.expiresAt
+
+  // Acknowledgement (set on POST /redeem when click-through accepted)
+  acknowledgedAt             DateTime?
+  acknowledgedIp             String?
+  acknowledgedUa             String?
+  acknowledgementTextVersion String?
+  pdpaConsentCrossBorder     Boolean   @default(false)
+  pdpaConsentTextVersion     String?
+
+  // OTP gate. otpAttemptCount==5 → permanent lockout (R2).
+  otpHash         String?
+  otpExpiresAt    DateTime?
+  otpAttemptCount Int       @default(0)
+
+  // Access tracking
+  lastAccessedAt DateTime?
+  accessCount    Int       @default(0)
+
+  // Lifecycle
+  revokedAt           DateTime?
+  revokedBy           String? // FK to User
+  supersededByGrantId String? // chain to a fresh re-issued grant
+
+  createdAt DateTime @default(now())
+
+  bundle       PresalesBundle       @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  revoker      User?                @relation("GrantsRevoked", fields: [revokedBy], references: [id])
+  supersededBy PresalesAccessGrant? @relation("Supersession", fields: [supersededByGrantId], references: [id])
+  supersedes   PresalesAccessGrant[] @relation("Supersession")
+  bundleSigned PresalesBundle[]     @relation("BundleSignedBy")
+
+  sessions     PresalesSession[]
+  decisionsSet PresalesBundleDecision[]
+  auditEvents  PresalesAuditEvent[]
+
+  // tokenHash already has a unique index from @unique above; a separate
+  // non-unique index would be redundant for equality lookups (the unique
+  // index serves them). Omitted deliberately.
+  @@index([bundleId])
+  @@index([email])
+  @@index([expiresAt])
+}
+
+/// Short-lived guest cookie session. NOT NextAuth. Cookie scope: Path=/c,
+/// SameSite=Strict, HttpOnly. 8h absolute, 60min sliding idle (Q12).
+model PresalesSession {
+  id       String @id @default(cuid())
+  grantId  String
+  bundleId String // denormalized for fast tenant scoping
+
+  ipAtIssuance        String
+  userAgentAtIssuance String
+
+  issuedAt       DateTime @default(now())
+  expiresAt      DateTime // issuedAt + 8h (absolute hard cap)
+  lastActivityAt DateTime @default(now()) // refreshed on every guest request
+  idleTimeoutSec Int      @default(3600) // 60 min
+
+  endedAt     DateTime?
+  endedReason String? // "logout" | "idle" | "absolute" | "revoked" | "reissued"
+
+  grant  PresalesAccessGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  bundle PresalesBundle      @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+
+  @@index([grantId])
+  @@index([bundleId])
+  @@index([expiresAt])
+}
+
+/// Append-only decision history. A row becomes stale when superseded by a
+/// newer one for the same (bundleId, scopeCode, decisionId). effortDays is
+/// INTERNAL — the redaction layer strips it before any external response.
+model PresalesBundleDecision {
+  id         String @id @default(cuid())
+  bundleId   String
+  scopeCode  String // e.g. "BD9"
+  decisionId String // e.g. "d3"
+  choice     String // "open" | "std" | "cfg" | "cst"
+  notes      String @default("")
+
+  effortDays Int @default(0) // INTERNAL — never sent to external client
+
+  // Provenance
+  setByGrantId String?
+  setAt        DateTime @default(now())
+
+  supersededAt DateTime?
+
+  bundle PresalesBundle       @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  setBy  PresalesAccessGrant? @relation(fields: [setByGrantId], references: [id])
+
+  // Explicit map: the auto-generated name (column list joined by underscore)
+  // is 67 chars and gets silently truncated by Postgres (→ 63 chars, drops
+  // `_idx`) but truncated differently by Prisma (→ 63 chars, keeps `_idx`).
+  // The mismatch causes drift on future migrate diff. Lock the name here.
+  @@index([bundleId, scopeCode, decisionId, supersededAt], map: "PresalesBundleDecision_lookup_idx")
+  @@index([bundleId, setAt])
+}
+
+/// Append-only event log. eventType is the canonical TS union in
+/// src/lib/presales/audit-events.ts (32 values incl. R4's four). Kept as
+/// String so future event types can be appended without a migration.
+///
+/// bundleId is NULLABLE specifically to record session_invalid /
+/// external_action_denied attempts where the cookie cannot be tied to a
+/// bundle (bogus session id, off-bundle tampering). When the cookie does
+/// resolve to a session row, the audit caller copies the bundleId from
+/// there. A null bundleId in an external_action_denied row with
+/// payload.reason = 'session_invalid' is the signal that a guest tried to
+/// hit a /c surface with a cookie that doesn't match any active session.
+model PresalesAuditEvent {
+  id          String  @id @default(cuid())
+  bundleId    String?
+  grantId     String? // null for consultant-side events
+  actorUserId String? // for consultant actions; null for guest events
+  eventType   String
+
+  ip        String?
+  userAgent String?
+  payload   Json    @default("{}")
+
+  createdAt DateTime @default(now())
+
+  bundle PresalesBundle?      @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  grant  PresalesAccessGrant? @relation(fields: [grantId], references: [id])
+  actor  User?                @relation("PresalesAuditActions", fields: [actorUserId], references: [id])
+
+  // Index strategy is deliberate. The R1 snapshot-lock probe in
+  // src/lib/presales/guards.ts (assertBundleDraft) filters by
+  // (bundleId, eventType='bundle_sent') LIMIT 1. Today it rides the
+  // [bundleId, createdAt] index; eventType selectivity is high enough that
+  // Postgres prunes quickly under current load. If presales volume scales
+  // and the bundle-mutation routes become hot, add a composite
+  // [bundleId, eventType, createdAt] — it serves the probe directly without
+  // re-reading the heap. Not added now because it would shadow two existing
+  // indexes for queries that don't filter on eventType.
+  @@index([bundleId, createdAt])
+  @@index([grantId, createdAt])
+  @@index([eventType, createdAt])
 }
