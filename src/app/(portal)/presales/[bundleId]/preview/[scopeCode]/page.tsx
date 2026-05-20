@@ -103,8 +103,13 @@ export default async function PresalesPreviewAsClient({ params }: PageProps) {
                   <div data-testid={`current-choice-${d.id}`} style={{ fontSize: 13, marginTop: 8 }}>
                     Current choice: <strong>{CHOICE_LABELS[currentChoice] ?? currentChoice}</strong>
                   </div>
-                  <div style={{ marginTop: 12, fontSize: 12, color: '#888780' }}>
-                    Disabled in preview — choice buttons not interactive.
+                  <div style={{ marginTop: 12, display: 'grid', gap: 8, fontSize: 13 }}>
+                    <div><strong>Standard:</strong> {d.std_desc}</div>
+                    <div><strong>Configure:</strong> {d.cfg_desc}</div>
+                    <div><strong>Custom:</strong> {d.cst_desc}</div>
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#888780', fontStyle: 'italic' }}>
+                    Disabled in preview — the real client sees these as choice buttons.
                   </div>
                 </li>
               );
