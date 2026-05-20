@@ -5,7 +5,7 @@ import EmailProvider from "next-auth/providers/email";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/db/prisma";
 import { sendEmail } from "@/lib/email/brevo";
-import { magicLinkEmail } from "@/lib/email/templates";
+import { magicLinkEmail, workbenchSigninEmail } from "@/lib/email/templates";
 import type { Adapter } from "next-auth/adapters";
 import { canRegister } from "@/lib/auth/auth-config";
 
@@ -66,13 +66,31 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          const template = magicLinkEmail(url, email);
+          // Detect Workbench context from the callbackUrl embedded in the
+          // verification URL. NextAuth packs the original callbackUrl as
+          // a query param on /api/auth/callback/email?token=...&callbackUrl=...
+          // When the destination is /presales/* we send the Workbench-branded
+          // template so the email reads "Sign in to Workbench" instead of
+          // "Sign in to Aptus" — same underlying token, different chrome.
+          let isWorkbench = false;
+          try {
+            const parsed = new URL(url);
+            const callback = parsed.searchParams.get("callbackUrl") ?? "";
+            isWorkbench =
+              callback.startsWith("/presales") ||
+              callback.includes("/presales");
+          } catch {
+            /* unparseable url falls through to Aptus template */
+          }
+          const template = isWorkbench
+            ? workbenchSigninEmail(url, email)
+            : magicLinkEmail(url, email);
           await sendEmail({
             to: { email },
             subject: template.subject,
             htmlContent: template.html,
             textContent: template.text,
-            tags: ["magic-link", "auth"],
+            tags: [isWorkbench ? "workbench-signin" : "magic-link", "auth"],
           });
         } catch (err) {
           console.error("[AUTH] Failed to send magic link email:", err);
