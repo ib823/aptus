@@ -83,6 +83,33 @@ export function magicLinkEmail(url: string, email: string): { subject: string; h
   };
 }
 
+/**
+ * Workbench-branded sign-in email. Same NextAuth flow as magicLinkEmail
+ * above but says "Workbench" instead of "Aptus" — used when the
+ * callbackUrl points at /presales/*. The auth-options.ts
+ * sendVerificationRequest detects the context and picks the right
+ * template; the underlying NextAuth verification URL is identical.
+ */
+export function workbenchSigninEmail(url: string, email: string): { subject: string; html: string; text: string } {
+  return {
+    subject: 'Sign in to Workbench',
+    html: baseLayout(`
+      <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#111827;">Sign in to Workbench</h2>
+      <p style="margin:0 0 4px;font-size:14px;color:#6b7280;line-height:1.6;">
+        Click the button below to sign in as <strong>${email}</strong>.
+      </p>
+      <p style="margin:0 0 16px;font-size:13px;color:#9ca3af;">
+        This link expires in 15 minutes. If you didn't request this, you can safely ignore this email.
+      </p>
+      ${button(url, "Sign in to Workbench")}
+      <p style="margin:0;font-size:12px;color:#d1d5db;word-break:break-all;">
+        Or copy this link: ${url}
+      </p>
+    `),
+    text: `Sign in to Workbench\n\nClick this link to sign in as ${email}:\n${url}\n\nThis link expires in 15 minutes.`,
+  };
+}
+
 // ── Stakeholder Invitation ─────────────────────────────────────────────────
 
 export function stakeholderInviteEmail(params: {
