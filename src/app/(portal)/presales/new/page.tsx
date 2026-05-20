@@ -88,20 +88,64 @@ export default async function PresalesNewBundlePage() {
 
         <Section index={3} title="Scope items">
           <div style={{ fontSize: 13, color: '#5A5A5A', marginBottom: 8 }}>
-            Pick the scope items to include. The bundle snapshots their content at creation; live library edits won&rsquo;t change this bundle.
+            Pick the scope items to include and mark one as the landing scope (what the client sees first). The bundle snapshots their content at creation; live library edits won&rsquo;t change this bundle.
           </div>
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', gap: 4 }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '40px 1fr 80px',
+                gap: 12,
+                padding: '4px 8px',
+                fontSize: 11,
+                color: '#888780',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                fontWeight: 600,
+              }}
+            >
+              <span>Include</span>
+              <span>Scope</span>
+              <span style={{ textAlign: 'center' }}>Default</span>
+            </div>
             {scopeCodes.map((code) => (
-              <label key={code} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input type="checkbox" name="scopeCodes" value={code} />
-                <span style={{ fontWeight: 600 }}>{code}</span>
-                <span style={{ color: '#5A5A5A' }}>{scopeItems[code]?.title}</span>
+              <label
+                key={code}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '40px 1fr 80px',
+                  gap: 12,
+                  alignItems: 'center',
+                  padding: '8px',
+                  border: '1px solid #E5E5E5',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  name="scopeCodes"
+                  value={code}
+                  style={{ justifySelf: 'center' }}
+                />
+                <span>
+                  <span style={{ fontWeight: 600 }}>{code}</span>{' '}
+                  <span style={{ color: '#5A5A5A' }}>{scopeItems[code]?.title}</span>
+                </span>
+                <input
+                  type="radio"
+                  name="defaultScopeCode"
+                  value={code}
+                  required
+                  style={{ justifySelf: 'center' }}
+                  title="Set as the landing scope shown to the client first"
+                />
               </label>
             ))}
           </div>
-          <Field label="Default scope code">
-            <input name="defaultScopeCode" required placeholder="BD9" style={inputStyle} />
-          </Field>
+          <div style={{ fontSize: 12, color: '#888780', marginTop: 4 }}>
+            The default scope must also be ticked &ldquo;Include&rdquo;.
+          </div>
         </Section>
 
         <Section index={4} title="Stakeholders">
