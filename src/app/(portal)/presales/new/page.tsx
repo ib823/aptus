@@ -21,6 +21,7 @@ import { prisma } from '@/lib/db/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
 import { scopeCodes, scopeItems } from '@/lib/fts/data';
 import { canPerformPresalesAction } from '@/lib/presales/rbac';
+import { BundleCreateForm } from './BundleCreateForm';
 import { StakeholderRows } from './StakeholderRows';
 
 export const dynamic = 'force-dynamic';
@@ -49,11 +50,7 @@ export default async function PresalesNewBundlePage() {
         </h1>
       </header>
 
-      <form
-        method="POST"
-        action="/api/presales/bundles"
-        style={{ display: 'grid', gap: 24 }}
-      >
+      <BundleCreateForm>
         <Section index={1} title="Engagement">
           <Field label="Internal bundle name">
             <input
@@ -210,7 +207,7 @@ export default async function PresalesNewBundlePage() {
             Send invitations
           </button>
         </div>
-      </form>
+      </BundleCreateForm>
     </main>
   );
 }

@@ -51,12 +51,12 @@ function publicAppOrigin(req: NextRequest): string {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: { code: 'UNAUTHENTICATED' } }, { status: 401 });
+  if (!user) return NextResponse.json({ error: { code: 'UNAUTHENTICATED', message: 'Sign in required.' } }, { status: 401 });
   if (!canPerformPresalesAction(user.role, 'create_bundle')) {
-    return NextResponse.json({ error: { code: 'FORBIDDEN' } }, { status: 403 });
+    return NextResponse.json({ error: { code: 'FORBIDDEN', message: 'Your role cannot create bundles.' } }, { status: 403 });
   }
   if (!user.organizationId) {
-    return NextResponse.json({ error: { code: 'NO_ORG' } }, { status: 400 });
+    return NextResponse.json({ error: { code: 'NO_ORG', message: 'Your account is not linked to an organization.' } }, { status: 400 });
   }
 
   const form = await req.formData();
@@ -75,16 +75,28 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const pdpaNoticeTextVersion = String(form.get('pdpaNoticeTextVersion') ?? 'v1');
 
   if (!name || !assessmentId || !clientCompanyName) {
-    return NextResponse.json({ error: { code: 'MISSING_FIELDS' } }, { status: 400 });
+    return NextResponse.json(
+      { error: { code: 'MISSING_FIELDS', message: 'Bundle name, linked assessment, and client company name are all required.' } },
+      { status: 400 },
+    );
   }
   if (scopeCodesRaw.length === 0) {
-    return NextResponse.json({ error: { code: 'NO_SCOPES' } }, { status: 400 });
+    return NextResponse.json(
+      { error: { code: 'NO_SCOPES', message: 'Tick at least one scope item to include in the bundle.' } },
+      { status: 400 },
+    );
   }
   if (!scopeCodesRaw.includes(defaultScopeCode)) {
-    return NextResponse.json({ error: { code: 'DEFAULT_SCOPE_NOT_IN_LIST' } }, { status: 400 });
+    return NextResponse.json(
+      { error: { code: 'DEFAULT_SCOPE_NOT_IN_LIST', message: 'The default scope must also be ticked Include.' } },
+      { status: 400 },
+    );
   }
   if (isNaN(startsAt.getTime()) || isNaN(expiresAt.getTime()) || expiresAt <= startsAt) {
-    return NextResponse.json({ error: { code: 'INVALID_WINDOW' } }, { status: 400 });
+    return NextResponse.json(
+      { error: { code: 'INVALID_WINDOW', message: 'Starts-at and expires-at must both be set, and expires-at must be after starts-at.' } },
+      { status: 400 },
+    );
   }
 
   // Confirm the assessment belongs to this org.
@@ -92,7 +104,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     where: { id: assessmentId, organizationId: user.organizationId, deletedAt: null },
     select: { id: true },
   });
-  if (!assessment) return NextResponse.json({ error: { code: 'ASSESSMENT_NOT_FOUND' } }, { status: 404 });
+  if (!assessment) return NextResponse.json({ error: { code: 'ASSESSMENT_NOT_FOUND', message: 'The selected assessment was not found in your organization.' } }, { status: 404 });
 
   // Snapshot the scope content. Deep-copy via structured clone — these are
   // the IP-bearing fields that the redaction layer strips for external
@@ -112,10 +124,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const stakeholders = parseStakeholders(stakeholdersRaw);
   const signatoryCount = stakeholders.filter((s) => s.isSignatory).length;
   if (stakeholders.length === 0) {
-    return NextResponse.json({ error: { code: 'NO_STAKEHOLDERS' } }, { status: 400 });
+    return NextResponse.json(
+      { error: { code: 'NO_STAKEHOLDERS', message: 'Add at least one stakeholder with a valid email address.' } },
+      { status: 400 },
+    );
   }
   if (signatoryCount === 0) {
-    return NextResponse.json({ error: { code: 'NO_SIGNATORY' } }, { status: 400 });
+    return NextResponse.json(
+      { error: { code: 'NO_SIGNATORY', message: 'Mark exactly one stakeholder as the signatory using the Signatory radio button.' } },
+      { status: 400 },
+    );
   }
   if (signatoryCount > 1) {
     return NextResponse.json(
@@ -212,5 +230,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     });
   }
 
-  return NextResponse.redirect(new URL(`/presales/${bundle.id}`, req.url), { status: 303 });
+  const redirectPath = `/presales/${bundle.id}`;
+  // Progressive enhancement: JSON for fetch clients, 303 for native form POSTs.
+  // The /presales/new client form sends Accept: application/json and reads
+  // redirectPath to navigate the browser without a full page reload.
+  if ((req.headers.get('accept') ?? '').includes('application/json')) {
+    return NextResponse.json({ ok: true, redirectPath, bundleId: bundle.id });
+  }
+  return NextResponse.redirect(new URL(redirectPath, req.url), { status: 303 });
 }
