@@ -50,20 +50,48 @@ export function WorkbenchLoginForm() {
 
   if (sent) {
     return (
-      <div
-        role="status"
-        style={{
-          background: '#E1F5EE',
-          color: '#085041',
-          border: '1px solid #B7E0CB',
-          borderRadius: 8,
-          padding: '14px 16px',
-          fontSize: 14,
-          lineHeight: 1.5,
-        }}
-      >
-        <div style={{ fontWeight: 600, marginBottom: 4 }}>Check your inbox</div>
-        We sent a sign-in link to <strong>{email}</strong>. Click it to enter the Workbench. The link expires in 10 minutes.
+      <div style={{ display: 'grid', gap: 12 }}>
+        <div
+          role="status"
+          style={{
+            background: '#E1F5EE',
+            color: '#085041',
+            border: '1px solid #B7E0CB',
+            borderRadius: 8,
+            padding: '14px 16px',
+            fontSize: 14,
+            lineHeight: 1.5,
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Check your inbox</div>
+          We sent a sign-in link to <strong>{email}</strong>. Click the link in that email to enter the Workbench &mdash; there&rsquo;s no code to type. The link expires in 10 minutes.
+        </div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
+          <span style={{ color: '#5A5A5A' }}>Wrong address, or didn&rsquo;t arrive?</span>
+          <button
+            type="button"
+            onClick={() => {
+              setSent(false);
+              setError(null);
+              setBusy(false);
+            }}
+            style={{
+              background: '#FFFFFF',
+              color: '#002B5C',
+              border: '1px solid #002B5C',
+              padding: '6px 12px',
+              fontSize: 13,
+              fontWeight: 600,
+              borderRadius: 6,
+              cursor: 'pointer',
+            }}
+          >
+            Use a different email
+          </button>
+        </div>
+        <div style={{ fontSize: 12, color: '#888780', marginTop: 4 }}>
+          Tip: check your spam / promotions folder. The sender is your team&rsquo;s configured EMAIL_FROM via Brevo SMTP.
+        </div>
       </div>
     );
   }
