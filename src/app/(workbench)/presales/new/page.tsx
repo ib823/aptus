@@ -43,7 +43,7 @@ export default async function PresalesNewBundlePage() {
     <main style={{ maxWidth: 880, margin: '32px auto', padding: '0 24px' }}>
       <header style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 12, color: '#5A5A5A', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-          Presales workbench · New bundle
+          Workbench · New bundle
         </div>
         <h1 style={{ fontSize: 28, fontWeight: 600, margin: '4px 0 0', color: '#002B5C' }}>
           Create presales bundle

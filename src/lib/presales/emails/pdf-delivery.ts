@@ -31,7 +31,7 @@ export function renderPdfDeliveryEmail(ctx: PdfDeliveryContext): EmailMessage {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr><td align="center" style="padding:32px 16px">
       <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="background:#FFFFFF;border:1px solid #E5E5E5;border-radius:12px">
-        <tr><td style="background:#002B5C;color:#FFFFFF;padding:16px 24px;border-radius:12px 12px 0 0;font-size:14px;letter-spacing:0.04em">ABeam Workbench · Bundle signed</td></tr>
+        <tr><td style="background:#002B5C;color:#FFFFFF;padding:16px 24px;border-radius:12px 12px 0 0;font-size:14px;letter-spacing:0.04em">Workbench · Bundle signed</td></tr>
         <tr><td style="padding:24px">
           <h1 style="margin:0 0 12px;font-size:22px;font-weight:600;color:#002B5C">${escapeHtml(ctx.clientCompanyName)} signed off</h1>
           <p style="margin:0 0 12px;font-size:14px;line-height:1.5;color:#5A5A5A">${escapeHtml(ctx.signatoryName)} (${escapeHtml(ctx.signatoryEmail)}) accepted the workbench. Signed PDF attached.</p>
@@ -60,7 +60,7 @@ ${ctx.signatoryName} (${ctx.signatoryEmail}) accepted the workbench.
 
 Signed PDF attached. Open the consultant dashboard for the full audit log.
 
-— ABeam Workbench`;
+— Workbench`;
 
   return {
     to: ctx.consultantEmail,
