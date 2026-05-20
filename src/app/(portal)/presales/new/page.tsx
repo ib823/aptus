@@ -21,6 +21,7 @@ import { prisma } from '@/lib/db/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
 import { scopeCodes, scopeItems } from '@/lib/fts/data';
 import { canPerformPresalesAction } from '@/lib/presales/rbac';
+import { StakeholderRows } from './StakeholderRows';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -149,18 +150,7 @@ export default async function PresalesNewBundlePage() {
         </Section>
 
         <Section index={4} title="Stakeholders">
-          <div style={{ fontSize: 13, color: '#5A5A5A', marginBottom: 8 }}>
-            One stakeholder must be the designated signatory. Each gets a unique magic-link emailed at &ldquo;Send invitations&rdquo;.
-          </div>
-          <textarea
-            name="stakeholders"
-            placeholder="signatory@client.example - CFO - SIGNATORY&#10;reviewer@client.example - Head of Ops"
-            rows={5}
-            style={{ ...inputStyle, fontFamily: 'Consolas, monospace', fontSize: 13 }}
-          />
-          <div style={{ fontSize: 12, color: '#888780', marginTop: 4 }}>
-            One per line: email - display name - role flag. Append &ldquo;SIGNATORY&rdquo; to mark the signatory.
-          </div>
+          <StakeholderRows />
         </Section>
 
         <Section index={5} title="Access window">
