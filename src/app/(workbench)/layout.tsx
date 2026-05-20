@@ -18,6 +18,7 @@
  * sign-in is sufficient for this surface.
  */
 
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { getCurrentUser } from '@/lib/auth/session';
@@ -25,6 +26,16 @@ import { WorkbenchShell } from '@/components/workbench/WorkbenchShell';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+/**
+ * Override the root layout's "Aptus" title across the Workbench surface.
+ * Child pages can override `title` again (e.g. "Bundles — Workbench");
+ * pages without their own title inherit the default below.
+ */
+export const metadata: Metadata = {
+  title: { default: 'Workbench', template: '%s — Workbench' },
+  description: 'Presales decisions workbench',
+};
 
 export default async function WorkbenchLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
