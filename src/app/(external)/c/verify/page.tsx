@@ -42,10 +42,18 @@ export default async function PresalesVerifyPage({ searchParams }: PageProps) {
     redirect('/c/expired?reason=session_expired');
   }
 
-  const { error, remaining } = await searchParams;
+  const { error } = await searchParams;
+  // Persistent attempts-remaining display: derive from grant.otpAttemptCount
+  // on every render. The query-param `remaining` from the POST redirect was
+  // unreliable — when the user navigated back to /c/verify (no query param)
+  // the counter vanished, making the persistent-DB-count behavior look like
+  // it was resetting. The display now reflects DB state for every render.
+  const MAX_OTP_ATTEMPTS = 5;
+  const dbAttempts = resolved.grant.otpAttemptCount;
+  const remainingAttempts = Math.max(0, MAX_OTP_ATTEMPTS - dbAttempts);
   const errorMessage =
     error === 'invalid'
-      ? `Code did not match. ${remaining ?? '0'} attempts remaining.`
+      ? `Code did not match. ${remainingAttempts} attempt${remainingAttempts === 1 ? '' : 's'} remaining before the grant locks.`
       : error === 'expired'
         ? 'Code expired — request a new one below.'
         : error === 'locked'
@@ -59,13 +67,18 @@ export default async function PresalesVerifyPage({ searchParams }: PageProps) {
   return (
     <main style={{ maxWidth: 480, margin: '64px auto', padding: '0 16px' }}>
       <header style={{ marginBottom: 32 }}>
-        <div style={{ fontSize: 14, color: '#5A5A5A', marginBottom: 8 }}>ABeam Workbench</div>
+        <div style={{ fontSize: 14, color: '#5A5A5A', marginBottom: 8 }}>Workbench</div>
         <h1 style={{ fontSize: 28, fontWeight: 600, margin: 0, color: '#002B5C' }}>
           Enter your verification code
         </h1>
         <p style={{ marginTop: 12, color: '#5A5A5A' }}>
           We sent a 6-digit code to {resolved.grant.email}. Enter it below to continue.
         </p>
+        {dbAttempts > 0 ? (
+          <p style={{ marginTop: 8, fontSize: 13, color: '#888780' }}>
+            {remainingAttempts} attempt{remainingAttempts === 1 ? '' : 's'} remaining before the grant locks.
+          </p>
+        ) : null}
       </header>
 
       {errorMessage ? (
