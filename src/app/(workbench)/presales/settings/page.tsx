@@ -14,6 +14,8 @@ import { canAccessPresales } from '@/lib/presales/rbac';
 
 export const dynamic = 'force-dynamic';
 
+export const metadata = { title: { absolute: 'Settings — Workbench' } };
+
 export default async function PresalesSettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');

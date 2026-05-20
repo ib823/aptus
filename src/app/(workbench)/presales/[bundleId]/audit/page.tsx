@@ -18,6 +18,8 @@ interface PageProps {
   searchParams: Promise<{ event?: string; q?: string }>;
 }
 
+export const metadata = { title: { absolute: 'Audit log — Workbench' } };
+
 export default async function PresalesAuditPage({ params, searchParams }: PageProps) {
   const user = await getCurrentUser();
   if (!user) redirect('/login');

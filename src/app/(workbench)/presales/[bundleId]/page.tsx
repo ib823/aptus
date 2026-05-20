@@ -29,6 +29,8 @@ interface PageProps {
   params: Promise<{ bundleId: string }>;
 }
 
+export const metadata = { title: { absolute: 'Bundle dashboard — Workbench' } };
+
 export default async function PresalesBundleDashboard({ params }: PageProps) {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
