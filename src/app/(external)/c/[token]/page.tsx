@@ -45,13 +45,14 @@ export default async function PresalesLandingPage({ params }: PageProps) {
   });
 
   if (!grant) redirect('/c/expired?reason=invalid_token');
-  if (grant.revokedAt) redirect('/c/expired?reason=revoked_grant');
-  if (grant.supersededByGrantId) redirect('/c/expired?reason=superseded_grant');
+  const bundleQs = `&bundleId=${encodeURIComponent(grant.bundle.id)}`;
+  if (grant.revokedAt) redirect(`/c/expired?reason=revoked_grant${bundleQs}`);
+  if (grant.supersededByGrantId) redirect(`/c/expired?reason=superseded_grant${bundleQs}`);
 
   const now = new Date();
-  if (grant.expiresAt <= now) redirect('/c/expired?reason=expired_window');
-  if (grant.bundle.revokedAt) redirect('/c/expired?reason=revoked_grant');
-  if (grant.bundle.expiresAt <= now) redirect('/c/expired?reason=expired_window');
+  if (grant.expiresAt <= now) redirect(`/c/expired?reason=expired_window${bundleQs}`);
+  if (grant.bundle.revokedAt) redirect(`/c/expired?reason=revoked_grant${bundleQs}`);
+  if (grant.bundle.expiresAt <= now) redirect(`/c/expired?reason=expired_window${bundleQs}`);
 
   const nonce = issueRedeemNonce(token);
 
