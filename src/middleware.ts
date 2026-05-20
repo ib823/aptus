@@ -117,6 +117,11 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
     pathname.startsWith("/login") ||
     pathname.startsWith("/dev-login") ||
     pathname.startsWith("/mfa/") ||
+    // Workbench (isolated presales surface) — guest URLs at /c/* must
+    // never be intercepted by the NextAuth bridge, and the Workbench
+    // sign-in page at /presales/login is unauthenticated by design.
+    pathname.startsWith("/c/") ||
+    pathname === "/presales/login" ||
     pathname.includes(".")
   ) {
     return undefined;

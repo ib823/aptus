@@ -43,7 +43,7 @@ export default async function PresalesChangeRequestPage({ params }: PageProps) {
     <main style={{ maxWidth: 720, margin: '32px auto', padding: '0 24px' }}>
       <header style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 12, color: '#5A5A5A', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-          Post-signoff · Change request
+          Workbench · Post-signoff · Change request
         </div>
         <h1 style={{ fontSize: 24, fontWeight: 600, margin: '4px 0 0', color: '#002B5C' }}>
           {bundle.clientCompanyName}

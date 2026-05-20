@@ -73,7 +73,7 @@ export default async function PresalesBundleDashboard({ params }: PageProps) {
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <div style={{ fontSize: 12, color: '#5A5A5A', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-            Presales · {bundle.scopeCodes.join(' · ')}
+            Workbench · {bundle.scopeCodes.join(' · ')}
           </div>
           <h1 style={{ fontSize: 24, fontWeight: 600, margin: '4px 0 0', color: '#002B5C' }}>
             {bundle.clientCompanyName}

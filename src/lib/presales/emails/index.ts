@@ -40,10 +40,10 @@ function fromAddress(): string {
   if (from) {
     // If the env var is already a full mailbox (Name <addr>), use as-is.
     if (from.includes('<')) return from;
-    const senderName = process.env.EMAIL_SENDER_NAME ?? 'ABeam Workbench';
+    const senderName = process.env.EMAIL_SENDER_NAME ?? 'Workbench';
     return `"${senderName}" <${from}>`;
   }
-  return '"ABeam Workbench" <no-reply@example.com>';
+  return '"Workbench" <no-reply@example.com>';
 }
 
 function smtpAvailable(): boolean {

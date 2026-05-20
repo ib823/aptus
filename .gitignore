@@ -73,3 +73,5 @@ test-results/
 # Phase 13.6 — user-supplied SAP API Hub export
 /sap-references/
 /api-hub-catalog.json
+.vercel-token
+.claude/
