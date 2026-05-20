@@ -19,6 +19,8 @@ import {
   canPerformPresalesAction,
 } from '@/lib/presales/rbac';
 import type { ScopeItemContent } from '@/lib/fts/types';
+import { ActionToolbar } from './ActionToolbar';
+import { RecipientRowActions } from './RecipientRowActions';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -85,7 +87,7 @@ export default async function PresalesBundleDashboard({ params }: PageProps) {
         </span>
       </header>
 
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 24 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
         <Link
           href={`/presales/${bundle.id}/preview/${encodeURIComponent(bundle.defaultScopeCode)}`}
           style={btn('secondary')}
@@ -100,8 +102,15 @@ export default async function PresalesBundleDashboard({ params }: PageProps) {
             Submit change request
           </Link>
         ) : null}
-        {canExtend ? <span style={btn('disabled')}>Extend window (coming soon)</span> : null}
-        {canRevoke ? <span style={btn('disabled')}>Revoke (coming soon)</span> : null}
+      </div>
+
+      <div style={{ marginBottom: 24 }}>
+        <ActionToolbar
+          bundleId={bundle.id}
+          currentExpiresAt={bundle.expiresAt.toISOString()}
+          canExtend={canExtend}
+          canRevoke={canRevoke}
+        />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
@@ -149,20 +158,41 @@ export default async function PresalesBundleDashboard({ params }: PageProps) {
           <h2 style={cardHeading}>Recipients</h2>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {bundle.grants.map((g) => (
-              <li key={g.id} style={{ padding: '8px 0', borderBottom: '1px solid #F1EFE8', fontSize: 13 }}>
-                <div style={{ fontWeight: 600 }}>
-                  {g.displayName ?? g.email}
-                  {g.canSignOff ? (
-                    <span style={{ marginLeft: 8, fontSize: 11, padding: '2px 6px', background: '#E1F5EE', color: '#085041', borderRadius: 4 }}>
-                      Signatory
-                    </span>
-                  ) : null}
+              <li
+                key={g.id}
+                style={{
+                  padding: '8px 0',
+                  borderBottom: '1px solid #F1EFE8',
+                  fontSize: 13,
+                  display: 'grid',
+                  gridTemplateColumns: '1fr auto',
+                  gap: 12,
+                  alignItems: 'start',
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 600 }}>
+                    {g.displayName ?? g.email}
+                    {g.canSignOff ? (
+                      <span style={{ marginLeft: 8, fontSize: 11, padding: '2px 6px', background: '#E1F5EE', color: '#085041', borderRadius: 4 }}>
+                        Signatory
+                      </span>
+                    ) : null}
+                  </div>
+                  <div style={{ color: '#5A5A5A' }}>{g.email}</div>
+                  <div style={{ color: '#888780', fontSize: 11 }}>
+                    {g.acknowledgedAt ? `Acknowledged ${g.acknowledgedAt.toISOString().slice(0, 10)}` : 'Pending acknowledgement'}
+                    {g.revokedAt && !g.supersededByGrantId ? ' · revoked' : ''}
+                  </div>
                 </div>
-                <div style={{ color: '#5A5A5A' }}>{g.email}</div>
-                <div style={{ color: '#888780', fontSize: 11 }}>
-                  {g.acknowledgedAt ? `Acknowledged ${g.acknowledgedAt.toISOString().slice(0, 10)}` : 'Pending acknowledgement'}
-                  {g.revokedAt ? ' · revoked' : ''}
-                </div>
+                <RecipientRowActions
+                  grantId={g.id}
+                  currentEmail={g.email}
+                  bundleSigned={!!bundle.signedAt}
+                  bundleRevoked={!!bundle.revokedAt}
+                  canReissue={canPerformPresalesAction(user.role, 'reissue_grant')}
+                  superseded={!!g.supersededByGrantId}
+                />
               </li>
             ))}
           </ul>
