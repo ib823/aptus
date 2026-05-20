@@ -101,11 +101,12 @@ export async function POST(req: NextRequest, ctx: RouteContext): Promise<NextRes
   });
   const now = new Date();
   if (!grant) return redirectTo(req, '/c/expired?reason=invalid_token');
-  if (grant.revokedAt) return redirectTo(req, '/c/expired?reason=revoked_grant');
-  if (grant.supersededByGrantId) return redirectTo(req, '/c/expired?reason=superseded_grant');
-  if (grant.expiresAt <= now) return redirectTo(req, '/c/expired?reason=expired_window');
-  if (grant.bundle.revokedAt) return redirectTo(req, '/c/expired?reason=revoked_grant');
-  if (grant.bundle.expiresAt <= now) return redirectTo(req, '/c/expired?reason=expired_window');
+  const bundleQs = `&bundleId=${encodeURIComponent(grant.bundle.id)}`;
+  if (grant.revokedAt) return redirectTo(req, `/c/expired?reason=revoked_grant${bundleQs}`);
+  if (grant.supersededByGrantId) return redirectTo(req, `/c/expired?reason=superseded_grant${bundleQs}`);
+  if (grant.expiresAt <= now) return redirectTo(req, `/c/expired?reason=expired_window${bundleQs}`);
+  if (grant.bundle.revokedAt) return redirectTo(req, `/c/expired?reason=revoked_grant${bundleQs}`);
+  if (grant.bundle.expiresAt <= now) return redirectTo(req, `/c/expired?reason=expired_window${bundleQs}`);
 
   const ip = clientIp(req);
   const ua = clientUa(req);
