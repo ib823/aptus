@@ -135,6 +135,44 @@ export const authOptions: NextAuthOptions = {
     error: "/login?error=true",
   },
   callbacks: {
+    /**
+     * Redirect callback — controls where NextAuth sends the browser after
+     * a successful sign-in (or sign-out). The default behavior turns any
+     * relative path like "/presales" into "<NEXTAUTH_URL>/presales", which
+     * in our two-host setup means a /presales redirect after a Workbench
+     * sign-in lands the user on aptus-sandy.vercel.app/presales (NEXTAUTH_URL
+     * host) instead of staying on ab-workbench.vercel.app. The browser then
+     * follows our middleware's 308 back to ab-workbench but the just-issued
+     * session-token cookie is scoped to ab-workbench, so it isn't sent to
+     * aptus-sandy and the bounce loses the session. Result: signed-in user
+     * lands at /presales/login on ab-workbench — looks like a sign-in loop.
+     *
+     * Override: for relative URLs, return them verbatim so the browser
+     * resolves against the request URL (which is whichever host the user
+     * actually authed on). For absolute URLs that target WORKBENCH_HOST,
+     * allow them through too. Otherwise fall back to NextAuth's default
+     * "same baseUrl host only" rule.
+     */
+    async redirect({ url, baseUrl }) {
+      if (url.startsWith("/") && !url.startsWith("//")) return url;
+      const workbenchHost = process.env.WORKBENCH_HOST;
+      if (workbenchHost) {
+        try {
+          const u = new URL(url);
+          if (u.host === workbenchHost) return url;
+        } catch {
+          /* fall through */
+        }
+      }
+      try {
+        const u = new URL(url);
+        const b = new URL(baseUrl);
+        if (u.host === b.host) return url;
+      } catch {
+        /* fall through */
+      }
+      return baseUrl;
+    },
     async signIn({ user }) {
       if (!user.email) return false;
 
