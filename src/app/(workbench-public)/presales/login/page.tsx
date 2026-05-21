@@ -16,7 +16,7 @@ import { WorkbenchLoginForm } from './WorkbenchLoginForm';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export const metadata = { title: { absolute: 'Sign in — Workbench' } };
+export const metadata = { title: { absolute: 'Sign in — ABeam Workbench' } };
 
 export default function WorkbenchLoginPage() {
   return (
@@ -48,7 +48,7 @@ export default function WorkbenchLoginPage() {
           </span>
           <div>
             <div style={{ fontWeight: 700, fontSize: 18, color: '#002B5C', letterSpacing: '-0.01em' }}>
-              Workbench
+              ABeam Workbench
             </div>
             <div style={{ fontSize: 11, color: '#5A5A5A', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
               Presales decisions
@@ -64,7 +64,7 @@ export default function WorkbenchLoginPage() {
         <WorkbenchLoginForm />
 
         <div style={{ fontSize: 12, color: '#888780', marginTop: 24, textAlign: 'center' }}>
-          For ABeam consultants. By signing in you agree to use Workbench in line with the engagement policies your team has set.
+          For ABeam consultants. By signing in you agree to use ABeam Workbench in line with the engagement policies your team has set.
         </div>
       </main>
     </div>

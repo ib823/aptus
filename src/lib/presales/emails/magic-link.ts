@@ -27,12 +27,12 @@ export function renderMagicLinkEmail(ctx: MagicLinkContext): EmailMessage {
 
   const html = `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8" /><title>Workbench invitation</title></head>
+<head><meta charset="UTF-8" /><title>ABeam Workbench invitation</title></head>
 <body style="margin:0;background:#F8FAFC;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#1A1A1A">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr><td align="center" style="padding:32px 16px">
       <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="background:#FFFFFF;border:1px solid #E5E5E5;border-radius:12px">
-        <tr><td style="background:#002B5C;color:#FFFFFF;padding:16px 24px;border-radius:12px 12px 0 0;font-size:14px;letter-spacing:0.04em">Workbench</td></tr>
+        <tr><td style="background:#002B5C;color:#FFFFFF;padding:16px 24px;border-radius:12px 12px 0 0;font-size:14px;letter-spacing:0.04em">ABeam Workbench</td></tr>
         <tr><td style="padding:24px">
           <h1 style="margin:0 0 12px;font-size:22px;font-weight:600;color:#002B5C">You're invited to review the proposal</h1>
           <p style="margin:0 0 12px;font-size:14px;line-height:1.5;color:#1A1A1A">${escapeHtml(ctx.recipientName)},</p>
@@ -48,7 +48,7 @@ export function renderMagicLinkEmail(ctx: MagicLinkContext): EmailMessage {
 </body>
 </html>`;
 
-  const text = `Workbench — proposal review invitation
+  const text = `ABeam Workbench — proposal review invitation
 
 ${ctx.recipientName},
 
@@ -59,11 +59,11 @@ ${ctx.linkUrl}
 
 This link expires ${expiresLocal} MYT. By continuing, you accept acknowledgement version ${ctx.acknowledgementVersion}.
 
-— Workbench`;
+— ABeam Workbench`;
 
   return {
     to: ctx.recipientEmail,
-    subject: `Your ${ctx.clientCompanyName} presales workbench is ready`,
+    subject: `Your ${ctx.clientCompanyName} ABeam Workbench is ready`,
     html,
     text,
   };

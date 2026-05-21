@@ -29,12 +29,12 @@ export function renderSignoffConfirmEmail(ctx: SignoffConfirmContext): EmailMess
 
   const html = `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8" /><title>Workbench — signoff confirmation</title></head>
+<head><meta charset="UTF-8" /><title>ABeam Workbench — signoff confirmation</title></head>
 <body style="margin:0;background:#F8FAFC;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#1A1A1A">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr><td align="center" style="padding:32px 16px">
       <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="background:#FFFFFF;border:1px solid #E5E5E5;border-radius:12px">
-        <tr><td style="background:#002B5C;color:#FFFFFF;padding:16px 24px;border-radius:12px 12px 0 0;font-size:14px;letter-spacing:0.04em">Workbench · Signed</td></tr>
+        <tr><td style="background:#002B5C;color:#FFFFFF;padding:16px 24px;border-radius:12px 12px 0 0;font-size:14px;letter-spacing:0.04em">ABeam Workbench · Signed</td></tr>
         <tr><td style="padding:24px">
           <h1 style="margin:0 0 12px;font-size:22px;font-weight:600;color:#002B5C">Thank you, ${escapeHtml(ctx.signatoryName)}</h1>
           <p style="margin:0 0 12px;font-size:14px;line-height:1.5;color:#5A5A5A">Your signoff for the ${escapeHtml(ctx.clientCompanyName)} presales workbench has been recorded.</p>
@@ -51,7 +51,7 @@ export function renderSignoffConfirmEmail(ctx: SignoffConfirmContext): EmailMess
 </body>
 </html>`;
 
-  const text = `Workbench — Signoff recorded
+  const text = `ABeam Workbench — Signoff recorded
 
 ${ctx.signatoryName},
 
@@ -63,11 +63,11 @@ Your signoff for the ${ctx.clientCompanyName} presales workbench has been record
 
 A copy of your signed decisions is attached. Your ABeam consultant will follow up to confirm next steps.
 
-— Workbench`;
+— ABeam Workbench`;
 
   return {
     to: ctx.signatoryEmail,
-    subject: `Signed: ${ctx.clientCompanyName} presales workbench`,
+    subject: `Signed: ${ctx.clientCompanyName} ABeam Workbench`,
     html,
     text,
     attachments: [

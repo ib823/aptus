@@ -34,7 +34,7 @@ export function AptusMark({ size = 24 }: AptusMarkProps) {
 }
 
 interface AptusWordmarkProps {
-  /** Font size of the "Aptus" text. The mark scales to size + 6. */
+  /** Font size of the "ABeam Workbench" text. The mark scales to size + 6. */
   size?: number;
 }
 
@@ -51,7 +51,7 @@ export function AptusWordmark({ size = 18 }: AptusWordmarkProps) {
           color: "var(--aptus-text)",
         }}
       >
-        Aptus
+        ABeam Workbench
       </span>
     </div>
   );

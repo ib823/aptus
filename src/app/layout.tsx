@@ -28,27 +28,30 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_APP_URL ?? "https://aptus-sandy.vercel.app",
   ),
   title: {
-    default: "Aptus",
-    template: "%s — Aptus",
+    default: "ABeam Workbench",
+    template: "%s — ABeam Workbench",
   },
-  description: "SAP best practices process validation portal",
+  description:
+    "ABeam's pre-onboarding Fit-to-Standard workbench. Authored Tier 1 decisions, signed and audited, ready to drive Explore.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Aptus",
+    title: "ABeam Workbench",
   },
   openGraph: {
-    title: "Aptus",
-    description: "SAP best practices process validation portal",
-    siteName: "Aptus",
+    title: "ABeam Workbench",
+    description:
+      "ABeam's pre-onboarding Fit-to-Standard workbench. Authored Tier 1 decisions, signed and audited, ready to drive Explore.",
+    siteName: "ABeam Workbench",
     type: "website",
     locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Aptus",
-    description: "SAP best practices process validation portal",
+    title: "ABeam Workbench",
+    description:
+      "ABeam's pre-onboarding Fit-to-Standard workbench. Authored Tier 1 decisions, signed and audited, ready to drive Explore.",
   },
   other: {
     "theme-color": "#f8fafc",

@@ -34,7 +34,7 @@ export function WorkbenchLoginForm() {
       if (res?.error) {
         setError(
           res.error === 'AccessDenied'
-            ? 'This email is not authorised for the Workbench. Ask your ABeam admin for an invitation.'
+            ? 'This email is not authorised for ABeam Workbench. Ask your ABeam admin for an invitation.'
             : 'We could not send the sign-in email. Check the address and try again.',
         );
         setBusy(false);
@@ -64,7 +64,7 @@ export function WorkbenchLoginForm() {
           }}
         >
           <div style={{ fontWeight: 600, marginBottom: 4 }}>Check your inbox</div>
-          We sent a sign-in link to <strong>{email}</strong>. Click the link in that email to enter the Workbench &mdash; there&rsquo;s no code to type. The link expires in 10 minutes.
+          We sent a sign-in link to <strong>{email}</strong>. Click the link in that email to enter ABeam Workbench &mdash; there&rsquo;s no code to type. The link expires in 10 minutes.
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
           <span style={{ color: '#5A5A5A' }}>Wrong address, or didn&rsquo;t arrive?</span>
