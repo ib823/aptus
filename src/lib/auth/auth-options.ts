@@ -70,21 +70,29 @@ export const authOptions: NextAuthOptions = {
           // verification URL. NextAuth packs the original callbackUrl as
           // a query param on /api/auth/callback/email?token=...&callbackUrl=...
           // When the destination is /presales/* we send the Workbench-branded
-          // template so the email reads "Sign in to Workbench" instead of
-          // "Sign in to Aptus" — same underlying token, different chrome.
+          // template AND wrap the URL in a confirm-page interstitial so that
+          // Outlook Safe Links / Brevo click-trackers can prefetch the
+          // interstitial (harmless) instead of the raw callback (which would
+          // burn the single-use token before the user clicks).
           let isWorkbench = false;
+          let emailUrl = url;
           try {
             const parsed = new URL(url);
             const callback = parsed.searchParams.get("callbackUrl") ?? "";
             isWorkbench =
               callback.startsWith("/presales") ||
               callback.includes("/presales");
+            if (isWorkbench) {
+              const confirm = new URL("/presales/login/confirm", parsed.origin);
+              confirm.searchParams.set("next", url);
+              emailUrl = confirm.toString();
+            }
           } catch {
             /* unparseable url falls through to Aptus template */
           }
           const template = isWorkbench
-            ? workbenchSigninEmail(url, email)
-            : magicLinkEmail(url, email);
+            ? workbenchSigninEmail(emailUrl, email)
+            : magicLinkEmail(emailUrl, email);
           await sendEmail({
             to: { email },
             subject: template.subject,
