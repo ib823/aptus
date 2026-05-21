@@ -1,7 +1,15 @@
 import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
+import { Source_Serif_4 } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
+
+const sourceSerif = Source_Serif_4({
+  subsets: ["latin"],
+  variable: "--font-source-serif",
+  display: "swap",
+  weight: ["400", "500", "600"],
+});
 import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/components/shared/Providers";
 import { ServiceWorkerProvider } from "@/components/pwa/ServiceWorkerProvider";
@@ -53,7 +61,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable} ${sourceSerif.variable}`}>
       <head />
       <body className="antialiased" suppressHydrationWarning>
         <a

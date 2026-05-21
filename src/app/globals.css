@@ -8,6 +8,54 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  /* Display serif — loaded by next/font in layout.tsx (Source_Serif_4).
+   * Brief §1.3 specifies Source Serif Pro as the agreed fallback to the
+   * licensed Tiempos Headline. Restored pages reach for `font-serif`. */
+  --font-serif: var(--font-source-serif), "Tiempos Headline", "Source Serif Pro", Georgia, serif;
+
+  /* ─── ABeam Workbench tokens (brief §1.1) ─────────────────────────────
+   * Exposed via @theme so Tailwind v4 generates utility classes like
+   * `bg-cream`, `text-ink`, `text-navy`, `bg-cta`, etc. The underlying
+   * CSS variables live in :root below. */
+  --color-navy:           var(--brand-navy);
+  --color-navy-hover:     var(--brand-navy-hover);
+  --color-navy-soft:      var(--brand-navy-soft);
+  --color-cta:            var(--cta-red);
+  --color-cta-hover:      var(--cta-red-hover);
+  --color-cta-focus:      var(--cta-red-focus);
+  --color-cream:          var(--surface-cream);
+  --color-paper:          var(--surface-paper);
+  --color-ink-tint:       var(--surface-ink-tint);
+  --color-banner-warn:    var(--surface-banner-warn);
+  --color-ink:            var(--ink-primary);
+  --color-ink-soft:       var(--ink-secondary);
+  --color-ink-muted:      var(--ink-muted);
+  --color-ink-disabled:   var(--ink-disabled);
+  --color-decision-standard:  var(--decision-standard);
+  --color-decision-configure: var(--decision-configure);
+  --color-decision-custom:    var(--decision-custom);
+  --color-decision-open:      var(--decision-open);
+  --color-status-draft-bg:    var(--status-draft-bg);
+  --color-status-draft-fg:    var(--status-draft-fg);
+  --color-status-sent-bg:     var(--status-sent-bg);
+  --color-status-sent-fg:     var(--status-sent-fg);
+  --color-status-awaiting-bg: var(--status-awaiting-bg);
+  --color-status-awaiting-fg: var(--status-awaiting-fg);
+  --color-status-signed-bg:   var(--status-signed-bg);
+  --color-status-signed-fg:   var(--status-signed-fg);
+  --color-status-expired-bg:  var(--status-expired-bg);
+  --color-status-expired-fg:  var(--status-expired-fg);
+  --color-status-revoked-bg:  var(--status-revoked-bg);
+  --color-status-revoked-fg:  var(--status-revoked-fg);
+
+  --radius-input: 8px;
+  --radius-card-warm: 12px;
+  --radius-pill: 9999px;
+
+  --shadow-card-warm:       0 1px 2px rgba(20,20,20,0.04), 0 1px 0 rgba(20,20,20,0.02);
+  --shadow-card-warm-hover: 0 4px 10px rgba(20,20,20,0.06), 0 2px 4px rgba(20,20,20,0.04);
+  --shadow-pop:             0 10px 24px rgba(20,20,20,0.10), 0 4px 10px rgba(20,20,20,0.06);
+  --shadow-focus-ring:      0 0 0 3px var(--cta-red-focus);
 
   /* Tailwind v4 default palette is used directly — the legacy SAP-Horizon
    * token bridge that remapped slate/blue/red/green/amber/yellow/orange/
@@ -61,6 +109,55 @@
 
 :root {
   --radius: 0.625rem;
+
+  /* ═════════════════════════════════════════════════════════════════════
+     ABeam Workbench design tokens (brief §1.1) — global :root.
+     These are pure CSS variables and don't break any existing utility.
+     The matching @theme entries above expose them as Tailwind classes
+     (bg-cream, text-navy, text-ink-muted, etc.). */
+  --brand-navy:         #002B5C;
+  --brand-navy-hover:   #001E40;
+  --brand-navy-soft:    #E6EBF1;
+  --cta-red:            #C8102E;
+  --cta-red-hover:      #A30D26;
+  --cta-red-focus:      #FBE9EC;
+  --surface-cream:      #FAF9F5;
+  --surface-paper:      #FFFFFE;
+  --surface-ink-tint:   #F4F2EB;
+  --surface-banner-warn:#FDF7E6;
+  --ink-primary:        #1A1A1A;
+  --ink-secondary:      #4A4A4A;
+  --ink-muted:          #8A8A8A;
+  --ink-disabled:       #C4C4C4;
+  --ink-on-navy:        #FFFFFF;
+  --ink-on-navy-muted:  rgba(255,255,255,0.72);
+  --border-default:     #E5E1D6;
+  --border-strong:      #C4BFAE;
+  --border-focus:       var(--brand-navy);
+
+  --status-draft-bg:    #F4F2EB;  --status-draft-fg:    #4A4A4A;
+  --status-sent-bg:     #E0EBF4;  --status-sent-fg:     #1A4D6F;
+  --status-awaiting-bg: #FBE9D1;  --status-awaiting-fg: #8B5A00;
+  --status-signed-bg:   #DCEBE3;  --status-signed-fg:   #166534;
+  --status-expired-bg:  #EAEAE6;  --status-expired-fg:  #6B6B6B;
+  --status-revoked-bg:  #F4DEDB;  --status-revoked-fg:  #8E2A26;
+
+  --decision-standard:  #0F766E;
+  --decision-configure: #1D4ED8;
+  --decision-custom:    #B45309;
+  --decision-open:      #8A8A8A;
+
+  --success:            #166534;
+  --warning:            #B45309;
+  --danger:             #991B1B;
+  --info:               #1E40AF;
+
+  --ease-snap:          cubic-bezier(0.2, 0, 0.13, 1);
+  --ease-calm:          cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-hero:          cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-snap:           100ms;
+  --dur-calm:           200ms;
+  --dur-hero:           320ms;
 
   /* SAP Horizon-bridged core surfaces */
   --background: oklch(0.984 0.003 247.86);
