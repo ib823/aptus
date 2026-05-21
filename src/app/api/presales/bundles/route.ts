@@ -42,11 +42,15 @@ function parseStakeholders(raw: string): ParsedStakeholder[] {
     .filter((s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email));
 }
 
+import { workbenchPublicOrigin } from '@/lib/presales/public-origin';
+
 function publicAppOrigin(req: NextRequest): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ??
-    new URL(req.url).origin
-  );
+  // Workbench guest links must point at WORKBENCH_HOST when set, so
+  // recipients land on ab-workbench.vercel.app/c/... directly rather
+  // than going through the aptus-sandy → ab-workbench middleware
+  // redirect (which would lose the no-store + no-referrer headers on
+  // the redirect hop).
+  return workbenchPublicOrigin(req);
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {

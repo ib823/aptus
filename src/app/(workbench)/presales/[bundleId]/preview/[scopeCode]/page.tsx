@@ -33,7 +33,7 @@ interface PageProps {
   params: Promise<{ bundleId: string; scopeCode: string }>;
 }
 
-export const metadata = { title: { absolute: 'Preview as client — Workbench' } };
+export const metadata = { title: { absolute: 'Preview as client — ABeam Workbench' } };
 
 export default async function PresalesPreviewAsClient({ params }: PageProps) {
   const user = await getCurrentUser();
