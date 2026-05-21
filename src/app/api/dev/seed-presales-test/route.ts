@@ -283,6 +283,43 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     },
   });
 
+  // ── Auto-login / activate modes ────────────────────────────────────
+  // ?as=consultant → set abeam-session, redirect to /presales
+  // ?as=client1    → set presales-session for client1, render OTP page
+  // ?as=client2    → same for client2
+  // (no ?as= → original JSON dump for scripting)
+  const as = req.nextUrl.searchParams.get('as');
+  if (as === 'consultant') {
+    const res = NextResponse.redirect(new URL('/presales', req.url), 303);
+    res.cookies.set('abeam-session', sessionToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 8,
+    });
+    return res;
+  }
+  if (as === 'client1' || as === 'client2') {
+    const idx = as === 'client1' ? 0 : 1;
+    const g = grantsOut[idx];
+    if (!g) return new NextResponse(null, { status: 500 });
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${g.displayName} — OTP</title><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;background:#FAF9F5;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#1A1A1A;min-height:100vh;display:grid;place-items:center;padding:24px"><main style="max-width:480px;width:100%;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:32px;box-shadow:0 1px 2px rgba(20,20,20,0.04)"><div style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8A8A8A;margin-bottom:8px">${g.displayName}</div><h1 style="font-family:Georgia,serif;font-size:28px;line-height:1.2;font-weight:500;margin:0;color:#1A1A1A">Your verification code</h1><p style="font-size:14px;color:#4A4A4A;margin:12px 0 24px;line-height:1.5">Click the button below — the OTP form will be pre-positioned. Paste this code:</p><div style="font-family:ui-monospace,'SF Mono',monospace;font-size:36px;font-weight:600;letter-spacing:0.3em;text-align:center;padding:20px;background:#F4F2EB;border-radius:12px;color:#002B5C;margin-bottom:24px;user-select:all;cursor:copy" onclick="navigator.clipboard.writeText('${g.otp}');this.style.background='#DCEBE3';setTimeout(()=>this.style.background='#F4F2EB',300)" title="Click to copy">${g.otp}</div><a href="/c/verify" style="display:block;text-align:center;background:#C8102E;color:#FFFFFF;text-decoration:none;padding:14px 18px;font-size:14px;font-weight:600;border-radius:8px">Continue to verification page →</a><p style="margin:16px 0 0;font-size:12px;color:#8A8A8A;text-align:center">Click the code above to copy. Or just type the 6 digits on the next page.</p></main></body></html>`;
+    const res = new NextResponse(html, {
+      status: 200,
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    });
+    res.cookies.set('presales-session', g.presalesSessionCookieValue, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+      path: '/c',
+      maxAge: 60 * 60 * 8,
+    });
+    return res;
+  }
+
+  // Default: JSON dump with all artifacts.
   return NextResponse.json({
     ok: true,
     consultantSession: {
