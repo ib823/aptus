@@ -54,6 +54,15 @@ async function parseBody(req: NextRequest): Promise<{
   choice: string;
   notes: string;
   csrf: string;
+  /** Optional client-supplied concurrency token: the rowId of the
+   * current (supersededAt:null) decision row the client knew about at
+   * load time. When present, the server uses it to detect stale writes
+   * (someone else changed this decision between the client's load and
+   * its save) and returns 409 STALE_WRITE instead of silently
+   * overwriting. The empty string means "no expected token — force
+   * override" (sent by "Keep my change anyway"). Classic HTML form
+   * callers omit this entirely → no concurrency check, back-compat. */
+  expectedRowId: string;
 }> {
   const contentType = req.headers.get('content-type') ?? '';
   if (contentType.includes('application/json')) {
@@ -64,6 +73,8 @@ async function parseBody(req: NextRequest): Promise<{
       choice: String(json.choice ?? ''),
       notes: String(json.notes ?? ''),
       csrf: String(json.csrf ?? ''),
+      expectedRowId:
+        typeof json.expectedRowId === 'string' ? json.expectedRowId : '',
     };
   }
   const form = await req.formData();
@@ -73,6 +84,7 @@ async function parseBody(req: NextRequest): Promise<{
     choice: String(form.get('choice') ?? ''),
     notes: String(form.get('notes') ?? ''),
     csrf: String(form.get('csrf') ?? ''),
+    expectedRowId: String(form.get('expectedRowId') ?? ''),
   };
 }
 
@@ -184,6 +196,54 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     },
     orderBy: { setAt: 'desc' },
   });
+
+  // ── Stale-write guard (optimistic concurrency, multi-stakeholder safety) ──
+  // When the client sends expectedRowId, compare against the prior row's
+  // id. Mismatch means another reviewer changed this decision between the
+  // client's load and its save attempt → 409 STALE_WRITE with the current
+  // value so the client renders a conflict UI rather than silently
+  // overwriting. The expected row id is per-decision so concurrent edits
+  // to a DIFFERENT decision do not raise a false conflict.
+  //
+  // expectedRowId === '' is the explicit "force-override" signal sent
+  // after the reviewer clicks "Keep my change anyway" on a conflict
+  // notice. Omission entirely (classic HTML form path) skips the check
+  // for back-compat with non-JS callers.
+  const sentExpected = (body as { expectedRowId?: string }).expectedRowId;
+  if (sentExpected !== undefined && sentExpected !== '') {
+    const priorId = prior?.id ?? '';
+    if (priorId !== sentExpected) {
+      let currentSetByName = 'another reviewer';
+      if (prior?.setByGrantId) {
+        const setter = await prisma.presalesAccessGrant.findUnique({
+          where: { id: prior.setByGrantId },
+          select: { displayName: true, email: true },
+        });
+        if (setter) {
+          currentSetByName = setter.displayName?.trim() || setter.email;
+        }
+      } else if (!prior) {
+        currentSetByName = 'no reviewer (decision was reset to draft)';
+      }
+      return NextResponse.json(
+        {
+          error: {
+            code: 'STALE_WRITE',
+            message: 'Another reviewer changed this decision before you saved.',
+            current: prior
+              ? {
+                  rowId: prior.id,
+                  choice: prior.choice,
+                  setAt: prior.setAt.toISOString(),
+                  setByName: currentSetByName,
+                }
+              : null,
+          },
+        },
+        { status: 409 },
+      );
+    }
+  }
 
   // Use the interactive-transaction form (callback) for clean typing:
   // the array form returns a heterogeneous tuple that fights TS inference

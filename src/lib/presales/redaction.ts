@@ -179,6 +179,11 @@ export interface RedactedDecisionState {
   notes: string;
   setAt: Date;
   rowId: string;
+  /** The grant id of the reviewer who set the current value. Null when
+   * the row was inserted by a server-side seed or when the FK has been
+   * cleared by a grant revocation cascade. Resolve to a display name via
+   * resolveDecisionAttribution. */
+  setByGrantId: string | null;
 }
 
 export async function getDecisionStatesForExternal(
@@ -199,7 +204,63 @@ export async function getDecisionStatesForExternal(
       notes: redacted.notes,
       setAt: redacted.setAt,
       rowId: redacted.id,
+      setByGrantId: redacted.setByGrantId,
     });
   }
   return map;
+}
+
+/**
+ * Resolves grant ids → reviewer display names for a given bundle, with a
+ * single round-trip. Untouched decisions (no current row) get the bundle
+ * creator's name as the "drafted by" fallback, per the multi-stakeholder
+ * safety spec. Never returns a raw email — `displayName` is the value
+ * the consultant gave when inviting; that's the same value visible on
+ * the original invitation email, so it's not new information leakage.
+ */
+export interface DecisionAttribution {
+  /** Display name to show in the "set by" line. */
+  name: string;
+  /** True when this is the bundle creator (untouched decision draft). */
+  isDraftFallback: boolean;
+}
+
+export async function resolveDecisionAttribution(
+  prisma: PrismaClient,
+  args: { bundleId: string; grantIds: ReadonlyArray<string | null> },
+): Promise<{
+  byGrantId: Map<string, DecisionAttribution>;
+  draftFallback: DecisionAttribution;
+}> {
+  const uniqueGrantIds = Array.from(
+    new Set(args.grantIds.filter((g): g is string => !!g)),
+  );
+
+  const [grants, bundle] = await Promise.all([
+    uniqueGrantIds.length > 0
+      ? prisma.presalesAccessGrant.findMany({
+          where: { id: { in: uniqueGrantIds } },
+          select: { id: true, displayName: true, email: true },
+        })
+      : Promise.resolve([] as Array<{ id: string; displayName: string | null; email: string }>),
+    prisma.presalesBundle.findUnique({
+      where: { id: args.bundleId },
+      select: { creator: { select: { name: true } } },
+    }),
+  ]);
+
+  const byGrantId = new Map<string, DecisionAttribution>();
+  for (const g of grants) {
+    byGrantId.set(g.id, {
+      name: g.displayName?.trim() || g.email,
+      isDraftFallback: false,
+    });
+  }
+
+  const draftFallback: DecisionAttribution = {
+    name: bundle?.creator?.name?.trim() || 'your ABeam consultant',
+    isDraftFallback: true,
+  };
+
+  return { byGrantId, draftFallback };
 }

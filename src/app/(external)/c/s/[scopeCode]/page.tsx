@@ -22,9 +22,11 @@ import { issueSessionNonce } from '@/lib/presales/csrf';
 import {
   getDecisionStatesForExternal,
   getScopeItemForExternal,
+  resolveDecisionAttribution,
 } from '@/lib/presales/redaction';
 import { readPresalesSession } from '@/lib/presales/session';
 import { hashUserAgent } from '@/lib/presales/ua-fingerprint';
+import { DecisionCardClient } from '@/components/presales/DecisionCardClient';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -110,6 +112,32 @@ export default async function PresalesScopePage({ params }: PageProps) {
     resolved.bundle.id,
   );
 
+  // ── Multi-stakeholder safety: attribution + reviewer count ─────────
+  // Resolve every "set by" id to a friendly name, plus the bundle
+  // creator for the never-touched-decision fallback. Single round-trip.
+  const attribution = await resolveDecisionAttribution(prisma, {
+    bundleId: resolved.bundle.id,
+    grantIds: item.decisions.map(
+      (d) => decisionStates.get(d.id)?.setByGrantId ?? null,
+    ),
+  });
+  // Active reviewers on the bundle — used for the "Shared with N
+  // reviewers" line. Excludes revoked + superseded grants. Counts
+  // people, not grant rows: same email can have multiple grants if
+  // re-issued, so dedupe by lowercased email.
+  const activeGrants = await prisma.presalesAccessGrant.findMany({
+    where: {
+      bundleId: resolved.bundle.id,
+      revokedAt: null,
+      supersededByGrantId: null,
+    },
+    select: { email: true },
+  });
+  const reviewerEmails = new Set(
+    activeGrants.map((g) => g.email.toLowerCase()),
+  );
+  const reviewerCount = reviewerEmails.size;
+
   await prisma.presalesAuditEvent.create({
     data: {
       bundleId: resolved.bundle.id,
@@ -118,13 +146,6 @@ export default async function PresalesScopePage({ params }: PageProps) {
       payload: { scopeCode },
     },
   });
-
-  const CHOICE_LABELS: Record<string, string> = {
-    open: 'Open',
-    std: 'Standard',
-    cfg: 'Configure',
-    cst: 'Custom',
-  };
 
   const csrf = issueSessionNonce(resolved.session.id);
   const bundleSigned = !!resolved.bundle.signedAt;
@@ -148,6 +169,38 @@ export default async function PresalesScopePage({ params }: PageProps) {
           }}
         />
         <p style={{ margin: 0, color: '#5A5A5A' }}>{item.overview}</p>
+
+        {/* Reviewer awareness — multi-stakeholder safety §2 */}
+        <div
+          style={{
+            marginTop: 16,
+            fontSize: 13,
+            color: 'var(--ink-secondary, #4A4A4A)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '6px 12px',
+            background: 'var(--surface-ink-tint, #F4F2EB)',
+            border: '1px solid var(--border-default, #E5E1D6)',
+            borderRadius: 9999,
+          }}
+          data-testid="reviewer-count"
+        >
+          {reviewerCount > 1 ? (
+            <>
+              <span aria-hidden>👥</span>
+              <span>
+                Shared with <strong>{reviewerCount} reviewers</strong> from{' '}
+                {resolved.bundle.clientCompanyName}
+              </span>
+            </>
+          ) : (
+            <>
+              <span aria-hidden>🔒</span>
+              <span>Only you have access to this workbench</span>
+            </>
+          )}
+        </div>
       </header>
 
       <section style={{ marginBottom: 32 }}>
@@ -156,75 +209,33 @@ export default async function PresalesScopePage({ params }: PageProps) {
           {item.decisions.map((d) => {
             const state = decisionStates.get(d.id);
             const currentChoice = state?.choice ?? 'open';
+            // Resolve attribution: either the grant who set this row,
+            // or the bundle-creator draft fallback when never touched.
+            const setByGrantId = state?.setByGrantId ?? null;
+            const resolvedAttribution = setByGrantId
+              ? attribution.byGrantId.get(setByGrantId) ?? attribution.draftFallback
+              : attribution.draftFallback;
+            const setAtIso = (state?.setAt ?? resolved.bundle.startsAt).toISOString();
             return (
-              <li
+              <DecisionCardClient
                 key={d.id}
-                style={{
-                  background: '#FFFFFF',
-                  border: '1px solid #E5E5E5',
-                  borderRadius: 12,
-                  padding: 16,
-                  marginBottom: 12,
+                scopeCode={scopeCode}
+                decisionId={d.id}
+                sscui={d.sscui}
+                title={d.title}
+                summary={d.summary}
+                stdDesc={d.std_desc}
+                cfgDesc={d.cfg_desc}
+                cstDesc={d.cst_desc}
+                initial={{
+                  rowId: state?.rowId ?? '',
+                  choice: currentChoice,
+                  setByName: resolvedAttribution.name,
+                  setAtIso,
+                  isDraftFallback: resolvedAttribution.isDraftFallback,
                 }}
-              >
-                <div style={{ fontSize: 12, color: '#5A5A5A' }}>{d.sscui}</div>
-                <h3 style={{ fontSize: 16, fontWeight: 600, margin: '4px 0' }}>{d.title}</h3>
-                <p style={{ margin: '8px 0', fontSize: 14, color: '#5A5A5A' }}>{d.summary}</p>
-                <div
-                  data-testid={`current-choice-${d.id}`}
-                  style={{ fontSize: 13, marginTop: 8 }}
-                >
-                  Current choice: <strong>{CHOICE_LABELS[currentChoice] ?? currentChoice}</strong>
-                </div>
-                {bundleSigned ? (
-                  <div style={{ marginTop: 12, fontSize: 12, color: '#5A5A5A', fontStyle: 'italic' }}>
-                    Read-only — bundle signed.
-                  </div>
-                ) : (
-                  <form
-                    method="POST"
-                    action="/c/decisions"
-                    style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}
-                  >
-                    <input type="hidden" name="scopeCode" value={scopeCode} />
-                    <input type="hidden" name="decisionId" value={d.id} />
-                    <input type="hidden" name="csrf" value={csrf} />
-                    {(['std', 'cfg', 'cst'] as const).map((choiceKey) => (
-                      <button
-                        key={choiceKey}
-                        type="submit"
-                        name="choice"
-                        value={choiceKey}
-                        style={{
-                          padding: '6px 12px',
-                          fontSize: 13,
-                          border: '1px solid #E5E5E5',
-                          borderRadius: 6,
-                          background: currentChoice === choiceKey ? '#002B5C' : '#FFFFFF',
-                          color: currentChoice === choiceKey ? '#FFFFFF' : '#1A1A1A',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {CHOICE_LABELS[choiceKey]}
-                      </button>
-                    ))}
-                  </form>
-                )}
-                <details style={{ marginTop: 8 }}>
-                  <summary style={{ cursor: 'pointer', fontSize: 13 }}>Show options</summary>
-                  <div style={{ marginTop: 12, display: 'grid', gap: 8, fontSize: 13 }}>
-                    <div>
-                      <strong>Standard:</strong> {d.std_desc}
-                    </div>
-                    <div>
-                      <strong>Configure:</strong> {d.cfg_desc}
-                    </div>
-                    <div>
-                      <strong>Custom:</strong> {d.cst_desc}
-                    </div>
-                  </div>
-                </details>
-              </li>
+                bundleSigned={bundleSigned}
+              />
             );
           })}
         </ul>
