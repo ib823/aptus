@@ -23,8 +23,10 @@ import { getCurrentUser } from '@/lib/auth/session';
 import {
   getDecisionStatesForExternal,
   getScopeItemForExternal,
+  resolveDecisionAttribution,
 } from '@/lib/presales/redaction';
 import { canPerformPresalesAction } from '@/lib/presales/rbac';
+import { RelativeTime } from '@/components/ui/relative-time';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -43,7 +45,14 @@ export default async function PresalesPreviewAsClient({ params }: PageProps) {
   const { bundleId, scopeCode } = await params;
   const bundle = await prisma.presalesBundle.findFirst({
     where: { id: bundleId, ...(user.organizationId ? { organizationId: user.organizationId } : {}) },
-    select: { id: true, clientCompanyName: true, defaultScopeCode: true, scopeCodes: true, signedAt: true },
+    select: {
+      id: true,
+      clientCompanyName: true,
+      defaultScopeCode: true,
+      scopeCodes: true,
+      signedAt: true,
+      startsAt: true,
+    },
   });
   if (!bundle) notFound();
 
@@ -51,6 +60,25 @@ export default async function PresalesPreviewAsClient({ params }: PageProps) {
   if (!item) notFound();
 
   const decisionStates = await getDecisionStatesForExternal(prisma, scopeCode, bundle.id);
+  const attribution = await resolveDecisionAttribution(prisma, {
+    bundleId: bundle.id,
+    grantIds: item.decisions.map(
+      (d) => decisionStates.get(d.id)?.setByGrantId ?? null,
+    ),
+  });
+  // Active reviewer count — same definition as the client-side workbench.
+  const activeGrants = await prisma.presalesAccessGrant.findMany({
+    where: {
+      bundleId: bundle.id,
+      revokedAt: null,
+      supersededByGrantId: null,
+    },
+    select: { email: true },
+  });
+  const reviewerCount = new Set(
+    activeGrants.map((g) => g.email.toLowerCase()),
+  ).size;
+
   const CHOICE_LABELS: Record<string, string> = {
     open: 'Open',
     std: 'Standard',
@@ -86,6 +114,31 @@ export default async function PresalesPreviewAsClient({ params }: PageProps) {
           </h1>
           <div style={{ height: 2, background: '#002B5C', width: 64, marginTop: 12, marginBottom: 16 }} />
           <p style={{ margin: 0, color: '#5A5A5A' }}>{item.overview}</p>
+
+          {/* Reviewer count mirror — what the client sees */}
+          <div
+            style={{
+              marginTop: 16,
+              fontSize: 13,
+              color: 'var(--ink-secondary, #4A4A4A)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 12px',
+              background: 'var(--surface-ink-tint, #F4F2EB)',
+              border: '1px solid var(--border-default, #E5E1D6)',
+              borderRadius: 9999,
+            }}
+            data-testid="reviewer-count"
+          >
+            {reviewerCount > 1 ? (
+              <span>
+                Shared with <strong>{reviewerCount} reviewers</strong> from {bundle.clientCompanyName}
+              </span>
+            ) : (
+              <span>Only one reviewer on this bundle</span>
+            )}
+          </div>
         </header>
 
         <section style={{ marginBottom: 32 }}>
@@ -94,6 +147,11 @@ export default async function PresalesPreviewAsClient({ params }: PageProps) {
             {item.decisions.map((d) => {
               const state = decisionStates.get(d.id);
               const currentChoice = state?.choice ?? 'open';
+              const setByGrantId = state?.setByGrantId ?? null;
+              const resolved = setByGrantId
+                ? attribution.byGrantId.get(setByGrantId) ?? attribution.draftFallback
+                : attribution.draftFallback;
+              const setAtIso = (state?.setAt ?? bundle.startsAt).toISOString();
               return (
                 <li
                   key={d.id}
@@ -104,6 +162,27 @@ export default async function PresalesPreviewAsClient({ params }: PageProps) {
                   <p style={{ margin: '8px 0', fontSize: 14, color: '#5A5A5A' }}>{d.summary}</p>
                   <div data-testid={`current-choice-${d.id}`} style={{ fontSize: 13, marginTop: 8 }}>
                     Current choice: <strong>{CHOICE_LABELS[currentChoice] ?? currentChoice}</strong>
+                  </div>
+                  {/* Attribution — read-only mirror of /c/s view */}
+                  <div
+                    style={{
+                      marginTop: 6,
+                      fontSize: 12,
+                      color: 'var(--ink-muted, #8A8A8A)',
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <span>
+                      {resolved.isDraftFallback ? 'Drafted by' : 'Set by'}{' '}
+                      <strong style={{ color: 'var(--ink-secondary, #4A4A4A)', fontWeight: 600 }}>
+                        {resolved.name}
+                      </strong>{' '}
+                      ·
+                    </span>
+                    <RelativeTime iso={setAtIso} compact />
                   </div>
                   <div style={{ marginTop: 12, display: 'grid', gap: 8, fontSize: 13 }}>
                     <div><strong>Standard:</strong> {d.std_desc}</div>
