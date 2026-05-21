@@ -18,7 +18,7 @@ interface PageProps {
   searchParams: Promise<{ event?: string; q?: string }>;
 }
 
-export const metadata = { title: { absolute: 'Audit log — Workbench' } };
+export const metadata = { title: { absolute: 'Audit log — ABeam Workbench' } };
 
 export default async function PresalesAuditPage({ params, searchParams }: PageProps) {
   const user = await getCurrentUser();

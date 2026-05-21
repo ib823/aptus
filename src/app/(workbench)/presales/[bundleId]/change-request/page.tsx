@@ -24,7 +24,7 @@ interface PageProps {
   params: Promise<{ bundleId: string }>;
 }
 
-export const metadata = { title: { absolute: 'Change request — Workbench' } };
+export const metadata = { title: { absolute: 'Change request — ABeam Workbench' } };
 
 export default async function PresalesChangeRequestPage({ params }: PageProps) {
   const user = await getCurrentUser();

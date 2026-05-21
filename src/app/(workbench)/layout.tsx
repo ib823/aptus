@@ -28,13 +28,30 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 /**
- * Override the root layout's "Aptus" title across the Workbench surface.
- * Child pages can override `title` again (e.g. "Bundles — Workbench");
- * pages without their own title inherit the default below.
+ * Override the root layout's "Aptus" defaults across the Workbench
+ * surface:
+ *   - title: child pages inherit "ABeam Workbench" or get
+ *     "%s — ABeam Workbench" templated
+ *   - metadataBase: OG cards and other absolute URL builders resolve
+ *     against the canonical Workbench hostname (WORKBENCH_HOST) when
+ *     set, so a /presales/{id} URL shared on Slack or LinkedIn renders
+ *     a preview pointing at ab-workbench.vercel.app rather than
+ *     aptus-sandy.vercel.app (which would 308-redirect through the
+ *     middleware).
+ * Child pages can override `title` again (e.g.
+ * "Bundles — ABeam Workbench"); pages without their own title inherit
+ * the default below.
  */
+const _workbenchHost = process.env.WORKBENCH_HOST;
 export const metadata: Metadata = {
-  title: { default: 'Workbench', template: '%s — Workbench' },
-  description: 'Presales decisions workbench',
+  title: {
+    default: 'ABeam Workbench',
+    template: '%s — ABeam Workbench',
+  },
+  description: 'ABeam pre-onboarding Fit-to-Standard workbench',
+  ...(_workbenchHost
+    ? { metadataBase: new URL(`https://${_workbenchHost}`) }
+    : {}),
 };
 
 export default async function WorkbenchLayout({ children }: { children: ReactNode }) {

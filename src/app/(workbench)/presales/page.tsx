@@ -60,7 +60,7 @@ const STATUS_LABEL: Record<FilterStatus, string> = {
   expired: 'Expired',
 };
 
-export const metadata = { title: { absolute: 'Bundles — Workbench' } };
+export const metadata = { title: { absolute: 'Bundles — ABeam Workbench' } };
 
 export default async function PresalesIndexPage({ searchParams }: PageProps) {
   const user = await getCurrentUser();

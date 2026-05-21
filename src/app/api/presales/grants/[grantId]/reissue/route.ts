@@ -47,8 +47,10 @@ function redirect(req: NextRequest, path: string): NextResponse {
   return NextResponse.redirect(new URL(path, req.url), { status: 303 });
 }
 
+import { workbenchPublicOrigin } from '@/lib/presales/public-origin';
+
 function publicAppOrigin(req: NextRequest): string {
-  return process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin;
+  return workbenchPublicOrigin(req);
 }
 
 export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextResponse> {
