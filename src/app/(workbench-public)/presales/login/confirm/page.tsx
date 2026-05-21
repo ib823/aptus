@@ -24,6 +24,8 @@ export const revalidate = 0;
 
 export const metadata = { title: { absolute: 'Continue sign-in — ABeam Workbench' } };
 
+import { Wordmark } from '@/components/brand/Wordmark';
+
 interface PageProps {
   searchParams: Promise<{ next?: string }>;
 }
@@ -77,21 +79,8 @@ export default async function WorkbenchConfirmPage({ searchParams }: PageProps) 
           boxShadow: '0 4px 24px rgba(0, 43, 92, 0.06)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-          <span
-            aria-hidden="true"
-            style={{
-              display: 'inline-block',
-              width: 32,
-              height: 32,
-              background: '#002B5C',
-              borderRadius: 6,
-              position: 'relative',
-            }}
-          >
-            <span style={{ position: 'absolute', inset: 8, background: '#C8102E', borderRadius: 2 }} />
-          </span>
-          <div style={{ fontWeight: 700, fontSize: 18, color: '#002B5C' }}>ABeam Workbench</div>
+        <div style={{ marginBottom: 20, textAlign: 'center' }}>
+          <Wordmark size="lg" />
         </div>
 
         {isValid ? (
