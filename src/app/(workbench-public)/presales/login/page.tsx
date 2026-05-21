@@ -11,6 +11,7 @@
  * provider; no separate email plumbing needed.
  */
 
+import { Wordmark } from '@/components/brand/Wordmark';
 import { WorkbenchLoginForm } from './WorkbenchLoginForm';
 
 export const dynamic = 'force-dynamic';
@@ -32,27 +33,18 @@ export default function WorkbenchLoginPage() {
           boxShadow: '0 4px 24px rgba(0, 43, 92, 0.06)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-          <span
-            aria-hidden="true"
+        <div style={{ marginBottom: 24, textAlign: 'center', display: 'grid', gap: 6, placeItems: 'center' }}>
+          <Wordmark size="lg" />
+          <div
             style={{
-              display: 'inline-block',
-              width: 32,
-              height: 32,
-              background: '#002B5C',
-              borderRadius: 6,
-              position: 'relative',
+              fontSize: 11,
+              color: 'var(--ink-muted)',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              fontWeight: 600,
             }}
           >
-            <span style={{ position: 'absolute', inset: 8, background: '#C8102E', borderRadius: 2 }} />
-          </span>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 18, color: '#002B5C', letterSpacing: '-0.01em' }}>
-              ABeam Workbench
-            </div>
-            <div style={{ fontSize: 11, color: '#5A5A5A', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-              Presales decisions
-            </div>
+            Presales decisions
           </div>
         </div>
 
