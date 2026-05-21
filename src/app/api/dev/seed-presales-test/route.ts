@@ -33,6 +33,7 @@ import { createHash, randomBytes, randomInt } from 'crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { createSession } from '@/lib/auth/session';
+import { createPresalesSession } from '@/lib/presales/session';
 import { scopeItems } from '@/lib/fts/data';
 import type { ScopeItemContent } from '@/lib/fts/types';
 
@@ -193,6 +194,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     isSignatory: boolean;
     rawToken: string;
     accessUrl: string;
+    verifyUrl: string;
+    presalesSessionCookieValue: string;
     otp: string;
     otpExpiresAt: string;
   }
@@ -247,12 +250,25 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       },
     });
 
+    // Pre-create the guest session so the tester can paste a
+    // presales-session cookie and jump straight to /c/verify, skipping
+    // the PDPA click-through gate entirely.
+    const presalesSession = await createPresalesSession({
+      grantId: grant.id,
+      bundleId: bundle.id,
+      ip: '127.0.0.1',
+      userAgent: 'dev-seed-presales-test',
+      now,
+    });
+
     grantsOut.push({
       email: spec.email,
       displayName: spec.displayName,
       isSignatory: spec.isSignatory,
       rawToken,
       accessUrl: `${origin}/c/${encodeURIComponent(rawToken)}`,
+      verifyUrl: `${origin}/c/verify`,
+      presalesSessionCookieValue: presalesSession.id,
       otp: code,
       otpExpiresAt: otpExpiresAt.toISOString(),
     });
@@ -293,6 +309,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     },
     grants: grantsOut,
     note:
-      'Each grant is fully wired: PDPA pre-acknowledged, OTP pre-issued. Visit accessUrl → land directly on /c/verify (no PDPA click-through) → enter the otp code. The OTP expires at otpExpiresAt — re-run this endpoint to get a fresh bundle if it lapses.',
+      'Two ways to access each client surface: (1) Visit accessUrl, tick both checkboxes, click Continue → land on /c/verify, enter otp. (2) Paste presalesSessionCookieValue as the presales-session cookie on the Workbench host with Path=/c, then visit verifyUrl directly → enter otp. Path #2 is faster for demos because it skips the PDPA gate. The OTP expires at otpExpiresAt.',
   });
 }
