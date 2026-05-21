@@ -1,7 +1,7 @@
 {
-  "name": "Aptus — SAP FIT-to-Standard",
-  "short_name": "Aptus",
-  "description": "SAP FIT-to-Standard assessment platform",
+  "name": "ABeam Workbench — Fit-to-Standard pre-onboarding",
+  "short_name": "ABeam Workbench",
+  "description": "ABeam's pre-onboarding Fit-to-Standard workbench for SAP S/4HANA Cloud",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#09090b",

@@ -22,7 +22,7 @@
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export const metadata = { title: { absolute: 'Continue sign-in — Workbench' } };
+export const metadata = { title: { absolute: 'Continue sign-in — ABeam Workbench' } };
 
 interface PageProps {
   searchParams: Promise<{ next?: string }>;
@@ -91,7 +91,7 @@ export default async function WorkbenchConfirmPage({ searchParams }: PageProps) 
           >
             <span style={{ position: 'absolute', inset: 8, background: '#C8102E', borderRadius: 2 }} />
           </span>
-          <div style={{ fontWeight: 700, fontSize: 18, color: '#002B5C' }}>Workbench</div>
+          <div style={{ fontWeight: 700, fontSize: 18, color: '#002B5C' }}>ABeam Workbench</div>
         </div>
 
         {isValid ? (
@@ -100,8 +100,8 @@ export default async function WorkbenchConfirmPage({ searchParams }: PageProps) 
               Confirm sign-in
             </h1>
             <p style={{ fontSize: 14, color: '#5A5A5A', marginTop: 8, marginBottom: 20, lineHeight: 1.5 }}>
-              You&rsquo;re one click away from the Workbench. Click below to
-              complete sign-in.
+              You&rsquo;re one click away from ABeam Workbench. Click below
+              to complete sign-in.
             </p>
             <a
               href={next}
@@ -118,7 +118,7 @@ export default async function WorkbenchConfirmPage({ searchParams }: PageProps) 
                 borderRadius: 8,
               }}
             >
-              Continue to Workbench
+              Continue to ABeam Workbench
             </a>
             <p style={{ fontSize: 12, color: '#888780', marginTop: 18, lineHeight: 1.5 }}>
               This extra click protects your sign-in from corporate email

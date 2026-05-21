@@ -1,0 +1,71 @@
+================================================================
+CCC KICKOFF — ABeam Workbench design restoration (implementation)
+================================================================
+
+GOAL
+Apply the approved design restoration to the real Next.js repo behind
+aptus-sandy.vercel.app. The design is finalized and visually approved.
+This task is implementation only — no new design decisions.
+
+TWO INPUT FILES (both in the project folder)
+1. ABeam-Workbench-Design-Restoration-Brief.md
+   The spec. Tokens, component contracts, per-route changes, roll-out
+   order, acceptance checklist. This is the source of truth.
+2. design-previews/  (PR1–PR5 HTML + Locale Switcher + pr5.css/pr5.js)
+   The pixel target. Self-contained HTML mockups showing exactly what
+   each page must look like once restored. Match these visually.
+
+If the brief and a preview ever disagree, the brief wins on behavior
+and tokens; the preview wins on layout and spacing.
+
+AUTONOMY
+Execute end to end. Do not stop for stage-gate approval between PRs.
+Land all five PRs, then report. Only pause if you hit a genuine
+blocker (a brief instruction that contradicts the existing codebase
+in a way you cannot safely resolve) — and if so, state the specific
+conflict and your recommended resolution, then continue with that
+recommendation unless it risks data loss or auth bypass.
+
+ROLL-OUT — 5 PRs, in this order (brief §7)
+PR1  Design tokens + Tailwind config + fonts (brief §1)
+PR2  Brand rename: Aptus -> ABeam Workbench (brief §4)
+PR3  Layout shell: TopBar, SideRail, Wordmark (brief §2.8, §6.3)
+PR4  Shared primitives: Button, StatusPill, Card, InlineErrorBanner,
+     RelativeTime, Input (brief §2)
+PR5  Page-level application across all 9 routes (brief §3), in the
+     order listed there. Each route may be its own commit.
+
+Land each PR independently. Put a screenshot of the result in each
+PR description so the visual change is reviewable.
+
+KNOWN TRAP — do not port the preview's CSS collision
+The previews contain a class-name collision: `.otp` is used for BOTH
+the OTP input box AND the OTP event-chip modifier, which renders the
+event chip malformed on routes 3.3 and 3.5. Brief §6.7 explains it.
+In the real repo, namespace them: the input is `<OtpInput>` with a
+scoped class (never bare `otp`); the event chip's OTP variant is
+`event-chip--otp` or a `variant="otp"` prop. Do not reproduce the bug.
+
+SCOPE GUARDRAILS (brief §9 — out of scope for this pass)
+No new features, no new routes, no new DB columns, no new business
+logic. No localization wiring, no dark mode activation, no Vercel
+hostname rename. Visual restoration only. Behavior must not change —
+the Batch A and Batch B fixes already verified on production
+(inline form errors, Extend/Revoke/Reissue, audit events) must keep
+working exactly as they do now.
+
+DONE = the brief's §8 acceptance checklist passes
+Run it against the deployment after PR5. Key checks:
+- zero "Aptus" anywhere on screen, in <title>, emails, PDF, favicon
+- zero "Sarah Tan" / "sarah.tan@abeam.com" in the codebase
+- no slate/gray page backgrounds — every page on bg-cream
+- every H1/H2 in the serif face
+- all timestamps via <RelativeTime>, no raw ISO strings
+- terminal contact card resolves to the real bundle owner
+- focus rings visible on every interactive element
+
+REPORT BACK
+When all 5 PRs are landed and deployed, post: the commit/PR list, a
+screenshot per route, and the §8 checklist with each box ticked or
+flagged. The reviewer will then re-run the live Chrome test.
+================================================================

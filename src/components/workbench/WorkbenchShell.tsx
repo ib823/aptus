@@ -66,7 +66,7 @@ export function WorkbenchShell({ userEmail, children }: Props) {
               }}
             />
           </span>
-          Workbench
+          ABeam Workbench
         </a>
         <WorkbenchUserMenu email={userEmail} />
       </header>
