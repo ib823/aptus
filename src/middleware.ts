@@ -42,10 +42,95 @@ const RATE_LIMIT_EXEMPT = [
   "/api/cron/",            // Cron jobs (protected by CRON_SECRET)
 ];
 
+/** Hostnames that surface the Workbench / Aptus brands. When unset the
+ * middleware runs with no host-routing — both surfaces are reachable on
+ * whichever vercel.app hostname the request lands on. When set, the
+ * middleware enforces "Workbench is /presales|/c only on WORKBENCH_HOST"
+ * and "/presales|/c on PORTAL_HOST redirects to WORKBENCH_HOST".
+ *
+ * Cookie note: *.vercel.app is on the Public Suffix List, so cookies
+ * cannot span subdomains of vercel.app. Each host has its own NextAuth
+ * session. This is intentional — Workbench and the Aptus portal are
+ * deliberately presented as separate products. */
+const WORKBENCH_HOST = process.env.WORKBENCH_HOST ?? null;
+const PORTAL_HOST = process.env.PORTAL_HOST ?? null;
+
+/** Path prefixes that the Workbench owns on WORKBENCH_HOST. Anything
+ * outside this set on WORKBENCH_HOST redirects to /presales. */
+const WORKBENCH_PATHS = [
+  '/presales',          // consultant surface (auth-gated under (workbench))
+  '/c/',                // guest token surface (under (external))
+  '/api/auth/',         // NextAuth callbacks must work on WORKBENCH_HOST
+  '/api/presales/',     // presales REST API
+  '/api/health',        // probes
+  '/_next/',            // build assets
+  '/icons/',            // brand assets
+  '/favicon',           // favicon variants
+  '/manifest.json',
+  '/sw.js',
+] as const;
+
+function isWorkbenchPath(pathname: string): boolean {
+  if (pathname === '/presales' || pathname === '/presales/login') return true;
+  return WORKBENCH_PATHS.some((p) => pathname.startsWith(p));
+}
+
 export async function middleware(request: NextRequest): Promise<NextResponse | undefined> {
   const { pathname } = request.nextUrl;
   const requestId = crypto.randomUUID();
   const requestStart = Date.now();
+  const host = request.headers.get('host')?.toLowerCase() ?? '';
+
+  // ----- Host-based product split (Workbench vs Aptus portal) -----
+  // Only active when both env vars are set. Until then this block is a
+  // no-op and behavior is unchanged. Auth callbacks (/api/auth/*) and
+  // static assets are NEVER redirected across hosts — they must work on
+  // whichever host the request lands on to keep magic-link callbacks
+  // functional during the migration window when old emails point at
+  // the old host and new emails point at the new host.
+  if (WORKBENCH_HOST && PORTAL_HOST) {
+    const isOnWorkbench = host === WORKBENCH_HOST;
+    const isOnPortal = host === PORTAL_HOST;
+
+    if (isOnWorkbench) {
+      // On the Workbench host, gate anything that is not a Workbench
+      // path. We redirect human-facing requests to /presales (the
+      // Workbench root). API/asset paths fall through so SSR + auth
+      // continue to function.
+      const isApiOrAsset =
+        pathname.startsWith('/api/') ||
+        pathname.startsWith('/_next') ||
+        pathname.startsWith('/icons/') ||
+        pathname === '/manifest.json' ||
+        pathname === '/sw.js' ||
+        pathname === '/robots.txt' ||
+        pathname.includes('.');
+      if (!isApiOrAsset && !isWorkbenchPath(pathname)) {
+        const target = new URL('/presales', request.url);
+        return NextResponse.redirect(target, 307);
+      }
+    } else if (isOnPortal) {
+      // On the Aptus portal host, send Workbench page requests to the
+      // Workbench host so links + bookmarks converge on canonical URLs.
+      // Auth and assets stay on whichever host the user arrives on.
+      const isPageRoute =
+        !pathname.startsWith('/api/') &&
+        !pathname.startsWith('/_next') &&
+        !pathname.startsWith('/icons/') &&
+        !pathname.includes('.');
+      const isWorkbenchPage =
+        pathname === '/presales' ||
+        pathname.startsWith('/presales/') ||
+        pathname === '/c' ||
+        pathname.startsWith('/c/');
+      if (isPageRoute && isWorkbenchPage) {
+        const target = new URL(request.url);
+        target.host = WORKBENCH_HOST;
+        target.protocol = 'https:';
+        return NextResponse.redirect(target, 308);
+      }
+    }
+  }
 
   // ----- API rate limiting -----
   if (pathname.startsWith("/api/")) {

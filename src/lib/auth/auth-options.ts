@@ -83,8 +83,26 @@ export const authOptions: NextAuthOptions = {
               callback.startsWith("/presales") ||
               callback.includes("/presales");
             if (isWorkbench) {
-              const confirm = new URL("/presales/login/confirm", parsed.origin);
-              confirm.searchParams.set("next", url);
+              // When the Workbench is on its own hostname (e.g.
+              // ab-workbench.vercel.app), rewrite the verification URL so
+              // the entire auth flow happens on that hostname — the
+              // /api/auth/callback/email callback lands there, sets its
+              // cookie there, and redirects to /presales there. Without
+              // the rewrite, the cookie would be set on PORTAL_HOST and
+              // the user would land logged-out on WORKBENCH_HOST (since
+              // *.vercel.app is on the Public Suffix List, cookies cannot
+              // span subdomains).
+              const workbenchHost = process.env.WORKBENCH_HOST;
+              if (workbenchHost) {
+                parsed.host = workbenchHost;
+                parsed.protocol = "https:";
+              }
+              const rewrittenUrl = parsed.toString();
+              const confirm = new URL(
+                "/presales/login/confirm",
+                parsed.origin,
+              );
+              confirm.searchParams.set("next", rewrittenUrl);
               emailUrl = confirm.toString();
             }
           } catch {
