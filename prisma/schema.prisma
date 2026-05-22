@@ -1455,10 +1455,15 @@ model User {
   onboardingTooltips OnboardingTooltip[]
 
   // ABeam Workbench — Presales (consultant-side relations)
-  presalesBundlesCreated  PresalesBundle[]      @relation("BundlesCreated")
-  presalesBundlesRevoked  PresalesBundle[]      @relation("BundlesRevoked")
-  presalesGrantsRevoked   PresalesAccessGrant[] @relation("GrantsRevoked")
-  presalesAuditActions    PresalesAuditEvent[]  @relation("PresalesAuditActions")
+  presalesBundlesCreated PresalesBundle[]      @relation("BundlesCreated")
+  presalesBundlesRevoked PresalesBundle[]      @relation("BundlesRevoked")
+  presalesGrantsRevoked  PresalesAccessGrant[] @relation("GrantsRevoked")
+  presalesAuditActions   PresalesAuditEvent[]  @relation("PresalesAuditActions")
+
+  // ABeam Workbench — Value-Stream Affirm-Set (CCC build, 2026-05-22)
+  affirmBundlesCreated  AffirmBundle[] @relation("AffirmBundlesCreated")
+  affirmBundlesReleased AffirmBundle[] @relation("AffirmBundlesReleased")
+  affirmEventsByUser    AffirmEvent[]  @relation("AffirmEventsByUser")
 
   @@index([role])
   @@index([organizationId])
@@ -3608,7 +3613,7 @@ model PresalesBundle {
   // Bundle content. Mutable while draft; locked once a `bundle_sent` audit
   // event exists for this bundle (R1, enforced in application layer).
   scopeCodes          String[] // e.g. ["1IQ", "BD9", "BDG"]
-  defaultScopeCode    String   // first scope shown on redemption
+  defaultScopeCode    String // first scope shown on redemption
   contentSnapshotJson Json // ScopeItemContent[] frozen at creation
 
   // Client-facing branding
@@ -3711,11 +3716,11 @@ model PresalesAccessGrant {
 
   createdAt DateTime @default(now())
 
-  bundle       PresalesBundle       @relation(fields: [bundleId], references: [id], onDelete: Cascade)
-  revoker      User?                @relation("GrantsRevoked", fields: [revokedBy], references: [id])
-  supersededBy PresalesAccessGrant? @relation("Supersession", fields: [supersededByGrantId], references: [id])
+  bundle       PresalesBundle        @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  revoker      User?                 @relation("GrantsRevoked", fields: [revokedBy], references: [id])
+  supersededBy PresalesAccessGrant?  @relation("Supersession", fields: [supersededByGrantId], references: [id])
   supersedes   PresalesAccessGrant[] @relation("Supersession")
-  bundleSigned PresalesBundle[]     @relation("BundleSignedBy")
+  bundleSigned PresalesBundle[]      @relation("BundleSignedBy")
 
   sessions     PresalesSession[]
   decisionsSet PresalesBundleDecision[]
@@ -3825,4 +3830,226 @@ model PresalesAuditEvent {
   @@index([bundleId, createdAt])
   @@index([grantId, createdAt])
   @@index([eventType, createdAt])
+}
+
+// =============================================================
+// ABeam Workbench — Value-Stream Affirm-Set (CCC build, 2026-05-22)
+// =============================================================
+// Pre-onboarding Fit-to-Standard affirmation tool. Captures SAP's BDC
+// Level-2 questions, positioned on the 8 e2e processes + Foundation
+// tree of 672 scope items. The consultant assembles a scope bundle,
+// the client affirms it, the consultant reviews and explicitly
+// releases — producing a signed affirmation record and a pre-sorted
+// workshop agenda. Independent of the legacy PresalesBundle path,
+// which serves the paid-engagement flow with a different lifecycle.
+//
+// Source spreadsheets are seeded by prisma/seeds/value-stream:
+//   - 8 streams + Foundation (Layer1 Full Hierarchy)
+//   - 55 sub-processes
+//   - 672 scope items
+//   - 150 L2 questions (122 suggested + 13 flagged + 15 excluded)
+//   - 63 curation-review placements
+// All counts must reconcile post-seed; the seeder asserts them.
+
+model AffirmValueStream {
+  id           String  @id // slug, e.g. "lead-to-cash"
+  name         String  @unique
+  isFoundation Boolean @default(false)
+  displayOrder Int     @default(0)
+
+  subProcesses AffirmSubProcess[]
+  scopeItems   AffirmScopeItem[]
+  questions    AffirmQuestion[]
+
+  @@index([displayOrder])
+}
+
+model AffirmSubProcess {
+  id           String @id // "<streamSlug>::<subSlug>"
+  streamId     String
+  name         String
+  // functional | industry | catch-all. The xlsx does not yet split these
+  // formally so the seeder writes "functional" for every row; consultant
+  // curation may upgrade specific sub-processes later.
+  type         String @default("functional")
+  displayOrder Int    @default(0)
+
+  stream     AffirmValueStream @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  scopeItems AffirmScopeItem[]
+  questions  AffirmQuestion[]
+
+  @@unique([streamId, name])
+  @@index([streamId])
+}
+
+model AffirmScopeItem {
+  id                  String  @id // SAP scope id, e.g. "BD9"
+  subProcessId        String
+  streamId            String
+  description         String
+  sapBusinessArea     String?
+  // True when this scope item carries at least one L2/L3 BDC question.
+  // The Layer-1 hierarchy marks 152 of the 672 with BDC coverage.
+  hasBdcCoverage      Boolean @default(false)
+  // Null normally; "pending-curation" for the 63 Layer-0 placement rows
+  // awaiting consultant sign-off (48 cross-stream + 15 industry-judgment).
+  placementReviewFlag String?
+
+  stream      AffirmValueStream       @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  subProcess  AffirmSubProcess        @relation(fields: [subProcessId], references: [id], onDelete: Cascade)
+  bundleItems AffirmBundleScopeItem[]
+
+  @@index([streamId])
+  @@index([subProcessId])
+  @@index([hasBdcCoverage])
+  @@index([placementReviewFlag])
+}
+
+model AffirmQuestion {
+  id                     String   @id // "L2-001" .. "L2-150"
+  streamId               String
+  subProcessId           String
+  scopeItemRefs          String[] // SAP scope codes the question relates to
+  sapVerbatim            String?  @db.Text
+  plainLanguageSuggested String?  @db.Text
+  consultantWording      String?  @db.Text
+  sapArea                String?
+  sapTopic               String?
+  sscuiRef               String?
+  sourceQuestionnaire    String?
+  placementBasis         String?
+  // suggested | confirmed | excluded.
+  // - suggested: drafted by the generator, awaiting consultant confirm.
+  // - confirmed: consultant has signed off the plain-language wording.
+  // - excluded: never shown to a client. 15 rows ship as excluded today
+  //   (14 mistagged Quality Management config rows with no question text;
+  //   1 Finance row whose verbatim is literally "Not Applicable").
+  status                 String   @default("suggested")
+  // null | "config-how-to" | "no-question-source".
+  // 13 rows carry "config-how-to" — drafted but flagged for the
+  // consultant because they read like an L3 configuration step rather
+  // than a business-affirm decision.
+  flag                   String?
+  statusNote             String?  @db.Text
+  displayOrder           Int      @default(0)
+
+  stream      AffirmValueStream      @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  subProcess  AffirmSubProcess       @relation(fields: [subProcessId], references: [id], onDelete: Cascade)
+  responses   AffirmResponse[]
+  bundleItems AffirmBundleQuestion[]
+
+  @@index([streamId])
+  @@index([subProcessId])
+  @@index([status])
+  @@index([flag])
+}
+
+/// One affirmation bundle. State machine:
+///   draft     consultant is assembling scope
+///   issued    issued to the client (read-only on scope, open for answers)
+///   submitted client has sealed answers; awaiting consultant review
+///   released  consultant has reviewed and released — outputs generated
+///
+/// "client" is a free-text engagement label. Tenant scoping is intentionally
+/// looser than the PresalesBundle flow because this is a pre-onboarding
+/// tool used before a client even has an Organization row.
+model AffirmBundle {
+  id     String @id @default(cuid())
+  client String
+  state  String @default("draft")
+
+  createdById  String?
+  releasedById String?
+  issuedAt     DateTime?
+  submittedAt  DateTime?
+  releasedAt   DateTime?
+
+  // Frozen at release. Includes the answered questions, the choices, any
+  // deviation reasons, the consultant's note, and the timestamp/actor.
+  signedRecordJson Json?
+  // Frozen at release. Pre-sorted Fit-to-Standard workshop agenda:
+  // { fastConfirm: [...], discuss: [...], deviations: [...] }
+  agendaJson       Json?
+
+  // Frozen at release. Snapshot of the consultant final wording used at
+  // the moment of release, so later edits to the question bank do not
+  // mutate a released bundle's record.
+  questionSnapshotJson Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy  User? @relation("AffirmBundlesCreated", fields: [createdById], references: [id])
+  releasedBy User? @relation("AffirmBundlesReleased", fields: [releasedById], references: [id])
+
+  scopeItems AffirmBundleScopeItem[]
+  questions  AffirmBundleQuestion[]
+  responses  AffirmResponse[]
+  events     AffirmEvent[]
+
+  @@index([state])
+  @@index([createdAt])
+}
+
+model AffirmBundleScopeItem {
+  bundleId    String
+  scopeItemId String
+
+  bundle    AffirmBundle    @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  scopeItem AffirmScopeItem @relation(fields: [scopeItemId], references: [id], onDelete: Cascade)
+
+  @@id([bundleId, scopeItemId])
+  @@index([scopeItemId])
+}
+
+model AffirmBundleQuestion {
+  bundleId   String
+  questionId String
+
+  bundle   AffirmBundle   @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  question AffirmQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@id([bundleId, questionId])
+  @@index([questionId])
+}
+
+/// One row per answered affirm question. Defaults to standard; deviate
+/// REQUIRES a reason (enforced in the API layer). Idempotent on
+/// (bundleId, questionId) — the client can change their mind until the
+/// bundle is sealed at submit.
+model AffirmResponse {
+  id         String   @id @default(cuid())
+  bundleId   String
+  questionId String
+  // standard | discuss | deviate
+  choice     String
+  reason     String?  @db.Text
+  answeredAt DateTime @default(now())
+
+  bundle   AffirmBundle   @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  question AffirmQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([bundleId, questionId])
+  @@index([bundleId])
+  @@index([choice])
+}
+
+/// Append-only audit log for the affirm flow. Lightweight by design;
+/// the heavyweight PresalesAuditEvent path is for the paid-engagement
+/// presales bundles.
+model AffirmEvent {
+  id        String   @id @default(cuid())
+  bundleId  String
+  // bundle_created | scope_updated | issued | submitted | released |
+  // released_record_generated | client_view_opened
+  type      String
+  actorId   String?
+  payload   Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  bundle AffirmBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  actor  User?        @relation("AffirmEventsByUser", fields: [actorId], references: [id])
+
+  @@index([bundleId, createdAt])
+  @@index([type, createdAt])
 }

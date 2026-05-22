@@ -1,0 +1,147 @@
+================================================================================
+CCC BUILD PROMPT — ABEAM WORKBENCH · VALUE-STREAM AFFIRM-SET RELEASE
+Prepared 2026-05-22 · Consolidates and supersedes CCC-layer-data-handoff-kickoff.txt
+================================================================================
+
+ROLE
+----
+You are implementing the next release of the ABeam Workbench — the Next.js app at
+ab-workbench.vercel.app. This single prompt carries everything you need: the data,
+the UI, and the build logic. Build to it exactly. Two hard rules above all else:
+do NOT invent SAP content, and do NOT invent UI.
+
+INPUTS  (items 1-4 are files alongside this prompt; item 5 is fetched; item 6 is in-repo)
+----------------------------------------------------------------------------------------
+1. Layer0-Value-Stream-Structure.xlsx — 672 SAP S/4HANA Cloud Public Edition 2602
+   scope items, each placed once under one of SAP's 8 end-to-end processes plus a
+   Foundation bucket. Sheet "Scope Item Placement" is the master list. Sheet
+   "Curation Review" holds 63 placement decisions awaiting consultant sign-off.
+2. Layer1-Value-Stream-Hierarchy.xlsx — the 3-tier navigable tree: 8 streams ->
+   55 sub-processes -> 672 scope items. Sheet "Full Hierarchy" is authoritative.
+3. Layer2-BDC-Affirm-Set.xlsx — the 150 BDC Level-2 questions positioned on the
+   tree, with SAP provenance (Area, Topic, SSCUI, source questionnaire).
+4. BDC-Affirm-Set-Plain-Language.xlsx — the 150 L2 questions, one sheet per stream,
+   three columns each: SAP verbatim (read-only) · suggested plain-language ·
+   consultant final wording (editable) · plus a Status column.
+5. The realigned UI design — hosted by the Claude design environment, NOT a file in
+   the repo. Fetch and implement it with this instruction (use the URL from the
+   Claude design environment; replace it if you regenerate the design):
+     "Fetch this design file, read its readme, and implement the relevant aspects
+      of the design. https://api.anthropic.com/v1/design/h/vs292N6jjdxeDEildxTGJA
+      Implement: the designs in this project"
+   The fetched design is the VISUAL AND INTERACTION SPEC — the four workbench
+   screens. Build the app to match it exactly. It works together with this prompt:
+   the design carries the UI; this prompt carries the data, the logic, and the rules.
+   The design alone is not enough — never implement it without this prompt.
+6. design-previews/PR1–PR5 — the canonical design system (tokens, primitives,
+   layout, pages). PR1 Design Tokens is law. The UI file already uses PR1 tokens.
+
+THE PRODUCT  (one paragraph)
+---------------------------
+The workbench is a Fit-to-Standard pre-onboarding tool. Before the Explore-phase
+Fit-to-Standard workshops, an executive sponsor affirms the SAP scoping decisions
+in plain language, so the workshops confirm rather than discover. The consultant
+assembles a scope bundle, the client affirms it, the consultant reviews and
+releases, and the workbench produces a signed affirmation record and a pre-sorted
+workshop agenda. It does not configure SAP — it produces affirmation outputs.
+
+DATA MODEL
+----------
+  ValueStream    id, name, isFoundation
+  SubProcess     id, name, streamId, type (functional | industry | catch-all)
+  ScopeItem      id, description, subProcessId, sapBusinessArea,
+                 hasBdcCoverage, placementReviewFlag (nullable)
+  AffirmQuestion id (L2-0xx), scopeItemRefs[], streamId, subProcessId,
+                 sapVerbatim, plainLanguageSuggested, consultantWording,
+                 sapArea, sapTopic, sscuiRef, sourceQuestionnaire,
+                 status (suggested | confirmed | excluded), flag (nullable)
+  Bundle         id, client, scopeItemIds[], affirmQuestionIds[],
+                 state (draft | issued | submitted | released)
+  Response       affirmQuestionId, choice (standard | discuss | deviate),
+                 reason (required when deviate)
+Import the four spreadsheets into this model. Layer 1 "Full Hierarchy" is the
+source of truth for ScopeItem -> SubProcess -> Stream. Layer 2 + the plain-language
+file are the source of truth for AffirmQuestion.
+
+THE FOUR SCREENS  (build to the fetched design — input 5)
+--------------------------------------------------------
+Screen 1 — Consultant · scope. A value-stream tree picker over the 672-item
+  master: 8 streams + Foundation, expandable to sub-processes and scope items.
+  Manual selection (no DDA import). Assembles the affirm-set from the selected
+  scope. Coverage shown honestly — sub-processes with no BDC questions are still
+  selectable but marked as carrying no affirm-set.
+Screen 2 — Client · affirm. The workbench header + live scorecard, then the
+  affirm cards grouped by sub-process and SAP Area. Each card shows the
+  plain-language prompt prominently, the SAP verbatim beneath in a labelled
+  "source of truth" box, three choice chips, and a reason field on deviation.
+  Defaults to "Adopt SAP standard". Client submits; answers seal.
+Screen 3 — Consultant · review & release. THE GATE. Affirmation summary, sealed
+  status, the deviations and discuss items laid out for review, the flagged-
+  question note, and the release control. Nothing is produced or sent until the
+  consultant releases. Build this screen in the most depth.
+Screen 4 — Consultant · output. The signed affirmation record and the pre-sorted
+  Fit-to-Standard workshop agenda (fast-confirm / discuss / deviations-needing-
+  design). Produced only after release; the consultant sends them manually.
+
+BUILD LOGIC — the six locked decisions, as requirements
+-------------------------------------------------------
+1. SAP's BDC L1/L2/L3 model. The workbench captures L2 only — the pre-workshop
+   affirm-set. Do not build L1 (Discovery) or L3 (in-workshop).
+2. Manual scope intake against the validated 672-item master. A controlled
+   picker, not free text and not an external import.
+3. Dual display, always. SAP verbatim is shown on every question and is never
+   overwritten or hidden. The generator drafts the plain-language wording; the
+   consultant confirms it (status suggested -> confirmed) before client-facing use.
+4. Default-to-standard. Every affirm item defaults to "Adopt SAP standard". A
+   deviation must be explicitly chosen and must capture a reason.
+5. Coverage gap shown, not hidden. 152 of 672 scope items carry BDC questions.
+   Make clear which selected scope has an affirm-set and which does not.
+6. Two pre-production gates: (a) consultant review-and-release before any client
+   sees output; (b) all client delivery is manual. No auto-send, ever.
+
+CAVEATS CCC MUST RESPECT
+------------------------
+- The 150 L2 questions are not 150 usable questions. 15 are recommended for
+  EXCLUSION (14 mistagged config rows in the Quality Management questionnaire
+  with no question text; 1 Finance row whose text is literally "Not Applicable").
+  Honour the Status field — never show an excluded row to a client. The genuine
+  affirm-set is ~135.
+- A further 13 questions are flagged as configuration how-to rather than business
+  decisions. They are drafted but carry a flag — surface the flag to the consultant.
+- The 63 Layer 0 curation-review placements and the plain-language wording are not
+  yet consultant-signed-off. Treat the data as release-candidate; render a
+  "pending review" state where appropriate.
+- The BDC questionnaires are ~2024 vintage and have not been re-verified against
+  live SAP 2602. This re-verification is a mandatory gate before client-facing
+  launch — do not present the affirm-set as final until it is cleared.
+
+WHAT CCC MUST NOT DO
+--------------------
+- Do not fabricate SAP content, scope items, questions, or SSCUI references.
+- Do not invent UI. Reuse the PR1-PR5 design system and the screens in the UI
+  file. Every colour must be a PR1 token.
+- Do not auto-configure or write to any SAP tenant. Central Business
+  Configuration governs Public Cloud configuration.
+- Do not auto-send anything to a client.
+- Do not collapse the SAP verbatim into the plain-language version.
+
+ACCEPTANCE CRITERIA
+-------------------
+- All 672 scope items navigable as the 3-tier tree; counts reconcile.
+- The affirm flow renders every non-excluded L2 question with dual display and
+  default-to-standard; deviations require a reason.
+- Screen 3 blocks all output and delivery behind an explicit consultant release.
+- Screen 4 outputs (signed record + agenda) generate only post-release.
+- Every screen matches the fetched design (input 5) and uses PR1 tokens only.
+- Excluded and flagged questions behave per the caveats above.
+
+PENDING — consultant actions, not CCC's
+---------------------------------------
+- Sign-off of the 63 Layer 0 curation-review placements.
+- Consultant confirm of the 150 plain-language rows (status -> confirmed).
+- BDC re-verification against live SAP 2602 (needs SAP partner login).
+
+Build the data layer, the four screens, and the journey logic against this spec.
+Where the data carries a flag or a pending state, render it honestly rather than
+hiding it — that visibility is the purpose of the tool.
+================================================================================
