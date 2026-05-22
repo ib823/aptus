@@ -59,9 +59,11 @@ const PORTAL_HOST = process.env.PORTAL_HOST ?? null;
  * outside this set on WORKBENCH_HOST redirects to /presales. */
 const WORKBENCH_PATHS = [
   '/presales',          // consultant surface (auth-gated under (workbench))
+  '/affirm',            // value-stream affirm-set workbench
   '/c/',                // guest token surface (under (external))
   '/api/auth/',         // NextAuth callbacks must work on WORKBENCH_HOST
   '/api/presales/',     // presales REST API
+  '/api/affirm/',       // affirm-set REST API
   '/api/health',        // probes
   '/_next/',            // build assets
   '/icons/',            // brand assets
@@ -72,6 +74,7 @@ const WORKBENCH_PATHS = [
 
 function isWorkbenchPath(pathname: string): boolean {
   if (pathname === '/presales' || pathname === '/presales/login') return true;
+  if (pathname === '/affirm') return true;
   return WORKBENCH_PATHS.some((p) => pathname.startsWith(p));
 }
 
@@ -121,6 +124,8 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
       const isWorkbenchPage =
         pathname === '/presales' ||
         pathname.startsWith('/presales/') ||
+        pathname === '/affirm' ||
+        pathname.startsWith('/affirm/') ||
         pathname === '/c' ||
         pathname.startsWith('/c/');
       if (isPageRoute && isWorkbenchPage) {
