@@ -160,8 +160,27 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const snap = resolved.bundle.contentSnapshotJson as unknown as ScopeItemContent[];
   const item = Array.isArray(snap) ? snap.find((s) => s?.code === body.scopeCode) : null;
   if (!item) return conflict('SNAPSHOT_SCOPE_MISSING', 'Scope missing from snapshot.');
-  if (!item.decisions.some((d) => d.id === body.decisionId)) {
+  const decisionDef = item.decisions.find((d) => d.id === body.decisionId);
+  if (!decisionDef) {
     return conflict('UNKNOWN_DECISION', 'Decision id not in snapshot.');
+  }
+
+  // Enhanced Workbench (BDC value-stream) deviation-reason gate.
+  // Per the first-wave spec: choosing "We do this differently" requires
+  // a short business reason before the card can be saved. Only enforced
+  // on value-stream items so the legacy Tier-1 scope items (1IQ / BD9 /
+  // BDG) keep their existing "Custom — no reason required" behaviour.
+  if (item.value_stream === true && body.choice === 'cst' && !body.notes.trim()) {
+    return NextResponse.json(
+      {
+        error: {
+          code: 'DEVIATION_REASON_REQUIRED',
+          message:
+            'A short business reason is required when you choose "We do this differently".',
+        },
+      },
+      { status: 409 },
+    );
   }
 
   // Per-device OTP gate.

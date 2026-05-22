@@ -46,6 +46,40 @@ export interface Decision {
 
   /** RICEFW classification: R / I / C / E / F / W. */
   ricefw_class: string;
+
+  // ───────────────────────────────────────────────────────────────────
+  // BDC enhancement fields — added for the first-wave Enhanced Workbench
+  // (SAP Business-Driven Configuration model). Optional so the existing
+  // hand-curated Tier-1 scope items (1IQ, BD9, BDG, ...) stay valid
+  // without touching their data files. The new O2C-Sales value-stream
+  // dataset populates these.
+  // ───────────────────────────────────────────────────────────────────
+
+  /** SAP BDC Level — "L1" (DDA confirm), "L2" (workbench affirm-set),
+   * "L3" (workshop). Omitted on legacy Tier-1 items; treat as "L2". */
+  level?: 'L1' | 'L2' | 'L3';
+
+  /** Area / Topic from the SAP BDC questionnaire (e.g. "Organization",
+   * "Sales Order Management and Processing — Sales Documents"). Drives
+   * the area-band grouping in the enhanced workbench UI. */
+  area_topic?: string;
+
+  /** Scope item codes the SAP source flags as relevant (e.g. ["BD9",
+   * "2EQ", "I9I"]). Display-only. */
+  scope_item_refs?: string[];
+
+  /** "narrative" = free-text Business Overview question (4 of 28 in
+   * O2C-Sales). "decision" = the standard adopt/discuss/deviate
+   * card. Defaults to "decision" when undefined for back-compat. */
+  answer_kind?: 'narrative' | 'decision';
+
+  /** Verbatim SAP question text from the BDC source. Shown in the
+   * "Show SAP source" expander. */
+  sap_verbatim?: string;
+
+  /** Consultant-curated plain-language rephrase shown on the card. Null
+   * until curated — page falls back to sap_verbatim. */
+  client_rephrase?: string | null;
 }
 
 /** Choice surface for each decision. */
@@ -145,6 +179,18 @@ export interface ScopeItemContent {
 
   /** Release identifier (e.g. "S/4HANA Cloud Public Edition 2602 — MY"). */
   release: string;
+
+  /** Marks this catalog entry as a VALUE STREAM (e.g. O2C-SALES) rather
+   * than a SAP scope item. The workbench page renders the enhanced
+   * BDC-style UI (scorecard, area bands, default-to-standard decision
+   * cards, narrative cards) instead of the legacy scope-item layout.
+   * Optional + defaults to false so existing scope items are unchanged. */
+  value_stream?: boolean;
+
+  /** Optional source-of-record tag for the enhanced view sub-header
+   * (e.g. "Generated from SAP BDC Questionnaire S4H_433 · release
+   * S4CLD 2602"). */
+  source_note?: string;
 }
 
 /** Excel export row shapes (typed for clarity). */

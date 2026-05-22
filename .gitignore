@@ -75,3 +75,7 @@ test-results/
 /api-hub-catalog.json
 .vercel-token
 .claude/
+
+# curation-model derived files (regenerated from inputs)
+curation-model/_*.txt
+curation-model/_*.tsv

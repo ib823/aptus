@@ -42,7 +42,11 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const DEFAULT_CONSULTANT_EMAIL = 'ikmal.baharudin@gmail.com';
-const SCOPE_CODES = ['1IQ', 'BD9', 'BDG'] as const;
+// First-wave Enhanced Workbench demo: a single value-stream bundle
+// (Order-to-Cash — Sales) with all 28 L2 questions instead of three
+// hand-curated Tier-1 scope items. The legacy 1IQ/BD9/BDG demo path
+// is reachable via the bundle creation form on /presales/new.
+const SCOPE_CODES = ['O2C-SALES'] as const;
 const OTP_TTL_MIN = 30;
 
 function hashOtp(code: string, grantId: string): string {
@@ -167,7 +171,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       organizationId: user.organizationId,
       createdBy: user.id,
       scopeCodes: [...SCOPE_CODES],
-      defaultScopeCode: '1IQ',
+      defaultScopeCode: 'O2C-SALES',
       contentSnapshotJson: snapshot as unknown as object,
       clientCompanyName: 'Acme Test Co.',
       clientAccentColor: null,
