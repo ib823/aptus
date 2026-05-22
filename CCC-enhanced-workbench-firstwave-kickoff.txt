@@ -1,0 +1,118 @@
+================================================================
+CCC TASK — Implement the first-wave Enhanced Workbench
+================================================================
+
+GOAL
+Implement the approved first-wave enhancement of the ABeam Workbench
+into the real Next.js repo behind ab-workbench.vercel.app. The
+enhancement re-anchors the workbench from the prototype model
+("7 Tier 1 decisions for scope item 1IQ") to SAP's own Business-Driven
+Configuration model: questions tagged Level 1 / 2 / 3, organised by
+value stream, with the Order-to-Cash (Sales) stream and its 28
+Level-2 questions as the first content set.
+
+INPUT FILES (in the project folder, curation-model/)
+1. Enhanced-Workbench-Design-First-Wave.docx — the design spec. The
+   source of truth for behaviour. Build to this.
+2. O2C-Sales-Question-Set.xlsx — the 28 Level-2 questions, generated
+   from SAP BDC Questionnaire S4H_433, each with provenance (SSCUI ID,
+   scope-item refs, Area / Topic, release S4CLD 2602). The content.
+3. Enhanced-Workbench-Mockup.html — the pixel and interaction target
+   for the client view and the consultant view. Match it.
+4. O2C-Sales-decision-set.yaml, Tier1-Curation-Method.docx —
+   supporting context on the value-stream model.
+
+If the spec and the mockup ever disagree, the spec wins on behaviour;
+the mockup wins on layout and interaction.
+
+AUTONOMY
+Execute end to end. Land the PRs, then report. Pause only on a genuine
+blocker — and if so, state the conflict and your recommended
+resolution, then continue with that recommendation unless it risks
+data loss or auth bypass.
+
+----------------------------------------------------------------
+WHAT TO BUILD — the five approved first-wave items
+----------------------------------------------------------------
+
+1. RE-ANCHOR THE DATA MODEL TO SAP L1 / L2 / L3
+   Retire the "Tier 1" concept. The question/decision entity carries a
+   Level field (L1 / L2 / L3). The workbench affirm-set is the L2
+   questions. L1 is carried from the DDA as confirm-only. L3 is shown
+   as "what the Fit-to-Standard workshop will cover" — never signed in
+   the workbench. Questions are organised value stream -> area -> topic.
+
+2. LOAD THE QUESTION SET FROM THE BDC
+   Seed the Order-to-Cash (Sales) value stream from
+   O2C-Sales-Question-Set.xlsx — the 28 L2 questions. Every question
+   keeps its provenance: SSCUI ID, scope-item references, Area / Topic,
+   SAP release. Do NOT hand-edit the question content; it is generated
+   from the SAP source.
+   PENDING CONTENT: the "Client-facing rephrase" column in the xlsx is
+   intentionally empty — it is a consultant curation step. Build the
+   card to show the rephrase when present and fall back to the
+   SAP-verbatim question text when it is not. Do not block on it; do
+   not fabricate it.
+
+3. THE DECISION CARD
+   Per the spec and the mockup. Two card types: a narrative card
+   (free-text response) for the four Business Overview questions; a
+   decision card for the rest. The decision card opens pre-set to
+   "Adopt SAP standard" — the default, one tap to confirm — with three
+   response modes: Adopt SAP standard / Discuss in the workshop / We do
+   this differently. A "show SAP source" expander reveals the SSCUI ID,
+   scope refs and Level. No free text as the primary response on a
+   decision card.
+
+4. SCORECARD + DEVIATION REASON
+   A live scorecard above the cards: questions answered, percent
+   adopting SAP standard, count to discuss, count of deviations.
+   "We do this differently" requires a short business reason before
+   the card can be saved.
+
+5. OUTPUTS
+   - The Scope & Standard-Adoption Affirmation — a sealed PDF the
+     client signs. Consultant-released: it is NOT auto-sent; the
+     consultant reviews and releases it (the manual gate already
+     agreed for this project).
+   - The Fit-to-Standard workshop agenda — the L2 answers pre-sorted
+     into fast-confirm / discuss / scoping (deviations, with their
+     reasons), plus the 145 L3 questions carried as the workshop's
+     working scope.
+
+----------------------------------------------------------------
+KEEP WORKING — do not regress
+----------------------------------------------------------------
+- The Batch A and Batch B fixes verified on production (inline form
+  errors, Extend / Revoke / Reissue, audit events).
+- The multi-stakeholder safety (stale-write guard, decision
+  attribution, reviewer count), if that PR has landed.
+- The restored design system — cream background, serif headings, the
+  brand tokens.
+  IMPORTANT: a prior audit found the design restoration only partly
+  live on the deployment (slate-50 page background, sans-serif
+  headings, single-box OTP on /c/verify). Confirm the restoration is
+  actually in place; if it is not, complete it as part of this work or
+  flag it explicitly in the report.
+
+----------------------------------------------------------------
+ROLL-OUT
+----------------------------------------------------------------
+Land as independent PRs, each with a screenshot in the description.
+Deploy to the ab-workbench deployment.
+
+DO NOT TREAT AS LIVE-TO-CLIENT YET
+This deploys to the environment, but it is not ready for real client
+use until BOTH gates pass:
+  (a) the acceptance test passes — the reviewer re-runs the live check;
+  (b) the consultant plain-language curation pass on the 28 questions
+      is loaded.
+State both gates, open or closed, in the PR description.
+
+----------------------------------------------------------------
+REPORT BACK
+----------------------------------------------------------------
+Post the PR list, a screenshot of the client view and the consultant
+view, confirmation that the design-restoration base is in place, and
+the two gates above marked open or closed.
+================================================================

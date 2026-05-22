@@ -1,0 +1,356 @@
+# =============================================================================
+# Order-to-Cash (Sales) - Tier 1 decision set
+# ABeam Workbench - Fit-to-Standard pre-onboarding
+# Baseline: SAP S/4HANA Cloud Public Edition 2602 (Malaysia)
+# =============================================================================
+#
+# CURATION MODEL
+#   Decisions are authored at the VALUE-STREAM level, not per scope item.
+#   Cross-cutting decisions (pricing, credit, output, ...) are decided ONCE
+#   and apply to every sales scope item. Each scope item then carries only
+#   its genuinely item-specific decisions, which REFERENCE a parent stream
+#   decision (field: refines).
+#
+# TIER 1 TEST  - a decision belongs in this set only if it passes all three:
+#   1. It needs sponsor / executive authority to settle - not a process
+#      analyst's call.
+#   2. It moves cost, scope, timeline or compliance.
+#   3. It is expensive to reverse once the build is underway.
+#   Detailed configuration (Tier 2) is handled in the Fit-to-Standard
+#   workshops and is deliberately NOT in this set (see tier2_deferred).
+#
+# GROUNDING
+#   Every decision traces to the SAP source: the process to the scope item
+#   BPD / test script; the configuration to the SSCUI catalogue
+#   (SSCUI_List_EN_XX, release 2602). SSCUI IDs below are real.
+# =============================================================================
+
+value_stream:
+  id: O2C-SALES
+  name: Order-to-Cash - Sales
+  sap_release: S4CLD 2602 (MY)
+  description: >
+    The sell-side flow from pre-sales enquiry through quotation to order,
+    delivery and billing. The scope items below share one sales-area
+    configuration, which is why the heavy decisions are curated once at
+    stream level rather than repeated per scope item.
+  scope_items:
+    - "1IQ - Sales Inquiry"
+    - "BDG - Sales Quotation"
+    - "BD9 - Sell from Stock"
+
+# =============================================================================
+# STREAM-LEVEL TIER 1 DECISIONS
+# Decided once. Apply to every sales scope item in the stream.
+# =============================================================================
+stream_decisions:
+
+  - id: s1
+    title: Pricing strategy
+    tier: 1
+    applies_to: [1IQ, BDG, BD9]
+    summary: >
+      How the solution prices every sales document - which pricing procedure,
+      condition types and access logic apply across inquiries, quotations and
+      orders. Pricing is configured once for the sales area; it is not a
+      per-document decision.
+    sscui_primary: "101118 - Set Pricing Procedure Determination"
+    sscui_related:
+      - "101117 - Set Pricing Procedures"
+      - "101120 - Set Condition Types for Pricing in Sales"
+      - "101202 - Set Customer Pricing Procedures"
+      - "103121 - Set Access Sequences"
+    std_desc: >
+      Adopt the SAP standard pricing procedure delivered for the MY country
+      version, with standard condition types and access sequences.
+    cfg_desc: >
+      Adjust the pricing procedure through SSCUI - add or remove SAP-delivered
+      condition types, tune access sequences, set customer and material price
+      groups. Within base scope.
+    cst_desc: >
+      Custom pricing routines - alternative calculation of condition value or
+      base, custom requirement logic. Beyond standard.
+    effort: 5
+    custom_type: "Developer Extensibility (pricing routine)"
+    ext_impact: "High - pricing changes ripple to every downstream sales and billing document; full regression each release"
+    ricefw_class: "E (Enhancement)"
+
+  - id: s2
+    title: Credit management
+    tier: 1
+    applies_to: [BDG, BD9]
+    summary: >
+      Whether the solution runs SAP Credit Management - credit segments,
+      automatic credit checks and limit blocks on sales documents - or
+      operates without credit control.
+    sscui_primary: "103596 - Activate Credit Management"
+    sscui_related:
+      - "101518 - Define Automatic Credit Control"
+      - "102137 - Set Credit Limit Checks for Sales Document Types"
+      - "103597 - Maintain Credit Segments"
+      - "101015 - Deactivate SAP Credit Management"
+    std_desc: >
+      Activate SAP Credit Management with the standard automatic credit
+      control and standard risk categories - or, where credit control is not
+      required, leave it deactivated.
+    cfg_desc: >
+      Configure credit segments, customer credit groups, automatic credit
+      control rules and limit checks per document type through SSCUI. Within
+      base scope.
+    cst_desc: >
+      Integration to an external credit-scoring bureau, or bespoke scoring
+      logic. Beyond standard.
+    effort: 6
+    custom_type: "Integration (external credit bureau) + scoring BAdI"
+    ext_impact: "High - external dependency; credit blocks gate order processing"
+    ricefw_class: "I (Interface)"
+
+  - id: s3
+    title: Availability check (ATP)
+    tier: 1
+    applies_to: [BD9]
+    summary: >
+      How the solution promises delivery dates - the scope and rules of the
+      availability (ATP) check applied when sales documents are saved.
+    sscui_primary: "101099 - Configure Scope of Availability Check"
+    sscui_related:
+      - "105977 - Define Availability Checking Group"
+      - "103161 - Configure Delivery Type & Availability Check Procedure"
+    std_desc: >
+      SAP standard availability check - scope of check as delivered, checking
+      against stock and standard inward/outward movements.
+    cfg_desc: >
+      Adjust the scope of the availability check, checking groups and checking
+      rules through SSCUI; configure backorder processing. Within base scope.
+    cst_desc: >
+      Advanced ATP allocation / product-allocation rules requiring bespoke
+      logic, or integration to an external planning system for date
+      confirmation. Beyond standard.
+    effort: 4
+    custom_type: "Developer Extensibility / Integration"
+    ext_impact: "Medium-High - affects every delivery promise"
+    ricefw_class: "I (Interface)"
+
+  - id: s4
+    title: Output and customer communication
+    tier: 1
+    applies_to: [1IQ, BDG, BD9]
+    summary: >
+      How sales documents reach the customer - channels (print, email, EDI) -
+      and whether the SAP-delivered form templates are sufficient.
+    sscui_primary: "103542 - Define Output Settings for Document Types"
+    sscui_related:
+      - "103727 - Specify Output Forms for PDF Generation"
+      - "103541 - Assign Document Types for Output"
+      - "101311 - Define Default Email Sender Address for Email Outbound"
+      - "101873 - Define Output Texts"
+    std_desc: >
+      SAP standard output management - standard PDF forms, manual or
+      rule-based print and email, default email sender settings.
+    cfg_desc: >
+      Configure output determination per document type, email templates and
+      sender settings, and select SAP-delivered form templates through SSCUI.
+      Within base scope.
+    cst_desc: >
+      Custom Adobe form layouts with client branding or bespoke fields, or
+      EDI/IDoc integration to customer systems. Beyond standard.
+    effort: 3
+    custom_type: "Adobe Forms (form template) / EDI integration"
+    ext_impact: "Low for form templates; High for EDI integration"
+    ricefw_class: "F (Form) / I (Interface)"
+
+  - id: s5
+    title: Sales document types and numbering
+    tier: 1
+    applies_to: [1IQ, BDG, BD9]
+    summary: >
+      Which sales document types (inquiry, quotation, order variants) the
+      solution uses, and how each is numbered.
+    sscui_primary: "102495 - Configure Sales Document Types"
+    sscui_related:
+      - "102819 - Define Number Ranges for Sales Documents"
+    std_desc: >
+      Use the SAP standard document types (IN inquiry, QT quotation, OR
+      order) with standard internal number ranges.
+    cfg_desc: >
+      Add or adjust document types and define number-range patterns through
+      SSCUI. Within base scope.
+    cst_desc: >
+      Document types tied to bespoke field logic or custom validations.
+      Beyond standard.
+    effort: 4
+    custom_type: "Key User Extensibility (custom fields) + custom document type"
+    ext_impact: "Medium - custom fields need regression test each release"
+    ricefw_class: "E (Enhancement)"
+
+  - id: s6
+    title: Order approval and release strategy
+    tier: 1
+    applies_to: [BDG, BD9]
+    summary: >
+      Whether sales documents require approval before they progress, and how
+      blocks (credit, billing) are released.
+    sscui_primary: "102751 - Define Reasons for Approval Requests"
+    sscui_related:
+      - "102752 - Assign Reasons for Approval Requests"
+      - "Flexible Workflow for Sales Orders (Manage Workflows app)"
+    std_desc: >
+      No approval workflow - documents progress directly. Standard credit and
+      billing blocks released manually.
+    cfg_desc: >
+      SAP Flexible Workflow for sales-order approval - threshold-based,
+      multi-step, using approval reasons (SSCUI 102751/102752), Teams and
+      Responsibilities, and a Cloud BAdI for approval-reason logic. This is
+      standard, in-scope capability. Within base scope.
+    cst_desc: >
+      Multi-stage approval with bespoke routing, or integration to an
+      external approval / governance tool. Beyond standard.
+    effort: 7
+    custom_type: "Workflow developer extension + external integration"
+    ext_impact: "High - multi-stage logic plus external dependency; full retest each release"
+    ricefw_class: "W (Workflow)"
+    note: >
+      The Configure path uses SAP standard Flexible Workflow - confirmed in
+      the BD9 BPD section 'Preliminary Steps for Sales Order Approval'. An
+      approval requirement is Custom only when an external tool is mandated.
+
+# =============================================================================
+# ITEM-LEVEL TIER 1 DECISIONS - 1IQ Sales Inquiry
+# Specific to this scope item. Each config decision REFINES a parent stream
+# decision (field: refines). Decision 1iq-1 is the scoping gate: if the
+# inquiry process is not in scope, 1iq-2..4 do not apply.
+# =============================================================================
+scope_item:
+  id: 1IQ
+  name: Sales Inquiry
+  bpd_reference: "1IQ_S4CLD2602_BPD_EN_MY (test script - 3 process steps: create / change / reject)"
+  gate: 1iq-1
+
+  item_decisions:
+
+    - id: 1iq-1
+      title: Is the sales inquiry process in scope?
+      tier: 1
+      decision_kind: scoping
+      summary: >
+        Does the client capture pre-sales inquiries in SAP at all, or start
+        the sales process at quotation or order? The inquiry is a non-binding
+        pre-sales document; many implementations skip it. This is a scoping
+        gate - if not in scope, the decisions below do not apply.
+      options:
+        - id: in_scope
+          label: In scope
+          desc: >
+            Activate and use 1IQ - the Manage Sales Inquiries app and inquiry
+            document type IN. Decisions 1iq-2 to 1iq-4 then apply.
+        - id: not_in_scope
+          label: Not in scope
+          desc: >
+            Skip the inquiry document; the sales process starts at quotation
+            (BDG) or order (BD9). No 1IQ configuration required.
+      effort: 0
+      ext_impact: "None - scoping decision"
+
+    - id: 1iq-2
+      title: Inquiry document type variants
+      tier: 1
+      refines: s5
+      summary: >
+        Does the inquiry need document types beyond the standard IN - for
+        example, separate product-inquiry and service-inquiry types so sales
+        reporting can split the pipelines.
+      sscui_primary: "102495 - Configure Sales Document Types"
+      std_desc: "Single standard inquiry type IN."
+      cfg_desc: >
+        Add one or two inquiry document type variants through SSCUI 102495.
+        Within base scope.
+      cst_desc: >
+        Inquiry type with custom fields or validation logic. Beyond standard.
+      effort: 4
+      custom_type: "Key User Extensibility (custom fields) + custom document type"
+      ext_impact: "Medium"
+      ricefw_class: "E (Enhancement)"
+
+    - id: 1iq-3
+      title: Indicative pricing on the inquiry
+      tier: 1
+      refines: s1
+      summary: >
+        Should the inquiry display indicative (non-binding) pricing to the
+        rep and customer, and at which pricing date.
+      sscui_primary: "104274 - Pricing Date (parameters and routines)"
+      std_desc: >
+        Standard pricing runs at inquiry creation - indicative only, per the
+        stream pricing procedure (s1).
+      cfg_desc: >
+        Adjust which condition types and which pricing date apply at the
+        inquiry stage through the pricing date SSCUI. Within base scope.
+      cst_desc: >
+        Custom pricing routine specific to the inquiry stage - for example,
+        promotional logic applied only at inquiry. Beyond standard.
+      effort: 5
+      custom_type: "Developer Extensibility (custom pricing routine)"
+      ext_impact: "High - a custom routine here affects all downstream documents"
+      ricefw_class: "E (Enhancement)"
+
+    - id: 1iq-4
+      title: Inquiry conversion control
+      tier: 1
+      refines: s6
+      summary: >
+        Does an inquiry need a control before it can be referenced into a
+        quotation or order - an approval, a completeness check, or a
+        restriction on who may convert it.
+      sscui_primary: "Flexible Workflow for Sales Documents (see s6)"
+      std_desc: >
+        Any inquiry can be referenced into a quotation or order directly -
+        no control.
+      cfg_desc: >
+        Apply an approval step via the stream approval strategy (s6 - SAP
+        Flexible Workflow), or an incompletion / completeness check, before
+        conversion. Within base scope.
+      cst_desc: >
+        Bespoke conversion gate integrated to an external governance tool.
+        Beyond standard.
+      effort: 7
+      custom_type: "Workflow developer extension + external integration"
+      ext_impact: "High"
+      ricefw_class: "W (Workflow)"
+
+# =============================================================================
+# DEFERRED TO TIER 2 - Fit-to-Standard workshop detail, NOT signed off here
+# These were Tier 1 candidates that fail the Tier 1 test: routine, low-stakes,
+# cheap to settle and to reverse. They belong in the configuration workshop.
+# =============================================================================
+tier2_deferred:
+  - item: "Inquiry number-range format"
+    sscui: "102819 - Define Number Ranges for Sales Documents"
+    reason: "Routine config; a key user settles the numbering pattern in minutes."
+  - item: "Reasons for rejection"
+    sscui: "OVAG - Define Reasons for Rejection"
+    reason: "The standard list covers near-universal cases; a one-click pick in the BPD."
+  - item: "Requested delivery date default formula"
+    sscui: "103827 - Requested Delivery Date (parameters and rules)"
+    reason: "Workshop-level tuning; not surfaced as an executive decision."
+
+# =============================================================================
+# OTHER SCOPE ITEMS IN THIS STREAM - next authoring pass
+# Candidate item-level decisions, to be authored against each BPD using the
+# same method. Listed here so the stream model is visible end to end.
+# =============================================================================
+pending_scope_items:
+  BDG:
+    name: Sales Quotation
+    candidate_item_decisions:
+      - "Quotation validity period and expiry handling"
+      - "Quotation success probability and alternative items"
+      - "Quotation approval before order conversion (refines s6)"
+  BD9:
+    name: Sell from Stock
+    note: >
+      Much of BD9's weight is the stream decisions surfacing (credit s2,
+      ATP s3, approval s6, output s4). Genuinely item-specific candidates:
+    candidate_item_decisions:
+      - "Delivery and shipping handling (complete vs partial, route determination)"
+      - "Billing approach (delivery-related vs order-related; billing block)"
+      - "IFRS 15 revenue bundling on the sales order"
