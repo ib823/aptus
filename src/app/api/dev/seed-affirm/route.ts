@@ -345,6 +345,27 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const got = req.nextUrl.searchParams.get("secret");
   if (got !== expected) return new NextResponse(null, { status: 401 });
 
+  try {
+    return await handle(req, expected);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error("[seed-affirm] failed:", message, stack);
+    // Surface the failure inline so callers can debug without a log
+    // round-trip. This endpoint is secret-gated and dev-only.
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "seed_failed",
+        message,
+        stack: stack?.split("\n").slice(0, 8).join("\n"),
+      },
+      { status: 500 },
+    );
+  }
+}
+
+async function handle(req: NextRequest, expected: string): Promise<NextResponse> {
   // Find any existing org to associate users with (User.organizationId is
   // nullable but downstream RBAC reads it; preferable to set it).
   const anyOrg = await prisma.organization.findFirst({ select: { id: true } });
