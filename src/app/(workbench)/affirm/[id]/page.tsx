@@ -13,6 +13,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getAffirmSetForBundle } from "@/lib/affirm/queries";
+import { getProcessFlowsForBundle } from "@/lib/affirm/process-flow";
 import { AffirmCardList } from "@/components/affirm/AffirmCardList";
 import { AffirmStepper } from "@/components/affirm/AffirmStepper";
 import type { AffirmChoice } from "@/lib/affirm/types";
@@ -42,6 +43,20 @@ export default async function ClientAffirmPage({ params }: PageProps) {
 
   // Client view: drop excluded questions per master prompt caveat 1.
   const questions = await getAffirmSetForBundle(id, { forClient: true });
+  // v2.1 §9: per-scope-item process flow for the "Where this sits"
+  // strip rendered on each affirm card. Pre-loaded server-side so the
+  // client component can resolve question → scopeRef → flow in O(1).
+  const flowMap = await getProcessFlowsForBundle(id);
+  // Pull scope item descriptions alongside so the strip eyebrow
+  // ("Where this sits · BD9 Sell from Stock") can show them.
+  const scopeItems = await prisma.affirmScopeItem.findMany({
+    where: { id: { in: Array.from(flowMap.keys()) } },
+    select: { id: true, description: true },
+  });
+  const scopeDescriptions = Object.fromEntries(
+    scopeItems.map((s) => [s.id, s.description]),
+  );
+  const flows = Object.fromEntries(flowMap);
 
   // Compute display stream — most bundles cover a single value stream;
   // we honour multi-stream bundles by joining the unique stream names.
@@ -68,6 +83,8 @@ export default async function ClientAffirmPage({ params }: PageProps) {
             reason: r.reason,
           }))}
           readOnly={bundle.state === "submitted"}
+          flows={flows}
+          scopeDescriptions={scopeDescriptions}
         />
       </div>
     </main>

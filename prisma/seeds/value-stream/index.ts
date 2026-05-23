@@ -62,6 +62,9 @@ type AffirmQuestionSeed = {
   flag: string | null;
   statusNote: string | null;
   displayOrder: number;
+  // v2.1: seeded from Standard-Answer-Layer.xlsx.
+  aboutText?: string | null;
+  format?: "decision" | "information";
 };
 
 type Dataset = {
@@ -155,8 +158,30 @@ export async function seedValueStream(
         flag: q.flag,
         statusNote: q.statusNote,
         displayOrder: q.displayOrder,
+        // v2.1 (Standard-Answer-Layer):
+        aboutText: q.aboutText ?? null,
+        format: q.format ?? "decision",
       },
-      create: q,
+      create: {
+        id: q.id,
+        streamId: q.streamId,
+        subProcessId: q.subProcessId,
+        scopeItemRefs: q.scopeItemRefs,
+        sapVerbatim: q.sapVerbatim,
+        plainLanguageSuggested: q.plainLanguageSuggested,
+        consultantWording: q.consultantWording,
+        sapArea: q.sapArea,
+        sapTopic: q.sapTopic,
+        sscuiRef: q.sscuiRef,
+        sourceQuestionnaire: q.sourceQuestionnaire,
+        placementBasis: q.placementBasis,
+        status: q.status,
+        flag: q.flag,
+        statusNote: q.statusNote,
+        displayOrder: q.displayOrder,
+        aboutText: q.aboutText ?? null,
+        format: q.format ?? "decision",
+      },
     });
   }
 

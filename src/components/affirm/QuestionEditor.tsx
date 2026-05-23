@@ -22,11 +22,17 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { EditorRow } from "@/lib/affirm/editor";
+import type { ProcessFlow } from "@/lib/affirm/process-flow";
+import { ProcessFlowStrip } from "@/components/affirm/ProcessFlowStrip";
 
 interface Props {
   bundleId: string;
   bundleState: string;
   rows: EditorRow[];
+  /** v2.1 §9: scope-item id → process flow. */
+  flows?: Record<string, ProcessFlow>;
+  /** v2.1 §9: scope-item id → description for the strip eyebrow. */
+  scopeDescriptions?: Record<string, string>;
 }
 
 interface DraftFor {
@@ -42,6 +48,8 @@ export function QuestionEditor({
   bundleId,
   bundleState,
   rows: initialRows,
+  flows = {},
+  scopeDescriptions = {},
 }: Props) {
   const router = useRouter();
   const [rows, setRows] = useState<EditorRow[]>(initialRows);
@@ -392,6 +400,21 @@ export function QuestionEditor({
                     rows={2}
                     className="mt-1 w-full rounded-input border border-border-default bg-paper p-2 text-sm focus:border-navy focus:outline-none"
                   />
+
+                  {/* v2.1 §9: "Where this sits" preview — same component
+                      the client sees on their affirm card. */}
+                  {r.scopeItemRefs
+                    .filter((ref) => flows[ref] || scopeDescriptions[ref])
+                    .map((ref) => (
+                      <div key={ref} className="mt-2">
+                        <ProcessFlowStrip
+                          variant="embedded"
+                          scopeItemId={ref}
+                          scopeItemDescription={scopeDescriptions[ref] ?? null}
+                          flow={flows[ref] ?? null}
+                        />
+                      </div>
+                    ))}
 
                   {/* SAP verbatim — read-only collapsible */}
                   {r.sapVerbatim && (

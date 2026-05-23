@@ -21,6 +21,7 @@ import {
   getEditorRows,
   materializeBundleQuestions,
 } from "@/lib/affirm/editor";
+import { getProcessFlowsForBundle } from "@/lib/affirm/process-flow";
 import { QuestionEditor } from "@/components/affirm/QuestionEditor";
 import { AffirmStepper } from "@/components/affirm/AffirmStepper";
 
@@ -44,6 +45,19 @@ export default async function QuestionsEditorPage({ params }: PageProps) {
   // get a join row so the editor can show + edit them.
   await materializeBundleQuestions(id);
   const rows = await getEditorRows(id);
+
+  // v2.1 §9: load process flows for every scope item in the bundle so
+  // the editor row preview can render the same "Where this sits" strip
+  // the client will see.
+  const flowMap = await getProcessFlowsForBundle(id);
+  const scopeItems = await prisma.affirmScopeItem.findMany({
+    where: { id: { in: Array.from(flowMap.keys()) } },
+    select: { id: true, description: true },
+  });
+  const scopeDescriptions = Object.fromEntries(
+    scopeItems.map((s) => [s.id, s.description]),
+  );
+  const flows = Object.fromEntries(flowMap);
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
@@ -101,6 +115,8 @@ export default async function QuestionsEditorPage({ params }: PageProps) {
           bundleId={id}
           bundleState={bundle.state}
           rows={rows}
+          flows={flows}
+          scopeDescriptions={scopeDescriptions}
         />
       )}
     </div>
