@@ -81,7 +81,10 @@ export const authOptions: NextAuthOptions = {
             const callback = parsed.searchParams.get("callbackUrl") ?? "";
             isWorkbench =
               callback.startsWith("/presales") ||
-              callback.includes("/presales");
+              callback.startsWith("/affirm") ||
+              callback.startsWith("/c/") ||
+              callback.includes("/presales") ||
+              callback.includes("/affirm");
             if (isWorkbench) {
               // When the Workbench is on its own hostname (e.g.
               // ab-workbench.vercel.app), rewrite the verification URL so
