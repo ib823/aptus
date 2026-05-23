@@ -36,6 +36,18 @@ def find_header(rows: Iterable[tuple]) -> int:
     raise RuntimeError("header row '#' not found")
 
 
+def normalise_verbatim(s) -> str:
+    """Join key for matching. The two source files share the SAP
+    verbatim text but use the L2-NNN row IDs in DIFFERENT row orders,
+    so we cannot join by ID. Verbatim text is the stable key.
+    Normalisation: trim, collapse internal whitespace, strip trailing
+    punctuation drift (the source occasionally has `?` vs `? ` etc.).
+    """
+    t = (str(s) if s is not None else "").strip()
+    t = " ".join(t.split())  # collapse whitespace runs
+    return t.rstrip(" ?.").strip()
+
+
 def main() -> None:
     wb = openpyxl.load_workbook(SRC_PATH, data_only=True, read_only=True)
     ws = wb["Standard-Answer Layer"]
@@ -44,28 +56,43 @@ def main() -> None:
     hdr = find_header(rows)
     data = [r for r in rows[hdr + 1 :] if r and r[0] is not None]
 
-    by_id: dict[str, dict[str, object]] = {}
+    # Key: normalised SAP verbatim. The Standard-Answer-Layer's L2-NNN
+    # IDs are positional in that file and do NOT correspond to the L2
+    # Affirm-Set's L2-NNN IDs. Verbatim text is the only stable key.
+    by_verbatim: dict[str, dict[str, object]] = {}
+    collisions = 0
     for r in data:
-        _, qid, _vs, _sub, _area, _verbatim, topic_def, fmt_default = r[:8]
+        _, _sa_qid, _vs, _sub, _area, verbatim, topic_def, fmt_default = r[:8]
+        key = normalise_verbatim(verbatim)
+        if not key:
+            continue
         about = (str(topic_def).strip() if topic_def else "") or None
         fmt_raw = str(fmt_default or "").strip().lower()
         fmt = "information" if fmt_raw == "information" else "decision"
-        by_id[str(qid)] = {"aboutText": about, "format": fmt}
+        if key in by_verbatim:
+            collisions += 1
+        by_verbatim[key] = {"aboutText": about, "format": fmt}
 
     with open(DATASET_PATH, "r", encoding="utf-8") as fh:
         dataset = json.load(fh)
 
-    missing = []
+    matched = 0
+    unmatched: list[str] = []
     decision_count = 0
     information_count = 0
     about_blank = 0
     for q in dataset["questions"]:
-        info = by_id.get(q["id"])
+        key = normalise_verbatim(q.get("sapVerbatim"))
+        info = by_verbatim.get(key) if key else None
         if not info:
-            missing.append(q["id"])
+            # Excluded rows often have blank / "Not Applicable" verbatim;
+            # they won't (and shouldn't) match. Default and move on.
             q["aboutText"] = None
             q["format"] = "decision"
+            if q.get("status") != "excluded":
+                unmatched.append(q["id"])
             continue
+        matched += 1
         q["aboutText"] = info["aboutText"]
         q["format"] = info["format"]
         if info["format"] == "information":
@@ -75,24 +102,29 @@ def main() -> None:
         if info["aboutText"] is None:
             about_blank += 1
 
-    if missing:
+    if unmatched:
         raise RuntimeError(
-            f"standard-answer extractor: {len(missing)} questions in dataset have "
-            f"no Standard-Answer row (first 5: {missing[:5]})"
+            f"standard-answer extractor: {len(unmatched)} non-excluded questions "
+            f"have no verbatim match in Standard-Answer-Layer "
+            f"(first 5: {unmatched[:5]})"
         )
 
     counts = dataset.setdefault("meta", {}).setdefault("counts", {})
     counts["formatDecision"] = decision_count
     counts["formatInformation"] = information_count
     counts["aboutTextBlank"] = about_blank
+    counts["standardAnswerMatched"] = matched
+    counts["standardAnswerVerbatimCollisions"] = collisions
 
     with open(DATASET_PATH, "w", encoding="utf-8") as fh:
         json.dump(dataset, fh, indent=2, ensure_ascii=False)
 
-    print(f"merged Standard-Answer into {DATASET_PATH}")
-    print("  format · decision:", decision_count)
-    print("  format · information:", information_count)
-    print("  aboutText blanks:", about_blank)
+    print(f"merged Standard-Answer into {DATASET_PATH} (by verbatim match)")
+    print(f"  matched: {matched} of {len(dataset['questions'])}")
+    print(f"  format · decision: {decision_count}")
+    print(f"  format · information: {information_count}")
+    print(f"  aboutText blanks: {about_blank}")
+    print(f"  verbatim collisions in standard-answer source: {collisions}")
 
 
 if __name__ == "__main__":
