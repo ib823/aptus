@@ -181,6 +181,12 @@ def build() -> dict:
             s["placementReviewFlag"] = "pending-curation"
 
     # ─── Layer 2: SAP-verbatim L2 questions ──────────────────────────────
+    # Some L2 rows are tagged with a placeholder sub-process name like
+    # "(general - by questionnaire)" that has no row in the L1 hierarchy.
+    # These are real L2 questions that the source questionnaire grouped
+    # generically rather than by a specific sub-process. We synthesize a
+    # "catch-all" sub-process for each such (stream, sub_name) pair so the
+    # FK to AffirmSubProcess holds.
     l2 = data_rows(load_sheet("Layer2-BDC-Affirm-Set.xlsx", "L2 Affirm-Set"))
     l2_by_idx: dict[int, dict] = {}
     questions: list[dict] = []
@@ -188,6 +194,16 @@ def build() -> dict:
         num, stream_name, sub_name, scope_raw, verbatim, area_topic, sscui, source, basis = r[:9]
         stream_id = slugify(stream_name)
         sub_id = f"{stream_id}::{slugify(sub_name)}"
+        if sub_id not in sub_processes:
+            sub_processes[sub_id] = {
+                "id": sub_id,
+                "streamId": stream_id,
+                "name": sub_name,
+                "type": "catch-all",
+                "displayOrder": sum(
+                    1 for s in sub_processes.values() if s["streamId"] == stream_id
+                ),
+            }
         sap_area, sap_topic = parse_area_topic(area_topic)
         q = {
             "id": f"L2-{int(num):03d}",
@@ -247,7 +263,10 @@ def build() -> dict:
 
     # ─── Sanity checks ──────────────────────────────────────────────────
     assert len(streams) == 8, f"expected 8 streams (incl. Foundation), got {len(streams)}"
-    assert len(sub_processes) == 55, f"expected 55 sub-processes, got {len(sub_processes)}"
+    # 55 L1 sub-processes + N catch-all sub-processes synthesized from L2
+    # questions that the source questionnaire grouped generically (e.g.
+    # "(general - by questionnaire)" in the Finance stream).
+    assert len(sub_processes) >= 55, f"expected at least 55 sub-processes, got {len(sub_processes)}"
     assert len(scope_items) == 672, f"expected 672 scope items, got {len(scope_items)}"
     assert len(questions) == 150, f"expected 150 L2 questions, got {len(questions)}"
     excluded = sum(1 for q in questions if q["status"] == "excluded")
