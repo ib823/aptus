@@ -45,6 +45,7 @@ import { prisma } from "@/lib/db/prisma";
 import { createSession } from "@/lib/auth/session";
 import { sendMagicLink } from "@/lib/auth/send-magic-link";
 import dataset from "../../../../../prisma/seeds/value-stream/dataset.json";
+import processFlowDataset from "../../../../../prisma/seeds/value-stream/process-flow.json";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -239,6 +240,77 @@ async function seedValueStream(): Promise<{
   return { streams, subProcesses: subs, scopeItems: items, questions, excluded, flagged };
 }
 
+// ─── Process-flow seed (Layer 3, MY 2602) ────────────────────────────
+// 655 of 672 scope items have an MY-mandatory flow; ~2502 step rows
+// total. Data-only landing — UI lands once the aligned design ships.
+
+interface ProcessFlowSeed {
+  scopeItemId: string;
+  activityCount: number;
+  myStepCount: number;
+  optionalCount: number;
+}
+interface ProcessStepSeed {
+  scopeItemId: string;
+  stepNumber: number;
+  activity: string;
+  fioriApps: string[];
+}
+interface ProcessFlowDataset {
+  meta: { country: string; sapRelease: string; counts: Record<string, number> };
+  flows: ProcessFlowSeed[];
+  steps: ProcessStepSeed[];
+}
+
+async function seedProcessFlow(): Promise<{ flows: number; steps: number }> {
+  const data = processFlowDataset as unknown as ProcessFlowDataset;
+  for (const f of data.flows) {
+    await prisma.affirmProcessFlow.upsert({
+      where: { scopeItemId: f.scopeItemId },
+      update: {
+        activityCount: f.activityCount,
+        myStepCount: f.myStepCount,
+        optionalCount: f.optionalCount,
+        country: data.meta.country,
+        sapRelease: data.meta.sapRelease,
+      },
+      create: {
+        scopeItemId: f.scopeItemId,
+        activityCount: f.activityCount,
+        myStepCount: f.myStepCount,
+        optionalCount: f.optionalCount,
+        country: data.meta.country,
+        sapRelease: data.meta.sapRelease,
+      },
+    });
+  }
+  // Replace steps per flow (unique key is (scopeItemId, stepNumber); a
+  // re-extract could reorder, so wipe-then-insert is the safe path).
+  const stepsByFlow = new Map<string, ProcessStepSeed[]>();
+  for (const s of data.steps) {
+    const arr = stepsByFlow.get(s.scopeItemId) ?? [];
+    arr.push(s);
+    stepsByFlow.set(s.scopeItemId, arr);
+  }
+  for (const [scopeItemId, rows] of stepsByFlow) {
+    await prisma.affirmProcessStep.deleteMany({ where: { scopeItemId } });
+    if (rows.length === 0) continue;
+    await prisma.affirmProcessStep.createMany({
+      data: rows.map((r) => ({
+        scopeItemId: r.scopeItemId,
+        stepNumber: r.stepNumber,
+        activity: r.activity,
+        fioriApps: r.fioriApps,
+      })),
+    });
+  }
+  const [flowCount, stepCount] = await Promise.all([
+    prisma.affirmProcessFlow.count(),
+    prisma.affirmProcessStep.count(),
+  ]);
+  return { flows: flowCount, steps: stepCount };
+}
+
 // ─── Demo bundle ─────────────────────────────────────────────────────
 
 async function ensureDemoBundle(ownerId: string): Promise<{
@@ -373,6 +445,10 @@ async function handle(req: NextRequest, expected: string): Promise<NextResponse>
 
   // 1. Master data
   const counts = await seedValueStream();
+  // 1b. Layer-3 process flow (MY 2602). Data-only landing — the
+  // <ProcessFlowStrip /> UI lands in a follow-up once the aligned
+  // design ships through Claude design.
+  const flowCounts = await seedProcessFlow();
 
   // 2. Users
   const realConsultant = await upsertUser(EMAILS.realConsultant, "consultant", orgId);
@@ -460,6 +536,7 @@ async function handle(req: NextRequest, expected: string): Promise<NextResponse>
       mode: "preview_only",
       note: "Email dispatch skipped. Magic-link URL preview only — no email sent, no VerificationToken row created.",
       masterData: counts,
+      processFlow: flowCounts,
       runtimeEnv: {
         WORKBENCH_HOST: wbHost ?? null,
         NEXTAUTH_URL: nextAuthUrl,
@@ -543,6 +620,10 @@ async function handle(req: NextRequest, expected: string): Promise<NextResponse>
       created: demo.created,
       clientView: `${origin}/affirm/${demo.id}`,
       consultantReview: `${origin}/affirm/${demo.id}/review`,
+    },
+    processFlow: {
+      ...flowCounts,
+      note: "Layer-3 MY 2602 process-flow data seeded. UI strip lands once the aligned design ships.",
     },
     instructions: [
       "Real pair: each recipient checks their inbox for the magic-link email, clicks Continue, and lands authenticated on the workbench.",

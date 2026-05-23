@@ -3899,6 +3899,7 @@ model AffirmScopeItem {
   stream      AffirmValueStream       @relation(fields: [streamId], references: [id], onDelete: Cascade)
   subProcess  AffirmSubProcess        @relation(fields: [subProcessId], references: [id], onDelete: Cascade)
   bundleItems AffirmBundleScopeItem[]
+  flow        AffirmProcessFlow?
 
   @@index([streamId])
   @@index([subProcessId])
@@ -4085,4 +4086,59 @@ model AffirmEvent {
 
   @@index([bundleId, createdAt])
   @@index([type, createdAt])
+}
+
+// =============================================================
+// ABeam Workbench — Layer-3 Process Flow (data-only landing,
+// 2026-05-23). UI lands in a follow-up once design aligns.
+// =============================================================
+//
+// Per scope item, SAP's "where this sits" process flow extracted
+// from BP_CLD_ENTPR Process-Steps and collapsed to the Malaysia
+// mandatory path (optional steps dropped, deduplicated in SAP row
+// order). Source: Layer3-Process-Flow.xlsx Sheet 2 "Mandatory MY
+// Flow". 655 of 672 scope items have a flow; the other 17 carry
+// no MY-mandatory steps.
+//
+// SAP-verbatim discipline (same rule as AffirmQuestion.sapVerbatim):
+// activity names are LOCKED — never edited, never reformatted.
+//
+// Country + sapRelease columns make this future-proof. The current
+// extract is MY / 2602; non-MY countries (when the workbench grows
+// beyond Malaysia) would seed parallel rows keyed by (scopeItemId,
+// country, sapRelease) — that's an upgrade path, not a v1 feature.
+
+model AffirmProcessFlow {
+  scopeItemId   String   @id
+  // Sheet 1 "Process-Flow Map" per-item summary metrics.
+  activityCount Int      @default(0) // raw activity count in source
+  myStepCount   Int      @default(0) // # MY-mandatory steps in the clean flow
+  optionalCount Int      @default(0)
+  // Provenance for re-extraction diffs.
+  country       String   @default("MY")
+  sapRelease    String   @default("2602")
+  extractedAt   DateTime @default(now())
+
+  scopeItem AffirmScopeItem     @relation(fields: [scopeItemId], references: [id], onDelete: Cascade)
+  steps     AffirmProcessStep[]
+
+  @@index([country])
+  @@index([sapRelease])
+}
+
+model AffirmProcessStep {
+  id          String   @id @default(cuid())
+  scopeItemId String
+  // 1-indexed step number within the scope item's MY-mandatory flow.
+  stepNumber  Int
+  // SAP-verbatim activity name. LOCKED — never edited.
+  activity    String   @db.Text
+  // Zero or more Fiori apps tied to this step. Source field uses "-"
+  // when no Fiori app exists; we normalise to an empty array.
+  fioriApps   String[]
+
+  flow AffirmProcessFlow @relation(fields: [scopeItemId], references: [scopeItemId], onDelete: Cascade)
+
+  @@unique([scopeItemId, stepNumber])
+  @@index([scopeItemId])
 }
