@@ -159,7 +159,9 @@ export async function getAffirmSetForBundle(
   const bundle = await prisma.affirmBundle.findUnique({
     where: { id: bundleId },
     include: {
-      scopeItems: { select: { scopeItemId: true } },
+      scopeItems: {
+        select: { scopeItemId: true, scopeItem: { select: { streamId: true } } },
+      },
       questions: {
         select: {
           questionId: true,
@@ -172,14 +174,27 @@ export async function getAffirmSetForBundle(
   });
   if (!bundle) return [];
   const scopeIds = bundle.scopeItems.map((s) => s.scopeItemId);
+  // v2.1 data fix: 71 of 150 questions are stream-level (empty
+  // scopeItemRefs). Union them in by streamId so they aren't dropped
+  // from the live in-scope query.
+  const streamIds = Array.from(
+    new Set(bundle.scopeItems.map((s) => s.scopeItem.streamId)),
+  );
 
   // A question is in-scope if any of its scopeItemRefs intersects the
-  // selected scope. The bundle.questions join already snapshots
-  // post-issue; we union both sources to handle the pre-issue editor
-  // case as well as custom questions (which have empty scopeItemRefs).
+  // selected scope, OR if its refs are empty but its stream is one of
+  // the bundle's streams. The bundle.questions join already snapshots
+  // post-issue; we union all three sources to handle the pre-issue
+  // editor case as well as custom questions (which have empty refs).
   const scopeWhere: Prisma.AffirmQuestionWhereInput[] = [];
   if (scopeIds.length > 0) {
     scopeWhere.push({ scopeItemRefs: { hasSome: scopeIds } });
+  }
+  if (streamIds.length > 0) {
+    scopeWhere.push({
+      scopeItemRefs: { isEmpty: true },
+      streamId: { in: streamIds },
+    });
   }
   const snapshotIds = bundle.questions.map((q) => q.questionId);
   if (snapshotIds.length > 0) {
