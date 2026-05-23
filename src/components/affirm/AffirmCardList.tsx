@@ -1,23 +1,22 @@
 "use client";
 
 /**
- * Screen 2 — Client affirm cards. Refit to the "Enhancement Restored"
- * design's .affirm-card pattern:
+ * Screen 3 — Client affirm cards. v2 (CCC follow-up) refit.
  *
- *   - ac-head row: sub-process category (left), DEFAULT badge when the
- *     current pick is "standard", L2-NNN qid right-aligned in mono.
- *   - ac-question: plain-language wording, 15px ink-primary.
- *   - sap-verbatim box on ink-tint with the exact mono micro-label
- *     "SAP verbatim · source of truth · never overwritten".
- *   - ac-source line: "SAP BDC · Level 2 · {sscui}", mono ink-muted.
- *   - choice-row: three segmented choice chips with colored dots that
- *     fill in when active (teal / blue / amber).
- *   - reason-block in surface-banner-warn appears only on deviate.
- *   - flag-note (warn surface, leading triangle icon) appears for
- *     questions flagged as config-how-to.
+ * The four v2 changes that affect this component:
+ *   §7 Each choice chip gets a one-line helper. A "How to answer" intro
+ *      card sits above the cards.
+ *   §8 Two question formats:
+ *        DECISION    — 3 choices + "What 'Adopt SAP standard' means
+ *                       here" teal box + "About this question" line.
+ *        INFORMATION — open free-text answer + optional "Flag for
+ *                       workshop discussion".
+ *      SAP verbatim collapses by default on both (chevron toggle).
+ *      "Adopt SAP standard" never appears on an Information card.
  *
- * Top of screen carries a stat-strip and a stacked progress bar; the
- * sticky release-bar at the bottom shows the submit CTA and helper.
+ * Server-side: getAffirmSetForBundle returns each row with .format,
+ * .enabled, .aboutText, .standardMeans. Disabled rows are already
+ * filtered for the client view.
  */
 import { useMemo, useState, useTransition } from "react";
 import type { AffirmQuestionRow } from "@/lib/affirm/queries";
@@ -42,12 +41,22 @@ interface AnswerState {
   dirty: boolean;
   saving: boolean;
   error: string | null;
+  // Information-only: the free-text answer is stored as `reason` server-
+  // side, mapped to choice='deviate' for now (re-using the existing
+  // schema). UI hides "deviate"/"reason" labels for Information rows.
+  // For Information questions, choice ∈ {standard ("no flag"), discuss
+  // ("flag for workshop")}. "deviate" is unused for Information.
 }
 
-const CHOICE_LABELS: Record<AffirmChoice, string> = {
+const DECISION_LABELS: Record<AffirmChoice, string> = {
   standard: "Adopt SAP standard",
   discuss: "Discuss in workshop",
   deviate: "We do this differently",
+};
+const DECISION_HELP: Record<AffirmChoice, string> = {
+  standard: "Keep SAP's pre-delivered setup.",
+  discuss: "Unsure — raise it in the workshop.",
+  deviate: "You have a specific requirement.",
 };
 
 export function AffirmCardList({
@@ -75,8 +84,13 @@ export function AffirmCardList({
 
   const [submitting, startSubmit] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [expandedVerbatim, setExpandedVerbatim] = useState<Record<string, boolean>>({});
 
-  // Group: sub-process -> sap area -> [questions]
+  function toggleVerbatim(id: string) {
+    setExpandedVerbatim((m) => ({ ...m, [id]: !m[id] }));
+  }
+
+  // Group questions: sub-process -> sap area -> [questions]
   const groups = useMemo(() => {
     const m = new Map<
       string,
@@ -104,20 +118,30 @@ export function AffirmCardList({
     return Array.from(m.entries());
   }, [questions]);
 
-  // Scorecard
+  // Scorecard counts — Decision only (Information rows are tallied
+  // separately and aren't part of the std/discuss/deviate stack).
   const totals = useMemo(() => {
     let standard = 0;
     let discuss = 0;
     let deviate = 0;
-    for (const a of Object.values(answers)) {
+    let info = 0;
+    for (const q of questions) {
+      const a = answers[q.id];
+      if (!a) continue;
+      if (q.format === "information") {
+        info++;
+        continue;
+      }
       if (a.choice === "standard") standard++;
       if (a.choice === "discuss") discuss++;
       if (a.choice === "deviate") deviate++;
     }
-    return { standard, discuss, deviate, total: questions.length };
-  }, [answers, questions.length]);
+    const decisionTotal = standard + discuss + deviate;
+    return { standard, discuss, deviate, info, total: questions.length, decisionTotal };
+  }, [answers, questions]);
 
-  const pct = (n: number) => (totals.total ? Math.round((n / totals.total) * 100) : 0);
+  const pct = (n: number) =>
+    totals.decisionTotal ? Math.round((n / totals.decisionTotal) * 100) : 0;
 
   async function persist(
     questionId: string,
@@ -135,7 +159,9 @@ export function AffirmCardList({
         body: JSON.stringify({
           questionId,
           choice,
-          reason: choice === "deviate" ? reason : null,
+          // For Information rows the free-text answer rides on `reason`.
+          // For Decision rows reason is only sent on deviate.
+          reason: choice === "deviate" ? reason : reason || null,
         }),
       });
       if (!res.ok) {
@@ -158,7 +184,7 @@ export function AffirmCardList({
     }
   }
 
-  function setChoice(q: AffirmQuestionRow, choice: AffirmChoice) {
+  function setDecisionChoice(q: AffirmQuestionRow, choice: AffirmChoice) {
     if (readOnly) return;
     setAnswers((m) => ({
       ...m,
@@ -167,6 +193,16 @@ export function AffirmCardList({
     if (choice !== "deviate") {
       void persist(q.id, choice, "");
     }
+  }
+
+  function setInfoFlag(q: AffirmQuestionRow, flagged: boolean) {
+    if (readOnly) return;
+    const newChoice: AffirmChoice = flagged ? "discuss" : "standard";
+    setAnswers((m) => ({
+      ...m,
+      [q.id]: { ...m[q.id]!, choice: newChoice, dirty: true },
+    }));
+    void persist(q.id, newChoice, answers[q.id]?.reason ?? "");
   }
 
   function setReason(q: AffirmQuestionRow, reason: string) {
@@ -179,21 +215,30 @@ export function AffirmCardList({
 
   function saveReason(q: AffirmQuestionRow) {
     const a = answers[q.id]!;
-    if (!a.reason.trim()) {
-      setAnswers((m) => ({
-        ...m,
-        [q.id]: { ...m[q.id]!, error: "A reason is required." },
-      }));
+    if (q.format === "decision") {
+      if (a.choice !== "deviate") return;
+      if (!a.reason.trim()) {
+        setAnswers((m) => ({
+          ...m,
+          [q.id]: { ...m[q.id]!, error: "A reason is required." },
+        }));
+        return;
+      }
+      void persist(q.id, "deviate", a.reason.trim());
       return;
     }
-    void persist(q.id, "deviate", a.reason.trim());
+    // Information: persist the free-text answer with the current
+    // choice (standard / discuss-flag), reason carries the answer body.
+    void persist(q.id, a.choice, a.reason);
   }
 
   async function submit() {
     setSubmitError(null);
-    const missing = Object.entries(answers).filter(
-      ([, a]) => a.choice === "deviate" && !a.reason.trim(),
-    );
+    const missing = Object.entries(answers).filter(([qid, a]) => {
+      const q = questions.find((x) => x.id === qid);
+      if (!q || q.format !== "decision") return false;
+      return a.choice === "deviate" && !a.reason.trim();
+    });
     if (missing.length) {
       setSubmitError(
         `${missing.length} deviation${missing.length > 1 ? "s" : ""} need a reason before you can submit.`,
@@ -224,58 +269,95 @@ export function AffirmCardList({
           {client} · {streamName}
         </h1>
         <p className="mt-1.5 max-w-[720px] text-sm text-ink-soft">
-          {questions.length} Level-2 question{questions.length === 1 ? "" : "s"} across
-          this stream. Your consultant will review your answers before they reach the
-          workshop agenda &mdash; nothing is final until they release.
+          {questions.length} question{questions.length === 1 ? "" : "s"} · your
+          answers go to your ABeam consultant for review before reaching the
+          workshop agenda. Nothing is final until they release it back to you.
         </p>
       </div>
 
-      {/* Stat-strip */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat n={totals.total} l="Affirm questions" />
+      {/* Stat-strip — Decision colours + Information count */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <Stat n={totals.total} l="Questions" />
         <Stat n={totals.standard} l="Adopt standard" tone="std" />
-        <Stat n={totals.discuss} l="Discuss in workshop" tone="cfg" />
+        <Stat n={totals.discuss} l="Discuss" tone="cfg" />
         <Stat n={totals.deviate} l="We differ" tone="cust" />
+        <Stat n={totals.info} l="Information" tone="muted" />
       </div>
 
-      {/* Stacked progress bar */}
-      <div>
-        <div
-          className="flex h-2 overflow-hidden rounded-pill bg-ink-tint"
-          aria-label="Choices breakdown"
-        >
-          {totals.standard > 0 && (
-            <span
-              className="block h-full bg-decision-standard"
-              style={{ width: `${pct(totals.standard)}%` }}
-            />
-          )}
-          {totals.discuss > 0 && (
-            <span
-              className="block h-full bg-decision-configure"
-              style={{ width: `${pct(totals.discuss)}%` }}
-            />
-          )}
-          {totals.deviate > 0 && (
-            <span
-              className="block h-full bg-decision-custom"
-              style={{ width: `${pct(totals.deviate)}%` }}
-            />
-          )}
+      {/* Stacked progress (Decision only) */}
+      {totals.decisionTotal > 0 && (
+        <div>
+          <div
+            className="flex h-2 overflow-hidden rounded-pill bg-ink-tint"
+            aria-label="Decision choices breakdown"
+          >
+            {totals.standard > 0 && (
+              <span
+                className="block h-full bg-decision-standard"
+                style={{ width: `${pct(totals.standard)}%` }}
+              />
+            )}
+            {totals.discuss > 0 && (
+              <span
+                className="block h-full bg-decision-configure"
+                style={{ width: `${pct(totals.discuss)}%` }}
+              />
+            )}
+            {totals.deviate > 0 && (
+              <span
+                className="block h-full bg-decision-custom"
+                style={{ width: `${pct(totals.deviate)}%` }}
+              />
+            )}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-3.5 text-[11px] text-ink-muted">
+            <span>
+              <span className="mr-1.5 inline-block size-2 rounded-full bg-decision-standard align-middle" />
+              Adopt standard · {pct(totals.standard)}%
+            </span>
+            <span>
+              <span className="mr-1.5 inline-block size-2 rounded-full bg-decision-configure align-middle" />
+              Discuss · {pct(totals.discuss)}%
+            </span>
+            <span>
+              <span className="mr-1.5 inline-block size-2 rounded-full bg-decision-custom align-middle" />
+              Differ · {pct(totals.deviate)}%
+            </span>
+          </div>
         </div>
-        <div className="mt-2 flex flex-wrap gap-3.5 text-[11px] text-ink-muted">
-          <span>
-            <span className="mr-1.5 inline-block size-2 rounded-full bg-decision-standard align-middle" />
-            Adopt standard · {pct(totals.standard)}%
-          </span>
-          <span>
-            <span className="mr-1.5 inline-block size-2 rounded-full bg-decision-configure align-middle" />
-            Discuss · {pct(totals.discuss)}%
-          </span>
-          <span>
-            <span className="mr-1.5 inline-block size-2 rounded-full bg-decision-custom align-middle" />
-            Differ · {pct(totals.deviate)}%
-          </span>
+      )}
+
+      {/* v2 §7: How to answer intro */}
+      <div className="grid grid-cols-[20px_1fr] gap-3 rounded-card-warm border border-border-default bg-paper p-4 text-sm leading-5 text-ink-soft shadow-card">
+        <svg
+          className="mt-px text-navy"
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 16v-4M12 8h.01" />
+        </svg>
+        <div className="space-y-1.5">
+          <p className="font-semibold text-ink">How to answer</p>
+          <p>
+            Each <strong>Decision</strong> question shows what SAP&apos;s standard does — the
+            teal box. If that works for you, keep <em>Adopt SAP standard</em> (already
+            selected). Pick <em>Discuss in workshop</em> if you are unsure, or{" "}
+            <em>We do this differently</em> if you have a specific requirement — then
+            add a short reason.
+          </p>
+          <p>
+            <strong>Information</strong> questions have no standard to adopt — just
+            provide your detail in the text box. You can flag any item for workshop
+            discussion.
+          </p>
         </div>
       </div>
 
@@ -321,154 +403,32 @@ export function AffirmCardList({
                     const a = answers[q.id]!;
                     const wording =
                       q.consultantWording ?? q.plainLanguageSuggested ?? q.sapVerbatim;
-                    const isDefaultStd = a.choice === "standard";
-                    return (
-                      <article
+                    return q.format === "information" ? (
+                      <InfoCard
                         key={q.id}
-                        className="rounded-card-warm border border-border-default bg-paper px-[22px] py-5 shadow-card"
-                      >
-                        <header className="mb-2 flex items-center gap-2.5">
-                          <span className="text-sm font-semibold text-ink-soft">
-                            {q.sapTopic ?? areaName}
-                          </span>
-                          {isDefaultStd && (
-                            <span className="inline-flex h-[18px] items-center rounded-pill bg-decision-standard/15 px-[7px] text-[9px] font-bold uppercase tracking-[0.06em] text-decision-standard">
-                              default
-                            </span>
-                          )}
-                          <span className="ml-auto font-mono text-[11px] text-ink-muted">
-                            {q.id}
-                          </span>
-                        </header>
-
-                        <p className="mb-3 text-[15px] leading-[22px] text-ink">
-                          {wording}
-                        </p>
-
-                        {q.sapVerbatim && (
-                          <div className="mb-2.5 rounded-input bg-ink-tint px-3.5 py-2.5">
-                            <span className="block font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
-                              SAP verbatim · source of truth · never overwritten
-                            </span>
-                            <span className="mt-1 block text-xs leading-[18px] text-ink-soft">
-                              {q.sapVerbatim}
-                            </span>
-                          </div>
-                        )}
-
-                        <p className="mb-3 font-mono text-[11px] text-ink-muted">
-                          SAP BDC · Level 2{q.sapArea ? ` · ${q.sapArea}` : ""}
-                          {q.sscuiRef && q.sscuiRef !== "-" && q.sscuiRef !== "N/A"
-                            ? ` · ${q.sscuiRef}`
-                            : ""}
-                        </p>
-
-                        <div
-                          className="flex flex-wrap gap-2"
-                          role="radiogroup"
-                          aria-label={`Your choice for ${q.id}`}
-                        >
-                          {(["standard", "discuss", "deviate"] as const).map((c) => {
-                            const selected = a.choice === c;
-                            const tone =
-                              c === "standard"
-                                ? "std"
-                                : c === "discuss"
-                                  ? "cfg"
-                                  : "cust";
-                            const onCls =
-                              tone === "std"
-                                ? "bg-decision-standard text-white border-decision-standard"
-                                : tone === "cfg"
-                                  ? "bg-decision-configure text-white border-decision-configure"
-                                  : "bg-decision-custom text-white border-decision-custom";
-                            const dotCls = selected
-                              ? "bg-white/90"
-                              : tone === "std"
-                                ? "bg-decision-standard"
-                                : tone === "cfg"
-                                  ? "bg-decision-configure"
-                                  : "bg-decision-custom";
-                            return (
-                              <button
-                                key={c}
-                                type="button"
-                                role="radio"
-                                aria-checked={selected}
-                                disabled={readOnly}
-                                onClick={() => setChoice(q, c)}
-                                className={`inline-flex h-8 items-center gap-1.5 rounded-pill border px-3.5 text-xs font-semibold transition ${
-                                  selected
-                                    ? onCls
-                                    : "border-border-default bg-paper text-ink-soft hover:border-border-strong hover:bg-ink-tint"
-                                } ${readOnly ? "cursor-not-allowed opacity-70" : ""}`}
-                              >
-                                <span
-                                  className={`block size-2 rounded-full ${dotCls}`}
-                                  aria-hidden="true"
-                                />
-                                {CHOICE_LABELS[c]}
-                              </button>
-                            );
-                          })}
-                          {a.saving && (
-                            <span className="self-center text-[11px] text-ink-muted">
-                              saving…
-                            </span>
-                          )}
-                          {a.error && (
-                            <span className="self-center text-[11px] text-cta">
-                              {a.error}
-                            </span>
-                          )}
-                        </div>
-
-                        {a.choice === "deviate" && (
-                          <div className="mt-3 rounded-input border border-[#E5D6A8] bg-banner-warn px-3.5 py-2.5 text-[13px] leading-[19px]">
-                            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-decision-custom">
-                              Why we differ
-                            </span>
-                            <textarea
-                              value={a.reason}
-                              onChange={(e) => setReason(q, e.target.value)}
-                              onBlur={() => saveReason(q)}
-                              disabled={readOnly}
-                              rows={3}
-                              maxLength={2000}
-                              placeholder="Required for a deviation."
-                              className="w-full resize-y rounded border-0 bg-transparent text-ink focus:outline-none"
-                            />
-                          </div>
-                        )}
-
-                        {q.flag === "config-how-to" && (
-                          <div className="mt-3 grid grid-cols-[16px_1fr] gap-2 rounded-input bg-banner-warn px-3 py-2 text-xs leading-[18px] text-ink-soft">
-                            <svg
-                              className="mt-0.5 text-[#8B5A00]"
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2.5"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              aria-hidden="true"
-                            >
-                              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                              <path d="M12 9v4M12 17h.01" />
-                            </svg>
-                            <div>
-                              <strong className="text-ink">
-                                L3 configuration · not a business decision.
-                              </strong>{" "}
-                              Reads more like a configuration setup step than a
-                              business-affirm question. Your consultant will confirm
-                              whether this belongs in the pre-workshop set.
-                            </div>
-                          </div>
-                        )}
-                      </article>
+                        q={q}
+                        wording={wording}
+                        answer={a}
+                        readOnly={readOnly}
+                        verbatimOpen={!!expandedVerbatim[q.id]}
+                        onToggleVerbatim={() => toggleVerbatim(q.id)}
+                        onSetFlag={(flagged) => setInfoFlag(q, flagged)}
+                        onSetReason={(v) => setReason(q, v)}
+                        onSaveReason={() => saveReason(q)}
+                      />
+                    ) : (
+                      <DecisionCard
+                        key={q.id}
+                        q={q}
+                        wording={wording}
+                        answer={a}
+                        readOnly={readOnly}
+                        verbatimOpen={!!expandedVerbatim[q.id]}
+                        onToggleVerbatim={() => toggleVerbatim(q.id)}
+                        onSetChoice={(c) => setDecisionChoice(q, c)}
+                        onSetReason={(v) => setReason(q, v)}
+                        onSaveReason={() => saveReason(q)}
+                      />
                     );
                   })}
                 </div>
@@ -486,9 +446,9 @@ export function AffirmCardList({
               All {totals.total} questions answered
             </div>
             <div className="mt-0.5 text-xs text-ink-muted">
-              Your answers are sealed when submitted. The SAP verbatim text is retained
-              on every item for audit. Your consultant reviews before anything is
-              finalised.
+              Your answers are sealed when submitted. The SAP verbatim text is
+              retained on every item for audit. Your consultant reviews before
+              anything is finalised.
             </div>
             {submitError && (
               <p className="mt-2 rounded-md border border-cta/40 bg-paper px-3 py-2 text-xs text-cta">
@@ -512,6 +472,320 @@ export function AffirmCardList({
   );
 }
 
+// ─── Cards ──────────────────────────────────────────────────────────
+
+function DecisionCard({
+  q,
+  wording,
+  answer,
+  readOnly,
+  verbatimOpen,
+  onToggleVerbatim,
+  onSetChoice,
+  onSetReason,
+  onSaveReason,
+}: {
+  q: AffirmQuestionRow;
+  wording: string | null;
+  answer: AnswerState;
+  readOnly: boolean;
+  verbatimOpen: boolean;
+  onToggleVerbatim: () => void;
+  onSetChoice: (c: AffirmChoice) => void;
+  onSetReason: (v: string) => void;
+  onSaveReason: () => void;
+}) {
+  const isStd = answer.choice === "standard";
+  return (
+    <article className="rounded-card-warm border border-border-default bg-paper px-[22px] py-5 shadow-card">
+      <header className="mb-2 flex items-center gap-2.5">
+        <span className="text-sm font-semibold text-ink-soft">
+          {q.sapTopic ?? "General"}
+        </span>
+        <span className="rounded-pill bg-decision-configure/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-decision-configure">
+          Decision
+        </span>
+        {isStd && (
+          <span className="rounded-pill bg-decision-standard/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-decision-standard">
+            default
+          </span>
+        )}
+        {q.isCustom && (
+          <span className="rounded-pill bg-navy/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-navy">
+            consultant-added
+          </span>
+        )}
+        <span className="ml-auto font-mono text-[11px] text-ink-muted">
+          {q.id}
+        </span>
+      </header>
+
+      {/* About this question */}
+      {q.aboutText && (
+        <p className="mb-2 text-[13px] leading-5 text-ink-soft">
+          <span className="font-semibold text-ink">What this is about:</span>{" "}
+          {q.aboutText}
+        </p>
+      )}
+
+      <p className="mb-3 text-[15px] leading-[22px] text-ink">{wording}</p>
+
+      {/* What "Adopt SAP standard" means here */}
+      {q.standardMeans && (
+        <div className="mb-3 rounded-input border border-decision-standard/30 bg-decision-standard/5 px-3.5 py-2.5">
+          <span className="block text-[11px] font-bold uppercase tracking-wider text-decision-standard">
+            What &quot;Adopt SAP standard&quot; means here
+          </span>
+          <span className="mt-1 block text-[13px] leading-[19px] text-ink-soft">
+            {q.standardMeans}
+          </span>
+        </div>
+      )}
+
+      {/* SAP verbatim — collapsed by default */}
+      {q.sapVerbatim && (
+        <>
+          <button
+            type="button"
+            onClick={onToggleVerbatim}
+            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-muted hover:text-ink"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              aria-hidden="true"
+              className={`transition ${verbatimOpen ? "rotate-90" : ""}`}
+            >
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+            Show the exact SAP wording
+          </button>
+          {verbatimOpen && (
+            <div className="mt-1.5 mb-2.5 rounded-input bg-ink-tint px-3.5 py-2.5">
+              <span className="block font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+                SAP verbatim · source of truth · never changed
+              </span>
+              <span className="mt-1 block text-xs leading-[18px] text-ink-soft">
+                {q.sapVerbatim}
+              </span>
+            </div>
+          )}
+        </>
+      )}
+
+      <p className="mt-3 mb-3 font-mono text-[11px] text-ink-muted">
+        SAP BDC · Level 2{q.sapArea ? ` · ${q.sapArea}` : ""}
+        {q.sscuiRef && q.sscuiRef !== "-" && q.sscuiRef !== "N/A"
+          ? ` · ${q.sscuiRef}`
+          : ""}
+      </p>
+
+      <div
+        className="flex flex-wrap gap-3"
+        role="radiogroup"
+        aria-label={`Your choice for ${q.id}`}
+      >
+        {(["standard", "discuss", "deviate"] as const).map((c) => {
+          const selected = answer.choice === c;
+          const tone = c === "standard" ? "std" : c === "discuss" ? "cfg" : "cust";
+          const onCls =
+            tone === "std"
+              ? "bg-decision-standard text-white border-decision-standard"
+              : tone === "cfg"
+                ? "bg-decision-configure text-white border-decision-configure"
+                : "bg-decision-custom text-white border-decision-custom";
+          return (
+            <div key={c} className="min-w-[140px]">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                disabled={readOnly}
+                onClick={() => onSetChoice(c)}
+                className={`inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-pill border px-3.5 text-xs font-semibold transition ${
+                  selected
+                    ? onCls
+                    : "border-border-default bg-paper text-ink-soft hover:border-border-strong hover:bg-ink-tint"
+                } ${readOnly ? "cursor-not-allowed opacity-70" : ""}`}
+              >
+                {DECISION_LABELS[c]}
+              </button>
+              <p className="mt-1 text-center text-[11px] leading-4 text-ink-muted">
+                {DECISION_HELP[c]}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      {answer.choice === "deviate" && (
+        <div className="mt-3 rounded-input border border-[#E5D6A8] bg-banner-warn px-3.5 py-2.5 text-[13px] leading-[19px]">
+          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-decision-custom">
+            Why we differ
+          </span>
+          <textarea
+            value={answer.reason}
+            onChange={(e) => onSetReason(e.target.value)}
+            onBlur={onSaveReason}
+            disabled={readOnly}
+            rows={3}
+            maxLength={2000}
+            placeholder="Required for a deviation."
+            className="w-full resize-y rounded border-0 bg-transparent text-ink focus:outline-none"
+          />
+        </div>
+      )}
+
+      {answer.saving && (
+        <p className="mt-2 text-[11px] text-ink-muted">saving…</p>
+      )}
+      {answer.error && <p className="mt-2 text-[11px] text-cta">{answer.error}</p>}
+    </article>
+  );
+}
+
+function InfoCard({
+  q,
+  wording,
+  answer,
+  readOnly,
+  verbatimOpen,
+  onToggleVerbatim,
+  onSetFlag,
+  onSetReason,
+  onSaveReason,
+}: {
+  q: AffirmQuestionRow;
+  wording: string | null;
+  answer: AnswerState;
+  readOnly: boolean;
+  verbatimOpen: boolean;
+  onToggleVerbatim: () => void;
+  onSetFlag: (flagged: boolean) => void;
+  onSetReason: (v: string) => void;
+  onSaveReason: () => void;
+}) {
+  const flagged = answer.choice === "discuss";
+  return (
+    <article className="rounded-card-warm border border-border-default bg-paper px-[22px] py-5 shadow-card">
+      <header className="mb-2 flex items-center gap-2.5">
+        <span className="text-sm font-semibold text-ink-soft">
+          {q.sapTopic ?? "General"}
+        </span>
+        <span className="rounded-pill bg-ink-tint px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-ink-soft">
+          Information
+        </span>
+        {q.isCustom && (
+          <span className="rounded-pill bg-navy/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-navy">
+            consultant-added
+          </span>
+        )}
+        <span className="ml-auto font-mono text-[11px] text-ink-muted">
+          {q.id}
+        </span>
+      </header>
+
+      {q.aboutText && (
+        <p className="mb-2 text-[13px] leading-5 text-ink-soft">
+          <span className="font-semibold text-ink">What this is about:</span>{" "}
+          {q.aboutText}
+        </p>
+      )}
+
+      <p className="mb-3 text-[15px] leading-[22px] text-ink">{wording}</p>
+
+      <div className="mb-3">
+        <label className="block text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+          Your answer
+        </label>
+        <textarea
+          value={answer.reason}
+          onChange={(e) => onSetReason(e.target.value)}
+          onBlur={onSaveReason}
+          disabled={readOnly}
+          rows={3}
+          maxLength={2000}
+          placeholder="Type your answer here — e.g. list the items, describe your setup…"
+          className="mt-1 w-full rounded-input border border-border-default bg-paper p-2.5 text-sm focus:border-navy focus:outline-none"
+        />
+      </div>
+
+      {q.sapVerbatim && (
+        <>
+          <button
+            type="button"
+            onClick={onToggleVerbatim}
+            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-muted hover:text-ink"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              aria-hidden="true"
+              className={`transition ${verbatimOpen ? "rotate-90" : ""}`}
+            >
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+            Show the exact SAP wording
+          </button>
+          {verbatimOpen && (
+            <div className="mt-1.5 mb-2.5 rounded-input bg-ink-tint px-3.5 py-2.5">
+              <span className="block font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+                SAP verbatim · source of truth · never changed
+              </span>
+              <span className="mt-1 block text-xs leading-[18px] text-ink-soft">
+                {q.sapVerbatim}
+              </span>
+            </div>
+          )}
+        </>
+      )}
+
+      <p className="mt-3 mb-3 font-mono text-[11px] text-ink-muted">
+        SAP BDC · Level 2{q.sapArea ? ` · ${q.sapArea}` : ""}
+        {q.sscuiRef && q.sscuiRef !== "-" && q.sscuiRef !== "N/A"
+          ? ` · ${q.sscuiRef}`
+          : ""}
+      </p>
+
+      {/* Optional flag for workshop discussion — no "adopt standard" here */}
+      <div className="flex items-start gap-3">
+        <div className="min-w-[200px]">
+          <button
+            type="button"
+            disabled={readOnly}
+            onClick={() => onSetFlag(!flagged)}
+            className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-pill border px-3.5 text-xs font-semibold transition ${
+              flagged
+                ? "border-decision-configure bg-decision-configure text-white"
+                : "border-border-default bg-paper text-ink-soft hover:border-border-strong hover:bg-ink-tint"
+            } ${readOnly ? "cursor-not-allowed opacity-70" : ""}`}
+          >
+            {flagged ? "Flagged for workshop" : "Flag for workshop discussion"}
+          </button>
+          <p className="mt-1 text-[11px] leading-4 text-ink-muted">
+            Use if you would rather cover this live.
+          </p>
+        </div>
+      </div>
+
+      {answer.saving && (
+        <p className="mt-2 text-[11px] text-ink-muted">saving…</p>
+      )}
+      {answer.error && <p className="mt-2 text-[11px] text-cta">{answer.error}</p>}
+    </article>
+  );
+}
+
 function Stat({
   n,
   l,
@@ -519,7 +793,7 @@ function Stat({
 }: {
   n: number;
   l: string;
-  tone?: "std" | "cfg" | "cust";
+  tone?: "std" | "cfg" | "cust" | "muted";
 }) {
   const cls =
     tone === "std"
@@ -528,7 +802,9 @@ function Stat({
         ? "text-decision-configure"
         : tone === "cust"
           ? "text-decision-custom"
-          : "text-ink";
+          : tone === "muted"
+            ? "text-ink-muted"
+            : "text-ink";
   return (
     <div className="rounded-card-warm border border-border-default bg-paper px-[18px] py-3.5">
       <p className={`font-serif text-[28px] leading-none font-medium ${cls}`}>{n}</p>

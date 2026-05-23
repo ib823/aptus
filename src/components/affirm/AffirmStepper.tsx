@@ -1,19 +1,28 @@
 /**
- * AffirmStepper — the 4-chip in-page workflow stepper.
+ * AffirmStepper — the 5-chip in-page workflow stepper.
  *
- * Visual: Scope -> Affirm -> Review -> Output. Active step uses navy bg
- * with CTA-red numeral; done steps use the signed-green numeral;
- * pending steps use ink-tint. Mirrors the .workflow-stepper pattern
- * from the design (enhancement-review.css).
+ * v2 (CCC follow-up §6): adds the consultant Question editor step
+ * between Scope and Affirm.
+ *
+ * Visual: Scope -> Question editor -> Affirm -> Review & release ->
+ * Output. Active step uses navy bg with CTA-red numeral; done steps
+ * use the signed-green numeral; pending steps use ink-tint. Mirrors
+ * .workflow-stepper from the v2 design.
  */
 
 import { Fragment } from "react";
 
-export type AffirmStep = "scope" | "affirm" | "review" | "output";
+export type AffirmStep =
+  | "scope"
+  | "editor"
+  | "affirm"
+  | "review"
+  | "output";
 
-const ORDER: AffirmStep[] = ["scope", "affirm", "review", "output"];
+const ORDER: AffirmStep[] = ["scope", "editor", "affirm", "review", "output"];
 const LABEL: Record<AffirmStep, string> = {
   scope: "Scope",
+  editor: "Question editor",
   affirm: "Affirm",
   review: "Review & release",
   output: "Output",

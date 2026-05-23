@@ -1,0 +1,128 @@
+================================================================================
+CCC FOLLOW-UP PROMPT — ABEAM WORKBENCH · UX REFINEMENTS FROM TEST FEEDBACK
+Prepared 2026-05-22 · A change-set on top of CCC-workbench-build-master-prompt.txt
+================================================================================
+
+ROLE & CONTEXT
+--------------
+The workbench affirm-set release is already built (per the master prompt). Live
+testing surfaced eight refinements. This prompt is the CHANGE-SET — the app, the
+data model, the API and the screens already exist. Apply these as deltas. Do not
+rebuild. Do not invent SAP content and do not invent UI.
+
+INPUTS
+------
+1. The realigned UI design — fetched from the Claude design environment (the
+   updated five-screen review: Consultant scope / Consultant review questions /
+   Client affirm / Consultant review & release / Consultant output). This is the
+   visual and interaction spec — build the screens to it.
+2. Standard-Answer-Layer file — accompanies this prompt; carries, per L2 question:
+   the SAP "Topic Definition" text and a Decision/Information format default.
+3. The four layer files and CCC-workbench-build-master-prompt.txt remain in force —
+   every locked decision, caveat and guardrail in the master prompt still applies.
+
+THE EIGHT CHANGES
+-----------------
+
+1. VALUE-STREAM EXPAND/COLLAPSE — use a disclosure control, not a checkbox.
+   The value-stream row gets a chevron (expand/collapse). Remove the checkbox at
+   the value-stream level entirely — a value stream is a navigation container, not
+   a selectable item. Expanding and selecting are two separate controls.
+
+2. TIER LABELS — name the three tiers in the scope tree:
+   Tier 1 "Value stream", Tier 2 "Sub-process", Tier 3 "Scope item". Render the
+   labels so the user is never guessing what a level is called.
+
+3. SCOPE ITEMS DEFAULT UNSELECTED.
+   Scope items must start UNCHECKED — the consultant opts items in. Add a
+   "Select all / Clear" control at the sub-process level (tri-state checkbox that
+   reflects how many children are selected). NOTE: this is scope SELECTION and is
+   opt-in; it is unrelated to "default-to-standard", which is about the ANSWER to a
+   question once it is already in the bundle and stays as-is.
+
+4. CONSULTANT QUESTION-EDITOR — a new screen between scope-selection and issue.
+   Add a route (e.g. /affirm/[id]/questions). It lists every question in the
+   bundle, grouped by sub-process. Per question the consultant can:
+     - preview it exactly as the client will see it;
+     - edit the plain-language wording inline;
+     - set the response FORMAT (Decision or Information — see change 8);
+     - enable or disable the question (disable keeps the record — never deletes);
+     - reorder questions within a sub-process;
+     - add a custom question, marked "consultant-added, not from SAP".
+   Locked, always: the SAP verbatim text is never editable and SAP questions are
+   never deletable (only disable). The 15 SAP-excluded rows arrive pre-disabled.
+   Data-model delta — on the bundle-question join (AffirmBundleQuestion):
+     enabled (bool, default true), displayOrder (int), format (decision|information).
+   On the question content: consultantWording (exists), aboutText, standardMeans.
+   Custom questions: isCustom (bool), createdBy.
+
+5. COVERAGE BADGE — show which scope items carry questions.
+   On every scope item in the tree, a count badge: "N questions" when the item
+   carries a BDC affirm-set, a muted "no affirm-set" when it does not (only 152 of
+   672 items do). Roll the count up to the sub-process and value-stream rows.
+
+6. BADGE LEGEND + LIFECYCLE STEPPER.
+   Add a badge legend (a key) on the review screen, defining every marker:
+   coverage, decision colours (standard / discuss / differ), flagged, excluded,
+   consultant-added. Add a bundle lifecycle stepper showing
+   Draft -> Issued -> Submitted -> Released with the current state marked.
+
+7. CLIENT OPTION GUIDANCE.
+   On the client affirm screen, put a short helper line under each of the three
+   choices ("Adopt SAP standard" = keep SAP's pre-delivered setup; "Discuss in
+   workshop" = unsure, raise it live; "We do this differently" = a specific
+   requirement, add a reason). Add a brief "How to answer" intro at the top.
+
+8. TWO QUESTION FORMATS + THE SAP STANDARD ON EVERY DECISION CARD.
+   The affirm-set contains two kinds of question:
+     - DECISION — there is an SAP standard; the client picks adopt / discuss /
+       differ + reason. This is the existing 3-choice format.
+     - INFORMATION — there is no standard to adopt; the client simply provides
+       their detail (e.g. "list your sales offices"). Render a free-text response;
+       the client may still flag it for the workshop. "Adopt SAP standard" must
+       NOT appear on an Information question.
+   On every DECISION card, show a "What adopting SAP standard means here" box —
+   content from standardMeans. Show an "About this question" line — content from
+   aboutText. Both seed from the SAP Topic Definition (input file 2); the
+   consultant confirms/refines them in the question editor (change 4), same
+   generator-drafts / consultant-confirms model as the plain-language wording.
+
+DATA NOTES — read these, they correct an earlier assumption
+-----------------------------------------------------------
+- The BDC "Solution" column is NOT a standard answer. It only lists the SAP
+  product editions a question applies to. Do not use it for "what the standard is".
+- The BDC "Topic Definition" column IS the useful field — it explains what each
+  SAP capability or configuration activity is. It seeds aboutText, and is the
+  starting point for standardMeans.
+- format defaults to "decision". The consultant switches a question to
+  "information" in the editor where it only collects data.
+- standardMeans may start empty for some questions; the consultant fills it in the
+  editor before issuing. Do not auto-generate a fake standard answer.
+
+GUARDRAILS (unchanged from the master prompt)
+---------------------------------------------
+- No fabrication of SAP content. SAP verbatim is locked and always visible.
+- Custom questions always visibly marked as not-from-SAP.
+- The consultant review-and-release gate stays; no auto-send.
+- Excluded questions never shown to the client; flagged questions surfaced to the
+  consultant. Coverage gap shown, not hidden.
+- UI strictly within the PR1 design system — build to the realigned design only.
+
+ACCEPTANCE CRITERIA
+-------------------
+1. Value-stream rows expand via a chevron; no checkbox at value-stream level.
+2. The three tiers are labelled in the tree.
+3. Scope items load unselected; sub-process Select-all / Clear works.
+4. The question-editor screen exists; wording edits, format toggle, enable/disable,
+   reorder and add-custom all work; SAP verbatim is read-only; SAP questions
+   cannot be deleted.
+5. Every scope item shows a coverage badge; counts roll up.
+6. The review screen shows a badge legend and a Draft->Released lifecycle stepper.
+7. Each client choice has helper text; the affirm screen has a "how to answer" intro.
+8. Information questions render a free-text response with no "adopt standard";
+   Decision cards show the "what SAP standard means" box and an "about" line.
+
+Apply these eight as a clean change-set. Where a question carries a flag, an
+excluded status, or an empty standardMeans, render it honestly rather than hiding
+it — that visibility is the purpose of the tool.
+================================================================================

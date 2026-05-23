@@ -1461,9 +1461,10 @@ model User {
   presalesAuditActions   PresalesAuditEvent[]  @relation("PresalesAuditActions")
 
   // ABeam Workbench — Value-Stream Affirm-Set (CCC build, 2026-05-22)
-  affirmBundlesCreated  AffirmBundle[] @relation("AffirmBundlesCreated")
-  affirmBundlesReleased AffirmBundle[] @relation("AffirmBundlesReleased")
-  affirmEventsByUser    AffirmEvent[]  @relation("AffirmEventsByUser")
+  affirmBundlesCreated   AffirmBundle[]   @relation("AffirmBundlesCreated")
+  affirmBundlesReleased  AffirmBundle[]   @relation("AffirmBundlesReleased")
+  affirmEventsByUser     AffirmEvent[]    @relation("AffirmEventsByUser")
+  affirmQuestionsCreated AffirmQuestion[] @relation("AffirmQuestionsCreated")
 
   @@index([role])
   @@index([organizationId])
@@ -3933,13 +3934,29 @@ model AffirmQuestion {
   statusNote             String?  @db.Text
   displayOrder           Int      @default(0)
 
+  // v2 (CCC follow-up): aboutText seeds from the SAP Topic Definition
+  // and is shown as "What this is about:" on each client card.
+  // standardMeans is the plain-language translation of what "Adopt SAP
+  // standard" means for Decision questions; shown in the teal box on
+  // the client card. Both may start empty and are filled by the
+  // consultant in the question editor.
+  aboutText     String? @db.Text
+  standardMeans String? @db.Text
+  // Consultant-added (not from SAP BDC). Always visibly marked
+  // "consultant-added, not from SAP". SAP questions (isCustom=false)
+  // are never deletable — only disable via AffirmBundleQuestion.
+  isCustom      Boolean @default(false)
+  createdById   String?
+
   stream      AffirmValueStream      @relation(fields: [streamId], references: [id], onDelete: Cascade)
   subProcess  AffirmSubProcess       @relation(fields: [subProcessId], references: [id], onDelete: Cascade)
+  createdBy   User?                  @relation("AffirmQuestionsCreated", fields: [createdById], references: [id])
   responses   AffirmResponse[]
   bundleItems AffirmBundleQuestion[]
 
   @@index([streamId])
   @@index([subProcessId])
+  @@index([isCustom])
   @@index([status])
   @@index([flag])
 }
@@ -4006,11 +4023,27 @@ model AffirmBundleQuestion {
   bundleId   String
   questionId String
 
+  // v2 (CCC follow-up): consultant question-editor controls.
+  // - enabled: a question can be disabled (kept in the record but
+  //   never shown to the client). The 15 SAP-excluded rows arrive
+  //   pre-disabled per the v2 prompt §4.
+  // - displayOrder: consultant-controlled reorder within a
+  //   sub-process. Defaults match the question's intrinsic
+  //   displayOrder; the editor overrides.
+  // - format: "decision" (3-choice, has SAP standard) or
+  //   "information" (free-text, no standard to adopt). Defaults to
+  //   "decision"; consultant switches in the editor.
+  enabled      Boolean @default(true)
+  displayOrder Int     @default(0)
+  format       String  @default("decision")
+
   bundle   AffirmBundle   @relation(fields: [bundleId], references: [id], onDelete: Cascade)
   question AffirmQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@id([bundleId, questionId])
   @@index([questionId])
+  @@index([bundleId, enabled])
+  @@index([bundleId, displayOrder])
 }
 
 /// One row per answered affirm question. Defaults to standard; deviate
