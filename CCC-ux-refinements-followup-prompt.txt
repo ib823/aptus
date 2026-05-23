@@ -18,11 +18,15 @@ INPUTS
    visual and interaction spec — build the screens to it.
 2. Standard-Answer-Layer file — accompanies this prompt; carries, per L2 question:
    the SAP "Topic Definition" text and a Decision/Information format default.
-3. The four layer files and CCC-workbench-build-master-prompt.txt remain in force —
+3. Layer3-Process-Flow.xlsx — accompanies this prompt; the per-scope-item process
+   flow. Sheet "Mandatory MY Flow" is the step strip to render; "Full Activity List"
+   is the drill-down source. Already collapsed to the Malaysia mandatory path —
+   render as-is, no further processing.
+4. The four layer files and CCC-workbench-build-master-prompt.txt remain in force —
    every locked decision, caveat and guardrail in the master prompt still applies.
 
-THE EIGHT CHANGES
------------------
+THE NINE CHANGES
+----------------
 
 1. VALUE-STREAM EXPAND/COLLAPSE — use a disclosure control, not a checkbox.
    The value-stream row gets a chevron (expand/collapse). Remove the checkbox at
@@ -87,6 +91,21 @@ THE EIGHT CHANGES
    consultant confirms/refines them in the question editor (change 4), same
    generator-drafts / consultant-confirms model as the plain-language wording.
 
+9. PROCESS FLOW ON THE AFFIRM CARD.
+   Each affirm question's scope item has a business process flow. Add a compact
+   "Where this sits" step strip — on the client affirm card and in the consultant
+   question editor — showing the mandatory Malaysia steps in SAP order, each with
+   its Fiori app, from input 3 sheet "Mandatory MY Flow". Optional steps and deeper
+   sub-activities (input 3 sheet "Full Activity List") are drill-down on demand,
+   not in the main strip. Activity names are SAP-verbatim — do not paraphrase.
+   Data-model delta: a ProcessFlowStep record — scopeItemId, stepOrder, stepName,
+   fioriApps — keyed by scope item ID. The affirm card resolves its flow via the
+   question's scope-item reference.
+   HONEST LIMIT: question -> scope-item flow is an exact join. Question -> one
+   specific step is NOT in the SAP data — render the whole flow, never a guessed
+   step highlight. 17 of 672 scope items have no process flow — mark that plainly,
+   do not invent one.
+
 DATA NOTES — read these, they correct an earlier assumption
 -----------------------------------------------------------
 - The BDC "Solution" column is NOT a standard answer. It only lists the SAP
@@ -121,6 +140,8 @@ ACCEPTANCE CRITERIA
 7. Each client choice has helper text; the affirm screen has a "how to answer" intro.
 8. Information questions render a free-text response with no "adopt standard";
    Decision cards show the "what SAP standard means" box and an "about" line.
+9. Each affirm card and editor row shows the scope item's process-flow strip;
+   no fabricated step-level highlight; scope items with no flow are marked, not faked.
 
 Apply these eight as a clean change-set. Where a question carries a flag, an
 excluded status, or an empty standardMeans, render it honestly rather than hiding
