@@ -46,10 +46,37 @@ export async function sendMagicLink(
     },
   });
 
-  const url = new URL(`${baseUrl}/api/auth/callback/email`);
+  // Workbench-aware host rewrite. When the destination is a Workbench
+  // path (/presales, /affirm, /c) and WORKBENCH_HOST is set, the
+  // entire sign-in flow must happen on the Workbench host so the
+  // session cookie set by /api/auth/callback/email lands on the right
+  // origin. *.vercel.app is on the Public Suffix List so cookies
+  // cannot span subdomains. Mirrors the rewrite in
+  // auth-options.ts:sendVerificationRequest for the NextAuth-driven
+  // sign-in path.
+  const workbenchHost = process.env.WORKBENCH_HOST;
+  const isWorkbench =
+    !!workbenchHost &&
+    (callbackUrl.startsWith("/presales") ||
+      callbackUrl.startsWith("/affirm") ||
+      callbackUrl.startsWith("/c/"));
+  const verifyBase = isWorkbench ? `https://${workbenchHost}` : baseUrl;
+  const url = new URL(`${verifyBase}/api/auth/callback/email`);
   url.searchParams.set("token", rawToken);
   url.searchParams.set("email", normalizedEmail);
   url.searchParams.set("callbackUrl", callbackUrl);
+
+  // Wrap the verification URL in a /presales/login/confirm interstitial
+  // for Workbench links so Outlook Safe Links / Brevo click-trackers
+  // can prefetch the interstitial (harmless) instead of the raw
+  // callback (which would burn the single-use token before the human
+  // clicks). Same protection auth-options.ts already applies.
+  let emailUrl = url.toString();
+  if (isWorkbench) {
+    const confirm = new URL("/presales/login/confirm", `https://${workbenchHost}`);
+    confirm.searchParams.set("next", url.toString());
+    emailUrl = confirm.toString();
+  }
 
   if (!process.env.SMTP_USER) {
     if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
@@ -61,7 +88,7 @@ export async function sendMagicLink(
   }
 
   try {
-    const template = magicLinkEmail(url.toString(), normalizedEmail);
+    const template = magicLinkEmail(emailUrl, normalizedEmail);
     await sendEmail({
       to: { email: normalizedEmail },
       subject: template.subject,
