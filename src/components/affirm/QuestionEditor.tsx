@@ -233,7 +233,21 @@ export function QuestionEditor({
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        setIssueError(j.error ?? `${res.status}`);
+        // 409 illegal_transition typically means the bundle is already
+        // issued (or beyond). The user clicked Issue from a stale
+        // editor view; route them to the review screen where their
+        // bundle actually is. Other 4xx/5xx errors surface inline.
+        if (res.status === 409 && j.error === "illegal_transition") {
+          router.replace(`/affirm/${bundleId}/review`);
+          return;
+        }
+        setIssueError(
+          j.error === "empty_scope"
+            ? "Add at least one scope item before issuing."
+            : j.error === "not_found"
+              ? "Bundle no longer exists."
+              : j.error ?? `Issue failed (${res.status}).`,
+        );
         return;
       }
       router.replace(`/affirm/${bundleId}/review`);
