@@ -31,7 +31,11 @@ export async function POST(
   const result = await prisma.$transaction(async (tx) => {
     const bundle = await tx.affirmBundle.findUnique({
       where: { id },
-      include: { scopeItems: { select: { scopeItemId: true } } },
+      include: {
+        scopeItems: {
+          select: { scopeItemId: true, scopeItem: { select: { streamId: true } } },
+        },
+      },
     });
     if (!bundle) return { error: "not_found" as const };
     try {
@@ -44,13 +48,21 @@ export async function POST(
     if (scopeIds.length === 0) {
       return { error: "empty_scope" as const };
     }
+    // v2.1 data fix: 71 of 150 L2 questions have empty scopeItemRefs
+    // (stream-level Business Overview etc.). Union them in by stream.
+    const streamIds = Array.from(
+      new Set(bundle.scopeItems.map((s) => s.scopeItem.streamId)),
+    );
 
     // All in-scope questions, including excluded — excluded come in
     // disabled (enabled=false) so they live in the audit record without
     // being shown to the client.
     const questions = await tx.affirmQuestion.findMany({
       where: {
-        scopeItemRefs: { hasSome: scopeIds },
+        OR: [
+          { scopeItemRefs: { hasSome: scopeIds } },
+          { scopeItemRefs: { isEmpty: true }, streamId: { in: streamIds } },
+        ],
       },
       select: { id: true, status: true, displayOrder: true, format: true },
     });

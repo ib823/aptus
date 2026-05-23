@@ -346,16 +346,23 @@ async function ensureDemoBundle(ownerId: string): Promise<{
     // demo bundle and the seed always wins. If a non-demo bundle is
     // ever named "DEMO · Lead to Cash" by accident, that's on the
     // operator.
-    const scopeIds = await prisma.affirmBundleScopeItem
-      .findMany({
-        where: { bundleId: existing.id },
-        select: { scopeItemId: true },
-      })
-      .then((rows) => rows.map((r) => r.scopeItemId));
+    const scopeRows = await prisma.affirmBundleScopeItem.findMany({
+      where: { bundleId: existing.id },
+      select: { scopeItemId: true, scopeItem: { select: { streamId: true } } },
+    });
+    const scopeIds = scopeRows.map((r) => r.scopeItemId);
+    const streamIds = Array.from(
+      new Set(scopeRows.map((r) => r.scopeItem.streamId)),
+    );
 
     const inScope = scopeIds.length
       ? await prisma.affirmQuestion.findMany({
-          where: { scopeItemRefs: { hasSome: scopeIds } },
+          where: {
+            OR: [
+              { scopeItemRefs: { hasSome: scopeIds } },
+              { scopeItemRefs: { isEmpty: true }, streamId: { in: streamIds } },
+            ],
+          },
           select: { id: true, status: true, displayOrder: true, format: true },
         })
       : [];
@@ -433,9 +440,16 @@ async function ensureDemoBundle(ownerId: string): Promise<{
 
     // Issue immediately so the client view is open for the demo.
     const scopeIds = scope.map((s) => s.id);
+    // Demo bundle scope is the whole Lead-to-Cash stream.
+    const streamIds = ["lead-to-cash"];
     const questions = scopeIds.length
       ? await tx.affirmQuestion.findMany({
-          where: { scopeItemRefs: { hasSome: scopeIds } },
+          where: {
+            OR: [
+              { scopeItemRefs: { hasSome: scopeIds } },
+              { scopeItemRefs: { isEmpty: true }, streamId: { in: streamIds } },
+            ],
+          },
           select: { id: true, status: true, displayOrder: true, format: true },
         })
       : [];

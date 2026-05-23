@@ -44,14 +44,30 @@ export async function materializeBundleQuestions(
 ): Promise<{ created: number; total: number }> {
   const bundle = await prisma.affirmBundle.findUnique({
     where: { id: bundleId },
-    include: { scopeItems: { select: { scopeItemId: true } } },
+    include: {
+      scopeItems: {
+        select: { scopeItemId: true, scopeItem: { select: { streamId: true } } },
+      },
+    },
   });
   if (!bundle) return { created: 0, total: 0 };
   const scopeIds = bundle.scopeItems.map((s) => s.scopeItemId);
   if (scopeIds.length === 0) return { created: 0, total: 0 };
+  // v2.1 data fix: 71 of 150 L2 questions have empty scopeItemRefs —
+  // they're stream-level (Business Overview, MRP, etc.) and would
+  // otherwise be silently dropped from every bundle. Include them
+  // whenever any scope item from the same stream is selected.
+  const streamIds = Array.from(
+    new Set(bundle.scopeItems.map((s) => s.scopeItem.streamId)),
+  );
 
   const questions = await prisma.affirmQuestion.findMany({
-    where: { scopeItemRefs: { hasSome: scopeIds } },
+    where: {
+      OR: [
+        { scopeItemRefs: { hasSome: scopeIds } },
+        { scopeItemRefs: { isEmpty: true }, streamId: { in: streamIds } },
+      ],
+    },
     select: { id: true, status: true, displayOrder: true, format: true },
   });
 
