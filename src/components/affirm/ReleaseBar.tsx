@@ -29,7 +29,19 @@ export function ReleaseBar({ bundleId, totals }: Props) {
         });
         if (!res.ok) {
           const j = await res.json().catch(() => ({}));
-          throw new Error(j.error ?? `${res.status}`);
+          // Stale-click handling — same pattern as the editor Issue
+          // CTA. A second click on Release after the first succeeded
+          // returns 409 illegal_transition; route to the output where
+          // the bundle actually lives.
+          if (res.status === 409 && j.error === "illegal_transition") {
+            router.replace(`/affirm/${bundleId}/output`);
+            return;
+          }
+          throw new Error(
+            j.error === "not_found"
+              ? "Bundle no longer exists."
+              : j.error ?? `Release failed (${res.status}).`,
+          );
         }
         router.replace(`/affirm/${bundleId}/output`);
       } catch (e) {
