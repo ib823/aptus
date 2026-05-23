@@ -152,6 +152,9 @@ interface QuestionSeed {
   flag: string | null;
   statusNote: string | null;
   displayOrder: number;
+  // v2.1 (Standard-Answer-Layer)
+  aboutText?: string | null;
+  format?: "decision" | "information";
 }
 interface Dataset {
   meta: { counts: Record<string, number> };
@@ -205,26 +208,30 @@ async function seedValueStream(): Promise<{
     });
   }
   for (const q of data.questions) {
+    const common = {
+      streamId: q.streamId,
+      subProcessId: q.subProcessId,
+      scopeItemRefs: q.scopeItemRefs,
+      sapVerbatim: q.sapVerbatim,
+      plainLanguageSuggested: q.plainLanguageSuggested,
+      consultantWording: q.consultantWording,
+      sapArea: q.sapArea,
+      sapTopic: q.sapTopic,
+      sscuiRef: q.sscuiRef,
+      sourceQuestionnaire: q.sourceQuestionnaire,
+      placementBasis: q.placementBasis,
+      status: q.status,
+      flag: q.flag,
+      statusNote: q.statusNote,
+      displayOrder: q.displayOrder,
+      // v2.1 (Standard-Answer-Layer):
+      aboutText: q.aboutText ?? null,
+      format: q.format ?? "decision",
+    };
     await prisma.affirmQuestion.upsert({
       where: { id: q.id },
-      update: {
-        streamId: q.streamId,
-        subProcessId: q.subProcessId,
-        scopeItemRefs: q.scopeItemRefs,
-        sapVerbatim: q.sapVerbatim,
-        plainLanguageSuggested: q.plainLanguageSuggested,
-        consultantWording: q.consultantWording,
-        sapArea: q.sapArea,
-        sapTopic: q.sapTopic,
-        sscuiRef: q.sscuiRef,
-        sourceQuestionnaire: q.sourceQuestionnaire,
-        placementBasis: q.placementBasis,
-        status: q.status,
-        flag: q.flag,
-        statusNote: q.statusNote,
-        displayOrder: q.displayOrder,
-      },
-      create: q,
+      update: common,
+      create: { id: q.id, ...common },
     });
   }
 

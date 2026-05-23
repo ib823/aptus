@@ -33,6 +33,7 @@ export interface EditorRow {
   sapArea: string | null;
   sapTopic: string | null;
   sscuiRef: string | null;
+  scopeItemRefs: string[];
   status: string;
   flag: string | null;
   isCustom: boolean;
@@ -51,7 +52,7 @@ export async function materializeBundleQuestions(
 
   const questions = await prisma.affirmQuestion.findMany({
     where: { scopeItemRefs: { hasSome: scopeIds } },
-    select: { id: true, status: true, displayOrder: true },
+    select: { id: true, status: true, displayOrder: true, format: true },
   });
 
   const existing = await prisma.affirmBundleQuestion.findMany({
@@ -68,6 +69,9 @@ export async function materializeBundleQuestions(
         questionId: q.id,
         enabled: q.status !== "excluded",
         displayOrder: q.displayOrder,
+        // v2.1: pick up the SAP default format from the question bank.
+        // Consultant override stays on the join row.
+        format: q.format,
       })),
       skipDuplicates: true,
     });
@@ -114,6 +118,7 @@ export async function getEditorRows(bundleId: string): Promise<EditorRow[]> {
     sapArea: r.question.sapArea,
     sapTopic: r.question.sapTopic,
     sscuiRef: r.question.sscuiRef,
+    scopeItemRefs: r.question.scopeItemRefs,
     status: r.question.status,
     flag: r.question.flag,
     isCustom: r.question.isCustom,

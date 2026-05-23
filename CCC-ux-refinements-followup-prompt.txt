@@ -12,10 +12,15 @@ rebuild. Do not invent SAP content and do not invent UI.
 
 INPUTS
 ------
-1. The realigned UI design — fetched from the Claude design environment (the
-   updated five-screen review: Consultant scope / Consultant review questions /
-   Client affirm / Consultant review & release / Consultant output). This is the
-   visual and interaction spec — build the screens to it.
+1. The realigned UI design — delivered by Claude design as files (in aptus/design-aligned/):
+     - "Enhancement v2 Restored.html" + "enhancement-v2.css" — the five-screen
+       workbench UI (consultant scope / review questions / client affirm /
+       review & release / output). The visual + interaction spec; build to it.
+     - "Process Flow.html" + "process-flow.css" — the aligned process-flow strip
+       (enhancement 9 below). Build the ProcessFlowStrip component to this.
+   Both are already tokenised to the PR1 design system — use them verbatim as the
+   design source. Ignore the rest of the Claude design bundle (PR1-PR5 are the
+   existing design system; the uploads/ folder is just the source mockups echoed back).
 2. Standard-Answer-Layer file — accompanies this prompt; carries, per L2 question:
    the SAP "Topic Definition" text and a Decision/Information format default.
 3. Layer3-Process-Flow.xlsx — accompanies this prompt; the per-scope-item process
@@ -140,10 +145,10 @@ ACCEPTANCE CRITERIA
 7. Each client choice has helper text; the affirm screen has a "how to answer" intro.
 8. Information questions render a free-text response with no "adopt standard";
    Decision cards show the "what SAP standard means" box and an "about" line.
-9. Each affirm card and editor row shows the scope item's process-flow strip;
+9. Each affirm card and editor row shows the scope item process-flow strip;
    no fabricated step-level highlight; scope items with no flow are marked, not faked.
 
-Apply these eight as a clean change-set. Where a question carries a flag, an
-excluded status, or an empty standardMeans, render it honestly rather than hiding
-it — that visibility is the purpose of the tool.
+Apply these nine changes as a clean change-set. Where a question carries a flag,
+an excluded status, or an empty standardMeans, render it honestly rather than
+hiding it - that visibility is the purpose of the tool.
 ================================================================================

@@ -21,6 +21,8 @@
 import { useMemo, useState, useTransition } from "react";
 import type { AffirmQuestionRow } from "@/lib/affirm/queries";
 import type { AffirmChoice } from "@/lib/affirm/types";
+import type { ProcessFlow } from "@/lib/affirm/process-flow";
+import { ProcessFlowStrip } from "@/components/affirm/ProcessFlowStrip";
 
 interface Props {
   bundleId: string;
@@ -33,6 +35,10 @@ interface Props {
     reason: string | null;
   }>;
   readOnly?: boolean;
+  /** v2.1 §9: scope-item id → process flow. Drives <ProcessFlowStrip>. */
+  flows?: Record<string, ProcessFlow>;
+  /** v2.1 §9: scope-item id → description for the strip eyebrow tail. */
+  scopeDescriptions?: Record<string, string>;
 }
 
 interface AnswerState {
@@ -66,6 +72,8 @@ export function AffirmCardList({
   questions,
   initialAnswers,
   readOnly = false,
+  flows = {},
+  scopeDescriptions = {},
 }: Props) {
   const [answers, setAnswers] = useState<Record<string, AnswerState>>(() => {
     const seed: Record<string, AnswerState> = {};
@@ -403,6 +411,11 @@ export function AffirmCardList({
                     const a = answers[q.id]!;
                     const wording =
                       q.consultantWording ?? q.plainLanguageSuggested ?? q.sapVerbatim;
+                    // v2.1 §9: resolve question → flow via the first
+                    // scopeItemRef. The data only supports the
+                    // scope-item-level join (prompt's HONEST LIMIT);
+                    // multiple refs land multiple strips.
+                    const flowRefs = q.scopeItemRefs.filter((r) => flows[r] || scopeDescriptions[r]);
                     return q.format === "information" ? (
                       <InfoCard
                         key={q.id}
@@ -415,6 +428,9 @@ export function AffirmCardList({
                         onSetFlag={(flagged) => setInfoFlag(q, flagged)}
                         onSetReason={(v) => setReason(q, v)}
                         onSaveReason={() => saveReason(q)}
+                        flowRefs={flowRefs}
+                        flows={flows}
+                        scopeDescriptions={scopeDescriptions}
                       />
                     ) : (
                       <DecisionCard
@@ -428,6 +444,9 @@ export function AffirmCardList({
                         onSetChoice={(c) => setDecisionChoice(q, c)}
                         onSetReason={(v) => setReason(q, v)}
                         onSaveReason={() => saveReason(q)}
+                        flowRefs={flowRefs}
+                        flows={flows}
+                        scopeDescriptions={scopeDescriptions}
                       />
                     );
                   })}
@@ -484,6 +503,9 @@ function DecisionCard({
   onSetChoice,
   onSetReason,
   onSaveReason,
+  flowRefs,
+  flows,
+  scopeDescriptions,
 }: {
   q: AffirmQuestionRow;
   wording: string | null;
@@ -494,6 +516,9 @@ function DecisionCard({
   onSetChoice: (c: AffirmChoice) => void;
   onSetReason: (v: string) => void;
   onSaveReason: () => void;
+  flowRefs: string[];
+  flows: Record<string, ProcessFlow>;
+  scopeDescriptions: Record<string, string>;
 }) {
   const isStd = answer.choice === "standard";
   return (
@@ -529,6 +554,17 @@ function DecisionCard({
       )}
 
       <p className="mb-3 text-[15px] leading-[22px] text-ink">{wording}</p>
+
+      {/* v2.1 §9: "Where this sits" process-flow strip per scope item */}
+      {flowRefs.map((ref) => (
+        <ProcessFlowStrip
+          key={ref}
+          variant="embedded"
+          scopeItemId={ref}
+          scopeItemDescription={scopeDescriptions[ref] ?? null}
+          flow={flows[ref] ?? null}
+        />
+      ))}
 
       {/* What "Adopt SAP standard" means here */}
       {q.standardMeans && (
@@ -659,6 +695,9 @@ function InfoCard({
   onSetFlag,
   onSetReason,
   onSaveReason,
+  flowRefs,
+  flows,
+  scopeDescriptions,
 }: {
   q: AffirmQuestionRow;
   wording: string | null;
@@ -669,6 +708,9 @@ function InfoCard({
   onSetFlag: (flagged: boolean) => void;
   onSetReason: (v: string) => void;
   onSaveReason: () => void;
+  flowRefs: string[];
+  flows: Record<string, ProcessFlow>;
+  scopeDescriptions: Record<string, string>;
 }) {
   const flagged = answer.choice === "discuss";
   return (
@@ -698,6 +740,17 @@ function InfoCard({
       )}
 
       <p className="mb-3 text-[15px] leading-[22px] text-ink">{wording}</p>
+
+      {/* v2.1 §9: "Where this sits" process-flow strip per scope item */}
+      {flowRefs.map((ref) => (
+        <ProcessFlowStrip
+          key={ref}
+          variant="embedded"
+          scopeItemId={ref}
+          scopeItemDescription={scopeDescriptions[ref] ?? null}
+          flow={flows[ref] ?? null}
+        />
+      ))}
 
       <div className="mb-3">
         <label className="block text-[11px] font-semibold uppercase tracking-wider text-ink-muted">

@@ -3943,6 +3943,12 @@ model AffirmQuestion {
   // consultant in the question editor.
   aboutText     String? @db.Text
   standardMeans String? @db.Text
+  // v2.1: SAP-default format ("decision" | "information") from the
+  // Standard-Answer-Layer file (137 Decision + 13 Information today).
+  // Materialised onto AffirmBundleQuestion.format at editor-first-
+  // render so the consultant can override per bundle without touching
+  // the question bank.
+  format        String  @default("decision")
   // Consultant-added (not from SAP BDC). Always visibly marked
   // "consultant-added, not from SAP". SAP questions (isCustom=false)
   // are never deletable — only disable via AffirmBundleQuestion.

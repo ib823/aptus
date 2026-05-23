@@ -52,7 +52,7 @@ export async function POST(
       where: {
         scopeItemRefs: { hasSome: scopeIds },
       },
-      select: { id: true, status: true, displayOrder: true },
+      select: { id: true, status: true, displayOrder: true, format: true },
     });
 
     // Upsert per row so editor-state (wording, format, displayOrder,
@@ -69,7 +69,9 @@ export async function POST(
           questionId: q.id,
           enabled: !isExcluded,
           displayOrder: q.displayOrder,
-          // format default 'decision' — consultant can flip in editor
+          // v2.1: SAP default format from the question bank. Consultant
+          // override on the join row wins after first edit.
+          format: q.format,
         },
       });
     }
