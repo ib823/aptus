@@ -327,26 +327,82 @@ async function ensureDemoBundle(ownerId: string): Promise<{
   scopeCount: number;
   questionCount: number;
   created: boolean;
+  refreshed: boolean;
 }> {
   const existing = await prisma.affirmBundle.findFirst({
     where: { client: DEMO_BUNDLE_NAME },
     orderBy: { createdAt: "desc" },
     include: {
       _count: { select: { scopeItems: true, questions: true } },
+      questions: { select: { questionId: true, enabled: true } },
     },
   });
+
   if (existing) {
+    // v2.1: refresh the join rows so the latest SAP defaults (format
+    // from Standard-Answer-Layer, enabled flips on excluded rows) take
+    // effect on the demo bundle without the consultant having to wipe
+    // anything. Preserves any consultant overrides? — no, this is a
+    // demo bundle and the seed always wins. If a non-demo bundle is
+    // ever named "DEMO · Lead to Cash" by accident, that's on the
+    // operator.
+    const scopeIds = await prisma.affirmBundleScopeItem
+      .findMany({
+        where: { bundleId: existing.id },
+        select: { scopeItemId: true },
+      })
+      .then((rows) => rows.map((r) => r.scopeItemId));
+
+    const inScope = scopeIds.length
+      ? await prisma.affirmQuestion.findMany({
+          where: { scopeItemRefs: { hasSome: scopeIds } },
+          select: { id: true, status: true, displayOrder: true, format: true },
+        })
+      : [];
+
+    await prisma.$transaction(async (tx) => {
+      await tx.affirmBundleQuestion.deleteMany({ where: { bundleId: existing.id } });
+      if (inScope.length) {
+        await tx.affirmBundleQuestion.createMany({
+          data: inScope.map((q) => ({
+            bundleId: existing.id,
+            questionId: q.id,
+            enabled: q.status !== "excluded",
+            displayOrder: q.displayOrder,
+            format: q.format,
+          })),
+        });
+      }
+      // Also wipe answers — they're keyed to old join rows by stale
+      // SAP defaults; the demo bundle is meant to be re-test-able.
+      await tx.affirmResponse.deleteMany({ where: { bundleId: existing.id } });
+      // Rewind state to issued so the client view is open again.
+      await tx.affirmBundle.update({
+        where: { id: existing.id },
+        data: { state: "issued", submittedAt: null, releasedAt: null, releasedById: null },
+      });
+      await tx.affirmEvent.create({
+        data: {
+          bundleId: existing.id,
+          type: "seed_refresh",
+          actorId: ownerId,
+          payload: { questionCount: inScope.length, seed: true },
+        },
+      });
+    });
+
     return {
       id: existing.id,
       client: existing.client,
-      state: existing.state,
+      state: "issued",
       scopeCount: existing._count.scopeItems,
-      questionCount: existing._count.questions,
+      questionCount: inScope.length,
       created: false,
+      refreshed: true,
     };
   }
 
-  // Build a bundle scoped to all Lead to Cash items.
+  // Build a fresh demo bundle scoped to all Lead to Cash items.
   const scope = await prisma.affirmScopeItem.findMany({
     where: { streamId: "lead-to-cash" },
     select: { id: true },
@@ -379,16 +435,19 @@ async function ensureDemoBundle(ownerId: string): Promise<{
     const scopeIds = scope.map((s) => s.id);
     const questions = scopeIds.length
       ? await tx.affirmQuestion.findMany({
-          where: {
-            status: { not: "excluded" },
-            scopeItemRefs: { hasSome: scopeIds },
-          },
-          select: { id: true },
+          where: { scopeItemRefs: { hasSome: scopeIds } },
+          select: { id: true, status: true, displayOrder: true, format: true },
         })
       : [];
     if (questions.length) {
       await tx.affirmBundleQuestion.createMany({
-        data: questions.map((q) => ({ bundleId: b.id, questionId: q.id })),
+        data: questions.map((q) => ({
+          bundleId: b.id,
+          questionId: q.id,
+          enabled: q.status !== "excluded",
+          displayOrder: q.displayOrder,
+          format: q.format,
+        })),
         skipDuplicates: true,
       });
     }
@@ -414,6 +473,7 @@ async function ensureDemoBundle(ownerId: string): Promise<{
     scopeCount: bundle.scope.length,
     questionCount: bundle.questions.length,
     created: true,
+    refreshed: false,
   };
 }
 
@@ -625,6 +685,7 @@ async function handle(req: NextRequest, expected: string): Promise<NextResponse>
       scopeCount: demo.scopeCount,
       questionCount: demo.questionCount,
       created: demo.created,
+      refreshed: demo.refreshed,
       clientView: `${origin}/affirm/${demo.id}`,
       consultantReview: `${origin}/affirm/${demo.id}/review`,
     },
