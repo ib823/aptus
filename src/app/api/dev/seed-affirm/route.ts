@@ -425,8 +425,59 @@ async function handle(req: NextRequest, expected: string): Promise<NextResponse>
     return res;
   }
 
-  // 5. Magic-link emails for the real pair. We do this AFTER bypass
-  // session creation so the JSON response is deterministic even if SMTP
+  // 5. Magic-link emails for the real pair.
+  //
+  // ?skipEmail=1 — for verifying the magic-link URL host fix without
+  // dispatching real emails to the recipients' inbox. The endpoint
+  // builds and saves the VerificationToken row exactly as the email
+  // path would, then returns the URL inline. SMTP_USER is left
+  // intact; we simply don't call sendEmail.
+  const skipEmail = req.nextUrl.searchParams.get("skipEmail") === "1";
+  if (skipEmail) {
+    // Replicate the exact host-rewrite logic in sendMagicLink so we
+    // can verify what URL would be embedded in the real email — no
+    // VerificationToken row is created and no SMTP call is made.
+    const wbHost = process.env.WORKBENCH_HOST;
+    const nextAuthUrl = process.env.NEXTAUTH_URL ?? "<unset>";
+    function previewFor(callbackPath: string): string {
+      const isWb =
+        !!wbHost &&
+        (callbackPath.startsWith("/presales") ||
+          callbackPath.startsWith("/affirm") ||
+          callbackPath.startsWith("/c/"));
+      const verifyBase = isWb ? `https://${wbHost}` : nextAuthUrl;
+      const inner = new URL(`${verifyBase}/api/auth/callback/email`);
+      inner.searchParams.set("token", "<RAW_TOKEN>");
+      inner.searchParams.set("email", "<EMAIL>");
+      inner.searchParams.set("callbackUrl", callbackPath);
+      if (!isWb) return inner.toString();
+      const confirm = new URL("/presales/login/confirm", `https://${wbHost}`);
+      confirm.searchParams.set("next", inner.toString());
+      return confirm.toString();
+    }
+    return NextResponse.json({
+      ok: true,
+      mode: "preview_only",
+      note: "Email dispatch skipped. Magic-link URL preview only — no email sent, no VerificationToken row created.",
+      masterData: counts,
+      runtimeEnv: {
+        WORKBENCH_HOST: wbHost ?? null,
+        NEXTAUTH_URL: nextAuthUrl,
+      },
+      previewMagicLink: {
+        consultant: previewFor("/affirm"),
+        client: previewFor(`/affirm/${demo.id}`),
+      },
+      demoBundle: {
+        id: demo.id,
+        client: demo.client,
+        state: demo.state,
+      },
+    });
+  }
+
+  // We do this AFTER bypass session creation so the JSON response is
+  // deterministic even if SMTP
   // is slow — emails dispatch in parallel.
   const magicLinkResults = await Promise.allSettled([
     sendMagicLink(EMAILS.realConsultant, "/affirm"),
