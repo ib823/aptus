@@ -22,8 +22,9 @@ import {
   getCoverageForBundle,
 } from "@/lib/affirm/queries";
 import { AffirmStepper } from "@/components/affirm/AffirmStepper";
+import { LifecycleStepper, type BundleLifecycle } from "@/components/affirm/LifecycleStepper";
+import { BadgeLegend } from "@/components/affirm/BadgeLegend";
 import { ReleaseBar } from "@/components/affirm/ReleaseBar";
-import { IssueButton } from "@/components/affirm/IssueButton";
 
 export const dynamic = "force-dynamic";
 
@@ -134,12 +135,29 @@ export default async function ReviewPage({ params }: PageProps) {
       <AffirmStepper
         current={
           bundle.state === "draft"
-            ? "scope"
+            ? "editor"
             : bundle.state === "issued"
               ? "affirm"
               : "review"
         }
       />
+
+      {/* v2 §6: bundle lifecycle stepper */}
+      <div className="mb-6">
+        <LifecycleStepper
+          current={bundle.state as BundleLifecycle}
+          meta={bundle.id}
+          caption={
+            bundle.state === "draft"
+              ? "The bundle is being assembled. Open the question editor to review the in-scope L2 set, then issue to the client."
+              : bundle.state === "issued"
+                ? "The bundle is live with the client. The client is answering; nothing reaches the workshop until they submit and you release."
+                : bundle.state === "submitted"
+                  ? `The client has answered all ${clientFacing.length} questions; it is now yours to review and release. Nothing is sent back to them until you act.`
+                  : "Released. The signed record and workshop agenda are produced."
+          }
+        />
+      </div>
 
       {/* Coverage stat-strip */}
       <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -202,23 +220,36 @@ export default async function ReviewPage({ params }: PageProps) {
         </div>
       )}
 
-      {/* DRAFT state: issue control */}
+      {/* DRAFT state: send the consultant to the question editor; the
+          editor owns the "Issue to client" CTA in v2 (CCC follow-up §4). */}
       {bundle.state === "draft" && (
-        <>
-          <IssueButton
-            bundleId={id}
-            selectedScopeCount={coverage.totalScopeItems}
-            estimatedQuestionCount={clientFacing.length}
-          />
-          <div className="mt-3 flex justify-end">
+        <div className="rounded-card-warm border border-navy bg-navy-soft px-[22px] py-5 shadow-card">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-navy">
+            Draft bundle
+          </p>
+          <h3 className="mt-1 font-serif text-lg text-ink">
+            {coverage.totalScopeItems} scope items · {clientFacing.length}{" "}
+            in-scope question{clientFacing.length === 1 ? "" : "s"}
+          </h3>
+          <p className="mt-1.5 text-sm text-ink-soft">
+            Continue to the question editor to review wording, format
+            (Decision / Information), and order before issuing to the client.
+          </p>
+          <div className="mt-3.5 flex gap-2.5">
+            <Link
+              href={`/affirm/${id}/questions`}
+              className="inline-flex h-10 items-center rounded-input bg-cta px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-cta-hover"
+            >
+              Open question editor
+            </Link>
             <Link
               href={`/affirm/${id}/scope`}
-              className="inline-flex h-9 items-center rounded-input border border-border-default bg-paper px-3 text-sm text-ink-soft hover:bg-ink-tint"
+              className="inline-flex h-10 items-center rounded-input border border-border-default bg-paper px-4 text-sm font-semibold text-ink hover:bg-ink-tint"
             >
               Edit scope
             </Link>
           </div>
-        </>
+        </div>
       )}
 
       {/* ISSUED state: waiting */}
@@ -233,12 +264,20 @@ export default async function ReviewPage({ params }: PageProps) {
                 The bundle is live with the client
               </h3>
             </div>
-            <Link
-              href={`/affirm/${id}`}
-              className="inline-flex h-8 items-center rounded-input border border-navy bg-paper px-3 text-xs font-semibold text-navy hover:bg-navy-soft"
-            >
-              Open client view
-            </Link>
+            <div className="flex shrink-0 gap-2">
+              <Link
+                href={`/affirm/${id}/questions`}
+                className="inline-flex h-8 items-center rounded-input border border-border-default bg-paper px-3 text-xs font-semibold text-ink-soft hover:bg-ink-tint"
+              >
+                Edit questions
+              </Link>
+              <Link
+                href={`/affirm/${id}`}
+                className="inline-flex h-8 items-center rounded-input border border-navy bg-paper px-3 text-xs font-semibold text-navy hover:bg-navy-soft"
+              >
+                Open client view
+              </Link>
+            </div>
           </div>
           <p className="text-sm text-ink-soft">
             Once the client submits their answers, this screen unlocks the release
@@ -293,6 +332,11 @@ export default async function ReviewPage({ params }: PageProps) {
                 tone="cust"
               />
             </dl>
+          </div>
+
+          {/* v2 §6: badge legend */}
+          <div className="mt-4">
+            <BadgeLegend />
           </div>
 
           {/* info-banner: sealed */}

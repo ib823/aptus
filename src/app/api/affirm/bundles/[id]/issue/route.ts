@@ -3,8 +3,17 @@
  *
  * Snapshots the in-scope L2 questions onto the bundle (via the
  * AffirmBundleQuestion join) so a later question-bank edit cannot
- * mutate what the client sees. Excluded questions are filtered here —
- * they never appear in the client view per master-prompt caveat 1.
+ * mutate what the client sees.
+ *
+ * v2 (CCC follow-up §4): the 15 SAP-excluded rows are kept in the
+ * record but ARRIVE PRE-DISABLED (enabled=false). The client view
+ * filters by enabled=true; the consultant editor sees them so the
+ * audit record is complete.
+ *
+ * Defensive: this endpoint is idempotent with respect to the editor
+ * pre-materialization (the editor page may pre-create rows in DRAFT
+ * state). We `upsert` per join row so editor edits — wording flips,
+ * format toggles, disables — are preserved through issue.
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
@@ -36,20 +45,32 @@ export async function POST(
       return { error: "empty_scope" as const };
     }
 
-    // Snapshot non-excluded in-scope questions.
+    // All in-scope questions, including excluded — excluded come in
+    // disabled (enabled=false) so they live in the audit record without
+    // being shown to the client.
     const questions = await tx.affirmQuestion.findMany({
       where: {
-        status: { not: "excluded" },
         scopeItemRefs: { hasSome: scopeIds },
       },
-      select: { id: true },
+      select: { id: true, status: true, displayOrder: true },
     });
 
-    await tx.affirmBundleQuestion.deleteMany({ where: { bundleId: id } });
-    if (questions.length) {
-      await tx.affirmBundleQuestion.createMany({
-        data: questions.map((q) => ({ bundleId: id, questionId: q.id })),
-        skipDuplicates: true,
+    // Upsert per row so editor-state (wording, format, displayOrder,
+    // enabled) is preserved if the consultant already opened the editor.
+    for (const q of questions) {
+      const isExcluded = q.status === "excluded";
+      await tx.affirmBundleQuestion.upsert({
+        where: {
+          bundleId_questionId: { bundleId: id, questionId: q.id },
+        },
+        update: {}, // editor's choices win on issue
+        create: {
+          bundleId: id,
+          questionId: q.id,
+          enabled: !isExcluded,
+          displayOrder: q.displayOrder,
+          // format default 'decision' — consultant can flip in editor
+        },
       });
     }
 
@@ -57,16 +78,26 @@ export async function POST(
       where: { id },
       data: { state: "issued", issuedAt: new Date() },
     });
+
+    const enabledCount = await tx.affirmBundleQuestion.count({
+      where: { bundleId: id, enabled: true },
+    });
+    const disabledCount = questions.length - enabledCount;
+
     await tx.affirmEvent.create({
       data: {
         bundleId: id,
         type: "issued",
         actorId: user.id,
-        payload: { questionCount: questions.length },
+        payload: {
+          totalQuestions: questions.length,
+          enabledQuestions: enabledCount,
+          disabledQuestions: disabledCount,
+        },
       },
     });
 
-    return { ok: true as const, questions: questions.length };
+    return { ok: true as const, questions: enabledCount, totalSnapshot: questions.length };
   });
 
   if ("error" in result) {
@@ -78,5 +109,9 @@ export async function POST(
           : 409;
     return NextResponse.json({ error: result.error }, { status });
   }
-  return NextResponse.json({ ok: true, questions: result.questions });
+  return NextResponse.json({
+    ok: true,
+    questions: result.questions,
+    totalSnapshot: result.totalSnapshot,
+  });
 }

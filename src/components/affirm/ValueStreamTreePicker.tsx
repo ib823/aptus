@@ -1,21 +1,20 @@
 "use client";
 
 /**
- * Screen 1 — Consultant scope picker. Refit to match the
- * "Enhancement Restored" design's .scope-tree pattern:
+ * Screen 1 — Consultant scope picker. v2 (CCC follow-up) refit.
  *
- *   - Parent rows are paper-surface chips with checkbox + name +
- *     right-aligned count. Selected parent = navy-soft bg.
- *   - Expanded sub-process rows live in a cream-surface block, with
- *     a coverage-chip pill ("affirm-set" / "no affirm-set") and the
- *     scope-item count.
- *   - Coverage is shown, never hidden — sub-processes with no BDC
- *     remain selectable but get the muted "no affirm-set" chip.
- *
- * Posts the final set to POST /api/affirm/bundles (mode=new) or
- * PUT /api/affirm/bundles/[id]/scope (mode=edit).
+ * The eight changes that affect this component:
+ *   §1 Value-stream rows use a chevron (disclosure), NOT a checkbox.
+ *      Streams are navigation containers — not selectable.
+ *   §2 The three tiers are labelled in the tree (Tier 1 / 2 / 3).
+ *   §3 Scope items start UNCHECKED. The consultant opts items in. Each
+ *      sub-process has a tri-state checkbox (Select all / Clear) that
+ *      reflects how many children are selected.
+ *   §5 Every scope item shows a coverage badge — "N questions" when
+ *      the item carries an affirm-set, or "no affirm-set" otherwise.
+ *      Counts roll up to the sub-process and stream rows.
  */
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { TreeStream } from "@/lib/affirm/queries";
 
@@ -27,10 +26,6 @@ interface Props {
   mode: "new" | "edit";
 }
 
-interface OpenState {
-  [streamId: string]: boolean;
-}
-
 export function ValueStreamTreePicker({
   tree,
   bundleId,
@@ -40,7 +35,11 @@ export function ValueStreamTreePicker({
 }: Props) {
   const router = useRouter();
   const [client, setClient] = useState(initialClient);
-  const [open, setOpen] = useState<OpenState>({});
+  // Sub-processes expanded WITHIN a stream — value stream rows control
+  // the visibility of the sub-process list; sub-process rows then
+  // expand to reveal individual scope items.
+  const [openStreams, setOpenStreams] = useState<Record<string, boolean>>({});
+  const [openSubs, setOpenSubs] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<Set<string>>(
     new Set(initialSelected),
   );
@@ -92,29 +91,27 @@ export function ValueStreamTreePicker({
 
   function streamSelectionCount(streamId: string): {
     selectedItems: number;
-    coveredItems: number;
     totalItems: number;
   } {
-    let s = 0;
-    let c = 0;
-    let t = 0;
     const stream = tree.find((x) => x.id === streamId);
-    if (!stream) return { selectedItems: 0, coveredItems: 0, totalItems: 0 };
+    if (!stream) return { selectedItems: 0, totalItems: 0 };
+    let s = 0;
+    let t = 0;
     for (const sp of stream.subProcesses) {
       for (const si of sp.scopeItems) {
         t++;
-        if (selected.has(si.id)) {
-          s++;
-          if (si.hasBdcCoverage) c++;
-        }
+        if (selected.has(si.id)) s++;
       }
     }
-    return { selectedItems: s, coveredItems: c, totalItems: t };
+    return { selectedItems: s, totalItems: t };
   }
 
   // ── Actions ─────────────────────────────────────────────────────
+  // v2 §1: stream rows toggle expansion only — no selection.
   const toggleStream = (id: string) =>
-    setOpen((m) => ({ ...m, [id]: !m[id] }));
+    setOpenStreams((m) => ({ ...m, [id]: !m[id] }));
+  const toggleSub = (id: string) =>
+    setOpenSubs((m) => ({ ...m, [id]: !m[id] }));
 
   const toggleItem = (id: string) =>
     setSelected((s) => {
@@ -124,10 +121,11 @@ export function ValueStreamTreePicker({
       return next;
     });
 
-  const toggleSubProcess = (ids: string[]) =>
+  // v2 §3: tri-state Select all / Clear at the sub-process level.
+  const toggleSubProcessSelectAll = (ids: string[]) =>
     setSelected((s) => {
       const next = new Set(s);
-      const allIn = ids.every((id) => next.has(id));
+      const allIn = ids.length > 0 && ids.every((id) => next.has(id));
       if (allIn) ids.forEach((id) => next.delete(id));
       else ids.forEach((id) => next.add(id));
       return next;
@@ -154,7 +152,8 @@ export function ValueStreamTreePicker({
           });
           if (!res.ok) throw new Error(`${res.status}`);
           const json = (await res.json()) as { id: string };
-          router.push(`/affirm/${json.id}/review`);
+          // v2 §4: editor is the next step after scope.
+          router.push(`/affirm/${json.id}/questions`);
         } else if (bundleId) {
           const res = await fetch(`/api/affirm/bundles/${bundleId}/scope`, {
             method: "PUT",
@@ -162,7 +161,7 @@ export function ValueStreamTreePicker({
             body: JSON.stringify({ scopeItemIds: ids }),
           });
           if (!res.ok) throw new Error(`${res.status}`);
-          router.push(`/affirm/${bundleId}/review`);
+          router.push(`/affirm/${bundleId}/questions`);
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Save failed");
@@ -188,6 +187,28 @@ export function ValueStreamTreePicker({
             </span>
           </div>
 
+          {/* v2 §2: tier labels */}
+          <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-medium text-ink-muted">
+            <span>
+              <span className="mr-1.5 inline-flex size-4 items-center justify-center rounded bg-navy-soft text-[10px] font-bold text-navy">
+                1
+              </span>
+              Tier 1 — value stream
+            </span>
+            <span>
+              <span className="mr-1.5 inline-flex size-4 items-center justify-center rounded bg-ink-tint text-[10px] font-bold text-ink-soft">
+                2
+              </span>
+              Tier 2 — sub-process
+            </span>
+            <span>
+              <span className="mr-1.5 inline-flex size-4 items-center justify-center rounded bg-cream text-[10px] font-bold text-ink-soft">
+                3
+              </span>
+              Tier 3 — scope item
+            </span>
+          </div>
+
           <input
             type="search"
             placeholder="Filter by scope code or text…"
@@ -197,173 +218,79 @@ export function ValueStreamTreePicker({
           />
 
           <div className="flex flex-col gap-1.5">
-            {visibleTree.map((s) => {
-              const counts = streamSelectionCount(s.id);
-              const isOpen = open[s.id] ?? filterLc !== "";
-              const hasAny = counts.selectedItems > 0;
+            {visibleTree.map((stream) => {
+              const counts = streamSelectionCount(stream.id);
+              const isOpen = openStreams[stream.id] ?? filterLc !== "";
               return (
-                <div key={s.id} className="flex flex-col gap-1">
+                <div key={stream.id} className="flex flex-col gap-1">
+                  {/* v2 §1: chevron-only stream row, NO checkbox */}
                   <button
                     type="button"
-                    onClick={() => toggleStream(s.id)}
+                    onClick={() => toggleStream(stream.id)}
+                    aria-expanded={isOpen}
+                    aria-controls={`sub-of-${stream.id}`}
                     className={`flex items-center gap-3 rounded-input border px-4 py-3 text-left transition ${
-                      hasAny
+                      counts.selectedItems > 0
                         ? "border-navy bg-navy-soft"
                         : "border-border-default bg-paper hover:bg-ink-tint"
                     }`}
                   >
-                    <span
-                      aria-hidden="true"
-                      className={`inline-flex size-4 shrink-0 items-center justify-center rounded border-[1.5px] ${
-                        hasAny
-                          ? "border-navy bg-navy"
-                          : "border-border-strong bg-paper"
-                      }`}
-                    >
-                      {hasAny && (
-                        <svg
-                          width="10"
-                          height="10"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="white"
-                          strokeWidth="3"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          aria-hidden="true"
-                        >
-                          <path d="M20 6L9 17l-5-5" />
-                        </svg>
-                      )}
-                    </span>
-                    <span className="text-sm font-semibold text-ink">{s.name}</span>
-                    {s.isFoundation && (
-                      <span className="rounded-pill bg-ink-tint px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-ink-soft">
-                        foundation
-                      </span>
-                    )}
-                    <span className="ml-auto whitespace-nowrap font-mono text-xs text-ink-soft">
-                      <span className="font-semibold text-ink">{counts.totalItems}</span> items
-                      <span className="text-ink-muted">
-                        {" "}
-                        · {counts.coveredItems > 0 ? counts.coveredItems : "0"} with affirm-set
-                      </span>
-                    </span>
                     <svg
                       width="14"
                       height="14"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
-                      strokeWidth="2"
+                      strokeWidth="2.5"
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       aria-hidden="true"
-                      className={`text-ink-muted transition ${isOpen ? "rotate-180" : ""}`}
+                      className={`text-ink-soft transition ${isOpen ? "rotate-90" : ""}`}
                     >
-                      <path d="M6 9l6 6 6-6" />
+                      <path d="M9 6l6 6-6 6" />
                     </svg>
+                    <span className="text-sm font-semibold text-ink">
+                      {stream.name}
+                    </span>
+                    {stream.isFoundation && (
+                      <span className="rounded-pill bg-ink-tint px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-ink-soft">
+                        foundation
+                      </span>
+                    )}
+                    <span className="ml-auto flex items-center gap-2 whitespace-nowrap font-mono text-xs text-ink-soft">
+                      {counts.selectedItems > 0 && (
+                        <span className="rounded-pill bg-navy/10 px-2 text-[10px] font-bold uppercase tracking-wider text-navy">
+                          {counts.selectedItems} selected
+                        </span>
+                      )}
+                      <span>
+                        <span className="font-semibold text-ink">{stream.totalScopeItems}</span> items
+                      </span>
+                      <span className="text-ink-muted">
+                        ·{" "}
+                        {stream.questionCount > 0
+                          ? `${stream.questionCount} questions`
+                          : "no affirm-set"}
+                      </span>
+                    </span>
                   </button>
 
                   {isOpen && (
-                    <div className="ml-8 flex flex-col gap-1">
-                      {s.subProcesses.map((sp) => {
-                        const allIds = sp.scopeItems.map((si) => si.id);
-                        const selCount = allIds.filter((id) => selected.has(id)).length;
-                        const allSelected =
-                          allIds.length > 0 && selCount === allIds.length;
-                        return (
-                          <div key={sp.id} className="flex flex-col gap-1">
-                            <button
-                              type="button"
-                              onClick={() => toggleSubProcess(allIds)}
-                              className="flex items-center gap-3 rounded-input border border-transparent bg-cream px-3.5 py-2.5 text-left hover:border-border-default"
-                            >
-                              <span
-                                aria-hidden="true"
-                                className={`inline-flex size-4 shrink-0 items-center justify-center rounded border-[1.5px] ${
-                                  allSelected
-                                    ? "border-navy bg-navy"
-                                    : selCount > 0
-                                      ? "border-navy bg-paper"
-                                      : "border-border-strong bg-paper"
-                                }`}
-                              >
-                                {allSelected ? (
-                                  <svg
-                                    width="10"
-                                    height="10"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="white"
-                                    strokeWidth="3"
-                                  >
-                                    <path d="M20 6L9 17l-5-5" />
-                                  </svg>
-                                ) : selCount > 0 ? (
-                                  <span className="block size-2 rounded-sm bg-navy" />
-                                ) : null}
-                              </span>
-                              <span className="text-sm font-medium text-ink">{sp.name}</span>
-                              <span
-                                className={`rounded-pill px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                                  sp.hasAnyBdcCoverage
-                                    ? "bg-status-signed-bg text-status-signed-fg"
-                                    : "bg-ink-tint text-ink-muted"
-                                }`}
-                              >
-                                {sp.hasAnyBdcCoverage ? "affirm-set" : "no affirm-set"}
-                              </span>
-                              <span className="ml-auto font-mono text-[11px] text-ink-soft tabular-nums">
-                                <span className="font-semibold text-ink">{selCount}</span>/{allIds.length} items
-                              </span>
-                            </button>
-
-                            {selCount > 0 || filterLc ? (
-                              <ul className="ml-7 flex flex-col gap-0.5">
-                                {sp.scopeItems.map((si) => (
-                                  <li
-                                    key={si.id}
-                                    className="flex items-start gap-2 px-2 py-1 text-[13px]"
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      id={`si-${si.id}`}
-                                      checked={selected.has(si.id)}
-                                      onChange={() => toggleItem(si.id)}
-                                      className="mt-1 size-3.5 rounded border-border-strong accent-navy"
-                                    />
-                                    <label
-                                      htmlFor={`si-${si.id}`}
-                                      className="flex flex-1 cursor-pointer flex-wrap items-center gap-2"
-                                    >
-                                      <code className="rounded bg-ink-tint px-1.5 py-0.5 font-mono text-[11px] text-ink-soft">
-                                        {si.id}
-                                      </code>
-                                      <span className="text-ink-soft">
-                                        {si.description}
-                                      </span>
-                                      {si.hasBdcCoverage && (
-                                        <span className="rounded-pill bg-decision-standard/15 px-2 text-[10px] font-bold uppercase tracking-wider text-decision-standard">
-                                          BDC
-                                        </span>
-                                      )}
-                                      {si.placementReviewFlag && (
-                                        <span
-                                          title="Layer-0 placement pending consultant curation"
-                                          className="rounded-pill bg-banner-warn px-2 text-[10px] font-bold uppercase tracking-wider text-decision-custom"
-                                        >
-                                          pending review
-                                        </span>
-                                      )}
-                                    </label>
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : null}
-                          </div>
-                        );
-                      })}
+                    <div
+                      id={`sub-of-${stream.id}`}
+                      className="ml-7 flex flex-col gap-1"
+                    >
+                      {stream.subProcesses.map((sp) => (
+                        <SubProcessRow
+                          key={sp.id}
+                          subProcess={sp}
+                          isOpen={openSubs[sp.id] ?? filterLc !== ""}
+                          onToggleOpen={() => toggleSub(sp.id)}
+                          selected={selected}
+                          onSelectAll={toggleSubProcessSelectAll}
+                          onToggleItem={toggleItem}
+                        />
+                      ))}
                     </div>
                   )}
                 </div>
@@ -447,13 +374,149 @@ export function ValueStreamTreePicker({
             disabled={pending}
             className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-input bg-cta px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-cta-hover disabled:opacity-60"
           >
-            {pending ? "Saving…" : mode === "new" ? "Create bundle" : "Save scope"}
+            {pending
+              ? "Saving…"
+              : mode === "new"
+                ? "Create bundle"
+                : "Save scope"}
           </button>
           <p className="mt-3 text-xs text-ink-muted">
-            Next: review the in-scope L2 questions, then issue the bundle to the client.
+            Next: review the in-scope L2 questions in the question editor before
+            issuing to the client.
           </p>
         </div>
       </aside>
+    </div>
+  );
+}
+
+// ─── SubProcess row (split for clarity + tri-state checkbox) ─────
+
+function SubProcessRow({
+  subProcess: sp,
+  isOpen,
+  onToggleOpen,
+  selected,
+  onSelectAll,
+  onToggleItem,
+}: {
+  subProcess: TreeStream["subProcesses"][number];
+  isOpen: boolean;
+  onToggleOpen: () => void;
+  selected: Set<string>;
+  onSelectAll: (ids: string[]) => void;
+  onToggleItem: (id: string) => void;
+}) {
+  const cbRef = useRef<HTMLInputElement>(null);
+  const allIds = sp.scopeItems.map((si) => si.id);
+  const selCount = allIds.filter((id) => selected.has(id)).length;
+  const allSelected = allIds.length > 0 && selCount === allIds.length;
+  const indeterminate = selCount > 0 && selCount < allIds.length;
+
+  // Tri-state requires imperative .indeterminate set.
+  useEffect(() => {
+    if (cbRef.current) cbRef.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-3 rounded-input border border-transparent bg-cream px-3.5 py-2.5 hover:border-border-default">
+        {/* v2 §3: tri-state Select-all checkbox */}
+        <label className="inline-flex cursor-pointer items-center">
+          <input
+            ref={cbRef}
+            type="checkbox"
+            checked={allSelected}
+            onChange={() => onSelectAll(allIds)}
+            disabled={allIds.length === 0}
+            aria-label={`Select all ${sp.scopeItems.length} scope items in ${sp.name}`}
+            className="size-4 cursor-pointer rounded border-[1.5px] border-border-strong accent-navy"
+          />
+        </label>
+
+        <button
+          type="button"
+          onClick={onToggleOpen}
+          aria-expanded={isOpen}
+          className="flex flex-1 items-center gap-2 text-left"
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className={`text-ink-muted transition ${isOpen ? "rotate-90" : ""}`}
+          >
+            <path d="M9 6l6 6-6 6" />
+          </svg>
+          <span className="text-sm font-medium text-ink">{sp.name}</span>
+          {/* v2 §5: coverage badge per sub-process */}
+          {sp.questionCount > 0 ? (
+            <span className="rounded-pill bg-status-signed-bg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-status-signed-fg">
+              {sp.questionCount} questions
+            </span>
+          ) : (
+            <span className="rounded-pill bg-ink-tint px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-ink-muted">
+              no affirm-set
+            </span>
+          )}
+          <span className="ml-auto font-mono text-[11px] tabular-nums text-ink-soft">
+            <span className="font-semibold text-ink">{selCount}</span>/{allIds.length}{" "}
+            items
+          </span>
+        </button>
+      </div>
+
+      {isOpen && (
+        <ul className="ml-7 flex flex-col gap-0.5">
+          {sp.scopeItems.map((si) => (
+            <li
+              key={si.id}
+              className="flex items-start gap-2 px-2 py-1 text-[13px]"
+            >
+              <input
+                type="checkbox"
+                id={`si-${si.id}`}
+                checked={selected.has(si.id)}
+                onChange={() => onToggleItem(si.id)}
+                className="mt-1 size-3.5 rounded border-border-strong accent-navy"
+              />
+              <label
+                htmlFor={`si-${si.id}`}
+                className="flex flex-1 cursor-pointer flex-wrap items-center gap-2"
+              >
+                <code className="rounded bg-ink-tint px-1.5 py-0.5 font-mono text-[11px] text-ink-soft">
+                  {si.id}
+                </code>
+                <span className="text-ink-soft">{si.description}</span>
+                {/* v2 §5: coverage badge per scope item */}
+                {si.questionCount > 0 ? (
+                  <span className="rounded-pill bg-decision-standard/15 px-2 text-[10px] font-bold uppercase tracking-wider text-decision-standard">
+                    {si.questionCount} question{si.questionCount === 1 ? "" : "s"}
+                  </span>
+                ) : (
+                  <span className="rounded-pill bg-ink-tint px-2 text-[10px] font-medium uppercase tracking-wider text-ink-muted">
+                    no affirm-set
+                  </span>
+                )}
+                {si.placementReviewFlag && (
+                  <span
+                    title="Layer-0 placement pending consultant curation"
+                    className="rounded-pill bg-banner-warn px-2 text-[10px] font-bold uppercase tracking-wider text-decision-custom"
+                  >
+                    pending review
+                  </span>
+                )}
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
