@@ -37,7 +37,7 @@ export function ProcessFlowStrip({
 }: Props) {
   if (!flow || flow.steps.length === 0) {
     return variant === "embedded" ? (
-      <div className="mb-3 rounded-input bg-ink-tint px-4 py-3 text-xs">
+      <div className="pf-embed mb-3 rounded-input bg-ink-tint px-4 py-3 text-xs">
         <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-muted">
           Where this sits ·{" "}
           <span className="font-bold text-navy">{scopeItemId}</span>
@@ -69,11 +69,11 @@ export function ProcessFlowStrip({
 
   if (variant === "embedded") {
     return (
-      <div className="mb-3 rounded-input bg-ink-tint px-4 py-3.5">
-        <p className="mb-2.5 flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-muted">
+      <div className="pf-embed mb-3 rounded-input bg-ink-tint px-4 py-3.5">
+        <p className="pf-embed-label mb-2.5 flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-muted">
           <ListIcon className="text-ink-muted" />
           Where this sits ·{" "}
-          <span className="font-bold text-navy">{scopeItemId}</span>
+          <span className="scope-id font-bold text-navy">{scopeItemId}</span>
           {scopeItemDescription ? ` ${scopeItemDescription}` : ""}
         </p>
         <Strip steps={flow.steps} compact />
@@ -114,9 +114,12 @@ function Strip({
   steps: ProcessFlow["steps"];
   compact?: boolean;
 }) {
+  // .pf-strip / .pf-step / .pf-arrow class hooks let the responsive
+  // pass target this surface — at <=1023px the strip collapses to a
+  // horizontal scroll-snap lane (CCC responsive pass).
   return (
     <ol
-      className="flex flex-wrap items-stretch gap-y-2 gap-x-0"
+      className="pf-strip flex flex-wrap items-stretch gap-y-2 gap-x-0"
       aria-label="Mandatory Malaysia process steps in SAP order"
     >
       {steps.map((s, idx) => (
@@ -125,18 +128,18 @@ function Strip({
           className="flex shrink-0 items-center"
         >
           <div
-            className={`flex shrink-0 flex-col gap-1.5 rounded-[10px] border border-[var(--brand-navy-border,#CFD7E0)] bg-paper p-3 ${
+            className={`pf-step flex shrink-0 flex-col gap-1.5 rounded-[10px] border border-[var(--brand-navy-border,#CFD7E0)] bg-paper p-3 ${
               compact ? "w-[168px] px-3 py-2.5" : "w-[184px] px-3.5 py-3"
             }`}
           >
             <span
-              className="inline-flex size-[22px] items-center justify-center rounded-full bg-navy font-mono text-[11px] font-bold text-white"
+              className="n inline-flex size-[22px] items-center justify-center rounded-full bg-navy font-mono text-[11px] font-bold text-white"
               aria-hidden="true"
             >
               {s.stepNumber}
             </span>
             <span
-              className={`font-semibold text-ink ${
+              className={`nm font-semibold text-ink ${
                 compact ? "text-xs leading-4" : "text-[13px] leading-[18px]"
               }`}
             >
@@ -144,7 +147,7 @@ function Strip({
             </span>
             {s.fioriApps.length > 0 && (
               <span
-                className={`mt-auto font-mono text-ink-muted ${
+                className={`fi mt-auto font-mono text-ink-muted ${
                   compact ? "text-[10px] leading-[14px]" : "text-[11px] leading-[15px]"
                 }`}
                 title={s.fioriApps.join(" · ")}
@@ -156,7 +159,7 @@ function Strip({
           {idx < steps.length - 1 && (
             <span
               aria-hidden="true"
-              className="flex shrink-0 items-center px-2 text-border-strong"
+              className="pf-arrow flex shrink-0 items-center px-2 text-border-strong"
             >
               <svg
                 width="14"

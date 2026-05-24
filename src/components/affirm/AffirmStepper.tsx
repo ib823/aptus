@@ -36,7 +36,12 @@ export function AffirmStepper({ current }: Props) {
   const currentIdx = ORDER.indexOf(current);
 
   return (
-    <ol className="mb-5 flex flex-wrap items-center gap-2" aria-label="Affirmation workflow">
+    // .workflow-stepper / .ws-step / .ws-arr — responsive pass turns
+    // this into a vertical list at <=767px.
+    <ol
+      className="workflow-stepper mb-5 flex flex-wrap items-center gap-2"
+      aria-label="Affirmation workflow"
+    >
       {ORDER.map((s, idx) => {
         const state =
           idx < currentIdx ? "done" : idx === currentIdx ? "current" : "pending";
@@ -44,7 +49,7 @@ export function AffirmStepper({ current }: Props) {
           <Fragment key={s}>
             <li>
               <span
-                className={`inline-flex h-[30px] items-center gap-2 rounded-pill border px-3 pl-2 text-xs ${
+                className={`ws-step inline-flex h-[30px] items-center gap-2 rounded-pill border px-3 pl-2 text-xs ${
                   state === "current"
                     ? "border-navy bg-navy text-white"
                     : state === "done"
@@ -53,7 +58,7 @@ export function AffirmStepper({ current }: Props) {
                 }`}
               >
                 <span
-                  className={`inline-flex size-[18px] items-center justify-center rounded-full font-mono text-[10px] font-bold ${
+                  className={`n inline-flex size-[18px] items-center justify-center rounded-full font-mono text-[10px] font-bold ${
                     state === "current"
                       ? "bg-cta text-white"
                       : state === "done"
@@ -69,7 +74,7 @@ export function AffirmStepper({ current }: Props) {
             {idx < ORDER.length - 1 && (
               <li
                 aria-hidden="true"
-                className="font-mono text-sm text-ink-disabled"
+                className="ws-arr font-mono text-sm text-ink-disabled"
               >
                 →
               </li>

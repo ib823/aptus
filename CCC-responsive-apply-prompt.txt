@@ -1,0 +1,89 @@
+================================================================================
+CCC PROMPT — APPLY THE TABLET & MOBILE RESPONSIVE PASS
+Prepared 2026-05-24 · Additive responsive change-set — no desktop/logic change
+================================================================================
+
+CONTEXT
+-------
+The ABeam Workbench desktop app is built and working. The tablet and mobile
+responsive design is now complete and reviewed. This task applies it to the app.
+It is purely additive responsive CSS plus three small markup / behaviour hooks —
+no change to desktop, data, routing or business logic.
+
+INPUTS (attached)
+-----------------
+- enhancement-v2.css — the five-screen workbench styles, now carrying the
+  responsive @media blocks.
+- process-flow.css — the process-flow strip styles, with its responsive blocks.
+- "Enhancement v2 Restored.html", "Process Flow.html" — markup reference for the
+  three hooks below.
+These are the authoritative styles. Port the responsive rules into the app's
+stylesheets, mapped to the matching components. If an app class name differs
+from the design file, apply the rule to the equivalent component — the
+responsive BEHAVIOUR is what must match.
+
+WHAT TO APPLY
+-------------
+1. RESPONSIVE CSS — port into the app:
+   - From enhancement-v2.css: the new base classes (.mobile-nav-btn,
+     .reorder-buttons, .reorder-btn, .nav-scrim) and the two media blocks
+     @media (max-width:1023px) and @media (max-width:767px), plus the
+     @media (min-width:1024px){ .reorder-buttons{ display:none } } rule.
+   - From process-flow.css: the @media (max-width:1023px) and (max-width:767px)
+     blocks — the .pf-strip horizontal-scroll-snap behaviour and the rest.
+   Desktop (>=1024px) rules are unchanged — do not touch them.
+
+2. MARKUP — three hooks (mirror the design HTML):
+   a. A hamburger button .mobile-nav-btn in the top bar (the CSS hides it at
+      >=768px). It controls the siderail — give it aria-controls pointing at the
+      siderail element's id, plus aria-expanded.
+   b. Up / Down reorder buttons — a .reorder-buttons group containing two
+      .reorder-btn buttons — inside the question editor's .editor-actions. The
+      CSS hides them on desktop and shows them on tablet / mobile.
+   c. A .nav-scrim element placed as the IMMEDIATE next sibling after the
+      .siderail element. The CSS selector ".siderail.is-open + .nav-scrim"
+      depends on that adjacency — it must be the very next sibling.
+   Also: every siderail nav item (.rail-item) must carry an aria-label — the
+   mobile drawer renders each item's label from it.
+
+3. BEHAVIOUR — wire these (React state / handlers):
+   a. Tapping .mobile-nav-btn toggles the class .is-open on the siderail (opens
+      and closes the off-canvas drawer); keep aria-expanded in sync.
+   b. Tapping .nav-scrim closes the drawer (remove .is-open). Esc should also
+      close it. Locking body scroll while the drawer is open is a nice-to-have.
+   c. The Up / Down .reorder-btn buttons call the EXISTING question-reorder
+      logic — the same move-within-sub-process the drag handle performs. They
+      are the touch reorder path; the drag handle is hidden on touch.
+
+CONSTRAINTS
+-----------
+- Desktop >=1024px must stay pixel-identical. This change is additive only.
+- Design-system tokens only — the CSS introduces no new tokens.
+- No change to data, seeding, API, routing or any business logic.
+- SAP verbatim text, decision colours, the locked-field treatment and all
+  existing behaviour are untouched.
+
+ONE KNOWN MINOR (no action needed unless trivial)
+-------------------------------------------------
+The touch checkbox reaches its 44px hit area via a -14px inset pseudo-element;
+in the densest tree rows the hit zones of adjacent rows can overlap slightly.
+This is acceptable. If the app's checkbox is already a <label>-wrapped control,
+you may instead size that label to 44px — either approach is fine.
+
+QA
+--
+- Test every screen at 390px, 834px and 1280px.
+- Confirm: editor cards have no empty left gutter on tablet; scope-tree
+  chevrons and checkboxes sit inside their cells with no overlap; the tier-2
+  row shows the name, the count and Select-all with no overlapping text; the
+  mobile nav drawer opens over a scrim and closes on scrim tap and Esc; Up/Down
+  reorder works on touch; form fields do not trigger zoom-on-focus on iOS.
+- Confirm desktop >=1024px is visually unchanged.
+
+ACCEPTANCE
+----------
+1. The app is correctly laid out and usable at phone, tablet and desktop widths.
+2. Desktop is visually identical to before the change.
+3. The mobile nav drawer, the scrim, and touch reorder all work.
+4. No data, logic or routing change.
+================================================================================
