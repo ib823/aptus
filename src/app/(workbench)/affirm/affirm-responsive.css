@@ -47,36 +47,13 @@
 }
 
 /* ---- Reorder buttons (visible on every breakpoint in this app —
-       see the deviation note above) ---- */
+       see the deviation note above)
+       Base sizing is INTENTIONALLY absent here so the existing
+       desktop IconBtn 28×28 stays pixel-identical. The 44×44 touch
+       target only kicks in inside the ≤1023px media block below. ---- */
 .reorder-buttons {
   display: inline-flex;
   gap: 4px;
-}
-.reorder-btn {
-  width: 44px;
-  height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface-paper);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-input);
-  color: var(--ink-secondary);
-  cursor: pointer;
-  font-family: inherit;
-  padding: 0;
-}
-.reorder-btn:hover:not(:disabled) {
-  background: var(--surface-ink-tint);
-  color: var(--ink-primary);
-}
-.reorder-btn:focus-visible {
-  outline: 0;
-  box-shadow: var(--shadow-focus-ring);
-}
-.reorder-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 /* Scrim under the (future) mobile drawer */
@@ -96,6 +73,12 @@
     height: 44px;
   }
   .chev-btn {
+    width: 44px;
+    height: 44px;
+  }
+  /* Reorder buttons inflate to the touch hit area only at ≤1023px;
+     desktop keeps the existing 28×28 from IconBtn. */
+  .reorder-btn {
     width: 44px;
     height: 44px;
   }
