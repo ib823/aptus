@@ -537,26 +537,31 @@ async function handle(req: NextRequest, expected: string): Promise<NextResponse>
   const bypassConsultant = await upsertUser(EMAILS.bypassConsultant, "consultant", orgId);
   const bypassClient = await upsertUser(EMAILS.bypassClient, "client", orgId);
 
-  // 3. Bypass-pair sessions (skip magic link)
-  const consSession = await createSession(
-    bypassConsultant.id,
-    "127.0.0.1",
-    "dev-seed-affirm",
-  );
-  const client2Session = await createSession(
-    bypassClient.id,
-    "127.0.0.1",
-    "dev-seed-affirm",
-  );
-
   const origin = originFromReq(req);
 
   // 4. Demo bundle (issued, owned by bypass consultant)
   const demo = await ensureDemoBundle(bypassConsultant.id);
 
   // ── Activate modes ─────────────────────────────────────────────────
+  //
+  // Critical: createSession() revokes any prior session for the same
+  // userId (concurrent-session-limit = 1). The earlier version of this
+  // handler called createSession UNCONDITIONALLY on every request —
+  // including the non-?as=, no-cookie-setting JSON path — which
+  // silently destroyed the user's active session every time a
+  // browser prefetch / accidental refresh / tester curl hit the URL
+  // without ?as=. Result: 401 on the next protected request because
+  // the browser still held the now-revoked token.
+  //
+  // Fix: only mint sessions when actually activating via ?as=cons or
+  // ?as=client2. Other paths never touch the Session table.
   const as = req.nextUrl.searchParams.get("as");
   if (as === "cons") {
+    const consSession = await createSession(
+      bypassConsultant.id,
+      "127.0.0.1",
+      "dev-seed-affirm",
+    );
     const res = NextResponse.redirect(new URL("/affirm", req.url), 303);
     res.cookies.set("abeam-session", consSession.token, {
       httpOnly: true,
@@ -568,6 +573,11 @@ async function handle(req: NextRequest, expected: string): Promise<NextResponse>
     return res;
   }
   if (as === "client2") {
+    const client2Session = await createSession(
+      bypassClient.id,
+      "127.0.0.1",
+      "dev-seed-affirm",
+    );
     const res = NextResponse.redirect(
       new URL(`/affirm/${demo.id}`, req.url),
       303,
@@ -674,20 +684,18 @@ async function handle(req: NextRequest, expected: string): Promise<NextResponse>
       },
     },
     bypassPair: {
-      mode: "session_paste_or_one_click",
+      mode: "one_click",
       note:
-        "No email round-trip. Click the activateUrl to set the abeam-session cookie and land directly on the workbench — or paste sessionCookieValue into DevTools → Application → Cookies on the Workbench host with Name=abeam-session, Path=/, HttpOnly, Secure.",
+        "No email round-trip. Click activateUrl to set the abeam-session cookie and land directly on the workbench. Sessions are MINTED at activate time, never on this JSON path — so calling this endpoint without ?as= never revokes a tester's active session.",
       consultant: {
         email: bypassConsultant.email,
         userId: bypassConsultant.id,
-        sessionCookieValue: consSession.token,
         activateUrl: `${origin}/api/dev/seed-affirm?secret=${encodeURIComponent(expected)}&as=cons`,
         landsOn: `${origin}/affirm`,
       },
       client: {
         email: bypassClient.email,
         userId: bypassClient.id,
-        sessionCookieValue: client2Session.token,
         activateUrl: `${origin}/api/dev/seed-affirm?secret=${encodeURIComponent(expected)}&as=client2`,
         landsOn: `${origin}/affirm/${demo.id}`,
       },
