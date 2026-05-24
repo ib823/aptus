@@ -18,8 +18,8 @@ export const metadata = { title: { absolute: 'Settings — ABeam Workbench' } };
 
 export default async function PresalesSettingsPage() {
   const user = await getCurrentUser();
-  if (!user) redirect('/login');
-  if (!canAccessPresales(user.role)) redirect('/dashboard');
+  if (!user) redirect('/presales/login');
+  if (!canAccessPresales(user.role)) redirect('/presales');
 
   return (
     <main style={{ maxWidth: 720, margin: '32px auto', padding: '0 24px' }}>

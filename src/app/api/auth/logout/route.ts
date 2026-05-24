@@ -13,7 +13,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  const response = NextResponse.redirect(new URL("/login", request.url));
+  // Host-aware post-logout redirect: workbench users land on the
+  // workbench sign-in (/presales/login); portal users on /login.
+  // The middleware would eventually bounce a wrong-host redirect to
+  // the right place, but routing here avoids an extra hop and a flash
+  // of the wrong page.
+  const host = request.headers.get("host")?.toLowerCase() ?? "";
+  const isWorkbench =
+    !!process.env.WORKBENCH_HOST && host === process.env.WORKBENCH_HOST;
+  const target = isWorkbench ? "/presales/login" : "/login";
+  const response = NextResponse.redirect(new URL(target, request.url));
 
   // Clear the custom session cookie
   response.cookies.set(SESSION_COOKIE_NAME, "", {

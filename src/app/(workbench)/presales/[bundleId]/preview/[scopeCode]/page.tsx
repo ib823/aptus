@@ -39,7 +39,7 @@ export const metadata = { title: { absolute: 'Preview as client — ABeam Workbe
 
 export default async function PresalesPreviewAsClient({ params }: PageProps) {
   const user = await getCurrentUser();
-  if (!user) redirect('/login');
+  if (!user) redirect('/presales/login');
   if (!canPerformPresalesAction(user.role, 'preview_as_client')) redirect('/presales');
 
   const { bundleId, scopeCode } = await params;

@@ -33,8 +33,8 @@ export const metadata = { title: { absolute: 'Bundle dashboard — ABeam Workben
 
 export default async function PresalesBundleDashboard({ params }: PageProps) {
   const user = await getCurrentUser();
-  if (!user) redirect('/login');
-  if (!canAccessPresales(user.role)) redirect('/dashboard');
+  if (!user) redirect('/presales/login');
+  if (!canAccessPresales(user.role)) redirect('/presales');
 
   const { bundleId } = await params;
   const bundle = await prisma.presalesBundle.findFirst({

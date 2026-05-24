@@ -31,7 +31,7 @@ export const metadata = { title: { absolute: 'New bundle — ABeam Workbench' } 
 
 export default async function PresalesNewBundlePage() {
   const user = await getCurrentUser();
-  if (!user) redirect('/login');
+  if (!user) redirect('/presales/login');
   if (!canPerformPresalesAction(user.role, 'create_bundle')) redirect('/presales');
 
   const assessments = await prisma.assessment.findMany({

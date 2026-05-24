@@ -28,8 +28,8 @@ export const metadata = { title: { absolute: 'Change request — ABeam Workbench
 
 export default async function PresalesChangeRequestPage({ params }: PageProps) {
   const user = await getCurrentUser();
-  if (!user) redirect('/login');
-  if (!canAccessPresales(user.role)) redirect('/dashboard');
+  if (!user) redirect('/presales/login');
+  if (!canAccessPresales(user.role)) redirect('/presales');
 
   const { bundleId } = await params;
   const bundle = await prisma.presalesBundle.findFirst({
