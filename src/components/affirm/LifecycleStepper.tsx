@@ -45,7 +45,9 @@ export function LifecycleStepper({ current, caption, meta }: Props) {
         )}
       </header>
 
-      <ol className="flex flex-wrap items-center gap-2">
+      {/* .lifecycle / .lc-step / .lc-arr — responsive pass collapses
+          this to a vertical list at <=767px. */}
+      <ol className="lifecycle flex flex-wrap items-center gap-2">
         {ORDER.map((s, idx) => {
           const isDone = idx < currentIdx;
           const isCurrent = idx === currentIdx;
@@ -53,7 +55,7 @@ export function LifecycleStepper({ current, caption, meta }: Props) {
             <Fragment key={s}>
               <li>
                 <span
-                  className={`inline-flex h-[34px] items-center gap-2.5 rounded-pill border px-3 pl-2 text-sm ${
+                  className={`lc-step inline-flex h-[34px] items-center gap-2.5 rounded-pill border px-3 pl-2 text-sm ${
                     isCurrent
                       ? "border-navy bg-navy text-white"
                       : isDone
@@ -62,7 +64,7 @@ export function LifecycleStepper({ current, caption, meta }: Props) {
                   }`}
                 >
                   <span
-                    className={`inline-flex size-[22px] items-center justify-center rounded-full text-[11px] font-bold ${
+                    className={`lc-n inline-flex size-[22px] items-center justify-center rounded-full text-[11px] font-bold ${
                       isCurrent
                         ? "bg-cta text-white"
                         : isDone
@@ -94,7 +96,7 @@ export function LifecycleStepper({ current, caption, meta }: Props) {
               {idx < ORDER.length - 1 && (
                 <li
                   aria-hidden="true"
-                  className="font-mono text-sm text-ink-disabled"
+                  className="lc-arr font-mono text-sm text-ink-disabled"
                 >
                   →
                 </li>

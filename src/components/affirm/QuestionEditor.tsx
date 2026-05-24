@@ -505,9 +505,16 @@ export function QuestionEditor({
                       </FormatBtn>
                     </div>
 
-                    <div className="ml-3 flex items-center gap-1">
+                    {/* .reorder-buttons / .reorder-btn — responsive
+                        markup hooks. The design hides these on
+                        desktop in favour of a drag handle; this app
+                        has no drag handle so we keep them visible at
+                        every breakpoint (deviation noted in
+                        affirm-responsive.css). */}
+                    <div className="reorder-buttons ml-3 flex items-center gap-1">
                       <IconBtn
                         title="Move up"
+                        className="reorder-btn"
                         onClick={() => move(r, "up")}
                         disabled={!editable || isFirst || busy === r.questionId}
                       >
@@ -515,6 +522,7 @@ export function QuestionEditor({
                       </IconBtn>
                       <IconBtn
                         title="Move down"
+                        className="reorder-btn"
                         onClick={() => move(r, "down")}
                         disabled={!editable || isLast || busy === r.questionId}
                       >
@@ -654,9 +662,9 @@ function FormatBtn({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex h-8 items-center rounded-input border px-3 text-xs font-semibold transition ${
+      className={`fmt-opt inline-flex h-8 items-center rounded-input border px-3 text-xs font-semibold transition ${
         on
-          ? "border-navy bg-navy text-white"
+          ? "on border-navy bg-navy text-white"
           : "border-border-default bg-paper text-ink-soft hover:bg-ink-tint"
       } disabled:cursor-not-allowed disabled:opacity-60`}
     >
@@ -669,11 +677,14 @@ function IconBtn({
   onClick,
   disabled,
   title,
+  className,
   children,
 }: {
   onClick: () => void;
   disabled?: boolean;
   title: string;
+  /** Extra class names (e.g. .reorder-btn for the responsive pass). */
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -683,7 +694,7 @@ function IconBtn({
       disabled={disabled}
       title={title}
       aria-label={title}
-      className="inline-flex size-7 items-center justify-center rounded-input border border-border-default bg-paper text-sm text-ink-soft hover:bg-ink-tint disabled:cursor-not-allowed disabled:opacity-40"
+      className={`inline-flex size-7 items-center justify-center rounded-input border border-border-default bg-paper text-sm text-ink-soft hover:bg-ink-tint disabled:cursor-not-allowed disabled:opacity-40 ${className ?? ""}`}
     >
       {children}
     </button>

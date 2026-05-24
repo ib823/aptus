@@ -53,21 +53,21 @@ export function ReleaseBar({ bundleId, totals }: Props) {
   return (
     <>
       {/* Sticky release-bar */}
-      <div className="sticky bottom-4 mt-7 flex items-center gap-4 rounded-card-warm border border-border-default bg-paper px-[22px] py-4 shadow-card-warm-hover">
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-ink">
+      <div className="release-bar sticky bottom-4 mt-7 flex items-center gap-4 rounded-card-warm border border-border-default bg-paper px-[22px] py-4 shadow-card-warm-hover">
+        <div className="info min-w-0 flex-1">
+          <div className="t text-sm font-semibold text-ink">
             Ready to release back to the client?
           </div>
-          <div className="mt-0.5 text-xs text-ink-muted">
+          <div className="s mt-0.5 text-xs text-ink-muted">
             Releasing produces the signed affirmation record and the pre-sorted
             Fit-to-Standard workshop agenda. Delivery is manual &mdash; the workbench
             never auto-sends.
           </div>
         </div>
-        <div className="flex shrink-0 gap-2.5">
+        <div className="actions flex shrink-0 gap-2.5">
           <button
             type="button"
-            className="inline-flex h-10 items-center rounded-input border border-border-default bg-paper px-4 text-sm font-semibold text-ink hover:bg-ink-tint"
+            className="btn secondary md inline-flex h-10 items-center rounded-input border border-border-default bg-paper px-4 text-sm font-semibold text-ink hover:bg-ink-tint"
           >
             Send back for clarification
           </button>
@@ -75,7 +75,7 @@ export function ReleaseBar({ bundleId, totals }: Props) {
             type="button"
             onClick={() => setConfirmOpen(true)}
             disabled={pending}
-            className="inline-flex h-10 items-center justify-center rounded-input bg-cta px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-cta-hover disabled:opacity-60"
+            className="btn primary md inline-flex h-10 items-center justify-center rounded-input bg-cta px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-cta-hover disabled:opacity-60"
           >
             Release to client
           </button>

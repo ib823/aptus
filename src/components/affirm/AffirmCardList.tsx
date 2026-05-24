@@ -284,7 +284,7 @@ export function AffirmCardList({
       </div>
 
       {/* Stat-strip — Decision colours + Information count */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+      <div className="stat-strip grid grid-cols-2 gap-3 md:grid-cols-5">
         <Stat n={totals.total} l="Questions" />
         <Stat n={totals.standard} l="Adopt standard" tone="std" />
         <Stat n={totals.discuss} l="Discuss" tone="cfg" />
@@ -397,13 +397,13 @@ export function AffirmCardList({
       <div className="space-y-6">
         {groups.map(([subId, g]) => (
           <section key={subId}>
-            <h3 className="mt-4 mb-1.5 border-b border-border-default pb-2 font-serif text-xl text-navy">
+            <h3 className="subprocess-head mt-4 mb-1.5 border-b border-border-default pb-2 font-serif text-xl text-navy">
               {g.subProcessName}
             </h3>
 
             {Array.from(g.areas.entries()).map(([areaName, qs]) => (
               <div key={areaName}>
-                <div className="mt-4 mb-2.5 inline-flex h-[26px] items-center rounded-pill bg-ink-tint px-3 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-soft">
+                <div className="category-band mt-4 mb-2.5 inline-flex h-[26px] items-center rounded-pill bg-ink-tint px-3 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-soft">
                   {areaName}
                 </div>
                 <div className="space-y-3">
@@ -459,12 +459,12 @@ export function AffirmCardList({
 
       {/* Sticky release bar */}
       {!readOnly && (
-        <div className="sticky bottom-4 mt-7 flex items-center gap-4 rounded-card-warm border border-border-default bg-paper px-[22px] py-4 shadow-card-warm-hover">
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold text-ink">
+        <div className="release-bar sticky bottom-4 mt-7 flex items-center gap-4 rounded-card-warm border border-border-default bg-paper px-[22px] py-4 shadow-card-warm-hover">
+          <div className="info min-w-0 flex-1">
+            <div className="t text-sm font-semibold text-ink">
               All {totals.total} questions answered
             </div>
-            <div className="mt-0.5 text-xs text-ink-muted">
+            <div className="s mt-0.5 text-xs text-ink-muted">
               Your answers are sealed when submitted. The SAP verbatim text is
               retained on every item for audit. Your consultant reviews before
               anything is finalised.
@@ -475,12 +475,12 @@ export function AffirmCardList({
               </p>
             )}
           </div>
-          <div className="flex shrink-0 gap-2.5">
+          <div className="actions flex shrink-0 gap-2.5">
             <button
               type="button"
               onClick={submit}
               disabled={submitting}
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-input bg-cta px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-cta-hover disabled:opacity-60"
+              className="btn primary md inline-flex h-10 items-center justify-center gap-1.5 rounded-input bg-cta px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-cta-hover disabled:opacity-60"
             >
               {submitting ? "Submitting…" : "Submit my affirmation"}
             </button>
@@ -522,12 +522,12 @@ function DecisionCard({
 }) {
   const isStd = answer.choice === "standard";
   return (
-    <article className="rounded-card-warm border border-border-default bg-paper px-[22px] py-5 shadow-card">
-      <header className="mb-2 flex items-center gap-2.5">
-        <span className="text-sm font-semibold text-ink-soft">
+    <article className="affirm-card rounded-card-warm border border-border-default bg-paper px-[22px] py-5 shadow-card">
+      <header className="ac-head mb-2 flex items-center gap-2.5">
+        <span className="ac-category text-sm font-semibold text-ink-soft">
           {q.sapTopic ?? "General"}
         </span>
-        <span className="rounded-pill bg-decision-configure/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-decision-configure">
+        <span className="fmt-badge decision rounded-pill bg-decision-configure/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-decision-configure">
           Decision
         </span>
         {isStd && (
@@ -540,20 +540,20 @@ function DecisionCard({
             consultant-added
           </span>
         )}
-        <span className="ml-auto font-mono text-[11px] text-ink-muted">
+        <span className="ac-qid ml-auto font-mono text-[11px] text-ink-muted">
           {q.id}
         </span>
       </header>
 
       {/* About this question */}
       {q.aboutText && (
-        <p className="mb-2 text-[13px] leading-5 text-ink-soft">
+        <p className="about-line mb-2 text-[13px] leading-5 text-ink-soft">
           <span className="font-semibold text-ink">What this is about:</span>{" "}
           {q.aboutText}
         </p>
       )}
 
-      <p className="mb-3 text-[15px] leading-[22px] text-ink">{wording}</p>
+      <p className="ac-question mb-3 text-[15px] leading-[22px] text-ink">{wording}</p>
 
       {/* v2.1 §9: "Where this sits" process-flow strip per scope item */}
       {flowRefs.map((ref) => (
@@ -568,11 +568,11 @@ function DecisionCard({
 
       {/* What "Adopt SAP standard" means here */}
       {q.standardMeans && (
-        <div className="mb-3 rounded-input border border-decision-standard/30 bg-decision-standard/5 px-3.5 py-2.5">
-          <span className="block text-[11px] font-bold uppercase tracking-wider text-decision-standard">
+        <div className="standard-box mb-3 rounded-input border border-decision-standard/30 bg-decision-standard/5 px-3.5 py-2.5">
+          <span className="label block text-[11px] font-bold uppercase tracking-wider text-decision-standard">
             What &quot;Adopt SAP standard&quot; means here
           </span>
-          <span className="mt-1 block text-[13px] leading-[19px] text-ink-soft">
+          <span className="text mt-1 block text-[13px] leading-[19px] text-ink-soft">
             {q.standardMeans}
           </span>
         </div>
@@ -584,7 +584,7 @@ function DecisionCard({
           <button
             type="button"
             onClick={onToggleVerbatim}
-            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-muted hover:text-ink"
+            className="verbatim-toggle inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-muted hover:text-ink"
           >
             <svg
               width="12"
@@ -602,11 +602,11 @@ function DecisionCard({
             Show the exact SAP wording
           </button>
           {verbatimOpen && (
-            <div className="mt-1.5 mb-2.5 rounded-input bg-ink-tint px-3.5 py-2.5">
-              <span className="block font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+            <div className="sap-verbatim mt-1.5 mb-2.5 rounded-input bg-ink-tint px-3.5 py-2.5">
+              <span className="label block font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
                 SAP verbatim · source of truth · never changed
               </span>
-              <span className="mt-1 block text-xs leading-[18px] text-ink-soft">
+              <span className="text mt-1 block text-xs leading-[18px] text-ink-soft">
                 {q.sapVerbatim}
               </span>
             </div>
@@ -614,7 +614,7 @@ function DecisionCard({
         </>
       )}
 
-      <p className="mt-3 mb-3 font-mono text-[11px] text-ink-muted">
+      <p className="ac-source mt-3 mb-3 font-mono text-[11px] text-ink-muted">
         SAP BDC · Level 2{q.sapArea ? ` · ${q.sapArea}` : ""}
         {q.sscuiRef && q.sscuiRef !== "-" && q.sscuiRef !== "N/A"
           ? ` · ${q.sscuiRef}`
@@ -622,7 +622,7 @@ function DecisionCard({
       </p>
 
       <div
-        className="flex flex-wrap gap-3"
+        className="choice-row flex flex-wrap gap-3"
         role="radiogroup"
         aria-label={`Your choice for ${q.id}`}
       >
@@ -636,14 +636,14 @@ function DecisionCard({
                 ? "bg-decision-configure text-white border-decision-configure"
                 : "bg-decision-custom text-white border-decision-custom";
           return (
-            <div key={c} className="min-w-[140px]">
+            <div key={c} className="choice-wrap min-w-[140px]">
               <button
                 type="button"
                 role="radio"
                 aria-checked={selected}
                 disabled={readOnly}
                 onClick={() => onSetChoice(c)}
-                className={`inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-pill border px-3.5 text-xs font-semibold transition ${
+                className={`choice ${tone} inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-pill border px-3.5 text-xs font-semibold transition ${
                   selected
                     ? onCls
                     : "border-border-default bg-paper text-ink-soft hover:border-border-strong hover:bg-ink-tint"
@@ -651,7 +651,7 @@ function DecisionCard({
               >
                 {DECISION_LABELS[c]}
               </button>
-              <p className="mt-1 text-center text-[11px] leading-4 text-ink-muted">
+              <p className="choice-help mt-1 text-center text-[11px] leading-4 text-ink-muted">
                 {DECISION_HELP[c]}
               </p>
             </div>
@@ -660,8 +660,8 @@ function DecisionCard({
       </div>
 
       {answer.choice === "deviate" && (
-        <div className="mt-3 rounded-input border border-[#E5D6A8] bg-banner-warn px-3.5 py-2.5 text-[13px] leading-[19px]">
-          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-decision-custom">
+        <div className="reason-block mt-3 rounded-input border border-[#E5D6A8] bg-banner-warn px-3.5 py-2.5 text-[13px] leading-[19px]">
+          <span className="l mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-decision-custom">
             Why we differ
           </span>
           <textarea
@@ -714,12 +714,12 @@ function InfoCard({
 }) {
   const flagged = answer.choice === "discuss";
   return (
-    <article className="rounded-card-warm border border-border-default bg-paper px-[22px] py-5 shadow-card">
-      <header className="mb-2 flex items-center gap-2.5">
-        <span className="text-sm font-semibold text-ink-soft">
+    <article className="affirm-card rounded-card-warm border border-border-default bg-paper px-[22px] py-5 shadow-card">
+      <header className="ac-head mb-2 flex items-center gap-2.5">
+        <span className="ac-category text-sm font-semibold text-ink-soft">
           {q.sapTopic ?? "General"}
         </span>
-        <span className="rounded-pill bg-ink-tint px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-ink-soft">
+        <span className="fmt-badge information rounded-pill bg-ink-tint px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-ink-soft">
           Information
         </span>
         {q.isCustom && (
@@ -727,19 +727,19 @@ function InfoCard({
             consultant-added
           </span>
         )}
-        <span className="ml-auto font-mono text-[11px] text-ink-muted">
+        <span className="ac-qid ml-auto font-mono text-[11px] text-ink-muted">
           {q.id}
         </span>
       </header>
 
       {q.aboutText && (
-        <p className="mb-2 text-[13px] leading-5 text-ink-soft">
+        <p className="about-line mb-2 text-[13px] leading-5 text-ink-soft">
           <span className="font-semibold text-ink">What this is about:</span>{" "}
           {q.aboutText}
         </p>
       )}
 
-      <p className="mb-3 text-[15px] leading-[22px] text-ink">{wording}</p>
+      <p className="ac-question mb-3 text-[15px] leading-[22px] text-ink">{wording}</p>
 
       {/* v2.1 §9: "Where this sits" process-flow strip per scope item */}
       {flowRefs.map((ref) => (
@@ -752,8 +752,8 @@ function InfoCard({
         />
       ))}
 
-      <div className="mb-3">
-        <label className="block text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+      <div className="info-input mb-3">
+        <label className="l block text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
           Your answer
         </label>
         <textarea
@@ -764,7 +764,7 @@ function InfoCard({
           rows={3}
           maxLength={2000}
           placeholder="Type your answer here — e.g. list the items, describe your setup…"
-          className="mt-1 w-full rounded-input border border-border-default bg-paper p-2.5 text-sm focus:border-navy focus:outline-none"
+          className="textarea mt-1 w-full rounded-input border border-border-default bg-paper p-2.5 text-sm focus:border-navy focus:outline-none"
         />
       </div>
 
@@ -773,7 +773,7 @@ function InfoCard({
           <button
             type="button"
             onClick={onToggleVerbatim}
-            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-muted hover:text-ink"
+            className="verbatim-toggle inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-muted hover:text-ink"
           >
             <svg
               width="12"
@@ -791,11 +791,11 @@ function InfoCard({
             Show the exact SAP wording
           </button>
           {verbatimOpen && (
-            <div className="mt-1.5 mb-2.5 rounded-input bg-ink-tint px-3.5 py-2.5">
-              <span className="block font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+            <div className="sap-verbatim mt-1.5 mb-2.5 rounded-input bg-ink-tint px-3.5 py-2.5">
+              <span className="label block font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
                 SAP verbatim · source of truth · never changed
               </span>
-              <span className="mt-1 block text-xs leading-[18px] text-ink-soft">
+              <span className="text mt-1 block text-xs leading-[18px] text-ink-soft">
                 {q.sapVerbatim}
               </span>
             </div>
@@ -803,7 +803,7 @@ function InfoCard({
         </>
       )}
 
-      <p className="mt-3 mb-3 font-mono text-[11px] text-ink-muted">
+      <p className="ac-source mt-3 mb-3 font-mono text-[11px] text-ink-muted">
         SAP BDC · Level 2{q.sapArea ? ` · ${q.sapArea}` : ""}
         {q.sscuiRef && q.sscuiRef !== "-" && q.sscuiRef !== "N/A"
           ? ` · ${q.sscuiRef}`
@@ -811,13 +811,13 @@ function InfoCard({
       </p>
 
       {/* Optional flag for workshop discussion — no "adopt standard" here */}
-      <div className="flex items-start gap-3">
-        <div className="min-w-[200px]">
+      <div className="choice-row info-flag-wrap flex items-start gap-3">
+        <div className="choice-wrap min-w-[200px]">
           <button
             type="button"
             disabled={readOnly}
             onClick={() => onSetFlag(!flagged)}
-            className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-pill border px-3.5 text-xs font-semibold transition ${
+            className={`choice cfg inline-flex h-9 items-center justify-center gap-1.5 rounded-pill border px-3.5 text-xs font-semibold transition ${
               flagged
                 ? "border-decision-configure bg-decision-configure text-white"
                 : "border-border-default bg-paper text-ink-soft hover:border-border-strong hover:bg-ink-tint"
@@ -825,7 +825,7 @@ function InfoCard({
           >
             {flagged ? "Flagged for workshop" : "Flag for workshop discussion"}
           </button>
-          <p className="mt-1 text-[11px] leading-4 text-ink-muted">
+          <p className="choice-help mt-1 text-[11px] leading-4 text-ink-muted">
             Use if you would rather cover this live.
           </p>
         </div>
@@ -859,9 +859,9 @@ function Stat({
             ? "text-ink-muted"
             : "text-ink";
   return (
-    <div className="rounded-card-warm border border-border-default bg-paper px-[18px] py-3.5">
-      <p className={`font-serif text-[28px] leading-none font-medium ${cls}`}>{n}</p>
-      <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-ink-muted">
+    <div className="stat rounded-card-warm border border-border-default bg-paper px-[18px] py-3.5">
+      <p className={`n font-serif text-[28px] leading-none font-medium ${cls}`}>{n}</p>
+      <p className="l mt-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-ink-muted">
         {l}
       </p>
     </div>
