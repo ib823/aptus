@@ -42,7 +42,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { createSession } from "@/lib/auth/session";
+import { generateSessionToken, hashSessionToken } from "@/lib/auth/session";
 import { sendMagicLink } from "@/lib/auth/send-magic-link";
 import dataset from "../../../../../prisma/seeds/value-stream/dataset.json";
 import processFlowDataset from "../../../../../prisma/seeds/value-stream/process-flow.json";
@@ -544,26 +544,65 @@ async function handle(req: NextRequest, expected: string): Promise<NextResponse>
 
   // ── Activate modes ─────────────────────────────────────────────────
   //
-  // Critical: createSession() revokes any prior session for the same
-  // userId (concurrent-session-limit = 1). The earlier version of this
-  // handler called createSession UNCONDITIONALLY on every request —
-  // including the non-?as=, no-cookie-setting JSON path — which
-  // silently destroyed the user's active session every time a
-  // browser prefetch / accidental refresh / tester curl hit the URL
-  // without ?as=. Result: 401 on the next protected request because
-  // the browser still held the now-revoked token.
+  // Two interacting problems made this section a session-revocation
+  // footgun:
   //
-  // Fix: only mint sessions when actually activating via ?as=cons or
-  // ?as=client2. Other paths never touch the Session table.
+  // (a) Non-?as= paths used to call createSession() unconditionally as a
+  //     side effect of building the JSON response. Browser prefetches /
+  //     stray refreshes / SafeLinks scanners would silently revoke the
+  //     tester's active session. Fixed earlier — JSON paths now never
+  //     touch the Session table.
+  //
+  // (b) The ?as= paths still call createSession(), which enforces the
+  //     "1 active session per user" policy by revoking any prior
+  //     session for that userId. In production this is a real security
+  //     guarantee. But for a dev demo URL pasted into Teams / Outlook /
+  //     Slack, the activate URL gets opened by:
+  //         - HEAD probe by SafeLinks / link-card preview
+  //         - GET prefetch by the email/chat client
+  //         - the human's actual click
+  //         - sometimes a second open in a different window / tab
+  //     The LAST hit wins the cookie in the browser; the others mint
+  //     orphan sessions in the DB; and the human ends up holding the
+  //     latest cookie until another hit retires it. If any background
+  //     hit fires AFTER the human's click (Edge link prefetch on hover,
+  //     SafeLinks delayed re-check), the human's cookie value points
+  //     at a session that the DB now flags revoked → 401 on every
+  //     protected request, including POST /api/affirm/bundles.
+  //
+  // Fix for the dev path: mint sessions WITHOUT revoking prior ones.
+  // Orphan sessions are harmless — they expire in 8h. Real production
+  // sign-in flows (magic link → /api/auth/bridge) still go through
+  // createSession() and keep the 1-active-session policy.
+  async function mintBypassSession(
+    userId: string,
+    userAgent: string,
+  ): Promise<string> {
+    const token = generateSessionToken();
+    await prisma.session.create({
+      data: {
+        userId,
+        tokenHash: hashSessionToken(token),
+        expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000),
+        ipAddress: "127.0.0.1",
+        userAgent,
+      },
+    });
+    await prisma.user.update({
+      where: { id: userId },
+      data: { lastLoginAt: new Date(), loginCount: { increment: 1 } },
+    });
+    return token;
+  }
+
   const as = req.nextUrl.searchParams.get("as");
   if (as === "cons") {
-    const consSession = await createSession(
+    const token = await mintBypassSession(
       bypassConsultant.id,
-      "127.0.0.1",
-      "dev-seed-affirm",
+      "dev-seed-affirm:cons",
     );
     const res = NextResponse.redirect(new URL("/affirm", req.url), 303);
-    res.cookies.set("abeam-session", consSession.token, {
+    res.cookies.set("abeam-session", token, {
       httpOnly: true,
       secure: true,
       sameSite: "lax",
@@ -573,16 +612,15 @@ async function handle(req: NextRequest, expected: string): Promise<NextResponse>
     return res;
   }
   if (as === "client2") {
-    const client2Session = await createSession(
+    const token = await mintBypassSession(
       bypassClient.id,
-      "127.0.0.1",
-      "dev-seed-affirm",
+      "dev-seed-affirm:client2",
     );
     const res = NextResponse.redirect(
       new URL(`/affirm/${demo.id}`, req.url),
       303,
     );
-    res.cookies.set("abeam-session", client2Session.token, {
+    res.cookies.set("abeam-session", token, {
       httpOnly: true,
       secure: true,
       sameSite: "lax",
