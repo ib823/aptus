@@ -80,6 +80,12 @@ async function _notifyNewLogin(params: {
   // Same IP and same UA → same device, skip notification
   if (currentIp === previousSessionIp && currentUa === previousUa) return;
 
+  // INTENTIONAL CROSS-HOST: the security review UI (/settings/security)
+  // lives on the Aptus portal — the Workbench has no equivalent page.
+  // Even when the originating sign-in was from the Workbench host,
+  // the email's "Review account security" link points at the portal
+  // because that's where the user can actually act. NEXTAUTH_URL is
+  // always the portal host in this two-host setup.
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
   const reviewUrl = `${baseUrl}/settings/security`;
   const device = currentUa ? parseDevice(currentUa) : "Unknown device";

@@ -22,8 +22,8 @@ export const metadata = { title: { absolute: 'Audit log — ABeam Workbench' } }
 
 export default async function PresalesAuditPage({ params, searchParams }: PageProps) {
   const user = await getCurrentUser();
-  if (!user) redirect('/login');
-  if (!canAccessPresales(user.role)) redirect('/dashboard');
+  if (!user) redirect('/presales/login');
+  if (!canAccessPresales(user.role)) redirect('/presales');
 
   const { bundleId } = await params;
   const sp = await searchParams;

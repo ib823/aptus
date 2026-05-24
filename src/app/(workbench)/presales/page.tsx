@@ -64,8 +64,8 @@ export const metadata = { title: { absolute: 'Bundles — ABeam Workbench' } };
 
 export default async function PresalesIndexPage({ searchParams }: PageProps) {
   const user = await getCurrentUser();
-  if (!user) redirect('/login');
-  if (!canAccessPresales(user.role)) redirect('/dashboard');
+  if (!user) redirect('/presales/login');
+  if (!canAccessPresales(user.role)) redirect('/presales');
 
   const sp = await searchParams;
   const filter = (sp.status as FilterStatus | undefined) ?? 'all';
