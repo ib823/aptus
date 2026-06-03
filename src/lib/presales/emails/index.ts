@@ -85,7 +85,6 @@ export async function dispatchEmail(
         'SMTP transport unavailable: SMTP_USER + SMTP_PASS must be set in production',
       );
       if (opts.bestEffort) {
-        // eslint-disable-next-line no-console
         console.warn('[presales-email] best-effort send skipped:', err.message);
         return { delivered: false, bestEffortFailed: true };
       }
@@ -120,7 +119,6 @@ export async function dispatchEmail(
     return { delivered: true, messageId: info.messageId ?? `smtp-${Date.now()}` };
   } catch (err) {
     if (opts.bestEffort) {
-      // eslint-disable-next-line no-console
       console.warn('[presales-email] send threw (best-effort):', err);
       return { delivered: false, bestEffortFailed: true };
     }

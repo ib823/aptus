@@ -53,6 +53,68 @@ Each step is shown as a card matching the on-screen layout:
 
 ---
 
+## Reporting & Display Apps — D2 Remediation Addendum
+
+> Added per the D2/D3 content-integrity remediation (see `D2-D3-REMEDIATION-NOTE.md`).
+> This app is part of the J59 Accounts Receivable flow per the SAP BPD test script
+> (S4CLD2602) but was not surfaced in the screen-by-screen capture below. It is
+> documented here so the J59 Fiori coverage matches the BPD. The app identity
+> (name + Fiori ID) and the screen-by-screen procedure below are both taken from
+> the J59 BPD test script; sample values are SAP standard demo data — nothing invented.
+
+### Display Customer Balances (F0703A)
+
+| | |
+|---|---|
+| **Fiori app** | Display Customer Balances |
+| **Fiori ID** | F0703A |
+| **Module** | FI-AR (Accounts Receivable) |
+| **Type** | Reporting / Display |
+
+**What this step does:**
+> Review a customer's open and cleared item balances in Accounts Receivable —
+> period debit/credit totals, cumulative balance, and drill-down to the underlying
+> line items — to monitor receivables and inform collection and dunning decisions.
+
+**Procedure (from the J59 BPD test script):**
+
+> **Business role:** Accounts Receivable Accountant — **Expected outcome:** a table of customer balances displays.
+
+1. **Log On** — Log on to the SAP Fiori launchpad as an Accounts Receivable Accountant.
+2. **Access the SAP Fiori App** — Open *Display Customer Balances* (F0703A).
+3. **Enter Search Criteria** — Enter **Customer:** `10100001` · **Company Code:** `1010` · **Fiscal Year:** *<Current Year>*, then choose **Go**. A table of customer balances displays.
+4. **Explore Balance Views** — To navigate the views, select **Balances**, **Special G/L**, or **Compare**, then choose **Go**.
+
+> Sample values (10100001 / 1010) are SAP standard demo data and are localization-independent. In the BPD this app immediately precedes *Manage Customer Line Items* (F0711), already covered below.
+
+---
+
+## Master Data Apps — D2 Remediation Addendum
+
+> Added per the D2/D3 content-integrity remediation (see `D2-D3-REMEDIATION-NOTE.md`).
+> This app is part of the J59 Accounts Receivable flow per the SAP BPD test script
+> (S4CLD2602) — its presence is confirmed by the external resolutions file — but it
+> was not surfaced in the screen-by-screen capture below. It is documented here so the
+> J59 Fiori coverage matches the BPD. The app identity (name + Fiori ID) is BPD-confirmed;
+> the detailed screen-by-screen procedure is defined in the BPD test script and is
+> **not** reproduced here (not invented).
+
+### Manage Customer Master Data (F0850A)
+
+| | |
+|---|---|
+| **Fiori app** | Manage Customer Master Data |
+| **Fiori ID** | F0850A |
+| **Module** | Master Data — Customer (Business Partner) / FI-AR |
+| **Type** | Master Data — maintenance |
+
+**What this step does:**
+> Create, change, and display the customer (business partner) master record — the
+> general, company-code, and sales-area data that identifies the account holder and
+> underpins downstream AR postings, invoicing, dunning, and customer-balance reporting.
+
+---
+
 
 ## Activity 1: Additional Information
 

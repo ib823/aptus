@@ -45,6 +45,32 @@ Each step is shown as a card matching the on-screen layout:
 
 ---
 
+## Master Data Apps — D2 Remediation Addendum
+
+> Added per the D2/D3 content-integrity remediation (see `D2-D3-REMEDIATION-NOTE.md`).
+> This app is part of the J60 Accounts Payable flow per the SAP BPD test script
+> (S4CLD2602) — its presence is confirmed by the external resolutions file — but it was
+> not surfaced as a discrete screen-by-screen capture below. It is documented here so the
+> J60 Fiori coverage matches the BPD. The app identity (name + Fiori ID) is BPD-confirmed;
+> the detailed screen-by-screen procedure is defined in the BPD test script and is
+> **not** reproduced here (not invented).
+
+### Manage Supplier Master Data (F1053A)
+
+| | |
+|---|---|
+| **Fiori app** | Manage Supplier Master Data |
+| **Fiori ID** | F1053A |
+| **Module** | Master Data — Supplier (Business Partner) / FI-AP |
+| **Type** | Master Data — maintenance |
+
+**What this step does:**
+> Create, change, and display the supplier (business partner) master record — the
+> general, company-code, and purchasing-organization data that identifies the vendor and
+> underpins downstream AP postings, invoice processing, payments, and supplier-line-item reporting.
+
+---
+
 
 ## Activity 1: Additional Information
 
@@ -10577,6 +10603,12 @@ Choose Create
 
 > 7 steps total | 4 classifiable | 3 hidden
 
+<!-- Fiori ID note (D2 remediation, revised resolutions file 2026-06-03): the "Process Free Form
+     Payments" app referenced in this activity and Activity 40 is F8654 (Cash Management Specialist —
+     review/process/release). It was corrected from F2564 on the strength of the revised resolutions
+     file's J60 BPD source check. F2564 remains "My Free Form Payments" (create step, AP Accountant,
+     Activity 38). See D2-D3-REMEDIATION-NOTE.md. -->
+
 ### Step 388: Information
 
 | | |
@@ -10636,12 +10668,12 @@ Log on to the SAP Fiori launchpad as a Cash Management Specialist.
 <details>
 <summary><strong>Technical Details for Implementation Team</strong></summary>
 
-Open Process Free Form Payments (F2564) .
+Open Process Free Form Payments (F8654) .
 
 </details>
 
 **Expected Result (Test Verification):**
-> The Process Free Form Payments (F2564) view displays.
+> The Process Free Form Payments (F8654) view displays.
 
 ---
 
@@ -10824,12 +10856,12 @@ Log on to the SAP Fiori launchpad as a Cash Management Specialist.
 <details>
 <summary><strong>Technical Details for Implementation Team</strong></summary>
 
-Open Process Free Form Payments (F2564).
+Open Process Free Form Payments (F8654).
 
 </details>
 
 **Expected Result (Test Verification):**
-> The Process Free Form Payments (F2564) view displays.
+> The Process Free Form Payments (F8654) view displays.
 
 ---
 
