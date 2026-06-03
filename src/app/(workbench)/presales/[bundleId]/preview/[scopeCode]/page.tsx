@@ -27,6 +27,8 @@ import {
 } from '@/lib/presales/redaction';
 import { canPerformPresalesAction } from '@/lib/presales/rbac';
 import { RelativeTime } from '@/components/ui/relative-time';
+import { ProcessTimeline } from '@/components/fts/ProcessTimeline';
+import { OptionCard } from '@/components/fts/OptionCard';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -184,10 +186,17 @@ export default async function PresalesPreviewAsClient({ params }: PageProps) {
                     </span>
                     <RelativeTime iso={setAtIso} compact />
                   </div>
-                  <div style={{ marginTop: 12, display: 'grid', gap: 8, fontSize: 13 }}>
-                    <div><strong>Standard:</strong> {d.std_desc}</div>
-                    <div><strong>Configure:</strong> {d.cfg_desc}</div>
-                    <div><strong>Custom:</strong> {d.cst_desc}</div>
+                  <div
+                    style={{
+                      marginTop: 12,
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                      gap: 8,
+                    }}
+                  >
+                    <OptionCard kind="std" label="Standard" description={d.std_desc} selected={currentChoice === 'std'} disabled />
+                    <OptionCard kind="cfg" label="Configure" description={d.cfg_desc} selected={currentChoice === 'cfg'} disabled />
+                    <OptionCard kind="cst" label="Custom" description={d.cst_desc} selected={currentChoice === 'cst'} disabled />
                   </div>
                   <div style={{ marginTop: 8, fontSize: 12, color: '#888780', fontStyle: 'italic' }}>
                     Disabled in preview — the real client sees these as choice buttons.
@@ -200,14 +209,7 @@ export default async function PresalesPreviewAsClient({ params }: PageProps) {
 
         <section>
           <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12 }}>Process steps</h2>
-          <ol style={{ paddingLeft: 20, margin: 0 }}>
-            {item.process_steps.map((step, i) => (
-              <li key={`${step.name}-${i}`} style={{ marginBottom: 8, fontSize: 14 }}>
-                <strong>{step.name}</strong> — {step.role} — {step.app}
-                <div style={{ fontSize: 13, color: '#5A5A5A' }}>{step.expected}</div>
-              </li>
-            ))}
-          </ol>
+          <ProcessTimeline steps={item.process_steps} />
         </section>
       </main>
     </>
