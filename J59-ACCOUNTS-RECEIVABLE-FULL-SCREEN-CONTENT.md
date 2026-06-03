@@ -89,6 +89,32 @@ Each step is shown as a card matching the on-screen layout:
 
 ---
 
+## Master Data Apps — D2 Remediation Addendum
+
+> Added per the D2/D3 content-integrity remediation (see `D2-D3-REMEDIATION-NOTE.md`).
+> This app is part of the J59 Accounts Receivable flow per the SAP BPD test script
+> (S4CLD2602) — its presence is confirmed by the external resolutions file — but it
+> was not surfaced in the screen-by-screen capture below. It is documented here so the
+> J59 Fiori coverage matches the BPD. The app identity (name + Fiori ID) is BPD-confirmed;
+> the detailed screen-by-screen procedure is defined in the BPD test script and is
+> **not** reproduced here (not invented).
+
+### Manage Customer Master Data (F0850A)
+
+| | |
+|---|---|
+| **Fiori app** | Manage Customer Master Data |
+| **Fiori ID** | F0850A |
+| **Module** | Master Data — Customer (Business Partner) / FI-AR |
+| **Type** | Master Data — maintenance |
+
+**What this step does:**
+> Create, change, and display the customer (business partner) master record — the
+> general, company-code, and sales-area data that identifies the account holder and
+> underpins downstream AR postings, invoicing, dunning, and customer-balance reporting.
+
+---
+
 
 ## Activity 1: Additional Information
 
