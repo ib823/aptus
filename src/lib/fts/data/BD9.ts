@@ -373,10 +373,10 @@ const content: ScopeItemContent = {
       "id": "d7",
       "title": "Delivery split / consolidation",
       "summary": "Should one order generate one delivery, or split by plant/shipping point? Allow customer-side consolidation across multiple orders?\n",
-      // TODO(verify): no clean "delivery split" SSCUI in 2602; closest catalogue candidate is 102763 (Define Copying Control for Delivery Document to Billing Document). Confirm intended config or keep this framework label.
-      "sscui": "No direct SSCUI — Delivery/Shipping Configuration",
+      // Resolved (2602): no discrete "delivery split" SSCUI. Split/consolidation is standard delivery behaviour (header split criteria — ship-to, route, shipping point, inco terms). Closest real SSCUIs are route determination: 102151 (Maintain Route Determination), 101880 (Define Routes), 102763 (Copying Control Delivery→Billing) — cite only if the engagement means route-driven consolidation. Keep sscui_id blank.
+      "sscui": "No direct SSCUI — Delivery split / consolidation (standard delivery behaviour)",
       "sscui_id": "",
-      "sscui_name": "Delivery/Shipping Configuration",
+      "sscui_name": "Delivery split / consolidation (standard delivery behaviour)",
       "std_desc": "Standard delivery split rules (per plant, per ship-to). One order may produce multiple deliveries.",
       "cfg_desc": "Adjust split criteria via SSCUI (e.g., consolidate by customer regardless of plant). Included.",
       "cst_desc": "Custom split logic based on customer preference, carrier, route, or schedule. Effort estimated separately in your SOW.",

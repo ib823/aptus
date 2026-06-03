@@ -36,19 +36,22 @@ covered.
 
 | Item | Fiori ID | App | Action taken |
 |------|----------|-----|--------------|
-| **J59** | **F0703A** | **Display Customer Balances** | **Added** — `J59-ACCOUNTS-RECEIVABLE-FULL-SCREEN-CONTENT.md` → "Reporting & Display Apps — D2 Remediation Addendum". The one genuine content gap. |
-| J59 | F0850A | Manage Customer Master Data | Not tagged — the app name does **not** appear in the J59 content file in-repo (0 occurrences), so there is nothing to tag. `TODO(verify)` against the BPD if a customer-master step must be added. |
-| J60 | F1053A | Manage Supplier Master Data | Not tagged — the app name does **not** appear in the J60 content file in-repo (0 occurrences). `TODO(verify)`. |
-| J60 | F8654 | Process Free Form Payments | Not re-tagged — the app **is already present and tagged** in the J60 content as **`Process Free Form Payments (F2564)`**. F2564 and F8654 are both valid Fiori IDs for this app across contexts; asserting F8654 next to the existing F2564 would contradict in-repo SAP data, so it was left as-is. `TODO(verify)` which ID the engagement standard prefers. |
-| BDW | F2250 | Manage Billing Documents | Not re-tagged — the app **is already present and tagged** in the BDW content as **`Manage Billing Documents (F0797)`**. Same multi-ID situation as above (the original D2 review listed both F0797 and F2250). Left as-is. `TODO(verify)`. |
+| **J59** | **F0703A** | **Display Customer Balances** | **Added** — `J59-ACCOUNTS-RECEIVABLE-FULL-SCREEN-CONTENT.md` → "Reporting & Display Apps — D2 Remediation Addendum". The one genuine content gap. Full screen-by-screen procedure subsequently ingested from the external resolutions file (J59 BPD; SAP standard demo data). |
+| J59 | F0850A | Manage Customer Master Data | Still not tagged. The external resolutions file confirms **F0850A** as the J59 customer-master ID, but supplies **no procedure/step** to attach it to and the app name has 0 occurrences in the J59 content. Remains `TODO(verify)` until a customer-master step is added. |
+| J60 | F1053A | Manage Supplier Master Data | Still not tagged. The external resolutions file confirms **F1053A** as a candidate, but no supplier-master step exists in the J60 content (0 occurrences) to attach it to. Remains `TODO(verify)`. |
+| J60 | F8654 | Process Free Form Payments | **Not applied — contradiction; kept `F2564`.** The external resolutions file proposed retagging J60 free-form payments to **F8654** and assigning **F2564** to *Manage Billing Documents*. This contradicts the in-repo BPD content, which uses **F2564** for *Process / My Free Form Payments* (5 occurrences) and **F0797** for *Manage Billing Documents* (7×); **F8654 appears 0× in the repo.** Applying F8654 would overwrite BPD-sourced data with an unverified ID, so it was rejected. The F2564↔F8654 assignment needs source confirmation against the actual SSCUI list / BPD. |
+| BDW | F2250 | Manage Billing Documents | Confirmed correct by the external resolutions file. In-repo billing tags `Manage Billing Documents (F0797)` (×7) and `(F2250)` (×1, in 2ET) are valid SAP billing IDs — left as-is. |
 
 J45, 1NT, 2ET: no BPD-confirmed gap.
 
-**Net change:** only `F0703A` was a genuine, safe addition. The four "optional tag" items were
-reviewed and intentionally **not** changed inline — two app names are absent from the in-repo
-content (nothing to tag) and two are already tagged with a different, also-valid Fiori ID
-(re-tagging would assert an unverified/conflicting SAP ID, against the golden rule). These are
-flagged `TODO(verify)` for the analyst rather than guessed.
+**Net change:** `F0703A` was the one genuine, safe addition (its full procedure has since been
+ingested from the external resolutions file). The four "optional tag" items were reviewed and
+intentionally **not** changed inline: F0850A/F1053A have no step in the content to attach to
+(still `TODO(verify)`), the BDW billing tags (F0797/F2250) were confirmed correct, and the
+proposed **F8654** free-form-payments retag was **rejected** — it contradicts the BPD-sourced
+**F2564** already in the J60 content (F8654 appears 0× in the repo). Re-tagging would assert an
+unverified/conflicting SAP ID, against the golden rule, so the F2564↔F8654 question is bounced
+back to the analyst for source confirmation.
 
 ---
 
@@ -64,5 +67,7 @@ MY-only delta.
 
 ---
 
-*Remediation applied 2026-06-03. Source: `claude-code-handoff/D2-D3-RESOLVED.md` +
+*Remediation applied 2026-06-03; cross-checked against the external resolutions file
+("TODO(verify) — resolutions from the SAP source") on 2026-06-03 — items 1–3 applied, the
+item-4 F8654 retag rejected (see the J60 row above). Source: `claude-code-handoff/D2-D3-RESOLVED.md` +
 `REMEDIATION-PLAN-AND-PROMPT.md`. No SAP IDs, process steps, or screen procedures were invented.*

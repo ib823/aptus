@@ -59,8 +59,8 @@ Each step is shown as a card matching the on-screen layout:
 > This app is part of the J59 Accounts Receivable flow per the SAP BPD test script
 > (S4CLD2602) but was not surfaced in the screen-by-screen capture below. It is
 > documented here so the J59 Fiori coverage matches the BPD. The app identity
-> (name + Fiori ID) is BPD-confirmed; the detailed screen-by-screen procedure is
-> defined in the BPD test script and is **not** reproduced here (not invented).
+> (name + Fiori ID) and the screen-by-screen procedure below are both taken from
+> the J59 BPD test script; sample values are SAP standard demo data — nothing invented.
 
 ### Display Customer Balances (F0703A)
 
@@ -76,11 +76,16 @@ Each step is shown as a card matching the on-screen layout:
 > period debit/credit totals, cumulative balance, and drill-down to the underlying
 > line items — to monitor receivables and inform collection and dunning decisions.
 
-<!-- TODO(verify): the full screen-by-screen test steps for F0703A live in the J59
-     BPD test script (S4CLD2602 BPD, _EN_MY for Malaysia localization). Ingest from
-     the BPD if the complete procedure capture is required. The app name and the
-     F0703A Fiori ID above are taken from the D2-D3 remediation handoff and are
-     BPD-confirmed; no procedure detail has been invented. -->
+**Procedure (from the J59 BPD test script):**
+
+> **Business role:** Accounts Receivable Accountant — **Expected outcome:** a table of customer balances displays.
+
+1. **Log On** — Log on to the SAP Fiori launchpad as an Accounts Receivable Accountant.
+2. **Access the SAP Fiori App** — Open *Display Customer Balances* (F0703A).
+3. **Enter Search Criteria** — Enter **Customer:** `10100001` · **Company Code:** `1010` · **Fiscal Year:** *<Current Year>*, then choose **Go**. A table of customer balances displays.
+4. **Explore Balance Views** — To navigate the views, select **Balances**, **Special G/L**, or **Compare**, then choose **Go**.
+
+> Sample values (10100001 / 1010) are SAP standard demo data and are localization-independent. In the BPD this app immediately precedes *Manage Customer Line Items* (F0711), already covered below.
 
 ---
 
