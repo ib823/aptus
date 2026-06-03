@@ -154,10 +154,10 @@ const content: ScopeItemContent = {
       "id": "d3",
       "title": "Reasons for rejection",
       "summary": "When an inquiry is rejected, what reasons should be available in the dropdown? SAP delivers ~20 standard reasons.\n",
-      // TODO(verify): a real "Reasons for Rejection" SSCUI likely exists in the BD9/sales config set (release 2602); confirm exact ID, else keep this descriptive (no-direct-SSCUI) label.
-      "sscui": "No direct SSCUI — Define Reasons for Rejection",
+      // Resolved (SSCUI_List 2602): no sales-scoped "Reasons for Rejection" SSCUI exists; maintained via expert configuration (Define Reasons for Rejection), not an SSCUI. Keep sscui_id blank.
+      "sscui": "No direct SSCUI — Define Reasons for Rejection (expert configuration)",
       "sscui_id": "",
-      "sscui_name": "Define Reasons for Rejection",
+      "sscui_name": "Define Reasons for Rejection (expert configuration)",
       "std_desc": "Use SAP standard rejection reasons. Most clients find these sufficient.",
       "cfg_desc": "Add or rename rejection reasons. Included.",
       "cst_desc": "Conditional rejection logic (e.g., auto-route certain reasons to approval). Effort estimated separately in your SOW.",
