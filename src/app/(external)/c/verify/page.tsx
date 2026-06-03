@@ -16,6 +16,7 @@ import { recordSessionInvalid } from '@/lib/presales/audit-session';
 import { PRESALES_COOKIE_NAME } from '@/lib/presales/cookies';
 import { issueSessionNonce } from '@/lib/presales/csrf';
 import { readPresalesSession } from '@/lib/presales/session';
+import { OtpInput } from '@/components/external/OtpInput';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -108,34 +109,15 @@ export default async function PresalesVerifyPage({ searchParams }: PageProps) {
         }}
       >
         <input type="hidden" name="csrf" value={issueSessionNonce(resolved.session.id)} />
-        <label
-          htmlFor="otp"
+        <div
+          id="otp-label"
           style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}
         >
           Verification code
-        </label>
-        <input
-          id="otp"
-          name="otp"
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]{6}"
-          maxLength={6}
-          required
-          autoComplete="one-time-code"
-          autoFocus
-          style={{
-            width: '100%',
-            padding: '12px 16px',
-            fontSize: 24,
-            letterSpacing: '0.4em',
-            textAlign: 'center',
-            border: '1px solid #E5E5E5',
-            borderRadius: 8,
-            marginBottom: 24,
-            boxSizing: 'border-box',
-          }}
-        />
+        </div>
+        <div style={{ marginBottom: 24 }}>
+          <OtpInput name="otp" length={6} />
+        </div>
         <button
           type="submit"
           style={{

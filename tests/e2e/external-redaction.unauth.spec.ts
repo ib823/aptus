@@ -39,6 +39,7 @@
  */
 
 import { expect, test } from '@playwright/test';
+import type { APIRequestContext } from '@playwright/test';
 import { REDACTED_KEYS } from '../../src/lib/presales/redaction';
 import { PRESALES_TEST_SCOPE_CODE, PRESALES_TEST_UA } from './fixtures/presales-constants';
 
@@ -147,7 +148,7 @@ function extractHydrationPayload(html: string): unknown {
 
 async function assertRedaction(opts: {
   baseURL: string;
-  request: import('@playwright/test').APIRequestContext;
+  request: APIRequestContext;
   themeCookie: 'light' | 'dark';
 }): Promise<void> {
   const response = await opts.request.get(SCOPE_URL, {

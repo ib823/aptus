@@ -46,9 +46,9 @@ describe("AptusMark", () => {
 });
 
 describe("AptusWordmark", () => {
-  it("renders 'Aptus' text", () => {
+  it("renders 'ABeam Workbench' text", () => {
     const { container } = render(<AptusWordmark />);
-    expect(container.textContent).toBe("Aptus");
+    expect(container.textContent).toBe("ABeam Workbench");
   });
 
   it("scales the mark to size + 6", () => {

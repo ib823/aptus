@@ -6,6 +6,7 @@ import type {
   DecisionChoice,
   DecisionState,
 } from "@/lib/fts/types";
+import { OptionCard } from "./OptionCard";
 
 interface Props {
   index: number;
@@ -64,29 +65,29 @@ export function DecisionCard({ index, decision, state, onChange }: Props) {
         <div className="px-4 pb-4 pt-2 border-t border-slate-100 bg-slate-50/50">
           <p className="text-sm text-slate-700 mb-4">{decision.summary}</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <ChoiceButton
-              accent="emerald"
+            <OptionCard
+              kind="std"
               label="Standard"
-              desc={decision.std_desc}
+              description={decision.std_desc}
               effortLabel="+0 days"
               selected={choice === "std"}
-              onClick={() => handleChoice("std", 0)}
+              onSelect={() => handleChoice("std", 0)}
             />
-            <ChoiceButton
-              accent="blue"
+            <OptionCard
+              kind="cfg"
               label="Configure (SSCUI)"
-              desc={decision.cfg_desc}
+              description={decision.cfg_desc}
               effortLabel="+0 days (included)"
               selected={choice === "cfg"}
-              onClick={() => handleChoice("cfg", 0)}
+              onSelect={() => handleChoice("cfg", 0)}
             />
-            <ChoiceButton
-              accent="red"
+            <OptionCard
+              kind="cst"
               label="Custom (chargeable)"
-              desc={decision.cst_desc}
+              description={decision.cst_desc}
               effortLabel={`+${decision.effort} days`}
               selected={choice === "cst"}
-              onClick={() => handleChoice("cst", decision.effort)}
+              onSelect={() => handleChoice("cst", decision.effort)}
             />
           </div>
           <div className="mt-3">
@@ -130,62 +131,5 @@ function StatusPill({ choice }: { choice: DecisionChoice }) {
     >
       {label}
     </span>
-  );
-}
-
-function ChoiceButton({
-  accent,
-  label,
-  desc,
-  effortLabel,
-  selected,
-  onClick,
-}: {
-  accent: "emerald" | "blue" | "red";
-  label: string;
-  desc: string;
-  effortLabel: string;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  const ringColor: Record<typeof accent, string> = {
-    emerald: "hover:border-emerald-400",
-    blue: "hover:border-blue-400",
-    red: "hover:border-red-400",
-  };
-  const selectedColor: Record<typeof accent, string> = {
-    emerald: "border-emerald-500 ring-2 ring-emerald-200",
-    blue: "border-blue-500 ring-2 ring-blue-200",
-    red: "border-red-500 ring-2 ring-red-200",
-  };
-  const pillColor: Record<typeof accent, string> = {
-    emerald: "bg-emerald-100 text-emerald-700",
-    blue: "bg-blue-100 text-blue-700",
-    red: "bg-red-100 text-red-700",
-  };
-  const effortColor: Record<typeof accent, string> = {
-    emerald: "text-emerald-700",
-    blue: "text-blue-700",
-    red: "text-red-700",
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`text-left p-3 rounded-lg border-2 transition-all ${
-        selected ? selectedColor[accent] : `border-slate-200 ${ringColor[accent]}`
-      } bg-white`}
-    >
-      <span
-        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold mb-2 ${pillColor[accent]}`}
-      >
-        {label}
-      </span>
-      <div className="text-xs text-slate-600">{desc}</div>
-      <div className={`text-xs font-mono mt-2 ${effortColor[accent]}`}>
-        {effortLabel}
-      </div>
-    </button>
   );
 }

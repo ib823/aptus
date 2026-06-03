@@ -9,6 +9,8 @@ import { notFound, redirect } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
 import { canAccessPresales } from '@/lib/presales/rbac';
+import { EventChip } from '@/components/audit/EventChip';
+import { PayloadView } from '@/components/audit/PayloadView';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -94,22 +96,22 @@ export default async function PresalesAuditPage({ params, searchParams }: PagePr
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr style={{ borderBottom: '1px solid #E5E5E5', background: '#F1EFE8' }}>
-            <th style={{ textAlign: 'left', padding: 8 }}>When</th>
-            <th style={{ textAlign: 'left', padding: 8 }}>Event</th>
-            <th style={{ textAlign: 'left', padding: 8 }}>Grant</th>
-            <th style={{ textAlign: 'left', padding: 8 }}>IP</th>
-            <th style={{ textAlign: 'left', padding: 8 }}>Payload</th>
+            <th scope="col" style={{ textAlign: 'left', padding: 8 }}>When</th>
+            <th scope="col" style={{ textAlign: 'left', padding: 8 }}>Event</th>
+            <th scope="col" style={{ textAlign: 'left', padding: 8 }}>Grant</th>
+            <th scope="col" style={{ textAlign: 'left', padding: 8 }}>IP</th>
+            <th scope="col" style={{ textAlign: 'left', padding: 8 }}>Payload</th>
           </tr>
         </thead>
         <tbody>
           {filtered.map((e) => (
             <tr key={e.id} style={{ borderBottom: '1px solid #F1EFE8', verticalAlign: 'top' }}>
               <td style={{ padding: 8, fontFamily: 'Consolas, monospace' }}>{e.createdAt.toISOString()}</td>
-              <td style={{ padding: 8 }}>{e.eventType}</td>
+              <td style={{ padding: 8 }}><EventChip eventType={e.eventType} /></td>
               <td style={{ padding: 8, fontFamily: 'Consolas, monospace' }}>{e.grantId ?? '—'}</td>
               <td style={{ padding: 8, fontFamily: 'Consolas, monospace' }}>{e.ip ?? '—'}</td>
-              <td style={{ padding: 8, fontFamily: 'Consolas, monospace', whiteSpace: 'pre-wrap', maxWidth: 480, overflow: 'hidden' }}>
-                {JSON.stringify(e.payload)}
+              <td style={{ padding: 8, maxWidth: 480, overflow: 'hidden' }}>
+                <PayloadView payload={e.payload} />
               </td>
             </tr>
           ))}
