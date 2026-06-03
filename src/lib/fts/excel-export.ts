@@ -26,6 +26,24 @@ export interface ExportOptions {
 }
 
 /**
+ * Render the "SSCUI ID" cell for a Configure Backlog row.
+ *
+ * Most decisions map to a real catalogue SSCUI (a numeric ID). Some map to
+ * a configuration *framework* rather than a single SSCUI (e.g. Output
+ * Management, Flexible Workflow, Advanced ATP, SAP Credit Management); those
+ * carry an empty `sscui_id` and name the framework in `sscui_name`. For those
+ * rows surface `(no direct SSCUI — <framework>)` so the export never shows a
+ * bare blank or a non-catalogue placeholder.
+ */
+export function formatSscuiIdCell(
+  d: Pick<Decision, "sscui_id" | "sscui_name">,
+): string {
+  const id = d.sscui_id?.trim();
+  if (id) return id;
+  return `(no direct SSCUI — ${d.sscui_name})`;
+}
+
+/**
  * Build and trigger download of the team backlog xlsx for the given scope +
  * choices. Returns the suggested filename.
  *
@@ -61,7 +79,7 @@ export async function exportTeamBacklog({
     "Scope Item Name": scope.title,
     "Decision #": d.id,
     "Decision Title": d.title,
-    "SSCUI ID": d.sscui_id,
+    "SSCUI ID": formatSscuiIdCell(d),
     "SSCUI Name": d.sscui_name,
     "Client Intent (from workbench notes)":
       choices[d.id]?.notes || "(no notes captured — review with client in workshop)",
