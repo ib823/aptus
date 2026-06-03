@@ -8,7 +8,6 @@ const REQUIRED_VARS = [
   "DATABASE_URL",
   "NEXTAUTH_SECRET",
   "NEXTAUTH_URL",
-  "CRON_SECRET",
 ];
 
 // Required in production deployments specifically. Dev can run without these
@@ -16,6 +15,10 @@ const REQUIRED_VARS = [
 // dev server). On Vercel / serverless, the in-memory limiter is reset on
 // every invocation, so missing Redis is equivalent to no rate limiting.
 const REQUIRED_IN_PRODUCTION = [
+  {
+    key: "CRON_SECRET",
+    reason: "Authenticates Vercel Cron calls to /api/cron/*; only production deployments run crons",
+  },
   {
     key: "UPSTASH_REDIS_REST_URL",
     reason: "Distributed rate limiting; in-memory fallback is ineffective on serverless",
@@ -52,6 +55,23 @@ const DANGEROUS_IN_PRODUCTION = [
 
 let exitCode = 0;
 
+// On Vercel, only the *production* environment enforces the production-
+// hardening requirements below — Preview and Development deployments are not
+// production and legitimately build without prod-only secrets (cron auth,
+// distributed rate limiting, prod CSRF). Off Vercel (e.g. local
+// `build:production`) fall back to NODE_ENV.
+const isProductionDeploy = process.env.VERCEL_ENV
+  ? process.env.VERCEL_ENV === "production"
+  : process.env.NODE_ENV === "production";
+
+if (process.env.VERCEL_ENV) {
+  console.log(
+    `[check-production-env] VERCEL_ENV=${process.env.VERCEL_ENV} -> production-hardening checks ${
+      isProductionDeploy ? "enabled" : "skipped (non-production deploy)"
+    }`,
+  );
+}
+
 // Check required vars
 for (const key of REQUIRED_VARS) {
   if (!process.env[key]) {
@@ -67,8 +87,8 @@ for (const key of RECOMMENDED_VARS) {
   }
 }
 
-// Flag dangerous vars in production
-if (process.env.NODE_ENV === "production") {
+// Flag dangerous vars + enforce prod-only requirements on production deploys.
+if (isProductionDeploy) {
   for (const { key, reason } of DANGEROUS_IN_PRODUCTION) {
     if (process.env[key]) {
       console.error(`[FAIL] Dangerous env var set in production: ${key} — ${reason}`);
