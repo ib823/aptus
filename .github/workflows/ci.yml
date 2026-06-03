@@ -190,13 +190,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.22.1
-          cache: pnpm
-
+      # Determine baseline presence BEFORE setting up Node/pnpm caching: with no
+      # baselines committed the job is a no-op, but actions/setup-node
+      # (cache: pnpm) with no subsequent install leaves its post-job cache-save
+      # step nothing to save — which fails the whole job ("Path Validation
+      # Error"). Gating the toolchain on the check keeps the no-baselines path
+      # cleanly green.
       - name: Check that baselines exist
         id: check-baselines
         shell: bash
@@ -214,6 +213,15 @@ jobs:
             echo "::warning::No visual-app baselines committed. Generate with 'pnpm test:visual-app:update' and commit snapshots; skipping run."
           fi
           exit 0
+
+      - uses: pnpm/action-setup@v4
+        if: steps.check-baselines.outputs.have_baselines == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.check-baselines.outputs.have_baselines == 'true'
+        with:
+          node-version: 22.22.1
+          cache: pnpm
 
       - name: Install dependencies
         if: steps.check-baselines.outputs.have_baselines == 'true'
