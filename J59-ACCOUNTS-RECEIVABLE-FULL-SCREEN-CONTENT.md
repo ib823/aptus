@@ -53,6 +53,37 @@ Each step is shown as a card matching the on-screen layout:
 
 ---
 
+## Reporting & Display Apps — D2 Remediation Addendum
+
+> Added per the D2/D3 content-integrity remediation (see `D2-D3-REMEDIATION-NOTE.md`).
+> This app is part of the J59 Accounts Receivable flow per the SAP BPD test script
+> (S4CLD2602) but was not surfaced in the screen-by-screen capture below. It is
+> documented here so the J59 Fiori coverage matches the BPD. The app identity
+> (name + Fiori ID) is BPD-confirmed; the detailed screen-by-screen procedure is
+> defined in the BPD test script and is **not** reproduced here (not invented).
+
+### Display Customer Balances (F0703A)
+
+| | |
+|---|---|
+| **Fiori app** | Display Customer Balances |
+| **Fiori ID** | F0703A |
+| **Module** | FI-AR (Accounts Receivable) |
+| **Type** | Reporting / Display |
+
+**What this step does:**
+> Review a customer's open and cleared item balances in Accounts Receivable —
+> period debit/credit totals, cumulative balance, and drill-down to the underlying
+> line items — to monitor receivables and inform collection and dunning decisions.
+
+<!-- TODO(verify): the full screen-by-screen test steps for F0703A live in the J59
+     BPD test script (S4CLD2602 BPD, _EN_MY for Malaysia localization). Ingest from
+     the BPD if the complete procedure capture is required. The app name and the
+     F0703A Fiori ID above are taken from the D2-D3 remediation handoff and are
+     BPD-confirmed; no procedure detail has been invented. -->
+
+---
+
 
 ## Activity 1: Additional Information
 
