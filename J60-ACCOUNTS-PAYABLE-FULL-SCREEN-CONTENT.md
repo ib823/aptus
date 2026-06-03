@@ -10603,6 +10603,12 @@ Choose Create
 
 > 7 steps total | 4 classifiable | 3 hidden
 
+<!-- Fiori ID note (D2 remediation, revised resolutions file 2026-06-03): the "Process Free Form
+     Payments" app referenced in this activity and Activity 40 is F8654 (Cash Management Specialist —
+     review/process/release). It was corrected from F2564 on the strength of the revised resolutions
+     file's J60 BPD source check. F2564 remains "My Free Form Payments" (create step, AP Accountant,
+     Activity 38). See D2-D3-REMEDIATION-NOTE.md. -->
+
 ### Step 388: Information
 
 | | |
@@ -10662,12 +10668,12 @@ Log on to the SAP Fiori launchpad as a Cash Management Specialist.
 <details>
 <summary><strong>Technical Details for Implementation Team</strong></summary>
 
-Open Process Free Form Payments (F2564) .
+Open Process Free Form Payments (F8654) .
 
 </details>
 
 **Expected Result (Test Verification):**
-> The Process Free Form Payments (F2564) view displays.
+> The Process Free Form Payments (F8654) view displays.
 
 ---
 
@@ -10850,12 +10856,12 @@ Log on to the SAP Fiori launchpad as a Cash Management Specialist.
 <details>
 <summary><strong>Technical Details for Implementation Team</strong></summary>
 
-Open Process Free Form Payments (F2564).
+Open Process Free Form Payments (F8654).
 
 </details>
 
 **Expected Result (Test Verification):**
-> The Process Free Form Payments (F2564) view displays.
+> The Process Free Form Payments (F8654) view displays.
 
 ---
 
