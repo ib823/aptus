@@ -18,18 +18,16 @@
  * data. A failed lookup falls through to the generic fallback so this
  * page never confirms bundle existence to a probe.
  *
- * Visuals (brief §3.9 / §5):
- *   - Cream surface, centered card
- *   - ABeam Workbench wordmark above the card (§5)
- *   - Contact card with avatar circle (initials in navy on navy-soft),
- *     name in semibold, email + phone as anchors, "Email {firstName}"
- *     CTA in CTA red.
+ * Visuals (brief §3.9 / §5): the cream surface + wordmark + paper card is
+ * the shared <TerminalScreen>; the contact block is <ConsultantContactCard>
+ * fed the real bundle owner — never fixture data.
  */
 
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/db/prisma';
 import { PRESALES_COOKIE_NAME } from '@/lib/presales/cookies';
-import { Wordmark } from '@/components/brand/Wordmark';
+import { TerminalScreen } from '@/components/external/TerminalScreen';
+import { ConsultantContactCard } from '@/components/external/ConsultantContactCard';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -129,19 +127,6 @@ async function bundleIdFromCookie(): Promise<string | null> {
   return session?.bundleId ?? null;
 }
 
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? '')
-    .join('');
-}
-
-function firstName(name: string): string {
-  return name.split(/\s+/)[0] ?? name;
-}
-
 export default async function PresalesExpiredPage({ searchParams }: PageProps) {
   const { reason, bundleId: queryBundleId } = await searchParams;
   const { eyebrow, heading, body } = copyFor(reason);
@@ -149,177 +134,28 @@ export default async function PresalesExpiredPage({ searchParams }: PageProps) {
   const contact = await lookupContact(bundleId);
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: 'var(--surface-cream)',
-        padding: '48px 16px',
-      }}
-    >
-      <div style={{ maxWidth: 560, margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <Wordmark size="md" />
-        </div>
-
-        <main
+    <TerminalScreen eyebrow={eyebrow} heading={heading} body={body}>
+      {contact ? (
+        <ConsultantContactCard
+          name={contact.name}
+          email={contact.email}
+          phone={contact.phone}
+        />
+      ) : (
+        <section
           style={{
-            background: 'var(--surface-paper)',
-            border: '1px solid var(--border-default)',
-            borderRadius: 12,
-            padding: '40px 32px',
-            boxShadow: 'var(--shadow-card-warm, 0 1px 2px rgba(20,20,20,0.04))',
+            marginTop: 32,
+            paddingTop: 24,
+            borderTop: '1px solid var(--border-default)',
+            fontSize: 13,
+            color: 'var(--ink-secondary)',
+            textAlign: 'left',
           }}
         >
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: 'var(--ink-muted)',
-              marginBottom: 8,
-            }}
-          >
-            {eyebrow}
-          </div>
-          <h1
-            style={{
-              fontFamily: 'var(--font-serif), Georgia, serif',
-              fontSize: 32,
-              lineHeight: 1.2,
-              fontWeight: 500,
-              margin: 0,
-              color: 'var(--ink-primary)',
-            }}
-          >
-            {heading}
-          </h1>
-          <p
-            style={{
-              marginTop: 16,
-              marginBottom: 0,
-              color: 'var(--ink-secondary)',
-              fontSize: 15,
-              lineHeight: 1.55,
-            }}
-          >
-            {body}
-          </p>
-
-          {contact ? (
-            <section
-              style={{
-                marginTop: 32,
-                paddingTop: 24,
-                borderTop: '1px solid var(--border-default)',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  color: 'var(--ink-muted)',
-                  marginBottom: 12,
-                }}
-              >
-                Your ABeam contact
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div
-                  aria-hidden
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 9999,
-                    background: 'var(--brand-navy-soft)',
-                    color: 'var(--brand-navy)',
-                    fontFamily: 'var(--font-serif), Georgia, serif',
-                    fontSize: 18,
-                    fontWeight: 600,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  {initials(contact.name)}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 16,
-                      fontWeight: 600,
-                      color: 'var(--ink-primary)',
-                    }}
-                  >
-                    {contact.name}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 14,
-                      color: 'var(--ink-secondary)',
-                      marginTop: 2,
-                    }}
-                  >
-                    <a
-                      href={`mailto:${contact.email}`}
-                      style={{ color: 'inherit', textDecoration: 'none' }}
-                    >
-                      {contact.email}
-                    </a>
-                    {contact.phone ? (
-                      <>
-                        {' · '}
-                        <a
-                          href={`tel:${contact.phone.replace(/\s/g, '')}`}
-                          style={{ color: 'inherit', textDecoration: 'none' }}
-                        >
-                          {contact.phone}
-                        </a>
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-              <div style={{ marginTop: 20 }}>
-                <a
-                  href={`mailto:${contact.email}?subject=${encodeURIComponent('Re: presales workbench access')}`}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: 40,
-                    padding: '0 18px',
-                    background: 'var(--cta-red)',
-                    color: '#FFFFFF',
-                    fontSize: 14,
-                    fontWeight: 600,
-                    borderRadius: 8,
-                    textDecoration: 'none',
-                  }}
-                >
-                  Email {firstName(contact.name)}
-                </a>
-              </div>
-            </section>
-          ) : (
-            <section
-              style={{
-                marginTop: 32,
-                paddingTop: 24,
-                borderTop: '1px solid var(--border-default)',
-                fontSize: 13,
-                color: 'var(--ink-secondary)',
-              }}
-            >
-              Please refer to the invitation email you received from your ABeam
-              consultant, or reply to it if you need a new link.
-            </section>
-          )}
-        </main>
-      </div>
-    </div>
+          Please refer to the invitation email you received from your ABeam
+          consultant, or reply to it if you need a new link.
+        </section>
+      )}
+    </TerminalScreen>
   );
 }
