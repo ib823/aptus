@@ -8,6 +8,7 @@ import { sendEmail } from "@/lib/email/brevo";
 import { magicLinkEmail, workbenchSigninEmail } from "@/lib/email/templates";
 import type { Adapter } from "next-auth/adapters";
 import { canRegister } from "@/lib/auth/auth-config";
+import { buildConfirmUrl } from "@/lib/auth/magic-link-confirm";
 
 /**
  * Custom adapter that wraps Prisma for NextAuth compatibility.
@@ -100,13 +101,10 @@ export const authOptions: NextAuthOptions = {
                 parsed.host = workbenchHost;
                 parsed.protocol = "https:";
               }
-              const rewrittenUrl = parsed.toString();
-              const confirm = new URL(
-                "/presales/login/confirm",
-                parsed.origin,
-              );
-              confirm.searchParams.set("next", rewrittenUrl);
-              emailUrl = confirm.toString();
+              // Seal the callback URL inside the confirm interstitial so a
+              // GET scanner (Outlook Safe Links etc.) can never reach — and
+              // burn — the single-use token before the human clicks.
+              emailUrl = buildConfirmUrl(parsed.toString(), parsed.origin);
             }
           } catch {
             /* unparseable url falls through to Aptus template */
