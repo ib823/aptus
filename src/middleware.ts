@@ -108,6 +108,20 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
         pathname === '/sw.js' ||
         pathname === '/robots.txt' ||
         pathname.includes('.');
+      // NextAuth routes sign-in failures (AccessDenied, Verification, …)
+      // and the verify-request notice to pages.signIn / pages.error, both
+      // of which resolve to "/login". On the Workbench host there is no
+      // branded "/login", and the generic redirect below would send it to
+      // "/presales" while DROPPING the "?error=" query — so a failed
+      // magic-link click bounced the user back to the sign-in form with no
+      // explanation (the reported "never-ending loop"). Map "/login" to the
+      // Workbench sign-in page and PRESERVE the query so the page can
+      // surface the actual failure reason.
+      if (pathname === '/login') {
+        const target = new URL('/presales/login', request.url);
+        target.search = request.nextUrl.search;
+        return NextResponse.redirect(target, 307);
+      }
       if (!isApiOrAsset && !isWorkbenchPath(pathname)) {
         const target = new URL('/presales', request.url);
         return NextResponse.redirect(target, 307);
@@ -212,6 +226,9 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
     // sign-in page at /presales/login is unauthenticated by design.
     pathname.startsWith("/c/") ||
     pathname === "/presales/login" ||
+    // …and its pre-auth children: the magic-link confirm interstitial and the
+    // POST-only continue handler must never be bounced through the bridge.
+    pathname.startsWith("/presales/login/") ||
     pathname.includes(".")
   ) {
     return undefined;
