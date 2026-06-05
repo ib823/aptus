@@ -18,6 +18,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { sendEmail } from "@/lib/email/brevo";
 import { magicLinkEmail } from "@/lib/email/templates";
+import { buildConfirmUrl } from "@/lib/auth/magic-link-confirm";
 
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours, matches NextAuth default
 
@@ -73,9 +74,9 @@ export async function sendMagicLink(
   // clicks). Same protection auth-options.ts already applies.
   let emailUrl = url.toString();
   if (isWorkbench) {
-    const confirm = new URL("/presales/login/confirm", `https://${workbenchHost}`);
-    confirm.searchParams.set("next", url.toString());
-    emailUrl = confirm.toString();
+    // Seal the callback URL inside the confirm interstitial so a GET scanner
+    // can never reach — and burn — the single-use token before the click.
+    emailUrl = buildConfirmUrl(url.toString(), `https://${workbenchHost}`);
   }
 
   if (!process.env.SMTP_USER) {

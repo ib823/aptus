@@ -8,6 +8,7 @@ import { sendEmail } from "@/lib/email/brevo";
 import { magicLinkEmail, workbenchSigninEmail } from "@/lib/email/templates";
 import type { Adapter } from "next-auth/adapters";
 import { canRegister } from "@/lib/auth/auth-config";
+import { buildConfirmUrl } from "@/lib/auth/magic-link-confirm";
 
 /**
  * Custom adapter that wraps Prisma for NextAuth compatibility.
@@ -100,13 +101,10 @@ export const authOptions: NextAuthOptions = {
                 parsed.host = workbenchHost;
                 parsed.protocol = "https:";
               }
-              const rewrittenUrl = parsed.toString();
-              const confirm = new URL(
-                "/presales/login/confirm",
-                parsed.origin,
-              );
-              confirm.searchParams.set("next", rewrittenUrl);
-              emailUrl = confirm.toString();
+              // Seal the callback URL inside the confirm interstitial so a
+              // GET scanner (Outlook Safe Links etc.) can never reach — and
+              // burn — the single-use token before the human clicks.
+              emailUrl = buildConfirmUrl(parsed.toString(), parsed.origin);
             }
           } catch {
             /* unparseable url falls through to Aptus template */
@@ -188,11 +186,23 @@ export const authOptions: NextAuthOptions = {
 
       // 2. If user exists, only check if they are active
       if (existingUser) {
+        // Surface the exact reason a magic-link click is rejected. Without
+        // this, an inactive account returns false here, NextAuth emits
+        // `error=AccessDenied`, and the user is bounced back to the sign-in
+        // page — indistinguishable in logs from a token failure. Names only.
+        if (!existingUser.isActive) {
+          console.warn(`[AUTH/signIn] denied: account inactive — ${email}`);
+        }
         return existingUser.isActive;
       }
 
       // 3. If user is NEW, enforce the security policy
       const policy = canRegister(email);
+      if (!policy.allowed) {
+        console.warn(
+          `[AUTH/signIn] denied: registration policy — ${email}: ${policy.reason}`,
+        );
+      }
       return policy.allowed;
     },
     async jwt({ token, user }) {
