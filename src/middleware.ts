@@ -226,6 +226,9 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
     // sign-in page at /presales/login is unauthenticated by design.
     pathname.startsWith("/c/") ||
     pathname === "/presales/login" ||
+    // …and its pre-auth children: the magic-link confirm interstitial and the
+    // POST-only continue handler must never be bounced through the bridge.
+    pathname.startsWith("/presales/login/") ||
     pathname.includes(".")
   ) {
     return undefined;
