@@ -14,11 +14,11 @@
 import { signIn } from 'next-auth/react';
 import { useState } from 'react';
 
-export function WorkbenchLoginForm() {
+export function WorkbenchLoginForm({ initialError = null }: { initialError?: string | null }) {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
