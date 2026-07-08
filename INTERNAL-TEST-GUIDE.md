@@ -1,22 +1,52 @@
-# ABeam — User Guide (Internal Team)
+# ABeam Workbench — User Guide (Internal Team)
 
-**Platform:** https://aptus-sandy.vercel.app
-**Last updated:** 2026-03-17
+**Platform:** https://ab-workbench.vercel.app
+**Last updated:** 2026-07-08
 
 ---
 
 ## Getting Started
 
-### Step 1: Sign In
+### Step 1: Sign In — one-click test login (recommended for internal testing)
 
-1. Go to https://aptus-sandy.vercel.app/login
+The fastest way for the internal team to test is the **Dev Login** page. It
+skips the email/magic-link round-trip and lets you sign in as any role in one
+click. No inbox, no MFA setup.
+
+1. Go to **https://ab-workbench.vercel.app/dev-login**
+2. Paste the shared **E2E_TEST_SECRET** into the field
+   (get it from the team password manager — it is never emailed or committed)
+3. Click the role you want to test as:
+
+   | Role | Use it to test |
+   |------|----------------|
+   | **Platform Admin** | Admin UI, user management, catalog, cross-org views |
+   | **Partner Lead** | Engagement ownership, managing the consultant team |
+   | **Consultant** | The day-to-day workshop flow (most common) |
+   | **Project Manager** | Deliverable/timeline tracking |
+   | **Executive Sponsor** | Executive summary views, sign-off approvals |
+
+You're signed in immediately. To switch roles, return to `/dev-login` and pick
+a different card. These test accounts live in an isolated `e2e-test-org` tenant
+and are separate from any real production users.
+
+> **Note:** `/dev-login` only exists when the deploy has the test-login env
+> flags set (see the deployment checklist at the end of this guide). If the page
+> shows "not found", the flags aren't enabled on that deployment — ask the
+> deployment owner.
+
+### Step 1 (alternative): Sign In with a magic link
+
+If you'd rather use the production-faithful path with your real work email:
+
+1. Go to https://ab-workbench.vercel.app/login
 2. Enter your work email address and click **Continue**
 3. Check your inbox for a sign-in email from ABeam
 4. Click the **Sign In** link in the email — you'll be logged in automatically
 
 > **Tip:** If the email doesn't arrive within a minute, check your spam folder.
 
-### Step 2: Set Up Two-Factor Authentication (First Time Only)
+### Step 2: Set Up Two-Factor Authentication (First Time Only — magic-link path)
 
 On your first login, you'll be asked to secure your account. Choose one:
 
@@ -173,7 +203,58 @@ If you have the **Platform Admin** role:
 
 ## Quick Reference
 
-- **Login URL:** https://aptus-sandy.vercel.app/login
+- **Test login (recommended):** https://ab-workbench.vercel.app/dev-login
+- **Magic-link login:** https://ab-workbench.vercel.app/login
 - **Supported browsers:** Chrome, Edge, Safari, Firefox (latest versions)
 - **Mobile:** Responsive design — works on phones and tablets
 - **Keyboard shortcut:** `Cmd+K` / `Ctrl+K` for quick search from anywhere
+
+---
+
+## Deployment checklist (for the deployment owner)
+
+For `/dev-login` to work on **ab-workbench.vercel.app**, set these environment
+variables on the Vercel project (Production environment):
+
+| Var | Value | Why |
+|-----|-------|-----|
+| `ENABLE_TEST_LOGIN_ENDPOINT` | `true` | Opens the `/api/auth/test-login` gate that `/dev-login` uses |
+| `ALLOW_TEST_LOGIN_IN_PROD` | `true` | Allows the endpoint to run on a production deploy |
+| `E2E_TEST_SECRET` | 24+ char random string | The secret testers paste; share via password manager only |
+| `INTERNAL_TEST_DEPLOYMENT` | `true` | **Required** — acknowledges this is an internal test deploy so the pre-deploy guard permits the test-login flags (see below). The build fails without it. |
+| `TEST_LOGIN_ALLOWED_IPS` | *(optional)* office/VPN IPs, comma-separated | Locks the backdoor to known networks — strongly recommended |
+
+Generate the secret:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
+```
+
+### Host routing — make ab-workbench the sole host
+
+Set these so every generated link and redirect points at ab-workbench:
+
+| Var | Value |
+|-----|-------|
+| `NEXTAUTH_URL` | `https://ab-workbench.vercel.app` |
+| `NEXT_PUBLIC_APP_URL` | `https://ab-workbench.vercel.app` |
+| `WORKBENCH_HOST` | `ab-workbench.vercel.app` |
+| `PORTAL_HOST` | *(leave unset / remove)* — unsetting it turns off the host-split redirects to the old aptus-sandy host |
+
+> **Important — pre-deploy guard:** `scripts/check-production-env.js` treats the
+> test-login flags as "dangerous in production" and **fails the build** if they
+> are set — *unless* you also set `INTERNAL_TEST_DEPLOYMENT=true` to consciously
+> acknowledge this is an internal test deployment. With the acknowledgment the
+> build passes with a loud warning and enforces a 24+ char `E2E_TEST_SECRET`.
+> This keeps the backdoor impossible to ship by accident: it always takes two
+> deliberate signals. Before ab-workbench serves real customers, remove the
+> test-login flags, `E2E_TEST_SECRET`, and `INTERNAL_TEST_DEPLOYMENT` so the
+> backdoor is gone entirely.
+
+### Security note — dev seed endpoints
+
+`/api/dev/seed-presales-test` and `/api/dev/seed-affirm` are demo helpers that
+mint real sessions. They now return **404 in production** unless
+`ALLOW_DEV_SEED_IN_PROD=true` is set (flagged dangerous by the pre-deploy
+guard). Do **not** set that flag on a shared deploy. The previously hardcoded
+demo secrets have been removed.

@@ -71,7 +71,7 @@ const LIMIT = process.env.SAP_API_HUB_LIMIT
 const DELAY_MS = parseInt(process.env.SAP_API_HUB_DELAY_MS ?? "100", 10);
 const MAX_RETRIES = parseInt(process.env.SAP_API_HUB_MAX_RETRIES ?? "5", 10);
 
-const USER_AGENT = "Aptus-SAP-API-Hub-Ingest/1.0 (+https://aptus-sandy.vercel.app)";
+const USER_AGENT = "Aptus-SAP-API-Hub-Ingest/1.0 (+https://ab-workbench.vercel.app)";
 
 // ── Types — what we expect back from api.sap.com ────────────────────────────
 // VERIFY: shape based on documented OData catalog pattern; live response
