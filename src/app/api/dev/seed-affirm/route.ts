@@ -30,10 +30,11 @@
  *   ?as=client2   → set abeam-session cookie for client2@email.com,
  *                   303 redirect to /affirm/<demo-bundle-id>
  *
- * Protection: requires the secret query param to match. The hard-coded
- * fallback below is a demo expedient and is observable in this public
- * repo — set DEV_AFFIRM_SEED_SECRET in Vercel to rotate. Remove this
- * route after the team walkthrough.
+ * Protection (see src/lib/auth/dev-seed-guard.ts): requires the secret query
+ * param to match the DEV_AFFIRM_SEED_SECRET env var. If the env var isn't set
+ * the endpoint returns 404. In production it stays 404 unless
+ * ALLOW_DEV_SEED_IN_PROD === "true", and the secret must be ≥24 chars there.
+ * There is NO in-repo fallback secret.
  *
  * NOT a production flow. Each call upserts users + seeds data, and the
  * bundle creation is idempotent on a stable key per-session (we reuse a
@@ -44,16 +45,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { generateSessionToken, hashSessionToken } from "@/lib/auth/session";
 import { sendMagicLink } from "@/lib/auth/send-magic-link";
+import { checkDevSeedAccess } from "@/lib/auth/dev-seed-guard";
 import dataset from "../../../../../prisma/seeds/value-stream/dataset.json";
 import processFlowDataset from "../../../../../prisma/seeds/value-stream/process-flow.json";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-// Hardcoded fallback so the endpoint works without an env-var deploy
-// round-trip during demo prep. DEV_AFFIRM_SEED_SECRET overrides when set;
-// rotate by setting that env var in Vercel and the constant becomes inert.
-const HARDCODED_SECRET = "sk_demo_affirm_2026_05_22_a4f8b2c1e6d9f3a7b8c2";
 
 const EMAILS = {
   realConsultant: "ibaharudin@abeam.com",
@@ -494,9 +491,11 @@ async function ensureDemoBundle(ownerId: string): Promise<{
 // ─── Handler ─────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  const expected = process.env.DEV_AFFIRM_SEED_SECRET ?? HARDCODED_SECRET;
-  const got = req.nextUrl.searchParams.get("secret");
-  if (got !== expected) return new NextResponse(null, { status: 401 });
+  // Gated: requires DEV_AFFIRM_SEED_SECRET, stays 404 in production unless
+  // ALLOW_DEV_SEED_IN_PROD === "true", constant-time secret compare.
+  const gate = checkDevSeedAccess("DEV_AFFIRM_SEED_SECRET", req.nextUrl.searchParams.get("secret"));
+  if (gate.response) return gate.response;
+  const expected = gate.secret as string;
 
   try {
     return await handle(req, expected);

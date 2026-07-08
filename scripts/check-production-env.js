@@ -46,11 +46,22 @@ const RECOMMENDED_VARS = [
   "BYOAI_ENCRYPTION_KEY",
 ];
 
+// Backdoors that must NEVER be enabled on a production deploy — no override.
 const DANGEROUS_IN_PRODUCTION = [
-  { key: "ALLOW_TEST_LOGIN", reason: "Enables test-login endpoint in production" },
-  { key: "ENABLE_TEST_LOGIN_ENDPOINT", reason: "Enables test-login endpoint — must not be set in production" },
-  { key: "ALLOW_TEST_LOGIN_IN_PROD", reason: "Overrides production safety gate for test-login" },
   { key: "ENABLE_SIMULATION_BRIDGE", reason: "Enables /api/auth/verify-izzat backdoor that issues real sessions" },
+  { key: "ALLOW_DEV_SEED_IN_PROD", reason: "Enables /api/dev/seed-* backdoors that mint real sessions and mutate data in production" },
+];
+
+// The test-login flags power the one-click /dev-login page used for internal
+// testing. They are fatal on a production deploy UNLESS the operator
+// consciously acknowledges an internal test deployment with
+// INTERNAL_TEST_DEPLOYMENT=true. Two deliberate signals are always required
+// (the flags AND the acknowledgment), so the backdoor can never ship by
+// accident to a customer-facing deploy.
+const TEST_LOGIN_FLAGS = [
+  { key: "ALLOW_TEST_LOGIN", reason: "Enables test-login endpoint in production" },
+  { key: "ENABLE_TEST_LOGIN_ENDPOINT", reason: "Enables the /api/auth/test-login + /dev-login backdoor" },
+  { key: "ALLOW_TEST_LOGIN_IN_PROD", reason: "Overrides the production safety gate for test-login" },
 ];
 
 let exitCode = 0;
@@ -93,6 +104,33 @@ if (isProductionDeploy) {
     if (process.env[key]) {
       console.error(`[FAIL] Dangerous env var set in production: ${key} — ${reason}`);
       exitCode = 1;
+    }
+  }
+
+  // Test-login backdoor: fatal unless explicitly acknowledged as internal test.
+  const internalTest = process.env.INTERNAL_TEST_DEPLOYMENT === "true";
+  const enabledTestLoginFlags = TEST_LOGIN_FLAGS.filter(({ key }) => process.env[key]);
+  if (enabledTestLoginFlags.length > 0) {
+    if (internalTest) {
+      for (const { key } of enabledTestLoginFlags) {
+        console.warn(
+          `[WARN] ${key} is enabled on this production deploy — permitted because INTERNAL_TEST_DEPLOYMENT=true. This deploy exposes the /dev-login backdoor; never set this on a customer-facing deployment.`,
+        );
+      }
+      // A weak secret guarding a prod backdoor is a configuration mistake.
+      if (!process.env.E2E_TEST_SECRET || process.env.E2E_TEST_SECRET.length < 24) {
+        console.error(
+          "[FAIL] Test-login is enabled but E2E_TEST_SECRET is missing or under 24 chars — set a strong secret.",
+        );
+        exitCode = 1;
+      }
+    } else {
+      for (const { key, reason } of enabledTestLoginFlags) {
+        console.error(
+          `[FAIL] Dangerous env var set in production: ${key} — ${reason}. If this is a deliberate internal test deployment, set INTERNAL_TEST_DEPLOYMENT=true to acknowledge.`,
+        );
+        exitCode = 1;
+      }
     }
   }
 

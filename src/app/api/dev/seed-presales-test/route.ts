@@ -17,10 +17,11 @@
  *
  * Returns JSON with every artifact needed.
  *
- * Protection: requires the secret query param to match the
- * DEV_SEED_SECRET env var. If the env var isn't set, the endpoint
- * returns 404 — i.e. the route doesn't exist unless explicitly
- * enabled by the deployment owner. Remove the env var to disable.
+ * Protection (see src/lib/auth/dev-seed-guard.ts): requires the secret query
+ * param to match the DEV_SEED_SECRET env var. If the env var isn't set the
+ * endpoint returns 404 — the route doesn't exist unless explicitly enabled.
+ * In production it stays 404 unless ALLOW_DEV_SEED_IN_PROD === "true", and the
+ * secret must be ≥24 chars there. There is NO in-repo fallback secret.
  *
  * NOT for production use as a real flow. Side effects (revoking the
  * user's existing sessions, marking the bundle sent, burning grants)
@@ -35,6 +36,7 @@ import { prisma } from '@/lib/db/prisma';
 import { createSession } from '@/lib/auth/session';
 import { createPresalesSession } from '@/lib/presales/session';
 import { issueSessionNonce } from '@/lib/presales/csrf';
+import { checkDevSeedAccess } from '@/lib/auth/dev-seed-guard';
 import { scopeItems } from '@/lib/fts/data';
 import type { ScopeItemContent } from '@/lib/fts/types';
 
@@ -59,23 +61,11 @@ function originFromReq(req: NextRequest): string {
   return new URL(req.url).origin;
 }
 
-/**
- * Temporary hardcoded secret for the demo. The DEV_SEED_SECRET env var
- * takes precedence when set, so the dashboard-set secret still works.
- * This constant is the fallback so the endpoint works without an env-var
- * round-trip during demo prep. Remove this endpoint after the team
- * walkthrough; the secret value is observable in the public GitHub repo
- * and should be considered burned.
- */
-const HARDCODED_SECRET =
-  'sk_demo_seed_2026_05_21_d8f9a3e4b7c1d2e6f5a8b9c0';
-
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  const expected = process.env.DEV_SEED_SECRET ?? HARDCODED_SECRET;
-  const got = req.nextUrl.searchParams.get('secret');
-  if (got !== expected) {
-    return new NextResponse(null, { status: 401 });
-  }
+  // Gated: requires DEV_SEED_SECRET to be set, stays 404 in production unless
+  // ALLOW_DEV_SEED_IN_PROD === "true", constant-time secret compare.
+  const gate = checkDevSeedAccess('DEV_SEED_SECRET', req.nextUrl.searchParams.get('secret'));
+  if (gate.response) return gate.response;
 
   const consultantEmail =
     req.nextUrl.searchParams.get('email')?.toLowerCase() ??

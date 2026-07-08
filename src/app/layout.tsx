@@ -25,7 +25,7 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL ?? "https://aptus-sandy.vercel.app",
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://ab-workbench.vercel.app",
   ),
   title: {
     default: "ABeam Workbench",

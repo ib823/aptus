@@ -479,8 +479,8 @@ c.push(sp());
 // SECTION 10: QUICK REFERENCE
 // ═══════════════════════════════════════════════════════════════
 c.push(h1("10. Quick Reference"));
-c.push(bull("Platform URL: https://aptus-sandy.vercel.app"));
-c.push(bull("Login: https://aptus-sandy.vercel.app/login"));
+c.push(bull("Platform URL: https://ab-workbench.vercel.app"));
+c.push(bull("Login: https://ab-workbench.vercel.app/login"));
 c.push(bull("Supported browsers: Chrome, Edge, Safari, Firefox (latest versions)"));
 c.push(bull("Mobile: Fully responsive — works on phones and tablets"));
 c.push(bull("Quick search: Cmd+K (Mac) or Ctrl+K (Windows)"));
