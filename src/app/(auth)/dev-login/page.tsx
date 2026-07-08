@@ -6,11 +6,16 @@ import { DevLoginForm } from "./DevLoginForm";
 export const metadata: Metadata = { title: "Dev Login" };
 export const dynamic = "force-dynamic";
 
+// On a Workbench-only deployment the Aptus portal (/assessments) is not
+// reachable, so testers must land on the Workbench home instead.
+const DEFAULT_LANDING =
+  process.env.WORKBENCH_ONLY === "true" ? "/workbench" : "/assessments";
+
 function safeCallbackUrl(raw: string | string[] | undefined): string {
   const value = Array.isArray(raw) ? raw[0] : raw;
-  if (!value) return "/assessments";
+  if (!value) return DEFAULT_LANDING;
   // Only allow same-origin absolute paths; reject protocol-relative and external URLs.
-  if (!value.startsWith("/") || value.startsWith("//")) return "/assessments";
+  if (!value.startsWith("/") || value.startsWith("//")) return DEFAULT_LANDING;
   return value;
 }
 

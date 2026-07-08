@@ -42,9 +42,9 @@ export function WorkbenchShell({ userEmail, children }: Props) {
         }}
       >
         <a
-          href="/presales"
+          href="/workbench"
           style={{ textDecoration: 'none', display: 'inline-flex' }}
-          aria-label="ABeam Workbench — go to bundles"
+          aria-label="ABeam Workbench — go to home"
         >
           <Wordmark size="md" />
         </a>
