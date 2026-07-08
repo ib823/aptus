@@ -6,6 +6,7 @@ import { GatedButton } from "@/components/ui/gated-button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UI_TEXT } from "@/constants/ui-text";
+import { COUNTRY_NAMES, getCountryLabel } from "@/constants/countries";
 
 interface CatalogVersionOption {
   id: string;
@@ -193,14 +194,20 @@ export function NewAssessmentForm() {
         <label htmlFor="country" className="block text-sm font-medium text-foreground mb-1">
           {UI_TEXT.assessment.country}
         </label>
-        <Input
-          id="country"
-          value={formData.country}
-          onChange={(e) => handleChange("country", e.target.value)}
-          placeholder="MY"
-          maxLength={10}
-          required
-        />
+        <Select value={formData.country} onValueChange={(val) => handleChange("country", val)}>
+          <SelectTrigger id="country">
+            <SelectValue placeholder="Select country">
+              {formData.country ? getCountryLabel(formData.country) : "Select country"}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {Object.keys(COUNTRY_NAMES).map((code) => (
+              <SelectItem key={code} value={code}>
+                {getCountryLabel(code)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div>
