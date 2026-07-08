@@ -157,6 +157,22 @@ export function NewAssessmentForm() {
 
   const isValid = formData.companyName && formData.industry && formData.country && formData.companySize;
 
+  // When the (gated) submit button is clicked with the form incomplete, tell
+  // the user exactly which required fields are missing and jump to the first
+  // one — otherwise the click is silently swallowed and "nothing happens".
+  const handleGatedClick = useCallback(() => {
+    const missing: Array<{ id: string; label: string }> = [];
+    if (!formData.companyName) missing.push({ id: "company-name", label: UI_TEXT.assessment.companyName });
+    if (!formData.industry) missing.push({ id: "industry", label: UI_TEXT.assessment.industry });
+    if (!formData.country) missing.push({ id: "country", label: UI_TEXT.assessment.country });
+    if (!formData.companySize) missing.push({ id: "company-size", label: UI_TEXT.assessment.companySize });
+    if (missing.length === 0) return;
+    setError(`Please complete the following before creating: ${missing.map((m) => m.label).join(", ")}.`);
+    const first = document.getElementById(missing[0]!.id);
+    first?.scrollIntoView({ behavior: "smooth", block: "center" });
+    first?.focus();
+  }, [formData]);
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
@@ -282,6 +298,7 @@ export function NewAssessmentForm() {
           className="w-full h-11"
           gated={!isValid}
           gatedReason="Complete all fields above to create an assessment."
+          onGatedClick={handleGatedClick}
           disabled={loading}
         >
           {loading ? "Creating..." : UI_TEXT.assessment.createButton}
