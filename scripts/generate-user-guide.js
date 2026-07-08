@@ -38,7 +38,7 @@ const c = [];
 // Title
 c.push(new Paragraph({ children: [new TextRun({ text: "ABeam", bold: true, size: 56, font: "Calibri", color: "0854A0" })], spacing: { after: 100 } }));
 c.push(new Paragraph({ children: [new TextRun({ text: "User Guide — Internal Team", bold: true, size: 36, font: "Calibri" })], spacing: { after: 200 } }));
-c.push(p("Platform: https://aptus-sandy.vercel.app"));
+c.push(p("Platform: https://ab-workbench.vercel.app"));
 c.push(p("Last updated: 17 March 2026"));
 c.push(sp());
 
@@ -46,7 +46,7 @@ c.push(sp());
 c.push(h1("1. Getting Started"));
 
 c.push(h2("1.1 Sign In"));
-c.push(num("1", "Go to https://aptus-sandy.vercel.app/login"));
+c.push(num("1", "Go to https://ab-workbench.vercel.app/login"));
 c.push(num("2", "Enter your work email address and click Continue"));
 c.push(num("3", "Check your inbox for a sign-in email from ABeam"));
 c.push(num("4", "Click the Sign In link in the email — you will be logged in automatically"));
@@ -187,7 +187,7 @@ c.push(tbl(["Problem", "Solution"], [
 
 // 8. Quick Ref
 c.push(h1("8. Quick Reference"));
-c.push(bull("Login URL: https://aptus-sandy.vercel.app/login"));
+c.push(bull("Login URL: https://ab-workbench.vercel.app/login"));
 c.push(bull("Browsers: Chrome, Edge, Safari, Firefox (latest)"));
 c.push(bull("Mobile: Fully responsive — works on phones and tablets"));
 c.push(bull("Quick search: Cmd+K (Mac) or Ctrl+K (Windows)"));
