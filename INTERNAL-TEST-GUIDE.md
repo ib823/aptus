@@ -70,7 +70,25 @@ After your first setup, future logins are faster:
 
 ---
 
-## Creating Your First Assessment
+## After you sign in — the ABeam Workbench
+
+This deployment presents **only the ABeam Workbench** (the pre-onboarding
+Fit-to-Standard surface). After login you land on the Workbench home at
+**https://ab-workbench.vercel.app/workbench**, which has two entry points:
+
+| Surface | URL | What it's for |
+|---------|-----|---------------|
+| **Affirm bundles** | `/affirm` | Assemble a value-stream affirm-set, send it to the client to affirm the Fit-to-Standard questions in advance, then release. Determines what is standard vs. non-standard and shapes the workshop scope. |
+| **Scope-item bundles** | `/presales` | Create SAP scope-item bundles and collect client sign-off through a time-boxed guest link (draft → sent → signed), with a full audit trail. |
+
+> **Note:** The older Aptus portal (dashboard, `/assessments`) is **not** part of
+> this deployment — any portal URL redirects to the Workbench home. The section
+> below describes that legacy portal flow and does not apply here; it is retained
+> only for reference.
+
+---
+
+## Creating Your First Assessment (legacy Aptus portal — not on this deployment)
 
 ### Quick Start — ABeam CoreEdge
 
@@ -239,7 +257,8 @@ Set these so every generated link and redirect points at ab-workbench:
 | `NEXTAUTH_URL` | `https://ab-workbench.vercel.app` |
 | `NEXT_PUBLIC_APP_URL` | `https://ab-workbench.vercel.app` |
 | `WORKBENCH_HOST` | `ab-workbench.vercel.app` |
-| `PORTAL_HOST` | *(leave unset / remove)* — unsetting it turns off the host-split redirects to the old aptus-sandy host |
+| `WORKBENCH_ONLY` | `true` — presents **only** the ABeam Workbench: root and all portal routes redirect to `/workbench`; the Aptus portal is unreachable |
+| `PORTAL_HOST` | *(leave unset / remove)* — unsetting it turns off the two-host split redirects to the old aptus-sandy host |
 
 > **Important — pre-deploy guard:** `scripts/check-production-env.js` treats the
 > test-login flags as "dangerous in production" and **fails the build** if they
