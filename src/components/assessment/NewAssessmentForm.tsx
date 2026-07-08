@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { GatedButton } from "@/components/ui/gated-button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -53,7 +52,6 @@ const COMPANY_SIZES = [
 ];
 
 export function NewAssessmentForm() {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -144,7 +142,14 @@ export function NewAssessmentForm() {
         }
 
         if (data.data?.id) {
-          router.push(`/assessment/${data.data.id}/profile`);
+          // Hard navigation, not router.push: the client-side soft navigation to
+          // the freshly created assessment intermittently fails to commit,
+          // leaving the user on this form with no feedback and prompting
+          // duplicate submits. A full navigation always lands them on the new
+          // assessment. Keep `loading` true so the button stays disabled until
+          // the page unloads.
+          window.location.assign(`/assessment/${data.data.id}/profile`);
+          return;
         }
       } catch {
         setError("Network error. Please try again.");
@@ -152,7 +157,7 @@ export function NewAssessmentForm() {
         setLoading(false);
       }
     },
-    [formData, router],
+    [formData],
   );
 
   const isValid = formData.companyName && formData.industry && formData.country && formData.companySize;
