@@ -26,6 +26,21 @@ export async function checkAssessmentLimit(organizationId: string): Promise<{
   current: number;
   limit: number;
 }> {
+  const current = await prisma.assessment.count({
+    where: {
+      organizationId,
+      deletedAt: null,
+      status: { notIn: ["archived"] },
+    },
+  });
+
+  // Internal test deployments (INTERNAL_TEST_DEPLOYMENT=true) have no
+  // assessment cap so the team can create as many as they need while testing.
+  // Never true on a customer-facing production deploy.
+  if (process.env.INTERNAL_TEST_DEPLOYMENT === "true") {
+    return { allowed: true, current, limit: Infinity };
+  }
+
   const org = await prisma.organization.findUniqueOrThrow({
     where: { id: organizationId },
     select: { plan: true, maxActiveAssessments: true },
@@ -33,16 +48,6 @@ export async function checkAssessmentLimit(organizationId: string): Promise<{
 
   const limits = getPlanLimits(org.plan as PlanTier);
   const effectiveLimit = Math.min(org.maxActiveAssessments, limits.maxActiveAssessments);
-
-  const current = await prisma.assessment.count({
-    where: {
-      organizationId,
-      deletedAt: null,
-      // "canceled" was previously listed defensively but is not a real
-       // AssessmentStatus value — dropped now that the column is enum-typed.
-      status: { notIn: ["archived"] },
-    },
-  });
 
   return {
     allowed: current < effectiveLimit,
