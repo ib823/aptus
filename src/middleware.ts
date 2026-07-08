@@ -55,9 +55,19 @@ const RATE_LIMIT_EXEMPT = [
 const WORKBENCH_HOST = process.env.WORKBENCH_HOST ?? null;
 const PORTAL_HOST = process.env.PORTAL_HOST ?? null;
 
+/** Single-host Workbench mode. When true, this deployment IS the ABeam
+ * Workbench — regardless of hostname. The root and every non-Workbench
+ * page route redirect to the Workbench home (/workbench); the Aptus
+ * portal (dashboard, assessments, …) is not reachable. This is the
+ * single-host counterpart to the two-host WORKBENCH_HOST/PORTAL_HOST
+ * split above: use WORKBENCH_ONLY when there is exactly one host and it
+ * should present only the Workbench. */
+const WORKBENCH_ONLY = process.env.WORKBENCH_ONLY === 'true';
+
 /** Path prefixes that the Workbench owns on WORKBENCH_HOST. Anything
  * outside this set on WORKBENCH_HOST redirects to /presales. */
 const WORKBENCH_PATHS = [
+  '/workbench',         // Workbench home / hub (auth-gated under (workbench))
   '/presales',          // consultant surface (auth-gated under (workbench))
   '/affirm',            // value-stream affirm-set workbench
   '/c/',                // guest token surface (under (external))
@@ -83,6 +93,43 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
   const requestId = crypto.randomUUID();
   const requestStart = Date.now();
   const host = request.headers.get('host')?.toLowerCase() ?? '';
+
+  // ----- Single-host Workbench-only mode -----
+  // This deployment presents ONLY the ABeam Workbench. Land the root and
+  // every non-Workbench page route on the Workbench home (/workbench) and
+  // keep the Aptus portal out of reach. API + assets fall through so SSR,
+  // auth callbacks, and the dev-login bypass keep working.
+  if (WORKBENCH_ONLY) {
+    const isApiOrAsset =
+      pathname.startsWith('/api/') ||
+      pathname.startsWith('/_next') ||
+      pathname.startsWith('/icons/') ||
+      pathname === '/manifest.json' ||
+      pathname === '/sw.js' ||
+      pathname === '/robots.txt' ||
+      pathname.includes('.');
+
+    // NextAuth routes sign-in/errors to "/login"; there is no Aptus login
+    // on this host. Send it to the Workbench sign-in, preserving "?error=".
+    if (pathname === '/login') {
+      const target = new URL('/presales/login', request.url);
+      target.search = request.nextUrl.search;
+      return NextResponse.redirect(target, 307);
+    }
+
+    // Allowed page surfaces: the Workbench itself, plus the /dev-login
+    // internal-testing bypass (its own env gate still governs visibility).
+    const isAllowedPage =
+      isWorkbenchPath(pathname) ||
+      pathname === '/dev-login' ||
+      pathname.startsWith('/dev-login/');
+
+    if (!isApiOrAsset && !isAllowedPage) {
+      const target = new URL('/workbench', request.url);
+      return NextResponse.redirect(target, 307);
+    }
+    // Allowed paths fall through to rate limiting + the session bridge.
+  }
 
   // ----- Host-based product split (Workbench vs Aptus portal) -----
   // Only active when both env vars are set. Until then this block is a
