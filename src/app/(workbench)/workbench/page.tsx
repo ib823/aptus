@@ -15,7 +15,6 @@
  * /presales/login when unauthenticated).
  */
 
-import Link from 'next/link';
 import { SampleSandboxCard } from '@/components/affirm/learn/SampleSandboxCard';
 import { SapOperationsDashboard } from '@/components/sap/SapOperationsDashboard';
 import { getConfiguredSapTenants } from '@/lib/sap-public/tdd-connector';
@@ -90,9 +89,13 @@ export default function WorkbenchHomePage() {
 
       {sampleEnabled && <SampleSandboxCard />}
 
+      {/* Plain <a>, not next/link: on this deployment the client-side soft
+          navigation between workbench surfaces intermittently fails to commit
+          (the click registers but the route never changes). A full-document
+          navigation always lands. Same fix as the /sap-explorer link. */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         {SURFACES.map((s) => (
-          <Link
+          <a
             key={s.href}
             href={s.href}
             className="group flex flex-col rounded-card-warm border border-border-default bg-paper p-6 shadow-card transition hover:border-cta/40 hover:shadow-md"
@@ -105,7 +108,7 @@ export default function WorkbenchHomePage() {
             <span className="mt-5 inline-flex items-center text-sm font-semibold text-navy transition group-hover:text-navy-hover">
               {s.cta} &rarr;
             </span>
-          </Link>
+          </a>
         ))}
       </div>
 
