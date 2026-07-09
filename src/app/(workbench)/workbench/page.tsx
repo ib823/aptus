@@ -126,12 +126,16 @@ export default function WorkbenchHomePage() {
                 reachability, latency, and sample records.
               </p>
             </div>
-            <Link
+            {/* Plain <a>, not next/link: /sap-explorer lives in the (public)
+                route group while this page is in (workbench). The cross-group
+                soft navigation intermittently fails to commit (URL stays on
+                /workbench), so force a full-document navigation. */}
+            <a
               href="/sap-explorer"
               className="inline-flex h-10 items-center rounded-input border border-border-default bg-paper px-4 text-sm font-semibold text-navy transition hover:border-navy"
             >
               Open full explorer &rarr;
-            </Link>
+            </a>
           </div>
           <SapOperationsDashboard />
         </section>
