@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth/session";
 import { SapOperationsDashboard } from "@/components/sap/SapOperationsDashboard";
 import { SapTenantExplorer } from "@/components/sap/SapTenantExplorer";
 import { SapWriteBackPanel } from "@/components/sap/SapWriteBackPanel";
@@ -8,14 +6,20 @@ import { SapWriteBackPanel } from "@/components/sap/SapWriteBackPanel";
 export const metadata: Metadata = { title: "SAP Operations" };
 export const dynamic = "force-dynamic";
 
-export default async function SapExplorerPage() {
-  const user = await getCurrentUser();
-  if (!user) {
-    redirect("/dev-login?callbackUrl=/sap-explorer");
-  }
-
+// Auth + chrome (ABeam Workbench header, sign-out) come from the
+// (workbench) layout, which redirects unauthenticated users to
+// /presales/login — so this page has no sign-in affordance of its own.
+export default function SapExplorerPage() {
   return (
     <main className="mx-auto max-w-[1280px] space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+      {/* Plain <a>, not next/link: a full-document navigation back to the
+          Workbench home is reliable regardless of route-group boundaries. */}
+      <a
+        href="/workbench"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-soft transition-colors hover:text-navy"
+      >
+        <span aria-hidden>&larr;</span> Back to Workbench
+      </a>
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">SAP Operations</h1>
       </div>
