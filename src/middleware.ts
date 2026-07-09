@@ -68,6 +68,7 @@ const WORKBENCH_ONLY = process.env.WORKBENCH_ONLY === 'true';
  * outside this set on WORKBENCH_HOST redirects to /presales. */
 const WORKBENCH_PATHS = [
   '/workbench',         // Workbench home / hub (auth-gated under (workbench))
+  '/sap-explorer',      // SAP Operations — live S/4HANA Cloud TDD explorer
   '/presales',          // consultant surface (auth-gated under (workbench))
   '/affirm',            // value-stream affirm-set workbench
   '/c/',                // guest token surface (under (external))
