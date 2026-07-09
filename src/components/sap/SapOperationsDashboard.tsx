@@ -71,7 +71,7 @@ function truncate(value: string): string {
   return value.length > 90 ? `${value.slice(0, 87)}...` : value;
 }
 
-export function SapOperationsDashboard() {
+export function SapOperationsDashboard({ product = "s4hana" }: { product?: string }) {
   const [tenants, setTenants] = useState<TenantOption[]>([]);
   const [tenantKey, setTenantKey] = useState("");
   const [sections, setSections] = useState<OperationSection[]>([]);
@@ -90,7 +90,9 @@ export function SapOperationsDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/sap/tdd/operations?tenant=${encodeURIComponent(nextTenantKey)}`);
+      const response = await fetch(
+        `/api/sap/tdd/operations?tenant=${encodeURIComponent(nextTenantKey)}&product=${encodeURIComponent(product)}`,
+      );
       const json = (await response.json()) as Partial<OperationsResponse> & {
         error?: { message?: string };
       };
@@ -106,14 +108,14 @@ export function SapOperationsDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [product]);
 
   useEffect(() => {
     let cancelled = false;
     async function loadCatalog() {
       setError(null);
       try {
-        const response = await fetch("/api/sap/tdd/catalog");
+        const response = await fetch(`/api/sap/tdd/catalog?product=${encodeURIComponent(product)}`);
         const json = (await response.json()) as Partial<CatalogResponse> & {
           error?: { message?: string };
         };
@@ -132,7 +134,7 @@ export function SapOperationsDashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [product]);
 
   useEffect(() => {
     if (tenantKey) void loadOperations(tenantKey);

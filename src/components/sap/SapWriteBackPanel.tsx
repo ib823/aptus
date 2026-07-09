@@ -69,7 +69,7 @@ function prettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-export function SapWriteBackPanel() {
+export function SapWriteBackPanel({ product = "s4hana" }: { product?: string }) {
   const [enabled, setEnabled] = useState(false);
   const [confirmationPhrase, setConfirmationPhrase] = useState("WRITE TO SAP TDD");
   const [writeSecretRequired, setWriteSecretRequired] = useState(false);
@@ -103,8 +103,8 @@ export function SapWriteBackPanel() {
       setError(null);
       try {
         const [statusResponse, catalogResponse] = await Promise.all([
-          fetch("/api/sap/tdd/write"),
-          fetch("/api/sap/tdd/catalog"),
+          fetch(`/api/sap/tdd/write?product=${encodeURIComponent(product)}`),
+          fetch(`/api/sap/tdd/catalog?product=${encodeURIComponent(product)}`),
         ]);
         const statusJson = (await statusResponse.json()) as WriteStatusResponse;
         const catalogJson = (await catalogResponse.json()) as CatalogResponse;
@@ -126,7 +126,7 @@ export function SapWriteBackPanel() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [product]);
 
   useEffect(() => {
     if (!tenantKey || !serviceKey) return;
@@ -135,7 +135,7 @@ export function SapWriteBackPanel() {
       setEntitiesLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams({ tenant: tenantKey, service: serviceKey, probe: "0" });
+        const params = new URLSearchParams({ tenant: tenantKey, service: serviceKey, probe: "0", product });
         const response = await fetch(`/api/sap/tdd/entities?${params.toString()}`);
         const json = (await response.json()) as Partial<EntitiesResponse> & {
           error?: { message?: string };
@@ -160,7 +160,7 @@ export function SapWriteBackPanel() {
     return () => {
       cancelled = true;
     };
-  }, [serviceKey, tenantKey]);
+  }, [serviceKey, tenantKey, product]);
 
   const createRecord = useCallback(async () => {
     if (!enabled || !tenantKey || !serviceKey || !entity || !parsedPayload) return;
@@ -172,6 +172,7 @@ export function SapWriteBackPanel() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          product,
           tenant: tenantKey,
           service: serviceKey,
           entity,
@@ -190,7 +191,7 @@ export function SapWriteBackPanel() {
     } finally {
       setLoading(false);
     }
-  }, [confirmation, enabled, entity, parsedPayload, serviceKey, tenantKey, writeSecret]);
+  }, [confirmation, enabled, entity, parsedPayload, serviceKey, tenantKey, writeSecret, product]);
 
   return (
     <section className="rounded-md border bg-card">
