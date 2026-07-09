@@ -8,6 +8,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
+import { ScreenGuide } from "@/components/affirm/learn/ScreenGuide";
+import { Term } from "@/components/affirm/learn/TermChip";
+import { SampleSandboxCard } from "@/components/affirm/learn/SampleSandboxCard";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -38,6 +41,12 @@ export default async function AffirmIndexPage() {
     },
   });
 
+  // The training sandbox is offered only on internal-test / workbench-only
+  // deployments (matches the /api/affirm/sample gate).
+  const sampleEnabled =
+    process.env.INTERNAL_TEST_DEPLOYMENT === "true" ||
+    process.env.WORKBENCH_ONLY === "true";
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
       <header className="mb-8 flex flex-wrap items-end justify-between gap-6">
@@ -47,21 +56,31 @@ export default async function AffirmIndexPage() {
           </p>
           <h1 className="font-serif text-3xl leading-10 text-ink">Affirm bundles</h1>
           <p className="mt-1.5 max-w-[720px] text-sm text-ink-soft">
-            Value-stream affirm-set, SAP S/4HANA Cloud Public Edition 2602. 8 streams +
-            Foundation, 672 scope items, ~135 client-facing L2 questions. Consultant
-            assembles &rarr; client affirms &rarr; consultant releases.
+            <Term id="affirm-set">Value-stream affirm-set</Term>,{" "}
+            <Term id="s4hana-cloud-public">SAP S/4HANA Cloud Public Edition 2602</Term>. 8{" "}
+            <Term id="value-stream">streams</Term> + <Term id="foundation">Foundation</Term>,
+            672 <Term id="scope-item">scope items</Term>, ~135 client-facing{" "}
+            <Term id="l2-question">L2 questions</Term>. Consultant assembles &rarr; client
+            affirms &rarr; consultant releases.
           </p>
         </div>
         <Link
           href="/affirm/new"
+          data-tour="affirm-new"
           className="inline-flex h-10 items-center rounded-input bg-cta px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-cta-hover"
         >
           New bundle
         </Link>
       </header>
 
+      <ScreenGuide />
+      {sampleEnabled && <SampleSandboxCard />}
+
       {bundles.length === 0 ? (
-        <div className="rounded-card-warm border border-border-default bg-paper p-10 text-center shadow-card">
+        <div
+          data-tour="affirm-list"
+          className="rounded-card-warm border border-border-default bg-paper p-10 text-center shadow-card"
+        >
           <p className="font-serif text-xl text-ink">No bundles yet</p>
           <p className="mt-2 text-sm text-ink-muted">
             Start the first affirm-bundle by picking scope items from the value-stream
@@ -75,7 +94,10 @@ export default async function AffirmIndexPage() {
           </Link>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-card-warm border border-border-default bg-paper shadow-card">
+        <div
+          data-tour="affirm-list"
+          className="overflow-hidden rounded-card-warm border border-border-default bg-paper shadow-card"
+        >
           <table className="w-full text-sm">
             <thead className="border-b border-border-default text-left text-[11px] uppercase tracking-[0.08em] text-ink-muted">
               <tr>

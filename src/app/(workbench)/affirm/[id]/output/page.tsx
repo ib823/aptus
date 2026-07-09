@@ -15,6 +15,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { AffirmStepper } from "@/components/affirm/AffirmStepper";
+import { ScreenGuide } from "@/components/affirm/learn/ScreenGuide";
 import type { AgendaJson, SignedRecordJson, AgendaItem } from "@/lib/affirm/types";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,7 @@ export default async function OutputPage({ params }: PageProps) {
       </header>
 
       <AffirmStepper current="output" />
+      <ScreenGuide />
 
       {/* info-banner — manual delivery */}
       <div className="mb-6 grid grid-cols-[20px_1fr] gap-3 rounded-card-warm border border-[#BFD1E3] bg-status-sent-bg px-4 py-3 text-sm leading-5 text-status-sent-fg">
@@ -97,7 +99,10 @@ export default async function OutputPage({ params }: PageProps) {
       </div>
 
       {/* Generated artefacts */}
-      <div className="rounded-card-warm border border-border-default bg-paper p-[22px] shadow-card">
+      <div
+        data-tour="affirm-artefacts"
+        className="rounded-card-warm border border-border-default bg-paper p-[22px] shadow-card"
+      >
         <header className="mb-3.5 flex items-start justify-between gap-4">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">

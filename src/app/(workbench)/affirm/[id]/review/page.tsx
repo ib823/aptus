@@ -25,6 +25,7 @@ import { AffirmStepper } from "@/components/affirm/AffirmStepper";
 import { LifecycleStepper, type BundleLifecycle } from "@/components/affirm/LifecycleStepper";
 import { BadgeLegend } from "@/components/affirm/BadgeLegend";
 import { ReleaseBar } from "@/components/affirm/ReleaseBar";
+import { ScreenGuide } from "@/components/affirm/learn/ScreenGuide";
 
 export const dynamic = "force-dynamic";
 
@@ -141,9 +142,10 @@ export default async function ReviewPage({ params }: PageProps) {
               : "review"
         }
       />
+      <ScreenGuide />
 
       {/* v2 §6: bundle lifecycle stepper */}
-      <div className="mb-6">
+      <div className="mb-6" data-tour="affirm-review-summary">
         <LifecycleStepper
           current={bundle.state as BundleLifecycle}
           meta={bundle.id}

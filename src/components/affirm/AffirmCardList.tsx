@@ -23,6 +23,7 @@ import type { AffirmQuestionRow } from "@/lib/affirm/queries";
 import type { AffirmChoice } from "@/lib/affirm/types";
 import type { ProcessFlow } from "@/lib/affirm/process-flow";
 import { ProcessFlowStrip } from "@/components/affirm/ProcessFlowStrip";
+import { Term } from "@/components/affirm/learn/TermChip";
 
 interface Props {
   bundleId: string;
@@ -271,7 +272,7 @@ export function AffirmCardList({
       {/* Page head */}
       <div>
         <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
-          Fit-to-Standard pre-workshop affirmation
+          <Term id="fit-to-standard">Fit-to-Standard</Term> pre-workshop affirmation
         </p>
         <h1 className="font-serif text-3xl leading-10 text-ink">
           {client} · {streamName}
@@ -336,7 +337,10 @@ export function AffirmCardList({
       )}
 
       {/* v2 §7: How to answer intro */}
-      <div className="grid grid-cols-[20px_1fr] gap-3 rounded-card-warm border border-border-default bg-paper p-4 text-sm leading-5 text-ink-soft shadow-card">
+      <div
+        data-tour="affirm-howto"
+        className="grid grid-cols-[20px_1fr] gap-3 rounded-card-warm border border-border-default bg-paper p-4 text-sm leading-5 text-ink-soft shadow-card"
+      >
         <svg
           className="mt-px text-navy"
           width="18"
@@ -355,11 +359,12 @@ export function AffirmCardList({
         <div className="space-y-1.5">
           <p className="font-semibold text-ink">How to answer</p>
           <p>
-            Each <strong>Decision</strong> question shows what SAP&apos;s standard does — the
-            teal box. If that works for you, keep <em>Adopt SAP standard</em> (already
-            selected). Pick <em>Discuss in workshop</em> if you are unsure, or{" "}
-            <em>We do this differently</em> if you have a specific requirement — then
-            add a short reason.
+            Each <Term id="decision-question"><strong>Decision</strong></Term> question shows
+            what SAP&apos;s standard does — the teal box. If that works for you, keep{" "}
+            <Term id="adopt-standard"><em>Adopt SAP standard</em></Term> (already selected).
+            Pick <Term id="discuss-in-workshop"><em>Discuss in workshop</em></Term> if you are
+            unsure, or <Term id="deviation"><em>We do this differently</em></Term> if you have
+            a specific requirement — then add a short reason.
           </p>
           <p>
             <strong>Information</strong> questions have no standard to adopt — just
@@ -459,7 +464,10 @@ export function AffirmCardList({
 
       {/* Sticky release bar */}
       {!readOnly && (
-        <div className="release-bar sticky bottom-4 mt-7 flex items-center gap-4 rounded-card-warm border border-border-default bg-paper px-[22px] py-4 shadow-card-warm-hover">
+        <div
+          data-tour="affirm-submit"
+          className="release-bar sticky bottom-4 mt-7 flex items-center gap-4 rounded-card-warm border border-border-default bg-paper px-[22px] py-4 shadow-card-warm-hover"
+        >
           <div className="info min-w-0 flex-1">
             <div className="t text-sm font-semibold text-ink">
               All {totals.total} questions answered
@@ -584,6 +592,7 @@ function DecisionCard({
           <button
             type="button"
             onClick={onToggleVerbatim}
+            data-tour="affirm-verbatim"
             className="verbatim-toggle inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-muted hover:text-ink"
           >
             <svg
@@ -622,6 +631,7 @@ function DecisionCard({
       </p>
 
       <div
+        data-tour="affirm-choices"
         className="choice-row flex flex-wrap gap-3"
         role="radiogroup"
         aria-label={`Your choice for ${q.id}`}
@@ -773,6 +783,7 @@ function InfoCard({
           <button
             type="button"
             onClick={onToggleVerbatim}
+            data-tour="affirm-verbatim"
             className="verbatim-toggle inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-muted hover:text-ink"
           >
             <svg
