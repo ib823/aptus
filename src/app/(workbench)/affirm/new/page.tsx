@@ -10,6 +10,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { getValueStreamTree } from "@/lib/affirm/queries";
 import { ValueStreamTreePicker } from "@/components/affirm/ValueStreamTreePicker";
 import { AffirmStepper } from "@/components/affirm/AffirmStepper";
+import { ScreenGuide } from "@/components/affirm/learn/ScreenGuide";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -46,6 +47,7 @@ export default async function NewBundlePage() {
       </header>
 
       <AffirmStepper current="scope" />
+      <ScreenGuide />
 
       <ValueStreamTreePicker tree={tree} mode="new" />
     </div>

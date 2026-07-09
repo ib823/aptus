@@ -280,7 +280,7 @@ export function QuestionEditor({
   const editable = bundleState === "draft" || bundleState === "issued";
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-tour="affirm-question-editor">
       {/* Top counts */}
       <div className="grid gap-3 sm:grid-cols-5">
         <Stat n={enabledCount} l="In bundle" />
@@ -587,6 +587,7 @@ export function QuestionEditor({
           <button
             onClick={issue}
             disabled={issuing || enabledCount === 0}
+            data-tour="affirm-issue"
             className="inline-flex h-10 items-center rounded-input bg-cta px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-cta-hover disabled:opacity-60"
           >
             {issuing ? "Issuing…" : "Issue to client"}

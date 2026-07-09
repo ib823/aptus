@@ -24,6 +24,7 @@ import {
 import { getProcessFlowsForBundle } from "@/lib/affirm/process-flow";
 import { QuestionEditor } from "@/components/affirm/QuestionEditor";
 import { AffirmStepper } from "@/components/affirm/AffirmStepper";
+import { ScreenGuide } from "@/components/affirm/learn/ScreenGuide";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +101,7 @@ export default async function QuestionsEditorPage({ params }: PageProps) {
       <AffirmStepper
         current={bundle.state === "draft" ? "editor" : "affirm"}
       />
+      <ScreenGuide />
 
       {rows.length === 0 ? (
         <div className="rounded-card-warm border border-border-default bg-paper p-10 text-center shadow-card">

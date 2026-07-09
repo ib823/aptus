@@ -16,6 +16,7 @@ import { getAffirmSetForBundle } from "@/lib/affirm/queries";
 import { getProcessFlowsForBundle } from "@/lib/affirm/process-flow";
 import { AffirmCardList } from "@/components/affirm/AffirmCardList";
 import { AffirmStepper } from "@/components/affirm/AffirmStepper";
+import { ScreenGuide } from "@/components/affirm/learn/ScreenGuide";
 import type { AffirmChoice } from "@/lib/affirm/types";
 
 export const dynamic = "force-dynamic";
@@ -72,6 +73,7 @@ export default async function ClientAffirmPage({ params }: PageProps) {
     <main className="bg-cream">
       <div className="mx-auto max-w-[880px] px-8 py-7">
         <AffirmStepper current="affirm" />
+        <ScreenGuide />
         <AffirmCardList
           bundleId={id}
           client={bundle.client}

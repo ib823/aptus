@@ -16,6 +16,7 @@
  */
 
 import Link from 'next/link';
+import { SampleSandboxCard } from '@/components/affirm/learn/SampleSandboxCard';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -57,6 +58,10 @@ const SURFACES: readonly SurfaceCard[] = [
 ];
 
 export default function WorkbenchHomePage() {
+  const sampleEnabled =
+    process.env.INTERNAL_TEST_DEPLOYMENT === "true" ||
+    process.env.WORKBENCH_ONLY === "true";
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-12">
       <header className="mb-10">
@@ -70,6 +75,8 @@ export default function WorkbenchHomePage() {
           settled before the first session.
         </p>
       </header>
+
+      {sampleEnabled && <SampleSandboxCard />}
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         {SURFACES.map((s) => (

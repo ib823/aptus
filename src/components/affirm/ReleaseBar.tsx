@@ -53,7 +53,10 @@ export function ReleaseBar({ bundleId, totals }: Props) {
   return (
     <>
       {/* Sticky release-bar */}
-      <div className="release-bar sticky bottom-4 mt-7 flex items-center gap-4 rounded-card-warm border border-border-default bg-paper px-[22px] py-4 shadow-card-warm-hover">
+      <div
+        data-tour="affirm-release"
+        className="release-bar sticky bottom-4 mt-7 flex items-center gap-4 rounded-card-warm border border-border-default bg-paper px-[22px] py-4 shadow-card-warm-hover"
+      >
         <div className="info min-w-0 flex-1">
           <div className="t text-sm font-semibold text-ink">
             Ready to release back to the client?
