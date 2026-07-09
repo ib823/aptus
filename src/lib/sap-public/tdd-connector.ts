@@ -216,6 +216,13 @@ const SUCCESSFACTORS_SERVICES: SapServiceDefinition[] = [
   },
 ];
 
+// Dashboard quick-view entities. Entity-set names are confirmed against
+// the SAP SuccessFactors HCM Suite OData API Reference Guide: User
+// (§5.15), JobRequisition (§16.2.1), JobApplication (§16.1.1), Candidate
+// (§16.3), ONB2Process (§14.3.1). EmpEmployment is the standard Employee
+// Central entity. The entity explorer auto-discovers the tenant's full
+// entity set from $metadata (Ch. 4), so these cards are a curated view,
+// not the limit of coverage.
 const SUCCESSFACTORS_OPERATIONS: SapOperationConfig[] = [
   {
     key: "users",
@@ -240,6 +247,14 @@ const SUCCESSFACTORS_OPERATIONS: SapOperationConfig[] = [
     entitySet: "JobRequisition",
     limit: 25,
     fields: ["jobReqId", "jobTitle", "status", "department", "division", "location"],
+  },
+  {
+    key: "candidates",
+    title: "Candidates",
+    serviceKey: "recruiting",
+    entitySet: "Candidate",
+    limit: 25,
+    fields: ["candidateId", "firstName", "lastName", "primaryEmail", "currentTitle", "creationDateTime"],
   },
   {
     key: "onboardingProcesses",
