@@ -4,18 +4,9 @@ import {
   getConfiguredSapTenants,
   getSapProduct,
   isSapTddPublicAccessEnabled,
-  SAP_ODATA_PRODUCTS,
 } from "@/lib/sap-public/tdd-connector";
+import { listProductSummaries } from "@/lib/sap-public/products";
 import { ERROR_CODES } from "@/types/api";
-
-/** Whether a product has at least one tenant configured (env-driven). */
-function isConfigured(envPrefix: string): boolean {
-  try {
-    return getConfiguredSapTenants(envPrefix).length > 0;
-  } catch {
-    return false;
-  }
-}
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const product = getSapProduct(request.nextUrl.searchParams.get("product"));
@@ -35,14 +26,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({
     data: {
-      // The full product list drives the top-level product switcher.
-      products: SAP_ODATA_PRODUCTS.map((p) => ({
-        key: p.key,
-        label: p.label,
-        description: p.description,
-        protocol: "odata" as const,
-        configured: isConfigured(p.envPrefix),
-      })),
+      // The full product list (OData + Ariba) drives the product switcher.
+      products: listProductSummaries(),
       product: { key: product.key, label: product.label, description: product.description },
       tenants: getConfiguredSapTenants(product.envPrefix).map((tenant) => ({
         key: tenant.key,
