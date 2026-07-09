@@ -95,7 +95,7 @@
     "next": "15.5.18",
     "next-auth": "^4.24.13",
     "next-themes": "^0.4.6",
-    "nodemailer": "^8.0.7",
+    "nodemailer": "^9.0.1",
     "otpauth": "^9.5.0",
     "prisma": "^6.19.2",
     "puppeteer-core": "^25.0.4",
@@ -165,12 +165,13 @@
       "brace-expansion@<1.1.13": "1.1.13",
       "brace-expansion@>=2.0.0 <2.0.3": "2.0.3",
       "brace-expansion@>=4.0.0 <5.0.6": "5.0.6",
-      "@vercel/blob>undici": ">=7.24.0",
+      "@vercel/blob>undici": ">=8.5.0",
+      "puppeteer-core>ws": ">=8.21.0",
       "tmp": ">=0.2.6"
     },
     "peerDependencyRules": {
       "allowedVersions": {
-        "nodemailer": "8"
+        "nodemailer": ">=8"
       }
     }
   },

@@ -3,8 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   isSapTddWriteEnabled: vi.fn(),
   getSapTddWriteSecretRequired: vi.fn(() => true),
-  getSapTenant: vi.fn((v: string) => (v ? { id: v } : null)),
-  getSapService: vi.fn((v: string) => (v ? { id: v } : null)),
+  // Reads the per-product WRITE_SECRET env at call time (prefix "S4_TDD" →
+  // process.env.S4_TDD_WRITE_SECRET), mirroring the real connector so the
+  // fail-closed env-var test cases below keep exercising real behaviour.
+  getSapTddWriteSecret: vi.fn((prefix: string) => process.env[`${prefix}_WRITE_SECRET`]),
+  // Multi-product resolver: empty/absent → default s4hana product (S4_TDD).
+  getSapProduct: vi.fn((v: string) =>
+    !v || v === "s4hana"
+      ? { key: "s4hana", label: "SAP S/4HANA Cloud", envPrefix: "S4_TDD" }
+      : null,
+  ),
+  getSapTenant: vi.fn((_prefix: string, v: string) => (v ? { id: v } : null)),
+  getSapService: vi.fn((_product: unknown, v: string) => (v ? { id: v } : null)),
   createSapEntitySetRecord: vi.fn(),
   requireAdmin: vi.fn(),
 }));
@@ -12,6 +22,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/sap-public/tdd-connector", () => ({
   isSapTddWriteEnabled: mocks.isSapTddWriteEnabled,
   getSapTddWriteSecretRequired: mocks.getSapTddWriteSecretRequired,
+  getSapTddWriteSecret: mocks.getSapTddWriteSecret,
+  getSapProduct: mocks.getSapProduct,
   getSapTenant: mocks.getSapTenant,
   getSapService: mocks.getSapService,
   createSapEntitySetRecord: mocks.createSapEntitySetRecord,
