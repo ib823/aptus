@@ -17,9 +17,20 @@
 
 import Link from 'next/link';
 import { SampleSandboxCard } from '@/components/affirm/learn/SampleSandboxCard';
+import { SapOperationsDashboard } from '@/components/sap/SapOperationsDashboard';
+import { getConfiguredSapTenants } from '@/lib/sap-public/tdd-connector';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+/** True when at least one SAP TDD tenant is configured (S4_TDD_* env). */
+function sapTddConfigured(): boolean {
+  try {
+    return getConfiguredSapTenants().length > 0;
+  } catch {
+    return false;
+  }
+}
 
 export const metadata = {
   title: { absolute: 'ABeam Workbench' },
@@ -61,6 +72,7 @@ export default function WorkbenchHomePage() {
   const sampleEnabled =
     process.env.INTERNAL_TEST_DEPLOYMENT === "true" ||
     process.env.WORKBENCH_ONLY === "true";
+  const showSap = sapTddConfigured();
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-12">
@@ -96,6 +108,34 @@ export default function WorkbenchHomePage() {
           </Link>
         ))}
       </div>
+
+      {showSap && (
+        <section className="mt-12 border-t border-border-default pt-10">
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+                Live · SAP S/4HANA Cloud Public
+                <span className="inline-flex items-center gap-1 rounded-pill bg-decision-standard/10 px-2 py-0.5 text-[10px] font-semibold text-decision-standard">
+                  <span className="inline-block size-1.5 rounded-full bg-decision-standard" />
+                  connected
+                </span>
+              </p>
+              <h2 className="font-serif text-2xl text-ink">SAP Operations</h2>
+              <p className="mt-1 max-w-[720px] text-sm text-ink-soft">
+                Live procurement data pulled straight from your SAP TDD tenant — per-service
+                reachability, latency, and sample records.
+              </p>
+            </div>
+            <Link
+              href="/sap-explorer"
+              className="inline-flex h-10 items-center rounded-input border border-border-default bg-paper px-4 text-sm font-semibold text-navy transition hover:border-navy"
+            >
+              Open full explorer &rarr;
+            </Link>
+          </div>
+          <SapOperationsDashboard />
+        </section>
+      )}
     </div>
   );
 }
