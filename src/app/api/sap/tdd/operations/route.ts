@@ -2,93 +2,16 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import {
   getConfiguredSapTenants,
+  getSapProduct,
   getSapService,
   getSapTenant,
   isSapTddPublicAccessEnabled,
   previewSapEntitySet,
+  type SapOdataProduct,
+  type SapOperationConfig,
   type SapTenant,
 } from "@/lib/sap-public/tdd-connector";
 import { ERROR_CODES } from "@/types/api";
-
-interface OperationConfig {
-  key: string;
-  title: string;
-  serviceKey: string;
-  entitySet: string;
-  limit: number;
-  fields: string[];
-}
-
-const OPERATION_CONFIGS: OperationConfig[] = [
-  {
-    key: "purchaseOrders",
-    title: "Purchase Orders",
-    serviceKey: "purchase-orders",
-    entitySet: "A_PurchaseOrder",
-    limit: 25,
-    fields: [
-      "PurchaseOrder",
-      "PurchaseOrderType",
-      "Supplier",
-      "CompanyCode",
-      "PurchasingOrganization",
-      "PurchasingGroup",
-      "PurchaseOrderDate",
-      "DocumentCurrency",
-    ],
-  },
-  {
-    key: "supplierInvoices",
-    title: "Supplier Invoices",
-    serviceKey: "supplier-invoices",
-    entitySet: "A_SupplierInvoice",
-    limit: 25,
-    fields: [
-      "SupplierInvoice",
-      "FiscalYear",
-      "CompanyCode",
-      "Supplier",
-      "DocumentDate",
-      "PostingDate",
-      "DocumentCurrency",
-      "InvoiceGrossAmount",
-    ],
-  },
-  {
-    key: "purchaseContracts",
-    title: "Purchase Contracts",
-    serviceKey: "purchase-contracts",
-    entitySet: "A_PurchaseContract",
-    limit: 25,
-    fields: [
-      "PurchaseContract",
-      "PurchaseContractType",
-      "Supplier",
-      "CompanyCode",
-      "PurchasingOrganization",
-      "ValidityStartDate",
-      "ValidityEndDate",
-      "DocumentCurrency",
-    ],
-  },
-  {
-    key: "commercialProjects",
-    title: "Commercial Projects",
-    serviceKey: "commercial-projects",
-    entitySet: "ProjectSet",
-    limit: 25,
-    fields: [
-      "ProjectUUID",
-      "ProjectID",
-      "ProjectName",
-      "Customer",
-      "CompanyCode",
-      "ServiceOrganization",
-      "StartDate",
-      "EndDate",
-    ],
-  },
-];
 
 function displayValue(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -112,14 +35,24 @@ function chooseFields(rows: Array<Record<string, unknown>>, preferredFields: str
   return Array.from(new Set(rows.flatMap((row) => Object.keys(row)))).slice(0, 8);
 }
 
-async function loadOperationSection(tenant: SapTenant, config: OperationConfig) {
-  const service = getSapService(config.serviceKey);
+async function loadOperationSection(
+  product: SapOdataProduct,
+  tenant: SapTenant,
+  config: SapOperationConfig,
+) {
+  const service = getSapService(product, config.serviceKey);
   if (!service) {
     throw new Error(`Unknown SAP service: ${config.serviceKey}`);
   }
 
   try {
-    const preview = await previewSapEntitySet(tenant, service, config.entitySet, config.limit);
+    const preview = await previewSapEntitySet(
+      product.envPrefix,
+      tenant,
+      service,
+      config.entitySet,
+      config.limit,
+    );
     const fields = chooseFields(preview.rows, config.fields);
     return {
       key: config.key,
@@ -155,21 +88,29 @@ async function loadOperationSection(tenant: SapTenant, config: OperationConfig) 
   }
 }
 
-function resolveTenant(request: NextRequest): SapTenant | null {
+function resolveTenant(product: SapOdataProduct, request: NextRequest): SapTenant | null {
   const tenantKey = request.nextUrl.searchParams.get("tenant");
-  if (tenantKey) return getSapTenant(tenantKey);
-  return getConfiguredSapTenants()[0] ?? null;
+  if (tenantKey) return getSapTenant(product.envPrefix, tenantKey);
+  return getConfiguredSapTenants(product.envPrefix)[0] ?? null;
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  if (!isSapTddPublicAccessEnabled() && !(await getCurrentUser())) {
+  const product = getSapProduct(request.nextUrl.searchParams.get("product"));
+  if (!product) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Unknown product" } },
+      { status: 400 },
+    );
+  }
+
+  if (!isSapTddPublicAccessEnabled(product.envPrefix) && !(await getCurrentUser())) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
       { status: 401 },
     );
   }
 
-  const tenant = resolveTenant(request);
+  const tenant = resolveTenant(product, request);
   if (!tenant) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "No SAP tenant is configured" } },
@@ -178,7 +119,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const sections = await Promise.all(
-    OPERATION_CONFIGS.map((config) => loadOperationSection(tenant, config)),
+    product.operations.map((config) => loadOperationSection(product, tenant, config)),
   );
 
   return NextResponse.json({

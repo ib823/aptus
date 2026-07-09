@@ -3,7 +3,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isAdminError, requireAdmin } from "@/lib/auth/admin-guard";
 import {
   createSapEntitySetRecord,
+  getSapProduct,
   getSapService,
+  getSapTddWriteSecret,
   getSapTddWriteSecretRequired,
   getSapTenant,
   isSapTddWriteEnabled,
@@ -13,6 +15,7 @@ import { ERROR_CODES } from "@/types/api";
 const CONFIRMATION_PHRASE = "WRITE TO SAP TDD";
 
 interface SapWriteRequestBody {
+  product?: unknown;
   tenant?: unknown;
   service?: unknown;
   entity?: unknown;
@@ -30,12 +33,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Fail-closed: if S4_TDD_WRITE_SECRET is unset, the endpoint must reject.
- * Prior behaviour returned true on missing secret, allowing unauthenticated
- * writes when the operator forgot to configure the secret.
+ * Fail-closed: if the product's WRITE_SECRET is unset, the endpoint must
+ * reject. Never allow a write when the operator forgot to configure it.
  */
-function validateWriteSecret(writeSecret: unknown): boolean {
-  const requiredSecret = process.env.S4_TDD_WRITE_SECRET;
+function validateWriteSecret(envPrefix: string, writeSecret: unknown): boolean {
+  const requiredSecret = getSapTddWriteSecret(envPrefix);
   if (!requiredSecret) return false;
   if (typeof writeSecret !== "string") return false;
 
@@ -45,18 +47,43 @@ function validateWriteSecret(writeSecret: unknown): boolean {
   return timingSafeEqual(a, b);
 }
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const product = getSapProduct(request.nextUrl.searchParams.get("product"));
+  if (!product) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Unknown product" } },
+      { status: 400 },
+    );
+  }
   return NextResponse.json({
     data: {
-      enabled: isSapTddWriteEnabled(),
+      enabled: isSapTddWriteEnabled(product.envPrefix),
       confirmationPhrase: CONFIRMATION_PHRASE,
-      writeSecretRequired: getSapTddWriteSecretRequired(),
+      writeSecretRequired: getSapTddWriteSecretRequired(product.envPrefix),
     },
   });
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  if (!isSapTddWriteEnabled()) {
+  let body: SapWriteRequestBody;
+  try {
+    body = (await request.json()) as SapWriteRequestBody;
+  } catch {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid JSON body" } },
+      { status: 400 },
+    );
+  }
+
+  const product = getSapProduct(readString(body.product));
+  if (!product) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Unknown product" } },
+      { status: 400 },
+    );
+  }
+
+  if (!isSapTddWriteEnabled(product.envPrefix)) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "SAP TDD write-back is disabled" } },
       { status: 403 },
@@ -68,16 +95,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAdmin();
   if (isAdminError(auth)) return auth;
 
-  let body: SapWriteRequestBody;
-  try {
-    body = (await request.json()) as SapWriteRequestBody;
-  } catch {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid JSON body" } },
-      { status: 400 },
-    );
-  }
-
   if (body.confirmation !== CONFIRMATION_PHRASE) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Confirmation phrase is required" } },
@@ -85,15 +102,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  if (!validateWriteSecret(body.writeSecret)) {
+  if (!validateWriteSecret(product.envPrefix, body.writeSecret)) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Invalid SAP write secret" } },
       { status: 403 },
     );
   }
 
-  const tenant = getSapTenant(readString(body.tenant));
-  const service = getSapService(readString(body.service));
+  const tenant = getSapTenant(product.envPrefix, readString(body.tenant));
+  const service = getSapService(product, readString(body.service));
   const entity = readString(body.entity);
 
   if (!tenant || !service || !entity || !isRecord(body.payload)) {
@@ -109,7 +126,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const result = await createSapEntitySetRecord(tenant, service, entity, body.payload);
+    const result = await createSapEntitySetRecord(
+      product.envPrefix,
+      tenant,
+      service,
+      entity,
+      body.payload,
+    );
     return NextResponse.json({ data: result }, { status: result.ok ? 200 : 502 });
   } catch (error) {
     return NextResponse.json(

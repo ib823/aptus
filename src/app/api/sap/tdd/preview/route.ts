@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import {
+  getSapProduct,
   getSapService,
   getSapTenant,
   isSapTddPublicAccessEnabled,
@@ -9,15 +10,23 @@ import {
 import { ERROR_CODES } from "@/types/api";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  if (!isSapTddPublicAccessEnabled() && !(await getCurrentUser())) {
+  const product = getSapProduct(request.nextUrl.searchParams.get("product"));
+  if (!product) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Unknown product" } },
+      { status: 400 },
+    );
+  }
+
+  if (!isSapTddPublicAccessEnabled(product.envPrefix) && !(await getCurrentUser())) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
       { status: 401 },
     );
   }
 
-  const tenant = getSapTenant(request.nextUrl.searchParams.get("tenant") ?? "");
-  const service = getSapService(request.nextUrl.searchParams.get("service") ?? "");
+  const tenant = getSapTenant(product.envPrefix, request.nextUrl.searchParams.get("tenant") ?? "");
+  const service = getSapService(product, request.nextUrl.searchParams.get("service") ?? "");
   const entity = request.nextUrl.searchParams.get("entity") ?? "";
   const limit = Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "10", 10);
 
@@ -29,7 +38,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const preview = await previewSapEntitySet(tenant, service, entity, limit);
+    const preview = await previewSapEntitySet(product.envPrefix, tenant, service, entity, limit);
     return NextResponse.json({ data: preview });
   } catch (error) {
     return NextResponse.json(

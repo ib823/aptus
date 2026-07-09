@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import { SapOperationsDashboard } from "@/components/sap/SapOperationsDashboard";
-import { SapTenantExplorer } from "@/components/sap/SapTenantExplorer";
-import { SapWriteBackPanel } from "@/components/sap/SapWriteBackPanel";
+import { SapCloudExplorer } from "@/components/sap/SapCloudExplorer";
 
 export const metadata: Metadata = { title: "SAP Operations" };
 export const dynamic = "force-dynamic";
@@ -22,15 +20,11 @@ export default function SapExplorerPage() {
       </a>
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">SAP Operations</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Live TDD explorer across your connected SAP Cloud products.
+        </p>
       </div>
-      <SapOperationsDashboard />
-      <SapWriteBackPanel />
-      <div className="border-t pt-6">
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold tracking-tight">Entity Explorer</h2>
-        </div>
-        <SapTenantExplorer />
-      </div>
+      <SapCloudExplorer />
     </main>
   );
 }
