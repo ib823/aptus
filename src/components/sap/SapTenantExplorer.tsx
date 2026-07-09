@@ -86,7 +86,7 @@ function statusTone(ok: boolean | undefined): "default" | "secondary" | "destruc
   return "outline";
 }
 
-export function SapTenantExplorer() {
+export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) {
   const [tenants, setTenants] = useState<TenantOption[]>([]);
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [tenantKey, setTenantKey] = useState("");
@@ -117,6 +117,7 @@ export function SapTenantExplorer() {
           tenant: tenantKey,
           service: serviceKey,
           probe: probe ? "1" : "0",
+          product,
         });
         const response = await fetch(`/api/sap/tdd/entities?${params.toString()}`);
         const json = (await response.json()) as Partial<EntitiesResponse> & {
@@ -138,7 +139,7 @@ export function SapTenantExplorer() {
         setLoading(false);
       }
     },
-    [serviceKey, tenantKey],
+    [serviceKey, tenantKey, product],
   );
 
   const loadPreview = useCallback(async () => {
@@ -151,6 +152,7 @@ export function SapTenantExplorer() {
         service: serviceKey,
         entity: selectedEntity,
         limit: "10",
+        product,
       });
       const response = await fetch(`/api/sap/tdd/preview?${params.toString()}`);
       const json = (await response.json()) as Partial<PreviewResponse> & {
@@ -165,14 +167,14 @@ export function SapTenantExplorer() {
     } finally {
       setPreviewLoading(false);
     }
-  }, [selectedEntity, serviceKey, tenantKey]);
+  }, [selectedEntity, serviceKey, tenantKey, product]);
 
   useEffect(() => {
     let cancelled = false;
     async function loadCatalog() {
       setError(null);
       try {
-        const response = await fetch("/api/sap/tdd/catalog");
+        const response = await fetch(`/api/sap/tdd/catalog?product=${encodeURIComponent(product)}`);
         const json = (await response.json()) as Partial<CatalogResponse> & {
           error?: { message?: string };
         };
@@ -192,7 +194,7 @@ export function SapTenantExplorer() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [product]);
 
   useEffect(() => {
     setEntities([]);

@@ -14,6 +14,33 @@ export interface SapServiceDefinition {
   domain: string;
 }
 
+/** A dashboard "operations" card: preview one entity set of one service. */
+export interface SapOperationConfig {
+  key: string;
+  title: string;
+  serviceKey: string;
+  entitySet: string;
+  limit: number;
+  fields: string[];
+}
+
+/**
+ * A connected SAP Cloud OData product (S/4HANA Cloud, SuccessFactors, …).
+ * Each product reads its own tenant + credentials from an env prefix
+ * (S4_TDD_*, SF_TDD_*) and carries its own OData service catalog and a
+ * short list of "operations" the dashboard previews for a health view.
+ */
+export interface SapOdataProduct {
+  key: string;
+  label: string;
+  /** Env var prefix, e.g. "S4_TDD" → S4_TDD_TENANTS_JSON, S4_TDD_USERNAME… */
+  envPrefix: string;
+  /** Human blurb for the product switcher. */
+  description: string;
+  services: SapServiceDefinition[];
+  operations: SapOperationConfig[];
+}
+
 export interface SapEntitySet {
   name: string;
   entityType: string;
@@ -48,7 +75,8 @@ export interface SapWriteResult {
   body: unknown;
 }
 
-export const SAP_TDD_SERVICES: SapServiceDefinition[] = [
+// ─── S/4HANA Cloud Public Edition — procurement OData catalog ──────────
+const S4HANA_SERVICES: SapServiceDefinition[] = [
   {
     key: "purchase-orders",
     label: "Purchase Orders",
@@ -86,6 +114,173 @@ export const SAP_TDD_SERVICES: SapServiceDefinition[] = [
   },
 ];
 
+const S4HANA_OPERATIONS: SapOperationConfig[] = [
+  {
+    key: "purchaseOrders",
+    title: "Purchase Orders",
+    serviceKey: "purchase-orders",
+    entitySet: "A_PurchaseOrder",
+    limit: 25,
+    fields: [
+      "PurchaseOrder",
+      "PurchaseOrderType",
+      "Supplier",
+      "CompanyCode",
+      "PurchasingOrganization",
+      "PurchasingGroup",
+      "PurchaseOrderDate",
+      "DocumentCurrency",
+    ],
+  },
+  {
+    key: "supplierInvoices",
+    title: "Supplier Invoices",
+    serviceKey: "supplier-invoices",
+    entitySet: "A_SupplierInvoice",
+    limit: 25,
+    fields: [
+      "SupplierInvoice",
+      "FiscalYear",
+      "CompanyCode",
+      "Supplier",
+      "DocumentDate",
+      "PostingDate",
+      "DocumentCurrency",
+      "InvoiceGrossAmount",
+    ],
+  },
+  {
+    key: "purchaseContracts",
+    title: "Purchase Contracts",
+    serviceKey: "purchase-contracts",
+    entitySet: "A_PurchaseContract",
+    limit: 25,
+    fields: [
+      "PurchaseContract",
+      "PurchaseContractType",
+      "Supplier",
+      "CompanyCode",
+      "PurchasingOrganization",
+      "ValidityStartDate",
+      "ValidityEndDate",
+      "DocumentCurrency",
+    ],
+  },
+  {
+    key: "commercialProjects",
+    title: "Commercial Projects",
+    serviceKey: "commercial-projects",
+    entitySet: "ProjectSet",
+    limit: 25,
+    fields: [
+      "ProjectUUID",
+      "ProjectID",
+      "ProjectName",
+      "Customer",
+      "CompanyCode",
+      "ServiceOrganization",
+      "StartDate",
+      "EndDate",
+    ],
+  },
+];
+
+// ─── SuccessFactors — Employee Central + Recruiting/Onboarding OData ────
+// SuccessFactors exposes a single OData V2 service root (/odata/v2) with
+// many entity sets. We model logical "services" as that same root so the
+// entity explorer and preview reuse the S/4 OData path unchanged; the
+// distinct catalogs just document which families live under it.
+const SF_ODATA_ROOT = "/odata/v2";
+
+const SUCCESSFACTORS_SERVICES: SapServiceDefinition[] = [
+  {
+    key: "employee-central",
+    label: "Employee Central",
+    scenario: "SF_EC",
+    path: SF_ODATA_ROOT,
+    domain: "Core HR",
+  },
+  {
+    key: "recruiting",
+    label: "Recruiting",
+    scenario: "SF_RCM",
+    path: SF_ODATA_ROOT,
+    domain: "Recruiting",
+  },
+  {
+    key: "onboarding",
+    label: "Onboarding",
+    scenario: "SF_ONB2",
+    path: SF_ODATA_ROOT,
+    domain: "Onboarding",
+  },
+];
+
+const SUCCESSFACTORS_OPERATIONS: SapOperationConfig[] = [
+  {
+    key: "users",
+    title: "Users",
+    serviceKey: "employee-central",
+    entitySet: "User",
+    limit: 25,
+    fields: ["userId", "username", "firstName", "lastName", "email", "department", "division", "jobTitle"],
+  },
+  {
+    key: "employment",
+    title: "Employment",
+    serviceKey: "employee-central",
+    entitySet: "EmpEmployment",
+    limit: 25,
+    fields: ["personIdExternal", "userId", "startDate", "endDate", "isContingentWorker"],
+  },
+  {
+    key: "jobRequisitions",
+    title: "Job Requisitions",
+    serviceKey: "recruiting",
+    entitySet: "JobRequisition",
+    limit: 25,
+    fields: ["jobReqId", "jobTitle", "status", "department", "division", "location"],
+  },
+  {
+    key: "onboardingProcesses",
+    title: "Onboarding",
+    serviceKey: "onboarding",
+    entitySet: "ONB2Process",
+    limit: 25,
+    fields: ["processId", "processStatus", "startDate", "candidateId"],
+  },
+];
+
+/** Registry of connected OData products, keyed by product key. */
+export const SAP_ODATA_PRODUCTS: SapOdataProduct[] = [
+  {
+    key: "s4hana",
+    label: "S/4HANA Cloud",
+    envPrefix: "S4_TDD",
+    description: "S/4HANA Cloud Public Edition — procurement & finance OData APIs.",
+    services: S4HANA_SERVICES,
+    operations: S4HANA_OPERATIONS,
+  },
+  {
+    key: "successfactors",
+    label: "SuccessFactors",
+    envPrefix: "SF_TDD",
+    description: "SuccessFactors — Employee Central, Recruiting & Onboarding OData APIs.",
+    services: SUCCESSFACTORS_SERVICES,
+    operations: SUCCESSFACTORS_OPERATIONS,
+  },
+];
+
+export const DEFAULT_PRODUCT_KEY = "s4hana";
+
+export function getSapProduct(key: string | null | undefined): SapOdataProduct | null {
+  const wanted = key && key.trim() ? key.trim() : DEFAULT_PRODUCT_KEY;
+  return SAP_ODATA_PRODUCTS.find((p) => p.key === wanted) ?? null;
+}
+
+/** @deprecated Use getSapProduct(key).services. Kept for existing imports. */
+export const SAP_TDD_SERVICES = S4HANA_SERVICES;
+
 interface OAuthTokenResponse {
   access_token?: unknown;
 }
@@ -104,34 +299,42 @@ interface ODataV4Response {
   error?: unknown;
 }
 
-function getRequestTimeoutMs(): number {
-  const parsed = Number.parseInt(process.env.S4_TDD_TIMEOUT_MS ?? "30000", 10);
+function env(prefix: string, name: string): string | undefined {
+  return process.env[`${prefix}_${name}`];
+}
+
+function getRequestTimeoutMs(prefix: string): number {
+  const parsed = Number.parseInt(env(prefix, "TIMEOUT_MS") ?? "30000", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 30000;
 }
 
-function getProbeConcurrency(): number {
-  const parsed = Number.parseInt(process.env.S4_TDD_PROBE_CONCURRENCY ?? "4", 10);
+function getProbeConcurrency(prefix: string): number {
+  const parsed = Number.parseInt(env(prefix, "PROBE_CONCURRENCY") ?? "4", 10);
   if (!Number.isFinite(parsed)) return 4;
   return Math.min(Math.max(parsed, 1), 8);
 }
 
-export function isSapTddPublicAccessEnabled(): boolean {
-  const raw = process.env.S4_TDD_PUBLIC_ACCESS;
+export function isSapTddPublicAccessEnabled(prefix: string = "S4_TDD"): boolean {
+  const raw = env(prefix, "PUBLIC_ACCESS");
   if (raw === "true") return true;
   if (raw === "false") return false;
   return process.env.NODE_ENV !== "production";
 }
 
-export function isSapTddWriteEnabled(): boolean {
-  return process.env.S4_TDD_WRITE_ENABLED === "true";
+export function isSapTddWriteEnabled(prefix: string = "S4_TDD"): boolean {
+  return env(prefix, "WRITE_ENABLED") === "true";
 }
 
-export function getSapTddWriteSecretRequired(): boolean {
-  return Boolean(process.env.S4_TDD_WRITE_SECRET);
+export function getSapTddWriteSecretRequired(prefix: string = "S4_TDD"): boolean {
+  return Boolean(env(prefix, "WRITE_SECRET"));
 }
 
-async function sapFetch(input: string, init: RequestInit = {}): Promise<Response> {
-  const timeoutMs = getRequestTimeoutMs();
+/** The configured write secret for a product, if any. */
+export function getSapTddWriteSecret(prefix: string = "S4_TDD"): string | undefined {
+  return env(prefix, "WRITE_SECRET");
+}
+
+async function sapFetch(input: string, init: RequestInit = {}, timeoutMs = 30000): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -183,12 +386,16 @@ function sanitizeTenantKey(raw: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-export function getConfiguredSapTenants(): SapTenant[] {
-  const tenantsJson = process.env.S4_TDD_TENANTS_JSON;
+/**
+ * Tenants configured for a product. `prefix` defaults to S4_TDD so the
+ * no-arg call keeps working for the S/4 workbench-home gate.
+ */
+export function getConfiguredSapTenants(prefix: string = "S4_TDD"): SapTenant[] {
+  const tenantsJson = env(prefix, "TENANTS_JSON");
   if (tenantsJson) {
     const parsed = JSON.parse(tenantsJson) as unknown;
     if (!Array.isArray(parsed)) {
-      throw new Error("S4_TDD_TENANTS_JSON must be an array");
+      throw new Error(`${prefix}_TENANTS_JSON must be an array`);
     }
     return parsed.map((tenant, index) => {
       const record = tenant as Record<string, unknown>;
@@ -205,43 +412,43 @@ export function getConfiguredSapTenants(): SapTenant[] {
     });
   }
 
-  const baseUrl = process.env.S4_TDD_BASE_URL;
+  const baseUrl = env(prefix, "BASE_URL");
   if (!baseUrl) return [];
   return [
     {
       key: "default",
-      label: process.env.S4_TDD_TENANT_LABEL ?? "Configured Tenant",
+      label: env(prefix, "TENANT_LABEL") ?? "Configured Tenant",
       baseUrl: normalizeBaseUrl(baseUrl),
     },
   ];
 }
 
-export function getSapTenant(key: string): SapTenant | null {
-  return getConfiguredSapTenants().find((tenant) => tenant.key === key) ?? null;
+export function getSapTenant(prefix: string, key: string): SapTenant | null {
+  return getConfiguredSapTenants(prefix).find((tenant) => tenant.key === key) ?? null;
 }
 
-export function getSapService(key: string): SapServiceDefinition | null {
-  return SAP_TDD_SERVICES.find((service) => service.key === key) ?? null;
+export function getSapService(product: SapOdataProduct, key: string): SapServiceDefinition | null {
+  return product.services.find((service) => service.key === key) ?? null;
 }
 
-function getAuthType(): SapAuthType {
-  const raw = process.env.S4_TDD_AUTH_TYPE ?? "basic";
+function getAuthType(prefix: string): SapAuthType {
+  const raw = env(prefix, "AUTH_TYPE") ?? "basic";
   if (raw === "basic" || raw === "bearer" || raw === "oauth-client-credentials") {
     return raw;
   }
-  throw new Error("S4_TDD_AUTH_TYPE must be basic, bearer, or oauth-client-credentials");
+  throw new Error(`${prefix}_AUTH_TYPE must be basic, bearer, or oauth-client-credentials`);
 }
 
-function requiredEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing required env var: ${name}`);
+function requiredEnv(prefix: string, name: string): string {
+  const value = env(prefix, name);
+  if (!value) throw new Error(`Missing required env var: ${prefix}_${name}`);
   return value;
 }
 
-async function fetchOAuthToken(): Promise<string> {
-  const tokenUrl = requiredEnv("S4_TDD_OAUTH_TOKEN_URL");
-  const clientId = requiredEnv("S4_TDD_CLIENT_ID");
-  const clientSecret = requiredEnv("S4_TDD_CLIENT_SECRET");
+async function fetchOAuthToken(prefix: string): Promise<string> {
+  const tokenUrl = requiredEnv(prefix, "OAUTH_TOKEN_URL");
+  const clientId = requiredEnv(prefix, "CLIENT_ID");
+  const clientSecret = requiredEnv(prefix, "CLIENT_SECRET");
   const response = await sapFetch(tokenUrl, {
     method: "POST",
     headers: {
@@ -250,7 +457,7 @@ async function fetchOAuthToken(): Promise<string> {
       Accept: "application/json",
     },
     body: new URLSearchParams({ grant_type: "client_credentials" }),
-  });
+  }, getRequestTimeoutMs(prefix));
   const json = (await response.json()) as OAuthTokenResponse;
   if (!response.ok || typeof json.access_token !== "string") {
     throw new Error(`OAuth token request failed: HTTP ${response.status}`);
@@ -258,17 +465,17 @@ async function fetchOAuthToken(): Promise<string> {
   return json.access_token;
 }
 
-async function buildAuthHeader(): Promise<string> {
-  const authType = getAuthType();
+async function buildAuthHeader(prefix: string): Promise<string> {
+  const authType = getAuthType(prefix);
   if (authType === "basic") {
-    const username = requiredEnv("S4_TDD_USERNAME");
-    const password = requiredEnv("S4_TDD_PASSWORD");
+    const username = requiredEnv(prefix, "USERNAME");
+    const password = requiredEnv(prefix, "PASSWORD");
     return `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
   }
   if (authType === "bearer") {
-    return `Bearer ${requiredEnv("S4_TDD_BEARER_TOKEN")}`;
+    return `Bearer ${requiredEnv(prefix, "BEARER_TOKEN")}`;
   }
-  return `Bearer ${await fetchOAuthToken()}`;
+  return `Bearer ${await fetchOAuthToken(prefix)}`;
 }
 
 function serviceUrl(tenant: SapTenant, service: SapServiceDefinition): string {
@@ -327,15 +534,16 @@ function extractRows(json: ODataV2Response | ODataV4Response): {
 }
 
 export async function inspectSapService(
+  prefix: string,
   tenant: SapTenant,
   service: SapServiceDefinition,
 ): Promise<{ entitySets: SapEntitySet[] }> {
   const response = await sapFetch(`${serviceUrl(tenant, service)}/$metadata`, {
     headers: {
-      Authorization: await buildAuthHeader(),
+      Authorization: await buildAuthHeader(prefix),
       Accept: "application/xml, text/xml, */*",
     },
-  });
+  }, getRequestTimeoutMs(prefix));
   const text = await response.text();
   if (!response.ok) {
     throw new Error(`Metadata request failed: HTTP ${response.status}`);
@@ -344,6 +552,7 @@ export async function inspectSapService(
 }
 
 export async function probeSapEntitySet(
+  prefix: string,
   tenant: SapTenant,
   service: SapServiceDefinition,
   entitySetName: string,
@@ -353,10 +562,11 @@ export async function probeSapEntitySet(
     `${serviceUrl(tenant, service)}/${encodeURIComponent(entitySetName)}?$top=1&$format=json`,
     {
       headers: {
-        Authorization: await buildAuthHeader(),
+        Authorization: await buildAuthHeader(prefix),
         Accept: "application/json",
       },
     },
+    getRequestTimeoutMs(prefix),
   );
   const durationMs = Date.now() - startedAt;
   const text = await response.text();
@@ -379,16 +589,18 @@ export async function probeSapEntitySet(
 }
 
 export async function probeSapEntitySets(
+  prefix: string,
   tenant: SapTenant,
   service: SapServiceDefinition,
   entitySetNames: string[],
 ): Promise<SapEntityProbe[]> {
-  return mapWithConcurrency(entitySetNames, getProbeConcurrency(), (entitySetName) =>
-    probeSapEntitySet(tenant, service, entitySetName),
+  return mapWithConcurrency(entitySetNames, getProbeConcurrency(prefix), (entitySetName) =>
+    probeSapEntitySet(prefix, tenant, service, entitySetName),
   );
 }
 
 export async function previewSapEntitySet(
+  prefix: string,
   tenant: SapTenant,
   service: SapServiceDefinition,
   entitySetName: string,
@@ -400,10 +612,11 @@ export async function previewSapEntitySet(
     `${serviceUrl(tenant, service)}/${encodeURIComponent(entitySetName)}?$top=${safeLimit}&$format=json`,
     {
       headers: {
-        Authorization: await buildAuthHeader(),
+        Authorization: await buildAuthHeader(prefix),
         Accept: "application/json",
       },
     },
+    getRequestTimeoutMs(prefix),
   );
   const durationMs = Date.now() - startedAt;
   const text = await response.text();
@@ -426,16 +639,17 @@ export async function previewSapEntitySet(
 }
 
 async function fetchCsrfSession(
+  prefix: string,
   tenant: SapTenant,
   service: SapServiceDefinition,
 ): Promise<{ token: string; cookie: string }> {
   const response = await sapFetch(`${serviceUrl(tenant, service)}/`, {
     headers: {
-      Authorization: await buildAuthHeader(),
+      Authorization: await buildAuthHeader(prefix),
       Accept: "application/json",
       "X-CSRF-Token": "Fetch",
     },
-  });
+  }, getRequestTimeoutMs(prefix));
   const token = response.headers.get("x-csrf-token");
   if (!response.ok || !token) {
     throw new Error(`CSRF token request failed: HTTP ${response.status}`);
@@ -452,15 +666,16 @@ function parseSapWriteBody(text: string, contentType: string | null): unknown {
 }
 
 export async function createSapEntitySetRecord(
+  prefix: string,
   tenant: SapTenant,
   service: SapServiceDefinition,
   entitySetName: string,
   payload: Record<string, unknown>,
 ): Promise<SapWriteResult> {
-  const { token, cookie } = await fetchCsrfSession(tenant, service);
+  const { token, cookie } = await fetchCsrfSession(prefix, tenant, service);
   const startedAt = Date.now();
   const headers: HeadersInit = {
-    Authorization: await buildAuthHeader(),
+    Authorization: await buildAuthHeader(prefix),
     Accept: "application/json",
     "Content-Type": "application/json",
     "X-CSRF-Token": token,
@@ -471,7 +686,7 @@ export async function createSapEntitySetRecord(
     method: "POST",
     headers,
     body: JSON.stringify(payload),
-  });
+  }, getRequestTimeoutMs(prefix));
   const durationMs = Date.now() - startedAt;
   const text = await response.text();
   return {
