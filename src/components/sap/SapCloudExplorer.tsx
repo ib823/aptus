@@ -16,11 +16,13 @@ import { PlugZap } from "lucide-react";
 import { SapOperationsDashboard } from "./SapOperationsDashboard";
 import { SapWriteBackPanel } from "./SapWriteBackPanel";
 import { SapTenantExplorer } from "./SapTenantExplorer";
+import { SapAribaExplorer } from "./SapAribaExplorer";
 
 interface ProductInfo {
   key: string;
   label: string;
   description: string;
+  protocol: "odata" | "rest";
   configured: boolean;
 }
 
@@ -91,6 +93,8 @@ export function SapCloudExplorer() {
             live data here (same pattern as S/4HANA). See the deployment env checklist.
           </p>
         </div>
+      ) : active?.protocol === "rest" ? (
+        <SapAribaExplorer />
       ) : (
         <>
           <SapOperationsDashboard product={product} />
