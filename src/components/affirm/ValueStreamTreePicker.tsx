@@ -172,7 +172,7 @@ export function ValueStreamTreePicker({
   // ── Render ──────────────────────────────────────────────────────
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
-      <div className="space-y-4">
+      <div className="space-y-4" data-tour="affirm-tree">
         {/* Filter + scope-tree card */}
         <div className="rounded-card-warm border border-border-default bg-paper p-5 shadow-card">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -327,7 +327,7 @@ export function ValueStreamTreePicker({
       </div>
 
       {/* Side panel */}
-      <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+      <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start" data-tour="affirm-selection">
         <div className="rounded-card-warm border border-border-default bg-paper p-5 shadow-card">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
             Bundle
