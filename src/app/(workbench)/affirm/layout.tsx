@@ -10,7 +10,8 @@
 
 import type { ReactNode } from "react";
 import "./affirm-responsive.css";
+import { AffirmLearnProvider } from "@/components/affirm/learn/AffirmLearnProvider";
 
 export default function AffirmLayout({ children }: { children: ReactNode }) {
-  return <>{children}</>;
+  return <AffirmLearnProvider>{children}</AffirmLearnProvider>;
 }
