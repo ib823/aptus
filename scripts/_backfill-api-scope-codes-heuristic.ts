@@ -74,7 +74,7 @@ async function main(): Promise<void> {
 
   // Step 2: For each API, scan apiName + description for matches
   const apis = await prisma.sapApiReference.findMany({
-    select: { id: true, apiId: true, apiName: true, description: true },
+    select: { id: true, apiId: true, apiName: true, description: true, scopeItemCodes: true },
   });
   console.log(`APIs to scan: ${apis.length}`);
 
@@ -83,9 +83,17 @@ async function main(): Promise<void> {
   let apisNoMatch = 0;
   let maxMatchesPerApi = 0;
   let updated = 0;
+  let preserved = 0;
   const matchHistogram = new Map<number, number>(); // matches-per-api → count
 
   for (const api of apis) {
+    // NON-CLOBBER: rows that already carry scope codes (provided by the import
+    // file) are authoritative — leave them untouched. The heuristic only fills
+    // rows still empty after import.
+    if (api.scopeItemCodes.length > 0) {
+      preserved++;
+      continue;
+    }
     const haystack = `${api.apiName} ${api.description}`;
     const hits: Set<string> = new Set();
     for (const m of matchable) {
@@ -115,6 +123,7 @@ async function main(): Promise<void> {
 
   console.log("");
   console.log("=== Heuristic match results ===");
+  console.log(`  Preserved (file-provided scope codes, not overwritten): ${preserved}`);
   console.log(`  APIs with ≥1 match: ${apisWithMatches} (${((apisWithMatches / apis.length) * 100).toFixed(1)}%)`);
   console.log(`  APIs with 0 matches: ${apisNoMatch} (${((apisNoMatch / apis.length) * 100).toFixed(1)}%)`);
   console.log(`  Total scope-code links: ${totalMatches}`);
