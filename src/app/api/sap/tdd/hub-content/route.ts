@@ -25,6 +25,7 @@ import {
   HUB_CONTENT_TYPES,
   HUB_CONTENT_TYPE_META,
   hubApiToService,
+  hubAvailabilityQualifier,
   isHubContentType,
   isRuntimeType,
   resolveHubStatus,
@@ -37,10 +38,14 @@ const RUNTIME_TYPES = HUB_CONTENT_TYPES.filter(isRuntimeType);
 const REFERENCE_TYPES = HUB_CONTENT_TYPES.filter((t) => !isRuntimeType(t));
 const PROBE_CAP = 60; // bound the live probe like the capabilities route
 
-/** Probe the tenant's probeable OData V2 APIs; return the set that returned 200. */
-async function probeActivatedApiIds(prefix: string, tenant: { key: string; label: string; baseUrl: string }): Promise<Set<string>> {
+/**
+ * Probe the tenant's probeable OData V2 runtime services (APIs + CDS views);
+ * return the set of externalIds that returned 200. Events are excluded — they
+ * are subscribe-only with no read endpoint.
+ */
+async function probeActivatedRuntimeIds(prefix: string, tenant: { key: string; label: string; baseUrl: string }): Promise<Set<string>> {
   const apis = await prisma.sapHubContent.findMany({
-    where: { appliesToPublic: true, contentType: "API", apiType: "ODATAV2" },
+    where: { appliesToPublic: true, contentType: { in: ["API", "CDS_VIEW"] }, apiType: "ODATAV2" },
     select: { contentType: true, apiType: true, externalId: true, title: true, packageId: true, communicationScenarios: true },
     orderBy: { externalId: "asc" },
     take: PROBE_CAP,
@@ -99,7 +104,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let activated = new Set<string>();
   if (tenant && probeEnabled) {
     try {
-      activated = await probeActivatedApiIds(product.envPrefix, tenant);
+      activated = await probeActivatedRuntimeIds(product.envPrefix, tenant);
     } catch {
       activated = new Set(); // probe failure → nothing ACTIVATED (honest); everything runtime AVAILABLE
     }
@@ -148,9 +153,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     packageId: r.packageId,
     apiType: r.apiType,
     communicationScenarios: r.communicationScenarios,
+    scopeItemCodes: r.scopeItemCodes,
     itemCount: r.itemCount,
     hubUrl: r.hubUrl,
     status: resolveHubStatus({ contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId }, activated),
+    availabilityNote: hubAvailabilityQualifier(r.contentType as HubContentType),
   }));
 
   // ── counts across the full edition set (ignoring the type/status filter
@@ -184,13 +191,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     REFERENCE: referenceTotal,
   };
 
+  // Honest scorecard denominator: discrete probeable runtime services only
+  // (API + CDS exposed as OData V2) — NOT events, NOT grouped CDS itemCount sums.
+  const probeableRuntime = await prisma.sapHubContent.count({
+    where: { appliesToPublic: true, contentType: { in: ["API", "CDS_VIEW"] }, apiType: "ODATAV2" },
+  });
+
   return NextResponse.json({
     data: {
       items,
       total,
       page,
       limit,
-      counts: { byType, byStatus },
+      counts: { byType, byStatus, probeableRuntime },
       catalogueImported: true,
       tenant: tenant?.label ?? null,
       typeMeta: HUB_CONTENT_TYPE_META,

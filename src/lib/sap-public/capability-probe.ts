@@ -10,10 +10,15 @@
  * tenant; 403/404 means it is published by SAP but not activated there.
  */
 import {
-  inspectSapService,
+  inspectSapServiceMetadata,
+  type EntityCapability,
+  type MetadataFlavor,
   type SapServiceDefinition,
   type SapTenant,
 } from "@/lib/sap-public/tdd-connector";
+
+/** Capability ladder derived from a live $metadata probe. */
+export type CapabilityLadder = "unreachable" | "reachable" | "readable" | "writable";
 
 export interface CapabilityResult {
   service: string;
@@ -22,7 +27,25 @@ export interface CapabilityResult {
   exposed: boolean;
   status: number;
   entitySetCount?: number;
+  /** Per-entity-set C/R/U/D from $metadata (Phase 2). */
+  entities?: EntityCapability[];
+  /** unreachable → reachable → readable → writable. */
+  ladder?: CapabilityLadder;
+  /** How the capability flags were derived (v4 is best-effort). */
+  metadataFlavor?: MetadataFlavor;
   error?: string;
+}
+
+/**
+ * Derive the ladder from a probe. Writable requires an EXPLICIT creatable=true
+ * (so V4 best-effort nulls never read as writable). Readable = any readable set.
+ */
+export function deriveCapabilityLadder(exposed: boolean, entities: EntityCapability[]): CapabilityLadder {
+  if (!exposed) return "unreachable";
+  const writable = entities.some((e) => e.creatable === true);
+  if (writable) return "writable";
+  const readable = entities.some((e) => e.readable);
+  return readable ? "readable" : "reachable";
 }
 
 export interface CapabilitySummary {
@@ -43,12 +66,20 @@ export async function probeService(
 ): Promise<CapabilityResult> {
   const base = { service: svc.key, label: svc.label, scenario: svc.scenario };
   try {
-    const { entitySets } = await inspectSapService(prefix, tenant, svc);
-    return { ...base, exposed: true, status: 200, entitySetCount: entitySets.length };
+    const { entitySets, entityCapabilities, flavor } = await inspectSapServiceMetadata(prefix, tenant, svc);
+    return {
+      ...base,
+      exposed: true,
+      status: 200,
+      entitySetCount: entitySets.length,
+      entities: entityCapabilities,
+      ladder: deriveCapabilityLadder(true, entityCapabilities),
+      metadataFlavor: flavor,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : "probe failed";
     const status = Number(message.match(/HTTP (\d{3})/)?.[1] ?? 0);
-    return { ...base, exposed: false, status, error: message };
+    return { ...base, exposed: false, status, ladder: "unreachable", error: message };
   }
 }
 

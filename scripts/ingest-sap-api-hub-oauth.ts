@@ -56,6 +56,7 @@
  */
 
 import { PrismaClient, type Prisma } from "@prisma/client";
+import { S4_PUBLIC_PUBLISHED_COUNTS } from "../src/lib/sap-public/hub-content";
 
 const prisma = new PrismaClient();
 
@@ -302,21 +303,26 @@ async function* paginateDiscovery(): AsyncGenerator<ApiHubEntry, void, void> {
 }
 
 // =====================================================================
-// Path C extension — ALL Business Accelerator Hub content types → SapHubContent
+// Path C extension — SPECULATIVE / UNVERIFIED (do NOT treat as available)
 // =====================================================================
-// Additive to the API-only pass above (which populates SapApiReference and is
-// untouched). This pulls every content type into the new SapHubContent table
-// via the API-Hub content API using OAuth2 client_credentials from a BTP
-// API-Hub service instance. Runnable only when configured; default no-op.
+// A scaffold for a hypothetical "bulk-export the Business Accelerator Hub
+// catalogue over OAuth" API, writing every content type into SapHubContent.
+// Additive to the API-only pass above (SapApiReference, untouched).
 //
-// Enable:  SAP_API_HUB_INGEST_CONTENT=1  plus the OAuth env below.
-//   SAP_API_HUB_TOKEN_URL      OAuth token endpoint (BTP service instance)
-//   SAP_API_HUB_CLIENT_ID
-//   SAP_API_HUB_CLIENT_SECRET
+// WARNING — there is NO known sanctioned SAP service that bulk-exports the
+// public api.sap.com content catalogue over OAuth. A BTP "apiportal/apiaccess"
+// instance is SAP Integration Suite — API Management (runtime proxying of YOUR
+// APIs), not a catalogue download. The paths + field names below are GUESSES
+// based on general OData patterns and have never been run against a real
+// endpoint. The SUPPORTED population path is the manual per-type export →
+// sap:hub:import (see docs/runbooks/sap-hub-content-ingest.md).
 //
-// VERIFY: the per-type discovery paths + response field names are documented
-// patterns, unverified against the live content API. Adjust the `path` values
-// and the field mapping in `mapContentEntry` once a real response is available.
+// Kept only as a placeholder should SAP ever publish such an API. If a real
+// endpoint is identified, resolve every `// VERIFY:` marker against its live
+// response first.
+//
+// Gated:  SAP_API_HUB_INGEST_CONTENT=1  plus the OAuth env below.
+//   SAP_API_HUB_TOKEN_URL / SAP_API_HUB_CLIENT_ID / SAP_API_HUB_CLIENT_SECRET
 
 const HUB_CONTENT_INGEST = process.env.SAP_API_HUB_INGEST_CONTENT === "1";
 
@@ -394,6 +400,10 @@ function mapContentEntry(type: string, e: Record<string, unknown>): {
 
 async function ingestAllHubContent(token: string): Promise<void> {
   console.log(`\n[sap-api-hub] Path C — ingesting ALL content types → SapHubContent`);
+  console.log(`[sap-api-hub] Scope: S/4HANA Cloud PUBLIC edition, released content only.`);
+  console.log(`[sap-api-hub] NOTE: the per-type paths + field names below are documented`);
+  console.log(`[sap-api-hub] SAP patterns and have NOT been verified against the live content`);
+  console.log(`[sap-api-hub] API. Confirm the '// VERIFY:' constants on this first run.\n`);
   const authFetch = (url: string) =>
     fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "User-Agent": USER_AGENT } });
 
@@ -426,7 +436,9 @@ async function ingestAllHubContent(token: string): Promise<void> {
       if (nextUrl && nextUrl.startsWith("/")) nextUrl = `${BASE_URL}${nextUrl}`;
       await sleep(DELAY_MS);
     }
-    console.log(`  ${type.padEnd(18)} ${count}`);
+    const expected = S4_PUBLIC_PUBLISHED_COUNTS[type as keyof typeof S4_PUBLIC_PUBLISHED_COUNTS] ?? 0;
+    const drift = expected > 0 ? ` (published ~${expected})` : "";
+    console.log(`  ${type.padEnd(18)} ${String(count).padStart(6)}${drift}`);
   }
 }
 
