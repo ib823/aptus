@@ -381,6 +381,68 @@ model SapApiReference {
   @@index([appliesToOnPrem])
 }
 
+/// Every content type SAP publishes on the Business Accelerator Hub for a
+/// product edition — APIs, events, CDS views, extension points, integrations,
+/// automations, process blueprints, partner use cases, analytics. Additive to
+/// SapApiReference (which the classifier depends on and stays untouched); an
+/// API may appear in both. Idempotent upsert by (contentType, externalId).
+enum SapHubContentType {
+  API // OData v2/v4 + SOAP — runtime, pull/write data
+  EVENT // CloudEvents — runtime, subscribe
+  CDS_VIEW // released VDM views — runtime via OData
+  BADI // on-stack extension point — reference
+  BO_INTERFACE // business object interface — reference
+  INTEGRATION // prebuilt iFlow (Integration Suite) — reference
+  BUILD // automation/app (SAP Build) — reference
+  PROCESS_BLUEPRINT // Live Process content — reference
+  LIVEPROCESS // Live Process variant — reference
+  SCENARIO // standard end-to-end process scenario — reference
+  VPUC // validated partner use case — reference
+  ANALYTICS // prebuilt SAC design — reference
+}
+
+model SapHubContent {
+  id          String            @id @default(cuid())
+  contentType SapHubContentType
+  externalId  String // SAP's id for the item (or a synthetic group id)
+  title       String
+  description String            @db.Text
+
+  /// Owning Hub package / line-of-business (e.g. "Sales", "Finance").
+  packageId String?
+
+  /// Edition applicability — this catalogue is scoped to S/4 Public, but the
+  /// flags are kept for parity with SapApiReference and future editions.
+  appliesToPublic  Boolean @default(true)
+  appliesToPrivate Boolean @default(false)
+  appliesToOnPrem  Boolean @default(false)
+
+  /// SAP publish lifecycle ("Released" | "Active" | …). NOT the runtime badge
+  /// (ACTIVATED/AVAILABLE/REFERENCE) — that is resolved live at request time.
+  status String
+
+  /// For API/CDS runtime items: "ODATAV2" | "ODATAV4" | "SOAP" | "CDS". Null
+  /// for reference content and grouped rows.
+  apiType String?
+
+  communicationScenarios String[] @default([])
+
+  /// For grouped rows (CDS views per LoB package, the BAdI group): how many
+  /// underlying items the row represents. Null for a single concrete item.
+  itemCount Int?
+
+  hubUrl          String // canonical link back to api.sap.com
+  rawMetadataJson Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([contentType, externalId])
+  @@index([contentType])
+  @@index([appliesToPublic])
+  @@index([status])
+}
+
 model ScopeItem {
   // Phase 13.1 — AD-13.1: id is now a cuid; the bare SAP code lives in scopeCode.
   // Composite uniqueness on (scopeCode, catalogVersionId) lets J60 exist in
