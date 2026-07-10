@@ -112,6 +112,15 @@ BEGIN
     RAISE EXCEPTION 'Post-migration: SapApiReference should be empty (ingest not yet run), found % rows', api_count;
   END IF;
 
+  -- Fresh-provision guard: the structural asserts above always run (they verify
+  -- this migration's own DDL), but the Bursa/ScopeItem baseline regression
+  -- asserts below only apply when that fixture exists. On an empty DB, skip
+  -- them — the end schema is identical either way.
+  IF (SELECT COUNT(*) FROM "ClientRequirement") = 0 THEN
+    RAISE NOTICE 'Fresh/empty DB — SapApiReference created; skipping Bursa/ScopeItem baseline asserts';
+    RETURN;
+  END IF;
+
   -- Bursa baseline must be unchanged
   SELECT COUNT(*) INTO bursa_req_count
     FROM "ClientRequirement" WHERE "assessmentId" = 'cmofk3zql000163ubn43nkhqy';

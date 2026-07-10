@@ -67,12 +67,14 @@ const DRY_RUN = process.env.IMPORT_DRY_RUN === "1";
 const VERBOSE = process.env.IMPORT_VERBOSE === "1";
 
 // ── Type for normalized rows ────────────────────────────────────────────────
-interface NormalizedApi {
+export interface NormalizedApi {
   apiId: string;
   apiName: string;
   description: string;
   status: string;
   category: string | null;
+  /** Protocol/type declared by the file (ODATAV2/ODATAV4/REST/SOAP/EVENT), or null. */
+  apiType: string | null;
   productTags: string[]; // raw product / category strings for edition mapping
   scopeItemCodes: string[];
   communicationScenarios: string[];
@@ -184,7 +186,7 @@ function classifyOneTag(t: string): {
   return { isPublic, isPrivate, isOnPrem };
 }
 
-function mapEditionFromProductTags(tags: string[]): {
+export function mapEditionFromProductTags(tags: string[]): {
   appliesToPublic: boolean;
   appliesToPrivate: boolean;
   appliesToOnPrem: boolean;
@@ -203,12 +205,28 @@ function mapEditionFromProductTags(tags: string[]): {
   return { appliesToPublic, appliesToPrivate, appliesToOnPrem };
 }
 
-function normalizeStatus(raw: string): string {
+export function normalizeStatus(raw: string): string {
   const lower = raw.toLowerCase();
   if (lower.includes("released")) return "Released";
   if (lower.includes("beta")) return "Beta";
   if (lower.includes("deprecat")) return "Deprecated";
   return raw || "Unknown";
+}
+
+// The protocol/type the file already declares for the API. We keep the
+// canonical SAP tokens the rest of the pipeline filters on (ODATAV2 /
+// ODATAV4 / REST / SOAP / EVENT). Returns null when the file says nothing —
+// scripts/ingest/refresh-api-types.ts then fills only those NULLs, so a
+// value the file provides is never clobbered.
+export function normalizeApiType(raw: string): string | null {
+  const compact = raw.toLowerCase().replace(/[\s_\-.]/g, "");
+  if (!compact) return null;
+  if (compact.includes("odatav4") || compact.includes("odata4")) return "ODATAV4";
+  if (compact.includes("odatav2") || compact.includes("odata2") || compact === "odata") return "ODATAV2";
+  if (compact.includes("soap") || compact.includes("wsdl")) return "SOAP";
+  if (compact.includes("rest") || compact.includes("openapi")) return "REST";
+  if (compact.includes("event") || compact.includes("amqp") || compact.includes("kafka")) return "EVENT";
+  return raw.trim().toUpperCase();
 }
 
 // ── CSV parser (RFC 4180-compliant, no external deps) ────────────────────────
@@ -264,7 +282,7 @@ function parseCsv(text: string): Array<Record<string, string>> {
 }
 
 // ── JSON parser (handles array, OData v2, OData v4) ─────────────────────────
-function parseJson(text: string): Array<Record<string, unknown>> {
+export function parseJson(text: string): Array<Record<string, unknown>> {
   const parsed = JSON.parse(text);
   if (Array.isArray(parsed)) return parsed as Array<Record<string, unknown>>;
   if (parsed && typeof parsed === "object") {
@@ -279,7 +297,9 @@ function parseJson(text: string): Array<Record<string, unknown>> {
 }
 
 // ── Normalize one parsed row ────────────────────────────────────────────────
-function normalizeRow(row: Record<string, unknown>): NormalizedApi | null {
+// Exported (with the pure mappers above) so tests can exercise the field
+// mapping without touching prisma or the filesystem.
+export function normalizeRow(row: Record<string, unknown>): NormalizedApi | null {
   const apiIdRaw = pickField(row, "apiId", "Id", "ID", "Name", "API_ID", "API ID", "id");
   if (!apiIdRaw) return null;
   const apiId = asString(apiIdRaw).trim();
@@ -288,6 +308,7 @@ function normalizeRow(row: Record<string, unknown>): NormalizedApi | null {
   const apiName = asString(pickField(row, "apiName", "title", "Title", "API Name", "name", "label"));
   const description = asString(pickField(row, "description", "Description", "shortText", "summary"));
   const statusRaw = asString(pickField(row, "status", "ReleaseStatus", "Release Status", "state", "lifecycle"));
+  const apiType = normalizeApiType(asString(pickField(row, "apiType", "APIType", "type", "protocol", "apiProtocol")));
   const category = asString(pickField(row, "category", "Category", "businessArea", "Business Area"));
   const product1 = asString(pickField(row, "productCategory", "ProductCategory", "Product Category"));
   const product2 = asString(pickField(row, "productLine", "ProductLine", "Product Line"));
@@ -308,6 +329,7 @@ function normalizeRow(row: Record<string, unknown>): NormalizedApi | null {
     apiName: apiName || apiId,
     description,
     status: normalizeStatus(statusRaw),
+    apiType,
     category: category || null,
     productTags,
     scopeItemCodes,
@@ -377,6 +399,9 @@ async function main(): Promise<void> {
       appliesToPublic: editions.appliesToPublic,
       appliesToPrivate: editions.appliesToPrivate,
       appliesToOnPrem: editions.appliesToOnPrem,
+      // Only write apiType when the file declares one. Omitting it on re-import
+      // preserves any value scripts/ingest/refresh-api-types.ts backfilled.
+      ...(norm.apiType ? { apiType: norm.apiType } : {}),
       scopeItemCodes: norm.scopeItemCodes,
       communicationScenarios: norm.communicationScenarios,
       apiHubUrl: norm.apiHubUrl,
@@ -430,7 +455,9 @@ async function main(): Promise<void> {
   await prisma.$disconnect();
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

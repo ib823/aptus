@@ -31,8 +31,22 @@ CREATE INDEX IF NOT EXISTS "Assessment_catalogVersionId_idx"
 
 -- 4. Assessment.brownfieldCatalogVersionId — same as #3 for hybrid
 --    (greenfield + brownfield) engagements.
-CREATE INDEX IF NOT EXISTS "Assessment_brownfieldCatalogVersionId_idx"
-  ON "Assessment"("brownfieldCatalogVersionId");
+-- Existence-guarded: the Brownfield subsystem (Phase 14) reached environments
+-- via `db push` and is not yet captured by any migration, so on a fresh
+-- `migrate deploy` this column/table may not exist yet. Create the index only
+-- when the target exists; on a db-push'd/populated DB it exists and is indexed.
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'Assessment'
+      AND column_name = 'brownfieldCatalogVersionId'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS "Assessment_brownfieldCatalogVersionId_idx"
+      ON "Assessment"("brownfieldCatalogVersionId");
+  ELSE
+    RAISE NOTICE 'Skipping Assessment_brownfieldCatalogVersionId_idx — column not present (Brownfield subsystem not yet migrated)';
+  END IF;
+END $$;
 
 -- 5. EditingLock.lockedById — joined to User to display the lock owner's
 --    name in the collaborative editing UI.
@@ -40,11 +54,23 @@ CREATE INDEX IF NOT EXISTS "EditingLock_lockedById_idx"
   ON "EditingLock"("lockedById");
 
 -- 6. BrownfieldClassificationPass.protocolVersionId — same join pattern as
---    #1 on the brownfield pathway.
-CREATE INDEX IF NOT EXISTS "BrownfieldClassificationPass_protocolVersionId_idx"
-  ON "BrownfieldClassificationPass"("protocolVersionId");
+--    #1 on the brownfield pathway. Existence-guarded (see #4).
+DO $$ BEGIN
+  IF to_regclass('"BrownfieldClassificationPass"') IS NOT NULL THEN
+    CREATE INDEX IF NOT EXISTS "BrownfieldClassificationPass_protocolVersionId_idx"
+      ON "BrownfieldClassificationPass"("protocolVersionId");
+  ELSE
+    RAISE NOTICE 'Skipping BrownfieldClassificationPass index — table not present (Brownfield subsystem not yet migrated)';
+  END IF;
+END $$;
 
 -- 7. BrownfieldVerdict.protocolVersionId — same join pattern as #2 on the
---    brownfield pathway.
-CREATE INDEX IF NOT EXISTS "BrownfieldVerdict_protocolVersionId_idx"
-  ON "BrownfieldVerdict"("protocolVersionId");
+--    brownfield pathway. Existence-guarded (see #4).
+DO $$ BEGIN
+  IF to_regclass('"BrownfieldVerdict"') IS NOT NULL THEN
+    CREATE INDEX IF NOT EXISTS "BrownfieldVerdict_protocolVersionId_idx"
+      ON "BrownfieldVerdict"("protocolVersionId");
+  ELSE
+    RAISE NOTICE 'Skipping BrownfieldVerdict index — table not present (Brownfield subsystem not yet migrated)';
+  END IF;
+END $$;
