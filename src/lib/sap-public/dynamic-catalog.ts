@@ -81,3 +81,30 @@ export async function getDynamicOdataServices(
   }
   return services;
 }
+
+/**
+ * Build the probe target list: the curated services first (the ones we've wired
+ * up and expect the tenant to have activated — e.g. the S/4HANA procurement/
+ * finance set), then the dynamic-catalogue services not already present,
+ * deduped by OData path. Capped to `limit` so the probe stays bounded.
+ *
+ * Curated-first matters: the dynamic catalogue is ordered by apiId, so a naive
+ * take(60) samples only the alphabetical head (API_A…/B…) and can miss the
+ * handful of services a demo/TDD tenant actually activated. Seeding the probe
+ * with the curated set guarantees those are always tested.
+ */
+export function mergeProbeTargets(
+  curated: SapServiceDefinition[],
+  dynamic: SapServiceDefinition[],
+  limit = 60,
+): SapServiceDefinition[] {
+  const seen = new Set<string>();
+  const merged: SapServiceDefinition[] = [];
+  for (const svc of [...curated, ...dynamic]) {
+    if (!svc.path || seen.has(svc.path)) continue;
+    seen.add(svc.path);
+    merged.push(svc);
+    if (merged.length >= limit) break;
+  }
+  return merged;
+}

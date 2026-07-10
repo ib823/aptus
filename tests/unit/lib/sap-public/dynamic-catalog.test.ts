@@ -8,7 +8,7 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: { sapApiReference: { findMany: mocks.findMany } },
 }));
 
-import { getDynamicOdataServices } from "@/lib/sap-public/dynamic-catalog";
+import { getDynamicOdataServices, mergeProbeTargets } from "@/lib/sap-public/dynamic-catalog";
 
 function row(over: Partial<Record<string, unknown>> = {}) {
   return {
@@ -72,5 +72,31 @@ describe("getDynamicOdataServices", () => {
     mocks.findMany.mockResolvedValue([row({ apiType: "ODATAV4" })]);
     const services = await getDynamicOdataServices({ edition: "PUBLIC", includeV4: false });
     expect(services).toHaveLength(0);
+  });
+});
+
+describe("mergeProbeTargets", () => {
+  const svc = (key: string, path: string) => ({ key, label: key, scenario: "", path, domain: "" });
+
+  it("puts curated services first, then dynamic ones", () => {
+    const curated = [svc("po", "/a"), svc("inv", "/b")];
+    const dynamic = [svc("x", "/c"), svc("y", "/d")];
+    const merged = mergeProbeTargets(curated, dynamic, 60);
+    expect(merged.map((s) => s.path)).toEqual(["/a", "/b", "/c", "/d"]);
+  });
+
+  it("dedupes by OData path (curated wins over a dynamic duplicate)", () => {
+    const curated = [svc("po", "/a")];
+    const dynamic = [svc("po-dup", "/a"), svc("y", "/d")];
+    const merged = mergeProbeTargets(curated, dynamic, 60);
+    expect(merged.map((s) => s.key)).toEqual(["po", "y"]); // "/a" kept once, curated key
+  });
+
+  it("caps at the limit but always keeps curated (they are first)", () => {
+    const curated = [svc("po", "/a"), svc("inv", "/b")];
+    const dynamic = Array.from({ length: 100 }, (_, i) => svc(`d${i}`, `/d${i}`));
+    const merged = mergeProbeTargets(curated, dynamic, 3);
+    expect(merged).toHaveLength(3);
+    expect(merged.slice(0, 2).map((s) => s.path)).toEqual(["/a", "/b"]);
   });
 });
