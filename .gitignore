@@ -70,8 +70,11 @@ playwright-visual-report/
 playwright-visual-app-report/
 test-results/
 
-# Phase 13.6 — user-supplied SAP API Hub export
-/sap-references/
+# Phase 13.6 — user-supplied SAP API Hub export (ignore contents, not the dir,
+# so the illustrative demo seed below can be re-included).
+/sap-references/*
+# …but ship the illustrative demo seed for the Capability Catalogue
+!/sap-references/hub-content-seed.json
 /api-hub-catalog.json
 .vercel-token
 .claude/
