@@ -301,6 +301,135 @@ async function* paginateDiscovery(): AsyncGenerator<ApiHubEntry, void, void> {
   }
 }
 
+// =====================================================================
+// Path C extension — ALL Business Accelerator Hub content types → SapHubContent
+// =====================================================================
+// Additive to the API-only pass above (which populates SapApiReference and is
+// untouched). This pulls every content type into the new SapHubContent table
+// via the API-Hub content API using OAuth2 client_credentials from a BTP
+// API-Hub service instance. Runnable only when configured; default no-op.
+//
+// Enable:  SAP_API_HUB_INGEST_CONTENT=1  plus the OAuth env below.
+//   SAP_API_HUB_TOKEN_URL      OAuth token endpoint (BTP service instance)
+//   SAP_API_HUB_CLIENT_ID
+//   SAP_API_HUB_CLIENT_SECRET
+//
+// VERIFY: the per-type discovery paths + response field names are documented
+// patterns, unverified against the live content API. Adjust the `path` values
+// and the field mapping in `mapContentEntry` once a real response is available.
+
+const HUB_CONTENT_INGEST = process.env.SAP_API_HUB_INGEST_CONTENT === "1";
+
+// Our enum value → the hub's content-API collection path (VERIFY paths).
+const CONTENT_TYPE_PATHS: Array<{ type: string; path: string }> = [
+  { type: "API", path: "/api-business-hub/odata/v1/APIs" },
+  { type: "EVENT", path: "/api-business-hub/odata/v1/Events" },
+  { type: "CDS_VIEW", path: "/api-business-hub/odata/v1/CDSViews" },
+  { type: "BADI", path: "/api-business-hub/odata/v1/BAdIs" },
+  { type: "BO_INTERFACE", path: "/api-business-hub/odata/v1/BusinessObjectInterfaces" },
+  { type: "INTEGRATION", path: "/api-business-hub/odata/v1/IntegrationFlows" },
+  { type: "BUILD", path: "/api-business-hub/odata/v1/BuildContent" },
+  { type: "PROCESS_BLUEPRINT", path: "/api-business-hub/odata/v1/ProcessBlueprints" },
+  { type: "LIVEPROCESS", path: "/api-business-hub/odata/v1/LiveProcesses" },
+  { type: "SCENARIO", path: "/api-business-hub/odata/v1/Scenarios" },
+  { type: "VPUC", path: "/api-business-hub/odata/v1/PartnerUseCases" },
+  { type: "ANALYTICS", path: "/api-business-hub/odata/v1/AnalyticsContent" },
+];
+
+/** OAuth2 client_credentials token from the BTP API-Hub service instance. */
+async function fetchHubOAuthToken(): Promise<string> {
+  const tokenUrl = process.env.SAP_API_HUB_TOKEN_URL;
+  const clientId = process.env.SAP_API_HUB_CLIENT_ID;
+  const clientSecret = process.env.SAP_API_HUB_CLIENT_SECRET;
+  if (!tokenUrl || !clientId || !clientSecret) {
+    throw new Error("Path C content ingest needs SAP_API_HUB_TOKEN_URL + CLIENT_ID + CLIENT_SECRET");
+  }
+  const res = await fetch(tokenUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
+    body: new URLSearchParams({ grant_type: "client_credentials" }),
+  });
+  const json = (await res.json()) as { access_token?: unknown };
+  if (!res.ok || typeof json.access_token !== "string") {
+    throw new Error(`OAuth token request failed: HTTP ${res.status}`);
+  }
+  return json.access_token;
+}
+
+// VERIFY: field names per content type. Tolerant to missing optional fields.
+function mapContentEntry(type: string, e: Record<string, unknown>): {
+  externalId: string;
+  title: string;
+  description: string;
+  packageId: string | null;
+  status: string;
+  apiType: string | null;
+  communicationScenarios: string[];
+  itemCount: number | null;
+  hubUrl: string;
+} | null {
+  const s = (v: unknown): string => (v == null ? "" : String(v));
+  const externalId = s(e.Id ?? e.ID ?? e.Name ?? e.ApiId ?? e.EntityId).trim();
+  if (!externalId) return null;
+  const arr = Array.isArray(e.CommunicationScenarios)
+    ? e.CommunicationScenarios.filter((x): x is string => typeof x === "string")
+    : [];
+  const count = Number(e.Count ?? e.ItemCount);
+  return {
+    externalId,
+    title: s(e.Title ?? e.Name ?? externalId),
+    description: s(e.Description ?? e.ShortText),
+    packageId: s(e.PackageId ?? e.LineOfBusiness ?? e.Category) || null,
+    status: s(e.ReleaseStatus ?? e.Status) || "Released",
+    apiType: type === "API" || type === "CDS_VIEW" ? s(e.ApiType ?? e.Protocol) || null : null,
+    communicationScenarios: arr,
+    itemCount: Number.isFinite(count) && count > 0 ? Math.trunc(count) : null,
+    hubUrl: s(e.Url ?? e.Link) || `${BASE_URL}/content/${encodeURIComponent(externalId)}`,
+  };
+}
+
+async function ingestAllHubContent(token: string): Promise<void> {
+  console.log(`\n[sap-api-hub] Path C — ingesting ALL content types → SapHubContent`);
+  const authFetch = (url: string) =>
+    fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "User-Agent": USER_AGENT } });
+
+  for (const { type, path } of CONTENT_TYPE_PATHS) {
+    let nextUrl: string | null = `${BASE_URL}${path}?$top=200&$format=json`;
+    let count = 0;
+    while (nextUrl) {
+      const res = await authFetch(nextUrl);
+      if (!res.ok) {
+        console.warn(`  ${type}: HTTP ${res.status} — skipping (VERIFY path ${path})`);
+        break;
+      }
+      const json = (await res.json()) as ApiHubDiscoveryResponse & { value?: Array<Record<string, unknown>> };
+      const rows = (json.d?.results ?? json.value ?? []) as Array<Record<string, unknown>>;
+      for (const e of rows) {
+        const m = mapContentEntry(type, e);
+        if (!m) continue;
+        if (!DRY_RUN) {
+          await prisma.sapHubContent.upsert({
+            where: { contentType_externalId: { contentType: type as never, externalId: m.externalId } },
+            create: { contentType: type as never, appliesToPublic: true, rawMetadataJson: e as Prisma.InputJsonValue, ...m },
+            update: { rawMetadataJson: e as Prisma.InputJsonValue, ...m },
+          });
+        }
+        count++;
+      }
+      const v2 = json.d?.__next;
+      const v4 = json["@odata.nextLink"];
+      nextUrl = v4 ?? v2 ?? null;
+      if (nextUrl && nextUrl.startsWith("/")) nextUrl = `${BASE_URL}${nextUrl}`;
+      await sleep(DELAY_MS);
+    }
+    console.log(`  ${type.padEnd(18)} ${count}`);
+  }
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 async function main(): Promise<void> {
   console.log(`[sap-api-hub] BASE_URL=${BASE_URL}`);
@@ -403,6 +532,12 @@ async function main(): Promise<void> {
   console.log(`    appliesToPrivate: ${privateCount}`);
   console.log(`    appliesToOnPrem:  ${onPremCount}`);
   console.log(`    Both Pub+Priv:    ${bothEditions}`);
+
+  // Path C extension — pull ALL content types into SapHubContent (opt-in).
+  if (HUB_CONTENT_INGEST) {
+    const token = await fetchHubOAuthToken();
+    await ingestAllHubContent(token);
+  }
 
   await prisma.$disconnect();
 }
