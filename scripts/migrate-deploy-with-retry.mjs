@@ -39,6 +39,15 @@ const COLD_START_PATTERNS = [
 // and which are safe to auto-mark as rolled-back. The corrected migration
 // MUST be idempotent against either schema state (already-applied or fresh).
 // Once main is unstuck, entries here become dead code and can be pruned.
+//
+// NOTE: this entry is INDEPENDENT of the fresh-DB empty-invariant fix applied
+// to the phase13.* migrations. It targets a different failure mode — a P3009
+// (failed migration row left in _prisma_migrations) recovery for a corrected
+// session-token migration, typically after a Neon cold-start partial apply.
+// The empty-DB assert bug never produced a P3009 on the deploy path, so this
+// band-aid neither caused nor is resolved by that fix. It is retained
+// deliberately (removing it isn't proven safe against the Neon scenario it
+// guards); prune only once that recovery path is confirmed dead in prod.
 const KNOWN_AUTO_RECOVERABLE = new Set([
   "20260516220000_session_token_hashing",
 ]);

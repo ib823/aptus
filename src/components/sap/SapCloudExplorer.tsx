@@ -16,6 +16,7 @@ import { PlugZap } from "lucide-react";
 import { SapOperationsDashboard } from "./SapOperationsDashboard";
 import { SapWriteBackPanel } from "./SapWriteBackPanel";
 import { SapTenantExplorer } from "./SapTenantExplorer";
+import { SapCapabilityPanel } from "./SapCapabilityPanel";
 import { SapAribaExplorer } from "./SapAribaExplorer";
 
 interface ProductInfo {
@@ -98,6 +99,9 @@ export function SapCloudExplorer() {
       ) : (
         <>
           <SapOperationsDashboard product={product} />
+          <div className="border-t pt-6">
+            <SapCapabilityPanel product={product} />
+          </div>
           <SapWriteBackPanel product={product} />
           <div className="border-t pt-6">
             <div className="mb-4">
