@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  inspectSapService: vi.fn(),
+  inspectSapServiceMetadata: vi.fn(),
 }));
 
 vi.mock("@/lib/sap-public/tdd-connector", () => ({
-  inspectSapService: mocks.inspectSapService,
+  inspectSapServiceMetadata: mocks.inspectSapServiceMetadata,
 }));
 
 import {
@@ -27,26 +27,30 @@ beforeEach(() => vi.clearAllMocks());
 
 describe("probeService", () => {
   it("200 with metadata → exposed, with entity-set count", async () => {
-    mocks.inspectSapService.mockResolvedValue({ entitySets: [{ name: "A" }, { name: "B" }] });
+    mocks.inspectSapServiceMetadata.mockResolvedValue({
+      entitySets: [{ name: "A" }, { name: "B" }],
+      entityCapabilities: [{ name: "A", readable: true, creatable: true, updatable: true, deletable: false, pageable: true }],
+      flavor: "v2",
+    });
     const r = await probeService("S4_TDD", TENANT, SVC);
-    expect(r).toMatchObject({ exposed: true, status: 200, entitySetCount: 2, scenario: "SAP_COM_0057" });
+    expect(r).toMatchObject({ exposed: true, status: 200, entitySetCount: 2, scenario: "SAP_COM_0057", ladder: "writable", metadataFlavor: "v2" });
   });
 
   it("403 → not activated (surfaced status, not an error throw)", async () => {
-    mocks.inspectSapService.mockRejectedValue(new Error("Metadata request failed: HTTP 403"));
+    mocks.inspectSapServiceMetadata.mockRejectedValue(new Error("Metadata request failed: HTTP 403"));
     const r = await probeService("S4_TDD", TENANT, SVC);
     expect(r.exposed).toBe(false);
     expect(r.status).toBe(403);
   });
 
   it("404 → not activated", async () => {
-    mocks.inspectSapService.mockRejectedValue(new Error("Metadata request failed: HTTP 404"));
+    mocks.inspectSapServiceMetadata.mockRejectedValue(new Error("Metadata request failed: HTTP 404"));
     const r = await probeService("S4_TDD", TENANT, SVC);
     expect(r).toMatchObject({ exposed: false, status: 404 });
   });
 
   it("a non-HTTP error (timeout) → status 0, never throws", async () => {
-    mocks.inspectSapService.mockRejectedValue(new Error("SAP request timed out after 30000ms"));
+    mocks.inspectSapServiceMetadata.mockRejectedValue(new Error("SAP request timed out after 30000ms"));
     const r = await probeService("S4_TDD", TENANT, SVC);
     expect(r.exposed).toBe(false);
     expect(r.status).toBe(0);
@@ -54,7 +58,7 @@ describe("probeService", () => {
   });
 
   it("a non-Error rejection → status 0 with a fallback message", async () => {
-    mocks.inspectSapService.mockRejectedValue("boom");
+    mocks.inspectSapServiceMetadata.mockRejectedValue("boom");
     const r = await probeService("S4_TDD", TENANT, SVC);
     expect(r.status).toBe(0);
     expect(r.error).toBe("probe failed");
@@ -63,11 +67,11 @@ describe("probeService", () => {
 
 describe("probeTenantCapabilities", () => {
   it("probes every service and preserves order", async () => {
-    mocks.inspectSapService.mockResolvedValue({ entitySets: [] });
+    mocks.inspectSapServiceMetadata.mockResolvedValue({ entitySets: [], entityCapabilities: [], flavor: "v2" });
     const services = Array.from({ length: 5 }, (_, i) => ({ ...SVC, key: `svc-${i}` }));
     const rows = await probeTenantCapabilities("S4_TDD", TENANT, services, 2);
     expect(rows.map((r) => r.service)).toEqual(["svc-0", "svc-1", "svc-2", "svc-3", "svc-4"]);
-    expect(mocks.inspectSapService).toHaveBeenCalledTimes(5);
+    expect(mocks.inspectSapServiceMetadata).toHaveBeenCalledTimes(5);
   });
 });
 
