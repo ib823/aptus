@@ -13,7 +13,7 @@ import {
   getSapTenant,
   isSapTddPublicAccessEnabled,
 } from "@/lib/sap-public/tdd-connector";
-import { getDynamicOdataServices } from "@/lib/sap-public/dynamic-catalog";
+import { getDynamicOdataServices, mergeProbeTargets } from "@/lib/sap-public/dynamic-catalog";
 import { probeTenantCapabilities, summarize } from "@/lib/sap-public/capability-probe";
 import { auditCapabilityProbe } from "@/lib/sap-public/capability-audit";
 import { ERROR_CODES } from "@/types/api";
@@ -46,18 +46,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const services = await getDynamicOdataServices({ edition: "PUBLIC", limit: 60 });
+  // Probe the curated (known-configured) services first — the ones this product
+  // has wired up and the tenant is most likely to have activated — then top up
+  // from the dynamic catalogue. Without curated-first, a naive alphabetical
+  // take(60) samples only the API_A…/B… head and misses the activated services.
+  const dynamic = await getDynamicOdataServices({ edition: "PUBLIC", limit: 60 });
+  const services = mergeProbeTargets(product.services, dynamic, 60);
   if (services.length === 0) {
     return NextResponse.json({
       data: {
-        note: "SapApiReference is empty — import the catalogue first (drop the api.sap.com export at sap-references/api-hub-catalog.json and run `pnpm sap:catalog:import`).",
+        note: "No probeable OData services — import the catalogue (drop the api.sap.com export at sap-references/api-hub-catalog.json and run `pnpm sap:catalog:import`).",
         summary: null,
       },
     });
   }
 
   const rows = await probeTenantCapabilities(product.envPrefix, tenant, services);
-  const summary = summarize(tenant.label, rows);
+  const summary = { ...summarize(tenant.label, rows), catalogueImported: dynamic.length > 0 };
 
   // Append-only audit of the probe (tenant label + counts, never secrets).
   // Best-effort — a failed audit write must not break the read response.

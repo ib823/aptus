@@ -30,6 +30,8 @@ export interface CapabilitySummary {
   published: number;
   exposed: number;
   notActivated: number;
+  /** Count of rows per HTTP status (e.g. { "200": 3, "403": 40, "401": 0 }). */
+  byStatus: Record<string, number>;
   rows: CapabilityResult[];
 }
 
@@ -75,5 +77,10 @@ export async function probeTenantCapabilities(
 
 export function summarize(tenant: string, rows: CapabilityResult[]): CapabilitySummary {
   const exposed = rows.filter((r) => r.exposed).length;
-  return { tenant, published: rows.length, exposed, notActivated: rows.length - exposed, rows };
+  const byStatus: Record<string, number> = {};
+  for (const r of rows) {
+    const key = String(r.status);
+    byStatus[key] = (byStatus[key] ?? 0) + 1;
+  }
+  return { tenant, published: rows.length, exposed, notActivated: rows.length - exposed, byStatus, rows };
 }

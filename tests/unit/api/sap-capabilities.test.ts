@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as DynamicCatalogModule from "@/lib/sap-public/dynamic-catalog";
 
 const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
@@ -19,7 +20,9 @@ vi.mock("@/lib/sap-public/tdd-connector", () => ({
   getConfiguredSapTenants: mocks.getConfiguredSapTenants,
   getSapTenant: mocks.getSapTenant,
 }));
-vi.mock("@/lib/sap-public/dynamic-catalog", () => ({
+// Keep the real mergeProbeTargets (pure logic worth exercising); mock only the DB read.
+vi.mock("@/lib/sap-public/dynamic-catalog", async (importActual) => ({
+  ...(await importActual<typeof DynamicCatalogModule>()),
   getDynamicOdataServices: mocks.getDynamicOdataServices,
 }));
 vi.mock("@/lib/sap-public/capability-probe", () => ({
@@ -32,7 +35,8 @@ vi.mock("@/lib/sap-public/capability-audit", () => ({
 
 const { GET } = await import("@/app/api/sap/tdd/capabilities/route");
 
-const PRODUCT = { key: "s4hana", label: "S/4HANA Cloud", envPrefix: "S4_TDD" };
+const CURATED = { key: "po", label: "Purchase Orders", scenario: "SAP_COM_0053", path: "/sap/opu/odata/sap/API_PURCHASEORDER_PROCESS_SRV", domain: "" };
+const PRODUCT = { key: "s4hana", label: "S/4HANA Cloud", envPrefix: "S4_TDD", services: [CURATED] };
 const TENANT = { key: "default", label: "ABeam TDD", baseUrl: "https://x.example" };
 
 function makeRequest(query = "product=s4hana"): Parameters<typeof GET>[0] {
@@ -48,7 +52,7 @@ beforeEach(() => {
   mocks.getSapTenant.mockReturnValue(TENANT);
   mocks.getDynamicOdataServices.mockResolvedValue([{ key: "svc", label: "S", scenario: "", path: "/p", domain: "" }]);
   mocks.probeTenantCapabilities.mockResolvedValue([{ service: "svc", exposed: true, status: 200 }]);
-  mocks.summarize.mockReturnValue({ tenant: "ABeam TDD", published: 1, exposed: 1, notActivated: 0, rows: [] });
+  mocks.summarize.mockReturnValue({ tenant: "ABeam TDD", published: 2, exposed: 1, notActivated: 1, byStatus: { "200": 1, "403": 1 }, rows: [] });
   mocks.auditCapabilityProbe.mockResolvedValue(undefined);
 });
 
@@ -75,7 +79,8 @@ describe("GET /api/sap/tdd/capabilities", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns a note (not a probe) when the catalogue is empty", async () => {
+  it("returns a note only when there are NO probeable services (curated + catalogue both empty)", async () => {
+    mocks.getSapProduct.mockReturnValue({ ...PRODUCT, services: [] });
     mocks.getDynamicOdataServices.mockResolvedValue([]);
     const res = await GET(makeRequest());
     expect(res.status).toBe(200);
@@ -86,12 +91,28 @@ describe("GET /api/sap/tdd/capabilities", () => {
     expect(mocks.auditCapabilityProbe).not.toHaveBeenCalled();
   });
 
-  it("happy path: probes, returns the summary, and writes an audit entry", async () => {
+  it("still probes the curated set (catalogueImported=false) when the catalogue is empty", async () => {
+    mocks.getDynamicOdataServices.mockResolvedValue([]);
     const res = await GET(makeRequest());
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.data).toMatchObject({ tenant: "ABeam TDD", published: 1, exposed: 1 });
+    expect(body.data.catalogueImported).toBe(false);
     expect(mocks.probeTenantCapabilities).toHaveBeenCalledOnce();
+    // Probed the curated service (real mergeProbeTargets was used).
+    const probed = mocks.probeTenantCapabilities.mock.calls[0]![2];
+    expect(probed[0].path).toBe(CURATED.path);
+  });
+
+  it("happy path: probes curated-first, returns the summary, and writes an audit entry", async () => {
+    const res = await GET(makeRequest());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data).toMatchObject({ tenant: "ABeam TDD", exposed: 1, catalogueImported: true });
+    expect(body.data.byStatus).toEqual({ "200": 1, "403": 1 });
+    // Curated service is probed first, then the catalogue top-up.
+    const probed = mocks.probeTenantCapabilities.mock.calls[0]![2];
+    expect(probed[0].path).toBe(CURATED.path);
+    expect(probed.map((s: { path: string }) => s.path)).toContain("/p");
     expect(mocks.auditCapabilityProbe).toHaveBeenCalledOnce();
     const [prod, summary, actor] = mocks.auditCapabilityProbe.mock.calls[0]!;
     expect(prod).toMatchObject({ key: "s4hana" });

@@ -10,35 +10,45 @@
  * Env overrides: PROBE_PREFIX (default S4_TDD), PROBE_LIMIT (default 60).
  */
 import "dotenv/config";
-import { getConfiguredSapTenants } from "../src/lib/sap-public/tdd-connector";
-import { getDynamicOdataServices } from "../src/lib/sap-public/dynamic-catalog";
+import { getConfiguredSapTenants, getSapProduct } from "../src/lib/sap-public/tdd-connector";
+import { getDynamicOdataServices, mergeProbeTargets } from "../src/lib/sap-public/dynamic-catalog";
 import { probeTenantCapabilities, summarize } from "../src/lib/sap-public/capability-probe";
 
 async function main(): Promise<void> {
   const prefix = process.env.PROBE_PREFIX ?? "S4_TDD";
+  const productKey = process.env.PROBE_PRODUCT ?? "s4hana";
   const tenant = getConfiguredSapTenants(prefix)[0];
   if (!tenant) {
     console.error(`No tenant configured for ${prefix}. Set ${prefix}_BASE_URL + auth.`);
     process.exit(1);
   }
 
-  const services = await getDynamicOdataServices({
-    edition: "PUBLIC",
-    limit: Number(process.env.PROBE_LIMIT ?? 60),
-  });
+  const limit = Number(process.env.PROBE_LIMIT ?? 60);
+  const curated = getSapProduct(productKey)?.services ?? [];
+  const dynamic = await getDynamicOdataServices({ edition: "PUBLIC", limit });
+  // Curated (known-configured) services first, then top up from the catalogue.
+  const services = mergeProbeTargets(curated, dynamic, limit);
   if (services.length === 0) {
     console.error(
-      "SapApiReference is empty. Drop s4-public-api-seed.json in sap-references/ and run:\n" +
-        "  pnpm tsx scripts/import-sap-api-catalog.ts",
+      "No probeable OData services. Drop the api.sap.com export at\n" +
+        "  sap-references/api-hub-catalog.json  and run:  pnpm sap:catalog:import",
     );
     process.exit(1);
+  }
+  if (dynamic.length === 0) {
+    console.warn(`(catalogue not imported — probing the ${curated.length} curated services only)\n`);
   }
 
   console.log(`Probing ${services.length} published OData services against "${tenant.label}"…\n`);
   const rows = await probeTenantCapabilities(prefix, tenant, services);
   const s = summarize(tenant.label, rows);
 
-  console.log(`Exposed by tenant: ${s.exposed}/${s.published}  (not activated: ${s.notActivated})\n`);
+  console.log(`Exposed by tenant: ${s.exposed}/${s.published}  (not activated: ${s.notActivated})`);
+  const breakdown = Object.entries(s.byStatus)
+    .sort((a, b) => b[1] - a[1])
+    .map(([status, count]) => `${count}×HTTP${status}`)
+    .join("  ");
+  console.log(`Status breakdown: ${breakdown}\n`);
   for (const r of rows.sort((a, b) => Number(b.exposed) - Number(a.exposed) || a.service.localeCompare(b.service))) {
     const mark = r.exposed ? "✓" : "·";
     const detail = r.exposed ? `${r.entitySetCount} entity sets` : `HTTP ${r.status || "err"}`;
