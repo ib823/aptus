@@ -139,17 +139,16 @@ jobs:
     name: Visual Regression (report mocks)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # TODO(visual-regression-drift): mcr.microsoft.com/playwright:v1.58.2-noble
-    # was rebuilt between 2026-05-10 and 2026-05-16 with slightly different
-    # font / sub-pixel rendering, pushing 14 of the 27 committed baselines
-    # over the 0.5% tolerance. Until a maintainer refreshes the baselines
-    # from inside the current container (pnpm test:visual:update) or pins
-    # the image by SHA digest, this job is non-blocking so unrelated CVE /
-    # security fixes can still land. See CONTRIBUTING.md
+    # The Playwright image is pinned by SHA digest (not just the mutable
+    # v1.58.2-noble tag) so font / sub-pixel rendering is byte-stable across
+    # image rebuilds. The committed baselines were regenerated from exactly
+    # this digest (pnpm test:visual:update). If Microsoft rebuilds the tag,
+    # this job keeps using the pinned image, so it stays deterministic and
+    # blocking. To intentionally move to a newer image: bump the digest AND
+    # refresh baselines in the same commit. See CONTRIBUTING.md
     # "Visual regression — image drift" for the runbook.
-    continue-on-error: true
     container:
-      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
       options: --ipc=host
 
     steps:
