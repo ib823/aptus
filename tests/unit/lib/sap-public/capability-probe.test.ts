@@ -81,4 +81,14 @@ describe("summarize", () => {
     expect(s).toMatchObject({ tenant: "ABeam TDD", published: 3, exposed: 1, notActivated: 2 });
     expect(s.rows).toHaveLength(3);
   });
+
+  it("tallies rows per HTTP status", () => {
+    const s = summarize("T", [
+      { service: "a", label: "", scenario: "", exposed: true, status: 200 },
+      { service: "b", label: "", scenario: "", exposed: false, status: 403 },
+      { service: "c", label: "", scenario: "", exposed: false, status: 403 },
+      { service: "d", label: "", scenario: "", exposed: false, status: 401 },
+    ]);
+    expect(s.byStatus).toEqual({ "200": 1, "403": 2, "401": 1 });
+  });
 });

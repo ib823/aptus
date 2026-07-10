@@ -34,6 +34,7 @@ interface CapabilitySummary {
   published: number;
   exposed: number;
   notActivated: number;
+  byStatus?: Record<string, number>;
   rows: CapabilityRow[];
 }
 
@@ -46,6 +47,8 @@ interface CapabilityResponse {
     published?: number;
     exposed?: number;
     notActivated?: number;
+    byStatus?: Record<string, number>;
+    catalogueImported?: boolean;
     rows?: CapabilityRow[];
   };
   error?: { message?: string };
@@ -59,14 +62,26 @@ function toSummary(data: CapabilityResponse["data"]): CapabilitySummary | null {
       published: data.published ?? 0,
       exposed: data.exposed ?? 0,
       notActivated: data.notActivated ?? 0,
+      ...(data.byStatus ? { byStatus: data.byStatus } : {}),
       rows: data.rows,
     };
   }
   return null;
 }
 
+// Human-readable meaning for the HTTP statuses the probe surfaces.
+function statusMeaning(status: string): string {
+  if (status === "200") return "exposed";
+  if (status === "401") return "auth rejected";
+  if (status === "403") return "not activated (forbidden)";
+  if (status === "404") return "not activated (not found)";
+  if (status === "0") return "no response (timeout/network)";
+  return `HTTP ${status}`;
+}
+
 export function SapCapabilityPanel({ product = "s4hana" }: { product?: string }) {
   const [summary, setSummary] = useState<CapabilitySummary | null>(null);
+  const [catalogueImported, setCatalogueImported] = useState(true);
   const [note, setNote] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +102,7 @@ export function SapCapabilityPanel({ product = "s4hana" }: { product?: string })
         return;
       }
       setSummary(toSummary(json.data));
+      setCatalogueImported(json.data.catalogueImported !== false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load capabilities");
       setSummary(null);
@@ -158,9 +174,45 @@ export function SapCapabilityPanel({ product = "s4hana" }: { product?: string })
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <CheckCircle2 className="size-4 text-primary" />
             <span>
-              {summary.exposed}/{summary.published} published services exposed by this tenant
+              {summary.exposed}/{summary.published} probed services exposed by this tenant
             </span>
           </div>
+
+          {/* Status breakdown — makes the *reason* for not-activated visible
+              (e.g. all-401 = auth problem vs 403/404 = genuinely not activated). */}
+          {summary.byStatus && Object.keys(summary.byStatus).length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-muted-foreground">Breakdown:</span>
+              {Object.entries(summary.byStatus)
+                .sort((a, b) => b[1] - a[1])
+                .map(([status, count]) => (
+                  <span
+                    key={status}
+                    className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5"
+                    title={`HTTP ${status}`}
+                  >
+                    <span className="font-medium">{count}×</span>
+                    <span className="text-muted-foreground">{statusMeaning(status)}</span>
+                  </span>
+                ))}
+            </div>
+          )}
+
+          {!catalogueImported && (
+            <div className="rounded-md border border-dashed bg-card px-3 py-2 text-xs text-muted-foreground">
+              Showing the curated service set only — the full api.sap.com catalogue
+              isn&apos;t imported yet, so the broad sweep didn&apos;t run. Run{" "}
+              <code className="rounded bg-muted px-1 py-0.5">pnpm sap:catalog:import</code> to widen coverage.
+            </div>
+          )}
+          {summary.exposed === 0 && summary.published > 0 && (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs">
+              0 exposed across {summary.published} probed. If the rows are mostly{" "}
+              <strong>401</strong> this is an auth/credentials issue; if <strong>403/404</strong>,
+              those services simply aren&apos;t activated in this tenant (request the listed{" "}
+              <code className="rounded bg-muted px-1 py-0.5">SAP_COM_xxxx</code> scenario).
+            </div>
+          )}
 
           <div className="overflow-auto rounded-md border bg-card">
             <table className="w-full min-w-[720px] text-sm">
