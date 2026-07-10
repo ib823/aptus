@@ -258,7 +258,8 @@ export type DecisionAction =
   | "INVITATION_REVOKED"
   | "USER_REACTIVATED"
   | "USER_DELETED"
-  | "MFA_RESET";
+  | "MFA_RESET"
+  | "SAP_CAPABILITY_PROBED";
 
 /** Aggregated StepResponse fit status counts per scope item (from raw SQL) */
 export interface ResponseCountRow {

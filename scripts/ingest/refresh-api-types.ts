@@ -80,12 +80,21 @@ async function main(): Promise<void> {
   const typeCounts: Record<string, number> = {};
   const updates: Array<{ id: string; apiType: string | null }> = [];
 
+  let preserved = 0;
   for (const row of all) {
+    // NON-CLOBBER: a value the import file already provided (row.apiType set)
+    // is authoritative — never overwrite it with a heuristic guess (and never
+    // null it out). The heuristic only fills rows still NULL after import.
+    if (row.apiType) {
+      preserved++;
+      continue;
+    }
     const result = classifyByHeuristic(row.apiId, row.apiHubUrl);
     reasonCounts.set(result.reason, (reasonCounts.get(result.reason) ?? 0) + 1);
     typeCounts[result.apiType ?? "(null)"] = (typeCounts[result.apiType ?? "(null)"] ?? 0) + 1;
-    if (row.apiType !== result.apiType) updates.push({ id: row.id, apiType: result.apiType });
+    if (result.apiType !== null) updates.push({ id: row.id, apiType: result.apiType });
   }
+  console.log(`[refresh-api-types] Preserved ${preserved.toLocaleString()} rows with a file-provided apiType (not re-classified)`);
 
   console.log(`[refresh-api-types] Classification result:`);
   for (const [type, count] of Object.entries(typeCounts).sort((a, b) => b[1] - a[1])) {
