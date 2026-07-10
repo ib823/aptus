@@ -32,6 +32,15 @@ DECLARE
   null_catalog_count INT;
 BEGIN
   SELECT COUNT(*) INTO scope_count FROM "ScopeItem";
+  -- Fresh-provision guard: on an empty DB (new environment, CI, or the
+  -- `migrate diff` shadow DB) the Phase 13.0 baseline fixture is absent, so
+  -- these fixture-specific regression asserts don't apply. Skip them; the data
+  -- transforms below are all no-ops on zero rows and produce the identical end
+  -- schema. On a populated DB the asserts run unchanged.
+  IF scope_count = 0 THEN
+    RAISE NOTICE 'Fresh/empty DB (0 ScopeItem rows) — skipping Phase 13.0 pre-flight asserts';
+    RETURN;
+  END IF;
   IF scope_count <> 582 THEN
     RAISE EXCEPTION 'Pre-flight failed: expected 582 ScopeItem rows, found %', scope_count;
   END IF;
@@ -197,6 +206,14 @@ DECLARE
   preset_item_count INT;
   chain_item_count INT;
 BEGIN
+  -- Fresh-provision guard (see pre-flight block): skip the fixture regression
+  -- asserts on an empty DB; enforced verbatim when the baseline data is present.
+  SELECT COUNT(*) INTO scope_count FROM "ScopeItem";
+  IF scope_count = 0 THEN
+    RAISE NOTICE 'Fresh/empty DB — skipping Phase 13.0 post-migration asserts';
+    RETURN;
+  END IF;
+
   -- Bursa invariants
   SELECT COUNT(*) INTO bursa_req_count
     FROM "ClientRequirement" WHERE "assessmentId" = 'cmofk3zql000163ubn43nkhqy';
