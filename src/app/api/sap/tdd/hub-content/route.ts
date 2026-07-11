@@ -21,6 +21,8 @@ import {
   isSapTddPublicAccessEnabled,
 } from "@/lib/sap-public/tdd-connector";
 import { probeTenantCapabilities } from "@/lib/sap-public/capability-probe";
+import { mergeProbeTargets } from "@/lib/sap-public/dynamic-catalog";
+import type { SapServiceDefinition } from "@/lib/sap-public/tdd-connector";
 import {
   HUB_CONTENT_TYPES,
   HUB_CONTENT_TYPE_META,
@@ -28,6 +30,7 @@ import {
   hubAvailabilityQualifier,
   isHubContentType,
   isRuntimeType,
+  pathToApiId,
   resolveHubStatus,
   type HubContentType,
   type HubStatus,
@@ -39,23 +42,33 @@ const REFERENCE_TYPES = HUB_CONTENT_TYPES.filter((t) => !isRuntimeType(t));
 const PROBE_CAP = 60; // bound the live probe like the capabilities route
 
 /**
- * Probe the tenant's probeable OData V2 runtime services (APIs + CDS views);
- * return the set of externalIds that returned 200. Events are excluded — they
- * are subscribe-only with no read endpoint.
+ * ONE probe = one source of truth. Probe the SAME curated-first set the working
+ * Tenant Capabilities panel uses (curated S4HANA_SERVICES known-good paths FIRST
+ * — regardless of alphabetical position or apiType classification — then the
+ * dynamic OData V2 rows), and return the exposed set keyed by apiId so it maps
+ * back to SapHubContent.externalId. Never ACTIVATED without a real 200.
  */
-async function probeActivatedRuntimeIds(prefix: string, tenant: { key: string; label: string; baseUrl: string }): Promise<Set<string>> {
-  const apis = await prisma.sapHubContent.findMany({
+async function probeActivatedApiIds(
+  prefix: string,
+  tenant: { key: string; label: string; baseUrl: string },
+  product: { services: SapServiceDefinition[] },
+): Promise<{ activated: Set<string>; probed: number }> {
+  const rows = await prisma.sapHubContent.findMany({
     where: { appliesToPublic: true, contentType: { in: ["API", "CDS_VIEW"] }, apiType: "ODATAV2" },
     select: { contentType: true, apiType: true, externalId: true, title: true, packageId: true, communicationScenarios: true },
     orderBy: { externalId: "asc" },
     take: PROBE_CAP,
   });
-  const services = apis
+  const dynamic = rows
     .map((a) => hubApiToService({ ...a, contentType: a.contentType as HubContentType }))
     .filter((s): s is NonNullable<typeof s> => s !== null);
-  if (services.length === 0) return new Set();
-  const rows = await probeTenantCapabilities(prefix, tenant, services);
-  return new Set(rows.filter((r) => r.exposed).map((r) => r.service));
+  // Curated FIRST, re-keyed by apiId (last path segment) so an exposed result's
+  // `service` equals the SapHubContent externalId, not the display key.
+  const curated = product.services.map((s) => ({ ...s, key: pathToApiId(s.path) }));
+  const targets = mergeProbeTargets(curated, dynamic, PROBE_CAP);
+  if (targets.length === 0) return { activated: new Set(), probed: 0 };
+  const results = await probeTenantCapabilities(prefix, tenant, targets);
+  return { activated: new Set(results.filter((r) => r.exposed).map((r) => r.service)), probed: targets.length };
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -102,11 +115,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const tenantKey = params.get("tenant") ?? getConfiguredSapTenants(product.envPrefix)[0]?.key;
   const tenant = tenantKey ? getSapTenant(product.envPrefix, tenantKey) : null;
   let activated = new Set<string>();
+  let probed = 0;
   if (tenant && probeEnabled) {
     try {
-      activated = await probeActivatedRuntimeIds(product.envPrefix, tenant);
+      const r = await probeActivatedApiIds(product.envPrefix, tenant, product);
+      activated = r.activated;
+      probed = r.probed;
     } catch {
       activated = new Set(); // probe failure → nothing ACTIVATED (honest); everything runtime AVAILABLE
+      probed = 0;
     }
   }
   const activatedIds = [...activated];
@@ -203,7 +220,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       total,
       page,
       limit,
-      counts: { byType, byStatus, probeableRuntime },
+      counts: { byType, byStatus, probeableRuntime, probed },
       catalogueImported: true,
       tenant: tenant?.label ?? null,
       typeMeta: HUB_CONTENT_TYPE_META,
