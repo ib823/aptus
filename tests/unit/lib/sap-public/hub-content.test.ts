@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   HUB_CONTENT_TYPES,
   HUB_CONTENT_TYPE_META,
+  classifyApiTypeById,
+  deriveV4Path,
   hubApiToService,
   hubAvailabilityQualifier,
   isHubContentType,
@@ -9,6 +11,42 @@ import {
   pathToApiId,
   resolveHubStatus,
 } from "@/lib/sap-public/hub-content";
+
+describe("classifyApiTypeById (honest, no broken-path types)", () => {
+  it.each([
+    ["CE_BILLINGDOCUMENT_0001", "ODATAV4"],
+    ["API_BILLING_DOCUMENT_SRV", "ODATAV2"],
+    ["API_ENTERPRISE_PROJECT_SRV_0002", "ODATAV2"],
+    ["API_COSTCNTRACTIVITYTYPE_CRUD_SRV", "ODATAV2"],
+    ["OP_API_PRODUCT_SRV_0001", "ODATAV2"],
+    ["BILLINGDOCUMENTREQUEST_IN", "SOAP"],
+    ["CO_SDBIL_ESR_BD_REF_CONF_OUT", "SOAP"],
+    ["ALLOCATIONPOSTINGCREATEREQUEST", "SOAP"],
+    ["SOMETHING_CDS_0001", "ODATAV4"],
+  ])("%s → %s", (id, type) => {
+    expect(classifyApiTypeById(id)).toBe(type);
+  });
+
+  it("leaves genuinely-unknown ids null (CamelCase, CO_ non-IN/OUT, sap-s4- wrappers)", () => {
+    expect(classifyApiTypeById("AccountPlan")).toBeNull();
+    expect(classifyApiTypeById("MaintenanceLookupTableDataService")).toBeNull();
+    expect(classifyApiTypeById("CO_LOG_MDR_ACCT_ASS_CATEGORY")).toBeNull();
+    expect(classifyApiTypeById("SLSPRCGACCESSSEQUENCE_0001")).toBeNull();
+    // sap-s4-* would yield a broken /sap/opu/odata/sap/sap-s4-… path → never V2.
+    expect(classifyApiTypeById("sap-s4-CE_BILLINGDOCUMENT_0001-v1")).toBeNull();
+  });
+});
+
+describe("deriveV4Path (best-effort, flagged)", () => {
+  it("strips the trailing version and builds the odata4 candidate path", () => {
+    expect(deriveV4Path("CE_BILLINGDOCUMENT_0001")).toBe(
+      "/sap/opu/odata4/sap/ce_billingdocument/srvd_a2x/sap/ce_billingdocument/0001",
+    );
+  });
+  it("defaults the version to 0001 when the id has none", () => {
+    expect(deriveV4Path("CE_BANK")).toBe("/sap/opu/odata4/sap/ce_bank/srvd_a2x/sap/ce_bank/0001");
+  });
+});
 
 describe("pathToApiId (probe→row identity)", () => {
   it("is the last path segment — the apiId that == SapHubContent.externalId", () => {
@@ -85,9 +123,15 @@ describe("hubApiToService", () => {
     expect(svc).toMatchObject({ key: "C_View", path: "/sap/opu/odata/sap/C_View" });
   });
 
-  it("returns null for non-V2, events, and grouped CDS package rows (apiType CDS)", () => {
-    expect(hubApiToService({ ...base, contentType: "API", apiType: "ODATAV4", externalId: "X" })).toBeNull();
+  it("maps an OData V4 API to a best-effort odata4 path (so it can reach ACTIVATED)", () => {
+    const svc = hubApiToService({ ...base, contentType: "API", apiType: "ODATAV4", externalId: "CE_BANK_0003" });
+    expect(svc!.path).toBe("/sap/opu/odata4/sap/ce_bank/srvd_a2x/sap/ce_bank/0003");
+  });
+
+  it("returns null for events, grouped CDS package rows (apiType CDS), SOAP, and null-type", () => {
     expect(hubApiToService({ ...base, contentType: "EVENT", apiType: null, externalId: "CE_X" })).toBeNull();
     expect(hubApiToService({ ...base, contentType: "CDS_VIEW", apiType: "CDS", externalId: "CDS_SALES" })).toBeNull();
+    expect(hubApiToService({ ...base, contentType: "API", apiType: "SOAP", externalId: "X_IN" })).toBeNull();
+    expect(hubApiToService({ ...base, contentType: "API", apiType: null, externalId: "AccountPlan" })).toBeNull();
   });
 });

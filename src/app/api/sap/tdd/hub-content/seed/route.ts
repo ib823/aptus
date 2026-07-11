@@ -19,7 +19,7 @@ import type { Prisma, SapHubContentType } from "@prisma/client";
 import { isAdminError, requireAdmin } from "@/lib/auth/admin-guard";
 import { prisma } from "@/lib/db/prisma";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
-import { pathToApiId } from "@/lib/sap-public/hub-content";
+import { classifyApiTypeById, pathToApiId } from "@/lib/sap-public/hub-content";
 import { resolveLineOfBusiness } from "@/lib/sap-public/hub-lob";
 import { resolveActivePublicCatalogVersionId } from "@/lib/sap-public/hub-dependencies";
 import { logDecision } from "@/lib/audit/decision-logger";
@@ -73,8 +73,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   for (const si of scopeItems) if (si.functionalArea && !codeToFA.has(si.scopeCode)) codeToFA.set(si.scopeCode, si.functionalArea);
 
   let imported = 0;
+  let apiTypeBackfilled = 0;
   const byLob: Record<string, number> = {};
   for (const a of apis) {
+    if (a.apiType == null && classifyApiTypeById(a.apiId) != null) apiTypeBackfilled++;
     const fas = a.scopeItemCodes.map((c) => codeToFA.get(c)).filter((f): f is string => Boolean(f));
     const lob = resolveLineOfBusiness(fas, a.apiName);
     byLob[lob] = (byLob[lob] ?? 0) + 1;
@@ -86,7 +88,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       appliesToPrivate: false,
       appliesToOnPrem: false,
       status: a.status,
-      apiType: a.apiType,
+      // Backfill apiType from the technical-id convention when the export left
+      // it null (never a type that yields a broken probe path; else stays null).
+      apiType: a.apiType ?? classifyApiTypeById(a.apiId),
       communicationScenarios: a.communicationScenarios,
       scopeItemCodes: a.scopeItemCodes,
       itemCount: null,
@@ -140,7 +144,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       entityType: "sap_hub_seed",
       entityId: "hub-content-api-rebuild",
       action: "SAP_HUB_SEED_IMPORTED",
-      newValue: { source: "SapApiReference", imported, injected, apiTotal, total, byLob },
+      newValue: { source: "SapApiReference", imported, injected, apiTypeBackfilled, apiTotal, total, byLob },
       actor: auth.user.email ?? "system",
       actorRole: (auth.user.role ?? "system") as UserRole,
     });
@@ -148,5 +152,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     /* audit is best-effort */
   }
 
-  return NextResponse.json({ data: { imported, injected, apiTotal, total, byLob, source: "SapApiReference" } });
+  return NextResponse.json({ data: { imported, injected, apiTypeBackfilled, apiTotal, total, byLob, source: "SapApiReference" } });
 }

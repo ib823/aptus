@@ -78,8 +78,8 @@ export function ReadinessScorecard({
       {/* catalogue scale — shown separately, never folded into the ratio */}
       <p className="mt-2 text-xs" style={{ color: "var(--ink-muted)" }}>
         Catalogue scale: <strong style={{ color: "var(--ink-secondary)" }}>{apiTotal.toLocaleString()}</strong> APIs ·{" "}
-        <strong style={{ color: "var(--ink-secondary)" }}>{probeable.toLocaleString()}</strong> OData V2 probeable · other content
-        types pending real exports
+        <strong style={{ color: "var(--ink-secondary)" }}>{probeable.toLocaleString()}</strong> OData probeable (V2 + best-effort V4) ·
+        other content types pending real exports
       </p>
 
       <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
