@@ -29,20 +29,24 @@ export function ReadinessScorecard({
   dataProbe,
   needsSetup,
   notChecked,
+  notProbeable,
   probed,
   probeable,
   apiTotal,
   reference,
+  lastProbedAt,
 }: {
   activated: number;
   dataConfirmed: number;
   dataProbe: boolean;
   needsSetup: number;
   notChecked: number;
+  notProbeable: number;
   probed: number;
   probeable: number;
   apiTotal: number;
   reference: number;
+  lastProbedAt?: string | null;
 }) {
   const pct = readinessPercent(activated, probed);
   return (
@@ -64,8 +68,14 @@ export function ReadinessScorecard({
           <strong className="tabular-nums" style={{ color: "var(--ink-primary)" }}>
             {probed.toLocaleString()}
           </strong>{" "}
-          services tested{" "}
-          <span style={{ color: "var(--ink-muted)" }}>(live probe sample)</span>
+          probed{" "}
+          <span style={{ color: "var(--ink-muted)" }}>
+            {probed > 0
+              ? lastProbedAt
+                ? `(stored · last probed ${new Date(lastProbedAt).toLocaleString()})`
+                : "(stored probe)"
+              : "(not probed yet — run “Probe all”)"}
+          </span>
         </div>
       </div>
 
@@ -101,10 +111,11 @@ export function ReadinessScorecard({
         other content types pending real exports
       </p>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         <CountPill label="Authorized" value={activated} bg="var(--status-signed-bg)" fg="var(--status-signed-fg)" />
         <CountPill label="Needs setup" value={needsSetup} bg="var(--status-awaiting-bg)" fg="var(--status-awaiting-fg)" />
         <CountPill label="Not checked" value={notChecked} bg="var(--surface-ink-tint)" fg="var(--ink-secondary)" />
+        <CountPill label="Not probeable" value={notProbeable} bg="var(--status-expired-bg)" fg="var(--status-expired-fg)" />
         <CountPill label="Reference" value={reference} bg="var(--status-draft-bg)" fg="var(--status-draft-fg)" />
       </div>
     </section>

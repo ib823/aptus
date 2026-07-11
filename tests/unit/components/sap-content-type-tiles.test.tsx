@@ -2,31 +2,35 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ContentTypeTiles } from "@/components/sap/capability/ContentTypeTiles";
 
+// Tiles speak COVERAGE (Loaded / Not loaded), never tenant status.
 // Real S4_PUBLIC_PUBLISHED_COUNTS: API 862, EVENT 147, LIVEPROCESS 0.
-describe("ContentTypeTiles — honest indicative counts", () => {
-  it("an IMPORTED type's OWN tile hides the stale indicative line (no '943 of ~862')", () => {
+describe("ContentTypeTiles — coverage language, not status", () => {
+  it("a LOADED type shows the real count + 'loaded' and NO indicative", () => {
     render(<ContentTypeTiles byType={{ API: 943 }} />);
     const apiTile = screen.getByRole("tab", { name: /APIs/i });
     expect(apiTile.textContent).toContain("943");
-    expect(apiTile.textContent).not.toMatch(/of ~/); // imported → count is the truth, no indicative
+    expect(apiTile.textContent).toMatch(/loaded/i);
+    expect(apiTile.textContent).not.toMatch(/of ~/);
     expect(apiTile.textContent).not.toMatch(/indicative/i);
   });
 
-  it("an EMPTY type's tile keeps '0 of ~Y indicative'", () => {
+  it("a NOT-loaded type with a published count shows 'Not loaded · ~Y published'", () => {
     render(<ContentTypeTiles byType={{ EVENT: 0 }} />);
     const eventTile = screen.getByRole("tab", { name: /Events/i });
-    expect(eventTile.textContent).toMatch(/of ~147/);
-    expect(eventTile.textContent).toMatch(/indicative/i);
+    expect(eventTile.textContent).toMatch(/Not loaded/i);
+    expect(eventTile.textContent).toMatch(/~147 published/);
+    expect(eventTile.textContent).not.toMatch(/indicative/i);
   });
 
-  it("a published count of 0 never renders '~0' (falls back to the reference tag)", () => {
+  it("a published count of 0 shows 'Not loaded' only — never '~0'", () => {
     const { container } = render(<ContentTypeTiles byType={{ LIVEPROCESS: 0 }} />);
     expect(container.textContent).not.toMatch(/~0/);
-    // Live Processes is a reference type → shows the tag, not an indicative line.
-    expect(screen.getAllByText(/reference/i).length).toBeGreaterThan(0);
+    const tile = screen.getByRole("tab", { name: /Live Processes/i });
+    expect(tile.textContent).toMatch(/Not loaded/i);
+    expect(tile.textContent).not.toMatch(/published/i);
   });
 
-  it("the empty-state tooltip omits '(~0 published)' for a 0-published type", () => {
+  it("the empty-state tooltip omits '~0 published' for a 0-published type", () => {
     render(<ContentTypeTiles byType={{ LIVEPROCESS: 0 }} />);
     const tile = screen.getByRole("tab", { name: /Live Processes/i });
     expect(tile.getAttribute("title")).not.toMatch(/~0 published/);

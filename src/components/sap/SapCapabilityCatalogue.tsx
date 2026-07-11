@@ -43,20 +43,21 @@ interface HubData {
   total: number;
   page: number;
   limit: number;
-  counts: { byType: Record<string, number>; byStatus: Record<HubStatus, number>; probeableRuntime: number; probed: number; dataConfirmed?: number; dataProbe?: boolean };
+  counts: { byType: Record<string, number>; byStatus: Record<HubStatus, number>; probeableRuntime: number; probed: number; lastProbedAt?: string | null; dataConfirmed?: number; dataProbe?: boolean };
   catalogueImported: boolean;
   tenant: string | null;
   isAdmin?: boolean;
 }
 
 type StatusFilter = "ALL" | HubStatus;
-const STATUS_FILTERS: StatusFilter[] = ["ALL", "ACTIVATED", "NEEDS_SETUP", "NOT_CHECKED", "REFERENCE"];
+const STATUS_FILTERS: StatusFilter[] = ["ALL", "ACTIVATED", "NEEDS_SETUP", "NOT_CHECKED", "NOT_PROBEABLE", "REFERENCE"];
 const STATUS_LABEL: Record<StatusFilter, string> = {
   ALL: "All",
   ACTIVATED: "Activated",
   NEEDS_SETUP: "Needs setup",
   NOT_FOUND: "Not found",
   NOT_CHECKED: "Not checked",
+  NOT_PROBEABLE: "Not probeable",
   AVAILABLE: "Available",
   REFERENCE: "Reference",
 };
@@ -72,6 +73,8 @@ function statusHint(status: BadgeStatus): { text: string; color: string } | null
       return { text: "needs setup — activate the arrangement", color: "var(--status-awaiting-fg)" };
     case "NOT_CHECKED":
       return { text: "not checked — open to run a live probe", color: "var(--ink-muted)" };
+    case "NOT_PROBEABLE":
+      return { text: "not probeable — no OData endpoint (SOAP/async)", color: "var(--ink-muted)" };
     case "NOT_FOUND":
       return { text: "path not found on this tenant", color: "var(--ink-muted)" };
     default:
@@ -169,17 +172,39 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
     }
   }, [load]);
 
+  const [probing, setProbing] = useState(false);
+  const probeAll = useCallback(async () => {
+    setProbing(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/sap/tdd/hub-content/probe-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: "PROBE ALL SAP SERVICES" }),
+      });
+      const json = (await res.json()) as { data?: { probed: number }; error?: { message?: string } };
+      if (!res.ok) throw new Error(json.error?.message ?? "Probe-all failed (admin only)");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Probe-all failed");
+    } finally {
+      setProbing(false);
+    }
+  }, [load]);
+
   const byType = data?.counts.byType ?? {};
   const byStatus: Record<HubStatus, number> = data?.counts.byStatus ?? {
     ACTIVATED: 0,
     NEEDS_SETUP: 0,
     NOT_FOUND: 0,
     NOT_CHECKED: 0,
+    NOT_PROBEABLE: 0,
     AVAILABLE: 0,
     REFERENCE: 0,
   };
   const probeable = data?.counts.probeableRuntime ?? 0;
   const probed = data?.counts.probed ?? 0;
+  const lastProbedAt = data?.counts.lastProbedAt ?? null;
   const dataConfirmedCount = data?.counts.dataConfirmed ?? 0;
   const dataProbeOn = data?.counts.dataProbe ?? false;
   const apiTotal = data?.counts.byType.API ?? 0;
@@ -198,22 +223,35 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
             Capability Catalogue
           </h2>
           <p className="text-sm" style={{ color: "var(--ink-secondary)" }}>
-            Every SAP Business Accelerator Hub content type for S/4HANA Cloud Public on {data?.tenant ?? "no tenant"} — badged only by what a live probe confirms. Runtime APIs are probed for activation; events are published subscribe-only (tenant subscription not verified); reference content is design-time. Empty types load once a real Hub export is imported.
+            Every SAP Business Accelerator Hub content type for S/4HANA Cloud Public on {data?.tenant ?? "no tenant"}. Two independent axes: <strong>coverage</strong> — whether we&apos;ve imported SAP&apos;s published list for a type (the tiles) — and <strong>tenant status</strong> — whether a specific item is live on this tenant (the row badges). A badge only asserts what a probe established; nothing is inferred.
           </p>
         </div>
-        {/* Always-available admin control (server still enforces the guard). */}
+        {/* Always-available admin controls (server still enforces the guard). */}
         {data?.isAdmin && (
-          <button
-            type="button"
-            onClick={() => void importSeed()}
-            disabled={seeding}
-            title="Rebuild the API rows from SapApiReference (admin only)"
-            className="inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-input)] px-3 py-1.5 text-sm font-medium disabled:opacity-50"
-            style={{ border: "1px solid var(--brand-navy)", color: "var(--brand-navy)", background: "var(--surface-paper)" }}
-          >
-            {seeding && <RefreshCw className="size-3.5 animate-spin" />}
-            Rebuild from API reference
-          </button>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void importSeed()}
+              disabled={seeding || probing}
+              title="Rebuild the API rows from SapApiReference (admin only)"
+              className="inline-flex items-center gap-2 rounded-[var(--radius-input)] px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+              style={{ border: "1px solid var(--brand-navy)", color: "var(--brand-navy)", background: "var(--surface-paper)" }}
+            >
+              {seeding && <RefreshCw className="size-3.5 animate-spin" />}
+              Rebuild from API reference
+            </button>
+            <button
+              type="button"
+              onClick={() => void probeAll()}
+              disabled={seeding || probing}
+              title="Probe every OData service and store the result (admin only). Read-only $metadata."
+              className="inline-flex items-center gap-2 rounded-[var(--radius-input)] px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+              style={{ border: "1px solid var(--brand-navy)", color: "var(--ink-on-navy)", background: "var(--brand-navy)" }}
+            >
+              {probing && <RefreshCw className="size-3.5 animate-spin" />}
+              Probe all
+            </button>
+          </div>
         )}
       </div>
 
@@ -247,12 +285,20 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
               dataProbe={dataProbeOn}
               needsSetup={byStatus.NEEDS_SETUP}
               notChecked={byStatus.NOT_CHECKED}
+              notProbeable={byStatus.NOT_PROBEABLE}
               probed={probed}
               probeable={probeable}
               apiTotal={apiTotal}
               reference={byStatus.REFERENCE}
+              lastProbedAt={lastProbedAt}
             />
           </div>
+          {/* Two-axis legend: COVERAGE (tiles) vs TENANT STATUS (badges). */}
+          <p className="text-xs" style={{ color: "var(--ink-muted)" }}>
+            <strong style={{ color: "var(--ink-secondary)" }}>Two axes.</strong>{" "}
+            <strong style={{ color: "var(--ink-secondary)" }}>Coverage</strong> (tiles): Loaded / Not loaded — have we imported SAP&apos;s published list for a type.{" "}
+            <strong style={{ color: "var(--ink-secondary)" }}>Tenant status</strong> (badges): Activated · Needs setup · Not found · Not checked · Not probeable · Available · Reference — whether a specific item is live on this tenant. Tiles never make a tenant claim; badges never claim coverage.
+          </p>
           <div data-tour="sap-tiles">
             <ContentTypeTiles byType={byType} activeType={contentType} onSelect={setContentType} />
           </div>

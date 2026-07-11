@@ -262,7 +262,8 @@ export type DecisionAction =
   | "SAP_CAPABILITY_PROBED"
   | "SAP_WRITE_TEST_PERFORMED"
   | "SAP_HUB_SEED_IMPORTED"
-  | "SAP_HUB_TYPE_IMPORTED";
+  | "SAP_HUB_TYPE_IMPORTED"
+  | "SAP_HUB_PROBED_ALL";
 
 /** Aggregated StepResponse fit status counts per scope item (from raw SQL) */
 export interface ResponseCountRow {

@@ -14,10 +14,10 @@ describe("readinessPercent (activated / probed)", () => {
 
 describe("ReadinessScorecard", () => {
   it("headlines the real exposed count as a probe SAMPLE, catalogue scale shown separately", () => {
-    render(<ReadinessScorecard activated={5} dataConfirmed={0} dataProbe={false} needsSetup={12} notChecked={900} probed={60} probeable={128} apiTotal={941} reference={0} />);
-    // Headline: "5 authorized of 60 services tested (live probe sample)".
+    render(<ReadinessScorecard activated={5} dataConfirmed={0} dataProbe={false} needsSetup={12} notChecked={900} notProbeable={470} probed={60} probeable={128} apiTotal={941} reference={0} />);
+    // Headline: "5 authorized of 60 probed (stored probe)".
     expect(screen.getByText(/authorized of/i)).toBeInTheDocument();
-    expect(screen.getByText(/live probe sample/i)).toBeInTheDocument();
+    expect(screen.getByText(/stored probe/i)).toBeInTheDocument();
     expect(screen.getByText("60")).toBeInTheDocument();
     // Catalogue scale is separate — NOT a percentage over 128 or 941.
     expect(screen.getByText(/941/)).toBeInTheDocument();
@@ -26,7 +26,7 @@ describe("ReadinessScorecard", () => {
   });
 
   it("progressbar reflects activated / probed, not over the whole catalogue", () => {
-    render(<ReadinessScorecard activated={5} dataConfirmed={0} dataProbe={false} needsSetup={12} notChecked={900} probed={60} probeable={128} apiTotal={941} reference={0} />);
+    render(<ReadinessScorecard activated={5} dataConfirmed={0} dataProbe={false} needsSetup={12} notChecked={900} notProbeable={470} probed={60} probeable={128} apiTotal={941} reference={0} />);
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("8");
   });
 });
@@ -41,6 +41,7 @@ describe("StatusBadge (token-mapped)", () => {
         <StatusBadge status="NEEDS_SETUP" />
         <StatusBadge status="NOT_FOUND" />
         <StatusBadge status="NOT_CHECKED" />
+        <StatusBadge status="NOT_PROBEABLE" />
       </div>,
     );
     expect(screen.getByLabelText("Activated")).toBeInTheDocument();
@@ -48,6 +49,8 @@ describe("StatusBadge (token-mapped)", () => {
     // Un-probed / absent-path get their OWN neutral labels — never "Needs setup".
     expect(screen.getByLabelText("Not checked")).toBeInTheDocument();
     expect(screen.getByLabelText("Not found")).toBeInTheDocument();
+    // No OData endpoint → a distinct terminal label, never "Not checked".
+    expect(screen.getByLabelText("Not probeable")).toBeInTheDocument();
     // Colour is applied via var(--token) inline style — never a hex literal.
     expect(container.innerHTML).not.toMatch(/#[0-9a-fA-F]{6}/);
     expect(container.innerHTML).toContain("var(--status-signed-bg)");

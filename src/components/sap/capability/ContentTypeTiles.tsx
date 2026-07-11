@@ -43,14 +43,14 @@ export function ContentTypeTiles({
     empty: boolean,
     defineId?: string,
   ) => {
-    // "of ~Y indicative" is context for what's MISSING — only meaningful for an
-    // empty type with a real published figure. Once imported (count > 0), the
-    // count IS the truth (a stale indicative would read "943 of ~862"). A 0/absent
-    // published count never renders "~0" — it falls back to the runtime/reference tag.
+    // Tiles speak COVERAGE, never tenant status. Loaded → the real count is the
+    // truth (no "indicative"). Not loaded → "~Y published" is the SCALE of what
+    // could be imported (coverage language only), and a 0/absent published figure
+    // never renders "~0". The ALL tile (published null) shows no coverage line.
     const hasPublished = published != null && published > 0;
-    const showIndicative = empty && hasPublished;
+    const isAll = key === "ALL";
     const title = empty
-      ? `${label}: none imported yet — drop a logged-in Hub export in sap-references/hub-content/${key}.json${hasPublished ? ` (~${published!.toLocaleString()} published). ${INDICATIVE_NOTE}` : "."}`
+      ? `${label}: not loaded — no rows imported yet. ${hasPublished ? `~${published!.toLocaleString()} published by SAP. ${INDICATIVE_NOTE} ` : ""}Drop a logged-in Hub export in sap-references/hub-content/${key}.json.`
       : label;
     return (
       <div
@@ -77,16 +77,14 @@ export function ContentTypeTiles({
           <span className="text-xs font-medium" style={{ color: "var(--ink-primary)" }}>
             {label}
           </span>
-          {showIndicative ? (
+          {isAll ? null : empty ? (
             <span className="text-[10px] tabular-nums" style={{ color: "var(--ink-muted)" }}>
-              of ~{published!.toLocaleString()} <span className="uppercase tracking-wide">indicative</span>
+              Not loaded{hasPublished ? ` · ~${published!.toLocaleString()} published` : ""}
             </span>
           ) : (
-            tag && (
-              <span className="text-[10px] uppercase tracking-wide" style={{ color: "var(--ink-muted)" }}>
-                {tag}
-              </span>
-            )
+            <span className="text-[10px] uppercase tracking-wide" style={{ color: "var(--ink-muted)" }}>
+              loaded{tag ? ` · ${tag}` : ""}
+            </span>
           )}
         </button>
         {defineId && (
