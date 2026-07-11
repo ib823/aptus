@@ -11,6 +11,8 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { AlertTriangle, RefreshCw, Search } from "lucide-react";
 import { HUB_CONTENT_TYPE_META, type HubContentType, type HubStatus } from "@/lib/sap-public/hub-content";
+import { useAffirmLearn } from "@/components/affirm/learn/context";
+import { glossaryIdForStatus } from "@/constants/sap-glossary";
 import { ReadinessScorecard } from "./capability/ReadinessScorecard";
 import { ContentTypeTiles } from "./capability/ContentTypeTiles";
 import { StatusBadge, type BadgeStatus } from "./capability/StatusBadge";
@@ -105,6 +107,8 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
   // Confirmed read/write lifted from a detail live-probe, keyed by item id — so an
   // expanded row's collapsed chip matches its detail exactly (mirrors probedStatus).
   const [probedCapability, setProbedCapability] = useState<Record<string, { read: boolean; write: boolean }>>({});
+  // Tap any status badge to open the plain-language glossary at that status.
+  const { openGlossary } = useAffirmLearn();
   // Robust autofill suppression: Chrome ignores autoComplete="off" on search
   // fields, so also use a randomized name + readonly-until-focus so nothing is
   // ever autofilled on load.
@@ -236,22 +240,26 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
 
       {!note && (
         <>
-          <ReadinessScorecard
-            activated={byStatus.ACTIVATED}
-            dataConfirmed={dataConfirmedCount}
-            dataProbe={dataProbeOn}
-            needsSetup={byStatus.NEEDS_SETUP}
-            notChecked={byStatus.NOT_CHECKED}
-            probed={probed}
-            probeable={probeable}
-            apiTotal={apiTotal}
-            reference={byStatus.REFERENCE}
-          />
-          <ContentTypeTiles byType={byType} activeType={contentType} onSelect={setContentType} />
+          <div data-tour="sap-scorecard">
+            <ReadinessScorecard
+              activated={byStatus.ACTIVATED}
+              dataConfirmed={dataConfirmedCount}
+              dataProbe={dataProbeOn}
+              needsSetup={byStatus.NEEDS_SETUP}
+              notChecked={byStatus.NOT_CHECKED}
+              probed={probed}
+              probeable={probeable}
+              apiTotal={apiTotal}
+              reference={byStatus.REFERENCE}
+            />
+          </div>
+          <div data-tour="sap-tiles">
+            <ContentTypeTiles byType={byType} activeType={contentType} onSelect={setContentType} />
+          </div>
 
           {/* status filter + search */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Status filter">
+            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Status filter" data-tour="sap-filters">
               {STATUS_FILTERS.map((s) => {
                 const selected = status === s;
                 return (
@@ -312,6 +320,7 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
 
           {/* grouped list */}
           <div
+            data-tour="sap-row"
             className="overflow-hidden rounded-[var(--radius-card-warm)]"
             style={{ background: "var(--surface-paper)", border: "1px solid var(--border-default)" }}
           >
@@ -337,13 +346,13 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
                     const hint = statusHint(effStatus);
                     return (
                       <li key={item.id} style={{ borderTop: "1px solid var(--border-default)" }}>
-                        <button
-                          type="button"
-                          onClick={() => setExpandedId(expanded ? null : item.id)}
-                          aria-expanded={expanded}
-                          className="flex w-full flex-col gap-2 px-4 py-3 text-left sm:flex-row sm:items-start sm:justify-between"
-                        >
-                          <div className="min-w-0">
+                        <div className="flex w-full flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedId(expanded ? null : item.id)}
+                            aria-expanded={expanded}
+                            className="min-w-0 flex-1 text-left"
+                          >
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="truncate font-medium" style={{ color: "var(--ink-primary)" }}>
                                 {item.title}
@@ -389,11 +398,18 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
                                 </span>
                               )}
                             </div>
-                          </div>
-                          <div className="shrink-0">
+                          </button>
+                          {/* Tap the badge → plain-language definition of this status. */}
+                          <button
+                            type="button"
+                            onClick={() => openGlossary(glossaryIdForStatus(effStatus))}
+                            title="What does this status mean?"
+                            aria-label={`What does "${effStatus}" mean?`}
+                            className="shrink-0 cursor-help rounded-[var(--radius-pill)]"
+                          >
                             <StatusBadge status={effStatus} subscribe={item.availabilityNote === "subscribe"} />
-                          </div>
-                        </button>
+                          </button>
+                        </div>
                         {expanded && (
                           <div className="px-4 pb-4">
                             <CapabilityDetail

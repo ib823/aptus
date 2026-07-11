@@ -13,13 +13,9 @@
 
 import type { GlossaryKey } from "@/constants/affirm-glossary";
 
-export type ScreenGuideId =
-  | "affirm-index"
-  | "affirm-assemble"
-  | "affirm-questions"
-  | "affirm-client"
-  | "affirm-review"
-  | "affirm-output";
+// Widened to string so the shared ScreenGuide can carry other domains' guides
+// (e.g. SAP Operations). The affirm ids remain the canonical affirm set.
+export type ScreenGuideId = string;
 
 export interface ScreenGuide {
   id: ScreenGuideId;
@@ -117,23 +113,23 @@ export const AFFIRM_SCREEN_GUIDES: Record<ScreenGuideId, ScreenGuide> = {
  */
 export function screenGuideForPath(pathname: string): ScreenGuide | null {
   if (pathname === "/affirm" || pathname.endsWith("/affirm")) {
-    return AFFIRM_SCREEN_GUIDES["affirm-index"];
+    return AFFIRM_SCREEN_GUIDES["affirm-index"] ?? null;
   }
   if (pathname.endsWith("/new") || pathname.endsWith("/scope")) {
-    return AFFIRM_SCREEN_GUIDES["affirm-assemble"];
+    return AFFIRM_SCREEN_GUIDES["affirm-assemble"] ?? null;
   }
   if (pathname.endsWith("/questions")) {
-    return AFFIRM_SCREEN_GUIDES["affirm-questions"];
+    return AFFIRM_SCREEN_GUIDES["affirm-questions"] ?? null;
   }
   if (pathname.endsWith("/review")) {
-    return AFFIRM_SCREEN_GUIDES["affirm-review"];
+    return AFFIRM_SCREEN_GUIDES["affirm-review"] ?? null;
   }
   if (pathname.endsWith("/output")) {
-    return AFFIRM_SCREEN_GUIDES["affirm-output"];
+    return AFFIRM_SCREEN_GUIDES["affirm-output"] ?? null;
   }
   // Bare /affirm/<id> — the client affirm cards.
   if (/^\/affirm\/[^/]+$/.test(pathname)) {
-    return AFFIRM_SCREEN_GUIDES["affirm-client"];
+    return AFFIRM_SCREEN_GUIDES["affirm-client"] ?? null;
   }
   return null;
 }

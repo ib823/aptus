@@ -13,15 +13,19 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { screenGuideForPath } from "@/constants/affirm-screen-guides";
-import { AFFIRM_GLOSSARY } from "@/constants/affirm-glossary";
+import { resolveScreenGuide, screenGuideById, glossaryEntry } from "@/lib/learn/content";
 import { useAffirmLearn } from "./context";
 
 const dismissKey = (id: string) => `affirm-guide-dismissed:${id}`;
 
-export function ScreenGuide() {
+/**
+ * Renders the page-level guide by path, or — when an explicit `id` is passed —
+ * a specific section guide (so a page can drop <ScreenGuide id="sap-catalogue" />
+ * above each section).
+ */
+export function ScreenGuide({ id }: { id?: string } = {}) {
   const pathname = usePathname() ?? "";
-  const guide = screenGuideForPath(pathname);
+  const guide = id ? screenGuideById(id) : resolveScreenGuide(pathname);
   const { openGlossary, startTour, hasTour } = useAffirmLearn();
   const [dismissed, setDismissed] = useState(true); // start hidden to avoid SSR flash
   const [hydrated, setHydrated] = useState(false);
@@ -112,7 +116,7 @@ export function ScreenGuide() {
               onClick={() => openGlossary(k)}
               className="rounded-pill border border-border-default bg-paper px-2.5 py-1 text-xs text-ink-soft transition hover:border-navy hover:text-navy"
             >
-              {AFFIRM_GLOSSARY[k]?.term ?? k}
+              {glossaryEntry(k)?.term ?? k}
             </button>
           ))}
           {hasTour && (
