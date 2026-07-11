@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, Database, Eye, RefreshCw, Server, Table2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -91,6 +91,11 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [tenantKey, setTenantKey] = useState("");
   const [serviceKey, setServiceKey] = useState("");
+  // Admin spot-read: any activated service by apiId (== SapHubContent.externalId),
+  // not just the curated picker. Kept in a ref so typing doesn't refetch per key.
+  const [customService, setCustomService] = useState("");
+  const customServiceRef = useRef("");
+  customServiceRef.current = customService;
   const [entities, setEntities] = useState<EntitySet[]>([]);
   const [probes, setProbes] = useState<EntityProbe[]>([]);
   const [selectedEntity, setSelectedEntity] = useState("");
@@ -100,7 +105,8 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
   const [error, setError] = useState<string | null>(null);
 
   const selectedTenant = tenants.find((tenant) => tenant.key === tenantKey);
-  const selectedService = services.find((service) => service.key === serviceKey);
+  const effectiveService = customService.trim() || serviceKey;
+  const selectedService = services.find((service) => service.key === effectiveService);
   const probeByName = useMemo(
     () => new Map(probes.map((probe) => [probe.name, probe])),
     [probes],
@@ -108,14 +114,15 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
 
   const loadEntities = useCallback(
     async (probe: boolean) => {
-      if (!tenantKey || !serviceKey) return;
+      const service = customServiceRef.current.trim() || serviceKey;
+      if (!tenantKey || !service) return;
       setLoading(true);
       setError(null);
       setPreview(null);
       try {
         const params = new URLSearchParams({
           tenant: tenantKey,
-          service: serviceKey,
+          service,
           probe: probe ? "1" : "0",
           product,
         });
@@ -143,13 +150,14 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
   );
 
   const loadPreview = useCallback(async () => {
-    if (!tenantKey || !serviceKey || !selectedEntity) return;
+    const service = customServiceRef.current.trim() || serviceKey;
+    if (!tenantKey || !service || !selectedEntity) return;
     setPreviewLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({
         tenant: tenantKey,
-        service: serviceKey,
+        service,
         entity: selectedEntity,
         limit: "10",
         product,
@@ -227,7 +235,7 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
 
         <label className="space-y-1.5">
           <span className="text-xs font-medium text-muted-foreground">Service</span>
-          <Select value={serviceKey} onValueChange={setServiceKey}>
+          <Select value={serviceKey} onValueChange={(v) => { setCustomService(""); setServiceKey(v); }}>
             <SelectTrigger>
               <SelectValue placeholder="Service" />
             </SelectTrigger>
@@ -239,13 +247,22 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
               ))}
             </SelectContent>
           </Select>
+          {/* Admin spot-read: any activated service by apiId, beyond the curated list. */}
+          <input
+            value={customService}
+            onChange={(event) => setCustomService(event.target.value)}
+            placeholder="…or any activated apiId (e.g. API_OPLACCTGDOCITEMCUBE_SRV)"
+            className="mt-1 h-8 w-full rounded-md border bg-background px-2 font-mono text-xs outline-none focus:border-ring"
+            spellCheck={false}
+            autoComplete="off"
+          />
         </label>
 
         <Button
           className="self-end"
           variant="outline"
           onClick={() => void loadEntities(false)}
-          disabled={!tenantKey || !serviceKey || loading}
+          disabled={!tenantKey || !effectiveService || loading}
         >
           <RefreshCw />
           Inspect
@@ -253,7 +270,7 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
         <Button
           className="self-end"
           onClick={() => void loadEntities(true)}
-          disabled={!tenantKey || !serviceKey || loading}
+          disabled={!tenantKey || !effectiveService || loading}
         >
           <Activity />
           Probe Reads

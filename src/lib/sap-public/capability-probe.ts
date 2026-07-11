@@ -11,6 +11,7 @@
  */
 import {
   inspectSapServiceMetadata,
+  probeSapEntitySet,
   type EntityCapability,
   type MetadataFlavor,
   type SapServiceDefinition,
@@ -33,7 +34,21 @@ export interface CapabilityResult {
   ladder?: CapabilityLadder;
   /** How the capability flags were derived (v4 is best-effort). */
   metadataFlavor?: MetadataFlavor;
+  /**
+   * Data-confirmed tier (opt-in): a real read-only 1-row GET ($top=1) on one
+   * entity set returned a data 200 — proving the comm user can READ data, not
+   * just reach $metadata. Only ever true on a real data 200; never inferred.
+   */
+  dataConfirmed?: boolean;
+  /** HTTP status of the 1-row data read (when dataProbe ran). */
+  dataStatus?: number;
   error?: string;
+}
+
+/** Pick the entity set to data-confirm: prefer a readable one, else the first. */
+function pickReadableEntitySet(entitySets: { name: string }[], caps: EntityCapability[]): string | null {
+  const readable = caps.find((c) => c.readable)?.name;
+  return readable ?? entitySets[0]?.name ?? null;
 }
 
 /**
@@ -63,11 +78,12 @@ export async function probeService(
   prefix: string,
   tenant: SapTenant,
   svc: SapServiceDefinition,
+  opts: { dataProbe?: boolean } = {},
 ): Promise<CapabilityResult> {
   const base = { service: svc.key, label: svc.label, scenario: svc.scenario };
   try {
     const { entitySets, entityCapabilities, flavor } = await inspectSapServiceMetadata(prefix, tenant, svc);
-    return {
+    const result: CapabilityResult = {
       ...base,
       exposed: true,
       status: 200,
@@ -76,6 +92,22 @@ export async function probeService(
       ladder: deriveCapabilityLadder(true, entityCapabilities),
       metadataFlavor: flavor,
     };
+    // Data-confirmed tier (opt-in): one read-only 1-row GET on a readable set.
+    if (opts.dataProbe) {
+      const target = pickReadableEntitySet(entitySets, entityCapabilities);
+      if (target) {
+        try {
+          const p = await probeSapEntitySet(prefix, tenant, svc, target);
+          result.dataStatus = p.status;
+          result.dataConfirmed = p.ok && p.status === 200 && !p.hasErrorBody;
+        } catch {
+          result.dataConfirmed = false; // a failed read never confirms data
+        }
+      } else {
+        result.dataConfirmed = false;
+      }
+    }
+    return result;
   } catch (err) {
     const message = err instanceof Error ? err.message : "probe failed";
     const status = Number(message.match(/HTTP (\d{3})/)?.[1] ?? 0);
@@ -89,6 +121,7 @@ export async function probeTenantCapabilities(
   tenant: SapTenant,
   services: SapServiceDefinition[],
   concurrency = 4,
+  opts: { dataProbe?: boolean } = {},
 ): Promise<CapabilityResult[]> {
   const results: CapabilityResult[] = new Array(services.length);
   let cursor = 0;
@@ -97,7 +130,7 @@ export async function probeTenantCapabilities(
       const i = cursor++;
       const svc = services[i];
       if (!svc) continue;
-      results[i] = await probeService(prefix, tenant, svc);
+      results[i] = await probeService(prefix, tenant, svc, opts);
     }
   }
   await Promise.all(

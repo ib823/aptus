@@ -71,9 +71,9 @@ describe("GET /api/sap/tdd/hub-content/[id]", () => {
     expect((await GET(req(), ctx("999"))).status).toBe(404);
   });
 
-  it("probed 404 → AVAILABLE with an honest dual-cause debug hint", async () => {
+  it("probed 404 → NOT_FOUND with an honest dual-cause debug hint", async () => {
     const body = await (await GET(req(), ctx("1"))).json();
-    expect(body.data.status).toBe("AVAILABLE");
+    expect(body.data.status).toBe("NOT_FOUND");
     expect(body.data.probeStatus).toBe(404);
     const hint = body.data.dependencies.debugHint.toLowerCase();
     expect(hint).toContain("not activated");
@@ -87,6 +87,13 @@ describe("GET /api/sap/tdd/hub-content/[id]", () => {
     expect(body.data.status).toBe("ACTIVATED");
     expect(body.data.ladder).toBe("writable");
     expect(body.data.metadataFlavor).toBe("v2");
+  });
+
+  it("probed 403 → NEEDS_SETUP (matches the list badge — no contradiction)", async () => {
+    mocks.probeService.mockResolvedValue({ service: "API_PO", exposed: false, status: 403, ladder: "unreachable" });
+    const body = await (await GET(req(), ctx("1"))).json();
+    expect(body.data.status).toBe("NEEDS_SETUP");
+    expect(body.data.probeStatus).toBe(403);
   });
 
   it("reference item → not probed, reference debug hint, REFERENCE status", async () => {
