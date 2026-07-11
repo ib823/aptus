@@ -39,6 +39,14 @@ import {
 } from "@/lib/sap-public/hub-content";
 import { ERROR_CODES } from "@/types/api";
 
+// This read endpoint must ALWAYS reflect the latest stored probe — never a
+// cached/static response (which served a stale pre-probe state per-URL on prod).
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+/** Responses carry no-store so neither Next nor a CDN caches the probe state. */
+const NO_STORE = { "Cache-Control": "no-store" } as const;
+
 const PROBE_CAP = 60; // bound the OPT-IN live overlay (dataProbe=1) like before
 
 /** All-zero byStatus, so every status key is always present in counts. */
@@ -151,16 +159,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         tenant: null,
         isAdmin,
       },
-    });
+    }, { headers: NO_STORE });
   }
 
-  // ── tenant + PERSISTED probe (primary source, no per-load tenant hammering) ──
-  const tenantKey = params.get("tenant") ?? getConfiguredSapTenants(product.envPrefix)[0]?.key;
+  // ── tenant + PERSISTED probe (per-tenant; no cross-tenant leak, no hammering) ──
+  const configuredTenants = getConfiguredSapTenants(product.envPrefix);
+  const defaultTenantKey = configuredTenants[0]?.key;
+  const tenantKey = params.get("tenant") ?? defaultTenantKey;
   const tenant = tenantKey ? getSapTenant(product.envPrefix, tenantKey) : null;
   const dataProbe = params.get("dataProbe") === "1"; // opt-in LIVE overlay (freshness + data-confirm)
 
-  // Load the persisted probe for the FULL catalogue (rawMetadataJson.probe is
-  // small). This is the source of truth — the admin Probe-all populates it.
+  // Load the persisted probe for the FULL catalogue (rawMetadataJson.probes is
+  // small). This is the source of truth — the admin Probe-all populates it PER
+  // TENANT; a row's status here is ONLY the requested tenant's stored result.
   const allRows = await prisma.sapHubContent.findMany({
     where: { appliesToPublic: true },
     select: { externalId: true, contentType: true, apiType: true, rawMetadataJson: true },
@@ -170,7 +181,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let lastProbedAt: string | null = null;
   let probed = 0;
   for (const r of allRows) {
-    const p = readStoredProbe(r.rawMetadataJson);
+    const p = tenantKey ? readStoredProbe(r.rawMetadataJson, tenantKey, defaultTenantKey) : null;
     if (!p) continue;
     if (typeof p.http === "number") {
       outcomes.set(r.externalId, p.http);
@@ -295,8 +306,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       counts: { byType, byStatus, probeableRuntime, probed, lastProbedAt, dataConfirmed: dataConfirmed.size, dataProbe },
       catalogueImported: true,
       tenant: tenant?.label ?? null,
+      tenantKey: tenantKey ?? null,
       isAdmin,
       typeMeta: HUB_CONTENT_TYPE_META,
     },
-  });
+  }, { headers: NO_STORE });
 }

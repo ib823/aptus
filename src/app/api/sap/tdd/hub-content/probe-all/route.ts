@@ -2,9 +2,10 @@
  * POST /api/sap/tdd/hub-content/probe-all — admin-gated bulk tenant probe.
  *
  * Read-only $metadata probe of EVERY probeable service (isProbeable: API/CDS_VIEW
- * on OData V2/V4), with bounded concurrency, then PERSISTS each result by MERGING
- * into SapHubContent.rawMetadataJson.probe = { http, at, read, write } — no schema
- * migration, and never clobbering the other rawMetadataJson keys (source/steps).
+ * on OData V2/V4) FOR A GIVEN TENANT, with bounded concurrency, then PERSISTS each
+ * result by MERGING into SapHubContent.rawMetadataJson.probes[tenantKey] =
+ * { http, at, read, write } — no schema migration, tenant-scoped (one tenant's run
+ * never touches another's), and never clobbering sibling keys (source/steps).
  *
  * The list + detail read this stored probe first, so the catalogue no longer
  * live-probes on every page load. Idempotent + re-runnable. SapApiReference is
@@ -21,7 +22,7 @@ import {
   getSapTenant,
 } from "@/lib/sap-public/tdd-connector";
 import { probeService } from "@/lib/sap-public/capability-probe";
-import { hubApiToService, httpToRuntimeStatus, isProbeable, type HubContentType } from "@/lib/sap-public/hub-content";
+import { hubApiToService, httpToRuntimeStatus, isProbeable, mergeStoredProbe, type HubContentType } from "@/lib/sap-public/hub-content";
 import { logDecision } from "@/lib/audit/decision-logger";
 import type { UserRole } from "@/types/assessment";
 import { ERROR_CODES } from "@/types/api";
@@ -33,9 +34,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAdmin();
   if (isAdminError(auth)) return auth;
 
-  let body: { confirmation?: unknown; product?: unknown };
+  let body: { confirmation?: unknown; product?: unknown; tenant?: unknown };
   try {
-    body = (await request.json()) as { confirmation?: unknown; product?: unknown };
+    body = (await request.json()) as { confirmation?: unknown; product?: unknown; tenant?: unknown };
   } catch {
     return NextResponse.json({ error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid JSON body" } }, { status: 400 });
   }
@@ -50,14 +51,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!product) {
     return NextResponse.json({ error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Unknown product" } }, { status: 400 });
   }
-  const tenantKey = getConfiguredSapTenants(product.envPrefix)[0]?.key;
+  // Probe the REQUESTED tenant (default = the first configured). Results are
+  // stored under this tenant's key, so probing one tenant never touches another's.
+  const tenantKey =
+    (typeof body.tenant === "string" && body.tenant) || getConfiguredSapTenants(product.envPrefix)[0]?.key;
   const tenant = tenantKey ? getSapTenant(product.envPrefix, tenantKey) : null;
-  if (!tenant) {
+  if (!tenant || !tenantKey) {
     return NextResponse.json(
-      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: `No TDD tenant configured for ${product.label}` } },
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: `No TDD tenant "${String(body.tenant ?? "")}" configured for ${product.label}` } },
       { status: 400 },
     );
   }
+  const targetTenantKey: string = tenantKey; // narrowed; stable inside the worker closure
 
   // Every probeable row (API/CDS_VIEW on OData V2/V4). SOAP / null apiType are
   // NOT probeable — they stay NOT_PROBEABLE and are skipped here.
@@ -88,11 +93,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       if (!svc) continue;
       const result = await probeService(product!.envPrefix, tenant!, svc); // read-only $metadata; never throws
       const { read, write } = deriveReadWrite(result.entities ?? []);
-      // MERGE — preserve every existing rawMetadataJson key (source/apiId/steps…).
-      const existing = (row.rawMetadataJson && typeof row.rawMetadataJson === "object" && !Array.isArray(row.rawMetadataJson))
-        ? (row.rawMetadataJson as Record<string, unknown>)
-        : {};
-      const merged = { ...existing, probe: { http: result.status, at, read, write } } as Prisma.InputJsonValue;
+      // MERGE under THIS tenant's key — preserves sibling keys (source/apiId/steps),
+      // the legacy singular `probe`, and every OTHER tenant's stored result.
+      const merged = mergeStoredProbe(row.rawMetadataJson, targetTenantKey, {
+        http: result.status,
+        at,
+        read,
+        write,
+      }) as Prisma.InputJsonValue;
       await prisma.sapHubContent.update({ where: { id: row.id }, data: { rawMetadataJson: merged } });
       probed++;
       const bucket = httpToRuntimeStatus(result.status);
@@ -107,7 +115,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       entityType: "sap_hub_probe",
       entityId: "hub-content-probe-all",
       action: "SAP_HUB_PROBED_ALL",
-      newValue: { tenant: tenant.label, probed, byOutcome, at },
+      newValue: { tenantKey, tenant: tenant.label, probed, byOutcome, at },
       actor: auth.user.email ?? "system",
       actorRole: (auth.user.role ?? "system") as UserRole,
     });
@@ -115,5 +123,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     /* audit is best-effort */
   }
 
-  return NextResponse.json({ data: { probed, byOutcome, at, tenant: tenant.label } });
+  return NextResponse.json({ data: { probed, byOutcome, at, tenantKey, tenant: tenant.label } });
 }
