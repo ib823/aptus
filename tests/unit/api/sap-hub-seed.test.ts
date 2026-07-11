@@ -5,6 +5,9 @@ const mocks = vi.hoisted(() => ({
   apiFindMany: vi.fn(),
   upsert: vi.fn(),
   count: vi.fn(),
+  findUnique: vi.fn(),
+  create: vi.fn(),
+  update: vi.fn(),
   scopeItemFindMany: vi.fn(),
   catalogFindFirst: vi.fn(),
   logDecision: vi.fn(),
@@ -17,7 +20,7 @@ vi.mock("@/lib/auth/admin-guard", () => ({
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     sapApiReference: { findMany: mocks.apiFindMany },
-    sapHubContent: { upsert: mocks.upsert, count: mocks.count },
+    sapHubContent: { upsert: mocks.upsert, count: mocks.count, findUnique: mocks.findUnique, create: mocks.create, update: mocks.update },
     scopeItem: { findMany: mocks.scopeItemFindMany },
     scopeCatalogVersion: { findFirst: mocks.catalogFindFirst },
   },
@@ -86,5 +89,43 @@ describe("POST /api/sap/tdd/hub-content/seed (rebuild from SapApiReference)", ()
 
     expect(body.data.byLob).toBeTruthy();
     expect(mocks.logDecision.mock.calls[0]![0]).toMatchObject({ action: "SAP_HUB_SEED_IMPORTED" });
+  });
+
+  it("contentType=EVENT imports the bundled type WITHOUT touching the API slice", async () => {
+    const res = await POST(makeRequest({ confirmation: "REBUILD SAP HUB CATALOGUE", contentType: "EVENT" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.source).toBe("bundled:EVENT");
+    expect(body.data.contentType).toBe("EVENT");
+    // Bundled EVENT.json ships empty → 0 rows, no fabrication.
+    expect(body.data.inserted).toBe(0);
+    // NEVER reads SapApiReference or upserts API rows for a non-API import.
+    expect(mocks.apiFindMany).not.toHaveBeenCalled();
+    expect(mocks.upsert).not.toHaveBeenCalled();
+    expect(mocks.logDecision.mock.calls[0]![0]).toMatchObject({ action: "SAP_HUB_TYPE_IMPORTED" });
+  });
+
+  it("contentType=CDS_VIEW is refused (count-only, never bundled)", async () => {
+    const res = await POST(makeRequest({ confirmation: "REBUILD SAP HUB CATALOGUE", contentType: "CDS_VIEW" }));
+    expect(res.status).toBe(400);
+    expect(mocks.apiFindMany).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it("an unknown contentType is a 400", async () => {
+    const res = await POST(makeRequest({ confirmation: "REBUILD SAP HUB CATALOGUE", contentType: "WIDGET" }));
+    expect(res.status).toBe(400);
+    expect(mocks.apiFindMany).not.toHaveBeenCalled();
+  });
+
+  it("contentType=ALL runs the API slice AND the bundled non-API types", async () => {
+    const res = await POST(makeRequest({ confirmation: "REBUILD SAP HUB CATALOGUE", contentType: "all" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(mocks.apiFindMany).toHaveBeenCalled(); // API slice ran
+    expect(body.data.api.source).toBe("SapApiReference");
+    // Every bundled non-API type reported (all empty → 0 rows, honest).
+    expect(Array.isArray(body.data.types)).toBe(true);
+    expect(body.data.types.length).toBeGreaterThanOrEqual(9);
   });
 });

@@ -91,7 +91,12 @@ describe("GET /api/sap/tdd/hub-content", () => {
     // runtime 10 (API5+EVENT5); EVENTs(5)→AVAILABLE; probeable runtime 5, of which
     // 1 activated → 4 NOT_CHECKED (beyond the 2-target probe); reference 1.
     expect(body.data.counts.byStatus).toEqual({ ACTIVATED: 1, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 4, AVAILABLE: 5, REFERENCE: 1 });
-    expect(body.data.counts.byType).toEqual({ API: 5, EVENT: 5, BADI: 1 });
+    // byType emits ALL 12 type keys (0 allowed) so every tile renders honest context.
+    expect(body.data.counts.byType).toEqual({
+      API: 5, EVENT: 5, CDS_VIEW: 0, BADI: 1, BO_INTERFACE: 0, INTEGRATION: 0,
+      BUILD: 0, PROCESS_BLUEPRINT: 0, LIVEPROCESS: 0, SCENARIO: 0, VPUC: 0, ANALYTICS: 0,
+    });
+    expect(Object.keys(body.data.counts.byType)).toHaveLength(12);
     expect(body.data.counts.probed).toBe(2); // API_PO + C_VIEW merged targets
     expect(body.data.tenant).toBe("ABeam TDD");
   });

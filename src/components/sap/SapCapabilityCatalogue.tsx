@@ -189,7 +189,7 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
             Capability Catalogue
           </h2>
           <p className="text-sm" style={{ color: "var(--ink-secondary)" }}>
-            SAP APIs for S/4HANA Cloud Public on {data?.tenant ?? "no tenant"} — activated vs available. Events, CDS &amp; other content types load once real exports are imported.
+            Every SAP Business Accelerator Hub content type for S/4HANA Cloud Public on {data?.tenant ?? "no tenant"} — badged only by what a live probe confirms. Runtime APIs are probed for activation; events are published subscribe-only (tenant subscription not verified); reference content is design-time. Empty types load once a real Hub export is imported.
           </p>
         </div>
         {/* Always-available admin control (server still enforces the guard). */}

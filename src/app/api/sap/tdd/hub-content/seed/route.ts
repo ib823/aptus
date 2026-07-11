@@ -1,51 +1,48 @@
 /**
- * POST /api/sap/tdd/hub-content/seed — admin-gated rebuild of the API slice of
- * the Capability Catalogue.
+ * POST /api/sap/tdd/hub-content/seed — admin-gated rebuild of the Capability
+ * Catalogue. Body: { confirmation, contentType? }.
  *
- * 1. Projects the REAL public SapApiReference rows into SapHubContent
- *    (contentType=API), deriving a real line of business per row
- *    (ScopeItem.functionalArea via scope codes → keyword classifier → "Other")
- *    and storing it in packageId — so grouping isn't all "Other".
- * 2. Injects the curated S4HANA_SERVICES (the known tenant-exposed services)
- *    as API rows with apiType=ODATAV2, so every service the tenant demonstrably
- *    exposes has a row that badges ACTIVATED and the scorecard + list agree.
+ *   contentType absent | "API"   → project the REAL public SapApiReference rows
+ *                                   into SapHubContent (contentType=API) + inject
+ *                                   the curated S4HANA_SERVICES. (unchanged)
+ *   contentType = a bundled type → import that type from the repo-bundled
+ *                                   sap-references/hub-content/<TYPE>.json.
+ *   contentType = "ALL"          → the API slice + every bundled non-API type.
+ *   CDS_VIEW / BADI              → refused: count-only (too large to bundle);
+ *                                   import via `pnpm sap:hub:import` to a dev DB.
  *
  * Runs IN the deployment runtime (ambient DATABASE_URL — no secret moves).
- * Additive + idempotent (upsert by contentType+externalId). Non-API content
- * types are never fabricated.
+ * Additive + idempotent (upsert by contentType+externalId). Never deletes or
+ * mutates SapApiReference; never fabricates rows.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import type { Prisma, SapHubContentType } from "@prisma/client";
 import { isAdminError, requireAdmin } from "@/lib/auth/admin-guard";
 import { prisma } from "@/lib/db/prisma";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
-import { classifyApiTypeById, pathToApiId } from "@/lib/sap-public/hub-content";
+import { classifyApiTypeById, isHubContentType, pathToApiId, type HubContentType } from "@/lib/sap-public/hub-content";
+import { BUNDLED_HUB_CONTENT, BUNDLED_HUB_TYPES, COUNT_ONLY_HUB_TYPES } from "@/lib/sap-public/hub-content-bundled";
+import { normalizeHubRowForType } from "@/lib/sap-public/hub-import";
 import { resolveLineOfBusiness } from "@/lib/sap-public/hub-lob";
 import { resolveActivePublicCatalogVersionId } from "@/lib/sap-public/hub-dependencies";
 import { logDecision } from "@/lib/audit/decision-logger";
-import type { UserRole } from "@/types/assessment";
+import type { DecisionAction, UserRole } from "@/types/assessment";
 import { ERROR_CODES } from "@/types/api";
 
 const CONFIRMATION = "REBUILD SAP HUB CATALOGUE";
 const API: SapHubContentType = "API" as SapHubContentType;
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
-  const auth = await requireAdmin();
-  if (isAdminError(auth)) return auth;
+interface ApiSliceStats {
+  imported: number;
+  injected: number;
+  apiTypeBackfilled: number;
+  apiTotal: number;
+  total: number;
+  byLob: Record<string, number>;
+}
 
-  let body: { confirmation?: unknown };
-  try {
-    body = (await request.json()) as { confirmation?: unknown };
-  } catch {
-    return NextResponse.json({ error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid JSON body" } }, { status: 400 });
-  }
-  if (body.confirmation !== CONFIRMATION) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: `Confirmation phrase required: "${CONFIRMATION}"` } },
-      { status: 400 },
-    );
-  }
-
+/** Project SapApiReference → SapHubContent(API) + inject curated services. */
+async function rebuildApiSlice(): Promise<ApiSliceStats> {
   const apis = await prisma.sapApiReference.findMany({
     where: { appliesToPublic: true },
     select: {
@@ -88,8 +85,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       appliesToPrivate: false,
       appliesToOnPrem: false,
       status: a.status,
-      // Backfill apiType from the technical-id convention when the export left
-      // it null (never a type that yields a broken probe path; else stays null).
       apiType: a.apiType ?? classifyApiTypeById(a.apiId),
       communicationScenarios: a.communicationScenarios,
       scopeItemCodes: a.scopeItemCodes,
@@ -105,9 +100,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     imported++;
   }
 
-  // Inject the curated known-exposed services (S4HANA_SERVICES) as API rows so
-  // every service the tenant demonstrably exposes has a row that can badge
-  // ACTIVATED. apiType=ODATAV2 makes them probeable + consistent with the 128.
+  // Inject the curated known-exposed services (S4HANA_SERVICES) as API rows.
   const curated = getSapProduct("s4hana")?.services ?? [];
   let injected = 0;
   for (const svc of curated) {
@@ -129,8 +122,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         hubUrl: `https://api.sap.com/api/${apiId}`,
         rawMetadataJson: { source: "curated", key: svc.key } as Prisma.InputJsonValue,
       },
-      // For rows that already exist (from SapApiReference), keep their data but
-      // make them probeable + give them the curated LoB.
       update: { apiType: "ODATAV2", packageId: lob },
     });
     injected++;
@@ -138,19 +129,143 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const total = await prisma.sapHubContent.count();
   const apiTotal = await prisma.sapHubContent.count({ where: { contentType: API } });
-  try {
-    await logDecision({
-      assessmentId: "system",
-      entityType: "sap_hub_seed",
-      entityId: "hub-content-api-rebuild",
-      action: "SAP_HUB_SEED_IMPORTED",
-      newValue: { source: "SapApiReference", imported, injected, apiTypeBackfilled, apiTotal, total, byLob },
-      actor: auth.user.email ?? "system",
-      actorRole: (auth.user.role ?? "system") as UserRole,
+  return { imported, injected, apiTypeBackfilled, apiTotal, total, byLob };
+}
+
+interface TypeImportStats {
+  contentType: HubContentType;
+  inserted: number;
+  updated: number;
+  skipped: number;
+}
+
+/** Import one bundled non-API type from its repo-bundled JSON. Never touches API. */
+async function importBundledType(type: HubContentType, importedAt: string): Promise<TypeImportStats> {
+  const ct = type as SapHubContentType;
+  const raw = BUNDLED_HUB_CONTENT[type] ?? [];
+  let inserted = 0;
+  let updated = 0;
+  let skipped = 0;
+  for (const row of raw) {
+    const norm = normalizeHubRowForType(row, type);
+    if (!norm) {
+      skipped++;
+      continue;
+    }
+    const data = {
+      title: norm.title,
+      description: norm.description,
+      packageId: norm.packageId,
+      appliesToPublic: norm.appliesToPublic,
+      appliesToPrivate: norm.appliesToPrivate,
+      appliesToOnPrem: norm.appliesToOnPrem,
+      status: norm.status,
+      apiType: norm.apiType,
+      communicationScenarios: norm.communicationScenarios,
+      scopeItemCodes: norm.scopeItemCodes,
+      itemCount: norm.itemCount,
+      hubUrl: norm.hubUrl,
+      // Provenance; release intentionally NOT pinned (counts are indicative).
+      rawMetadataJson: { source: `bundled:${type}`, release: null, importedAt, raw: norm.rawJson } as Prisma.InputJsonValue,
+    };
+    const existing = await prisma.sapHubContent.findUnique({
+      where: { contentType_externalId: { contentType: ct, externalId: norm.externalId } },
+      select: { id: true },
     });
+    if (existing) {
+      await prisma.sapHubContent.update({ where: { id: existing.id }, data });
+      updated++;
+    } else {
+      await prisma.sapHubContent.create({ data: { contentType: ct, externalId: norm.externalId, ...data } });
+      inserted++;
+    }
+  }
+  return { contentType: type, inserted, updated, skipped };
+}
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  const auth = await requireAdmin();
+  if (isAdminError(auth)) return auth;
+
+  let body: { confirmation?: unknown; contentType?: unknown };
+  try {
+    body = (await request.json()) as { confirmation?: unknown; contentType?: unknown };
   } catch {
-    /* audit is best-effort */
+    return NextResponse.json({ error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid JSON body" } }, { status: 400 });
+  }
+  if (body.confirmation !== CONFIRMATION) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: `Confirmation phrase required: "${CONFIRMATION}"` } },
+      { status: 400 },
+    );
   }
 
-  return NextResponse.json({ data: { imported, injected, apiTypeBackfilled, apiTotal, total, byLob, source: "SapApiReference" } });
+  const target =
+    typeof body.contentType === "string" && body.contentType.trim()
+      ? body.contentType.toUpperCase().replace(/[\s-]+/g, "_")
+      : "API";
+  const importedAt = new Date().toISOString();
+  const actor = auth.user; // narrowed above (isAdminError guard) — capture for the closure
+
+  async function logImport(action: DecisionAction, newValue: Prisma.InputJsonValue): Promise<void> {
+    try {
+      await logDecision({
+        assessmentId: "system",
+        entityType: "sap_hub_seed",
+        entityId: "hub-content-rebuild",
+        action,
+        newValue,
+        actor: actor.email ?? "system",
+        actorRole: (actor.role ?? "system") as UserRole,
+      });
+    } catch {
+      /* audit is best-effort */
+    }
+  }
+
+  // ── API slice (default / back-compat) ──────────────────────────────────────
+  if (target === "API") {
+    const stats = await rebuildApiSlice();
+    await logImport("SAP_HUB_SEED_IMPORTED", { source: "SapApiReference", ...stats });
+    return NextResponse.json({ data: { ...stats, source: "SapApiReference" } });
+  }
+
+  // ── all: API slice + every bundled non-API type ────────────────────────────
+  if (target === "ALL") {
+    const api = await rebuildApiSlice();
+    const types: TypeImportStats[] = [];
+    for (const t of BUNDLED_HUB_TYPES) types.push(await importBundledType(t, importedAt));
+    await logImport("SAP_HUB_SEED_IMPORTED", { source: "all", api: { ...api }, types } as unknown as Prisma.InputJsonValue);
+    return NextResponse.json({ data: { source: "all", api: { ...api, source: "SapApiReference" }, types } });
+  }
+
+  // ── count-only types: refused by design (never baked into the function) ────
+  if ((COUNT_ONLY_HUB_TYPES as string[]).includes(target)) {
+    return NextResponse.json(
+      {
+        error: {
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: `${target} is count-only (too large to bundle). Import it via \`pnpm sap:hub:import\` to a dev DB; the published-count tile is the honest resting state.`,
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  // ── one bundled non-API type ───────────────────────────────────────────────
+  if (isHubContentType(target) && (BUNDLED_HUB_TYPES as string[]).includes(target)) {
+    const stats = await importBundledType(target, importedAt);
+    await logImport("SAP_HUB_TYPE_IMPORTED", { source: `bundled:${target}`, ...stats } as unknown as Prisma.InputJsonValue);
+    return NextResponse.json({ data: { source: `bundled:${target}`, ...stats } });
+  }
+
+  return NextResponse.json(
+    {
+      error: {
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: `Unknown contentType "${target}". Use "API", "ALL", or one of: ${BUNDLED_HUB_TYPES.join(", ")}.`,
+      },
+    },
+    { status: 400 },
+  );
 }
