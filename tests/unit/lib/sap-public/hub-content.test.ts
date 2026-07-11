@@ -3,6 +3,7 @@ import {
   HUB_CONTENT_TYPES,
   HUB_CONTENT_TYPE_META,
   hubApiToService,
+  hubAvailabilityQualifier,
   isHubContentType,
   isRuntimeType,
   resolveHubStatus,
@@ -46,6 +47,21 @@ describe("resolveHubStatus (honest badges)", () => {
     expect(resolveHubStatus(runtime, new Set())).toBe("AVAILABLE");
     expect(resolveHubStatus(runtime)).toBe("AVAILABLE");
   });
+
+  it("an active CDS view (probed 200) → ACTIVATED", () => {
+    const cds = { contentType: "CDS_VIEW" as const, apiType: "ODATAV2", externalId: "CDS_X" };
+    expect(resolveHubStatus(cds, new Set(["CDS_X"]))).toBe("ACTIVATED");
+    expect(resolveHubStatus(cds, new Set())).toBe("AVAILABLE");
+  });
+
+  it("EVENT is subscribe-only → AVAILABLE, never ACTIVATED even if forced into the set", () => {
+    const ev = { contentType: "EVENT" as const, apiType: null, externalId: "CE_X" };
+    expect(resolveHubStatus(ev, new Set(["CE_X"]))).toBe("AVAILABLE");
+    expect(resolveHubStatus(ev)).toBe("AVAILABLE");
+    expect(hubAvailabilityQualifier("EVENT")).toBe("subscribe");
+    expect(hubAvailabilityQualifier("API")).toBeNull();
+    expect(hubAvailabilityQualifier("CDS_VIEW")).toBeNull();
+  });
 });
 
 describe("hubApiToService", () => {
@@ -56,7 +72,12 @@ describe("hubApiToService", () => {
     expect(svc).toMatchObject({ key: "API_X", path: "/sap/opu/odata/sap/API_X", scenario: "SAP_COM_0053" });
   });
 
-  it("returns null for non-V2 APIs and non-API content (not reliably probeable)", () => {
+  it("maps a CDS view exposed as OData V2 (so it can reach ACTIVATED)", () => {
+    const svc = hubApiToService({ ...base, contentType: "CDS_VIEW", apiType: "ODATAV2", externalId: "C_View" });
+    expect(svc).toMatchObject({ key: "C_View", path: "/sap/opu/odata/sap/C_View" });
+  });
+
+  it("returns null for non-V2, events, and grouped CDS package rows (apiType CDS)", () => {
     expect(hubApiToService({ ...base, contentType: "API", apiType: "ODATAV4", externalId: "X" })).toBeNull();
     expect(hubApiToService({ ...base, contentType: "EVENT", apiType: null, externalId: "CE_X" })).toBeNull();
     expect(hubApiToService({ ...base, contentType: "CDS_VIEW", apiType: "CDS", externalId: "CDS_SALES" })).toBeNull();
