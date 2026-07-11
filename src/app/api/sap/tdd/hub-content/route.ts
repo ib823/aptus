@@ -131,7 +131,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         total: 0,
         page,
         limit,
-        counts: { byType: {}, byStatus: { ACTIVATED: 0, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 0, AVAILABLE: 0, REFERENCE: 0 } },
+        counts: {
+          byType: Object.fromEntries(HUB_CONTENT_TYPES.map((t) => [t, 0])),
+          byStatus: { ACTIVATED: 0, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 0, AVAILABLE: 0, REFERENCE: 0 },
+        },
         catalogueImported: false,
         tenant: null,
         isAdmin,
@@ -247,7 +250,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       : { appliesToPublic: true },
     _count: { _all: true },
   });
-  const byType: Record<string, number> = {};
+  // Emit ALL 12 type keys (0 allowed) so every tile renders with honest context,
+  // not just the types that happen to have rows.
+  const byType: Record<string, number> = Object.fromEntries(HUB_CONTENT_TYPES.map((t) => [t, 0]));
   let runtimeTotal = 0;
   let referenceTotal = 0;
   for (const g of grouped) {

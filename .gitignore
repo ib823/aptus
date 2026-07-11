@@ -75,6 +75,9 @@ test-results/
 /sap-references/*
 # …but ship the illustrative demo seed for the Capability Catalogue
 !/sap-references/hub-content-seed.json
+# …and the per-type drop targets + README (committed, bundled into the admin
+# Rebuild endpoint). Real exports are dropped INTO these files, not new paths.
+!/sap-references/hub-content/
 /api-hub-catalog.json
 .vercel-token
 .claude/

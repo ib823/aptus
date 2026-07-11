@@ -215,8 +215,16 @@ export function resolveHubStatus(
 ): HubStatus {
   if (!isRuntimeType(item.contentType)) return "REFERENCE";
   // Events are consumed by subscription (CloudEvents), not a readable OData
-  // endpoint — there is nothing to probe, so they can never reach ACTIVATED.
+  // endpoint — nothing to $metadata-probe, so they never reach ACTIVATED.
+  // AVAILABLE here means "published, subscribe-only; tenant subscription NOT
+  // verified" — never "available in your tenant".
+  // TODO: runtime probe — verify a tenant's event subscription (channel/binding)
+  //       and promote from AVAILABLE only on a confirmed subscription.
   if (item.contentType === "EVENT") return "AVAILABLE";
+  // CDS_VIEW is OData-probeable but not probed in the import pass → NOT_CHECKED
+  // (un-probed, honest) via httpToRuntimeStatus below.
+  // TODO: runtime probe — sample imported CDS_VIEW rows so they can reach
+  //       ACTIVATED/NEEDS_SETUP/NOT_FOUND like APIs, instead of resting NOT_CHECKED.
   return httpToRuntimeStatus(probeOutcomes?.get(item.externalId));
 }
 

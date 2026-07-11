@@ -1,14 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-// The importer constructs a PrismaClient at module load; stub it (we only test
-// the pure mappers).
-vi.mock("@prisma/client", () => ({ PrismaClient: class {}, Prisma: { JsonNull: null } }));
-
+// Pure mappers now live in the shared lib (no Prisma), used by both the local
+// script and the admin Rebuild endpoint.
 import {
   normalizeHubRow,
+  normalizeHubRowForType,
   normalizeHubApiType,
   parseHubJson,
-} from "../../../scripts/import-sap-hub-content";
+} from "@/lib/sap-public/hub-import";
 
 describe("normalizeHubRow", () => {
   it("maps an API row (runtime, with apiType + scenario)", () => {
@@ -51,6 +50,25 @@ describe("normalizeHubRow", () => {
   it("skips rows with an unknown content type or no externalId", () => {
     expect(normalizeHubRow({ contentType: "WIDGET", externalId: "X" })).toBeNull();
     expect(normalizeHubRow({ contentType: "API" })).toBeNull();
+  });
+});
+
+describe("normalizeHubRowForType (contentType stamped from the filename)", () => {
+  it("stamps the given type — the row needs no contentType field", () => {
+    const n = normalizeHubRowForType({ externalId: "CE_BUPA_CHANGED", title: "Business Partner Changed" }, "EVENT")!;
+    expect(n.contentType).toBe("EVENT");
+    expect(n.externalId).toBe("CE_BUPA_CHANGED");
+    expect(n.appliesToPublic).toBe(true);
+    // No hubUrl in the row → synthesized content deep-link (not an /api/ link).
+    expect(n.hubUrl).toContain("/content/");
+  });
+
+  it("still returns null without a usable externalId", () => {
+    expect(normalizeHubRowForType({ title: "no id" }, "CDS_VIEW")).toBeNull();
+  });
+
+  it("does not fabricate — an empty file yields no rows", () => {
+    expect(parseHubJson("[]")).toEqual([]);
   });
 });
 
