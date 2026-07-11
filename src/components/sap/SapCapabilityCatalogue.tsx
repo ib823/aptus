@@ -31,6 +31,7 @@ interface HubItem {
   hubUrl: string;
   status: HubStatus;
   availabilityNote?: "subscribe" | null;
+  dataConfirmed?: boolean;
 }
 interface HubData {
   note?: string;
@@ -38,21 +39,40 @@ interface HubData {
   total: number;
   page: number;
   limit: number;
-  counts: { byType: Record<string, number>; byStatus: Record<HubStatus, number>; probeableRuntime: number; probed: number };
+  counts: { byType: Record<string, number>; byStatus: Record<HubStatus, number>; probeableRuntime: number; probed: number; dataConfirmed?: number; dataProbe?: boolean };
   catalogueImported: boolean;
   tenant: string | null;
   isAdmin?: boolean;
 }
 
 type StatusFilter = "ALL" | HubStatus;
-const STATUS_FILTERS: StatusFilter[] = ["ALL", "ACTIVATED", "AVAILABLE", "REFERENCE"];
-const STATUS_LABEL: Record<StatusFilter, string> = { ALL: "All", ACTIVATED: "Activated", AVAILABLE: "Available", REFERENCE: "Reference" };
+const STATUS_FILTERS: StatusFilter[] = ["ALL", "ACTIVATED", "NEEDS_SETUP", "NOT_CHECKED", "REFERENCE"];
+const STATUS_LABEL: Record<StatusFilter, string> = {
+  ALL: "All",
+  ACTIVATED: "Activated",
+  NEEDS_SETUP: "Needs setup",
+  NOT_FOUND: "Not found",
+  NOT_CHECKED: "Not checked",
+  AVAILABLE: "Available",
+  REFERENCE: "Reference",
+};
 
-/** AVAILABLE + a prerequisite (comm scenario / scope codes) → NEEDS_SETUP. */
-function badgeFor(item: HubItem): BadgeStatus {
-  if (item.status === "ACTIVATED") return "ACTIVATED";
-  if (item.status === "REFERENCE") return "REFERENCE";
-  return item.communicationScenarios.length > 0 || item.scopeItemCodes.length > 0 ? "NEEDS_SETUP" : "AVAILABLE";
+/**
+ * A one-line hint under the row, driven ONLY by the confirmed probe status —
+ * never fabricated from catalogue metadata. Un-probed says "open to probe",
+ * not "needs setup" (which killed the list-vs-detail contradiction).
+ */
+function statusHint(status: BadgeStatus): { text: string; color: string } | null {
+  switch (status) {
+    case "NEEDS_SETUP":
+      return { text: "needs setup — activate the arrangement", color: "var(--status-awaiting-fg)" };
+    case "NOT_CHECKED":
+      return { text: "not checked — open to run a live probe", color: "var(--ink-muted)" };
+    case "NOT_FOUND":
+      return { text: "path not found on this tenant", color: "var(--ink-muted)" };
+    default:
+      return null;
+  }
 }
 
 function groupByLoB(items: HubItem[]): Array<[string, HubItem[]]> {
@@ -72,10 +92,14 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
 
   const [contentType, setContentType] = useState<HubContentType | "ALL">("ALL");
   const [status, setStatus] = useState<StatusFilter>("ALL");
+  const [dataProbe, setDataProbe] = useState(false);
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Confirmed statuses lifted from a detail live-probe, keyed by item id. These
+  // OVERRIDE the list's (capped) status so list & detail can never contradict.
+  const [probedStatus, setProbedStatus] = useState<Record<string, HubStatus>>({});
   // Robust autofill suppression: Chrome ignores autoComplete="off" on search
   // fields, so also use a randomized name + readonly-until-focus so nothing is
   // ever autofilled on load.
@@ -98,6 +122,7 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
       if (contentType !== "ALL") sp.set("contentType", contentType);
       if (status !== "ALL") sp.set("status", status);
       if (q) sp.set("q", q);
+      if (dataProbe) sp.set("dataProbe", "1");
       const res = await fetch(`/api/sap/tdd/hub-content?${sp.toString()}`);
       const json = (await res.json()) as { data?: HubData; error?: { message?: string } };
       if (!res.ok || !json.data) throw new Error(json.error?.message ?? "Failed to load the catalogue");
@@ -109,7 +134,7 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
     } finally {
       setLoading(false);
     }
-  }, [product, page, contentType, status, q]);
+  }, [product, page, contentType, status, q, dataProbe]);
 
   useEffect(() => {
     void load();
@@ -136,9 +161,18 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
   }, [load]);
 
   const byType = data?.counts.byType ?? {};
-  const byStatus = data?.counts.byStatus ?? { ACTIVATED: 0, AVAILABLE: 0, REFERENCE: 0 };
+  const byStatus: Record<HubStatus, number> = data?.counts.byStatus ?? {
+    ACTIVATED: 0,
+    NEEDS_SETUP: 0,
+    NOT_FOUND: 0,
+    NOT_CHECKED: 0,
+    AVAILABLE: 0,
+    REFERENCE: 0,
+  };
   const probeable = data?.counts.probeableRuntime ?? 0;
   const probed = data?.counts.probed ?? 0;
+  const dataConfirmedCount = data?.counts.dataConfirmed ?? 0;
+  const dataProbeOn = data?.counts.dataProbe ?? false;
   const apiTotal = data?.counts.byType.API ?? 0;
   const totalPages = data ? Math.max(1, Math.ceil(data.total / limit)) : 1;
   const groups = data ? groupByLoB(data.items) : [];
@@ -199,10 +233,13 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
         <>
           <ReadinessScorecard
             activated={byStatus.ACTIVATED}
+            dataConfirmed={dataConfirmedCount}
+            dataProbe={dataProbeOn}
+            needsSetup={byStatus.NEEDS_SETUP}
+            notChecked={byStatus.NOT_CHECKED}
             probed={probed}
             probeable={probeable}
             apiTotal={apiTotal}
-            available={byStatus.AVAILABLE}
             reference={byStatus.REFERENCE}
           />
           <ContentTypeTiles byType={byType} activeType={contentType} onSelect={setContentType} />
@@ -231,6 +268,20 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
                 );
               })}
             </div>
+            <div className="flex items-center gap-2">
+            <label
+              className="flex cursor-pointer items-center gap-1.5 text-xs"
+              style={{ color: "var(--ink-secondary)" }}
+              title="Also run a read-only 1-row GET ($top=1) on each authorized service to confirm the comm user can read live data — bounded, read-only."
+            >
+              <input
+                type="checkbox"
+                checked={dataProbe}
+                onChange={(e) => setDataProbe(e.target.checked)}
+                className="size-3.5 accent-[var(--brand-navy)]"
+              />
+              Confirm data reads
+            </label>
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2" style={{ color: "var(--ink-muted)" }} />
               <input
@@ -250,6 +301,7 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
                 className="h-9 w-full rounded-[var(--radius-input)] pl-8 pr-3 text-sm outline-none sm:w-72"
                 style={{ background: "var(--surface-paper)", color: "var(--ink-primary)", border: "1px solid var(--border-default)" }}
               />
+            </div>
             </div>
           </div>
 
@@ -275,6 +327,9 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
                   {rows.map((item) => {
                     const meta = HUB_CONTENT_TYPE_META[item.contentType];
                     const expanded = expandedId === item.id;
+                    // Detail-probe result (if any) wins over the capped list status.
+                    const effStatus: BadgeStatus = probedStatus[item.id] ?? item.status;
+                    const hint = statusHint(effStatus);
                     return (
                       <li key={item.id} style={{ borderTop: "1px solid var(--border-default)" }}>
                         <button
@@ -313,20 +368,30 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
                                   {item.communicationScenarios[0]}
                                 </code>
                               )}
-                              {badgeFor(item) === "NEEDS_SETUP" && (
-                                <span className="text-xs" style={{ color: "var(--status-awaiting-fg)" }}>
-                                  needs setup — activate the arrangement
+                              {item.dataConfirmed && (
+                                <span className="text-xs font-medium" style={{ color: "var(--status-signed-fg)" }}>
+                                  ✓ data-confirmed
+                                </span>
+                              )}
+                              {hint && (
+                                <span className="text-xs" style={{ color: hint.color }}>
+                                  {hint.text}
                                 </span>
                               )}
                             </div>
                           </div>
                           <div className="shrink-0">
-                            <StatusBadge status={badgeFor(item)} subscribe={item.availabilityNote === "subscribe"} />
+                            <StatusBadge status={effStatus} subscribe={item.availabilityNote === "subscribe"} />
                           </div>
                         </button>
                         {expanded && (
                           <div className="px-4 pb-4">
-                            <CapabilityDetail id={item.id} product={product} onClose={() => setExpandedId(null)} />
+                            <CapabilityDetail
+                              id={item.id}
+                              product={product}
+                              onClose={() => setExpandedId(null)}
+                              onResolved={(s) => setProbedStatus((m) => (m[item.id] === s ? m : { ...m, [item.id]: s }))}
+                            />
                           </div>
                         )}
                       </li>

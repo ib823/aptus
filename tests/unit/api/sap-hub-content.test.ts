@@ -88,8 +88,9 @@ describe("GET /api/sap/tdd/hub-content", () => {
     const body = await (await GET(makeRequest())).json();
     const byId = Object.fromEntries(body.data.items.map((i: { externalId: string; status: string }) => [i.externalId, i.status]));
     expect(byId).toEqual({ API_PO: "ACTIVATED", CE_X: "AVAILABLE", BADI_X: "REFERENCE" });
-    // runtime total 10 (API5+EVENT5), activated 1 → AVAILABLE 9; reference 1
-    expect(body.data.counts.byStatus).toEqual({ ACTIVATED: 1, AVAILABLE: 9, REFERENCE: 1 });
+    // runtime 10 (API5+EVENT5); EVENTs(5)→AVAILABLE; probeable runtime 5, of which
+    // 1 activated → 4 NOT_CHECKED (beyond the 2-target probe); reference 1.
+    expect(body.data.counts.byStatus).toEqual({ ACTIVATED: 1, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 4, AVAILABLE: 5, REFERENCE: 1 });
     expect(body.data.counts.byType).toEqual({ API: 5, EVENT: 5, BADI: 1 });
     expect(body.data.counts.probed).toBe(2); // API_PO + C_VIEW merged targets
     expect(body.data.tenant).toBe("ABeam TDD");
@@ -149,12 +150,22 @@ describe("GET /api/sap/tdd/hub-content", () => {
     expect(body.data.counts.byStatus.ACTIVATED).toBe(1);
   });
 
-  it("without a live 200, runtime items are AVAILABLE not ACTIVATED", async () => {
+  it("probed 403 → NEEDS_SETUP (confirmed negative), never ACTIVATED", async () => {
     mocks.probeTenantCapabilities.mockResolvedValue([{ service: "API_PO", exposed: false, status: 403 }]);
     const body = await (await GET(makeRequest())).json();
     const po = body.data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
-    expect(po.status).toBe("AVAILABLE");
+    expect(po.status).toBe("NEEDS_SETUP");
     expect(body.data.counts.byStatus.ACTIVATED).toBe(0);
+    expect(body.data.counts.byStatus.NEEDS_SETUP).toBe(1);
+  });
+
+  it("a runtime service beyond the probe window → NOT_CHECKED (never a fabricated Needs setup)", async () => {
+    // Only C_VIEW gets a live 200; API_PO is un-probed → must be NOT_CHECKED, not a
+    // metadata-inferred 'Needs setup'. This is the list-vs-detail contradiction fix.
+    mocks.probeTenantCapabilities.mockResolvedValue([{ service: "C_VIEW", exposed: true, status: 200 }]);
+    const body = await (await GET(makeRequest())).json();
+    const po = body.data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
+    expect(po.status).toBe("NOT_CHECKED");
   });
 
   it("passes a contentType filter through to the query", async () => {

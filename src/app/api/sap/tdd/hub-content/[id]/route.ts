@@ -59,7 +59,6 @@ export async function GET(
   let ladder: string | null = null;
   let entities: unknown = null;
   let metadataFlavor: string | null = null;
-  let exposed = false;
   if (tenant && service && request.nextUrl.searchParams.get("probe") !== "0") {
     try {
       const result = await probeService(product.envPrefix, tenant, service);
@@ -67,7 +66,6 @@ export async function GET(
       ladder = result.ladder ?? null;
       entities = result.entities ?? null;
       metadataFlavor = result.metadataFlavor ?? null;
-      exposed = result.exposed;
     } catch {
       probeStatus = null;
     }
@@ -79,10 +77,11 @@ export async function GET(
     probeStatus,
   );
 
-  const status = resolveHubStatus(
-    { contentType, apiType: item.apiType, externalId: item.externalId },
-    exposed ? new Set([item.externalId]) : new Set(),
-  );
+  // Feed the SAME outcome-driven resolver the list uses — the live probe's HTTP
+  // code (200/403/404) is authoritative here, so detail and list can't disagree.
+  const outcomes = new Map<string, number>();
+  if (probeStatus != null) outcomes.set(item.externalId, probeStatus);
+  const status = resolveHubStatus({ contentType, apiType: item.apiType, externalId: item.externalId }, outcomes);
 
   // Blueprint steps, if the export carried any (PROCESS_BLUEPRINT / SCENARIO).
   const raw = item.rawMetadataJson as { steps?: unknown } | null;

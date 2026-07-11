@@ -27,7 +27,19 @@ export type HubContentType =
   | "VPUC"
   | "ANALYTICS";
 
-export type HubStatus = "ACTIVATED" | "AVAILABLE" | "REFERENCE";
+/**
+ * Probe-outcome-driven status. A badge asserts ONLY what a live probe
+ * established — un-probed is UNKNOWN (NOT_CHECKED), never a confirmed negative.
+ *   ACTIVATED   — probed, live 200 (authorized/reachable)
+ *   NEEDS_SETUP — probed, 403/401 (published for this edition; the tenant hasn't
+ *                 authorized the SAP_COM_xxxx arrangement). Confirmed negative.
+ *   NOT_FOUND   — probed, 404 (service path absent on this tenant). Distinct from 403.
+ *   NOT_CHECKED — NOT probed (beyond the probe cap, non-probeable, apiType null,
+ *                 or an inconclusive 0/5xx). UNKNOWN — must never render "Needs setup".
+ *   AVAILABLE   — EVENT (subscribe-only; no read endpoint, so never probed).
+ *   REFERENCE   — design-time content; not a tenant endpoint.
+ */
+export type HubStatus = "ACTIVATED" | "NEEDS_SETUP" | "NOT_FOUND" | "NOT_CHECKED" | "AVAILABLE" | "REFERENCE";
 
 export interface HubContentTypeMeta {
   label: string;
@@ -172,26 +184,40 @@ export interface HubItemForStatus {
 }
 
 /**
- * Resolve the honest status badge.
- *   reference type                → REFERENCE
- *   EVENT                         → AVAILABLE (subscribe-only; no read endpoint,
- *                                   so never ACTIVATED — see hubAvailabilityQualifier)
- *   runtime + live $metadata 200  → ACTIVATED
- *   runtime, otherwise            → AVAILABLE (published, not confirmed active)
+ * Map a runtime service's live-probe HTTP outcome to a status. `undefined`
+ * means the service was NOT probed → NOT_CHECKED (unknown), never a negative.
+ * Only a real HTTP code asserts anything; inconclusive results (0 / 5xx) stay
+ * NOT_CHECKED so a badge never over-claims what the probe did not establish.
+ */
+export function httpToRuntimeStatus(http: number | undefined): HubStatus {
+  if (http === undefined) return "NOT_CHECKED";
+  if (http === 200) return "ACTIVATED";
+  if (http === 403 || http === 401) return "NEEDS_SETUP"; // published, not authorized
+  if (http === 404) return "NOT_FOUND"; // path absent on this tenant
+  return "NOT_CHECKED"; // 0 / 5xx / anything inconclusive — don't over-claim
+}
+
+/**
+ * Resolve the honest status badge from live-probe OUTCOMES (not just a 200 set).
+ *   reference type   → REFERENCE
+ *   EVENT            → AVAILABLE (subscribe-only; no read endpoint, never probed)
+ *   runtime, probed  → ACTIVATED / NEEDS_SETUP / NOT_FOUND per httpToRuntimeStatus
+ *   runtime, un-probed → NOT_CHECKED (UNKNOWN — never NEEDS_SETUP)
  *
- * `activatedIds` is the set of externalIds whose live probe returned 200.
- * Items not in the set (not probeable / not probed) stay AVAILABLE —
- * ACTIVATED is never inferred.
+ * `probeOutcomes` maps externalId → the HTTP status of its live probe. Only
+ * probed services appear; absence means un-probed → NOT_CHECKED. This is what
+ * kills the list-vs-detail contradiction: a badge can only assert a confirmed
+ * probe result, never a fabricated "Needs setup" for a service never tested.
  */
 export function resolveHubStatus(
   item: HubItemForStatus,
-  activatedIds?: Set<string>,
+  probeOutcomes?: Map<string, number>,
 ): HubStatus {
   if (!isRuntimeType(item.contentType)) return "REFERENCE";
   // Events are consumed by subscription (CloudEvents), not a readable OData
   // endpoint — there is nothing to probe, so they can never reach ACTIVATED.
   if (item.contentType === "EVENT") return "AVAILABLE";
-  return activatedIds?.has(item.externalId) ? "ACTIVATED" : "AVAILABLE";
+  return httpToRuntimeStatus(probeOutcomes?.get(item.externalId));
 }
 
 /**

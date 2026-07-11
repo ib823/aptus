@@ -29,6 +29,7 @@ import {
   HUB_CONTENT_TYPE_META,
   hubApiToService,
   hubAvailabilityQualifier,
+  httpToRuntimeStatus,
   isHubContentType,
   isRuntimeType,
   pathToApiId,
@@ -39,6 +40,9 @@ import {
 import { ERROR_CODES } from "@/types/api";
 
 const RUNTIME_TYPES = HUB_CONTENT_TYPES.filter(isRuntimeType);
+// Runtime types that carry a probeable read endpoint (everything runtime except
+// EVENTs, which are subscribe-only → AVAILABLE and never NOT_CHECKED).
+const RUNTIME_PROBEABLE_TYPES = RUNTIME_TYPES.filter((t) => t !== "EVENT");
 const REFERENCE_TYPES = HUB_CONTENT_TYPES.filter((t) => !isRuntimeType(t));
 const PROBE_CAP = 60; // bound the live probe like the capabilities route
 
@@ -53,7 +57,8 @@ async function probeActivatedApiIds(
   prefix: string,
   tenant: { key: string; label: string; baseUrl: string },
   product: { services: SapServiceDefinition[] },
-): Promise<{ activated: Set<string>; probed: number }> {
+  dataProbe: boolean,
+): Promise<{ outcomes: Map<string, number>; dataConfirmed: Set<string>; probed: number }> {
   const select = { contentType: true, apiType: true, externalId: true, title: true, packageId: true, communicationScenarios: true } as const;
   // Sample both V2 (reliable path) and V4 (best-effort path) so V4 rows can also
   // reach ACTIVATED — alphabetical ordering alone never reaches the CE_* (V4) set.
@@ -78,9 +83,17 @@ async function probeActivatedApiIds(
   // `service` equals the SapHubContent externalId, not the display key.
   const curated = product.services.map((s) => ({ ...s, key: pathToApiId(s.path) }));
   const targets = mergeProbeTargets(curated, dynamic, PROBE_CAP);
-  if (targets.length === 0) return { activated: new Set(), probed: 0 };
-  const results = await probeTenantCapabilities(prefix, tenant, targets);
-  return { activated: new Set(results.filter((r) => r.exposed).map((r) => r.service)), probed: targets.length };
+  if (targets.length === 0) return { outcomes: new Map(), dataConfirmed: new Set(), probed: 0 };
+  const results = await probeTenantCapabilities(prefix, tenant, targets, 4, { dataProbe });
+  // Keep the FULL outcome (HTTP status) per probed service — not just the 200s —
+  // so the badge can distinguish 200/403/404, and un-probed stays NOT_CHECKED.
+  const outcomes = new Map<string, number>();
+  for (const r of results) outcomes.set(r.service, r.status);
+  return {
+    outcomes,
+    dataConfirmed: new Set(results.filter((r) => r.dataConfirmed).map((r) => r.service)),
+    probed: targets.length,
+  };
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -101,8 +114,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const typeParam = params.get("contentType");
   const contentType: HubContentType | null = typeParam && isHubContentType(typeParam) ? typeParam : null;
   const statusParam = (params.get("status") ?? "ALL").toUpperCase();
-  const status: HubStatus | "ALL" =
-    statusParam === "ACTIVATED" || statusParam === "AVAILABLE" || statusParam === "REFERENCE" ? statusParam : "ALL";
+  const VALID_STATUS: HubStatus[] = ["ACTIVATED", "NEEDS_SETUP", "NOT_FOUND", "NOT_CHECKED", "AVAILABLE", "REFERENCE"];
+  const status: HubStatus | "ALL" = (VALID_STATUS as string[]).includes(statusParam) ? (statusParam as HubStatus) : "ALL";
   const q = (params.get("q") ?? "").trim();
   const page = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
   const limit = Math.min(200, Math.max(1, Number.parseInt(params.get("limit") ?? "50", 10) || 50));
@@ -118,7 +131,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         total: 0,
         page,
         limit,
-        counts: { byType: {}, byStatus: { ACTIVATED: 0, AVAILABLE: 0, REFERENCE: 0 } },
+        counts: { byType: {}, byStatus: { ACTIVATED: 0, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 0, AVAILABLE: 0, REFERENCE: 0 } },
         catalogueImported: false,
         tenant: null,
         isAdmin,
@@ -129,19 +142,36 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // ── resolve the tenant + activated set (bounded live probe) ────────────
   const tenantKey = params.get("tenant") ?? getConfiguredSapTenants(product.envPrefix)[0]?.key;
   const tenant = tenantKey ? getSapTenant(product.envPrefix, tenantKey) : null;
-  let activated = new Set<string>();
+  const dataProbe = params.get("dataProbe") === "1"; // opt-in 1-row read to data-confirm
+  let outcomes = new Map<string, number>();
+  let dataConfirmed = new Set<string>();
   let probed = 0;
   if (tenant && probeEnabled) {
     try {
-      const r = await probeActivatedApiIds(product.envPrefix, tenant, product);
-      activated = r.activated;
+      const r = await probeActivatedApiIds(product.envPrefix, tenant, product, dataProbe);
+      outcomes = r.outcomes;
+      dataConfirmed = r.dataConfirmed;
       probed = r.probed;
     } catch {
-      activated = new Set(); // probe failure → nothing ACTIVATED (honest); everything runtime AVAILABLE
+      outcomes = new Map(); // probe failure → nothing probed (honest); runtime rows → NOT_CHECKED
+      dataConfirmed = new Set();
       probed = 0;
     }
   }
-  const activatedIds = [...activated];
+  // Partition the probed services by their confirmed HTTP outcome. Only these
+  // ids carry a definite status; every other runtime row is NOT_CHECKED.
+  const activatedIds: string[] = [];
+  const needsSetupIds: string[] = [];
+  const notFoundIds: string[] = [];
+  for (const [svc, http] of outcomes) {
+    const s = httpToRuntimeStatus(http);
+    if (s === "ACTIVATED") activatedIds.push(svc);
+    else if (s === "NEEDS_SETUP") needsSetupIds.push(svc);
+    else if (s === "NOT_FOUND") notFoundIds.push(svc);
+  }
+  // Conclusively-probed = the three definite buckets; anything else runtime is
+  // NOT_CHECKED (includes inconclusive 0/5xx probes and everything beyond the cap).
+  const conclusiveIds = [...activatedIds, ...needsSetupIds, ...notFoundIds];
 
   // ── build the WHERE from filters (status pre-filters at SQL level) ─────
   const and: Prisma.SapHubContentWhereInput[] = [{ appliesToPublic: true }];
@@ -157,11 +187,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
   if (status === "REFERENCE") {
     and.push({ contentType: { in: REFERENCE_TYPES } });
-  } else if (status === "ACTIVATED") {
-    and.push(activatedIds.length ? { contentType: "API", externalId: { in: activatedIds } } : { id: "__none__" });
   } else if (status === "AVAILABLE") {
-    and.push({ contentType: { in: RUNTIME_TYPES } });
-    if (activatedIds.length) and.push({ NOT: { externalId: { in: activatedIds } } });
+    // AVAILABLE now means subscribe-only EVENTs (no read endpoint to probe).
+    and.push({ contentType: "EVENT" });
+  } else if (status === "ACTIVATED") {
+    and.push(activatedIds.length ? { externalId: { in: activatedIds } } : { id: "__none__" });
+  } else if (status === "NEEDS_SETUP") {
+    and.push(needsSetupIds.length ? { externalId: { in: needsSetupIds } } : { id: "__none__" });
+  } else if (status === "NOT_FOUND") {
+    and.push(notFoundIds.length ? { externalId: { in: notFoundIds } } : { id: "__none__" });
+  } else if (status === "NOT_CHECKED") {
+    // Probeable runtime rows we could NOT confirm (beyond the cap / inconclusive).
+    and.push({ contentType: { in: RUNTIME_PROBEABLE_TYPES } });
+    if (conclusiveIds.length) and.push({ NOT: { externalId: { in: conclusiveIds } } });
   }
   const where: Prisma.SapHubContentWhereInput = { AND: and };
 
@@ -188,8 +226,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     scopeItemCodes: r.scopeItemCodes,
     itemCount: r.itemCount,
     hubUrl: r.hubUrl,
-    status: resolveHubStatus({ contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId }, activated),
+    status: resolveHubStatus({ contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId }, outcomes),
     availabilityNote: hubAvailabilityQualifier(r.contentType as HubContentType),
+    dataConfirmed: dataConfirmed.has(r.externalId),
   }));
 
   // ── counts across the full edition set (ignoring the type/status filter
@@ -216,10 +255,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (isRuntimeType(g.contentType as HubContentType)) runtimeTotal += g._count._all;
     else referenceTotal += g._count._all;
   }
+  // Reconcile counts with the outcome taxonomy. EVENTs are the only AVAILABLE
+  // rows; every other runtime row is either conclusively probed or NOT_CHECKED.
+  const eventCount = byType["EVENT"] ?? 0;
+  const probeableRuntimeRows = Math.max(0, runtimeTotal - eventCount);
   const activatedCount = activatedIds.length;
-  const byStatus = {
+  const needsSetupCount = needsSetupIds.length;
+  const notFoundCount = notFoundIds.length;
+  const notCheckedCount = Math.max(0, probeableRuntimeRows - activatedCount - needsSetupCount - notFoundCount);
+  const byStatus: Record<HubStatus, number> = {
     ACTIVATED: activatedCount,
-    AVAILABLE: Math.max(0, runtimeTotal - activatedCount),
+    NEEDS_SETUP: needsSetupCount,
+    NOT_FOUND: notFoundCount,
+    NOT_CHECKED: notCheckedCount,
+    AVAILABLE: eventCount,
     REFERENCE: referenceTotal,
   };
 
@@ -235,7 +284,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       total,
       page,
       limit,
-      counts: { byType, byStatus, probeableRuntime, probed },
+      counts: { byType, byStatus, probeableRuntime, probed, dataConfirmed: dataConfirmed.size, dataProbe },
       catalogueImported: true,
       tenant: tenant?.label ?? null,
       isAdmin,
