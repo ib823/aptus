@@ -607,6 +607,21 @@ export function parseEntityCapabilities(metadataXml: string): EntityCapability[]
   return caps;
 }
 
+/**
+ * Single source of truth for the read/write summary derived from $metadata
+ * capabilities. Used identically by the chips, the list route, and the detail
+ * route so a row's collapsed chip can never contradict its expanded detail.
+ *   read  = any entity set is readable
+ *   write = any entity set is EXPLICITLY creatable OR updatable OR deletable
+ *           (create-only / update-only / delete-only all count; V4 best-effort
+ *           nulls never read as writable)
+ */
+export function deriveReadWrite(entities: EntityCapability[]): { read: boolean; write: boolean } {
+  const read = entities.some((e) => e.readable);
+  const write = entities.some((e) => e.creatable === true || e.updatable === true || e.deletable === true);
+  return { read, write };
+}
+
 function toRecordRows(rows: unknown[]): Array<Record<string, unknown>> {
   return rows
     .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object" && !Array.isArray(row))

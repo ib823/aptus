@@ -1,19 +1,16 @@
 /**
  * CapabilityChips — capability KIND chips (design-token contract §1).
  * read→decision-standard, write→decision-custom, subscribe→decision-configure,
- * n/a→decision-open. With `entities` (from a live probe / item detail) the chips
- * reflect confirmed C/R/U/D; without them (the list) they reflect the kind by
- * content type. Colour via var(--token) only.
+ * n/a→decision-open. Read/write come ONLY from a real probe: the `capability`
+ * {read,write} is derived server-side by the shared deriveReadWrite (list route
+ * for the ~60 probed rows, detail route for an opened row) so the collapsed list
+ * chip can never contradict the expanded detail. Without a probe there is NO
+ * "read" claim — an un-probed OData row shows a muted "not probed", SOAP shows
+ * its modality, and a null-apiType row makes no CRUD claim at all.
+ * Colour via var(--token) only.
  */
 import type { HubContentType } from "@/lib/sap-public/hub-content";
 import { isRuntimeType } from "@/lib/sap-public/hub-content";
-
-interface EntityCap {
-  readable: boolean;
-  creatable: boolean | null;
-  updatable: boolean | null;
-  deletable: boolean | null;
-}
 
 const CHIP: Record<string, string> = {
   read: "var(--decision-standard)",
@@ -21,6 +18,8 @@ const CHIP: Record<string, string> = {
   subscribe: "var(--decision-configure)",
   na: "var(--decision-open)",
   reference: "var(--decision-open)",
+  soap: "var(--ink-muted)",
+  notprobed: "var(--ink-muted)",
 };
 
 function Chip({ label, color }: { label: string; color: string }) {
@@ -47,33 +46,45 @@ function Chip({ label, color }: { label: string; color: string }) {
 
 export function CapabilityChips({
   contentType,
-  entities,
+  apiType,
+  capability,
   subscribe,
 }: {
   contentType: HubContentType;
-  entities?: EntityCap[] | null;
+  /** Backend apiType (ODATAV2/ODATAV4/SOAP/…), used only for the un-probed modality hint. */
+  apiType?: string | null;
+  /** Real read/write from a live probe (shared deriveReadWrite). null/absent = not probed. */
+  capability?: { read: boolean; write: boolean } | null;
   subscribe?: boolean;
 }) {
-  const chips: Array<{ label: string; key: string }> = [];
+  const chips: Array<{ label: string; key: string; title?: string }> = [];
 
   if (contentType === "EVENT" || subscribe) {
     chips.push({ label: "subscribe", key: "subscribe" });
   } else if (!isRuntimeType(contentType)) {
     chips.push({ label: "reference", key: "reference" });
-  } else if (entities && entities.length > 0) {
-    // Confirmed capabilities from $metadata.
-    if (entities.some((e) => e.readable)) chips.push({ label: "read", key: "read" });
-    if (entities.some((e) => e.creatable === true)) chips.push({ label: "write", key: "write" });
+  } else if (capability) {
+    // Confirmed by a live probe — never fabricated.
+    if (capability.read) chips.push({ label: "read", key: "read" });
+    if (capability.write) chips.push({ label: "write", key: "write" });
     if (chips.length === 0) chips.push({ label: "n/a", key: "na" });
   } else {
-    // List view (no probe yet): an OData runtime service is read-capable by kind.
-    chips.push({ label: "read", key: "read" });
+    // Runtime, but NOT probed → never claim "read". Show modality instead.
+    const t = (apiType ?? "").toUpperCase();
+    if (t === "SOAP") {
+      chips.push({ label: "SOAP", key: "soap", title: "SOAP service — not OData-readable; direction/CRUD confirmed only via the service contract." });
+    } else if (t) {
+      chips.push({ label: "not probed", key: "notprobed", title: "Read/write unknown until a live probe runs — open the item to probe." });
+    }
+    // null apiType → no CRUD claim at all (render nothing).
   }
 
   return (
     <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
       {chips.map((c) => (
-        <Chip key={c.key} label={c.label} color={CHIP[c.key] ?? "var(--decision-open)"} />
+        <span key={c.key} title={c.title}>
+          <Chip label={c.label} color={CHIP[c.key] ?? "var(--decision-open)"} />
+        </span>
       ))}
     </span>
   );

@@ -21,6 +21,11 @@ vi.mock("@/lib/sap-public/tdd-connector", () => ({
   isSapTddPublicAccessEnabled: mocks.isSapTddPublicAccessEnabled,
   getConfiguredSapTenants: mocks.getConfiguredSapTenants,
   getSapTenant: mocks.getSapTenant,
+  // real (pure) derivation — the route uses it to attach read/write to probed rows.
+  deriveReadWrite: (entities: Array<{ readable: boolean; creatable: boolean | null; updatable: boolean | null; deletable: boolean | null }>) => ({
+    read: entities.some((e) => e.readable),
+    write: entities.some((e) => e.creatable === true || e.updatable === true || e.deletable === true),
+  }),
 }));
 vi.mock("@/lib/sap-public/capability-probe", () => ({ probeTenantCapabilities: mocks.probeTenantCapabilities }));
 
@@ -99,6 +104,22 @@ describe("GET /api/sap/tdd/hub-content", () => {
     expect(Object.keys(body.data.counts.byType)).toHaveLength(12);
     expect(body.data.counts.probed).toBe(2); // API_PO + C_VIEW merged targets
     expect(body.data.tenant).toBe("ABeam TDD");
+  });
+
+  it("attaches real read/write to PROBED rows (no click needed); un-probed rows carry none", async () => {
+    // Probe returns a CRUD service (create + delete) for API_PO.
+    mocks.probeTenantCapabilities.mockResolvedValue([
+      { service: "API_PO", exposed: true, status: 200, entities: [
+        { name: "A", readable: true, creatable: true, updatable: null, deletable: null, pageable: null },
+        { name: "B", readable: true, creatable: null, updatable: null, deletable: true, pageable: null },
+      ] },
+    ]);
+    const body = await (await GET(makeRequest())).json();
+    const po = body.data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
+    expect(po.capability).toEqual({ read: true, write: true }); // create OR delete ⇒ write
+    // CE_X (event) + BADI_X (reference) were not probed → no capability claim.
+    const ev = body.data.items.find((i: { externalId: string }) => i.externalId === "CE_X");
+    expect(ev.capability).toBeNull();
   });
 
   it("curated-first identity: a service exposed via the curated set marks its row ACTIVATED even when it's NOT in the alphabetical probe window", async () => {
