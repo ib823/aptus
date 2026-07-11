@@ -17,6 +17,7 @@ const PAYLOAD = {
     counts: { byType: { API: 941 }, byStatus: { ACTIVATED: 5, AVAILABLE: 936, REFERENCE: 0 }, probeableRuntime: 128, probed: 60 },
     catalogueImported: true,
     tenant: "ABeam TDD",
+    isAdmin: true,
   },
 };
 
@@ -42,6 +43,17 @@ describe("SapCapabilityCatalogue (CatalogueList) smoke", () => {
     // LoB group header + the item row.
     expect(screen.getByText("Procurement")).toBeInTheDocument();
     expect(screen.getByText("Purchase Order")).toBeInTheDocument();
+
+    // Admin rebuild control is always available in the header (populated state).
+    expect(screen.getByRole("button", { name: /Rebuild from API reference/i })).toBeInTheDocument();
+
+    // Search input: no stray autofilled value on load, readonly-until-focus,
+    // randomized (non-guessable) name so the browser can't autofill it.
+    const searchInput = screen.getByPlaceholderText(/Search title/i) as HTMLInputElement;
+    expect(searchInput.value).toBe("");
+    expect(searchInput).toHaveAttribute("readonly");
+    expect(searchInput.getAttribute("name")).toMatch(/^cap-search-/);
+    expect(searchInput.getAttribute("name")).not.toBe("capability-search");
 
     // The dark-mode scope hook is present on the root.
     expect(container.querySelector("[data-cap-catalogue]")).not.toBeNull();

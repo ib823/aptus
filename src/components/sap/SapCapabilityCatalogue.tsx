@@ -8,7 +8,7 @@
  * Colour via var(--token) only; flips in dark within [data-cap-catalogue].
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { AlertTriangle, RefreshCw, Search } from "lucide-react";
 import { HUB_CONTENT_TYPE_META, type HubContentType, type HubStatus } from "@/lib/sap-public/hub-content";
 import { ReadinessScorecard } from "./capability/ReadinessScorecard";
@@ -41,6 +41,7 @@ interface HubData {
   counts: { byType: Record<string, number>; byStatus: Record<HubStatus, number>; probeableRuntime: number; probed: number };
   catalogueImported: boolean;
   tenant: string | null;
+  isAdmin?: boolean;
 }
 
 type StatusFilter = "ALL" | HubStatus;
@@ -75,6 +76,11 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Robust autofill suppression: Chrome ignores autoComplete="off" on search
+  // fields, so also use a randomized name + readonly-until-focus so nothing is
+  // ever autofilled on load.
+  const searchFieldName = `cap-search-${useId()}`;
+  const [searchReadOnly, setSearchReadOnly] = useState(true);
   const limit = 50;
 
   useEffect(() => {
@@ -143,13 +149,29 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
       className="space-y-5 rounded-[var(--radius-card-warm)] p-1"
       style={{ background: "var(--surface-cream)", color: "var(--ink-primary)" }}
     >
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight" style={{ color: "var(--brand-navy)" }}>
-          Capability Catalogue
-        </h2>
-        <p className="text-sm" style={{ color: "var(--ink-secondary)" }}>
-          SAP APIs for S/4HANA Cloud Public on {data?.tenant ?? "no tenant"} — activated vs available. Events, CDS &amp; other content types load once real exports are imported.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight" style={{ color: "var(--brand-navy)" }}>
+            Capability Catalogue
+          </h2>
+          <p className="text-sm" style={{ color: "var(--ink-secondary)" }}>
+            SAP APIs for S/4HANA Cloud Public on {data?.tenant ?? "no tenant"} — activated vs available. Events, CDS &amp; other content types load once real exports are imported.
+          </p>
+        </div>
+        {/* Always-available admin control (server still enforces the guard). */}
+        {data?.isAdmin && (
+          <button
+            type="button"
+            onClick={() => void importSeed()}
+            disabled={seeding}
+            title="Rebuild the API rows from SapApiReference (admin only)"
+            className="inline-flex shrink-0 items-center gap-2 rounded-[var(--radius-input)] px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+            style={{ border: "1px solid var(--brand-navy)", color: "var(--brand-navy)", background: "var(--surface-paper)" }}
+          >
+            {seeding && <RefreshCw className="size-3.5 animate-spin" />}
+            Rebuild from API reference
+          </button>
+        )}
       </div>
 
       {error && (
@@ -169,16 +191,7 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
             <AlertTriangle className="size-4" /> Catalogue not imported
           </p>
           <p className="mt-1">{note}</p>
-          <button
-            type="button"
-            onClick={() => void importSeed()}
-            disabled={seeding}
-            className="mt-3 inline-flex items-center gap-2 rounded-[var(--radius-input)] px-3 py-1.5 text-sm font-medium disabled:opacity-50"
-            style={{ border: "1px solid var(--brand-navy)", color: "var(--brand-navy)", background: "var(--surface-paper)" }}
-          >
-            {seeding && <RefreshCw className="size-3.5 animate-spin" />}
-            Rebuild catalogue from API reference (admin)
-          </button>
+          {data?.isAdmin && <p className="mt-2 text-xs">Use “Rebuild from API reference” in the header above to populate it.</p>}
         </div>
       )}
 
@@ -222,10 +235,15 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2" style={{ color: "var(--ink-muted)" }} />
               <input
                 type="search"
-                name="capability-search"
+                name={searchFieldName}
+                readOnly={searchReadOnly}
+                onFocus={() => setSearchReadOnly(false)}
                 autoComplete="off"
                 autoCorrect="off"
+                autoCapitalize="off"
                 spellCheck={false}
+                data-1p-ignore
+                data-lpignore="true"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search title, id, description…"
