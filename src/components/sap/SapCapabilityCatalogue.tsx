@@ -109,6 +109,26 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
     void load();
   }, [load]);
 
+  const [seeding, setSeeding] = useState(false);
+  const importSeed = useCallback(async () => {
+    setSeeding(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/sap/tdd/hub-content/seed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: "REBUILD SAP HUB CATALOGUE" }),
+      });
+      const json = (await res.json()) as { data?: { imported: number }; error?: { message?: string } };
+      if (!res.ok) throw new Error(json.error?.message ?? "Rebuild failed (admin only)");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setSeeding(false);
+    }
+  }, [load]);
+
   const byType = data?.counts.byType ?? {};
   const byStatus = data?.counts.byStatus ?? { ACTIVATED: 0, AVAILABLE: 0, REFERENCE: 0 };
   const probeable = data?.counts.probeableRuntime ?? 0;
@@ -147,6 +167,16 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
             <AlertTriangle className="size-4" /> Catalogue not imported
           </p>
           <p className="mt-1">{note}</p>
+          <button
+            type="button"
+            onClick={() => void importSeed()}
+            disabled={seeding}
+            className="mt-3 inline-flex items-center gap-2 rounded-[var(--radius-input)] px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+            style={{ border: "1px solid var(--brand-navy)", color: "var(--brand-navy)", background: "var(--surface-paper)" }}
+          >
+            {seeding && <RefreshCw className="size-3.5 animate-spin" />}
+            Rebuild catalogue from API reference (admin)
+          </button>
         </div>
       )}
 
