@@ -3,30 +3,31 @@ import { render, screen } from "@testing-library/react";
 import { ReadinessScorecard, readinessPercent } from "@/components/sap/capability/ReadinessScorecard";
 import { StatusBadge } from "@/components/sap/capability/StatusBadge";
 
-describe("readinessPercent (honest metric)", () => {
-  it("is activated / probeable, 0 when nothing probeable", () => {
-    expect(readinessPercent(16, 39)).toBe(41);
-    expect(readinessPercent(0, 39)).toBe(0);
+describe("readinessPercent (activated / probed)", () => {
+  it("is activated / probed, 0 when nothing probed", () => {
+    expect(readinessPercent(5, 60)).toBe(8);
+    expect(readinessPercent(0, 60)).toBe(0);
     expect(readinessPercent(5, 0)).toBe(0);
-    expect(readinessPercent(39, 39)).toBe(100);
+    expect(readinessPercent(60, 60)).toBe(100);
   });
 });
 
 describe("ReadinessScorecard", () => {
-  it("shows the discrete denominator plainly (no grouped itemCount inflation)", () => {
-    render(<ReadinessScorecard activated={16} probeable={39} available={100} reference={200} />);
-    // The honest phrasing with the visible denominator.
-    expect(screen.getByText(/runtime services activated/i)).toBeInTheDocument();
-    expect(screen.getAllByText("16").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("39").length).toBeGreaterThan(0);
-    expect(screen.getByText("41%")).toBeInTheDocument();
-    // Must NOT present a grouped-sum style number as the ratio.
-    expect(screen.queryByText(/6413|8983/)).not.toBeInTheDocument();
+  it("headlines the real exposed count as a probe SAMPLE, catalogue scale shown separately", () => {
+    render(<ReadinessScorecard activated={5} probed={60} probeable={128} apiTotal={941} available={936} reference={0} />);
+    // Headline: "5 activated of 60 services tested (live probe sample)".
+    expect(screen.getByText(/activated of/i)).toBeInTheDocument();
+    expect(screen.getByText(/live probe sample/i)).toBeInTheDocument();
+    expect(screen.getByText("60")).toBeInTheDocument();
+    // Catalogue scale is separate — NOT a percentage over 128 or 941.
+    expect(screen.getByText(/941/)).toBeInTheDocument();
+    expect(screen.getByText(/128/)).toBeInTheDocument();
+    expect(screen.queryByText(/of 128|of 941/)).not.toBeInTheDocument();
   });
 
-  it("exposes an accessible progressbar with the honest value", () => {
-    render(<ReadinessScorecard activated={16} probeable={39} available={100} reference={200} />);
-    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("41");
+  it("progressbar reflects activated / probed, not over the whole catalogue", () => {
+    render(<ReadinessScorecard activated={5} probed={60} probeable={128} apiTotal={941} available={936} reference={0} />);
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("8");
   });
 });
 

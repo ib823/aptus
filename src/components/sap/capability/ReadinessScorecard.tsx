@@ -1,24 +1,22 @@
 /**
- * ReadinessScorecard — % of the probeable runtime surface that is ACTIVATED.
+ * ReadinessScorecard — how many services the tenant demonstrably exposes.
  *
- * HONEST metric (contract §4): counts DISCRETE probeable runtime services
- * (activated / probeable), never the grouped itemCount sum. The denominator is
- * shown plainly ("N of M runtime services activated") — no Phase-0 inflation.
- * Colour via var(--token) only.
+ * HONEST metric (agreed): the headline is the real exposed count from the SAME
+ * curated-first probe the Tenant Capabilities panel uses — "N activated of
+ * {probed} tested" — labelled as a probe SAMPLE, not a ratio over the whole
+ * catalogue. Catalogue scale (APIs / probeable OData V2 / other types) is shown
+ * separately; no percentage over 128 or 941. Colour via var(--token) only.
  */
 
-/** activated / probeable as a 0–100 integer (0 when nothing is probeable). */
-export function readinessPercent(activated: number, probeable: number): number {
-  if (probeable <= 0) return 0;
-  return Math.round((activated / probeable) * 100);
+/** activated / probed as a 0–100 integer (0 when nothing was probed). */
+export function readinessPercent(activated: number, probed: number): number {
+  if (probed <= 0) return 0;
+  return Math.round((activated / probed) * 100);
 }
 
 function CountPill({ label, value, bg, fg }: { label: string; value: number; bg: string; fg: string }) {
   return (
-    <div
-      className="flex items-center justify-between rounded-[var(--radius-pill)] px-3 py-1.5"
-      style={{ background: bg, color: fg }}
-    >
+    <div className="flex items-center justify-between rounded-[var(--radius-pill)] px-3 py-1.5" style={{ background: bg, color: fg }}>
       <span className="text-xs font-medium">{label}</span>
       <span className="text-sm font-semibold tabular-nums">{value.toLocaleString()}</span>
     </div>
@@ -27,48 +25,45 @@ function CountPill({ label, value, bg, fg }: { label: string; value: number; bg:
 
 export function ReadinessScorecard({
   activated,
+  probed,
   probeable,
+  apiTotal,
   available,
   reference,
 }: {
   activated: number;
+  probed: number;
   probeable: number;
+  apiTotal: number;
   available: number;
   reference: number;
 }) {
-  const pct = readinessPercent(activated, probeable);
+  const pct = readinessPercent(activated, probed);
   return (
     <section
       aria-label="Tenant readiness"
       className="rounded-[var(--radius-card-warm)] p-5"
       style={{ background: "var(--surface-paper)", border: "1px solid var(--border-default)" }}
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
-          Tenant readiness
-        </h3>
-        <span className="text-xs" style={{ color: "var(--ink-muted)" }}>
-          probeable runtime services (APIs + CDS via OData) — excludes events &amp; grouped CDS
-        </span>
-      </div>
+      <h3 className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>
+        Tenant readiness
+      </h3>
 
-      <div className="mt-3 flex items-end gap-3">
+      <div className="mt-2 flex items-end gap-3">
         <div className="text-3xl font-bold tabular-nums" style={{ color: "var(--brand-navy)" }}>
-          {pct}%
+          {activated.toLocaleString()}
         </div>
         <div className="pb-1 text-sm" style={{ color: "var(--ink-secondary)" }}>
+          activated of{" "}
           <strong className="tabular-nums" style={{ color: "var(--ink-primary)" }}>
-            {activated.toLocaleString()}
+            {probed.toLocaleString()}
           </strong>{" "}
-          of{" "}
-          <strong className="tabular-nums" style={{ color: "var(--ink-primary)" }}>
-            {probeable.toLocaleString()}
-          </strong>{" "}
-          runtime services activated
+          services tested{" "}
+          <span style={{ color: "var(--ink-muted)" }}>(live probe sample)</span>
         </div>
       </div>
 
-      {/* progress: fill brand-navy on an ink-tint track */}
+      {/* progress: activated / probed (probe sample), fill navy on ink-tint */}
       <div
         className="mt-3 h-2.5 w-full overflow-hidden rounded-[var(--radius-pill)]"
         style={{ background: "var(--surface-ink-tint)" }}
@@ -79,6 +74,13 @@ export function ReadinessScorecard({
       >
         <div className="h-full rounded-[var(--radius-pill)]" style={{ width: `${pct}%`, background: "var(--brand-navy)" }} />
       </div>
+
+      {/* catalogue scale — shown separately, never folded into the ratio */}
+      <p className="mt-2 text-xs" style={{ color: "var(--ink-muted)" }}>
+        Catalogue scale: <strong style={{ color: "var(--ink-secondary)" }}>{apiTotal.toLocaleString()}</strong> APIs ·{" "}
+        <strong style={{ color: "var(--ink-secondary)" }}>{probeable.toLocaleString()}</strong> OData V2 probeable · other content
+        types pending real exports
+      </p>
 
       <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
         <CountPill label="Activated" value={activated} bg="var(--status-signed-bg)" fg="var(--status-signed-fg)" />

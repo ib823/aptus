@@ -38,7 +38,7 @@ interface HubData {
   total: number;
   page: number;
   limit: number;
-  counts: { byType: Record<string, number>; byStatus: Record<HubStatus, number>; probeableRuntime: number };
+  counts: { byType: Record<string, number>; byStatus: Record<HubStatus, number>; probeableRuntime: number; probed: number };
   catalogueImported: boolean;
   tenant: string | null;
 }
@@ -132,6 +132,8 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
   const byType = data?.counts.byType ?? {};
   const byStatus = data?.counts.byStatus ?? { ACTIVATED: 0, AVAILABLE: 0, REFERENCE: 0 };
   const probeable = data?.counts.probeableRuntime ?? 0;
+  const probed = data?.counts.probed ?? 0;
+  const apiTotal = data?.counts.byType.API ?? 0;
   const totalPages = data ? Math.max(1, Math.ceil(data.total / limit)) : 1;
   const groups = data ? groupByLoB(data.items) : [];
 
@@ -146,7 +148,7 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
           Capability Catalogue
         </h2>
         <p className="text-sm" style={{ color: "var(--ink-secondary)" }}>
-          Every content type SAP publishes for S/4HANA Cloud Public — {data?.tenant ?? "no tenant"} · imagine all activated.
+          SAP APIs for S/4HANA Cloud Public on {data?.tenant ?? "no tenant"} — activated vs available. Events, CDS &amp; other content types load once real exports are imported.
         </p>
       </div>
 
@@ -182,7 +184,14 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
 
       {!note && (
         <>
-          <ReadinessScorecard activated={byStatus.ACTIVATED} probeable={probeable} available={byStatus.AVAILABLE} reference={byStatus.REFERENCE} />
+          <ReadinessScorecard
+            activated={byStatus.ACTIVATED}
+            probed={probed}
+            probeable={probeable}
+            apiTotal={apiTotal}
+            available={byStatus.AVAILABLE}
+            reference={byStatus.REFERENCE}
+          />
           <ContentTypeTiles byType={byType} activeType={contentType} onSelect={setContentType} />
 
           {/* status filter + search */}
@@ -213,6 +222,10 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2" style={{ color: "var(--ink-muted)" }} />
               <input
                 type="search"
+                name="capability-search"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search title, id, description…"
@@ -257,9 +270,15 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
                               <span className="truncate font-medium" style={{ color: "var(--ink-primary)" }}>
                                 {item.title}
                               </span>
-                              <span className="text-xs" style={{ color: "var(--ink-muted)" }}>
-                                {meta.label}
-                              </span>
+                              {/* Disambiguate same-title variants (in/out, version, V2/V4). */}
+                              <code className="rounded-[var(--radius-input)] px-1.5 py-0.5 text-[11px]" style={{ background: "var(--surface-ink-tint)", color: "var(--ink-secondary)" }}>
+                                {item.externalId}
+                              </code>
+                              {item.apiType && (
+                                <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--ink-muted)" }}>
+                                  {item.apiType}
+                                </span>
+                              )}
                               {item.itemCount != null && (
                                 <span className="text-xs tabular-nums" style={{ color: "var(--ink-muted)" }}>
                                   {item.itemCount.toLocaleString()} items

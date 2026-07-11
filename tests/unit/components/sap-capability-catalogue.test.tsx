@@ -14,7 +14,7 @@ const PAYLOAD = {
     total: 1,
     page: 1,
     limit: 50,
-    counts: { byType: { API: 5, EVENT: 5, CDS_VIEW: 6, BADI: 1 }, byStatus: { ACTIVATED: 0, AVAILABLE: 16, REFERENCE: 20 }, probeableRuntime: 39 },
+    counts: { byType: { API: 941 }, byStatus: { ACTIVATED: 5, AVAILABLE: 936, REFERENCE: 0 }, probeableRuntime: 128, probed: 60 },
     catalogueImported: true,
     tenant: "ABeam TDD",
   },
@@ -29,13 +29,15 @@ describe("SapCapabilityCatalogue (CatalogueList) smoke", () => {
   it("mounts with scorecard + type tiles + LoB-grouped list", async () => {
     const { container } = render(<SapCapabilityCatalogue product="s4hana" />);
 
-    // Scorecard — honest denominator.
-    expect(await screen.findByText(/runtime services activated/i)).toBeInTheDocument();
-    expect(screen.getByText("39")).toBeInTheDocument();
+    // Scorecard — real exposed count as a probe sample + separate catalogue scale.
+    expect(await screen.findByText(/activated of/i)).toBeInTheDocument();
+    expect(screen.getByText(/live probe sample/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/941/).length).toBeGreaterThan(0);
 
-    // Content-type tiles (ContentTypeTiles renders a tab per present type).
+    // Content-type tiles show ALL types (APIs present, Events/CDS dimmed).
     expect(screen.getByRole("tab", { name: /All types/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /APIs/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Events/i })).toBeInTheDocument();
 
     // LoB group header + the item row.
     expect(screen.getByText("Procurement")).toBeInTheDocument();

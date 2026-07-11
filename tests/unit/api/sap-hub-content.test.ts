@@ -89,7 +89,30 @@ describe("GET /api/sap/tdd/hub-content", () => {
     // runtime total 10 (API5+EVENT5), activated 1 → AVAILABLE 9; reference 1
     expect(body.data.counts.byStatus).toEqual({ ACTIVATED: 1, AVAILABLE: 9, REFERENCE: 1 });
     expect(body.data.counts.byType).toEqual({ API: 5, EVENT: 5, BADI: 1 });
+    expect(body.data.counts.probed).toBe(2); // API_PO + C_VIEW merged targets
     expect(body.data.tenant).toBe("ABeam TDD");
+  });
+
+  it("curated-first identity: a service exposed via the curated set marks its row ACTIVATED even when it's NOT in the alphabetical probe window", async () => {
+    // Curated service (key 'purchase-orders') whose path → apiId API_PO.
+    mocks.getSapProduct.mockReturnValue({
+      ...PRODUCT,
+      services: [{ key: "purchase-orders", label: "PO", scenario: "SAP_COM_0053", path: "/sap/opu/odata/sap/API_PO", domain: "Sourcing and Procurement" }],
+    });
+    // Dynamic window does NOT contain API_PO (alphabetically late) — only API_ZZZ.
+    mocks.findMany.mockImplementation((args: { where?: { apiType?: string } }) =>
+      Promise.resolve(
+        args.where?.apiType === "ODATAV2"
+          ? [{ contentType: "API", apiType: "ODATAV2", externalId: "API_ZZZ", title: "Z", packageId: null, communicationScenarios: [] }]
+          : PAGE_ROWS,
+      ),
+    );
+    // The curated probe finds API_PO exposed (result.service == apiId).
+    mocks.probeTenantCapabilities.mockResolvedValue([{ service: "API_PO", exposed: true, status: 200 }]);
+    const body = await (await GET(makeRequest())).json();
+    const po = body.data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
+    expect(po.status).toBe("ACTIVATED"); // matched by externalId == apiId (last path segment)
+    expect(body.data.counts.byStatus.ACTIVATED).toBe(1);
   });
 
   it("an active CDS view (probed 200) → ACTIVATED; an EVENT stays AVAILABLE(subscribe)", async () => {

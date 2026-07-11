@@ -6,8 +6,16 @@ import {
   hubAvailabilityQualifier,
   isHubContentType,
   isRuntimeType,
+  pathToApiId,
   resolveHubStatus,
 } from "@/lib/sap-public/hub-content";
+
+describe("pathToApiId (probe→row identity)", () => {
+  it("is the last path segment — the apiId that == SapHubContent.externalId", () => {
+    expect(pathToApiId("/sap/opu/odata/sap/API_PURCHASEORDER_PROCESS_SRV")).toBe("API_PURCHASEORDER_PROCESS_SRV");
+    expect(pathToApiId("/sap/opu/odata/CPD/SC_PROJ_ENGMT_CREATE_UPD_SRV")).toBe("SC_PROJ_ENGMT_CREATE_UPD_SRV");
+  });
+});
 
 describe("hub-content type metadata", () => {
   it("classifies runtime vs reference correctly", () => {
