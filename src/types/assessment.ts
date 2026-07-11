@@ -260,7 +260,8 @@ export type DecisionAction =
   | "USER_DELETED"
   | "MFA_RESET"
   | "SAP_CAPABILITY_PROBED"
-  | "SAP_WRITE_TEST_PERFORMED";
+  | "SAP_WRITE_TEST_PERFORMED"
+  | "SAP_HUB_SEED_IMPORTED";
 
 /** Aggregated StepResponse fit status counts per scope item (from raw SQL) */
 export interface ResponseCountRow {
