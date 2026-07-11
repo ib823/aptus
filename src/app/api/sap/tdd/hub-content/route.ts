@@ -30,22 +30,21 @@ import {
   HUB_CONTENT_TYPE_META,
   hubApiToService,
   hubAvailabilityQualifier,
-  httpToRuntimeStatus,
   isHubContentType,
-  isRuntimeType,
   pathToApiId,
+  readStoredProbe,
   resolveHubStatus,
   type HubContentType,
   type HubStatus,
 } from "@/lib/sap-public/hub-content";
 import { ERROR_CODES } from "@/types/api";
 
-const RUNTIME_TYPES = HUB_CONTENT_TYPES.filter(isRuntimeType);
-// Runtime types that carry a probeable read endpoint (everything runtime except
-// EVENTs, which are subscribe-only → AVAILABLE and never NOT_CHECKED).
-const RUNTIME_PROBEABLE_TYPES = RUNTIME_TYPES.filter((t) => t !== "EVENT");
-const REFERENCE_TYPES = HUB_CONTENT_TYPES.filter((t) => !isRuntimeType(t));
-const PROBE_CAP = 60; // bound the live probe like the capabilities route
+const PROBE_CAP = 60; // bound the OPT-IN live overlay (dataProbe=1) like before
+
+/** All-zero byStatus, so every status key is always present in counts. */
+function emptyByStatus(): Record<HubStatus, number> {
+  return { ACTIVATED: 0, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 0, NOT_PROBEABLE: 0, AVAILABLE: 0, REFERENCE: 0 };
+}
 
 /**
  * ONE probe = one source of truth. Probe the SAME curated-first set the working
@@ -128,12 +127,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const typeParam = params.get("contentType");
   const contentType: HubContentType | null = typeParam && isHubContentType(typeParam) ? typeParam : null;
   const statusParam = (params.get("status") ?? "ALL").toUpperCase();
-  const VALID_STATUS: HubStatus[] = ["ACTIVATED", "NEEDS_SETUP", "NOT_FOUND", "NOT_CHECKED", "AVAILABLE", "REFERENCE"];
+  const VALID_STATUS: HubStatus[] = ["ACTIVATED", "NEEDS_SETUP", "NOT_FOUND", "NOT_CHECKED", "NOT_PROBEABLE", "AVAILABLE", "REFERENCE"];
   const status: HubStatus | "ALL" = (VALID_STATUS as string[]).includes(statusParam) ? (statusParam as HubStatus) : "ALL";
   const q = (params.get("q") ?? "").trim();
   const page = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
   const limit = Math.min(200, Math.max(1, Number.parseInt(params.get("limit") ?? "50", 10) || 50));
-  const probeEnabled = params.get("probe") !== "0";
 
   // ── empty-catalogue note ───────────────────────────────────────────────
   const totalRows = await prisma.sapHubContent.count({ where: { appliesToPublic: true } });
@@ -147,7 +145,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         limit,
         counts: {
           byType: Object.fromEntries(HUB_CONTENT_TYPES.map((t) => [t, 0])),
-          byStatus: { ACTIVATED: 0, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 0, AVAILABLE: 0, REFERENCE: 0 },
+          byStatus: emptyByStatus(),
         },
         catalogueImported: false,
         tenant: null,
@@ -156,44 +154,63 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
   }
 
-  // ── resolve the tenant + activated set (bounded live probe) ────────────
+  // ── tenant + PERSISTED probe (primary source, no per-load tenant hammering) ──
   const tenantKey = params.get("tenant") ?? getConfiguredSapTenants(product.envPrefix)[0]?.key;
   const tenant = tenantKey ? getSapTenant(product.envPrefix, tenantKey) : null;
-  const dataProbe = params.get("dataProbe") === "1"; // opt-in 1-row read to data-confirm
-  let outcomes = new Map<string, number>();
-  let dataConfirmed = new Set<string>();
-  let capabilities = new Map<string, { read: boolean; write: boolean }>();
+  const dataProbe = params.get("dataProbe") === "1"; // opt-in LIVE overlay (freshness + data-confirm)
+
+  // Load the persisted probe for the FULL catalogue (rawMetadataJson.probe is
+  // small). This is the source of truth — the admin Probe-all populates it.
+  const allRows = await prisma.sapHubContent.findMany({
+    where: { appliesToPublic: true },
+    select: { externalId: true, contentType: true, apiType: true, rawMetadataJson: true },
+  });
+  const outcomes = new Map<string, number>();
+  const capabilities = new Map<string, { read: boolean; write: boolean }>();
+  let lastProbedAt: string | null = null;
   let probed = 0;
-  if (tenant && probeEnabled) {
+  for (const r of allRows) {
+    const p = readStoredProbe(r.rawMetadataJson);
+    if (!p) continue;
+    if (typeof p.http === "number") {
+      outcomes.set(r.externalId, p.http);
+      probed++;
+    }
+    if (typeof p.read === "boolean") capabilities.set(r.externalId, { read: p.read, write: p.write === true });
+    if (p.at && (!lastProbedAt || p.at > lastProbedAt)) lastProbedAt = p.at;
+  }
+
+  // Opt-in LIVE overlay: a bounded (~60) fresh probe that WINS over stored, and
+  // adds the 1-row data-confirm. Default loads never trigger it (no hammering).
+  let dataConfirmed = new Set<string>();
+  if (tenant && dataProbe) {
     try {
-      const r = await probeActivatedApiIds(product.envPrefix, tenant, product, dataProbe);
-      outcomes = r.outcomes;
+      const r = await probeActivatedApiIds(product.envPrefix, tenant, product, true);
+      for (const [k, v] of r.outcomes) outcomes.set(k, v);
+      for (const [k, v] of r.capabilities) capabilities.set(k, v);
       dataConfirmed = r.dataConfirmed;
-      capabilities = r.capabilities;
-      probed = r.probed;
     } catch {
-      outcomes = new Map(); // probe failure → nothing probed (honest); runtime rows → NOT_CHECKED
-      dataConfirmed = new Set();
-      capabilities = new Map();
-      probed = 0;
+      /* overlay is best-effort; stored results stand */
     }
   }
-  // Partition the probed services by their confirmed HTTP outcome. Only these
-  // ids carry a definite status; every other runtime row is NOT_CHECKED.
-  const activatedIds: string[] = [];
-  const needsSetupIds: string[] = [];
-  const notFoundIds: string[] = [];
-  for (const [svc, http] of outcomes) {
-    const s = httpToRuntimeStatus(http);
-    if (s === "ACTIVATED") activatedIds.push(svc);
-    else if (s === "NEEDS_SETUP") needsSetupIds.push(svc);
-    else if (s === "NOT_FOUND") notFoundIds.push(svc);
-  }
-  // Conclusively-probed = the three definite buckets; anything else runtime is
-  // NOT_CHECKED (includes inconclusive 0/5xx probes and everything beyond the cap).
-  const conclusiveIds = [...activatedIds, ...needsSetupIds, ...notFoundIds];
 
-  // ── build the WHERE from filters (status pre-filters at SQL level) ─────
+  // Classify EVERY row's tenant status from the outcomes (stored+overlay). This
+  // gives exact byStatus counts across the whole edition AND the id-sets used to
+  // pre-filter the paged query by status (uniform for all 7 statuses).
+  const byStatus = emptyByStatus();
+  const idsByStatus: Record<HubStatus, string[]> = {
+    ACTIVATED: [], NEEDS_SETUP: [], NOT_FOUND: [], NOT_CHECKED: [], NOT_PROBEABLE: [], AVAILABLE: [], REFERENCE: [],
+  };
+  for (const r of allRows) {
+    const s = resolveHubStatus(
+      { contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId },
+      outcomes,
+    );
+    byStatus[s]++;
+    idsByStatus[s].push(r.externalId);
+  }
+
+  // ── build the WHERE from filters (status pre-filters via the classified ids) ──
   const and: Prisma.SapHubContentWhereInput[] = [{ appliesToPublic: true }];
   if (contentType) and.push({ contentType });
   if (q) {
@@ -205,21 +222,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       ],
     });
   }
-  if (status === "REFERENCE") {
-    and.push({ contentType: { in: REFERENCE_TYPES } });
-  } else if (status === "AVAILABLE") {
-    // AVAILABLE now means subscribe-only EVENTs (no read endpoint to probe).
-    and.push({ contentType: "EVENT" });
-  } else if (status === "ACTIVATED") {
-    and.push(activatedIds.length ? { externalId: { in: activatedIds } } : { id: "__none__" });
-  } else if (status === "NEEDS_SETUP") {
-    and.push(needsSetupIds.length ? { externalId: { in: needsSetupIds } } : { id: "__none__" });
-  } else if (status === "NOT_FOUND") {
-    and.push(notFoundIds.length ? { externalId: { in: notFoundIds } } : { id: "__none__" });
-  } else if (status === "NOT_CHECKED") {
-    // Probeable runtime rows we could NOT confirm (beyond the cap / inconclusive).
-    and.push({ contentType: { in: RUNTIME_PROBEABLE_TYPES } });
-    if (conclusiveIds.length) and.push({ NOT: { externalId: { in: conclusiveIds } } });
+  if (status !== "ALL") {
+    const ids = idsByStatus[status];
+    and.push(ids.length ? { externalId: { in: ids } } : { id: "__none__" });
   }
   const where: Prisma.SapHubContentWhereInput = { AND: and };
 
@@ -270,31 +275,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     _count: { _all: true },
   });
   // Emit ALL 12 type keys (0 allowed) so every tile renders with honest context,
-  // not just the types that happen to have rows.
+  // not just the types that happen to have rows. (byStatus is computed above from
+  // the full-catalogue classification.)
   const byType: Record<string, number> = Object.fromEntries(HUB_CONTENT_TYPES.map((t) => [t, 0]));
-  let runtimeTotal = 0;
-  let referenceTotal = 0;
-  for (const g of grouped) {
-    byType[g.contentType] = g._count._all;
-    if (isRuntimeType(g.contentType as HubContentType)) runtimeTotal += g._count._all;
-    else referenceTotal += g._count._all;
-  }
-  // Reconcile counts with the outcome taxonomy. EVENTs are the only AVAILABLE
-  // rows; every other runtime row is either conclusively probed or NOT_CHECKED.
-  const eventCount = byType["EVENT"] ?? 0;
-  const probeableRuntimeRows = Math.max(0, runtimeTotal - eventCount);
-  const activatedCount = activatedIds.length;
-  const needsSetupCount = needsSetupIds.length;
-  const notFoundCount = notFoundIds.length;
-  const notCheckedCount = Math.max(0, probeableRuntimeRows - activatedCount - needsSetupCount - notFoundCount);
-  const byStatus: Record<HubStatus, number> = {
-    ACTIVATED: activatedCount,
-    NEEDS_SETUP: needsSetupCount,
-    NOT_FOUND: notFoundCount,
-    NOT_CHECKED: notCheckedCount,
-    AVAILABLE: eventCount,
-    REFERENCE: referenceTotal,
-  };
+  for (const g of grouped) byType[g.contentType] = g._count._all;
 
   // Honest scorecard denominator: discrete probeable runtime services (API + CDS
   // as OData V2 reliably, or V4 best-effort) — NOT events, NOT grouped CDS sums.
@@ -308,7 +292,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       total,
       page,
       limit,
-      counts: { byType, byStatus, probeableRuntime, probed, dataConfirmed: dataConfirmed.size, dataProbe },
+      counts: { byType, byStatus, probeableRuntime, probed, lastProbedAt, dataConfirmed: dataConfirmed.size, dataProbe },
       catalogueImported: true,
       tenant: tenant?.label ?? null,
       isAdmin,

@@ -34,12 +34,21 @@ export type HubContentType =
  *   NEEDS_SETUP — probed, 403/401 (published for this edition; the tenant hasn't
  *                 authorized the SAP_COM_xxxx arrangement). Confirmed negative.
  *   NOT_FOUND   — probed, 404 (service path absent on this tenant). Distinct from 403.
- *   NOT_CHECKED — NOT probed (beyond the probe cap, non-probeable, apiType null,
- *                 or an inconclusive 0/5xx). UNKNOWN — must never render "Needs setup".
+ *   NOT_CHECKED — PROBEABLE (OData) runtime item that hasn't been probed yet.
+ *                 UNKNOWN, not a negative — run Probe-all / open it to resolve.
+ *   NOT_PROBEABLE — runtime item with NO OData endpoint to probe (SOAP, async,
+ *                 apiType null / sap-s4-*). A terminal, honest "can't check here".
  *   AVAILABLE   — EVENT (subscribe-only; no read endpoint, so never probed).
  *   REFERENCE   — design-time content; not a tenant endpoint.
  */
-export type HubStatus = "ACTIVATED" | "NEEDS_SETUP" | "NOT_FOUND" | "NOT_CHECKED" | "AVAILABLE" | "REFERENCE";
+export type HubStatus =
+  | "ACTIVATED"
+  | "NEEDS_SETUP"
+  | "NOT_FOUND"
+  | "NOT_CHECKED"
+  | "NOT_PROBEABLE"
+  | "AVAILABLE"
+  | "REFERENCE";
 
 export interface HubContentTypeMeta {
   label: string;
@@ -184,6 +193,45 @@ export interface HubItemForStatus {
 }
 
 /**
+ * A probe result persisted on SapHubContent.rawMetadataJson.probe by the admin
+ * Probe-all action (no schema migration). `http` is the $metadata status; `at`
+ * is the ISO timestamp; read/write come from the shared deriveReadWrite.
+ */
+export interface StoredProbe {
+  http?: number;
+  at?: string;
+  read?: boolean;
+  write?: boolean;
+}
+
+/** Safely read the persisted probe from a rawMetadataJson value (or null). */
+export function readStoredProbe(raw: unknown): StoredProbe | null {
+  if (!raw || typeof raw !== "object") return null;
+  const probe = (raw as Record<string, unknown>).probe;
+  if (!probe || typeof probe !== "object") return null;
+  const p = probe as Record<string, unknown>;
+  const out: StoredProbe = {};
+  if (typeof p.http === "number") out.http = p.http;
+  if (typeof p.at === "string") out.at = p.at;
+  if (typeof p.read === "boolean") out.read = p.read;
+  if (typeof p.write === "boolean") out.write = p.write;
+  return out;
+}
+
+/**
+ * Whether an item has a live OData endpoint we can $metadata-probe. Mirror of
+ * hubApiToService returning non-null: only API / CDS_VIEW carrying an OData
+ * apiType are probeable. SOAP, apiType null, sap-s4-*, and non-runtime types are
+ * NOT probeable — there is no endpoint to check, so their status is terminal.
+ */
+export function isProbeable(item: { contentType: HubContentType; apiType: string | null }): boolean {
+  return (
+    (item.contentType === "API" || item.contentType === "CDS_VIEW") &&
+    (item.apiType === "ODATAV2" || item.apiType === "ODATAV4")
+  );
+}
+
+/**
  * Map a runtime service's live-probe HTTP outcome to a status. `undefined`
  * means the service was NOT probed → NOT_CHECKED (unknown), never a negative.
  * Only a real HTTP code asserts anything; inconclusive results (0 / 5xx) stay
@@ -221,11 +269,14 @@ export function resolveHubStatus(
   // TODO: runtime probe — verify a tenant's event subscription (channel/binding)
   //       and promote from AVAILABLE only on a confirmed subscription.
   if (item.contentType === "EVENT") return "AVAILABLE";
-  // CDS_VIEW is OData-probeable but not probed in the import pass → NOT_CHECKED
-  // (un-probed, honest) via httpToRuntimeStatus below.
-  // TODO: runtime probe — sample imported CDS_VIEW rows so they can reach
-  //       ACTIVATED/NEEDS_SETUP/NOT_FOUND like APIs, instead of resting NOT_CHECKED.
-  return httpToRuntimeStatus(probeOutcomes?.get(item.externalId));
+  // A stored/live probe outcome is authoritative for any runtime item — even a
+  // SOAP row we somehow probed reports its real HTTP result.
+  const http = probeOutcomes?.get(item.externalId);
+  if (http !== undefined) return httpToRuntimeStatus(http);
+  // No outcome: distinguish "probeable but not probed yet" (NOT_CHECKED — run
+  // Probe-all / open it) from "no OData endpoint at all" (NOT_PROBEABLE —
+  // terminal; SOAP/async/null apiType). Never conflate the two.
+  return isProbeable(item) ? "NOT_CHECKED" : "NOT_PROBEABLE";
 }
 
 /**
