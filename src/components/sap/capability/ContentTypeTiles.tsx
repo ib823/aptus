@@ -38,11 +38,15 @@ export function ContentTypeTiles({
     selected: boolean,
     empty: boolean,
   ) => {
+    // "of ~Y indicative" is context for what's MISSING — only meaningful for an
+    // empty type with a real published figure. Once imported (count > 0), the
+    // count IS the truth (a stale indicative would read "943 of ~862"). A 0/absent
+    // published count never renders "~0" — it falls back to the runtime/reference tag.
+    const hasPublished = published != null && published > 0;
+    const showIndicative = empty && hasPublished;
     const title = empty
-      ? `${label}: none imported yet — drop a logged-in Hub export in sap-references/hub-content/${key}.json${published != null ? ` (~${published.toLocaleString()} published). ${INDICATIVE_NOTE}` : "."}`
-      : published != null
-        ? `${label}: ${count.toLocaleString()} of ~${published.toLocaleString()} imported (indicative). ${INDICATIVE_NOTE}`
-        : label;
+      ? `${label}: none imported yet — drop a logged-in Hub export in sap-references/hub-content/${key}.json${hasPublished ? ` (~${published!.toLocaleString()} published). ${INDICATIVE_NOTE}` : "."}`
+      : label;
     return (
       <button
         key={key}
@@ -65,9 +69,9 @@ export function ContentTypeTiles({
         <span className="text-xs font-medium" style={{ color: "var(--ink-primary)" }}>
           {label}
         </span>
-        {published != null ? (
+        {showIndicative ? (
           <span className="text-[10px] tabular-nums" style={{ color: "var(--ink-muted)" }}>
-            of ~{published.toLocaleString()} <span className="uppercase tracking-wide">indicative</span>
+            of ~{published!.toLocaleString()} <span className="uppercase tracking-wide">indicative</span>
           </span>
         ) : (
           tag && (

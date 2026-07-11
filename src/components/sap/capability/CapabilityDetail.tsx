@@ -27,12 +27,14 @@ interface DetailData {
     title: string;
     description: string;
     packageId: string | null;
+    apiType: string | null;
     communicationScenarios: string[];
     hubUrl: string;
   };
   status: string;
   ladder: string | null;
   entities: EntityCap[] | null;
+  capability: { read: boolean; write: boolean } | null;
   metadataFlavor: string | null;
   probeStatus: number | null;
   dependencies: {
@@ -61,8 +63,8 @@ export function CapabilityDetail({
   id: string;
   product?: string;
   onClose?: () => void;
-  /** Lift the detail's live-probe status up so the list badge can't contradict it. */
-  onResolved?: (status: HubStatus) => void;
+  /** Lift the detail's live-probe status + capability up so the list can't contradict it. */
+  onResolved?: (status: HubStatus, capability: { read: boolean; write: boolean } | null) => void;
 }) {
   const [data, setData] = useState<DetailData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,7 +84,7 @@ export function CapabilityDetail({
         if (cancelled) return;
         if (!j.data) throw new Error(j.error?.message ?? "Failed to load item");
         setData(j.data);
-        onResolvedRef.current?.(j.data.status as HubStatus);
+        onResolvedRef.current?.(j.data.status as HubStatus, j.data.capability ?? null);
       })
       .catch((e: unknown) => !cancelled && setError(e instanceof Error ? e.message : "Failed to load item"))
       .finally(() => !cancelled && setLoading(false));
@@ -128,7 +130,7 @@ export function CapabilityDetail({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <CapabilityChips contentType={data.item.contentType} entities={data.entities} />
+            <CapabilityChips contentType={data.item.contentType} apiType={data.item.apiType} capability={data.capability} />
             <a
               href={data.item.hubUrl}
               target="_blank"

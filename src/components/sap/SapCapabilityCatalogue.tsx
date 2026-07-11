@@ -32,6 +32,8 @@ interface HubItem {
   status: HubStatus;
   availabilityNote?: "subscribe" | null;
   dataConfirmed?: boolean;
+  /** Real read/write for the ~60 probed rows (else null → "not probed"). */
+  capability?: { read: boolean; write: boolean } | null;
 }
 interface HubData {
   note?: string;
@@ -100,6 +102,9 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
   // Confirmed statuses lifted from a detail live-probe, keyed by item id. These
   // OVERRIDE the list's (capped) status so list & detail can never contradict.
   const [probedStatus, setProbedStatus] = useState<Record<string, HubStatus>>({});
+  // Confirmed read/write lifted from a detail live-probe, keyed by item id — so an
+  // expanded row's collapsed chip matches its detail exactly (mirrors probedStatus).
+  const [probedCapability, setProbedCapability] = useState<Record<string, { read: boolean; write: boolean }>>({});
   // Robust autofill suppression: Chrome ignores autoComplete="off" on search
   // fields, so also use a randomized name + readonly-until-focus so nothing is
   // ever autofilled on load.
@@ -362,7 +367,12 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
                               {item.description || meta.whyItMatters}
                             </p>
                             <div className="mt-1 flex flex-wrap items-center gap-2">
-                              <CapabilityChips contentType={item.contentType} subscribe={item.availabilityNote === "subscribe"} />
+                              <CapabilityChips
+                                contentType={item.contentType}
+                                apiType={item.apiType}
+                                capability={probedCapability[item.id] ?? item.capability ?? null}
+                                subscribe={item.availabilityNote === "subscribe"}
+                              />
                               {item.communicationScenarios[0] && (
                                 <code className="rounded-[var(--radius-input)] px-1.5 py-0.5 text-xs" style={{ background: "var(--surface-ink-tint)", color: "var(--ink-primary)" }}>
                                   {item.communicationScenarios[0]}
@@ -390,7 +400,10 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
                               id={item.id}
                               product={product}
                               onClose={() => setExpandedId(null)}
-                              onResolved={(s) => setProbedStatus((m) => (m[item.id] === s ? m : { ...m, [item.id]: s }))}
+                              onResolved={(s, cap) => {
+                                setProbedStatus((m) => (m[item.id] === s ? m : { ...m, [item.id]: s }));
+                                if (cap) setProbedCapability((m) => ({ ...m, [item.id]: cap }));
+                              }}
                             />
                           </div>
                         )}

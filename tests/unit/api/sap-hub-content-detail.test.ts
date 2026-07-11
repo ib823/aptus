@@ -25,6 +25,10 @@ vi.mock("@/lib/sap-public/tdd-connector", () => ({
   isSapTddPublicAccessEnabled: mocks.isSapTddPublicAccessEnabled,
   getConfiguredSapTenants: mocks.getConfiguredSapTenants,
   getSapTenant: mocks.getSapTenant,
+  deriveReadWrite: (entities: Array<{ readable: boolean; creatable: boolean | null; updatable: boolean | null; deletable: boolean | null }>) => ({
+    read: entities.some((e) => e.readable),
+    write: entities.some((e) => e.creatable === true || e.updatable === true || e.deletable === true),
+  }),
 }));
 vi.mock("@/lib/sap-public/capability-probe", () => ({ probeService: mocks.probeService }));
 
@@ -87,6 +91,15 @@ describe("GET /api/sap/tdd/hub-content/[id]", () => {
     expect(body.data.status).toBe("ACTIVATED");
     expect(body.data.ladder).toBe("writable");
     expect(body.data.metadataFlavor).toBe("v2");
+  });
+
+  it("returns capability {read,write} from the SAME derivation the list uses", async () => {
+    mocks.probeService.mockResolvedValue({
+      service: "API_PO", exposed: true, status: 200, ladder: "readable", metadataFlavor: "v2",
+      entities: [{ name: "A", readable: true, creatable: false, updatable: true, deletable: false, pageable: null }],
+    });
+    const body = await (await GET(req(), ctx("1"))).json();
+    expect(body.data.capability).toEqual({ read: true, write: true }); // update-only ⇒ write
   });
 
   it("probed 403 → NEEDS_SETUP (matches the list badge — no contradiction)", async () => {

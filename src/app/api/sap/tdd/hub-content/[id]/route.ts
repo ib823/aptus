@@ -9,6 +9,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import {
+  deriveReadWrite,
   getConfiguredSapTenants,
   getSapProduct,
   getSapTenant,
@@ -59,6 +60,7 @@ export async function GET(
   let ladder: string | null = null;
   let entities: unknown = null;
   let metadataFlavor: string | null = null;
+  let capability: { read: boolean; write: boolean } | null = null;
   if (tenant && service && request.nextUrl.searchParams.get("probe") !== "0") {
     try {
       const result = await probeService(product.envPrefix, tenant, service);
@@ -66,6 +68,8 @@ export async function GET(
       ladder = result.ladder ?? null;
       entities = result.entities ?? null;
       metadataFlavor = result.metadataFlavor ?? null;
+      // Same shared derivation as the list — the collapsed chip must match this.
+      if (result.entities && result.entities.length > 0) capability = deriveReadWrite(result.entities);
     } catch {
       probeStatus = null;
     }
@@ -110,6 +114,7 @@ export async function GET(
       availabilityNote: hubAvailabilityQualifier(contentType),
       ladder,
       entities,
+      capability,
       metadataFlavor,
       probeStatus,
       dependencies,
