@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
 import {
   AlertTriangle,
   BriefcaseBusiness,
@@ -66,6 +66,20 @@ function sectionIcon(key: string) {
 
 function truncate(value: string): string {
   return value.length > 90 ? `${value.slice(0, 87)}...` : value;
+}
+
+/**
+ * Smooth-scroll to an on-page section. Uses scrollIntoView (which finds the real
+ * scroll container) instead of relying on native #hash navigation, which does
+ * nothing here. preventDefault stops the (broken) native jump from fighting it;
+ * the hash is still set for shareability.
+ */
+function scrollToSection(e: MouseEvent<HTMLAnchorElement>, id: string): void {
+  const el = document.getElementById(id);
+  if (!el) return; // section not on this product tab — let the default run
+  e.preventDefault();
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (typeof history !== "undefined") history.replaceState(null, "", `#${id}`);
 }
 
 export function SapOperationsDashboard({ product = "s4hana" }: { product?: string }) {
@@ -152,11 +166,11 @@ export function SapOperationsDashboard({ product = "s4hana" }: { product?: strin
           {/* Coherence: this is a curated live sample, not the full activated set. */}
           <p className="mt-1.5 max-w-2xl text-xs" style={{ color: "var(--ink-secondary)" }}>
             Curated live sample: 4 key services, 25-row cap — not the full activated set. See the{" "}
-            <a href="#sap-capability-catalogue" className="font-medium underline" style={{ color: "var(--cta-red)" }}>
+            <a href="#sap-capability-catalogue" onClick={(e) => scrollToSection(e, "sap-capability-catalogue")} className="cursor-pointer font-medium underline" style={{ color: "var(--cta-red)" }}>
               Capability Catalogue
             </a>{" "}
             above for all activated services, or inspect any activated service by apiId in the{" "}
-            <a href="#sap-entity-explorer" className="font-medium underline" style={{ color: "var(--cta-red)" }}>
+            <a href="#sap-entity-explorer" onClick={(e) => scrollToSection(e, "sap-entity-explorer")} className="cursor-pointer font-medium underline" style={{ color: "var(--cta-red)" }}>
               Entity Explorer
             </a>{" "}
             below.
