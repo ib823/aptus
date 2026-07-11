@@ -203,11 +203,46 @@ export function hubAvailabilityQualifier(contentType: HubContentType): "subscrib
 }
 
 /**
+ * Classify an apiId's protocol from its technical-id conventions, or null when
+ * genuinely unknown (honest — a null row shows no protocol chip, stays
+ * AVAILABLE). Only assigns a type that yields a VALID probe path; never V2/V4
+ * for a `sap-s4-*` wrapper id (its /sap/opu/odata/sap/… path would be broken).
+ *   *_IN / *_OUT / *REQUEST / *CONFIRMATION → SOAP (async messaging; not probeable)
+ *   *_CDS_*                                 → OData V4
+ *   CE_*                                    → OData V4 (public-edition A2X services)
+ *   *_SRV[_NNNN]                            → OData V2 (traditional ABAP services)
+ *   else                                    → null
+ */
+export function classifyApiTypeById(apiId: string): "ODATAV2" | "ODATAV4" | "SOAP" | null {
+  const id = apiId.trim();
+  if (!id) return null;
+  if (/^sap-s4-/i.test(id)) return null; // wrapper id — no valid odata path
+  if (/(_IN|_OUT)$/i.test(id) || /(REQUEST|CONFIRMATION)$/i.test(id)) return "SOAP";
+  if (/_CDS_/.test(id)) return "ODATAV4";
+  if (/^CE_/.test(id)) return "ODATAV4";
+  if (/_SRV(_\d+)?$/i.test(id)) return "ODATAV2";
+  return null;
+}
+
+/**
+ * Best-effort OData V4 service path from an apiId (BEST-EFFORT, flagged): V4
+ * services bind under /sap/opu/odata4/sap/<group>/srvd_a2x/sap/<def>/<version>
+ * and the Hub apiId doesn't map 1:1, so this is a candidate only — a 404 keeps
+ * the row AVAILABLE, only a live 200 makes it ACTIVATED. Never fabricated.
+ */
+export function deriveV4Path(externalId: string): string {
+  const m = externalId.match(/^(.*?)_(\d+)$/);
+  const base = (m?.[1] ?? externalId).toLowerCase();
+  const version = m?.[2] ?? "0001";
+  return `/sap/opu/odata4/sap/${base}/srvd_a2x/sap/${base}/${version}`;
+}
+
+/**
  * Derive a probeable OData service from a runtime row, or null if it has no
- * stable runtime endpoint. An API OR a CDS_VIEW exposed as OData V2 uses the
- * reliable /sap/opu/odata/sap/<id> convention and is probeable — so an active
- * CDS view can reach ACTIVATED. V4/SOAP, events, and grouped-CDS package rows
- * (apiType "CDS") have no single probeable endpoint, so they stay AVAILABLE.
+ * probeable endpoint. OData V2 uses the reliable /sap/opu/odata/sap/<id> path;
+ * OData V4 uses a BEST-EFFORT derived path (deriveV4Path) so a tenant-exposed V4
+ * service can still reach ACTIVATED on a live 200 (else it stays AVAILABLE).
+ * SOAP, events, grouped-CDS package rows, and null-type rows are not probeable.
  */
 export function hubApiToService(item: {
   contentType: HubContentType;
@@ -217,17 +252,16 @@ export function hubApiToService(item: {
   packageId: string | null;
   communicationScenarios: string[];
 }): SapServiceDefinition | null {
-  const probeable = (item.contentType === "API" || item.contentType === "CDS_VIEW") && item.apiType === "ODATAV2";
-  if (!probeable) return null;
-  // TODO(phase-later): /sap/opu/odata/sap/<externalId> is a convention that
-  // won't resolve for every CDS view (many are bound under service groups /
-  // different roots). Until the real service-binding path is derived, an
-  // unresolved view simply probes 404 → stays AVAILABLE (never fabricated).
+  if (item.contentType !== "API" && item.contentType !== "CDS_VIEW") return null;
+  let path: string | null = null;
+  if (item.apiType === "ODATAV2") path = `/sap/opu/odata/sap/${item.externalId}`;
+  else if (item.apiType === "ODATAV4") path = deriveV4Path(item.externalId); // best-effort
+  if (!path) return null;
   return {
     key: item.externalId,
     label: item.title,
     scenario: item.communicationScenarios[0] ?? "",
-    path: `/sap/opu/odata/sap/${item.externalId}`,
+    path,
     domain: item.packageId ?? "",
   };
 }
