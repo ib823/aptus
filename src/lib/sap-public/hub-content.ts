@@ -127,6 +127,18 @@ export function isHubContentType(value: string): value is HubContentType {
 }
 
 /**
+ * The apiId that identifies an OData service: the last path segment. This is the
+ * join key between a probed service and a SapHubContent row —
+ *   curated  "/sap/opu/odata/sap/API_PURCHASEORDER_PROCESS_SRV" → apiId
+ *   dynamic   SapHubContent.externalId (== apiId)
+ * so an exposed service maps back to its row by externalId, regardless of the
+ * curated service's display key ("purchase-orders").
+ */
+export function pathToApiId(path: string): string {
+  return path.split("/").filter(Boolean).pop() ?? path;
+}
+
+/**
  * Published SAP Business Accelerator Hub figures for S/4HANA Cloud PUBLIC
  * Edition, used only as a drift reference by the ingest report — NOT as data.
  * Values move with each SAP release, so the report compares "within drift", not

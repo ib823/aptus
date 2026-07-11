@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   apiFindMany: vi.fn(),
   upsert: vi.fn(),
   count: vi.fn(),
+  scopeItemFindMany: vi.fn(),
+  catalogFindFirst: vi.fn(),
   logDecision: vi.fn(),
 }));
 
@@ -16,6 +18,8 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     sapApiReference: { findMany: mocks.apiFindMany },
     sapHubContent: { upsert: mocks.upsert, count: mocks.count },
+    scopeItem: { findMany: mocks.scopeItemFindMany },
+    scopeCatalogVersion: { findFirst: mocks.catalogFindFirst },
   },
 }));
 vi.mock("@/lib/audit/decision-logger", () => ({ logDecision: mocks.logDecision }));
@@ -37,6 +41,8 @@ beforeEach(() => {
   mocks.apiFindMany.mockResolvedValue(API_ROWS);
   mocks.upsert.mockResolvedValue({});
   mocks.count.mockResolvedValue(API_ROWS.length);
+  mocks.catalogFindFirst.mockResolvedValue({ id: "cv-public" });
+  mocks.scopeItemFindMany.mockResolvedValue([{ scopeCode: "J60", functionalArea: "Sourcing and Procurement" }]);
 });
 
 describe("POST /api/sap/tdd/hub-content/seed (rebuild from SapApiReference)", () => {
@@ -54,20 +60,25 @@ describe("POST /api/sap/tdd/hub-content/seed (rebuild from SapApiReference)", ()
     expect(mocks.upsert).not.toHaveBeenCalled();
   });
 
-  it("projects public SapApiReference rows into SapHubContent as contentType=API (idempotent)", async () => {
+  it("projects public SapApiReference rows + injects curated services, with real LoB", async () => {
     const res = await POST(makeRequest({ confirmation: "REBUILD SAP HUB CATALOGUE" }));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data).toMatchObject({ imported: 2, source: "SapApiReference" });
+    // Curated S4HANA_SERVICES (real getSapProduct) injected on top.
+    expect(body.data.injected).toBeGreaterThanOrEqual(5);
+    expect(mocks.upsert.mock.calls.length).toBeGreaterThanOrEqual(2 + 5);
 
-    // Only public references are queried.
-    expect(mocks.apiFindMany.mock.calls[0]![0].where).toMatchObject({ appliesToPublic: true });
-    // Upsert keyed by (contentType=API, externalId=apiId), projecting real fields.
-    expect(mocks.upsert).toHaveBeenCalledTimes(2);
-    const first = mocks.upsert.mock.calls[0]![0];
-    expect(first.where.contentType_externalId).toEqual({ contentType: "API", externalId: "API_PURCHASEORDER_PROCESS_SRV" });
-    expect(first.create).toMatchObject({ title: "Purchase Order", apiType: "ODATAV2", communicationScenarios: ["SAP_COM_0053"], scopeItemCodes: ["J60"], hubUrl: expect.stringContaining("api.sap.com") });
+    // Real LoB derived: PO row has scope J60 → functionalArea "Sourcing and Procurement".
+    const poCreate = mocks.upsert.mock.calls[0]![0].create;
+    expect(poCreate.where === undefined); // sanity
+    expect(mocks.upsert.mock.calls[0]![0].where.contentType_externalId).toEqual({ contentType: "API", externalId: "API_PURCHASEORDER_PROCESS_SRV" });
+    expect(poCreate.packageId).toBe("Sourcing and Procurement");
+    // BP row has no scope codes → keyword classifier → Master Data.
+    const bpCreate = mocks.upsert.mock.calls[1]![0].create;
+    expect(bpCreate.packageId).toBe("Master Data");
 
-    expect(mocks.logDecision.mock.calls[0]![0]).toMatchObject({ action: "SAP_HUB_SEED_IMPORTED", newValue: expect.objectContaining({ source: "SapApiReference" }) });
+    expect(body.data.byLob).toBeTruthy();
+    expect(mocks.logDecision.mock.calls[0]![0]).toMatchObject({ action: "SAP_HUB_SEED_IMPORTED" });
   });
 });
