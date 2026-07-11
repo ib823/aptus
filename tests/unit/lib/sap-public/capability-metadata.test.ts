@@ -1,6 +1,37 @@
 import { describe, expect, it } from "vitest";
-import { detectMetadataFlavor, parseEntityCapabilities } from "@/lib/sap-public/tdd-connector";
+import { deriveReadWrite, detectMetadataFlavor, parseEntityCapabilities, type EntityCapability } from "@/lib/sap-public/tdd-connector";
 import { deriveCapabilityLadder } from "@/lib/sap-public/capability-probe";
+
+const cap = (o: Partial<EntityCapability>): EntityCapability => ({
+  name: "E", readable: false, creatable: null, updatable: null, deletable: null, pageable: null, ...o,
+});
+
+describe("deriveReadWrite (single source of truth for read/write chips)", () => {
+  it("read = any readable set", () => {
+    expect(deriveReadWrite([cap({ readable: true })])).toEqual({ read: true, write: false });
+    expect(deriveReadWrite([cap({ readable: false })])).toEqual({ read: false, write: false });
+  });
+
+  it("write = create-only OR update-only OR delete-only (not just creatable)", () => {
+    expect(deriveReadWrite([cap({ readable: true, creatable: true })]).write).toBe(true);
+    expect(deriveReadWrite([cap({ readable: true, updatable: true })]).write).toBe(true); // update-only
+    expect(deriveReadWrite([cap({ readable: true, deletable: true })]).write).toBe(true); // delete-only
+  });
+
+  it("read-only → write false; empty → both false", () => {
+    expect(deriveReadWrite([cap({ readable: true, creatable: false, updatable: false, deletable: false })])).toEqual({ read: true, write: false });
+    expect(deriveReadWrite([])).toEqual({ read: false, write: false });
+  });
+
+  it("V4 best-effort nulls never read as writable", () => {
+    // present in $metadata ⇒ readable:true, but create/update/delete unknown (null)
+    expect(deriveReadWrite([cap({ readable: true, creatable: null, updatable: null, deletable: null })])).toEqual({ read: true, write: false });
+  });
+
+  it("a CRUD service across sets → read + write", () => {
+    expect(deriveReadWrite([cap({ readable: true }), cap({ creatable: true, updatable: true, deletable: true })])).toEqual({ read: true, write: true });
+  });
+});
 
 const V2_METADATA = `<?xml version="1.0"?>
 <edmx:Edmx Version="1.0" xmlns:sap="http://www.sap.com/Protocols/SAPData">
