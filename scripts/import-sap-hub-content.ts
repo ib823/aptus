@@ -1,188 +1,86 @@
 /**
  * SAP Capability Catalogue importer (Path B, file-based — NO scraping).
  *
- * Reads per-content-type exports dropped in sap-references/ and populates the
- * SapHubContent table (every Business Accelerator Hub content type for S/4HANA
- * Cloud Public Edition). Additive to SapApiReference, which is left untouched.
+ * Reads Business Accelerator Hub exports dropped in sap-references/ and populates
+ * the SapHubContent table (every content type for S/4HANA Cloud Public Edition).
+ * Additive to SapApiReference, which is left untouched. LOCAL/dev only (direct
+ * DATABASE_URL). Prod is populated via the admin Rebuild endpoint (bundled files).
  *
- * Files (any subset), auto-detected in sap-references/:
- *   hub-content-seed.json       ← the shipped illustrative demo seed
- *   hub-content-<type>.json      ← e.g. hub-content-events.json (real exports)
- *   hub-content.json
- * Or set HUB_IMPORT_FILE=<path> to import one explicit file.
+ * Two layouts, both auto-detected:
+ *   sap-references/hub-content/<TYPE>.json   ← per-type; contentType from filename
+ *                                              (EVENT.json, CDS_VIEW.json, …)
+ *   sap-references/hub-content*.json          ← legacy; contentType from each row
+ * Or set HUB_IMPORT_FILE=<path> to import one explicit legacy file.
  *
- * JSON shape: a top-level array, or { value: [...] } / { d: { results: [...] } }.
- * Each row needs at least contentType + externalId; other fields are tolerant.
+ * JSON shape: a top-level array, or { value: [...] } / { items: [...] } /
+ * { d: { results: [...] } }. Each row needs at least a usable externalId.
  *
  *   pnpm sap:hub:import
  *   HUB_IMPORT_FILE=path/to/file.json pnpm sap:hub:import
  *   HUB_IMPORT_DRY_RUN=1 pnpm sap:hub:import
  *
- * Idempotent: upsert by (contentType, externalId).
+ * Idempotent: upsert by (contentType, externalId). Never deletes/mutates API rows.
  */
 import { PrismaClient, type Prisma } from "@prisma/client";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { HUB_CONTENT_TYPE_META, isHubContentType, type HubContentType } from "../src/lib/sap-public/hub-content";
+import {
+  normalizeHubRow,
+  normalizeHubRowForType,
+  parseHubJson,
+  type NormalizedHubContent,
+} from "../src/lib/sap-public/hub-import";
 
 const prisma = new PrismaClient();
 
 const REF_DIR = "sap-references";
+const PER_TYPE_DIR = path.join(REF_DIR, "hub-content");
 const EXPLICIT_FILE = process.env.HUB_IMPORT_FILE ?? null;
 const DRY_RUN = process.env.HUB_IMPORT_DRY_RUN === "1";
 
-export interface NormalizedHubContent {
-  contentType: HubContentType;
-  externalId: string;
-  title: string;
-  description: string;
-  packageId: string | null;
-  appliesToPublic: boolean;
-  appliesToPrivate: boolean;
-  appliesToOnPrem: boolean;
-  status: string;
-  apiType: string | null;
-  communicationScenarios: string[];
-  scopeItemCodes: string[];
-  itemCount: number | null;
-  hubUrl: string;
-  rawJson: Record<string, unknown>;
+/** A file to import + the content type to stamp (null = read it from each row). */
+interface ImportSource {
+  file: string;
+  contentType: HubContentType | null;
 }
 
-// ── tolerant field access ────────────────────────────────────────────────────
-function normalizeKey(s: string): string {
-  return s.toLowerCase().replace(/[\s_\-.]/g, "");
-}
-function pickField(row: Record<string, unknown>, ...candidates: string[]): unknown {
-  const map = new Map<string, unknown>();
-  for (const [k, v] of Object.entries(row)) map.set(normalizeKey(k), v);
-  for (const c of candidates) {
-    const v = map.get(normalizeKey(c));
-    if (v !== undefined && v !== null && v !== "") return v;
-  }
-  return null;
-}
-function asString(v: unknown): string {
-  return v === null || v === undefined ? "" : String(v);
-}
-function asArray(v: unknown): string[] {
-  if (Array.isArray(v)) return v.map((x) => String(x)).filter(Boolean);
-  if (typeof v === "string" && v.trim()) {
-    const t = v.trim();
-    if (t.startsWith("[")) {
-      try {
-        const p = JSON.parse(t);
-        if (Array.isArray(p)) return p.map(String);
-      } catch {
-        /* fall through */
-      }
-    }
-    return t.split(/[,;|\n]+/).map((s) => s.trim()).filter(Boolean);
-  }
-  return [];
-}
-function asBool(v: unknown, fallback: boolean): boolean {
-  if (typeof v === "boolean") return v;
-  if (typeof v === "string") return v.toLowerCase() === "true";
-  return fallback;
-}
-function asIntOrNull(v: unknown): number | null {
-  if (v === null || v === undefined || v === "") return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.trunc(n) : null;
-}
-
-/** Normalize an apiType token, or null. */
-export function normalizeHubApiType(raw: string): string | null {
-  const c = raw.toLowerCase().replace(/[\s_\-.]/g, "");
-  if (!c) return null;
-  if (c.includes("odatav4") || c.includes("odata4")) return "ODATAV4";
-  if (c.includes("odatav2") || c.includes("odata2") || c === "odata") return "ODATAV2";
-  if (c.includes("soap") || c.includes("wsdl")) return "SOAP";
-  if (c.includes("cds")) return "CDS";
-  if (c.includes("rest") || c.includes("openapi")) return "REST";
-  return raw.trim().toUpperCase();
-}
-
-/** Parse a JSON file body into an array of rows (array / OData v2 / v4 shapes). */
-export function parseHubJson(text: string): Array<Record<string, unknown>> {
-  const parsed = JSON.parse(text);
-  if (Array.isArray(parsed)) return parsed as Array<Record<string, unknown>>;
-  if (parsed && typeof parsed === "object") {
-    const o = parsed as Record<string, unknown>;
-    if (Array.isArray(o.value)) return o.value as Array<Record<string, unknown>>;
-    if (Array.isArray(o.items)) return o.items as Array<Record<string, unknown>>;
-    if (o.d && typeof o.d === "object") {
-      const d = o.d as Record<string, unknown>;
-      if (Array.isArray(d.results)) return d.results as Array<Record<string, unknown>>;
-    }
-  }
-  throw new Error("Unrecognized JSON shape — expected array, { value: [] }, { items: [] }, or { d: { results: [] } }");
-}
-
-/** Normalize one raw row into a SapHubContent shape, or null if unusable. */
-export function normalizeHubRow(row: Record<string, unknown>): NormalizedHubContent | null {
-  const typeRaw = asString(pickField(row, "contentType", "type", "kind", "category")).toUpperCase().replace(/[\s-]+/g, "_");
-  if (!isHubContentType(typeRaw)) return null;
-  const contentType = typeRaw;
-
-  const externalId = asString(pickField(row, "externalId", "id", "apiId", "eventId", "name", "code")).trim();
-  if (!externalId) return null;
-
-  const title = asString(pickField(row, "title", "name", "label", "displayName")) || externalId;
-  const description = asString(pickField(row, "description", "whyItMatters", "summary", "shortText"));
-  const packageId = asString(pickField(row, "packageId", "package", "lineOfBusiness", "lob", "area")) || null;
-
-  const apiTypeRaw = asString(pickField(row, "apiType", "protocol", "apiProtocol"));
-  const apiType = apiTypeRaw ? normalizeHubApiType(apiTypeRaw) : null;
-
-  const idRaw = asString(pickField(row, "externalId", "id", "apiId", "name"));
-  const hubUrl =
-    asString(pickField(row, "hubUrl", "url", "link")) ||
-    `https://api.sap.com/${contentType === "API" ? "api" : "content"}/${encodeURIComponent(idRaw)}`;
-
-  return {
-    contentType,
-    externalId,
-    title,
-    description,
-    packageId,
-    // Scope is S/4 Public — default Public true unless the file says otherwise.
-    appliesToPublic: asBool(pickField(row, "appliesToPublic", "public"), true),
-    appliesToPrivate: asBool(pickField(row, "appliesToPrivate", "private"), false),
-    appliesToOnPrem: asBool(pickField(row, "appliesToOnPrem", "onPrem"), false),
-    status: asString(pickField(row, "status", "releaseStatus", "state")) || "Released",
-    apiType,
-    communicationScenarios: asArray(pickField(row, "communicationScenarios", "scenarios")),
-    scopeItemCodes: asArray(pickField(row, "scopeItemCodes", "scopeItems", "scopeCodes", "businessScenarios")).map((s) => s.toUpperCase()),
-    itemCount: asIntOrNull(pickField(row, "itemCount", "count", "total")),
-    hubUrl,
-    rawJson: row,
-  };
-}
-
-function resolveFiles(): string[] {
+function resolveSources(): ImportSource[] {
   if (EXPLICIT_FILE) {
     if (!existsSync(EXPLICIT_FILE)) throw new Error(`HUB_IMPORT_FILE=${EXPLICIT_FILE} does not exist`);
-    return [EXPLICIT_FILE];
+    return [{ file: EXPLICIT_FILE, contentType: null }];
   }
+  const sources: ImportSource[] = [];
+
+  // 1) Per-type files: sap-references/hub-content/<TYPE>.json → contentType from name.
+  const perTypeDir = path.resolve(process.cwd(), PER_TYPE_DIR);
+  if (existsSync(perTypeDir)) {
+    for (const f of readdirSync(perTypeDir).filter((f) => f.toLowerCase().endsWith(".json")).sort()) {
+      const typeRaw = path.basename(f, path.extname(f)).toUpperCase().replace(/[\s-]+/g, "_");
+      if (isHubContentType(typeRaw)) sources.push({ file: path.join(perTypeDir, f), contentType: typeRaw });
+    }
+  }
+
+  // 2) Legacy root files: sap-references/hub-content*.json → contentType per row.
   const dir = path.resolve(process.cwd(), REF_DIR);
-  if (!existsSync(dir)) {
-    throw new Error(`No ${REF_DIR}/ directory. Drop hub-content-seed.json (or hub-content-*.json) there.`);
+  if (existsSync(dir)) {
+    for (const f of readdirSync(dir).filter((f) => /^hub-content.*\.json$/i.test(f)).sort()) {
+      sources.push({ file: path.join(dir, f), contentType: null });
+    }
   }
-  const files = readdirSync(dir)
-    .filter((f) => /^hub-content.*\.json$/i.test(f))
-    .map((f) => path.join(dir, f))
-    .sort();
-  if (files.length === 0) {
-    throw new Error(`No hub-content*.json files in ${REF_DIR}/. Ship hub-content-seed.json or drop real exports.`);
+
+  if (sources.length === 0) {
+    throw new Error(
+      `No hub-content sources. Drop per-type files in ${PER_TYPE_DIR}/<TYPE>.json or legacy hub-content*.json in ${REF_DIR}/.`,
+    );
   }
-  return files;
+  return sources;
 }
 
 async function main(): Promise<void> {
-  const files = resolveFiles();
-  console.log(`[import-sap-hub-content] Files: ${files.map((f) => path.basename(f)).join(", ")}`);
+  const sources = resolveSources();
+  const importedAt = new Date().toISOString();
+  console.log(`[import-sap-hub-content] Sources: ${sources.map((s) => path.basename(s.file)).join(", ")}`);
   console.log(`[import-sap-hub-content] Dry run: ${DRY_RUN}`);
 
   let inserted = 0;
@@ -190,16 +88,18 @@ async function main(): Promise<void> {
   let skipped = 0;
   const byType: Record<string, number> = {};
 
-  for (const file of files) {
-    const rows = parseHubJson(readFileSync(file, "utf-8"));
+  for (const src of sources) {
+    const rows = parseHubJson(readFileSync(src.file, "utf-8"));
+    const label = path.basename(src.file);
     for (const raw of rows) {
-      const norm = normalizeHubRow(raw);
+      const norm: NormalizedHubContent | null = src.contentType
+        ? normalizeHubRowForType(raw, src.contentType)
+        : normalizeHubRow(raw);
       if (!norm) {
         skipped++;
         continue;
       }
       byType[norm.contentType] = (byType[norm.contentType] ?? 0) + 1;
-
       if (DRY_RUN) {
         inserted++;
         continue;
@@ -218,7 +118,9 @@ async function main(): Promise<void> {
         scopeItemCodes: norm.scopeItemCodes,
         itemCount: norm.itemCount,
         hubUrl: norm.hubUrl,
-        rawMetadataJson: norm.rawJson as Prisma.InputJsonValue,
+        // Provenance: which file, when. release is intentionally NOT pinned — the
+        // published counts are indicative volume, not a release-accurate snapshot.
+        rawMetadataJson: { source: label, release: null, importedAt, raw: norm.rawJson } as Prisma.InputJsonValue,
       };
       const existing = await prisma.sapHubContent.findUnique({
         where: { contentType_externalId: { contentType: norm.contentType, externalId: norm.externalId } },
@@ -228,16 +130,15 @@ async function main(): Promise<void> {
         await prisma.sapHubContent.update({ where: { id: existing.id }, data });
         updated++;
       } else {
-        await prisma.sapHubContent.create({
-          data: { contentType: norm.contentType, externalId: norm.externalId, ...data },
-        });
+        await prisma.sapHubContent.create({ data: { contentType: norm.contentType, externalId: norm.externalId, ...data } });
         inserted++;
       }
     }
   }
 
-  // Backfill API scope codes from SapApiReference (non-clobbering: only fill
-  // rows the export left empty; matched by apiId == externalId).
+  // Backfill API scope codes from SapApiReference (non-clobbering: only fill rows
+  // the export left empty; matched by apiId == externalId). Reads API rows; never
+  // mutates SapApiReference.
   let scopeBackfilled = 0;
   if (!DRY_RUN) {
     const apiRows = await prisma.sapHubContent.findMany({
@@ -245,10 +146,7 @@ async function main(): Promise<void> {
       select: { id: true, externalId: true },
     });
     for (const r of apiRows) {
-      const ref = await prisma.sapApiReference.findUnique({
-        where: { apiId: r.externalId },
-        select: { scopeItemCodes: true },
-      });
+      const ref = await prisma.sapApiReference.findUnique({ where: { apiId: r.externalId }, select: { scopeItemCodes: true } });
       if (ref && ref.scopeItemCodes.length > 0) {
         await prisma.sapHubContent.update({ where: { id: r.id }, data: { scopeItemCodes: ref.scopeItemCodes } });
         scopeBackfilled++;

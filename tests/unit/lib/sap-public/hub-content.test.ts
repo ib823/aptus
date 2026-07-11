@@ -11,6 +11,8 @@ import {
   isRuntimeType,
   pathToApiId,
   resolveHubStatus,
+  type HubContentType,
+  type HubStatus,
 } from "@/lib/sap-public/hub-content";
 
 describe("classifyApiTypeById (honest, no broken-path types)", () => {
@@ -133,6 +135,33 @@ describe("resolveHubStatus (probe-outcome-driven, honest badges)", () => {
     expect(hubAvailabilityQualifier("EVENT")).toBe("subscribe");
     expect(hubAvailabilityQualifier("API")).toBeNull();
     expect(hubAvailabilityQualifier("CDS_VIEW")).toBeNull();
+  });
+});
+
+describe("all 12 content types map to an honest un-probed status", () => {
+  // With NO probe outcomes: reference → REFERENCE; EVENT → AVAILABLE (subscribe-
+  // only); API + CDS_VIEW → NOT_CHECKED (probeable, just not probed here).
+  const EXPECTED: Record<HubContentType, HubStatus> = {
+    API: "NOT_CHECKED",
+    EVENT: "AVAILABLE",
+    CDS_VIEW: "NOT_CHECKED",
+    BADI: "REFERENCE",
+    BO_INTERFACE: "REFERENCE",
+    INTEGRATION: "REFERENCE",
+    BUILD: "REFERENCE",
+    PROCESS_BLUEPRINT: "REFERENCE",
+    LIVEPROCESS: "REFERENCE",
+    SCENARIO: "REFERENCE",
+    VPUC: "REFERENCE",
+    ANALYTICS: "REFERENCE",
+  };
+
+  it("covers every enum member (no type left unbadged)", () => {
+    expect(Object.keys(EXPECTED).sort()).toEqual([...HUB_CONTENT_TYPES].sort());
+  });
+
+  it.each(HUB_CONTENT_TYPES)("%s (un-probed) → its honest status", (type) => {
+    expect(resolveHubStatus({ contentType: type, apiType: null, externalId: `${type}_X` })).toBe(EXPECTED[type]);
   });
 });
 

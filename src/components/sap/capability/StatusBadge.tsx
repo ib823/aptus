@@ -4,19 +4,21 @@ import type { HubStatus } from "@/lib/sap-public/hub-content";
  * StatusBadge — token-mapped catalogue status (design-token contract §1).
  * A badge asserts only what a probe established: ACTIVATED (200)→signed,
  * NEEDS_SETUP (403)→awaiting, NOT_FOUND (404)/NOT_CHECKED (un-probed)→neutral,
- * AVAILABLE (event, subscribe)→sent, REFERENCE→draft. Un-probed is NEVER
- * "Needs setup". Colour via var(--token) only (zero hex); flips in dark within
+ * AVAILABLE (event, subscribe-only — tenant subscription NOT verified)→sent,
+ * REFERENCE→draft. Un-probed is NEVER "Needs setup", and AVAILABLE never claims
+ * the item is available IN YOUR TENANT — only that SAP publishes it as
+ * subscribe-only. Colour via var(--token) only (zero hex); flips in dark within
  * [data-cap-catalogue].
  */
 export type BadgeStatus = HubStatus;
 
-const TONE: Record<BadgeStatus, { bg: string; fg: string; label: string }> = {
-  ACTIVATED: { bg: "var(--status-signed-bg)", fg: "var(--status-signed-fg)", label: "Activated" },
-  NEEDS_SETUP: { bg: "var(--status-awaiting-bg)", fg: "var(--status-awaiting-fg)", label: "Needs setup" },
-  NOT_FOUND: { bg: "var(--surface-ink-tint)", fg: "var(--ink-muted)", label: "Not found" },
-  NOT_CHECKED: { bg: "var(--surface-ink-tint)", fg: "var(--ink-secondary)", label: "Not checked" },
-  AVAILABLE: { bg: "var(--status-sent-bg)", fg: "var(--status-sent-fg)", label: "Available" },
-  REFERENCE: { bg: "var(--status-draft-bg)", fg: "var(--status-draft-fg)", label: "Reference" },
+const TONE: Record<BadgeStatus, { bg: string; fg: string; label: string; tip: string }> = {
+  ACTIVATED: { bg: "var(--status-signed-bg)", fg: "var(--status-signed-fg)", label: "Activated", tip: "Live $metadata returned 200 for the comm user — reachable/authorized." },
+  NEEDS_SETUP: { bg: "var(--status-awaiting-bg)", fg: "var(--status-awaiting-fg)", label: "Needs setup", tip: "Probed 403/401 — published for this edition, but the tenant hasn't authorized the communication arrangement." },
+  NOT_FOUND: { bg: "var(--surface-ink-tint)", fg: "var(--ink-muted)", label: "Not found", tip: "Probed 404 — the service path is absent on this tenant." },
+  NOT_CHECKED: { bg: "var(--surface-ink-tint)", fg: "var(--ink-secondary)", label: "Not checked", tip: "Not probed yet — open the item to run a live probe. Status unknown, not a negative." },
+  AVAILABLE: { bg: "var(--status-sent-bg)", fg: "var(--status-sent-fg)", label: "Available", tip: "Published, subscribe-only (CloudEvents) — tenant subscription NOT verified. Not 'available in your tenant'." },
+  REFERENCE: { bg: "var(--status-draft-bg)", fg: "var(--status-draft-fg)", label: "Reference", tip: "Design-time content — not a tenant runtime endpoint." },
 };
 
 export function StatusBadge({ status, subscribe }: { status: BadgeStatus; subscribe?: boolean }) {
@@ -25,6 +27,7 @@ export function StatusBadge({ status, subscribe }: { status: BadgeStatus; subscr
     <span
       role="status"
       aria-label={subscribe ? `${tone.label}, subscribe` : tone.label}
+      title={tone.tip}
       style={{
         display: "inline-flex",
         alignItems: "center",
