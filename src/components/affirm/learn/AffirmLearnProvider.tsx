@@ -19,7 +19,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { usePathname } from "next/navigation";
 import { driver, type Driver, type DriveStep } from "driver.js";
 import "driver.js/dist/driver.css";
-import { tourForPath } from "@/lib/affirm/learn-tours";
+import { resolveTour } from "@/lib/learn/content";
 import type { GlossaryKey } from "@/constants/affirm-glossary";
 import { AffirmLearnContext } from "./context";
 import { GlossaryDrawer } from "./GlossaryDrawer";
@@ -43,7 +43,7 @@ export function AffirmLearnProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const runTour = useCallback(() => {
-    const tour = tourForPath(pathname);
+    const tour = resolveTour(pathname);
     if (!tour) return;
 
     // Only include steps whose anchor is actually on the page.
@@ -97,7 +97,7 @@ export function AffirmLearnProvider({ children }: { children: ReactNode }) {
   // Auto-start the tour once per screen (first visit only).
   useEffect(() => {
     if (!mounted || !pathname) return;
-    const tour = tourForPath(pathname);
+    const tour = resolveTour(pathname);
     if (!tour) return;
     if (autoRanRef.current === tour.id) return;
 
@@ -126,7 +126,7 @@ export function AffirmLearnProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const hasTour = mounted && tourForPath(pathname) != null;
+  const hasTour = mounted && resolveTour(pathname) != null;
 
   return (
     <AffirmLearnContext.Provider value={{ openGlossary, startTour: runTour, hasTour }}>

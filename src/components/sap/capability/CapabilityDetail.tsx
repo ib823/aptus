@@ -144,7 +144,7 @@ export function CapabilityDetail({
 
           {/* Capability ladder */}
           {reachedIndex >= 0 && (
-            <div>
+            <div data-tour="sap-ladder">
               <div className="mb-1 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--ink-muted)" }}>
                 Capability ladder
               </div>
