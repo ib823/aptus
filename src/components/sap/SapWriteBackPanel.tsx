@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, SendHorizontal } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { HttpStatusPill, httpTone } from "@/components/sap/HttpStatusPill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -194,32 +194,32 @@ export function SapWriteBackPanel({ product = "s4hana" }: { product?: string }) 
   }, [confirmation, enabled, entity, parsedPayload, serviceKey, tenantKey, writeSecret, product]);
 
   return (
-    <section className="rounded-md border bg-card">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+    <section className="rounded-[var(--radius-card-warm)] border" style={{ background: "var(--surface-paper)", borderColor: "var(--border-default)" }}>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3" style={{ borderColor: "var(--border-default)" }}>
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">Write Mode</h2>
-          <p className="text-xs text-muted-foreground">{selectedService?.scenario ?? "SAP TDD"}</p>
+          <h2 className="font-serif text-lg tracking-tight" style={{ color: "var(--brand-navy)" }}>Write Mode</h2>
+          <p className="text-xs" style={{ color: "var(--ink-muted)" }}>{selectedService?.scenario ?? "SAP TDD"}</p>
         </div>
-        <Badge variant={enabled ? "default" : "outline"}>{enabled ? "Live" : "Disabled"}</Badge>
+        <HttpStatusPill tone={enabled ? "live" : "neutral"} label={enabled ? "Live" : "Disabled"} />
       </div>
 
       <div className="space-y-4 p-4">
         {!enabled && (
-          <div className="flex items-center gap-2 rounded-md border border-muted bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 rounded-[var(--radius-input)] border px-3 py-2 text-sm" style={{ background: "var(--surface-ink-tint)", borderColor: "var(--border-default)", color: "var(--ink-secondary)" }}>
             <AlertTriangle className="size-4" />
             Write-back is disabled.
           </div>
         )}
 
         {error && (
-          <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <div className="rounded-[var(--radius-input)] border px-3 py-2 text-sm" style={{ background: "var(--status-revoked-bg)", borderColor: "var(--status-revoked-fg)", color: "var(--status-revoked-fg)" }}>
             {error}
           </div>
         )}
 
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
           <label className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Tenant</span>
+            <span className="text-xs font-medium" style={{ color: "var(--ink-secondary)" }}>Tenant</span>
             <Select value={tenantKey} onValueChange={setTenantKey}>
               <SelectTrigger>
                 <SelectValue placeholder="Tenant" />
@@ -235,7 +235,7 @@ export function SapWriteBackPanel({ product = "s4hana" }: { product?: string }) 
           </label>
 
           <label className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Service</span>
+            <span className="text-xs font-medium" style={{ color: "var(--ink-secondary)" }}>Service</span>
             <Select value={serviceKey} onValueChange={setServiceKey}>
               <SelectTrigger>
                 <SelectValue placeholder="Service" />
@@ -251,7 +251,7 @@ export function SapWriteBackPanel({ product = "s4hana" }: { product?: string }) 
           </label>
 
           <label className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Entity Set</span>
+            <span className="text-xs font-medium" style={{ color: "var(--ink-secondary)" }}>Entity Set</span>
             <Select value={entity} onValueChange={setEntity} disabled={entitiesLoading}>
               <SelectTrigger>
                 <SelectValue placeholder="Entity set" />
@@ -268,7 +268,7 @@ export function SapWriteBackPanel({ product = "s4hana" }: { product?: string }) 
         </div>
 
         <label className="space-y-1.5">
-          <span className="text-xs font-medium text-muted-foreground">JSON Payload</span>
+          <span className="text-xs font-medium" style={{ color: "var(--ink-secondary)" }}>JSON Payload</span>
           <Textarea
             className="min-h-[220px] font-mono text-xs"
             value={payload}
@@ -279,7 +279,7 @@ export function SapWriteBackPanel({ product = "s4hana" }: { product?: string }) 
 
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1fr_auto]">
           <label className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Confirmation</span>
+            <span className="text-xs font-medium" style={{ color: "var(--ink-secondary)" }}>Confirmation</span>
             <Input
               value={confirmation}
               onChange={(event) => setConfirmation(event.target.value)}
@@ -288,7 +288,7 @@ export function SapWriteBackPanel({ product = "s4hana" }: { product?: string }) 
           </label>
 
           <label className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Write Secret</span>
+            <span className="text-xs font-medium" style={{ color: "var(--ink-secondary)" }}>Write Secret</span>
             <Input
               value={writeSecret}
               onChange={(event) => setWriteSecret(event.target.value)}
@@ -298,7 +298,7 @@ export function SapWriteBackPanel({ product = "s4hana" }: { product?: string }) 
           </label>
 
           <Button
-            className="self-end"
+            className="self-end bg-[var(--cta-red)] text-[var(--ink-on-navy)] hover:bg-[var(--cta-red-hover)]"
             onClick={() => void createRecord()}
             disabled={
               !enabled ||
@@ -314,14 +314,14 @@ export function SapWriteBackPanel({ product = "s4hana" }: { product?: string }) 
         </div>
 
         {!parsedPayload && (
-          <div className="text-xs text-destructive">Payload must be a valid JSON object.</div>
+          <div className="text-xs" style={{ color: "var(--status-revoked-fg)" }}>Payload must be a valid JSON object.</div>
         )}
 
         {result?.data && (
-          <div className="rounded-md border bg-background">
-            <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
-              <span className="text-sm font-medium">Result</span>
-              <Badge variant={result.data.ok ? "default" : "destructive"}>HTTP {result.data.status}</Badge>
+          <div className="rounded-[var(--radius-card-warm)] border" style={{ background: "var(--surface-cream)", borderColor: "var(--border-default)" }}>
+            <div className="flex items-center justify-between gap-3 border-b px-3 py-2" style={{ borderColor: "var(--border-default)" }}>
+              <span className="text-sm font-medium" style={{ color: "var(--ink-primary)" }}>Result</span>
+              <HttpStatusPill tone={httpTone(result.data.ok)} label={`HTTP ${result.data.status}`} />
             </div>
             <pre className="max-h-[360px] overflow-auto p-3 text-xs">
               {prettyJson({
