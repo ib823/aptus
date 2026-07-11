@@ -68,10 +68,10 @@ export function SapCloudExplorer() {
                   disabled={!p.configured}
                   className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-medium transition ${
                     selected
-                      ? "border-foreground bg-foreground text-background"
+                      ? "border-[var(--brand-navy)] bg-[var(--brand-navy)] text-[var(--ink-on-navy)]"
                       : p.configured
-                        ? "border-border bg-card text-foreground hover:border-foreground/50"
-                        : "cursor-not-allowed border-border bg-muted/40 text-muted-foreground"
+                        ? "border-[var(--border-default)] bg-[var(--surface-paper)] text-[var(--ink-primary)] hover:border-[var(--brand-navy)]"
+                        : "cursor-not-allowed border-[var(--border-default)] bg-[var(--surface-ink-tint)] text-[var(--ink-muted)]"
                   }`}
                   title={p.configured ? p.description : `${p.label} has no TDD tenant configured`}
                 >
@@ -82,13 +82,13 @@ export function SapCloudExplorer() {
               );
             })}
           </div>
-          {active && <p className="text-sm text-muted-foreground">{active.description}</p>}
+          {active && <p className="text-sm" style={{ color: "var(--ink-secondary)" }}>{active.description}</p>}
         </div>
       )}
 
       {active && !active.configured ? (
-        <div className="rounded-md border border-dashed bg-card px-5 py-8 text-sm text-muted-foreground">
-          <p className="font-medium text-foreground">{active.label} isn&apos;t connected yet.</p>
+        <div className="rounded-[var(--radius-card-warm)] border border-dashed px-5 py-8 text-sm" style={{ borderColor: "var(--border-strong)", background: "var(--surface-cream)", color: "var(--ink-secondary)" }}>
+          <p className="font-medium" style={{ color: "var(--ink-primary)" }}>{active.label} isn&apos;t connected yet.</p>
           <p className="mt-1">
             Add this product&apos;s TDD tenant + credentials to the deployment environment to pull
             live data here (same pattern as S/4HANA). See the deployment env checklist.
@@ -98,14 +98,18 @@ export function SapCloudExplorer() {
         <SapAribaExplorer />
       ) : (
         <>
-          <SapCapabilityCatalogue product={product} />
-          <div className="border-t pt-6">
+          <div id="sap-capability-catalogue" style={{ scrollMarginTop: 24 }}>
+            <SapCapabilityCatalogue product={product} />
+          </div>
+          <div className="border-t pt-6" style={{ borderColor: "var(--border-default)" }}>
             <SapOperationsDashboard product={product} />
           </div>
           <SapWriteBackPanel product={product} />
-          <div className="border-t pt-6">
+          <div id="sap-entity-explorer" className="border-t pt-6" style={{ borderColor: "var(--border-default)", scrollMarginTop: 24 }}>
             <div className="mb-4">
-              <h2 className="text-lg font-semibold tracking-tight">Entity Explorer</h2>
+              <h2 className="font-serif text-lg tracking-tight" style={{ color: "var(--brand-navy)" }}>
+                Entity Explorer
+              </h2>
             </div>
             <SapTenantExplorer product={product} />
           </div>
