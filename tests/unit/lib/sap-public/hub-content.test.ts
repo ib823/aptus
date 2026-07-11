@@ -7,6 +7,7 @@ import {
   hubApiToService,
   hubAvailabilityQualifier,
   httpToRuntimeStatus,
+  isProbeable,
   isHubContentType,
   isRuntimeType,
   pathToApiId,
@@ -115,10 +116,17 @@ describe("resolveHubStatus (probe-outcome-driven, honest badges)", () => {
     expect(resolveHubStatus(runtime, new Map([["API_X", 404]]))).toBe("NOT_FOUND");
   });
 
-  it("runtime, NOT probed → NOT_CHECKED — never NEEDS_SETUP (the list-vs-detail bug)", () => {
+  it("PROBEABLE runtime, NOT probed → NOT_CHECKED — never NEEDS_SETUP (the list-vs-detail bug)", () => {
     expect(resolveHubStatus(runtime, new Map([["OTHER", 200]]))).toBe("NOT_CHECKED");
     expect(resolveHubStatus(runtime, new Map())).toBe("NOT_CHECKED");
     expect(resolveHubStatus(runtime)).toBe("NOT_CHECKED");
+  });
+
+  it("UN-PROBEABLE runtime (SOAP / null apiType), no outcome → NOT_PROBEABLE (distinct from NOT_CHECKED)", () => {
+    expect(resolveHubStatus({ contentType: "API", apiType: "SOAP", externalId: "IN_X" })).toBe("NOT_PROBEABLE");
+    expect(resolveHubStatus({ contentType: "API", apiType: null, externalId: "N_X" })).toBe("NOT_PROBEABLE");
+    // but a real stored/live outcome still wins even for a SOAP row we somehow probed
+    expect(resolveHubStatus({ contentType: "API", apiType: "SOAP", externalId: "IN_X" }, new Map([["IN_X", 200]]))).toBe("ACTIVATED");
   });
 
   it("a CDS view resolves by its own probe outcome", () => {
@@ -139,12 +147,12 @@ describe("resolveHubStatus (probe-outcome-driven, honest badges)", () => {
 });
 
 describe("all 12 content types map to an honest un-probed status", () => {
-  // With NO probe outcomes: reference → REFERENCE; EVENT → AVAILABLE (subscribe-
-  // only); API + CDS_VIEW → NOT_CHECKED (probeable, just not probed here).
-  const EXPECTED: Record<HubContentType, HubStatus> = {
-    API: "NOT_CHECKED",
+  // With NO probe outcomes AND apiType null: reference → REFERENCE; EVENT →
+  // AVAILABLE; API + CDS_VIEW → NOT_PROBEABLE (null apiType = no OData endpoint).
+  const EXPECTED_NULL_APITYPE: Record<HubContentType, HubStatus> = {
+    API: "NOT_PROBEABLE",
     EVENT: "AVAILABLE",
-    CDS_VIEW: "NOT_CHECKED",
+    CDS_VIEW: "NOT_PROBEABLE",
     BADI: "REFERENCE",
     BO_INTERFACE: "REFERENCE",
     INTEGRATION: "REFERENCE",
@@ -157,11 +165,28 @@ describe("all 12 content types map to an honest un-probed status", () => {
   };
 
   it("covers every enum member (no type left unbadged)", () => {
-    expect(Object.keys(EXPECTED).sort()).toEqual([...HUB_CONTENT_TYPES].sort());
+    expect(Object.keys(EXPECTED_NULL_APITYPE).sort()).toEqual([...HUB_CONTENT_TYPES].sort());
   });
 
-  it.each(HUB_CONTENT_TYPES)("%s (un-probed) → its honest status", (type) => {
-    expect(resolveHubStatus({ contentType: type, apiType: null, externalId: `${type}_X` })).toBe(EXPECTED[type]);
+  it.each(HUB_CONTENT_TYPES)("%s (un-probed, null apiType) → its honest status", (type) => {
+    expect(resolveHubStatus({ contentType: type, apiType: null, externalId: `${type}_X` })).toBe(EXPECTED_NULL_APITYPE[type]);
+  });
+
+  it("API / CDS_VIEW with an OData apiType (un-probed) → NOT_CHECKED, not NOT_PROBEABLE", () => {
+    expect(resolveHubStatus({ contentType: "API", apiType: "ODATAV2", externalId: "A" })).toBe("NOT_CHECKED");
+    expect(resolveHubStatus({ contentType: "CDS_VIEW", apiType: "ODATAV4", externalId: "C" })).toBe("NOT_CHECKED");
+  });
+});
+
+describe("isProbeable", () => {
+  it("only API / CDS_VIEW on OData V2/V4 are probeable", () => {
+    expect(isProbeable({ contentType: "API", apiType: "ODATAV2" })).toBe(true);
+    expect(isProbeable({ contentType: "API", apiType: "ODATAV4" })).toBe(true);
+    expect(isProbeable({ contentType: "CDS_VIEW", apiType: "ODATAV2" })).toBe(true);
+    expect(isProbeable({ contentType: "API", apiType: "SOAP" })).toBe(false);
+    expect(isProbeable({ contentType: "API", apiType: null })).toBe(false);
+    expect(isProbeable({ contentType: "EVENT", apiType: "ODATAV2" })).toBe(false);
+    expect(isProbeable({ contentType: "BADI", apiType: "ODATAV2" })).toBe(false);
   });
 });
 
