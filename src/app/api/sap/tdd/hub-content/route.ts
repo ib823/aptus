@@ -16,6 +16,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { isAdminRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import {
+  deriveReadWrite,
   getConfiguredSapTenants,
   getSapProduct,
   getSapTenant,
@@ -58,7 +59,12 @@ async function probeActivatedApiIds(
   tenant: { key: string; label: string; baseUrl: string },
   product: { services: SapServiceDefinition[] },
   dataProbe: boolean,
-): Promise<{ outcomes: Map<string, number>; dataConfirmed: Set<string>; probed: number }> {
+): Promise<{
+  outcomes: Map<string, number>;
+  dataConfirmed: Set<string>;
+  capabilities: Map<string, { read: boolean; write: boolean }>;
+  probed: number;
+}> {
   const select = { contentType: true, apiType: true, externalId: true, title: true, packageId: true, communicationScenarios: true } as const;
   // Sample both V2 (reliable path) and V4 (best-effort path) so V4 rows can also
   // reach ACTIVATED — alphabetical ordering alone never reaches the CE_* (V4) set.
@@ -83,15 +89,23 @@ async function probeActivatedApiIds(
   // `service` equals the SapHubContent externalId, not the display key.
   const curated = product.services.map((s) => ({ ...s, key: pathToApiId(s.path) }));
   const targets = mergeProbeTargets(curated, dynamic, PROBE_CAP);
-  if (targets.length === 0) return { outcomes: new Map(), dataConfirmed: new Set(), probed: 0 };
+  if (targets.length === 0) return { outcomes: new Map(), dataConfirmed: new Set(), capabilities: new Map(), probed: 0 };
   const results = await probeTenantCapabilities(prefix, tenant, targets, 4, { dataProbe });
   // Keep the FULL outcome (HTTP status) per probed service — not just the 200s —
   // so the badge can distinguish 200/403/404, and un-probed stays NOT_CHECKED.
   const outcomes = new Map<string, number>();
-  for (const r of results) outcomes.set(r.service, r.status);
+  // Real read/write from the SAME probe, via the shared deriveReadWrite — so the
+  // 47 activated rows show correct CRUD in the list WITHOUT a click, and the
+  // collapsed chip matches the expanded detail exactly.
+  const capabilities = new Map<string, { read: boolean; write: boolean }>();
+  for (const r of results) {
+    outcomes.set(r.service, r.status);
+    if (r.entities && r.entities.length > 0) capabilities.set(r.service, deriveReadWrite(r.entities));
+  }
   return {
     outcomes,
     dataConfirmed: new Set(results.filter((r) => r.dataConfirmed).map((r) => r.service)),
+    capabilities,
     probed: targets.length,
   };
 }
@@ -148,16 +162,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const dataProbe = params.get("dataProbe") === "1"; // opt-in 1-row read to data-confirm
   let outcomes = new Map<string, number>();
   let dataConfirmed = new Set<string>();
+  let capabilities = new Map<string, { read: boolean; write: boolean }>();
   let probed = 0;
   if (tenant && probeEnabled) {
     try {
       const r = await probeActivatedApiIds(product.envPrefix, tenant, product, dataProbe);
       outcomes = r.outcomes;
       dataConfirmed = r.dataConfirmed;
+      capabilities = r.capabilities;
       probed = r.probed;
     } catch {
       outcomes = new Map(); // probe failure → nothing probed (honest); runtime rows → NOT_CHECKED
       dataConfirmed = new Set();
+      capabilities = new Map();
       probed = 0;
     }
   }
@@ -232,6 +249,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     status: resolveHubStatus({ contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId }, outcomes),
     availabilityNote: hubAvailabilityQualifier(r.contentType as HubContentType),
     dataConfirmed: dataConfirmed.has(r.externalId),
+    // Real read/write for the ~60 probed rows (else undefined → "not probed").
+    capability: capabilities.get(r.externalId) ?? null,
   }));
 
   // ── counts across the full edition set (ignoring the type/status filter
