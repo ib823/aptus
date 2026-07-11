@@ -14,7 +14,7 @@ const PAYLOAD = {
     total: 1,
     page: 1,
     limit: 50,
-    counts: { byType: { API: 941 }, byStatus: { ACTIVATED: 5, NEEDS_SETUP: 12, NOT_FOUND: 3, NOT_CHECKED: 921, AVAILABLE: 0, REFERENCE: 0 }, probeableRuntime: 128, probed: 60 },
+    counts: { byType: { API: 941 }, byStatus: { ACTIVATED: 5, NEEDS_SETUP: 12, NOT_FOUND: 3, NOT_CHECKED: 451, NOT_PROBEABLE: 470, AVAILABLE: 0, REFERENCE: 0 }, probeableRuntime: 128, probed: 60, lastProbedAt: "2026-02-02T00:00:00Z" },
     catalogueImported: true,
     tenant: "ABeam TDD",
     isAdmin: true,
@@ -30,9 +30,9 @@ describe("SapCapabilityCatalogue (CatalogueList) smoke", () => {
   it("mounts with scorecard + type tiles + LoB-grouped list", async () => {
     const { container } = render(<SapCapabilityCatalogue product="s4hana" />);
 
-    // Scorecard — real exposed count as a probe sample + separate catalogue scale.
+    // Scorecard — real exposed count from the stored probe + separate catalogue scale.
     expect(await screen.findByText(/authorized of/i)).toBeInTheDocument();
-    expect(screen.getByText(/live probe sample/i)).toBeInTheDocument();
+    expect(screen.getByText(/last probed/i)).toBeInTheDocument();
     expect(screen.getAllByText(/941/).length).toBeGreaterThan(0);
 
     // Content-type tiles show ALL types (APIs present, Events/CDS dimmed).

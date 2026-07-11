@@ -33,8 +33,21 @@ const { GET } = await import("@/app/api/sap/tdd/hub-content/route");
 
 const PRODUCT = { key: "s4hana", label: "S/4HANA Cloud", envPrefix: "S4_TDD", services: [] };
 const TENANT = { key: "default", label: "ABeam TDD", baseUrl: "https://x.example" };
-const API_ROW = { contentType: "API", apiType: "ODATAV2", externalId: "API_PO", title: "PO", packageId: "Proc", communicationScenarios: ["SAP_COM_0053"] };
-const CDS_ROW = { contentType: "CDS_VIEW", apiType: "ODATAV2", externalId: "C_VIEW", title: "View", packageId: "Sales", communicationScenarios: [] };
+
+// Status now derives from the PERSISTED probe on rawMetadataJson.probe, read for
+// the whole catalogue (allRows). The live probe only runs as an opt-in overlay.
+const stored = (http: number, read = false, write = false) => ({
+  source: "s",
+  probe: { http, at: "2026-02-02T00:00:00Z", read, write },
+});
+// Classification set (allRows): drives byStatus + the paged items' status.
+const ALL_ROWS = [
+  { externalId: "API_PO", contentType: "API", apiType: "ODATAV2", rawMetadataJson: stored(200, true, true) }, // → ACTIVATED
+  { externalId: "C_VIEW", contentType: "CDS_VIEW", apiType: "ODATAV2", rawMetadataJson: { source: "s" } }, // probeable, no probe → NOT_CHECKED
+  { externalId: "SOAP_IN", contentType: "API", apiType: "SOAP", rawMetadataJson: { source: "s" } }, // no OData → NOT_PROBEABLE
+  { externalId: "CE_X", contentType: "EVENT", apiType: null, rawMetadataJson: null }, // → AVAILABLE
+  { externalId: "BADI_X", contentType: "BADI", apiType: null, rawMetadataJson: null }, // → REFERENCE
+];
 const PAGE_ROWS = [
   { id: "1", contentType: "API", externalId: "API_PO", title: "PO", description: "", packageId: "Proc", apiType: "ODATAV2", communicationScenarios: ["SAP_COM_0053"], itemCount: null, hubUrl: "u" },
   { id: "2", contentType: "EVENT", externalId: "CE_X", title: "Ev", description: "", packageId: null, apiType: null, communicationScenarios: [], itemCount: null, hubUrl: "u" },
@@ -50,8 +63,16 @@ function makeRequest(query = "product=s4hana"): Parameters<typeof GET>[0] {
   return { nextUrl: { searchParams: new URLSearchParams(query) } } as Parameters<typeof GET>[0];
 }
 
+/** Set the persisted probe for a row in ALL_ROWS (drives status without a live probe). */
+function setStored(externalId: string, raw: unknown): void {
+  const row = ALL_ROWS.find((r) => r.externalId === externalId);
+  if (row) (row as { rawMetadataJson: unknown }).rawMetadataJson = raw;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  // reset the mutable stored fixtures each test
+  setStored("API_PO", stored(200, true, true));
   mocks.getSapProduct.mockReturnValue(PRODUCT);
   mocks.isSapTddPublicAccessEnabled.mockReturnValue(true);
   mocks.getCurrentUser.mockResolvedValue({ email: "a@b.co", role: "consultant" });
@@ -60,11 +81,12 @@ beforeEach(() => {
   mocks.probeTenantCapabilities.mockResolvedValue([{ service: "API_PO", exposed: true, status: 200 }]);
   // totalRows (no AND) → 40; page total (AND filter) → PAGE_ROWS.length
   mocks.count.mockImplementation((args: { where?: { AND?: unknown } }) => Promise.resolve(args.where?.AND ? PAGE_ROWS.length : 40));
-  // probe queries: apiType V2 → V2 rows, apiType V4 → V4 rows; page query (AND) → page rows
-  mocks.findMany.mockImplementation((args: { where?: { apiType?: string } }) => {
-    if (args.where?.apiType === "ODATAV2") return Promise.resolve([API_ROW, CDS_ROW]);
+  // findMany routing: paged (AND) → items; apiType (dataProbe overlay) → V2/V4; else (allRows) → classification set.
+  mocks.findMany.mockImplementation((args: { where?: { apiType?: string; AND?: unknown } }) => {
+    if (args.where?.AND) return Promise.resolve(PAGE_ROWS);
+    if (args.where?.apiType === "ODATAV2") return Promise.resolve([{ contentType: "API", apiType: "ODATAV2", externalId: "API_PO", title: "PO", packageId: "Proc", communicationScenarios: ["SAP_COM_0053"] }]);
     if (args.where?.apiType === "ODATAV4") return Promise.resolve([]);
-    return Promise.resolve(PAGE_ROWS);
+    return Promise.resolve(ALL_ROWS);
   });
   mocks.groupBy.mockResolvedValue(GROUPED);
 });
@@ -89,109 +111,64 @@ describe("GET /api/sap/tdd/hub-content", () => {
     expect(body.data.items).toEqual([]);
   });
 
-  it("happy path: resolves honest badges (probed 200 → ACTIVATED) and counts", async () => {
+  it("happy path: STORED probe drives honest badges + counts (incl. NOT_PROBEABLE)", async () => {
     const body = await (await GET(makeRequest())).json();
     const byId = Object.fromEntries(body.data.items.map((i: { externalId: string; status: string }) => [i.externalId, i.status]));
     expect(byId).toEqual({ API_PO: "ACTIVATED", CE_X: "AVAILABLE", BADI_X: "REFERENCE" });
-    // runtime 10 (API5+EVENT5); EVENTs(5)→AVAILABLE; probeable runtime 5, of which
-    // 1 activated → 4 NOT_CHECKED (beyond the 2-target probe); reference 1.
-    expect(body.data.counts.byStatus).toEqual({ ACTIVATED: 1, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 4, AVAILABLE: 5, REFERENCE: 1 });
-    // byType emits ALL 12 type keys (0 allowed) so every tile renders honest context.
-    expect(body.data.counts.byType).toEqual({
-      API: 5, EVENT: 5, CDS_VIEW: 0, BADI: 1, BO_INTERFACE: 0, INTEGRATION: 0,
-      BUILD: 0, PROCESS_BLUEPRINT: 0, LIVEPROCESS: 0, SCENARIO: 0, VPUC: 0, ANALYTICS: 0,
+    // Classified over the 5 allRows: 1 ACTIVATED (stored 200), 1 NOT_CHECKED
+    // (probeable C_VIEW, no probe), 1 NOT_PROBEABLE (SOAP), 1 AVAILABLE (event), 1 REFERENCE.
+    expect(body.data.counts.byStatus).toEqual({
+      ACTIVATED: 1, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 1, NOT_PROBEABLE: 1, AVAILABLE: 1, REFERENCE: 1,
     });
+    // Sums to the full set.
+    expect(Object.values(body.data.counts.byStatus).reduce((a: number, b) => a + (b as number), 0)).toBe(ALL_ROWS.length);
+    // byType still emits all 12 keys from the groupBy.
     expect(Object.keys(body.data.counts.byType)).toHaveLength(12);
-    expect(body.data.counts.probed).toBe(2); // API_PO + C_VIEW merged targets
+    expect(body.data.counts.byType.API).toBe(5);
+    expect(body.data.counts.probed).toBe(1); // only API_PO carries a stored http
+    expect(body.data.counts.lastProbedAt).toBe("2026-02-02T00:00:00Z");
     expect(body.data.tenant).toBe("ABeam TDD");
   });
 
-  it("attaches real read/write to PROBED rows (no click needed); un-probed rows carry none", async () => {
-    // Probe returns a CRUD service (create + delete) for API_PO.
-    mocks.probeTenantCapabilities.mockResolvedValue([
-      { service: "API_PO", exposed: true, status: 200, entities: [
-        { name: "A", readable: true, creatable: true, updatable: null, deletable: null, pageable: null },
-        { name: "B", readable: true, creatable: null, updatable: null, deletable: true, pageable: null },
-      ] },
-    ]);
+  it("default load reads STORED probe only — no per-request tenant hammering", async () => {
+    await GET(makeRequest());
+    expect(mocks.probeTenantCapabilities).not.toHaveBeenCalled();
+  });
+
+  it("attaches STORED read/write to probed rows; un-probed rows carry none", async () => {
     const body = await (await GET(makeRequest())).json();
     const po = body.data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
-    expect(po.capability).toEqual({ read: true, write: true }); // create OR delete ⇒ write
-    // CE_X (event) + BADI_X (reference) were not probed → no capability claim.
+    expect(po.capability).toEqual({ read: true, write: true }); // from stored probe
     const ev = body.data.items.find((i: { externalId: string }) => i.externalId === "CE_X");
     expect(ev.capability).toBeNull();
   });
 
-  it("curated-first identity: a service exposed via the curated set marks its row ACTIVATED even when it's NOT in the alphabetical probe window", async () => {
-    // Curated service (key 'purchase-orders') whose path → apiId API_PO.
-    mocks.getSapProduct.mockReturnValue({
-      ...PRODUCT,
-      services: [{ key: "purchase-orders", label: "PO", scenario: "SAP_COM_0053", path: "/sap/opu/odata/sap/API_PO", domain: "Sourcing and Procurement" }],
-    });
-    // Dynamic window does NOT contain API_PO (alphabetically late) — only API_ZZZ.
-    mocks.findMany.mockImplementation((args: { where?: { apiType?: string } }) => {
-      if (args.where?.apiType === "ODATAV2")
-        return Promise.resolve([{ contentType: "API", apiType: "ODATAV2", externalId: "API_ZZZ", title: "Z", packageId: null, communicationScenarios: [] }]);
-      if (args.where?.apiType === "ODATAV4") return Promise.resolve([]);
-      return Promise.resolve(PAGE_ROWS);
-    });
-    // The curated probe finds API_PO exposed (result.service == apiId).
-    mocks.probeTenantCapabilities.mockResolvedValue([{ service: "API_PO", exposed: true, status: 200 }]);
-    const body = await (await GET(makeRequest())).json();
-    const po = body.data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
-    expect(po.status).toBe("ACTIVATED"); // matched by externalId == apiId (last path segment)
-    expect(body.data.counts.byStatus.ACTIVATED).toBe(1);
-  });
-
-  it("an active CDS view (probed 200) → ACTIVATED; an EVENT stays AVAILABLE(subscribe)", async () => {
-    mocks.probeTenantCapabilities.mockResolvedValue([{ service: "C_VIEW", exposed: true, status: 200 }]);
-    mocks.findMany.mockImplementation((args: { where?: { apiType?: string } }) => {
-      if (args.where?.apiType === "ODATAV2") return Promise.resolve([API_ROW, CDS_ROW]);
-      if (args.where?.apiType === "ODATAV4") return Promise.resolve([]);
-      return Promise.resolve([
-        { id: "c", contentType: "CDS_VIEW", externalId: "C_VIEW", title: "View", description: "", packageId: "Sales", apiType: "ODATAV2", communicationScenarios: [], itemCount: null, hubUrl: "u" },
-        { id: "e", contentType: "EVENT", externalId: "CE_X", title: "Ev", description: "", packageId: null, apiType: null, communicationScenarios: [], itemCount: null, hubUrl: "u" },
-      ]);
-    });
-    const body = await (await GET(makeRequest())).json();
-    const byId = Object.fromEntries(body.data.items.map((i: { externalId: string; status: string }) => [i.externalId, i.status]));
-    expect(byId).toEqual({ C_VIEW: "ACTIVATED", CE_X: "AVAILABLE" });
-    const ev = body.data.items.find((i: { externalId: string }) => i.externalId === "CE_X");
-    expect(ev.availabilityNote).toBe("subscribe");
-  });
-
-  it("a best-effort V4 service that returns a live 200 → ACTIVATED", async () => {
-    mocks.findMany.mockImplementation((args: { where?: { apiType?: string } }) => {
-      if (args.where?.apiType === "ODATAV2") return Promise.resolve([]);
-      if (args.where?.apiType === "ODATAV4")
-        return Promise.resolve([{ contentType: "API", apiType: "ODATAV4", externalId: "CE_BANK_0003", title: "Bank", packageId: "Master Data", communicationScenarios: [] }]);
-      return Promise.resolve([
-        { id: "v", contentType: "API", externalId: "CE_BANK_0003", title: "Bank", description: "", packageId: "Master Data", apiType: "ODATAV4", communicationScenarios: [], itemCount: null, hubUrl: "u" },
-      ]);
-    });
-    mocks.probeTenantCapabilities.mockResolvedValue([{ service: "CE_BANK_0003", exposed: true, status: 200 }]);
-    const body = await (await GET(makeRequest())).json();
-    const v4 = body.data.items.find((i: { externalId: string }) => i.externalId === "CE_BANK_0003");
-    expect(v4.status).toBe("ACTIVATED");
-    expect(body.data.counts.byStatus.ACTIVATED).toBe(1);
-  });
-
-  it("probed 403 → NEEDS_SETUP (confirmed negative), never ACTIVATED", async () => {
-    mocks.probeTenantCapabilities.mockResolvedValue([{ service: "API_PO", exposed: false, status: 403 }]);
-    const body = await (await GET(makeRequest())).json();
-    const po = body.data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
+  it("stored 403 → NEEDS_SETUP; stored 404 → NOT_FOUND", async () => {
+    setStored("API_PO", stored(403));
+    let po = (await (await GET(makeRequest())).json()).data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
     expect(po.status).toBe("NEEDS_SETUP");
-    expect(body.data.counts.byStatus.ACTIVATED).toBe(0);
-    expect(body.data.counts.byStatus.NEEDS_SETUP).toBe(1);
+    setStored("API_PO", stored(404));
+    po = (await (await GET(makeRequest())).json()).data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
+    expect(po.status).toBe("NOT_FOUND");
   });
 
-  it("a runtime service beyond the probe window → NOT_CHECKED (never a fabricated Needs setup)", async () => {
-    // Only C_VIEW gets a live 200; API_PO is un-probed → must be NOT_CHECKED, not a
-    // metadata-inferred 'Needs setup'. This is the list-vs-detail contradiction fix.
-    mocks.probeTenantCapabilities.mockResolvedValue([{ service: "C_VIEW", exposed: true, status: 200 }]);
+  it("probeable but no stored probe → NOT_CHECKED; SOAP/no-endpoint → NOT_PROBEABLE", async () => {
     const body = await (await GET(makeRequest())).json();
+    // paged items include only API_PO/CE_X/BADI_X, so assert via the counts + a filtered fetch.
+    expect(body.data.counts.byStatus.NOT_CHECKED).toBe(1); // C_VIEW
+    expect(body.data.counts.byStatus.NOT_PROBEABLE).toBe(1); // SOAP_IN
+  });
+
+  it("dataProbe=1 runs the LIVE overlay (which wins) and data-confirms", async () => {
+    setStored("API_PO", stored(403)); // stored says NEEDS_SETUP…
+    mocks.probeTenantCapabilities.mockResolvedValue([
+      { service: "API_PO", exposed: true, status: 200, dataConfirmed: true, entities: [{ name: "A", readable: true, creatable: true, updatable: null, deletable: null, pageable: null }] },
+    ]);
+    const body = await (await GET(makeRequest("product=s4hana&dataProbe=1"))).json();
+    expect(mocks.probeTenantCapabilities).toHaveBeenCalled();
     const po = body.data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
-    expect(po.status).toBe("NOT_CHECKED");
+    expect(po.status).toBe("ACTIVATED"); // …but the live overlay (200) wins
+    expect(po.dataConfirmed).toBe(true);
   });
 
   it("passes a contentType filter through to the query", async () => {
@@ -201,12 +178,12 @@ describe("GET /api/sap/tdd/hub-content", () => {
     expect(and).toContainEqual({ contentType: "EVENT" });
   });
 
-  it("status=REFERENCE filters to reference content types in SQL", async () => {
+  it("status filter pre-filters the page by the classified externalId set", async () => {
     await GET(makeRequest("product=s4hana&status=REFERENCE"));
     const pageCall = mocks.findMany.mock.calls.find((c) => (c[0] as { where?: { AND?: unknown } }).where?.AND);
-    const and = (pageCall![0] as { where: { AND: Array<{ contentType?: { in?: string[] } }> } }).where.AND;
-    const refClause = and.find((c) => c.contentType?.in);
-    expect(refClause!.contentType!.in).toContain("BADI");
-    expect(refClause!.contentType!.in).not.toContain("API");
+    const and = (pageCall![0] as { where: { AND: Array<{ externalId?: { in?: string[] } }> } }).where.AND;
+    const clause = and.find((c) => c.externalId?.in);
+    expect(clause!.externalId!.in).toContain("BADI_X"); // the only REFERENCE row
+    expect(clause!.externalId!.in).not.toContain("API_PO");
   });
 });
