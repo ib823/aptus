@@ -72,28 +72,53 @@ describe("POST /api/sap/tdd/hub-content/probe-all", () => {
     expect(mocks.update).not.toHaveBeenCalled();
   });
 
-  it("probes every probeable row and PERSISTS the result by MERGING rawMetadataJson", async () => {
+  it("probes every probeable row and PERSISTS under the tenant key, MERGING rawMetadataJson", async () => {
     const res = await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES" }));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.data.probed).toBe(2);
     expect(body.data.byOutcome).toMatchObject({ ACTIVATED: 1, NEEDS_SETUP: 1 });
+    expect(body.data.tenantKey).toBe("default");
 
-    // API_PO update MERGES probe onto the existing keys (source/apiId preserved).
+    // API_PO update MERGES probes.default onto the existing keys (source/apiId preserved).
     const poCall = mocks.update.mock.calls.find((c) => c[0].where.id === "1")!;
     const raw = poCall[0].data.rawMetadataJson;
     expect(raw.source).toBe("SapApiReference"); // preserved
     expect(raw.apiId).toBe("API_PO"); // preserved
-    expect(raw.probe.http).toBe(200);
-    expect(raw.probe.read).toBe(true);
-    expect(raw.probe.write).toBe(true); // creatable ⇒ write
-    expect(typeof raw.probe.at).toBe("string");
+    expect(raw.probe).toBeUndefined(); // no more singular slot
+    expect(raw.probes.default.http).toBe(200);
+    expect(raw.probes.default.read).toBe(true);
+    expect(raw.probes.default.write).toBe(true); // creatable ⇒ write
+    expect(typeof raw.probes.default.at).toBe("string");
 
-    // C_VIEW (403) persisted with read/write false and a probe block even w/ null existing.
     const cvCall = mocks.update.mock.calls.find((c) => c[0].where.id === "2")!;
-    expect(cvCall[0].data.rawMetadataJson.probe.http).toBe(403);
+    expect(cvCall[0].data.rawMetadataJson.probes.default.http).toBe(403);
 
     expect(mocks.logDecision.mock.calls[0]![0]).toMatchObject({ action: "SAP_HUB_PROBED_ALL" });
+  });
+
+  it("probing one tenant writes ONLY that tenant's key — preserves siblings + legacy probe", async () => {
+    // API_PO already has a customizing result + a legacy singular probe.
+    mocks.findMany.mockResolvedValue([
+      { ...PROBEABLE_ROWS[0], rawMetadataJson: { source: "SapApiReference", apiId: "API_PO", probe: { http: 999 }, probes: { customizing: { http: 200 } } } },
+    ]);
+    mocks.getConfiguredSapTenants.mockReturnValue([TENANT, { key: "development", label: "Dev X5M/080", baseUrl: "https://d.example" }]);
+    mocks.getSapTenant.mockImplementation((_p: string, key: string) =>
+      key === "development" ? { key: "development", label: "Dev X5M/080", baseUrl: "https://d.example" } : TENANT,
+    );
+    const res = await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES", tenant: "development" }));
+    expect(res.status).toBe(200);
+    const raw = mocks.update.mock.calls.find((c) => c[0].where.id === "1")![0].data.rawMetadataJson;
+    expect(raw.probes.development.http).toBe(200); // wrote development
+    expect(raw.probes.customizing.http).toBe(200); // sibling tenant untouched
+    expect(raw.probe.http).toBe(999); // legacy slot untouched
+    expect(raw.source).toBe("SapApiReference");
+  });
+
+  it("400 on an unknown tenant key", async () => {
+    mocks.getSapTenant.mockReturnValue(null);
+    const res = await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES", tenant: "nope" }));
+    expect(res.status).toBe(400);
   });
 
   it("400 when no tenant is configured", async () => {

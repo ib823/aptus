@@ -186,4 +186,40 @@ describe("GET /api/sap/tdd/hub-content", () => {
     expect(clause!.externalId!.in).toContain("BADI_X"); // the only REFERENCE row
     expect(clause!.externalId!.in).not.toContain("API_PO");
   });
+
+  it("the response is Cache-Control: no-store (never cached/stale)", async () => {
+    const res = await GET(makeRequest());
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("status is per REQUESTED tenant — one tenant's activation never leaks to another", async () => {
+    // API_PO has a probe ONLY for 'customizing'; 'development' was never probed.
+    setStored("API_PO", { source: "s", probes: { customizing: { http: 200, at: "2026-07-11T14:20:51Z", read: true, write: true } } });
+    mocks.getConfiguredSapTenants.mockReturnValue([
+      { key: "customizing", label: "Customizing X5M/100", baseUrl: "https://c.example" },
+      { key: "development", label: "Development X5M/080", baseUrl: "https://d.example" },
+    ]);
+    mocks.getSapTenant.mockImplementation((_p: string, key: string) => ({ key, label: key, baseUrl: "https://x.example" }));
+
+    // customizing → ACTIVATED (its own probe)
+    let po = (await (await GET(makeRequest("product=s4hana&tenant=customizing"))).json()).data.items
+      .find((i: { externalId: string }) => i.externalId === "API_PO");
+    expect(po.status).toBe("ACTIVATED");
+
+    // development → NOT_CHECKED (probeable but not probed for THIS tenant) — NOT ACTIVATED
+    const devBody = (await (await GET(makeRequest("product=s4hana&tenant=development"))).json()).data;
+    po = devBody.items.find((i: { externalId: string }) => i.externalId === "API_PO");
+    expect(po.status).toBe("NOT_CHECKED");
+    expect(po.capability).toBeNull();
+    expect(devBody.counts.byStatus.ACTIVATED).toBe(0);
+    expect(devBody.counts.lastProbedAt).toBeNull();
+  });
+
+  it("legacy singular probe still resolves for the DEFAULT tenant (data preserved)", async () => {
+    // A row migrated implicitly: legacy `probe`, no `probes` map. Default tenant sees it.
+    setStored("API_PO", { source: "s", probe: { http: 200, at: "2026-07-11T14:20:51Z", read: true, write: true } });
+    // default tenant = getConfiguredSapTenants[0] = "default" (from beforeEach)
+    const po = (await (await GET(makeRequest())).json()).data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
+    expect(po.status).toBe("ACTIVATED");
+  });
 });
