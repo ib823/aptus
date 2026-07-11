@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, Database, Eye, RefreshCw, Server, Table2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { HttpStatusPill, httpTone } from "@/components/sap/HttpStatusPill";
 import {
   Select,
   SelectContent,
@@ -80,11 +80,6 @@ function valueLabel(value: unknown): string {
   return JSON.stringify(value).slice(0, 80);
 }
 
-function statusTone(ok: boolean | undefined): "default" | "secondary" | "destructive" | "outline" {
-  if (ok === true) return "default";
-  if (ok === false) return "destructive";
-  return "outline";
-}
 
 export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) {
   const [tenants, setTenants] = useState<TenantOption[]>([]);
@@ -218,7 +213,7 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
     <div className="space-y-5">
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1fr_auto_auto]">
         <label className="space-y-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Tenant</span>
+          <span className="text-xs font-medium text-[var(--ink-secondary)]">Tenant</span>
           <Select value={tenantKey} onValueChange={setTenantKey}>
             <SelectTrigger>
               <SelectValue placeholder="Tenant" />
@@ -234,7 +229,7 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
         </label>
 
         <label className="space-y-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Service</span>
+          <span className="text-xs font-medium text-[var(--ink-secondary)]">Service</span>
           <Select value={serviceKey} onValueChange={(v) => { setCustomService(""); setServiceKey(v); }}>
             <SelectTrigger>
               <SelectValue placeholder="Service" />
@@ -252,7 +247,7 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
             value={customService}
             onChange={(event) => setCustomService(event.target.value)}
             placeholder="…or any activated apiId (e.g. API_OPLACCTGDOCITEMCUBE_SRV)"
-            className="mt-1 h-8 w-full rounded-md border bg-background px-2 font-mono text-xs outline-none focus:border-ring"
+            className="mt-1 h-8 w-full rounded-[var(--radius-input)] border border-[var(--border-default)] bg-[var(--surface-paper)] px-2 font-mono text-xs outline-none focus:border-[var(--border-focus)]"
             spellCheck={false}
             autoComplete="off"
           />
@@ -268,7 +263,7 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
           Inspect
         </Button>
         <Button
-          className="self-end"
+          className="self-end bg-[var(--brand-navy)] text-[var(--ink-on-navy)] hover:bg-[var(--brand-navy-hover)]"
           onClick={() => void loadEntities(true)}
           disabled={!tenantKey || !effectiveService || loading}
         >
@@ -278,35 +273,35 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
       </div>
 
       {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <div className="rounded-[var(--radius-input)] border px-3 py-2 text-sm" style={{ background: "var(--status-revoked-bg)", borderColor: "var(--status-revoked-fg)", color: "var(--status-revoked-fg)" }}>
           {error}
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-        <div className="rounded-md border bg-card p-3">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="rounded-[var(--radius-card-warm)] border border-[var(--border-default)] bg-[var(--surface-paper)] p-3">
+          <div className="flex items-center gap-2 text-xs text-[var(--ink-muted)]">
             <Server className="size-4" />
             Tenant
           </div>
           <div className="mt-2 truncate text-sm font-medium">{selectedTenant?.baseHost ?? "Not configured"}</div>
         </div>
-        <div className="rounded-md border bg-card p-3">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="rounded-[var(--radius-card-warm)] border border-[var(--border-default)] bg-[var(--surface-paper)] p-3">
+          <div className="flex items-center gap-2 text-xs text-[var(--ink-muted)]">
             <Database className="size-4" />
             Scenario
           </div>
           <div className="mt-2 truncate text-sm font-medium">{selectedService?.scenario ?? "-"}</div>
         </div>
-        <div className="rounded-md border bg-card p-3">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="rounded-[var(--radius-card-warm)] border border-[var(--border-default)] bg-[var(--surface-paper)] p-3">
+          <div className="flex items-center gap-2 text-xs text-[var(--ink-muted)]">
             <Table2 className="size-4" />
             Entity Sets
           </div>
           <div className="mt-2 text-sm font-medium">{entities.length}</div>
         </div>
-        <div className="rounded-md border bg-card p-3">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="rounded-[var(--radius-card-warm)] border border-[var(--border-default)] bg-[var(--surface-paper)] p-3">
+          <div className="flex items-center gap-2 text-xs text-[var(--ink-muted)]">
             <Eye className="size-4" />
             Reads OK
           </div>
@@ -317,14 +312,14 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)]">
-        <section className="rounded-md border bg-card">
-          <div className="flex items-center justify-between border-b px-4 py-3">
-            <h2 className="text-sm font-semibold">Entity Sets</h2>
-            {loading && <span className="text-xs text-muted-foreground">Loading</span>}
+        <section className="rounded-[var(--radius-card-warm)] border border-[var(--border-default)] bg-[var(--surface-paper)]">
+          <div className="flex items-center justify-between border-b border-[var(--border-default)] px-4 py-3">
+            <h2 className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>Entity Sets</h2>
+            {loading && <span className="text-xs text-[var(--ink-muted)]">Loading</span>}
           </div>
           <div className="max-h-[560px] overflow-auto">
             <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-muted/80 text-left text-xs text-muted-foreground">
+              <thead className="sticky top-0 bg-[var(--surface-ink-tint)] text-left text-xs text-[var(--ink-muted)]">
                 <tr>
                   <th className="px-4 py-2 font-medium">Name</th>
                   <th className="px-3 py-2 font-medium">Read</th>
@@ -338,7 +333,7 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
                   return (
                     <tr
                       key={entity.name}
-                      className={selected ? "bg-accent/60" : "hover:bg-muted/40"}
+                      className={selected ? "bg-[var(--surface-ink-tint)]" : "hover:bg-[var(--surface-cream)]"}
                     >
                       <td className="px-4 py-2">
                         <button
@@ -354,11 +349,9 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
                         </button>
                       </td>
                       <td className="px-3 py-2">
-                        <Badge variant={statusTone(probe?.ok)}>
-                          {probe ? probe.status : "idle"}
-                        </Badge>
+                        <HttpStatusPill tone={httpTone(probe?.ok)} label={probe ? String(probe.status) : "idle"} />
                       </td>
-                      <td className="px-3 py-2 text-right text-muted-foreground">
+                      <td className="px-3 py-2 text-right text-[var(--ink-muted)]">
                         {probe?.resultCount ?? "-"}
                       </td>
                     </tr>
@@ -366,7 +359,7 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
                 })}
                 {!entities.length && (
                   <tr>
-                    <td className="px-4 py-8 text-sm text-muted-foreground" colSpan={3}>
+                    <td className="px-4 py-8 text-sm text-[var(--ink-muted)]" colSpan={3}>
                       No entity sets loaded.
                     </td>
                   </tr>
@@ -376,14 +369,15 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
           </div>
         </section>
 
-        <section className="rounded-md border bg-card">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+        <section className="rounded-[var(--radius-card-warm)] border border-[var(--border-default)] bg-[var(--surface-paper)]">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-default)] px-4 py-3">
             <div>
-              <h2 className="text-sm font-semibold">Preview</h2>
-              <p className="text-xs text-muted-foreground">{selectedEntity || "Select an entity set"}</p>
+              <h2 className="text-sm font-semibold" style={{ color: "var(--brand-navy)" }}>Preview</h2>
+              <p className="text-xs text-[var(--ink-muted)]">{selectedEntity || "Select an entity set"}</p>
             </div>
             <Button
               size="sm"
+              className="bg-[var(--brand-navy)] text-[var(--ink-on-navy)] hover:bg-[var(--brand-navy-hover)]"
               onClick={() => void loadPreview()}
               disabled={!selectedEntity || previewLoading}
             >
@@ -394,7 +388,7 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
           <div className="overflow-auto">
             {preview && previewFields.length > 0 ? (
               <table className="w-full min-w-[720px] text-sm">
-                <thead className="bg-muted/80 text-left text-xs text-muted-foreground">
+                <thead className="bg-[var(--surface-ink-tint)] text-left text-xs text-[var(--ink-muted)]">
                   <tr>
                     {previewFields.map((field) => (
                       <th key={field} className="px-3 py-2 font-medium">
@@ -405,10 +399,10 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
                 </thead>
                 <tbody>
                   {preview.rows.map((row, rowIndex) => (
-                    <tr key={rowIndex} className="border-t">
+                    <tr key={rowIndex} className="border-t border-[var(--border-default)]">
                       {previewFields.map((field) => (
                         <td key={field} className="max-w-[220px] truncate px-3 py-2" title={valueLabel(row[field])}>
-                          {valueLabel(row[field]) || <span className="text-muted-foreground">-</span>}
+                          {valueLabel(row[field]) || <span className="text-[var(--ink-muted)]">-</span>}
                         </td>
                       ))}
                     </tr>
@@ -416,7 +410,7 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
                 </tbody>
               </table>
             ) : (
-              <div className="px-4 py-10 text-sm text-muted-foreground">
+              <div className="px-4 py-10 text-sm text-[var(--ink-muted)]">
                 {previewLoading ? "Loading preview." : "No preview loaded."}
               </div>
             )}
