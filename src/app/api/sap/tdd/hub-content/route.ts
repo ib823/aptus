@@ -54,13 +54,24 @@ async function probeActivatedApiIds(
   tenant: { key: string; label: string; baseUrl: string },
   product: { services: SapServiceDefinition[] },
 ): Promise<{ activated: Set<string>; probed: number }> {
-  const rows = await prisma.sapHubContent.findMany({
-    where: { appliesToPublic: true, contentType: { in: ["API", "CDS_VIEW"] }, apiType: "ODATAV2" },
-    select: { contentType: true, apiType: true, externalId: true, title: true, packageId: true, communicationScenarios: true },
-    orderBy: { externalId: "asc" },
-    take: PROBE_CAP,
-  });
-  const dynamic = rows
+  const select = { contentType: true, apiType: true, externalId: true, title: true, packageId: true, communicationScenarios: true } as const;
+  // Sample both V2 (reliable path) and V4 (best-effort path) so V4 rows can also
+  // reach ACTIVATED — alphabetical ordering alone never reaches the CE_* (V4) set.
+  const [v2rows, v4rows] = await Promise.all([
+    prisma.sapHubContent.findMany({
+      where: { appliesToPublic: true, contentType: { in: ["API", "CDS_VIEW"] }, apiType: "ODATAV2" },
+      select,
+      orderBy: { externalId: "asc" },
+      take: 45,
+    }),
+    prisma.sapHubContent.findMany({
+      where: { appliesToPublic: true, contentType: { in: ["API", "CDS_VIEW"] }, apiType: "ODATAV4" },
+      select,
+      orderBy: { externalId: "asc" },
+      take: 25,
+    }),
+  ]);
+  const dynamic = [...v2rows, ...v4rows]
     .map((a) => hubApiToService({ ...a, contentType: a.contentType as HubContentType }))
     .filter((s): s is NonNullable<typeof s> => s !== null);
   // Curated FIRST, re-keyed by apiId (last path segment) so an exposed result's
@@ -212,10 +223,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     REFERENCE: referenceTotal,
   };
 
-  // Honest scorecard denominator: discrete probeable runtime services only
-  // (API + CDS exposed as OData V2) — NOT events, NOT grouped CDS itemCount sums.
+  // Honest scorecard denominator: discrete probeable runtime services (API + CDS
+  // as OData V2 reliably, or V4 best-effort) — NOT events, NOT grouped CDS sums.
   const probeableRuntime = await prisma.sapHubContent.count({
-    where: { appliesToPublic: true, contentType: { in: ["API", "CDS_VIEW"] }, apiType: "ODATAV2" },
+    where: { appliesToPublic: true, contentType: { in: ["API", "CDS_VIEW"] }, apiType: { in: ["ODATAV2", "ODATAV4"] } },
   });
 
   return NextResponse.json({
