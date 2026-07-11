@@ -29,6 +29,7 @@ const { GET } = await import("@/app/api/sap/tdd/hub-content/route");
 const PRODUCT = { key: "s4hana", label: "S/4HANA Cloud", envPrefix: "S4_TDD", services: [] };
 const TENANT = { key: "default", label: "ABeam TDD", baseUrl: "https://x.example" };
 const API_ROW = { contentType: "API", apiType: "ODATAV2", externalId: "API_PO", title: "PO", packageId: "Proc", communicationScenarios: ["SAP_COM_0053"] };
+const CDS_ROW = { contentType: "CDS_VIEW", apiType: "ODATAV2", externalId: "C_VIEW", title: "View", packageId: "Sales", communicationScenarios: [] };
 const PAGE_ROWS = [
   { id: "1", contentType: "API", externalId: "API_PO", title: "PO", description: "", packageId: "Proc", apiType: "ODATAV2", communicationScenarios: ["SAP_COM_0053"], itemCount: null, hubUrl: "u" },
   { id: "2", contentType: "EVENT", externalId: "CE_X", title: "Ev", description: "", packageId: null, apiType: null, communicationScenarios: [], itemCount: null, hubUrl: "u" },
@@ -54,9 +55,9 @@ beforeEach(() => {
   mocks.probeTenantCapabilities.mockResolvedValue([{ service: "API_PO", exposed: true, status: 200 }]);
   // totalRows (no AND) → 40; page total (AND filter) → PAGE_ROWS.length
   mocks.count.mockImplementation((args: { where?: { AND?: unknown } }) => Promise.resolve(args.where?.AND ? PAGE_ROWS.length : 40));
-  // probe query (contentType: "API") → API rows; page query (AND) → page rows
-  mocks.findMany.mockImplementation((args: { where?: { contentType?: string } }) =>
-    Promise.resolve(args.where?.contentType === "API" ? [API_ROW] : PAGE_ROWS),
+  // probe query (apiType: "ODATAV2") → runtime rows; page query (AND) → page rows
+  mocks.findMany.mockImplementation((args: { where?: { apiType?: string } }) =>
+    Promise.resolve(args.where?.apiType === "ODATAV2" ? [API_ROW, CDS_ROW] : PAGE_ROWS),
   );
   mocks.groupBy.mockResolvedValue(GROUPED);
 });
@@ -89,6 +90,25 @@ describe("GET /api/sap/tdd/hub-content", () => {
     expect(body.data.counts.byStatus).toEqual({ ACTIVATED: 1, AVAILABLE: 9, REFERENCE: 1 });
     expect(body.data.counts.byType).toEqual({ API: 5, EVENT: 5, BADI: 1 });
     expect(body.data.tenant).toBe("ABeam TDD");
+  });
+
+  it("an active CDS view (probed 200) → ACTIVATED; an EVENT stays AVAILABLE(subscribe)", async () => {
+    mocks.probeTenantCapabilities.mockResolvedValue([{ service: "C_VIEW", exposed: true, status: 200 }]);
+    mocks.findMany.mockImplementation((args: { where?: { apiType?: string } }) =>
+      Promise.resolve(
+        args.where?.apiType === "ODATAV2"
+          ? [API_ROW, CDS_ROW]
+          : [
+              { id: "c", contentType: "CDS_VIEW", externalId: "C_VIEW", title: "View", description: "", packageId: "Sales", apiType: "ODATAV2", communicationScenarios: [], itemCount: null, hubUrl: "u" },
+              { id: "e", contentType: "EVENT", externalId: "CE_X", title: "Ev", description: "", packageId: null, apiType: null, communicationScenarios: [], itemCount: null, hubUrl: "u" },
+            ],
+      ),
+    );
+    const body = await (await GET(makeRequest())).json();
+    const byId = Object.fromEntries(body.data.items.map((i: { externalId: string; status: string }) => [i.externalId, i.status]));
+    expect(byId).toEqual({ C_VIEW: "ACTIVATED", CE_X: "AVAILABLE" });
+    const ev = body.data.items.find((i: { externalId: string }) => i.externalId === "CE_X");
+    expect(ev.availabilityNote).toBe("subscribe");
   });
 
   it("without a live 200, runtime items are AVAILABLE not ACTIVATED", async () => {

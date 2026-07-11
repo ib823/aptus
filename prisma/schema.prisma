@@ -427,6 +427,12 @@ model SapHubContent {
 
   communicationScenarios String[] @default([])
 
+  /// Scope-item codes (e.g. "J60") this item relates to — from the export, and
+  /// for APIs copied from SapApiReference.scopeItemCodes. Joined to ScopeItem
+  /// (within the active catalog version) to surface prerequisites. Denormalized
+  /// String[] like SapApiReference; may be empty (most seed rows are).
+  scopeItemCodes String[] @default([])
+
   /// For grouped rows (CDS views per LoB package, the BAdI group): how many
   /// underlying items the row represents. Null for a single concrete item.
   itemCount Int?

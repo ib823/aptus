@@ -43,6 +43,7 @@ export interface NormalizedHubContent {
   status: string;
   apiType: string | null;
   communicationScenarios: string[];
+  scopeItemCodes: string[];
   itemCount: number | null;
   hubUrl: string;
   rawJson: Record<string, unknown>;
@@ -153,6 +154,7 @@ export function normalizeHubRow(row: Record<string, unknown>): NormalizedHubCont
     status: asString(pickField(row, "status", "releaseStatus", "state")) || "Released",
     apiType,
     communicationScenarios: asArray(pickField(row, "communicationScenarios", "scenarios")),
+    scopeItemCodes: asArray(pickField(row, "scopeItemCodes", "scopeItems", "scopeCodes", "businessScenarios")).map((s) => s.toUpperCase()),
     itemCount: asIntOrNull(pickField(row, "itemCount", "count", "total")),
     hubUrl,
     rawJson: row,
@@ -213,6 +215,7 @@ async function main(): Promise<void> {
         status: norm.status,
         apiType: norm.apiType,
         communicationScenarios: norm.communicationScenarios,
+        scopeItemCodes: norm.scopeItemCodes,
         itemCount: norm.itemCount,
         hubUrl: norm.hubUrl,
         rawMetadataJson: norm.rawJson as Prisma.InputJsonValue,
@@ -233,7 +236,28 @@ async function main(): Promise<void> {
     }
   }
 
+  // Backfill API scope codes from SapApiReference (non-clobbering: only fill
+  // rows the export left empty; matched by apiId == externalId).
+  let scopeBackfilled = 0;
+  if (!DRY_RUN) {
+    const apiRows = await prisma.sapHubContent.findMany({
+      where: { contentType: "API", scopeItemCodes: { isEmpty: true } },
+      select: { id: true, externalId: true },
+    });
+    for (const r of apiRows) {
+      const ref = await prisma.sapApiReference.findUnique({
+        where: { apiId: r.externalId },
+        select: { scopeItemCodes: true },
+      });
+      if (ref && ref.scopeItemCodes.length > 0) {
+        await prisma.sapHubContent.update({ where: { id: r.id }, data: { scopeItemCodes: ref.scopeItemCodes } });
+        scopeBackfilled++;
+      }
+    }
+  }
+
   console.log("\n[import-sap-hub-content] === Import complete ===");
+  if (scopeBackfilled > 0) console.log(`  Scope codes backfilled from SapApiReference: ${scopeBackfilled}`);
   console.log(`  Inserted: ${inserted}`);
   console.log(`  Updated:  ${updated}`);
   console.log(`  Skipped:  ${skipped}`);

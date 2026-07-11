@@ -282,6 +282,40 @@
   --status-na-fg: oklch(0.55 0 0);
 }
 
+/* SAP Capability Catalogue — scoped dark flip of the (otherwise light-only)
+ * presales brand/ink/surface + status + decision tokens. Scoped to
+ * [data-cap-catalogue] so it flips ONLY within the catalogue (no effect on
+ * presales UI). See docs/design/sap-capability-catalogue-tokens.md. */
+.dark [data-cap-catalogue] {
+  --surface-cream: var(--background);
+  --surface-paper: var(--card);
+  --surface-ink-tint: var(--muted);
+  --ink-primary: var(--foreground);
+  --ink-secondary: var(--muted-foreground);
+  --ink-muted: var(--muted-foreground);
+  --border-default: var(--border);
+  --brand-navy: oklch(0.78 0.09 250);
+  --cta-red: oklch(0.72 0.18 20);
+
+  --status-signed-bg: oklch(0.3 0.06 145);
+  --status-signed-fg: oklch(0.85 0.12 145);
+  --status-sent-bg: oklch(0.3 0.06 250);
+  --status-sent-fg: oklch(0.85 0.12 250);
+  --status-draft-bg: oklch(0.28 0 0);
+  --status-draft-fg: oklch(0.75 0 0);
+  --status-awaiting-bg: oklch(0.32 0.06 70);
+  --status-awaiting-fg: oklch(0.85 0.12 70);
+  --status-expired-bg: oklch(0.28 0 0);
+  --status-expired-fg: oklch(0.7 0 0);
+  --status-revoked-bg: oklch(0.3 0.06 25);
+  --status-revoked-fg: oklch(0.85 0.12 25);
+
+  --decision-standard: oklch(0.82 0.1 175);
+  --decision-configure: oklch(0.82 0.12 255);
+  --decision-custom: oklch(0.83 0.12 70);
+  --decision-open: oklch(0.7 0 0);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

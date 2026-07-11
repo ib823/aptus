@@ -126,6 +126,29 @@ export function isHubContentType(value: string): value is HubContentType {
   return (HUB_CONTENT_TYPES as string[]).includes(value);
 }
 
+/**
+ * Published SAP Business Accelerator Hub figures for S/4HANA Cloud PUBLIC
+ * Edition, used only as a drift reference by the ingest report — NOT as data.
+ * Values move with each SAP release, so the report compares "within drift", not
+ * for exact equality. CDS/BAdI/BO are stored as grouped rows carrying itemCount,
+ * so the report compares the summed itemCount against these totals.
+ * (PROCESS_BLUEPRINT + LIVEPROCESS are ~15 combined; assigned to the former.)
+ */
+export const S4_PUBLIC_PUBLISHED_COUNTS: Record<HubContentType, number> = {
+  API: 862,
+  EVENT: 147,
+  CDS_VIEW: 8983,
+  BADI: 1665,
+  BO_INTERFACE: 207,
+  INTEGRATION: 158,
+  BUILD: 78,
+  PROCESS_BLUEPRINT: 15,
+  LIVEPROCESS: 0,
+  SCENARIO: 16,
+  VPUC: 5,
+  ANALYTICS: 6,
+};
+
 export function isRuntimeType(type: HubContentType): boolean {
   return HUB_CONTENT_TYPE_META[type].kind === "runtime";
 }
@@ -139,6 +162,8 @@ export interface HubItemForStatus {
 /**
  * Resolve the honest status badge.
  *   reference type                → REFERENCE
+ *   EVENT                         → AVAILABLE (subscribe-only; no read endpoint,
+ *                                   so never ACTIVATED — see hubAvailabilityQualifier)
  *   runtime + live $metadata 200  → ACTIVATED
  *   runtime, otherwise            → AVAILABLE (published, not confirmed active)
  *
@@ -151,14 +176,26 @@ export function resolveHubStatus(
   activatedIds?: Set<string>,
 ): HubStatus {
   if (!isRuntimeType(item.contentType)) return "REFERENCE";
+  // Events are consumed by subscription (CloudEvents), not a readable OData
+  // endpoint — there is nothing to probe, so they can never reach ACTIVATED.
+  if (item.contentType === "EVENT") return "AVAILABLE";
   return activatedIds?.has(item.externalId) ? "ACTIVATED" : "AVAILABLE";
 }
 
 /**
- * Derive a probeable OData service from an API row, or null if it has no stable
- * runtime endpoint. Only OData V2 APIs use the reliable
- * /sap/opu/odata/sap/<id> convention; V4/SOAP/events/grouped-CDS are not probed
- * here (they'd need per-item service-group metadata), so they stay AVAILABLE.
+ * Qualifier shown alongside an AVAILABLE badge. EVENTs are "subscribe" (no read
+ * endpoint); everything else has no qualifier.
+ */
+export function hubAvailabilityQualifier(contentType: HubContentType): "subscribe" | null {
+  return contentType === "EVENT" ? "subscribe" : null;
+}
+
+/**
+ * Derive a probeable OData service from a runtime row, or null if it has no
+ * stable runtime endpoint. An API OR a CDS_VIEW exposed as OData V2 uses the
+ * reliable /sap/opu/odata/sap/<id> convention and is probeable — so an active
+ * CDS view can reach ACTIVATED. V4/SOAP, events, and grouped-CDS package rows
+ * (apiType "CDS") have no single probeable endpoint, so they stay AVAILABLE.
  */
 export function hubApiToService(item: {
   contentType: HubContentType;
@@ -168,7 +205,12 @@ export function hubApiToService(item: {
   packageId: string | null;
   communicationScenarios: string[];
 }): SapServiceDefinition | null {
-  if (item.contentType !== "API" || item.apiType !== "ODATAV2") return null;
+  const probeable = (item.contentType === "API" || item.contentType === "CDS_VIEW") && item.apiType === "ODATAV2";
+  if (!probeable) return null;
+  // TODO(phase-later): /sap/opu/odata/sap/<externalId> is a convention that
+  // won't resolve for every CDS view (many are bound under service groups /
+  // different roots). Until the real service-binding path is derived, an
+  // unresolved view simply probes 404 → stays AVAILABLE (never fabricated).
   return {
     key: item.externalId,
     label: item.title,

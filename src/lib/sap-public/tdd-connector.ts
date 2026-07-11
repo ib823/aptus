@@ -46,6 +46,24 @@ export interface SapEntitySet {
   entityType: string;
 }
 
+/** How the entity-set capability flags were derived. */
+export type MetadataFlavor = "v2" | "v4-best-effort";
+
+/**
+ * Per-entity-set C/R/U/D capability, parsed from $metadata.
+ *   V2  → reliable: sap:creatable/updatable/deletable/pageable/addressable.
+ *   V4  → best-effort from Capabilities annotations; unconfirmed flags are null
+ *         (never inferred as writable), and the result is flagged v4-best-effort.
+ */
+export interface EntityCapability {
+  name: string;
+  readable: boolean;
+  creatable: boolean | null;
+  updatable: boolean | null;
+  deletable: boolean | null;
+  pageable: boolean | null;
+}
+
 export interface SapEntityProbe {
   name: string;
   ok: boolean;
@@ -520,6 +538,75 @@ function parseEntitySets(metadataXml: string): SapEntitySet[] {
   return entitySets;
 }
 
+/**
+ * Decide how to read capabilities. SAP TDD OData services are predominantly V2
+ * (sap:* attributes on EntitySet). V4 exposes capabilities via
+ * Org.OData.Capabilities annotations instead — best-effort only.
+ */
+export function detectMetadataFlavor(metadataXml: string): MetadataFlavor {
+  if (/\bsap:(creatable|updatable|deletable|pageable|addressable)=/.test(metadataXml)) return "v2";
+  if (/Version="4\.0"/.test(metadataXml) || /Org\.OData\.Capabilities/.test(metadataXml)) return "v4-best-effort";
+  return "v2";
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** V4 best-effort: read a boolean restriction (Insertable/Updatable/Deletable). */
+function readV4Restriction(xml: string, entitySet: string, term: string, property: string): boolean | null {
+  // Find the <Annotations Target="...Container/EntitySet"> block for this set.
+  const block = xml.match(
+    new RegExp(`<Annotations\\b[^>]*Target="[^"]*[/.]${escapeRegExp(entitySet)}"[^>]*>([\\s\\S]*?)</Annotations>`),
+  )?.[1];
+  if (!block) return null;
+  const termBlock = block.match(
+    new RegExp(`Capabilities\\.V1\\.${term}[\\s\\S]*?Property="${property}"\\s+Bool="(true|false)"`),
+  )?.[1];
+  if (termBlock === undefined) return null;
+  return termBlock === "true";
+}
+
+/**
+ * Parse per-entity-set C/R/U/D from $metadata. V2 is reliable; V4 is best-effort
+ * (unconfirmed flags stay null — never inferred writable). Read the flavor with
+ * detectMetadataFlavor to know which applies.
+ */
+export function parseEntityCapabilities(metadataXml: string): EntityCapability[] {
+  const flavor = detectMetadataFlavor(metadataXml);
+  const caps: EntityCapability[] = [];
+  const re = /<EntitySet\b([^>]*)>/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(metadataXml)) !== null) {
+    const attrs = match[1] ?? "";
+    const name = attrs.match(/\bName="([^"]+)"/)?.[1];
+    if (!name) continue;
+    if (flavor === "v2") {
+      // SAP V2: attribute omitted ⇒ true; only an explicit ="false" disables.
+      const flag = (attr: string): boolean => attrs.match(new RegExp(`\\bsap:${attr}="([^"]+)"`))?.[1] !== "false";
+      caps.push({
+        name,
+        readable: flag("addressable"),
+        creatable: flag("creatable"),
+        updatable: flag("updatable"),
+        deletable: flag("deletable"),
+        pageable: flag("pageable"),
+      });
+    } else {
+      // V4 best-effort: only what the Capabilities annotations explicitly state.
+      caps.push({
+        name,
+        readable: true, // present in $metadata ⇒ readable
+        creatable: readV4Restriction(metadataXml, name, "InsertRestrictions", "Insertable"),
+        updatable: readV4Restriction(metadataXml, name, "UpdateRestrictions", "Updatable"),
+        deletable: readV4Restriction(metadataXml, name, "DeleteRestrictions", "Deletable"),
+        pageable: null,
+      });
+    }
+  }
+  return caps;
+}
+
 function toRecordRows(rows: unknown[]): Array<Record<string, unknown>> {
   return rows
     .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object" && !Array.isArray(row))
@@ -564,6 +651,32 @@ export async function inspectSapService(
     throw new Error(`Metadata request failed: HTTP ${response.status}`);
   }
   return { entitySets: parseEntitySets(text) };
+}
+
+/**
+ * Like inspectSapService but also returns per-entity-set C/R/U/D capabilities
+ * and the metadata flavor, from the same single $metadata fetch (read-only).
+ */
+export async function inspectSapServiceMetadata(
+  prefix: string,
+  tenant: SapTenant,
+  service: SapServiceDefinition,
+): Promise<{ entitySets: SapEntitySet[]; entityCapabilities: EntityCapability[]; flavor: MetadataFlavor }> {
+  const response = await sapFetch(`${serviceUrl(tenant, service)}/$metadata`, {
+    headers: {
+      Authorization: await buildAuthHeader(prefix),
+      Accept: "application/xml, text/xml, */*",
+    },
+  }, getRequestTimeoutMs(prefix));
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Metadata request failed: HTTP ${response.status}`);
+  }
+  return {
+    entitySets: parseEntitySets(text),
+    entityCapabilities: parseEntityCapabilities(text),
+    flavor: detectMetadataFlavor(text),
+  };
 }
 
 export async function probeSapEntitySet(
@@ -712,4 +825,29 @@ export async function createSapEntitySetRecord(
     location: response.headers.get("location"),
     body: parseSapWriteBody(text, response.headers.get("content-type")),
   };
+}
+
+/**
+ * Delete a record by the Location URL a create returned (relative or absolute).
+ * Used only by the guarded capability write-test's create-then-delete. Fetches
+ * a fresh CSRF token from the service root, then issues the DELETE.
+ */
+export async function deleteSapEntityByLocation(
+  prefix: string,
+  tenant: SapTenant,
+  service: SapServiceDefinition,
+  location: string,
+): Promise<{ ok: boolean; status: number }> {
+  const { token, cookie } = await fetchCsrfSession(prefix, tenant, service);
+  const url = location.startsWith("http")
+    ? location
+    : `${tenant.baseUrl}${location.startsWith("/") ? "" : "/"}${location}`;
+  const headers: HeadersInit = {
+    Authorization: await buildAuthHeader(prefix),
+    Accept: "application/json",
+    "X-CSRF-Token": token,
+  };
+  if (cookie) headers.Cookie = cookie;
+  const response = await sapFetch(url, { method: "DELETE", headers }, getRequestTimeoutMs(prefix));
+  return { ok: response.ok, status: response.status };
 }
