@@ -13,6 +13,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
+import { isAdminRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import {
   getConfiguredSapTenants,
@@ -82,6 +83,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!isSapTddPublicAccessEnabled(product.envPrefix) && !user) {
     return NextResponse.json({ error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } }, { status: 401 });
   }
+  // Lets the client show the admin-only rebuild control (server still enforces).
+  const isAdmin = Boolean(user) && isAdminRole(user!.role);
 
   // ── parse filters ──────────────────────────────────────────────────────
   const typeParam = params.get("contentType");
@@ -107,6 +110,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         counts: { byType: {}, byStatus: { ACTIVATED: 0, AVAILABLE: 0, REFERENCE: 0 } },
         catalogueImported: false,
         tenant: null,
+        isAdmin,
       },
     });
   }
@@ -223,6 +227,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       counts: { byType, byStatus, probeableRuntime, probed },
       catalogueImported: true,
       tenant: tenant?.label ?? null,
+      isAdmin,
       typeMeta: HUB_CONTENT_TYPE_META,
     },
   });
