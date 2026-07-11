@@ -6,6 +6,7 @@ import {
   deriveV4Path,
   hubApiToService,
   hubAvailabilityQualifier,
+  httpToRuntimeStatus,
   isHubContentType,
   isRuntimeType,
   pathToApiId,
@@ -75,34 +76,59 @@ describe("hub-content type metadata", () => {
   });
 });
 
-describe("resolveHubStatus (honest badges)", () => {
+describe("httpToRuntimeStatus (outcome → status)", () => {
+  it("maps each probe HTTP outcome to its confirmed status", () => {
+    expect(httpToRuntimeStatus(200)).toBe("ACTIVATED");
+    expect(httpToRuntimeStatus(403)).toBe("NEEDS_SETUP");
+    expect(httpToRuntimeStatus(401)).toBe("NEEDS_SETUP");
+    expect(httpToRuntimeStatus(404)).toBe("NOT_FOUND");
+  });
+
+  it("un-probed (undefined) and inconclusive (0 / 5xx) → NOT_CHECKED, never a fake negative", () => {
+    expect(httpToRuntimeStatus(undefined)).toBe("NOT_CHECKED");
+    expect(httpToRuntimeStatus(0)).toBe("NOT_CHECKED");
+    expect(httpToRuntimeStatus(500)).toBe("NOT_CHECKED");
+    expect(httpToRuntimeStatus(503)).toBe("NOT_CHECKED");
+  });
+});
+
+describe("resolveHubStatus (probe-outcome-driven, honest badges)", () => {
   const runtime = { contentType: "API" as const, apiType: "ODATAV2", externalId: "API_X" };
   const reference = { contentType: "BADI" as const, apiType: null, externalId: "BADI_X" };
 
   it("reference types are always REFERENCE", () => {
-    expect(resolveHubStatus(reference, new Set(["BADI_X"]))).toBe("REFERENCE");
+    expect(resolveHubStatus(reference, new Map([["BADI_X", 200]]))).toBe("REFERENCE");
     expect(resolveHubStatus(reference)).toBe("REFERENCE");
   });
 
-  it("runtime + live 200 (in activated set) → ACTIVATED", () => {
-    expect(resolveHubStatus(runtime, new Set(["API_X"]))).toBe("ACTIVATED");
+  it("runtime, probed 200 → ACTIVATED", () => {
+    expect(resolveHubStatus(runtime, new Map([["API_X", 200]]))).toBe("ACTIVATED");
   });
 
-  it("runtime not in activated set → AVAILABLE (never inferred)", () => {
-    expect(resolveHubStatus(runtime, new Set(["OTHER"]))).toBe("AVAILABLE");
-    expect(resolveHubStatus(runtime, new Set())).toBe("AVAILABLE");
-    expect(resolveHubStatus(runtime)).toBe("AVAILABLE");
+  it("runtime, probed 403 → NEEDS_SETUP (confirmed negative)", () => {
+    expect(resolveHubStatus(runtime, new Map([["API_X", 403]]))).toBe("NEEDS_SETUP");
   });
 
-  it("an active CDS view (probed 200) → ACTIVATED", () => {
+  it("runtime, probed 404 → NOT_FOUND (distinct from 403)", () => {
+    expect(resolveHubStatus(runtime, new Map([["API_X", 404]]))).toBe("NOT_FOUND");
+  });
+
+  it("runtime, NOT probed → NOT_CHECKED — never NEEDS_SETUP (the list-vs-detail bug)", () => {
+    expect(resolveHubStatus(runtime, new Map([["OTHER", 200]]))).toBe("NOT_CHECKED");
+    expect(resolveHubStatus(runtime, new Map())).toBe("NOT_CHECKED");
+    expect(resolveHubStatus(runtime)).toBe("NOT_CHECKED");
+  });
+
+  it("a CDS view resolves by its own probe outcome", () => {
     const cds = { contentType: "CDS_VIEW" as const, apiType: "ODATAV2", externalId: "CDS_X" };
-    expect(resolveHubStatus(cds, new Set(["CDS_X"]))).toBe("ACTIVATED");
-    expect(resolveHubStatus(cds, new Set())).toBe("AVAILABLE");
+    expect(resolveHubStatus(cds, new Map([["CDS_X", 200]]))).toBe("ACTIVATED");
+    expect(resolveHubStatus(cds, new Map([["CDS_X", 403]]))).toBe("NEEDS_SETUP");
+    expect(resolveHubStatus(cds, new Map())).toBe("NOT_CHECKED");
   });
 
-  it("EVENT is subscribe-only → AVAILABLE, never ACTIVATED even if forced into the set", () => {
+  it("EVENT is subscribe-only → AVAILABLE, never ACTIVATED even if forced into the map", () => {
     const ev = { contentType: "EVENT" as const, apiType: null, externalId: "CE_X" };
-    expect(resolveHubStatus(ev, new Set(["CE_X"]))).toBe("AVAILABLE");
+    expect(resolveHubStatus(ev, new Map([["CE_X", 200]]))).toBe("AVAILABLE");
     expect(resolveHubStatus(ev)).toBe("AVAILABLE");
     expect(hubAvailabilityQualifier("EVENT")).toBe("subscribe");
     expect(hubAvailabilityQualifier("API")).toBeNull();

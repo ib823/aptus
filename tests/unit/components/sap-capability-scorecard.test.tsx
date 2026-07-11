@@ -14,9 +14,9 @@ describe("readinessPercent (activated / probed)", () => {
 
 describe("ReadinessScorecard", () => {
   it("headlines the real exposed count as a probe SAMPLE, catalogue scale shown separately", () => {
-    render(<ReadinessScorecard activated={5} probed={60} probeable={128} apiTotal={941} available={936} reference={0} />);
-    // Headline: "5 activated of 60 services tested (live probe sample)".
-    expect(screen.getByText(/activated of/i)).toBeInTheDocument();
+    render(<ReadinessScorecard activated={5} dataConfirmed={0} dataProbe={false} needsSetup={12} notChecked={900} probed={60} probeable={128} apiTotal={941} reference={0} />);
+    // Headline: "5 authorized of 60 services tested (live probe sample)".
+    expect(screen.getByText(/authorized of/i)).toBeInTheDocument();
     expect(screen.getByText(/live probe sample/i)).toBeInTheDocument();
     expect(screen.getByText("60")).toBeInTheDocument();
     // Catalogue scale is separate — NOT a percentage over 128 or 941.
@@ -26,7 +26,7 @@ describe("ReadinessScorecard", () => {
   });
 
   it("progressbar reflects activated / probed, not over the whole catalogue", () => {
-    render(<ReadinessScorecard activated={5} probed={60} probeable={128} apiTotal={941} available={936} reference={0} />);
+    render(<ReadinessScorecard activated={5} dataConfirmed={0} dataProbe={false} needsSetup={12} notChecked={900} probed={60} probeable={128} apiTotal={941} reference={0} />);
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("8");
   });
 });
@@ -39,10 +39,15 @@ describe("StatusBadge (token-mapped)", () => {
         <StatusBadge status="AVAILABLE" />
         <StatusBadge status="REFERENCE" />
         <StatusBadge status="NEEDS_SETUP" />
+        <StatusBadge status="NOT_FOUND" />
+        <StatusBadge status="NOT_CHECKED" />
       </div>,
     );
     expect(screen.getByLabelText("Activated")).toBeInTheDocument();
     expect(screen.getByLabelText("Needs setup")).toBeInTheDocument();
+    // Un-probed / absent-path get their OWN neutral labels — never "Needs setup".
+    expect(screen.getByLabelText("Not checked")).toBeInTheDocument();
+    expect(screen.getByLabelText("Not found")).toBeInTheDocument();
     // Colour is applied via var(--token) inline style — never a hex literal.
     expect(container.innerHTML).not.toMatch(/#[0-9a-fA-F]{6}/);
     expect(container.innerHTML).toContain("var(--status-signed-bg)");

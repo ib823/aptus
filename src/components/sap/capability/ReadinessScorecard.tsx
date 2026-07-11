@@ -25,17 +25,23 @@ function CountPill({ label, value, bg, fg }: { label: string; value: number; bg:
 
 export function ReadinessScorecard({
   activated,
+  dataConfirmed,
+  dataProbe,
+  needsSetup,
+  notChecked,
   probed,
   probeable,
   apiTotal,
-  available,
   reference,
 }: {
   activated: number;
+  dataConfirmed: number;
+  dataProbe: boolean;
+  needsSetup: number;
+  notChecked: number;
   probed: number;
   probeable: number;
   apiTotal: number;
-  available: number;
   reference: number;
 }) {
   const pct = readinessPercent(activated, probed);
@@ -54,7 +60,7 @@ export function ReadinessScorecard({
           {activated.toLocaleString()}
         </div>
         <div className="pb-1 text-sm" style={{ color: "var(--ink-secondary)" }}>
-          activated of{" "}
+          authorized of{" "}
           <strong className="tabular-nums" style={{ color: "var(--ink-primary)" }}>
             {probed.toLocaleString()}
           </strong>{" "}
@@ -62,6 +68,19 @@ export function ReadinessScorecard({
           <span style={{ color: "var(--ink-muted)" }}>(live probe sample)</span>
         </div>
       </div>
+
+      {/* Authorized ($metadata reachable) vs Data-confirmed (a live 1-row read). */}
+      <p className="mt-1 text-xs" style={{ color: "var(--ink-muted)" }}>
+        {dataProbe ? (
+          <>
+            <strong style={{ color: "var(--status-signed-fg)" }}>{dataConfirmed.toLocaleString()}</strong> data-confirmed
+            (read a live row) · <strong style={{ color: "var(--ink-secondary)" }}>{activated.toLocaleString()}</strong> authorized
+            ($metadata reachable)
+          </>
+        ) : (
+          <>Authorized = $metadata reachable. Enable “Confirm data reads” to also count data-confirmed (a live 1-row read).</>
+        )}
+      </p>
 
       {/* progress: activated / probed (probe sample), fill navy on ink-tint */}
       <div
@@ -82,9 +101,10 @@ export function ReadinessScorecard({
         other content types pending real exports
       </p>
 
-      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <CountPill label="Activated" value={activated} bg="var(--status-signed-bg)" fg="var(--status-signed-fg)" />
-        <CountPill label="Available" value={available} bg="var(--status-sent-bg)" fg="var(--status-sent-fg)" />
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <CountPill label="Authorized" value={activated} bg="var(--status-signed-bg)" fg="var(--status-signed-fg)" />
+        <CountPill label="Needs setup" value={needsSetup} bg="var(--status-awaiting-bg)" fg="var(--status-awaiting-fg)" />
+        <CountPill label="Not checked" value={notChecked} bg="var(--surface-ink-tint)" fg="var(--ink-secondary)" />
         <CountPill label="Reference" value={reference} bg="var(--status-draft-bg)" fg="var(--status-draft-fg)" />
       </div>
     </section>
