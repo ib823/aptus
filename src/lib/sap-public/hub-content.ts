@@ -193,9 +193,14 @@ export interface HubItemForStatus {
 }
 
 /**
- * A probe result persisted on SapHubContent.rawMetadataJson.probe by the admin
+ * A probe result persisted on SapHubContent.rawMetadataJson by the admin
  * Probe-all action (no schema migration). `http` is the $metadata status; `at`
  * is the ISO timestamp; read/write come from the shared deriveReadWrite.
+ *
+ * PERSISTED SHAPE — tenant-scoped, so one tenant's activations are NEVER served
+ * for another: rawMetadataJson.probes = { [tenantKey]: StoredProbe }. A legacy
+ * singular rawMetadataJson.probe (pre-tenant-scoping) is read as the DEFAULT
+ * tenant's result so the first Probe-all run survives without re-probing.
  */
 export interface StoredProbe {
   http?: number;
@@ -204,18 +209,49 @@ export interface StoredProbe {
   write?: boolean;
 }
 
-/** Safely read the persisted probe from a rawMetadataJson value (or null). */
-export function readStoredProbe(raw: unknown): StoredProbe | null {
-  if (!raw || typeof raw !== "object") return null;
-  const probe = (raw as Record<string, unknown>).probe;
-  if (!probe || typeof probe !== "object") return null;
-  const p = probe as Record<string, unknown>;
+function coerceProbe(v: unknown): StoredProbe | null {
+  if (!v || typeof v !== "object") return null;
+  const p = v as Record<string, unknown>;
   const out: StoredProbe = {};
   if (typeof p.http === "number") out.http = p.http;
   if (typeof p.at === "string") out.at = p.at;
   if (typeof p.read === "boolean") out.read = p.read;
   if (typeof p.write === "boolean") out.write = p.write;
   return out;
+}
+
+/**
+ * Read the persisted probe FOR A SPECIFIC TENANT (or null if that tenant was
+ * not probed). Never falls back to another tenant's data. `defaultTenantKey`
+ * enables the legacy read: a pre-tenant-scoping singular `probe` is treated as
+ * the default tenant's result only.
+ */
+export function readStoredProbe(raw: unknown, tenantKey: string, defaultTenantKey?: string): StoredProbe | null {
+  if (!raw || typeof raw !== "object") return null;
+  const root = raw as Record<string, unknown>;
+  const probes = root.probes;
+  if (probes && typeof probes === "object") {
+    return coerceProbe((probes as Record<string, unknown>)[tenantKey]);
+  }
+  // Legacy singular slot → the default tenant's result ONLY (no cross-tenant leak).
+  if (defaultTenantKey && tenantKey === defaultTenantKey) return coerceProbe(root.probe);
+  return null;
+}
+
+/**
+ * Merge a tenant's probe into rawMetadataJson.probes[tenantKey], preserving every
+ * sibling key (source/apiId/steps), every OTHER tenant's entry, and the legacy
+ * `probe` slot. This is the ONLY sanctioned write path for a stored probe.
+ */
+export function mergeStoredProbe(raw: unknown, tenantKey: string, probe: StoredProbe): Record<string, unknown> {
+  const base =
+    raw && typeof raw === "object" && !Array.isArray(raw) ? { ...(raw as Record<string, unknown>) } : {};
+  const existingProbes =
+    base.probes && typeof base.probes === "object" && !Array.isArray(base.probes)
+      ? (base.probes as Record<string, unknown>)
+      : {};
+  base.probes = { ...existingProbes, [tenantKey]: probe };
+  return base;
 }
 
 /**

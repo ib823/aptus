@@ -25,6 +25,11 @@ import {
 import { resolveHubItemDependencies } from "@/lib/sap-public/hub-dependencies";
 import { ERROR_CODES } from "@/types/api";
 
+// A read endpoint whose result depends on a live per-tenant probe — never cache.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+const NO_STORE = { "Cache-Control": "no-store" } as const;
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -121,5 +126,5 @@ export async function GET(
       steps,
       tenant: tenant?.label ?? null,
     },
-  });
+  }, { headers: NO_STORE });
 }

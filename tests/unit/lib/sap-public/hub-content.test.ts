@@ -8,6 +8,8 @@ import {
   hubAvailabilityQualifier,
   httpToRuntimeStatus,
   isProbeable,
+  mergeStoredProbe,
+  readStoredProbe,
   isHubContentType,
   isRuntimeType,
   pathToApiId,
@@ -187,6 +189,50 @@ describe("isProbeable", () => {
     expect(isProbeable({ contentType: "API", apiType: null })).toBe(false);
     expect(isProbeable({ contentType: "EVENT", apiType: "ODATAV2" })).toBe(false);
     expect(isProbeable({ contentType: "BADI", apiType: "ODATAV2" })).toBe(false);
+  });
+});
+
+describe("readStoredProbe — tenant-scoped (no cross-tenant leak)", () => {
+  const raw = { source: "x", probes: { customizing: { http: 200, at: "t1", read: true, write: false }, development: { http: 403 } } };
+
+  it("returns only the requested tenant's probe", () => {
+    expect(readStoredProbe(raw, "customizing")?.http).toBe(200);
+    expect(readStoredProbe(raw, "development")?.http).toBe(403);
+  });
+
+  it("returns null for a tenant with no probe — never another tenant's data", () => {
+    expect(readStoredProbe(raw, "production")).toBeNull();
+    // even with a default key, an absent tenant in a populated probes map → null
+    expect(readStoredProbe(raw, "production", "customizing")).toBeNull();
+  });
+
+  it("legacy singular `probe` is read as the DEFAULT tenant's result ONLY", () => {
+    const legacy = { source: "x", probe: { http: 200, read: true } };
+    expect(readStoredProbe(legacy, "customizing", "customizing")?.http).toBe(200); // default → legacy
+    expect(readStoredProbe(legacy, "development", "customizing")).toBeNull(); // non-default → no leak
+    expect(readStoredProbe(legacy, "customizing")).toBeNull(); // no default key given → no legacy read
+  });
+
+  it("null / non-probe raw → null", () => {
+    expect(readStoredProbe(null, "customizing")).toBeNull();
+    expect(readStoredProbe({ source: "x" }, "customizing", "customizing")).toBeNull();
+  });
+});
+
+describe("mergeStoredProbe — write only the tenant's key, preserve everything else", () => {
+  it("adds probes[tenant] while keeping siblings, other tenants, and the legacy probe", () => {
+    const raw = { source: "s", apiId: "A", probe: { http: 999 }, probes: { customizing: { http: 200 } } };
+    const merged = mergeStoredProbe(raw, "development", { http: 403, at: "t", read: false, write: false });
+    expect((merged.probes as Record<string, { http: number }>).development.http).toBe(403);
+    expect((merged.probes as Record<string, { http: number }>).customizing.http).toBe(200); // untouched
+    expect((merged.probe as { http: number }).http).toBe(999); // legacy untouched
+    expect(merged.source).toBe("s");
+    expect(merged.apiId).toBe("A");
+  });
+
+  it("starts a fresh probes map from null/empty raw", () => {
+    const merged = mergeStoredProbe(null, "customizing", { http: 200 });
+    expect((merged.probes as Record<string, { http: number }>).customizing.http).toBe(200);
   });
 });
 
