@@ -55,10 +55,12 @@ beforeEach(() => {
   mocks.probeTenantCapabilities.mockResolvedValue([{ service: "API_PO", exposed: true, status: 200 }]);
   // totalRows (no AND) → 40; page total (AND filter) → PAGE_ROWS.length
   mocks.count.mockImplementation((args: { where?: { AND?: unknown } }) => Promise.resolve(args.where?.AND ? PAGE_ROWS.length : 40));
-  // probe query (apiType: "ODATAV2") → runtime rows; page query (AND) → page rows
-  mocks.findMany.mockImplementation((args: { where?: { apiType?: string } }) =>
-    Promise.resolve(args.where?.apiType === "ODATAV2" ? [API_ROW, CDS_ROW] : PAGE_ROWS),
-  );
+  // probe queries: apiType V2 → V2 rows, apiType V4 → V4 rows; page query (AND) → page rows
+  mocks.findMany.mockImplementation((args: { where?: { apiType?: string } }) => {
+    if (args.where?.apiType === "ODATAV2") return Promise.resolve([API_ROW, CDS_ROW]);
+    if (args.where?.apiType === "ODATAV4") return Promise.resolve([]);
+    return Promise.resolve(PAGE_ROWS);
+  });
   mocks.groupBy.mockResolvedValue(GROUPED);
 });
 
@@ -100,13 +102,12 @@ describe("GET /api/sap/tdd/hub-content", () => {
       services: [{ key: "purchase-orders", label: "PO", scenario: "SAP_COM_0053", path: "/sap/opu/odata/sap/API_PO", domain: "Sourcing and Procurement" }],
     });
     // Dynamic window does NOT contain API_PO (alphabetically late) — only API_ZZZ.
-    mocks.findMany.mockImplementation((args: { where?: { apiType?: string } }) =>
-      Promise.resolve(
-        args.where?.apiType === "ODATAV2"
-          ? [{ contentType: "API", apiType: "ODATAV2", externalId: "API_ZZZ", title: "Z", packageId: null, communicationScenarios: [] }]
-          : PAGE_ROWS,
-      ),
-    );
+    mocks.findMany.mockImplementation((args: { where?: { apiType?: string } }) => {
+      if (args.where?.apiType === "ODATAV2")
+        return Promise.resolve([{ contentType: "API", apiType: "ODATAV2", externalId: "API_ZZZ", title: "Z", packageId: null, communicationScenarios: [] }]);
+      if (args.where?.apiType === "ODATAV4") return Promise.resolve([]);
+      return Promise.resolve(PAGE_ROWS);
+    });
     // The curated probe finds API_PO exposed (result.service == apiId).
     mocks.probeTenantCapabilities.mockResolvedValue([{ service: "API_PO", exposed: true, status: 200 }]);
     const body = await (await GET(makeRequest())).json();
@@ -117,21 +118,35 @@ describe("GET /api/sap/tdd/hub-content", () => {
 
   it("an active CDS view (probed 200) → ACTIVATED; an EVENT stays AVAILABLE(subscribe)", async () => {
     mocks.probeTenantCapabilities.mockResolvedValue([{ service: "C_VIEW", exposed: true, status: 200 }]);
-    mocks.findMany.mockImplementation((args: { where?: { apiType?: string } }) =>
-      Promise.resolve(
-        args.where?.apiType === "ODATAV2"
-          ? [API_ROW, CDS_ROW]
-          : [
-              { id: "c", contentType: "CDS_VIEW", externalId: "C_VIEW", title: "View", description: "", packageId: "Sales", apiType: "ODATAV2", communicationScenarios: [], itemCount: null, hubUrl: "u" },
-              { id: "e", contentType: "EVENT", externalId: "CE_X", title: "Ev", description: "", packageId: null, apiType: null, communicationScenarios: [], itemCount: null, hubUrl: "u" },
-            ],
-      ),
-    );
+    mocks.findMany.mockImplementation((args: { where?: { apiType?: string } }) => {
+      if (args.where?.apiType === "ODATAV2") return Promise.resolve([API_ROW, CDS_ROW]);
+      if (args.where?.apiType === "ODATAV4") return Promise.resolve([]);
+      return Promise.resolve([
+        { id: "c", contentType: "CDS_VIEW", externalId: "C_VIEW", title: "View", description: "", packageId: "Sales", apiType: "ODATAV2", communicationScenarios: [], itemCount: null, hubUrl: "u" },
+        { id: "e", contentType: "EVENT", externalId: "CE_X", title: "Ev", description: "", packageId: null, apiType: null, communicationScenarios: [], itemCount: null, hubUrl: "u" },
+      ]);
+    });
     const body = await (await GET(makeRequest())).json();
     const byId = Object.fromEntries(body.data.items.map((i: { externalId: string; status: string }) => [i.externalId, i.status]));
     expect(byId).toEqual({ C_VIEW: "ACTIVATED", CE_X: "AVAILABLE" });
     const ev = body.data.items.find((i: { externalId: string }) => i.externalId === "CE_X");
     expect(ev.availabilityNote).toBe("subscribe");
+  });
+
+  it("a best-effort V4 service that returns a live 200 → ACTIVATED", async () => {
+    mocks.findMany.mockImplementation((args: { where?: { apiType?: string } }) => {
+      if (args.where?.apiType === "ODATAV2") return Promise.resolve([]);
+      if (args.where?.apiType === "ODATAV4")
+        return Promise.resolve([{ contentType: "API", apiType: "ODATAV4", externalId: "CE_BANK_0003", title: "Bank", packageId: "Master Data", communicationScenarios: [] }]);
+      return Promise.resolve([
+        { id: "v", contentType: "API", externalId: "CE_BANK_0003", title: "Bank", description: "", packageId: "Master Data", apiType: "ODATAV4", communicationScenarios: [], itemCount: null, hubUrl: "u" },
+      ]);
+    });
+    mocks.probeTenantCapabilities.mockResolvedValue([{ service: "CE_BANK_0003", exposed: true, status: 200 }]);
+    const body = await (await GET(makeRequest())).json();
+    const v4 = body.data.items.find((i: { externalId: string }) => i.externalId === "CE_BANK_0003");
+    expect(v4.status).toBe("ACTIVATED");
+    expect(body.data.counts.byStatus.ACTIVATED).toBe(1);
   });
 
   it("without a live 200, runtime items are AVAILABLE not ACTIVATED", async () => {

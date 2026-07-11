@@ -33,6 +33,7 @@
  */
 
 import { prisma } from "../../src/lib/db/prisma";
+import { classifyApiTypeById } from "../../src/lib/sap-public/hub-content";
 
 interface HeuristicResult {
   apiType: string | null;
@@ -40,34 +41,15 @@ interface HeuristicResult {
 }
 
 function classifyByHeuristic(apiId: string, apiHubUrl: string): HeuristicResult {
-  // Order matters: check most specific patterns first.
-  if (/_CDS_\d+/.test(apiId)) return { apiType: "ODATAV4", reason: "CDS_in_id" };
-  if (/_CDS_/.test(apiId)) return { apiType: "ODATAV4", reason: "CDS_substring" };
-  if (apiHubUrl.includes("/SOAP/")) return { apiType: "SOAP", reason: "SOAP_in_url" };
-  if (apiHubUrl.includes("/REST/")) return { apiType: "REST", reason: "REST_in_url" };
-  if (/\b(soap|wsdl)\b/i.test(apiHubUrl)) return { apiType: "SOAP", reason: "soap_keyword_in_url" };
-  // OP_ prefix is the Cloud Private Edition convention (vs CE_ for Public Edition).
-  // Most OP_API_*_SRV_NNNN are OData v2; OP_*_CDS_NNNN are v4.
-  if (/^OP_/.test(apiId)) {
-    if (/_CDS_/.test(apiId)) return { apiType: "ODATAV4", reason: "OP_CDS" };
-    if (/_SRV_/.test(apiId)) return { apiType: "ODATAV2", reason: "OP_SRV" };
-    return { apiType: "ODATAV2", reason: "OP_default" };
-  }
-  // CE_ prefix = Cloud Edition (Public). Mostly v4 (CDS-driven).
-  if (/^CE_/.test(apiId)) {
-    if (/_CDS_/.test(apiId)) return { apiType: "ODATAV4", reason: "CE_CDS" };
-    return { apiType: "ODATAV4", reason: "CE_default" };
-  }
-  // IS_ = Industry Solutions, traditional v2 in Cloud PE.
-  if (/^IS_/.test(apiId)) return { apiType: "ODATAV2", reason: "IS_default" };
-  // SuccessFactors-style IDs often have OData paths in the URL
+  // Primary: the shared technical-id convention (CE_→V4, *_SRV→V2, _IN/_OUT→SOAP,
+  // _CDS_→V4; sap-s4-* stays null — its odata path would be broken; unknown → null).
+  const byId = classifyApiTypeById(apiId);
+  if (byId) return { apiType: byId, reason: "id-convention" };
+  // Supplements for ids the convention can't place — protocol hints in the URL.
+  if (apiHubUrl.includes("/SOAP/") || /\b(soap|wsdl)\b/i.test(apiHubUrl)) return { apiType: "SOAP", reason: "soap_in_url" };
+  if (apiHubUrl.includes("/REST/")) return { apiType: "REST", reason: "rest_in_url" };
   if (/odata\.svc/i.test(apiHubUrl)) return { apiType: "ODATAV2", reason: "odata_svc_in_url" };
-  // sap-s4-* prefix is the apiHubId for newer cloud APIs; without _CDS_ marker, treat as v2
-  if (/^sap-s4-/.test(apiId)) {
-    if (/_CDS_/.test(apiId)) return { apiType: "ODATAV4", reason: "sap-s4-CDS" };
-    return { apiType: "ODATAV2", reason: "sap-s4-default" };
-  }
-  return { apiType: null, reason: "no_heuristic_match" };
+  return { apiType: null, reason: "no_match" };
 }
 
 async function main(): Promise<void> {
