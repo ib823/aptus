@@ -17,16 +17,16 @@
 
 import type { ReactNode } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { AFFIRM_GLOSSARY, type GlossaryKey } from "@/constants/affirm-glossary";
+import { glossaryEntry } from "@/lib/learn/content";
 import { useAffirmLearn } from "./context";
 
 interface TermProps {
-  id: GlossaryKey;
+  id: string;
   children?: ReactNode;
 }
 
 export function Term({ id, children }: TermProps) {
-  const entry = AFFIRM_GLOSSARY[id];
+  const entry = glossaryEntry(id);
   const { openGlossary } = useAffirmLearn();
 
   if (!entry) return <>{children}</>;
@@ -66,7 +66,7 @@ export function Term({ id, children }: TermProps) {
                   onClick={() => openGlossary(rk)}
                   className="rounded-pill border border-border-default bg-ink-tint px-2.5 py-1 text-xs text-ink-soft transition hover:border-navy hover:text-navy"
                 >
-                  {AFFIRM_GLOSSARY[rk]?.term ?? rk}
+                  {glossaryEntry(rk)?.term ?? rk}
                 </button>
               ))}
             </div>

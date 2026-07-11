@@ -14,6 +14,8 @@ import {
   isRuntimeType,
   type HubContentType,
 } from "@/lib/sap-public/hub-content";
+import { useAffirmLearn } from "@/components/affirm/learn/context";
+import { glossaryIdForContentType } from "@/constants/sap-glossary";
 
 const INDICATIVE_NOTE =
   "Indicative published volume from an SAP Business Accelerator Hub snapshot; not pinned to a release. Refresh from a logged-in Hub check for release-accurate figures.";
@@ -28,6 +30,8 @@ export function ContentTypeTiles({
   onSelect?: (type: HubContentType | "ALL") => void;
 }) {
   const total = Object.values(byType).reduce((n, c) => n + c, 0);
+  // Tap the "?" on a tile → plain-language definition of that content type.
+  const { openGlossary } = useAffirmLearn();
 
   const tile = (
     key: HubContentType | "ALL",
@@ -37,6 +41,7 @@ export function ContentTypeTiles({
     tag: string | null,
     selected: boolean,
     empty: boolean,
+    defineId?: string,
   ) => {
     // "of ~Y indicative" is context for what's MISSING — only meaningful for an
     // empty type with a real published figure. Once imported (count > 0), the
@@ -48,39 +53,55 @@ export function ContentTypeTiles({
       ? `${label}: none imported yet — drop a logged-in Hub export in sap-references/hub-content/${key}.json${hasPublished ? ` (~${published!.toLocaleString()} published). ${INDICATIVE_NOTE}` : "."}`
       : label;
     return (
-      <button
+      <div
         key={key}
-        type="button"
-        role="tab"
-        aria-selected={selected}
-        onClick={() => !empty && onSelect?.(key)}
-        disabled={empty}
-        title={title}
-        className="flex flex-col items-start gap-1 rounded-[var(--radius-card-warm)] px-3 py-2 text-left transition disabled:cursor-not-allowed"
+        className="relative rounded-[var(--radius-card-warm)]"
         style={{
           background: "var(--surface-paper)",
           border: `1px solid ${selected ? "var(--brand-navy)" : "var(--border-default)"}`,
           opacity: empty ? 0.62 : 1,
         }}
       >
-        <span className="text-lg font-bold tabular-nums" style={{ color: empty ? "var(--ink-muted)" : "var(--brand-navy)" }}>
-          {count.toLocaleString()}
-        </span>
-        <span className="text-xs font-medium" style={{ color: "var(--ink-primary)" }}>
-          {label}
-        </span>
-        {showIndicative ? (
-          <span className="text-[10px] tabular-nums" style={{ color: "var(--ink-muted)" }}>
-            of ~{published!.toLocaleString()} <span className="uppercase tracking-wide">indicative</span>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={selected}
+          onClick={() => !empty && onSelect?.(key)}
+          disabled={empty}
+          title={title}
+          className="flex w-full flex-col items-start gap-1 px-3 py-2 pr-7 text-left transition disabled:cursor-not-allowed"
+        >
+          <span className="text-lg font-bold tabular-nums" style={{ color: empty ? "var(--ink-muted)" : "var(--brand-navy)" }}>
+            {count.toLocaleString()}
           </span>
-        ) : (
-          tag && (
-            <span className="text-[10px] uppercase tracking-wide" style={{ color: "var(--ink-muted)" }}>
-              {tag}
+          <span className="text-xs font-medium" style={{ color: "var(--ink-primary)" }}>
+            {label}
+          </span>
+          {showIndicative ? (
+            <span className="text-[10px] tabular-nums" style={{ color: "var(--ink-muted)" }}>
+              of ~{published!.toLocaleString()} <span className="uppercase tracking-wide">indicative</span>
             </span>
-          )
+          ) : (
+            tag && (
+              <span className="text-[10px] uppercase tracking-wide" style={{ color: "var(--ink-muted)" }}>
+                {tag}
+              </span>
+            )
+          )}
+        </button>
+        {defineId && (
+          <button
+            type="button"
+            onClick={() => openGlossary(defineId)}
+            title={`What is "${label}"?`}
+            aria-label={`What is "${label}"?`}
+            className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full text-[11px] leading-none"
+            style={{ color: "var(--ink-muted)", border: "1px solid var(--border-default)" }}
+          >
+            ?
+          </button>
         )}
-      </button>
+      </div>
     );
   };
 
@@ -98,6 +119,7 @@ export function ContentTypeTiles({
           isRuntimeType(t) ? "runtime" : "reference",
           activeType === t,
           (byType[t] ?? 0) === 0,
+          glossaryIdForContentType(t),
         ),
       )}
     </div>

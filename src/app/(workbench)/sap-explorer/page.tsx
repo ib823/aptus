@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SapCloudExplorer } from "@/components/sap/SapCloudExplorer";
+import { ScreenGuide } from "@/components/affirm/learn/ScreenGuide";
 
 export const metadata: Metadata = { title: "SAP Operations" };
 export const dynamic = "force-dynamic";
@@ -26,6 +27,8 @@ export default function SapExplorerPage() {
           Live TDD explorer across your connected SAP Cloud products.
         </p>
       </div>
+      {/* Plain-language screen guide (first-run + one tap away). */}
+      <ScreenGuide />
       <SapCloudExplorer />
     </main>
   );
