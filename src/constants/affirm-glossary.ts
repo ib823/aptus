@@ -14,41 +14,12 @@
  * auditor who has never seen SAP.
  */
 
-export type GlossaryKey =
-  | "fit-to-standard"
-  | "pre-onboarding"
-  | "affirm-bundle"
-  | "affirm-set"
-  | "value-stream"
-  | "sub-process"
-  | "scope-item"
-  | "foundation"
-  | "l2-question"
-  | "l3-configuration"
-  | "bdc"
-  | "sap-verbatim"
-  | "sscui"
-  | "s4hana-cloud-public"
-  | "decision-question"
-  | "information-question"
-  | "adopt-standard"
-  | "discuss-in-workshop"
-  | "deviation"
-  | "fast-confirm"
-  | "workshop"
-  | "bundle-lifecycle"
-  | "draft"
-  | "issued"
-  | "sealed"
-  | "released"
-  | "signed-record"
-  | "workshop-agenda"
-  | "excluded"
-  | "flagged"
-  | "mandatory-my"
-  | "fiori-app"
-  | "consultant-added"
-  | "pending-curation";
+/**
+ * A glossary term id. Widened from the original affirm-only union to `string`
+ * so the shared learn framework can carry other domains' glossaries too (e.g.
+ * SAP Operations). The affirm ids below are still the canonical affirm set.
+ */
+export type GlossaryKey = string;
 
 export interface GlossaryEntry {
   /** Human-readable term as it appears on screen. */
@@ -335,7 +306,7 @@ export const GLOSSARY_ORDER: GlossaryKey[] = [
 export function glossaryKeyForTerm(term: string): GlossaryKey | null {
   const needle = term.trim().toLowerCase();
   for (const key of GLOSSARY_ORDER) {
-    if (AFFIRM_GLOSSARY[key].term.toLowerCase() === needle) return key;
+    if (AFFIRM_GLOSSARY[key]?.term.toLowerCase() === needle) return key;
   }
   return null;
 }

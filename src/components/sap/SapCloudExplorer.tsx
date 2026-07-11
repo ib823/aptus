@@ -17,6 +17,7 @@ import { SapOperationsDashboard } from "./SapOperationsDashboard";
 import { SapWriteBackPanel } from "./SapWriteBackPanel";
 import { SapTenantExplorer } from "./SapTenantExplorer";
 import { SapCapabilityCatalogue } from "./SapCapabilityCatalogue";
+import { ScreenGuide } from "@/components/affirm/learn/ScreenGuide";
 import { SapAribaExplorer } from "./SapAribaExplorer";
 
 interface ProductInfo {
@@ -99,18 +100,24 @@ export function SapCloudExplorer() {
       ) : (
         <>
           <div id="sap-capability-catalogue" style={{ scrollMarginTop: 24 }}>
+            <ScreenGuide id="sap-catalogue" />
             <SapCapabilityCatalogue product={product} />
           </div>
-          <div className="border-t pt-6" style={{ borderColor: "var(--border-default)" }}>
+          <div data-tour="sap-procurement" className="border-t pt-6" style={{ borderColor: "var(--border-default)" }}>
+            <ScreenGuide id="sap-procurement" />
             <SapOperationsDashboard product={product} />
           </div>
-          <SapWriteBackPanel product={product} />
-          <div id="sap-entity-explorer" className="border-t pt-6" style={{ borderColor: "var(--border-default)", scrollMarginTop: 24 }}>
+          <div>
+            <ScreenGuide id="sap-write-mode" />
+            <SapWriteBackPanel product={product} />
+          </div>
+          <div id="sap-entity-explorer" data-tour="sap-entity-explorer" className="border-t pt-6" style={{ borderColor: "var(--border-default)", scrollMarginTop: 24 }}>
             <div className="mb-4">
               <h2 className="font-serif text-lg tracking-tight" style={{ color: "var(--brand-navy)" }}>
                 Entity Explorer
               </h2>
             </div>
+            <ScreenGuide id="sap-entity-explorer" />
             <SapTenantExplorer product={product} />
           </div>
         </>

@@ -10,35 +10,37 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import {
-  AFFIRM_GLOSSARY,
-  GLOSSARY_ORDER,
-  type GlossaryKey,
-} from "@/constants/affirm-glossary";
+import { glossaryFor } from "@/lib/learn/content";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  focusTerm: GlossaryKey | null;
+  focusTerm: string | null;
 }
 
 export function GlossaryDrawer({ open, onOpenChange, focusTerm }: Props) {
+  const pathname = usePathname() ?? "";
   const [query, setQuery] = useState("");
   const listRef = useRef<HTMLDivElement | null>(null);
 
+  // Glossary set is path-aware: affirm terms on /affirm, SAP terms on /sap-explorer.
+  const { entries, order } = useMemo(() => glossaryFor(pathname), [pathname]);
+
   const keys = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return GLOSSARY_ORDER;
-    return GLOSSARY_ORDER.filter((k) => {
-      const e = AFFIRM_GLOSSARY[k];
+    if (!needle) return order;
+    return order.filter((k) => {
+      const e = entries[k];
+      if (!e) return false;
       return (
         e.term.toLowerCase().includes(needle) ||
         e.short.toLowerCase().includes(needle) ||
         e.why.toLowerCase().includes(needle)
       );
     });
-  }, [query]);
+  }, [query, order, entries]);
 
   // When opened with a focus term, clear any search filter and scroll to it.
   useEffect(() => {
@@ -83,7 +85,8 @@ export function GlossaryDrawer({ open, onOpenChange, focusTerm }: Props) {
           ) : (
             <ul className="space-y-4">
               {keys.map((k) => {
-                const e = AFFIRM_GLOSSARY[k];
+                const e = entries[k];
+                if (!e) return null;
                 const focused = focusTerm === k;
                 return (
                   <li
