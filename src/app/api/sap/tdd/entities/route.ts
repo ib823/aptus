@@ -2,12 +2,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import {
   getSapProduct,
-  getSapService,
   getSapTenant,
   inspectSapService,
   isSapTddPublicAccessEnabled,
   probeSapEntitySets,
 } from "@/lib/sap-public/tdd-connector";
+import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
 import { ERROR_CODES } from "@/types/api";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const tenant = getSapTenant(product.envPrefix, request.nextUrl.searchParams.get("tenant") ?? "");
-  const service = getSapService(product, request.nextUrl.searchParams.get("service") ?? "");
+  const service = await resolveHubService(product, request.nextUrl.searchParams.get("service") ?? "");
   const probe = request.nextUrl.searchParams.get("probe") === "1";
 
   if (!tenant || !service) {

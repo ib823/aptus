@@ -5,9 +5,9 @@
  * per-entity C/R/U/D, and the Phase-3 dependencies + honest debug hint, from
  * GET /api/sap/tdd/hub-content/[id]. Colour via var(--token) only.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ExternalLink, RefreshCw } from "lucide-react";
-import type { HubContentType } from "@/lib/sap-public/hub-content";
+import type { HubContentType, HubStatus } from "@/lib/sap-public/hub-content";
 import { ProcessBlueprintView, type BlueprintStep } from "./ProcessBlueprintView";
 import { CapabilityChips } from "./CapabilityChips";
 
@@ -52,10 +52,25 @@ function crud(v: boolean | null): { label: string; color: string } {
   return { label: "?", color: "var(--ink-muted)" };
 }
 
-export function CapabilityDetail({ id, product = "s4hana", onClose }: { id: string; product?: string; onClose?: () => void }) {
+export function CapabilityDetail({
+  id,
+  product = "s4hana",
+  onClose,
+  onResolved,
+}: {
+  id: string;
+  product?: string;
+  onClose?: () => void;
+  /** Lift the detail's live-probe status up so the list badge can't contradict it. */
+  onResolved?: (status: HubStatus) => void;
+}) {
   const [data, setData] = useState<DetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Hold the latest callback in a ref so an inline parent arrow doesn't retrigger
+  // the fetch every render (it would loop). The probe runs once per id/product.
+  const onResolvedRef = useRef(onResolved);
+  onResolvedRef.current = onResolved;
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +82,7 @@ export function CapabilityDetail({ id, product = "s4hana", onClose }: { id: stri
         if (cancelled) return;
         if (!j.data) throw new Error(j.error?.message ?? "Failed to load item");
         setData(j.data);
+        onResolvedRef.current?.(j.data.status as HubStatus);
       })
       .catch((e: unknown) => !cancelled && setError(e instanceof Error ? e.message : "Failed to load item"))
       .finally(() => !cancelled && setLoading(false));

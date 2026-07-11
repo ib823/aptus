@@ -8,13 +8,13 @@ const PAYLOAD = {
       {
         id: "1", contentType: "API", externalId: "API_PO", title: "Purchase Order", description: "Create/read POs",
         packageId: "Procurement", apiType: "ODATAV2", communicationScenarios: ["SAP_COM_0053"], scopeItemCodes: [],
-        itemCount: null, hubUrl: "https://api.sap.com/api/API_PO", status: "AVAILABLE", availabilityNote: null,
+        itemCount: null, hubUrl: "https://api.sap.com/api/API_PO", status: "NOT_CHECKED", availabilityNote: null,
       },
     ],
     total: 1,
     page: 1,
     limit: 50,
-    counts: { byType: { API: 941 }, byStatus: { ACTIVATED: 5, AVAILABLE: 936, REFERENCE: 0 }, probeableRuntime: 128, probed: 60 },
+    counts: { byType: { API: 941 }, byStatus: { ACTIVATED: 5, NEEDS_SETUP: 12, NOT_FOUND: 3, NOT_CHECKED: 921, AVAILABLE: 0, REFERENCE: 0 }, probeableRuntime: 128, probed: 60 },
     catalogueImported: true,
     tenant: "ABeam TDD",
     isAdmin: true,
@@ -31,7 +31,7 @@ describe("SapCapabilityCatalogue (CatalogueList) smoke", () => {
     const { container } = render(<SapCapabilityCatalogue product="s4hana" />);
 
     // Scorecard — real exposed count as a probe sample + separate catalogue scale.
-    expect(await screen.findByText(/activated of/i)).toBeInTheDocument();
+    expect(await screen.findByText(/authorized of/i)).toBeInTheDocument();
     expect(screen.getByText(/live probe sample/i)).toBeInTheDocument();
     expect(screen.getAllByText(/941/).length).toBeGreaterThan(0);
 
