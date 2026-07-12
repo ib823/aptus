@@ -24,6 +24,7 @@ export function GlossaryDrawer({ open, onOpenChange, focusTerm }: Props) {
   const pathname = usePathname() ?? "";
   const [query, setQuery] = useState("");
   const listRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
 
   // Glossary set is path-aware: affirm terms on /affirm, SAP terms on /sap-explorer.
   const { entries, order } = useMemo(() => glossaryFor(pathname), [pathname]);
@@ -53,10 +54,19 @@ export function GlossaryDrawer({ open, onOpenChange, focusTerm }: Props) {
     return () => clearTimeout(t);
   }, [open, focusTerm]);
 
+  // Move initial focus into the dialog on open (the custom Sheet doesn't, and a
+  // dialog that leaves focus on the trigger is a keyboard/screen-reader trap).
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => searchRef.current?.focus(), 60);
+    return () => clearTimeout(t);
+  }, [open]);
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
+        aria-label="Glossary — decode the jargon"
         className="flex w-full flex-col gap-0 border-border-default bg-paper p-0 text-ink sm:max-w-md"
       >
         <div className="border-b border-border-default px-5 pb-4 pt-5">
@@ -68,6 +78,7 @@ export function GlossaryDrawer({ open, onOpenChange, focusTerm }: Props) {
             Every SAP term in this tool, explained without the jargon.
           </p>
           <input
+            ref={searchRef}
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}

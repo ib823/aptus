@@ -53,7 +53,7 @@ export function SapCloudExplorer() {
   const active = products.find((p) => p.key === product);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" data-sap-explorer>
       {products.length > 0 && (
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-2" role="tablist" aria-label="SAP Cloud product">

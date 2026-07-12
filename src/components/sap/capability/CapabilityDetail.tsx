@@ -48,10 +48,13 @@ interface DetailData {
 
 const LADDER = ["reachable", "readable", "writable"] as const;
 
-function crud(v: boolean | null): { label: string; color: string } {
-  if (v === true) return { label: "✓", color: "var(--decision-standard)" };
-  if (v === false) return { label: "·", color: "var(--ink-muted)" };
-  return { label: "?", color: "var(--ink-muted)" };
+// Non-color-dependent encoding: each state has a distinct GLYPH + text label,
+// so it reads for colourblind users and screen readers, not by hue alone.
+//   supported → ✓ (green)   not supported → — (muted)   not probed → ? (muted)
+function crud(v: boolean | null): { glyph: string; text: string; color: string } {
+  if (v === true) return { glyph: "✓", text: "Yes", color: "var(--decision-standard)" };
+  if (v === false) return { glyph: "—", text: "No", color: "var(--ink-muted)" };
+  return { glyph: "?", text: "Not probed", color: "var(--ink-muted)" };
 }
 
 export function CapabilityDetail({
@@ -177,9 +180,9 @@ export function CapabilityDetail({
               <table className="w-full min-w-[420px] text-sm">
                 <thead>
                   <tr style={{ color: "var(--ink-muted)" }}>
-                    <th className="px-2 py-1 text-left text-xs font-medium">Entity set</th>
+                    <th scope="col" className="px-2 py-1 text-left text-xs font-medium">Entity set</th>
                     {["Read", "Create", "Update", "Delete"].map((h) => (
-                      <th key={h} className="px-2 py-1 text-center text-xs font-medium">
+                      <th key={h} scope="col" className="px-2 py-1 text-center text-xs font-medium">
                         {h}
                       </th>
                     ))}
@@ -194,8 +197,14 @@ export function CapabilityDetail({
                       {[e.readable, e.creatable, e.updatable, e.deletable].map((v, i) => {
                         const c = crud(v);
                         return (
-                          <td key={i} className="px-2 py-1 text-center font-semibold" style={{ color: c.color }}>
-                            {c.label}
+                          <td
+                            key={i}
+                            className="px-2 py-1 text-center font-semibold"
+                            style={{ color: c.color }}
+                            title={c.text}
+                            aria-label={c.text}
+                          >
+                            <span aria-hidden>{c.glyph}</span>
                           </td>
                         );
                       })}
@@ -203,6 +212,10 @@ export function CapabilityDetail({
                   ))}
                 </tbody>
               </table>
+              {/* Legend so the glyphs are unambiguous without relying on colour. */}
+              <p className="mt-1.5 px-2 text-[11px]" style={{ color: "var(--ink-muted)" }}>
+                <span style={{ color: "var(--decision-standard)" }}>✓</span> supported · — not supported · ? not probed
+              </p>
             </div>
           )}
 

@@ -319,9 +319,9 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-[var(--surface-ink-tint)] text-left text-xs text-[var(--ink-muted)]">
                 <tr>
-                  <th className="px-4 py-2 font-medium">Name</th>
-                  <th className="px-3 py-2 font-medium">Read</th>
-                  <th className="px-3 py-2 text-right font-medium">Rows</th>
+                  <th scope="col" className="px-4 py-2 font-medium">Name</th>
+                  <th scope="col" className="px-3 py-2 font-medium">Read</th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">Rows</th>
                 </tr>
               </thead>
               <tbody>
@@ -389,7 +389,7 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
                 <thead className="bg-[var(--surface-ink-tint)] text-left text-xs text-[var(--ink-muted)]">
                   <tr>
                     {previewFields.map((field) => (
-                      <th key={field} className="px-3 py-2 font-medium">
+                      <th key={field} scope="col" className="px-3 py-2 font-medium">
                         {field}
                       </th>
                     ))}
