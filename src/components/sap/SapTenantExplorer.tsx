@@ -15,14 +15,12 @@ import {
 interface TenantOption {
   key: string;
   label: string;
-  baseHost: string;
 }
 
 interface ServiceOption {
   key: string;
   label: string;
   scenario: string;
-  path: string;
   domain: string;
 }
 
@@ -284,7 +282,7 @@ export function SapTenantExplorer({ product = "s4hana" }: { product?: string }) 
             <Server className="size-4" />
             Tenant
           </div>
-          <div className="mt-2 truncate text-sm font-medium">{selectedTenant?.baseHost ?? "Not configured"}</div>
+          <div className="mt-2 truncate text-sm font-medium">{selectedTenant?.label ?? "Not configured"}</div>
         </div>
         <div className="rounded-[var(--radius-card-warm)] border border-[var(--border-default)] bg-[var(--surface-paper)] p-3">
           <div className="flex items-center gap-2 text-xs text-[var(--ink-muted)]">
