@@ -153,6 +153,12 @@ export const RATE_LIMITS = {
   apiRead: { limit: 300, windowMs: 60 * 1000 },
   /** Report generation: 10 per minute */
   report: { limit: 10, windowMs: 60 * 1000 },
+  /**
+   * Expensive LIVE-SAP routes (/operations, /entities?probe=1, hub-content
+   * Probe-all): a tight, dedicated bucket so they can't amplify load onto the
+   * SAP tenant even within the generous apiRead/apiMutation ceilings.
+   */
+  sapLive: { limit: 20, windowMs: 60 * 1000 },
 } as const;
 
 /**

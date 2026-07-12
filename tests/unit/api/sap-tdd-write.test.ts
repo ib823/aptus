@@ -35,7 +35,7 @@ vi.mock("@/lib/auth/admin-guard", () => ({
     typeof r === "object" && r !== null && "status" in (r as Record<string, unknown>),
 }));
 
-const { POST } = await import("@/app/api/sap/tdd/write/route");
+const { POST, GET } = await import("@/app/api/sap/tdd/write/route");
 
 const VALID_BODY = {
   tenant: "TEN1",
@@ -111,5 +111,16 @@ describe("POST /api/sap/tdd/write", () => {
     const res = await POST(makeRequest({ ...VALID_BODY, writeSecret: "secret-value" }));
     expect(res.status).toBe(200);
     expect(mocks.createSapEntitySetRecord).toHaveBeenCalledOnce();
+  });
+});
+
+describe("WS2a — GET /api/sap/tdd/write returns only capability flags (no confirmation phrase)", () => {
+  it("returns { enabled, writeSecretRequired } and NOT confirmationPhrase", async () => {
+    mocks.isSapTddWriteEnabled.mockReturnValue(true);
+    mocks.getSapTddWriteSecretRequired.mockReturnValue(true);
+    const req = { nextUrl: { searchParams: new URLSearchParams("product=s4hana") } } as Parameters<typeof GET>[0];
+    const body = await (await GET(req)).json();
+    expect(body.data).toEqual({ enabled: true, writeSecretRequired: true });
+    expect(body.data).not.toHaveProperty("confirmationPhrase");
   });
 });
