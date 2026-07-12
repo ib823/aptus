@@ -282,6 +282,16 @@
   --status-na-fg: oklch(0.55 0 0);
 }
 
+/* WCAG contrast: the global --ink-muted (#8A8A8A ≈ 3.5:1 on white) fails the
+ * 4.5:1 body-text minimum. Darken it to #6B6B6B (≈ 5:1 on white/cream) within
+ * the SAP Operations screens only, so this middleware ships the fix without
+ * re-baselining unrelated visual-regression snapshots. The catalogue's own
+ * dark flip below (.dark [data-cap-catalogue], higher specificity) still wins
+ * inside the catalogue, so dark mode is unaffected. */
+[data-sap-explorer] {
+  --ink-muted: #6B6B6B;
+}
+
 /* SAP Capability Catalogue — scoped dark flip of the (otherwise light-only)
  * presales brand/ink/surface + status + decision tokens. Scoped to
  * [data-cap-catalogue] so it flips ONLY within the catalogue (no effect on
