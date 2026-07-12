@@ -210,10 +210,19 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
       const clientIp = getClientIp(request.headers);
       const isAuthMutation = pathname.startsWith("/api/auth");
       const isReportRoute = pathname.startsWith("/api/assessments/") && pathname.includes("/report/");
+      // Expensive live-SAP routes get their own tight bucket so they can't
+      // amplify load onto the SAP tenant: /operations, /entities?probe=1, and
+      // the hub-content Probe-all sweep.
+      const isSapLive =
+        pathname === "/api/sap/tdd/operations" ||
+        (pathname === "/api/sap/tdd/entities" && request.nextUrl.searchParams.get("probe") === "1") ||
+        pathname === "/api/sap/tdd/hub-content/probe-all";
 
       // Auth mutations and report generation get tighter limits. Other
       // endpoints use method-based limits.
-      const config = isAuthMutation
+      const config = isSapLive
+        ? RATE_LIMITS.sapLive
+        : isAuthMutation
         ? RATE_LIMITS.auth
         : isReportRoute
           ? RATE_LIMITS.report
@@ -221,7 +230,9 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
           ? RATE_LIMITS.apiRead
           : RATE_LIMITS.apiMutation;
 
-      const key = isAuthMutation
+      const key = isSapLive
+        ? `sap-live:${clientIp}`
+        : isAuthMutation
         ? `auth:${clientIp}`
         : isReportRoute
           ? `report:${clientIp}`

@@ -24,7 +24,6 @@ import {
 interface TenantOption {
   key: string;
   label: string;
-  baseHost: string;
 }
 
 interface CatalogResponse {
@@ -160,7 +159,7 @@ export function SapOperationsDashboard({ product = "s4hana" }: { product?: strin
           </h2>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--ink-muted)" }}>
             <Server className="size-4" />
-            <span>{selectedTenant?.baseHost ?? "No SAP tenant"}</span>
+            <span>{selectedTenant?.label ?? "No SAP tenant"}</span>
             {generatedAt && <span>{new Date(generatedAt).toLocaleTimeString()}</span>}
           </div>
           {/* Coherence: this is a curated live sample, not the full activated set. */}

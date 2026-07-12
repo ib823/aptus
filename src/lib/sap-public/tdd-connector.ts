@@ -306,9 +306,28 @@ export const SAP_ODATA_PRODUCTS: SapOdataProduct[] = [
 
 export const DEFAULT_PRODUCT_KEY = "s4hana";
 
+/**
+ * Ariba is a REST product (see products.ts / ariba-connector), not OData — but it
+ * IS a known product. Return a placeholder with no OData tenants so an OData route
+ * hit with product=ariba reports "No SAP tenant is configured" (same path as an
+ * unconfigured SuccessFactors) instead of a misleading "Unknown product". Not part
+ * of SAP_ODATA_PRODUCTS, so listProductSummaries never double-counts it.
+ */
+const ARIBA_ODATA_PLACEHOLDER: SapOdataProduct = {
+  key: "ariba",
+  label: "Ariba",
+  envPrefix: "ARIBA_TDD",
+  description: "SAP Ariba (REST) — not exposed via the OData routes.",
+  services: [],
+  operations: [],
+};
+
 export function getSapProduct(key: string | null | undefined): SapOdataProduct | null {
   const wanted = key && key.trim() ? key.trim() : DEFAULT_PRODUCT_KEY;
-  return SAP_ODATA_PRODUCTS.find((p) => p.key === wanted) ?? null;
+  const found = SAP_ODATA_PRODUCTS.find((p) => p.key === wanted);
+  if (found) return found;
+  if (wanted === "ariba") return ARIBA_ODATA_PLACEHOLDER; // known, but unconfigured for OData
+  return null;
 }
 
 /** @deprecated Use getSapProduct(key).services. Kept for existing imports. */

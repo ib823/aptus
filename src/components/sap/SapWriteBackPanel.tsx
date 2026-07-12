@@ -17,7 +17,6 @@ import { Textarea } from "@/components/ui/textarea";
 interface TenantOption {
   key: string;
   label: string;
-  baseHost: string;
 }
 
 interface ServiceOption {
@@ -38,10 +37,13 @@ interface CatalogResponse {
   };
 }
 
+// UX friction, not a secret — the server no longer returns it (it only validates
+// it on POST). The client holds it as a constant.
+const CONFIRMATION_PHRASE = "WRITE TO SAP TDD";
+
 interface WriteStatusResponse {
   data: {
     enabled: boolean;
-    confirmationPhrase: string;
     writeSecretRequired: boolean;
   };
 }
@@ -71,7 +73,7 @@ function prettyJson(value: unknown): string {
 
 export function SapWriteBackPanel({ product = "s4hana" }: { product?: string }) {
   const [enabled, setEnabled] = useState(false);
-  const [confirmationPhrase, setConfirmationPhrase] = useState("WRITE TO SAP TDD");
+  const confirmationPhrase = CONFIRMATION_PHRASE;
   const [writeSecretRequired, setWriteSecretRequired] = useState(false);
   const [tenants, setTenants] = useState<TenantOption[]>([]);
   const [services, setServices] = useState<ServiceOption[]>([]);
@@ -110,7 +112,6 @@ export function SapWriteBackPanel({ product = "s4hana" }: { product?: string }) 
         const catalogJson = (await catalogResponse.json()) as CatalogResponse;
         if (cancelled) return;
         setEnabled(statusJson.data.enabled);
-        setConfirmationPhrase(statusJson.data.confirmationPhrase);
         setWriteSecretRequired(statusJson.data.writeSecretRequired);
         setTenants(catalogJson.data.tenants);
         setServices(catalogJson.data.services);

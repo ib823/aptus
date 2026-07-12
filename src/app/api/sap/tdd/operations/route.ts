@@ -11,6 +11,7 @@ import {
   type SapOperationConfig,
   type SapTenant,
 } from "@/lib/sap-public/tdd-connector";
+import { getLiveCache, setLiveCache } from "@/lib/sap-public/live-cache";
 import { ERROR_CODES } from "@/types/api";
 
 function displayValue(value: unknown): string {
@@ -61,6 +62,9 @@ async function loadOperationSection(
       scenario: service.scenario,
       entitySet: config.entitySet,
       ok: preview.ok,
+      // Reachable-but-empty is NOT a healthy "read available" — flag it so the UI
+      // shows amber ("reachable, no data"), not a false-green heartbeat.
+      empty: preview.ok && preview.rows.length === 0,
       status: preview.status,
       durationMs: preview.durationMs,
       rowCount: preview.rows.length,
@@ -78,6 +82,7 @@ async function loadOperationSection(
       scenario: service.scenario,
       entitySet: config.entitySet,
       ok: false,
+      empty: false,
       status: 0,
       durationMs: 0,
       rowCount: 0,
@@ -88,6 +93,12 @@ async function loadOperationSection(
   }
 }
 
+/**
+ * Tenant resolution, standardized with /entities:
+ *   - a tenant param present + INVALID → null → the caller returns 400
+ *   - a tenant param OMITTED → the first configured tenant (documented default,
+ *     so the dashboard's initial heartbeat load needs no explicit tenant).
+ */
 function resolveTenant(product: SapOdataProduct, request: NextRequest): SapTenant | null {
   const tenantKey = request.nextUrl.searchParams.get("tenant");
   if (tenantKey) return getSapTenant(product.envPrefix, tenantKey);
@@ -118,19 +129,35 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  // Short-TTL cache: 4 live SAP reads per request is expensive; a warm instance
+  // serves repeats from cache. ?refresh=1 forces a live re-read. generatedAt is
+  // the freshness timestamp the UI shows.
+  const cacheKey = `ops:${product.key}:${tenant.key}`;
+  const refresh = request.nextUrl.searchParams.get("refresh") === "1";
+  const tenantIdentity = { key: tenant.key, label: tenant.label };
+
+  if (!refresh) {
+    const cached = getLiveCache<{ sections: unknown; generatedAt: string }>(cacheKey);
+    if (cached) {
+      return NextResponse.json({
+        data: { tenant: tenantIdentity, generatedAt: cached.value.generatedAt, sections: cached.value.sections, fromCache: true },
+      });
+    }
+  }
+
   const sections = await Promise.all(
     product.operations.map((config) => loadOperationSection(product, tenant, config)),
   );
+  const generatedAt = new Date().toISOString();
+  setLiveCache(cacheKey, { sections, generatedAt });
 
   return NextResponse.json({
     data: {
-      tenant: {
-        key: tenant.key,
-        label: tenant.label,
-        baseHost: new URL(tenant.baseUrl).host,
-      },
-      generatedAt: new Date().toISOString(),
+      // Never leak the SAP host — return only the tenant identity the UI renders.
+      tenant: tenantIdentity,
+      generatedAt,
       sections,
+      fromCache: false,
     },
   });
 }
