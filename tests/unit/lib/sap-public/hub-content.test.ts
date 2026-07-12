@@ -223,8 +223,9 @@ describe("mergeStoredProbe — write only the tenant's key, preserve everything 
   it("adds probes[tenant] while keeping siblings, other tenants, and the legacy probe", () => {
     const raw = { source: "s", apiId: "A", probe: { http: 999 }, probes: { customizing: { http: 200 } } };
     const merged = mergeStoredProbe(raw, "development", { http: 403, at: "t", read: false, write: false });
-    expect((merged.probes as Record<string, { http: number }>).development.http).toBe(403);
-    expect((merged.probes as Record<string, { http: number }>).customizing.http).toBe(200); // untouched
+    const probes = merged.probes as { development: { http: number }; customizing: { http: number } };
+    expect(probes.development.http).toBe(403);
+    expect(probes.customizing.http).toBe(200); // untouched
     expect((merged.probe as { http: number }).http).toBe(999); // legacy untouched
     expect(merged.source).toBe("s");
     expect(merged.apiId).toBe("A");
@@ -232,7 +233,7 @@ describe("mergeStoredProbe — write only the tenant's key, preserve everything 
 
   it("starts a fresh probes map from null/empty raw", () => {
     const merged = mergeStoredProbe(null, "customizing", { http: 200 });
-    expect((merged.probes as Record<string, { http: number }>).customizing.http).toBe(200);
+    expect((merged.probes as { customizing: { http: number } }).customizing.http).toBe(200);
   });
 });
 

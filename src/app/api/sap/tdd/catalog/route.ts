@@ -29,12 +29,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       // The full product list (OData + Ariba) drives the product switcher.
       products: listProductSummaries(),
       product: { key: product.key, label: product.label, description: product.description },
+      // Identity only — never the SAP host.
       tenants: getConfiguredSapTenants(product.envPrefix).map((tenant) => ({
         key: tenant.key,
         label: tenant.label,
-        baseHost: new URL(tenant.baseUrl).host,
       })),
-      services: product.services,
+      // Only what the UI renders — the full OData `path` stays server-side (the
+      // client addresses a service by its key; the server resolves the path).
+      services: product.services.map((s) => ({ key: s.key, label: s.label, scenario: s.scenario, domain: s.domain })),
     },
   });
 }

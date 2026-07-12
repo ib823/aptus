@@ -55,10 +55,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       { status: 400 },
     );
   }
+  // The confirmation phrase is UX friction, not a secret — the client holds it as
+  // a constant. This unguarded GET returns only capability flags, nothing sensitive.
   return NextResponse.json({
     data: {
       enabled: isSapTddWriteEnabled(product.envPrefix),
-      confirmationPhrase: CONFIRMATION_PHRASE,
       writeSecretRequired: getSapTddWriteSecretRequired(product.envPrefix),
     },
   });
