@@ -17,6 +17,10 @@ import { resolveScreenGuide, screenGuideById, glossaryEntry } from "@/lib/learn/
 import { useAffirmLearn } from "./context";
 
 const dismissKey = (id: string) => `affirm-guide-dismissed:${id}`;
+// Marks that the guide has been shown expanded at least once. After the first
+// visit it defaults to the collapsed chip so returning users aren't re-lectured;
+// the chip still reopens it on demand.
+const seenKey = (id: string) => `affirm-guide-seen:${id}`;
 
 /**
  * Renders the page-level guide by path, or — when an explicit `id` is passed —
@@ -33,13 +37,18 @@ export function ScreenGuide({ id }: { id?: string } = {}) {
   useEffect(() => {
     setHydrated(true);
     if (!guide) return;
-    let d = false;
+    let collapsed = false;
     try {
-      d = localStorage.getItem(dismissKey(guide.id)) === "1";
+      // Collapse if explicitly hidden OR already seen on a prior visit — the guide
+      // shows expanded only on the very first visit, then defaults to the chip.
+      const dismissed = localStorage.getItem(dismissKey(guide.id)) === "1";
+      const seen = localStorage.getItem(seenKey(guide.id)) === "1";
+      collapsed = dismissed || seen;
+      if (!seen) localStorage.setItem(seenKey(guide.id), "1");
     } catch {
       /* ignore */
     }
-    setDismissed(d);
+    setDismissed(collapsed);
   }, [guide]);
 
   if (!guide || !hydrated) return null;

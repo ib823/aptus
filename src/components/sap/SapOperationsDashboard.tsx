@@ -39,6 +39,8 @@ interface OperationSection {
   scenario: string;
   entitySet: string;
   ok: boolean;
+  /** 200-reachable but zero rows on this tenant → amber, not green. */
+  empty?: boolean;
   status: number;
   durationMs: number;
   rowCount: number;
@@ -90,8 +92,14 @@ export function SapOperationsDashboard({ product = "s4hana" }: { product?: strin
   const [error, setError] = useState<string | null>(null);
 
   const selectedTenant = tenants.find((tenant) => tenant.key === tenantKey);
-  const healthySections = useMemo(
-    () => sections.filter((section) => section.ok).length,
+  // Two honest tallies: sections returning data (green) vs reachable-but-empty
+  // (amber, 200 with 0 rows). Empty reads are NOT counted as "returning data".
+  const withDataSections = useMemo(
+    () => sections.filter((section) => section.ok && !section.empty).length,
+    [sections],
+  );
+  const emptySections = useMemo(
+    () => sections.filter((section) => section.ok && section.empty).length,
     [sections],
   );
 
@@ -213,7 +221,7 @@ export function SapOperationsDashboard({ product = "s4hana" }: { product?: strin
                 {sectionIcon(section.key)}
                 <span className="truncate">{section.title}</span>
               </div>
-              <HttpStatusPill tone={httpTone(section.ok)} label={section.status ? String(section.status) : "error"} />
+              <HttpStatusPill tone={httpTone(section.ok, section.empty)} label={section.empty ? "no data" : section.status ? String(section.status) : "error"} />
             </div>
             <div className="mt-3 text-2xl font-semibold" style={{ color: "var(--brand-navy)" }}>{section.rowCount}</div>
             <div className="mt-1 text-xs" style={{ color: "var(--ink-muted)" }}>sample rows</div>
@@ -230,11 +238,16 @@ export function SapOperationsDashboard({ product = "s4hana" }: { product?: strin
       </div>
 
       {sections.length > 0 && (
-        <div className="flex items-center gap-2 text-sm" style={{ color: "var(--ink-secondary)" }}>
+        <div className="flex flex-wrap items-center gap-2 text-sm" style={{ color: "var(--ink-secondary)" }}>
           <CheckCircle2 className="size-4" style={{ color: "var(--status-signed-fg)" }} />
           <span>
-            {healthySections}/{sections.length} SAP reads available
+            {withDataSections}/{sections.length} SAP reads returning data
           </span>
+          {emptySections > 0 && (
+            <span style={{ color: "var(--status-awaiting-fg)" }}>
+              · {emptySections} reachable, no data
+            </span>
+          )}
         </div>
       )}
 
@@ -248,7 +261,7 @@ export function SapOperationsDashboard({ product = "s4hana" }: { product?: strin
                   {section.scenario} / {section.entitySet}
                 </p>
               </div>
-              <HttpStatusPill tone={httpTone(section.ok)} label={section.status ? `HTTP ${section.status}` : "error"} />
+              <HttpStatusPill tone={httpTone(section.ok, section.empty)} label={section.empty ? `HTTP ${section.status} · no data` : section.status ? `HTTP ${section.status}` : "error"} />
             </div>
 
             {section.error ? (

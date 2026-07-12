@@ -60,4 +60,20 @@ describe("SapCapabilityCatalogue (CatalogueList) smoke", () => {
     // No hardcoded hex leaked into the rendered markup.
     expect(container.innerHTML).not.toMatch(/#[0-9a-fA-F]{6}/);
   });
+
+  it("faceted status toolbar shows counts and hides empty facets (but not Not-probeable)", async () => {
+    render(<SapCapabilityCatalogue product="s4hana" />);
+
+    // Not-probeable (~470) is always surfaced WITH its count — never hidden.
+    const notProbeable = await screen.findByRole("tab", { name: /Not probeable/i });
+    expect(notProbeable.textContent).toMatch(/470/);
+
+    // ALL facet shows the edition-wide total (sum of byStatus = 941).
+    const all = screen.getByRole("tab", { name: /^All/i });
+    expect(all.textContent).toMatch(/941/);
+
+    // Zero-count facets (AVAILABLE:0, REFERENCE:0) are decluttered away.
+    expect(screen.queryByRole("tab", { name: /Available/i })).toBeNull();
+    expect(screen.queryByRole("tab", { name: /Reference/i })).toBeNull();
+  });
 });

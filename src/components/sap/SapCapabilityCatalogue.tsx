@@ -50,7 +50,10 @@ interface HubData {
 }
 
 type StatusFilter = "ALL" | HubStatus;
-const STATUS_FILTERS: StatusFilter[] = ["ALL", "ACTIVATED", "NEEDS_SETUP", "NOT_CHECKED", "NOT_PROBEABLE", "REFERENCE"];
+// Full faceted set. Each facet renders only when it has rows (or is selected),
+// so empty statuses stay out of the way — but NOT_PROBEABLE (~470) always shows
+// its count and is never hidden. Counts come from the edition-wide byStatus.
+const STATUS_FILTERS: StatusFilter[] = ["ALL", "ACTIVATED", "NEEDS_SETUP", "NOT_CHECKED", "NOT_PROBEABLE", "NOT_FOUND", "AVAILABLE", "REFERENCE"];
 const STATUS_LABEL: Record<StatusFilter, string> = {
   ALL: "All",
   ACTIVATED: "Activated",
@@ -80,6 +83,25 @@ function statusHint(status: BadgeStatus): { text: string; color: string } | null
     default:
       return null;
   }
+}
+
+/** A tiny coverage-tile swatch for the legend: filled = Loaded, outline = Not loaded. */
+function LegendSwatch({ filled, label }: { filled?: boolean; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5" style={{ color: "var(--ink-secondary)" }}>
+      <span
+        aria-hidden
+        style={{
+          width: 12,
+          height: 12,
+          borderRadius: 3,
+          background: filled ? "var(--brand-navy)" : "var(--surface-cream)",
+          border: filled ? "1px solid var(--brand-navy)" : "1px solid var(--border-default)",
+        }}
+      />
+      {label}
+    </span>
+  );
 }
 
 function groupByLoB(items: HubItem[]): Array<[string, HubItem[]]> {
@@ -202,6 +224,9 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
     AVAILABLE: 0,
     REFERENCE: 0,
   };
+  // Edition-wide total for the ALL facet (byStatus is computed over every row,
+  // independent of the active contentType/search/status filters).
+  const allCount = Object.values(byStatus).reduce((sum, n) => sum + n, 0);
   const probeable = data?.counts.probeableRuntime ?? 0;
   const probed = data?.counts.probed ?? 0;
   const lastProbedAt = data?.counts.lastProbedAt ?? null;
@@ -293,12 +318,32 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
               lastProbedAt={lastProbedAt}
             />
           </div>
-          {/* Two-axis legend: COVERAGE (tiles) vs TENANT STATUS (badges). */}
-          <p className="text-xs" style={{ color: "var(--ink-muted)" }}>
-            <strong style={{ color: "var(--ink-secondary)" }}>Two axes.</strong>{" "}
-            <strong style={{ color: "var(--ink-secondary)" }}>Coverage</strong> (tiles): Loaded / Not loaded — have we imported SAP&apos;s published list for a type.{" "}
-            <strong style={{ color: "var(--ink-secondary)" }}>Tenant status</strong> (badges): Activated · Needs setup · Not found · Not checked · Not probeable · Available · Reference — whether a specific item is live on this tenant. Tiles never make a tenant claim; badges never claim coverage.
-          </p>
+          {/* Compact visual two-axis legend: COVERAGE (tiles) vs TENANT STATUS (badges). */}
+          <div
+            className="flex flex-col gap-2 rounded-[var(--radius-input)] px-3 py-2.5 text-xs"
+            style={{ background: "var(--surface-paper)", border: "1px solid var(--border-default)" }}
+          >
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+              <span className="font-semibold uppercase tracking-wide" style={{ color: "var(--ink-secondary)" }}>Coverage</span>
+              <span style={{ color: "var(--ink-muted)" }}>tiles —</span>
+              <LegendSwatch filled label="Loaded" />
+              <LegendSwatch label="Not loaded" />
+              <span style={{ color: "var(--ink-muted)" }}>have we imported SAP&apos;s published list for a type</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+              <span className="font-semibold uppercase tracking-wide" style={{ color: "var(--ink-secondary)" }}>Tenant status</span>
+              <span style={{ color: "var(--ink-muted)" }}>badges —</span>
+              <StatusBadge status="ACTIVATED" />
+              <StatusBadge status="NEEDS_SETUP" />
+              <StatusBadge status="NOT_CHECKED" />
+              <StatusBadge status="NOT_PROBEABLE" />
+              <StatusBadge status="REFERENCE" />
+              <span style={{ color: "var(--ink-muted)" }}>whether an item is live on this tenant</span>
+            </div>
+            <p style={{ color: "var(--ink-muted)" }}>
+              Tiles never make a tenant claim; badges never claim coverage. A badge asserts only what a probe established.
+            </p>
+          </div>
           <div data-tour="sap-tiles">
             <ContentTypeTiles byType={byType} activeType={contentType} onSelect={setContentType} />
           </div>
@@ -308,6 +353,10 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
             <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Status filter" data-tour="sap-filters">
               {STATUS_FILTERS.map((s) => {
                 const selected = status === s;
+                const count = s === "ALL" ? allCount : byStatus[s];
+                // Hide empty facets to declutter — but never hide the selected one,
+                // and ALL is always shown. Non-empty facets (incl. Not-probeable) stay.
+                if (s !== "ALL" && count === 0 && !selected) return null;
                 return (
                   <button
                     key={s}
@@ -315,7 +364,7 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
                     role="tab"
                     aria-selected={selected}
                     onClick={() => setStatus(s)}
-                    className="rounded-[var(--radius-pill)] px-3 py-1 text-xs font-medium transition"
+                    className="inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] px-3 py-1 text-xs font-medium transition"
                     style={
                       selected
                         ? { background: "var(--brand-navy)", color: "var(--surface-paper)" }
@@ -323,6 +372,12 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
                     }
                   >
                     {STATUS_LABEL[s]}
+                    <span
+                      className="tabular-nums"
+                      style={{ color: selected ? "var(--surface-paper)" : "var(--ink-muted)", opacity: selected ? 0.85 : 1 }}
+                    >
+                      {count.toLocaleString()}
+                    </span>
                   </button>
                 );
               })}
