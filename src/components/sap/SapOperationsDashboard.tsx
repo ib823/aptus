@@ -272,7 +272,7 @@ export function SapOperationsDashboard({ product = "s4hana" }: { product?: strin
                   <thead className="text-left text-xs" style={{ background: "var(--surface-ink-tint)", color: "var(--ink-muted)" }}>
                     <tr>
                       {section.fields.map((field) => (
-                        <th key={field} className="px-3 py-2 font-medium">
+                        <th key={field} scope="col" className="px-3 py-2 font-medium">
                           {field}
                         </th>
                       ))}

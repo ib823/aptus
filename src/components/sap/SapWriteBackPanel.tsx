@@ -90,6 +90,7 @@ export function SapWriteBackPanel({ product = "s4hana" }: { product?: string }) 
   const [error, setError] = useState<string | null>(null);
 
   const selectedService = services.find((service) => service.key === serviceKey);
+  const selectedTenant = tenants.find((tenant) => tenant.key === tenantKey);
   const parsedPayload = useMemo(() => {
     try {
       const parsed = JSON.parse(payload) as unknown;
@@ -218,6 +219,24 @@ export function SapWriteBackPanel({ product = "s4hana" }: { product?: string }) 
           </div>
         )}
 
+        {/* Standing destructive framing + the unmistakable active write target.
+            This is a real, persisted write to the selected SAP TDD tenant — not
+            a sandbox — so the target tenant is stated in full, in danger tone. */}
+        {enabled && (
+          <div
+            role="note"
+            className="flex items-start gap-2 rounded-[var(--radius-input)] border px-3 py-2 text-sm"
+            style={{ background: "var(--status-revoked-bg)", borderColor: "var(--status-revoked-fg)", color: "var(--status-revoked-fg)" }}
+          >
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <span>
+              <strong>Live write.</strong> Creating a record persists it to the real SAP TDD tenant{" "}
+              <strong>{selectedTenant?.label ?? "— no tenant selected"}</strong>
+              {selectedService ? <> · {selectedService.label}</> : null}. This cannot be undone from here.
+            </span>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
           <label className="space-y-1.5">
             <span className="text-xs font-medium" style={{ color: "var(--ink-secondary)" }}>Tenant</span>
@@ -310,7 +329,7 @@ export function SapWriteBackPanel({ product = "s4hana" }: { product?: string }) 
             }
           >
             <SendHorizontal />
-            {loading ? "Posting" : "Post to SAP"}
+            {loading ? "Creating…" : "Create record"}
           </Button>
         </div>
 
