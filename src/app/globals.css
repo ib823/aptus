@@ -20,6 +20,7 @@
   --color-navy:           var(--brand-navy);
   --color-navy-hover:     var(--brand-navy-hover);
   --color-navy-soft:      var(--brand-navy-soft);
+  --color-navy-border:    var(--brand-navy-border);
   --color-cta:            var(--cta-red);
   --color-cta-hover:      var(--cta-red-hover);
   --color-cta-focus:      var(--cta-red-focus);
@@ -50,6 +51,7 @@
 
   --radius-input: 8px;
   --radius-card-warm: 12px;
+  --radius-step: 10px;
   --radius-pill: 9999px;
 
   --shadow-card-warm:       0 1px 2px rgba(20,20,20,0.04), 0 1px 0 rgba(20,20,20,0.02);
@@ -118,6 +120,7 @@
   --brand-navy:         #002B5C;
   --brand-navy-hover:   #001E40;
   --brand-navy-soft:    #E6EBF1;
+  --brand-navy-border:  #CFD7E0;
   --cta-red:            #C8102E;
   --cta-red-hover:      #A30D26;
   --cta-red-focus:      #FBE9EC;

@@ -53,7 +53,9 @@ export function GuestAffirmCards({
     return seed;
   });
   const [verbatimOpen, setVerbatimOpen] = useState<Record<string, boolean>>({});
-  const [touched, setTouched] = useState<Set<string>>(new Set());
+  const [touched, setTouched] = useState<Set<string>>(
+    () => new Set(initialAnswers.map((a) => a.questionId)),
+  );
 
   const answeredCount = useMemo(() => touched.size, [touched]);
 
@@ -142,6 +144,7 @@ export function GuestAffirmCards({
             flowRefs={[]}
             flows={NO_FLOWS}
             scopeDescriptions={NO_SCOPE_DESC}
+            saved={!readOnly && touched.has(q.id)}
           />
         ) : (
           <DecisionCard
@@ -159,6 +162,7 @@ export function GuestAffirmCards({
             flows={NO_FLOWS}
             scopeDescriptions={NO_SCOPE_DESC}
             calibratedNotes={CALIBRATED_NOTES}
+            saved={!readOnly && touched.has(q.id)}
           />
         );
       })}
