@@ -1529,10 +1529,11 @@ model User {
   presalesAuditActions   PresalesAuditEvent[]  @relation("PresalesAuditActions")
 
   // ABeam Workbench — Value-Stream Affirm-Set (CCC build, 2026-05-22)
-  affirmBundlesCreated   AffirmBundle[]   @relation("AffirmBundlesCreated")
-  affirmBundlesReleased  AffirmBundle[]   @relation("AffirmBundlesReleased")
-  affirmEventsByUser     AffirmEvent[]    @relation("AffirmEventsByUser")
-  affirmQuestionsCreated AffirmQuestion[] @relation("AffirmQuestionsCreated")
+  affirmBundlesCreated   AffirmBundle[]      @relation("AffirmBundlesCreated")
+  affirmBundlesReleased  AffirmBundle[]      @relation("AffirmBundlesReleased")
+  affirmEventsByUser     AffirmEvent[]       @relation("AffirmEventsByUser")
+  affirmQuestionsCreated AffirmQuestion[]    @relation("AffirmQuestionsCreated")
+  affirmGrantsRevoked    AffirmAccessGrant[] @relation("AffirmGrantsRevoked")
 
   @@index([role])
   @@index([organizationId])
@@ -4079,6 +4080,11 @@ model AffirmBundle {
   responses  AffirmResponse[]
   events     AffirmEvent[]
 
+  // External executive journey (PR-1 guest infrastructure). Per-executive
+  // token grants scoped to value streams. Guest sessions hang off the grant,
+  // not the bundle directly.
+  grants AffirmAccessGrant[]
+
   @@index([state])
   @@index([createdAt])
 }
@@ -4160,6 +4166,92 @@ model AffirmEvent {
 
   @@index([bundleId, createdAt])
   @@index([type, createdAt])
+}
+
+// =============================================================
+// ABeam Workbench — Affirm External Executive Journey (PR-1, 2026-07-15)
+// =============================================================
+// Token + OTP guest surface for the Affirm flow, mirroring the presales
+// guest stack (PresalesAccessGrant / PresalesSession) but on its own tables.
+// Each executive gets a personal token limited to assigned value streams
+// (CFO → finance streams, etc.). Attributable, auditable, fail-closed behind
+// AFFIRM_EXTERNAL_ENABLED. Guest-side AffirmEvent rows carry actorId=null and
+// payload.grantId (there is no User actor). Event-type vocabulary lives in
+// src/lib/affirm/external/events.ts (String column, no enum migration needed).
+
+/// One per-executive access grant. Raw token appears only in the invite URL;
+/// we store SHA-256(tokenHash). valueStreamIds scopes the persona (empty =
+/// all streams in the bundle). otpAttemptCount==5 → permanent lockout, which
+/// revokes the grant and alerts the bundle's consultant. Re-issue chains via
+/// supersededByGrantId.
+model AffirmAccessGrant {
+  id       String @id @default(cuid())
+  bundleId String
+
+  // Identity (the executive)
+  email       String
+  displayName String
+  roleLabel   String? // "CFO", "Head of SCM" — display only
+
+  // Token (the credential) — SHA-256 of the raw token; raw lives only in URL
+  tokenHash String @unique // 64 hex chars
+
+  // Persona scope: value streams this executive may see. Empty = all streams
+  // in the bundle. Filtered in getAffirmSetForGrant.
+  valueStreamIds String[]
+
+  // Legal acknowledgement (set on POST /a/[token]/redeem)
+  ackAt       DateTime?
+  pdpaVersion String?
+
+  // OTP gate. otpAttemptCount==5 → permanent lockout.
+  otpHash             String?
+  otpExpiresAt        DateTime?
+  otpAttemptCount     Int       @default(0)
+  // Per-device verification: sha256(normalized UA) values that cleared OTP.
+  otpVerifiedUaHashes String[]
+
+  // Access tracking
+  lastAccessAt DateTime?
+
+  // Lifecycle
+  revokedAt           DateTime?
+  revokedById         String? // FK to User (consultant who revoked)
+  supersededByGrantId String? // chain to a fresh re-issued grant
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bundle       AffirmBundle         @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  revoker      User?                @relation("AffirmGrantsRevoked", fields: [revokedById], references: [id])
+  supersededBy AffirmAccessGrant?   @relation("AffirmGrantSupersession", fields: [supersededByGrantId], references: [id])
+  supersedes   AffirmAccessGrant[]  @relation("AffirmGrantSupersession")
+  sessions     AffirmGuestSession[]
+
+  @@index([bundleId])
+  @@index([email])
+}
+
+/// Short-lived guest cookie session for the Affirm external surface. NOT
+/// NextAuth. Cookie scope: Path=/a, SameSite=Strict, HttpOnly. 8h absolute,
+/// 60min sliding idle. The cookie carries the opaque tokenHash (PK-style
+/// random id); lookup is by tokenHash.
+model AffirmGuestSession {
+  id      String @id @default(cuid())
+  grantId String
+
+  tokenHash String @unique // sha256 of the opaque session token in the cookie
+  uaHash    String
+
+  createdAt   DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  endedAt     DateTime?
+  // expired | idle | logout | ended_by_consultant | bundle_state_change | superseded
+  endedReason String?
+
+  grant AffirmAccessGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@index([grantId])
 }
 
 // =============================================================
