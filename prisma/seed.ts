@@ -14,6 +14,7 @@ import { PrismaClient } from "@prisma/client";
 import { seedConversationTemplates } from "./seeds/conversation-templates";
 import { seedValueStream } from "./seeds/value-stream";
 import { seedProcessFlow } from "./seeds/value-stream/process-flow";
+import { seedChapters } from "./seeds/value-stream/chapters";
 
 const prisma = new PrismaClient();
 
@@ -33,6 +34,11 @@ async function main(): Promise<void> {
   const pf = await seedProcessFlow(prisma);
   console.log(
     `[seed] process flow (MY 2602): ${pf.flows} flows, ${pf.steps} steps`,
+  );
+
+  const ch = await seedChapters(prisma);
+  console.log(
+    `[seed] affirm chapters: ${ch.items} items, ${ch.chapters} chapters, ${ch.reviewed} reviewed`,
   );
 
   console.log("[seed] done");

@@ -1,0 +1,2492 @@
+{
+  "streamId": "source-to-pay",
+  "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+  "itemCount": 38,
+  "items": [
+    {
+      "scopeItemId": "18J",
+      "description": "Requisitioning",
+      "reviewed": false,
+      "story": {
+        "headline": "How requisitioning runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create purchase request",
+          "summary": "The team create purchase request.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Approve purchase request",
+          "summary": "The team approve purchase request.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "My Inbox - All Items"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Change purchase request",
+          "summary": "The team change purchase request.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Purchase Requisitions - Professional"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Convert purchase request to purchase order",
+          "summary": "The team convert purchase request to purchase order.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Process Purchase Requisitions"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Approve purchase order",
+          "summary": "The team approve purchase order.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "My Inbox - All Items"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Change purchase order",
+          "summary": "The team change purchase order.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Manage Purchase Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Confirm Receipt of Goods",
+          "summary": "The team confirm receipt of goods.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Confirm Receipt of Goods"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Create supplier invoice",
+          "summary": "The team create supplier invoice.",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [
+            "Create Supplier Invoice"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 9,
+          "title": "Purchase request with Reservation",
+          "summary": "The team purchase request with reservation.",
+          "stepStart": 9,
+          "stepEnd": 9,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "19E",
+      "description": "Supplier Classification and Segmentation",
+      "reviewed": false,
+      "story": {
+        "headline": "How supplier classification and segmentation runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Purchasing Categories",
+          "summary": "The team create purchasing categories.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Purchasing Categories"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Manage Purchasing Categories",
+          "summary": "The team manage purchasing categories.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Manage Purchasing Categories"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "1XF",
+      "description": "Request for Price",
+      "reviewed": false,
+      "story": {
+        "headline": "How request for price runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Price Request",
+          "summary": "The team create price request.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage RFQs"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Supplier Quotation",
+          "summary": "The team create supplier quotation.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Manage RFQs"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Compare and Award Supplier Quotation",
+          "summary": "The team compare and award supplier quotation.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Compare Supplier Quotations"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Create Follow-on Documents",
+          "summary": "The team create follow-on documents.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Manage Supplier Quotations"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "22Z",
+      "description": "Procurement of Services",
+      "reviewed": false,
+      "story": {
+        "headline": "How procurement of services runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Standard Procurement of Service",
+          "summary": "The team standard procurement of service.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Multiple Account Assignment for Procurement of Services",
+          "summary": "The team multiple account assignment for procurement of services.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Automatic purchase order create from purchase request",
+          "summary": "The team automatic purchase order create from purchase request.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Employee Self Services Procurement",
+          "summary": "The team employee self services procurement.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2EJ",
+      "description": "Integration of Procurement with External Suppliers",
+      "reviewed": false,
+      "story": {
+        "headline": "How integration of procurement with external suppliers runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "SAP S/4HANA Cloud Public Edition to SAP S/4HANA Cloud Public Edition Integration",
+          "summary": "The team sap s/4hana cloud public edition to sap s/4hana cloud public edition integration.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2LG",
+      "description": "Supplier Consignment",
+      "reviewed": false,
+      "story": {
+        "headline": "How supplier consignment runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create purchase order",
+          "summary": "The team create purchase order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Purchase Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Post goods receipt",
+          "summary": "The team post goods receipt.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Post Goods Receipt for Purchasing Document"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Transfer Stock",
+          "summary": "The team transfer stock.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Transfer Stock - In-Plant"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Invoice Receipt from Consignment Withdrawal",
+          "summary": "The team invoice receipt from consignment withdrawal.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2LH",
+      "description": "Automated Invoice Settlement",
+      "reviewed": false,
+      "story": {
+        "headline": "How automated invoice settlement runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create purchase order",
+          "summary": "The team create purchase order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Purchase Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Post goods receipt",
+          "summary": "The team post goods receipt.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Post Goods Receipt for Purchasing Document"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Execute Evaluated Receipt Settlement",
+          "summary": "The team execute evaluated receipt settlement.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Schedule Supplier Invoice Jobs - Advanced"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2ME",
+      "description": "Central Purchase Contracts",
+      "reviewed": false,
+      "story": {
+        "headline": "How central purchase contracts runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Central Purchase Contracts",
+          "summary": "The team central purchase contracts.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Mass Changes to Central Purchase Contracts",
+          "summary": "The team mass changes to central purchase contracts.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Mass Changes to Central Purchase Contracts"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Price History for Central Purchase Contract Items",
+          "summary": "The team price history for central purchase contract items.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Hierarchy Central Contracts",
+          "summary": "The team hierarchy central contracts.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Versioning of Central Purchase Contracts",
+          "summary": "The team versioning of central purchase contracts.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2NV",
+      "description": "Guided Buying Capability with SAP Ariba Buying",
+      "reviewed": false,
+      "story": {
+        "headline": "How guided buying capability with sap ariba buying runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Shopping Cart",
+          "summary": "Covers create shopping cart and create purchase request.",
+          "stepStart": 1,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Display Purchase Requisitions"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Approve Shopping Cart",
+          "summary": "Covers approve shopping cart and update purchase request.",
+          "stepStart": 3,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Display Purchase Requisitions"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create Reservation (Automated)",
+          "summary": "The team create reservation (automated).",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Display Shopping Cart",
+          "summary": "The team display shopping cart.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Post Goods Movement",
+          "summary": "The team post goods movement.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Post Goods Movement"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Create purchase order (Automated)",
+          "summary": "The team create purchase order (automated).",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Create Service Entry Sheet",
+          "summary": "The team create service entry sheet.",
+          "stepStart": 9,
+          "stepEnd": 9,
+          "roles": [],
+          "fioriApps": [
+            "Manage Service Entry Sheets - Lean Services"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Post goods receipt",
+          "summary": "The team post goods receipt.",
+          "stepStart": 10,
+          "stepEnd": 10,
+          "roles": [],
+          "fioriApps": [
+            "Post Goods Receipt for Purchasing Document"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 9,
+          "title": "Create supplier invoice",
+          "summary": "The team create supplier invoice.",
+          "stepStart": 11,
+          "stepEnd": 11,
+          "roles": [],
+          "fioriApps": [
+            "Create Supplier Invoice"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2NX",
+      "description": "Scheduling Agreement for Subcontracting Procurement",
+      "reviewed": false,
+      "story": {
+        "headline": "How scheduling agreement for subcontracting procurement runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Part 1: Scheduling Agreement for Subcontracting without Serial Number Management",
+          "summary": "The team part 1: scheduling agreement for subcontracting without serial number management.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Part 2: Scheduling Agreement for Subcontracting with Serial Number Management",
+          "summary": "The team part 2: scheduling agreement for subcontracting with serial number management.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2NY",
+      "description": "Scheduling Agreement for Consignment Procurement",
+      "reviewed": false,
+      "story": {
+        "headline": "How scheduling agreement for consignment procurement runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create purchase request",
+          "summary": "The team create purchase request.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Create Purchase Requisition - Advanced"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Convert purchase request to Scheduling Agreement",
+          "summary": "The team convert purchase request to scheduling agreement.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Create Scheduling Agreement"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create Scheduling Agreement",
+          "summary": "The team create scheduling agreement.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Purchase Scheduling Agreements"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Set up Delivery Schedule",
+          "summary": "The team set up delivery schedule.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Manage Purchase Scheduling Agreements"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Print Scheduling Agreement",
+          "summary": "The team print scheduling agreement.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Manage Purchase Scheduling Agreements"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Evaluate the Stock/Requirement Situation",
+          "summary": "The team evaluate the stock/requirement situation.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Manage Material Coverage",
+            "Monitor Material Coverage - Net / Individual Segments"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Post goods receipt",
+          "summary": "The team post goods receipt.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Post Goods Receipt for Purchasing Document"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Transfer post from Vendor Consigned Stock to Own Stock",
+          "summary": "The team transfer post from vendor consigned stock to own stock.",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [
+            "Transfer Stock - In-Plant"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 9,
+          "title": "Invoice Receipt from Consignment Withdrawal",
+          "summary": "The team invoice receipt from consignment withdrawal.",
+          "stepStart": 9,
+          "stepEnd": 9,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2R3",
+      "description": "Cross-Company Purchasing Organization",
+      "reviewed": false,
+      "story": {
+        "headline": "How cross-company purchasing organization runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Cross-Company Code Purchasing within a Single Country",
+          "summary": "The team cross-company code purchasing within a single country.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Cross-Company Code Purchasing across Countries",
+          "summary": "The team cross-company code purchasing across countries.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2R7",
+      "description": "Purchasing Rebate Processing",
+      "reviewed": false,
+      "story": {
+        "headline": "How purchasing rebate processing runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Goods Related A/P Settlement Based on Supplier Invoices",
+          "summary": "The team goods related a/p settlement based on supplier invoices.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Service Related A/R Settlement Based on Supplier Invoices",
+          "summary": "The team service related a/r settlement based on supplier invoices.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "A/P and A/R Settlement Based on GR Material Documents",
+          "summary": "The team a/p and a/r settlement based on gr material documents.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Two-Step handle for Settlement",
+          "summary": "The team two-step handle for settlement.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Purchasing Rebate handle with Workflow",
+          "summary": "The team purchasing rebate handle with workflow.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Purchase Rebate handle with Graduated Scale Determination",
+          "summary": "The team purchase rebate handle with graduated scale determination.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Purchasing Rebate handle – Fixed Amount Agreements",
+          "summary": "The team purchasing rebate handle – fixed amount agreements.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Purchase Rebate handle with Different Bases for Rebate Calculation and Scale Determination",
+          "summary": "The team purchase rebate handle with different bases for rebate calculation and scale determination.",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2TS",
+      "description": "Intercompany Stock Transfer Returns",
+      "reviewed": false,
+      "story": {
+        "headline": "How intercompany stock transfer returns runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Domestic",
+          "summary": "The team domestic.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "International",
+          "summary": "The team international.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2TW",
+      "description": "Complementary Procurement Functions",
+      "reviewed": false,
+      "story": {
+        "headline": "How complementary procurement functions runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Procurement of Operating Supply Material",
+          "summary": "The team procurement of operating supply material.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Procurement of Batch Management Material",
+          "summary": "The team procurement of batch management material.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Procurement of Serial Number Management Material",
+          "summary": "The team procurement of serial number management material.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2TX",
+      "description": "Direct Procurement with Inbound Delivery",
+      "reviewed": false,
+      "story": {
+        "headline": "How direct procurement with inbound delivery runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create purchase order Manually",
+          "summary": "The team create purchase order manually.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Monitor Confirmation/Situation",
+          "summary": "The team monitor confirmation/situation.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create Inbound Deliveries",
+          "summary": "The team create inbound deliveries.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Confirm Quantities for Putaway",
+          "summary": "The team confirm quantities for putaway.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Inbound Deliveries for Putaway"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Post goods receipt for Inbound Delivery",
+          "summary": "The team post goods receipt for inbound delivery.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Create supplier invoice",
+          "summary": "The team create supplier invoice.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2XU",
+      "description": "Procurement of Materials with Variant Configuration",
+      "reviewed": false,
+      "story": {
+        "headline": "How procurement of materials with variant configuration runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Purchase Orders",
+          "summary": "The team create purchase orders.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Post goods receipt",
+          "summary": "The team post goods receipt.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Post Goods Movement"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create supplier invoice",
+          "summary": "The team create supplier invoice.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Create Supplier Invoice"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "41F",
+      "description": "Procurement of Pipeline Materials",
+      "reviewed": false,
+      "story": {
+        "headline": "How procurement of pipeline materials runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Purchasing Info Record",
+          "summary": "The team create purchasing info record.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Purchasing Info Records"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Record Consumption",
+          "summary": "The team record consumption.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Post Goods Movement"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Invoice Receipt from Pipeline Withdrawal",
+          "summary": "The team invoice receipt from pipeline withdrawal.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "42K",
+      "description": "Automation of Source-to-Pay with SAP Business Network",
+      "reviewed": false,
+      "story": {
+        "headline": "How automation of source-to-pay with sap business network runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Material Procurement",
+          "summary": "The team material procurement.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Service Procurement",
+          "summary": "The team service procurement.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Enhanced Limit purchase order",
+          "summary": "The team enhanced limit purchase order.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Discount Management",
+          "summary": "The team discount management.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Quick Enablement of Suppliers",
+          "summary": "Covers quick enablement of suppliers and quick enablement of suppliers through quote automation.",
+          "stepStart": 5,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Material Procurement with Evaluated Receipt Settlement",
+          "summary": "The team material procurement with evaluated receipt settlement.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "4AZ",
+      "description": "Contract Management with SAP Ariba Contracts",
+      "reviewed": false,
+      "story": {
+        "headline": "How contract management with sap ariba contracts runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Contract or Scheduling Agreement in SAP Ariba Contracts",
+          "summary": "The team create contract or scheduling agreement in sap ariba contracts.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Review Contract in SAP S/4HANA Cloud Public Edition",
+          "summary": "The team review contract in sap s/4hana cloud public edition.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Manage Purchase Contracts (Version 2)"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Check Updated Contract ID or Scheduling Agreement ID in SAP Ariba Contracts",
+          "summary": "The team check updated contract id or scheduling agreement id in sap ariba contracts.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "4BL",
+      "description": "Sourcing with SAP Ariba Sourcing",
+      "reviewed": false,
+      "story": {
+        "headline": "How sourcing with sap ariba sourcing runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Request for Quotation",
+          "summary": "The team create request for quotation.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage RFQs"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Sourcing with SAP Ariba Guided Sourcing UI",
+          "summary": "Covers sourcing with sap ariba guided sourcing ui and sourcing with sap ariba classic sourcing ui.",
+          "stepStart": 2,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Display Automatically Created Supplier Quotation from Award",
+          "summary": "The team display automatically created supplier quotation from award.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Manage Supplier Quotations"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Display Automatically Created purchase order",
+          "summary": "The team display automatically created purchase order.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Manage RFQs"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "5FM",
+      "description": "Procurement for Retail",
+      "reviewed": false,
+      "story": {
+        "headline": "How procurement for retail runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create purchase order Directly",
+          "summary": "The team create purchase order directly.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Create Purchase Order - Advanced"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create purchase order with Reference to purchase request",
+          "summary": "The team create purchase order with reference to purchase request.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Monitor purchase order",
+          "summary": "The team monitor purchase order.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Message Determination",
+          "summary": "The team message determination.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Quantity Optimization in purchase order",
+          "summary": "The team quantity optimization in purchase order.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "5FN",
+      "description": "Invoice Verification for Retail",
+      "reviewed": false,
+      "story": {
+        "headline": "How invoice verification for retail runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create supplier invoice using purchase order",
+          "summary": "The team create supplier invoice using purchase order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Create Supplier Invoice - Advanced"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Display supplier invoice",
+          "summary": "The team display supplier invoice.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Display Supplier Invoice - Advanced"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create supplier invoice using purchase order with Freight Condition",
+          "summary": "The team create supplier invoice using purchase order with freight condition.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Create Supplier Invoice - Advanced"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Create Invoice Verification in Background",
+          "summary": "Covers create invoice verification in background and create supplier invoice using api.",
+          "stepStart": 4,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "5FO",
+      "description": "Returns to Supplier for Retail",
+      "reviewed": false,
+      "story": {
+        "headline": "How returns to supplier for retail runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Returns purchase order",
+          "summary": "The team create returns purchase order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Create Purchase Order - Advanced"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Monitor Returns purchase order",
+          "summary": "The team monitor returns purchase order.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Display Purchase Order - Advanced"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create Outbound Delivery",
+          "summary": "The team create outbound delivery.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "My Purchase Orders - Due for Delivery"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Pick and Post Goods Issue",
+          "summary": "The team pick and post goods issue.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Change Outbound Delivery"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Create Credit Memo (Option 1)",
+          "summary": "The team create credit memo (option 1).",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Create Supplier Invoice - Advanced"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Receive Replacement Material (Option 2)",
+          "summary": "The team receive replacement material (option 2).",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Receive Replacement Materials - From Vendor"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "5FY",
+      "description": "In-Store Purchase Order Management",
+      "reviewed": false,
+      "story": {
+        "headline": "How in-store purchase order management runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Review Order Proposals",
+          "summary": "The team review order proposals.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Order Products"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Receive Product - Standard",
+          "summary": "The team receive product - standard.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Receive Product - Trusted",
+          "summary": "The team receive product - trusted.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Receive Products"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "5OM",
+      "description": "Field Logistics Planning and Execution – Direct Procurement",
+      "reviewed": false,
+      "story": {
+        "headline": "How field logistics planning and execution – direct procurement runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Option A: Create a Maintenance Order",
+          "summary": "The team option a: create a maintenance order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Create Maintenance Order"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Option B: Create Project Demand",
+          "summary": "The team option b: create project demand.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create purchase order",
+          "summary": "The team create purchase order.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Receive Non-stock Items at Base",
+          "summary": "The team receive non-stock items at base.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Single Plant Setup",
+          "summary": "The team single plant setup.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Post Goods Issue and Initiate Transport",
+          "summary": "The team post goods issue and initiate transport.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Receive Non-stock Item at Remote",
+          "summary": "The team receive non-stock item at remote.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Process Return for Non-stock Items",
+          "summary": "The team process return for non-stock items.",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "5W3",
+      "description": "Procurement of Production Components – Consumer Products",
+      "reviewed": false,
+      "story": {
+        "headline": "How procurement of production components – consumer products runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Procurement of Stock Material with QM – Raw Material",
+          "summary": "The team procurement of stock material with qm – raw material.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Quality Inspection (goods receipt Inspection)",
+          "summary": "The team quality inspection (goods receipt inspection).",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Procurement of Stock Material without QM – Packaging",
+          "summary": "The team procurement of stock material without qm – packaging.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Evaluations",
+          "summary": "The team evaluations.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "5W4",
+      "description": "Subcontracting – Consumer Products",
+      "reviewed": false,
+      "story": {
+        "headline": "How subcontracting – consumer products runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Anonymous Forecast and MRP",
+          "summary": "The team anonymous forecast and mrp.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Subcontracting",
+          "summary": "The team subcontracting.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Quality Inspection",
+          "summary": "The team quality inspection.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Invoicing",
+          "summary": "The team invoicing.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Batch Traceability",
+          "summary": "The team batch traceability.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "6A6",
+      "description": "Vendor Performance – Consumer Products",
+      "reviewed": false,
+      "story": {
+        "headline": "How vendor performance – consumer products runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Supplier Evaluation Weighting and Scoring",
+          "summary": "The team create supplier evaluation weighting and scoring.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Supplier Evaluation Weighting and Scoring"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Sections and Questions in Question Library",
+          "summary": "The team create sections and questions in question library.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create Evaluation Questionnaire",
+          "summary": "The team create evaluation questionnaire.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Evaluation Questionnaires - Evaluation"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Create Group-Based Evaluation Template",
+          "summary": "The team create group-based evaluation template.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Manage Evaluation Templates - Evaluation"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Start Group-Based Evaluation",
+          "summary": "The team start group-based evaluation.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Manage Evaluation Templates - Evaluation"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Set up Evaluation Response as Appraiser",
+          "summary": "The team set up evaluation response as appraiser.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Evaluate Suppliers"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Display Scorecards",
+          "summary": "The team display scorecards.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Display Scorecards - Evaluation Questionnaires"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "71P",
+      "description": "Supplier Consignment for Retail",
+      "reviewed": false,
+      "story": {
+        "headline": "How supplier consignment for retail runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Master Data for Article for Consignment handle",
+          "summary": "Covers create master data for article for consignment handle and procurement from external supplier.",
+          "stepStart": 1,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Store Ordering from Distribution Center",
+          "summary": "The team store ordering from distribution center.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Transfer Data to Point-of-Sale (POS)",
+          "summary": "The team transfer data to point-of-sale (pos).",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Process Point of Sales(POS) Transactions",
+          "summary": "The team process point of sales(pos) transactions.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Invoice Receipt from Consignment Withdrawal",
+          "summary": "The team invoice receipt from consignment withdrawal.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Return From Stores",
+          "summary": "Covers return from stores and return to supplier.",
+          "stepStart": 7,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "In-Store Inventory Management",
+          "summary": "Covers in-store inventory management and in-store customer order management.",
+          "stepStart": 9,
+          "stepEnd": 10,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Omnichannel Order Fulfillment for Retail",
+          "summary": "The team omnichannel order fulfillment for retail.",
+          "stepStart": 11,
+          "stepEnd": 11,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 9,
+          "title": "Sales from Distribution Center",
+          "summary": "The team sales from distribution center.",
+          "stepStart": 12,
+          "stepEnd": 12,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BMD",
+      "description": "Purchase Contract",
+      "reviewed": false,
+      "story": {
+        "headline": "How purchase contract runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Purchase Contract handle",
+          "summary": "The team purchase contract handle.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Purchase Contract with Hierarchy Items handle",
+          "summary": "The team purchase contract with hierarchy items handle.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Versioning of Purchase Contracts",
+          "summary": "The team versioning of purchase contracts.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BMR",
+      "description": "Scheduling Agreements in Procurement",
+      "reviewed": false,
+      "story": {
+        "headline": "How scheduling agreements in procurement runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Scheduling agreement w/ Release doc for Standard Procurement",
+          "summary": "The team scheduling agreement w/ release doc for standard procurement.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Scheduling Agreement w/o Release doc for Standard Procurement",
+          "summary": "The team scheduling agreement w/o release doc for standard procurement.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Integration of Scheduling Agreement Procurement with External Suppliers",
+          "summary": "The team integration of scheduling agreement procurement with external suppliers.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BMY",
+      "description": "Subcontracting",
+      "reviewed": false,
+      "story": {
+        "headline": "How subcontracting runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Part 1: Subcontracting without Serial Number Management",
+          "summary": "The team part 1: subcontracting without serial number management.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Part 2: Subcontracting with Serial Number Management",
+          "summary": "The team part 2: subcontracting with serial number management.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BNX",
+      "description": "Consumable Purchasing",
+      "reviewed": false,
+      "story": {
+        "headline": "How consumable purchasing runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create purchase request",
+          "summary": "The team create purchase request.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Purchase Requisitions - Professional"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Convert purchase request to purchase order",
+          "summary": "The team convert purchase request to purchase order.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Process Purchase Requisitions"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create purchase order",
+          "summary": "The team create purchase order.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Purchase Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Post goods receipt",
+          "summary": "The team post goods receipt.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Post Goods Receipt for Purchasing Document"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Create supplier invoice",
+          "summary": "The team create supplier invoice.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Multiple Account Assignment for consumable purchasing",
+          "summary": "The team multiple account assignment for consumable purchasing.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Invoicing Plan for Consumable Purchasing",
+          "summary": "The team invoicing plan for consumable purchasing.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "J13",
+      "description": "Service and Material Procurement – Project-Based Services",
+      "reviewed": false,
+      "story": {
+        "headline": "How service and material procurement – project-based services runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Service Procurement",
+          "summary": "The team service procurement.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Third-Party Order handle",
+          "summary": "The team third-party order handle.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Procurement of Consumable Material",
+          "summary": "The team procurement of consumable material.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Purchase Document handle (Optional Steps)",
+          "summary": "The team purchase document handle (optional steps).",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "J45",
+      "description": "Procurement of Direct Materials",
+      "reviewed": false,
+      "story": {
+        "headline": "How procurement of direct materials runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Procurement of Stock Material",
+          "summary": "The team procurement of stock material.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Automatic purchase order create from purchase request",
+          "summary": "The team automatic purchase order create from purchase request.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "E-invoice submission",
+          "summary": "The team e-invoice submission.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "eDocument Cockpit"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "J82",
+      "description": "Automated Purchase-to-Pay with SAP Ariba Commerce Automation",
+      "reviewed": false,
+      "story": {
+        "headline": "How automated purchase-to-pay with sap ariba commerce automation runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Approve purchase order",
+          "summary": "The team approve purchase order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "My Inbox"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Display purchase order (as a Supplier in SAP Business Network for Procurement)",
+          "summary": "The team display purchase order (as a supplier in sap business network for procurement).",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Set Up the Putaway of Goods for Inbound Delivery",
+          "summary": "The team set up the putaway of goods for inbound delivery.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Change Inbound Delivery"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Post goods receipt for Inbound Delivery",
+          "summary": "The team post goods receipt for inbound delivery.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Post Goods Receipt for Inbound Delivery"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Check goods receipt Details (optional)",
+          "summary": "The team check goods receipt details (optional).",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Material Documents Overview"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Display goods receipt (as a Supplier in SAP Business Network for Procurement)",
+          "summary": "The team display goods receipt (as a supplier in sap business network for procurement).",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Create supplier invoice with PO/GR Relation",
+          "summary": "The team create supplier invoice with po/gr relation.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Manage Supplier Invoices"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Display Invoice Status Change (as a Supplier in SAP Business Network for Procurement)",
+          "summary": "The team display invoice status change (as a supplier in sap business network for procurement).",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "SL4",
+      "description": "Supplier Evaluation and Performance Monitoring",
+      "reviewed": false,
+      "story": {
+        "headline": "How supplier evaluation and performance monitoring runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Operational Supplier Evaluation",
+          "summary": "The team operational supplier evaluation.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Supplier Evaluation by Questionnaire",
+          "summary": "The team supplier evaluation by questionnaire.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Supplier Evaluation by User-Defined Criteria",
+          "summary": "The team supplier evaluation by user-defined criteria.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Manage Supplier Evaluation Score",
+          "summary": "The team manage supplier evaluation score.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    }
+  ]
+}
