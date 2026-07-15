@@ -71,7 +71,8 @@ const WORKBENCH_PATHS = [
   '/sap-explorer',      // SAP Operations — live S/4HANA Cloud TDD explorer
   '/presales',          // consultant surface (auth-gated under (workbench))
   '/affirm',            // value-stream affirm-set workbench
-  '/c/',                // guest token surface (under (external))
+  '/c/',                // presales guest token surface (under (external))
+  '/a/',                // affirm external executive guest surface (under (external))
   '/api/auth/',         // NextAuth callbacks must work on WORKBENCH_HOST
   '/api/presales/',     // presales REST API
   '/api/affirm/',       // affirm-set REST API
@@ -189,7 +190,9 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
         pathname === '/affirm' ||
         pathname.startsWith('/affirm/') ||
         pathname === '/c' ||
-        pathname.startsWith('/c/');
+        pathname.startsWith('/c/') ||
+        pathname === '/a' ||
+        pathname.startsWith('/a/');
       if (isPageRoute && isWorkbenchPage) {
         const target = new URL(request.url);
         target.host = WORKBENCH_HOST;
@@ -284,6 +287,8 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
     // never be intercepted by the NextAuth bridge, and the Workbench
     // sign-in page at /presales/login is unauthenticated by design.
     pathname.startsWith("/c/") ||
+    // Affirm external guest URLs at /a/* are token/cookie-authed, never bridged.
+    pathname.startsWith("/a/") ||
     pathname === "/presales/login" ||
     // …and its pre-auth children: the magic-link confirm interstitial and the
     // POST-only continue handler must never be bounced through the bridge.

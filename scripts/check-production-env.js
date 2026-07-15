@@ -169,6 +169,19 @@ if (isProductionDeploy) {
     );
     exitCode = 1;
   }
+
+  // Affirm external executive journey: when the guest surface is enabled in
+  // production, its CSRF nonces reuse PRESALES_CSRF_SECRET, so that secret must
+  // be present (the dev-only NEXTAUTH_SECRET fallback is not permitted in prod).
+  if (
+    process.env.AFFIRM_EXTERNAL_ENABLED === "true" &&
+    !process.env.PRESALES_CSRF_SECRET
+  ) {
+    console.error(
+      "[FAIL] AFFIRM_EXTERNAL_ENABLED=true requires PRESALES_CSRF_SECRET in production (the /a CSRF nonces reuse it)",
+    );
+    exitCode = 1;
+  }
 }
 
 if (exitCode === 0) {
