@@ -1529,11 +1529,12 @@ model User {
   presalesAuditActions   PresalesAuditEvent[]  @relation("PresalesAuditActions")
 
   // ABeam Workbench — Value-Stream Affirm-Set (CCC build, 2026-05-22)
-  affirmBundlesCreated   AffirmBundle[]      @relation("AffirmBundlesCreated")
-  affirmBundlesReleased  AffirmBundle[]      @relation("AffirmBundlesReleased")
-  affirmEventsByUser     AffirmEvent[]       @relation("AffirmEventsByUser")
-  affirmQuestionsCreated AffirmQuestion[]    @relation("AffirmQuestionsCreated")
-  affirmGrantsRevoked    AffirmAccessGrant[] @relation("AffirmGrantsRevoked")
+  affirmBundlesCreated   AffirmBundle[]         @relation("AffirmBundlesCreated")
+  affirmBundlesReleased  AffirmBundle[]         @relation("AffirmBundlesReleased")
+  affirmEventsByUser     AffirmEvent[]          @relation("AffirmEventsByUser")
+  affirmQuestionsCreated AffirmQuestion[]       @relation("AffirmQuestionsCreated")
+  affirmGrantsRevoked    AffirmAccessGrant[]    @relation("AffirmGrantsRevoked")
+  affirmStoriesReviewed  AffirmScopeItemStory[] @relation("AffirmStoriesReviewed")
 
   @@index([role])
   @@index([organizationId])
@@ -3969,6 +3970,10 @@ model AffirmScopeItem {
   subProcess  AffirmSubProcess        @relation(fields: [subProcessId], references: [id], onDelete: Cascade)
   bundleItems AffirmBundleScopeItem[]
   flow        AffirmProcessFlow?
+  // Affirm chaptered content (PR-2): executive-facing narrative derived from
+  // the SAP process steps. Gated by story review (unreviewed never renders).
+  chapters    AffirmProcessChapter[]
+  story       AffirmScopeItemStory?
 
   @@index([streamId])
   @@index([subProcessId])
@@ -4307,4 +4312,53 @@ model AffirmProcessStep {
 
   @@unique([scopeItemId, stepNumber])
   @@index([scopeItemId])
+}
+
+// =============================================================
+// ABeam Workbench — Affirm Chaptered Process Content (PR-2, 2026-07-15)
+// =============================================================
+// Executive-facing narrative derived from the SAP process steps for the 2
+// pilot value streams (lead-to-cash + source-to-pay). Chapter/story TEXT is
+// NEW business-language copy — the SAP-verbatim AffirmProcessStep.activity is
+// never mutated; chapters only reference step ranges. Story review is the
+// render gate: getChapteredFlow returns null (→ flat ProcessFlowStrip
+// fallback) unless the scope item's story is reviewed.
+
+/// A business-language chapter grouping a contiguous range of a scope item's
+/// ordered process steps. Titles/summaries are written for executives.
+model AffirmProcessChapter {
+  id            String   @id @default(cuid())
+  scopeItemId   String
+  chapterNumber Int
+  title         String // business language, e.g. "Create and approve the purchase order"
+  summary       String // 1–2 sentences, executive register
+  stepStart     Int // inclusive range into AffirmProcessStep.stepNumber
+  stepEnd       Int
+  roles         String[] // business roles appearing in this chapter
+  fioriApps     String[]
+  benefitNote   String?
+
+  scopeItem AffirmScopeItem @relation(fields: [scopeItemId], references: [id], onDelete: Cascade)
+
+  @@unique([scopeItemId, chapterNumber])
+  @@index([scopeItemId])
+}
+
+/// One executive story per scope item. reviewedAt is the RENDER GATE:
+/// unreviewed stories (and their chapters) NEVER render on /a/*.
+model AffirmScopeItemStory {
+  scopeItemId         String    @id
+  headline            String // what this process achieves, one sentence, exec language
+  outcomeBullets      String[] // ≤4
+  kpiHints            String[]
+  integrationNotes    String[] // derived from SapHubContent where available
+  sourceAttribution   String // "SAP Best Practices, S/4HANA Cloud Public Edition 2602"
+  processNavigatorUrl String?
+  reviewedById        String?
+  reviewedAt          DateTime? // REVIEW GATE: unreviewed stories NEVER render on /a/*
+
+  scopeItem  AffirmScopeItem @relation(fields: [scopeItemId], references: [id], onDelete: Cascade)
+  reviewedBy User?           @relation("AffirmStoriesReviewed", fields: [reviewedById], references: [id])
+
+  @@index([reviewedAt])
 }
