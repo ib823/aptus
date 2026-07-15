@@ -22,6 +22,7 @@ export function InfoCard({
   flowRefs,
   flows,
   scopeDescriptions,
+  saved,
 }: {
   q: CardQuestion;
   wording: string | null;
@@ -35,6 +36,7 @@ export function InfoCard({
   flowRefs: string[];
   flows: Record<string, ProcessFlow>;
   scopeDescriptions: Record<string, string>;
+  saved?: boolean;
 }) {
   const flagged = answer.choice === "discuss";
   return (
@@ -152,7 +154,16 @@ export function InfoCard({
         </div>
       </div>
 
-      {answer.saving && <p className="mt-2 text-[11px] text-ink-muted" aria-live="polite">saving…</p>}
+      {answer.saving ? (
+        <p className="mt-2 text-[11px] text-ink-muted" aria-live="polite">saving…</p>
+      ) : saved && !answer.error ? (
+        <p className="mt-2 inline-flex items-center gap-1 text-[11px] text-ink-muted" aria-live="polite">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-decision-standard)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+          Saved
+        </p>
+      ) : null}
       {answer.error && <p className="mt-2 text-[11px] text-cta" role="alert">{answer.error}</p>}
     </article>
   );

@@ -1,23 +1,22 @@
 /**
- * GET /a/expired — polymorphic terminal state for the Affirm external surface.
+ * GET /a/expired — S3 polymorphic terminal.
  *
- * Renders ONE generic message regardless of the underlying reason (invalid /
- * revoked / superseded token, non-client-facing bundle, expired or idled
- * session, OTP lockout). We deliberately never oracle which condition applies
- * to a stranger — there is no reason query param and no per-reason copy.
+ * ONE generic message regardless of the underlying reason (invalid / revoked /
+ * superseded / non-client-facing / expired / OTP lockout). Never oracles which
+ * applies. Restyled to the Executive Surface design.
  */
 
-import { TerminalScreen } from "@/components/external/TerminalScreen";
+import { GuestTerminal } from "@/components/affirm/external/GuestTerminal";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default function AffirmExpiredPage() {
   return (
-    <TerminalScreen
-      eyebrow="Link not active"
+    <GuestTerminal
+      eyebrow="ABeam Workbench"
       heading="This link is no longer active"
-      body="If you were expecting access, please refer to the invitation email from your ABeam consultant, or reply to it to request a new link."
+      body="Your review window has closed. Your ABeam consultant can send you a fresh link whenever you're ready to continue."
     />
   );
 }
