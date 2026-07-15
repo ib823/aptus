@@ -117,3 +117,158 @@ ack; redeem POST → 303 `/a/home` with cookie (device pre-verified skips OTP);
 (same as `/c/*`) — they rely on the hardening headers + app-level OTP
 throttle/lockout. The consultant grant API is under `/api/affirm/*` and IS
 middleware-rate-limited.
+
+## PR-2 — Chaptered process content (feat/affirm-chaptered-content)
+
+**Migration:** `20260715130000_affirm_process_chapters` — adds
+`AffirmProcessChapter` (business chapters over step ranges) + `AffirmScopeItemStory`
+(exec story; `reviewedAt` is the render gate). Reverse relations on
+`AffirmScopeItem` (`chapters`, `story`) and `User` (`affirmStoriesReviewed`).
+
+**Pilot streams:** `lead-to-cash` + `source-to-pay` (the procurement stream —
+confirmed it contains scope item `J45`, per §3.4).
+
+**Pipeline:** `scripts/chapterize-process-flows.ts` groups each pilot scope
+item's ordered SAP steps into chapters (`src/lib/affirm/chapterize.ts`,
+pure/tested) and emits reviewable drafts to `curation-model/chapters/{stream}.json`
+(85 lead-to-cash + 38 source-to-pay items, 544 draft chapters). SAP-verbatim
+`activity` is never written — only step ranges + new copy.
+
+**Curation:** `curation-model/chapters/curated.json` — hand-authored, reviewed
+executive copy for **5 flagship items** (31Q, 1XF, J45, 16T, 1Z3) with accurate
+step ranges, roles, benefit notes, and stories. `scripts/import-process-chapters.ts`
+(+ shared `src/lib/affirm/chapters-import.ts`) merges drafts + curated overlay
+and stamps `reviewedAt/reviewedById` only for reviewed items. Wired into
+`prisma/seed.ts` (`seedChapters`) for fresh-DB reproducibility: **123 items,
+537 chapters, 5 reviewed**.
+
+**Read model** (`src/lib/affirm/process-flow.ts`): `getChapteredFlow` (null →
+flat-strip fallback when no story / unreviewed / no chapters; attaches
+SAP-verbatim steps per chapter) + `getStreamStories` (review-gated summaries,
+`story: null` → compact card).
+
+### PR-2 judgment calls / deviations
+- **"Floor 5" chapters applied only to flows with ≥10 steps.** The spec's literal
+  floor-5 would force a 6-step flow into 5 near-1:1 chapters (not a meaningful
+  grouping). Real pilot flows are mostly 1–9 steps; small flows keep their
+  natural boundary count, `<5` steps → one chapter per step, hard cap 9 always.
+- **`roles` left empty in generated drafts** — the step data carries no role
+  field, so fabricating roles would be dishonest. Curated items have
+  hand-written roles.
+- **`processNavigatorUrl` left null** — didn't guess the Process Navigator URL
+  shape (spec §7.2: "if uncertain, leave null rather than guess").
+- **`integrationNotes`** in drafts derived from `SapHubContent.title` where a row
+  matches the scope code (often empty); curated items have hand-written notes.
+- **Reviewed coverage is a curated pilot subset (5 items).** The other 118 pilot
+  items import as unreviewed drafts and fall back to the flat `ProcessFlowStrip`
+  — partial coverage is by design (§8 L1 index renders compact cards for items
+  without a reviewed story; never fake narrative).
+
+## PR-3 — Executive journey UX (feat/affirm-executive-journey)
+
+**Card extraction (refactor):** lifted `DecisionCard` + `InfoCard` out of the
+880-line `AffirmCardList` into `src/components/affirm/cards/` (shared
+`card-shared.ts` types + labels). Both the internal client surface and the
+external journey now render the same cards — no fork. The cards take a NARROW
+`CardQuestion` shape; `sscuiRef`/`isCustom` are optional, so their consultant
+badges/source-suffix simply don't render externally (leak boundary intact by
+construction). `AffirmCardList` behavior is unchanged (its tests + the internal
+surface still pass).
+
+**Read model** (`src/lib/affirm/external/journey.ts`, built on the leak-safe
+`getAffirmSetForGrant`): `getGuestJourney` (L0 ribbon: streams + sub-processes +
+progress), `getGuestStreamIndex` (L1 story cards), `getGuestProcessPage` (L1
+chaptered story / flat fallback), `getGuestScopeAffirm` (L2 questions), and
+`getGuestSummary` (submit buckets).
+
+**Pages** (`src/app/(external)/a/`): `home` (real journey — value-chain ribbon
+with `ProgressRing`, promise, what-happens-next, `SubmitPanel`; renders the
+executive summary when sealed), `stream/[streamId]`, `process/[scopeItemId]`
+(`ChapterBand` with `<details>` SAP-step reveal + attribution + Process
+Navigator link; flat-strip fallback), `affirm/[scopeItemId]` (`GuestAffirmCards`
+— shared cards + calibrated notes + autosave to `/a/answers` + sticky progress).
+
+**Components:** `GuestAffirmCards`, `SubmitPanel` (confirm dialog),
+`ChapterBand`, `ProgressRing`, `GuestGuide` (all under
+`src/components/affirm/external/`). Calibrated copy in `copy.ts` (exact §8
+prose). 4 client-audience `ScreenGuide` entries added
+(`affirm-exec-{home,stream,process,affirm}`).
+
+**Runtime-verified end-to-end (dev server, flag on):** landing → ack → redeem →
+home (ribbon) → stream index → **reviewed chaptered story for J45** (chapters +
+SAP-source reveal + attribution) → affirm cards → **answer autosave** (`POST
+/a/answers` deviate+reason → 200, response persisted, `guest_answer_saved`
+event) → **submit** (`POST /a/submit` → issued→submitted) → **executive summary**
+→ **sealed read-only** on the affirm page. All confirmed via curl.
+
+### PR-3 judgment calls / deviations
+- **No question→chapter mapping (grouped under "General").** §8 says map only if
+  unambiguous and DO NOT guess; the data has no reliable question↔chapter link
+  (that anchoring is PR-4), so L2 questions render as one "General" group with
+  the chapter count shown as context only. Per-step highlighting is PR-4.
+- **The interactive AffirmLearnProvider / glossary is NOT mounted on the guest
+  surface.** It's consultant tooling; shipping it to guests bloats the bundle
+  and contradicts the "no jargon" principle. Instead a lightweight `GuestGuide`
+  (`<details>`, server-rendered, no client JS) surfaces the client-audience
+  ScreenGuide copy. Term chips are omitted on the exec surface by the same
+  reasoning (the copy is already plain-language).
+- **"Next process" CTA points to the stream index** (pick the next process)
+  rather than computing a linear next-item order.
+- **A11y:** radiogroup for choices, `aria-pressed` flag toggle, `role="progressbar"`
+  with values, `aria-live` on autosave/progress, `aria-expanded` verbatim
+  toggles, native `<details>` for chapter/step reveals (keyboard-completable,
+  no pointer needed), `aria-modal` submit dialog.
+- **Visual baselines:** the visual-app harness has no baselines for `/a/*`;
+  visual snapshotting skipped (noted here per §8).
+
+## FINAL REPORT
+
+**Branches / PRs** (stacked: each targets the previous):
+- PR-1 `feat/affirm-external-guest-infra` → https://github.com/ib823/aptus/pull/95 (base: main)
+- PR-2 `feat/affirm-chaptered-content` → https://github.com/ib823/aptus/pull/96 (base: PR-1)
+- PR-3 `feat/affirm-executive-journey` → (base: PR-2) — see PR link in the session summary
+
+**Migrations added:** `20260715120000_affirm_external_guest_infra`,
+`20260715130000_affirm_process_chapters`.
+
+**New env vars:** `AFFIRM_EXTERNAL_ENABLED` (fail-closed flag; reuses
+`PRESALES_CSRF_SECRET` for CSRF, enforced in `check-production-env.js`).
+
+**New routes:** `/a/{token,verify,home,stream/[id],process/[id],affirm/[id],
+answers,submit,end,expired,ended}`; `/api/affirm/bundles/[id]/grants*`.
+
+**Test deltas (unit+integration, `pnpm test`):**
+- Baseline at branch point: **3,686** (161 files).
+- After PR-1: **3,743** (+57). After PR-2: **3,765** (+22). After PR-3: see
+  session summary (+journey/read-model tests; card extraction added no test
+  reduction). No suite ever shrank.
+
+**Demo locally:**
+```
+docker run -d --name aptus-pg -p 5432:5432 -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=aptus postgres:16
+cp .env.example .env   # set DATABASE_URL=postgresql://postgres:dev@localhost:5432/aptus
+pnpm install && pnpm db:push && pnpm db:seed        # seeds chapters too (5 reviewed)
+# create an issued bundle over both pilot streams + a device-verified grant, then:
+AFFIRM_EXTERNAL_ENABLED=true PRESALES_CSRF_SECRET="<32+ chars>" pnpm dev
+# open https://localhost:3003/a/{rawToken}   (grant scoped to lead-to-cash + source-to-pay)
+# reviewed chaptered stories: 31Q, 1XF, J45, 16T, 1Z3
+```
+Grants are created from the bundle's Review screen (issued/submitted) once the
+flag is on; the invite email carries `/a/{rawToken}`.
+
+**§2 ground-truth corrections found** (all in the Deviations section above):
+email transport is Brevo SMTP not Resend; affirm error envelope is flat
+`{ error }` not `{ code, message }`; affirm doesn't use `safeParseJsonBody`;
+presales session cookie is unsigned opaque PK; `/c` (and `/a`) page routes are
+not middleware-rate-limited; baseline test count is 3,686 not 3,504;
+`AffirmEvent` has no grantId/ip/ua columns (guest events use `payload.grantId`).
+
+**Open items discovered, not fixed** (out of PR-1–3 scope):
+- Question→chapter anchoring + per-step highlighting is PR-4 (deferred, not built).
+- Internal estimation loop is PR-5 (deferred, not built).
+- The repo's migration history lags `schema.prisma` (team uses `db push`); new
+  migrations were generated via `migrate diff` and contain only the new tables.
+  A full `migrate deploy` on an empty DB would need the history reconciled — a
+  pre-existing condition, unchanged by this work.
+- Process Navigator deep-link URLs are null (shape not verified); populate when
+  the canonical pattern is confirmed.
