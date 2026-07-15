@@ -26,6 +26,9 @@ import { LifecycleStepper, type BundleLifecycle } from "@/components/affirm/Life
 import { BadgeLegend } from "@/components/affirm/BadgeLegend";
 import { ReleaseBar } from "@/components/affirm/ReleaseBar";
 import { ScreenGuide } from "@/components/affirm/learn/ScreenGuide";
+import { GrantsPanel, type GrantClient } from "@/components/affirm/GrantsPanel";
+import { listGrantsForBundle } from "@/lib/affirm/external/grants";
+import { isAffirmExternalEnabled } from "@/lib/affirm/external/guards";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +95,28 @@ export default async function ReviewPage({ params }: PageProps) {
         : `${streamNames.length} value streams`;
 
   const pill = PILL_FOR[bundle.state];
+
+  // Affirm external executive journey (PR-1). The grants panel appears on
+  // client-facing bundles when the feature flag is on. Streams come from the
+  // in-scope questions so the multi-select is scoped to this bundle.
+  const externalEnabled = isAffirmExternalEnabled();
+  const showGrantsPanel =
+    externalEnabled && (bundle.state === "issued" || bundle.state === "submitted");
+  const grantStreams = Array.from(
+    new Map(clientFacing.map((q) => [q.streamId, q.streamName])).entries(),
+  ).map(([id, name]) => ({ id, name }));
+  const initialGrants: GrantClient[] = showGrantsPanel
+    ? (await listGrantsForBundle(id)).map((g) => ({
+        id: g.id,
+        email: g.email,
+        displayName: g.displayName,
+        roleLabel: g.roleLabel,
+        valueStreamIds: g.valueStreamIds,
+        status: g.status,
+        answered: g.answered,
+        total: g.total,
+      }))
+    : [];
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
@@ -160,6 +185,10 @@ export default async function ReviewPage({ params }: PageProps) {
           }
         />
       </div>
+
+      {showGrantsPanel && (
+        <GrantsPanel bundleId={id} streams={grantStreams} initialGrants={initialGrants} />
+      )}
 
       {/* Coverage stat-strip */}
       <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
