@@ -1,48 +1,44 @@
 /**
- * GET /a/home — Affirm external executive journey (L0, the hero moment).
+ * GET /a/home — S4 Executive home (live) and S8 Executive summary (sealed).
  *
- * Greeting + a value-chain ribbon (the grant's streams as connected segments,
- * sub-processes lit within each, a progress ring per stream), the one-line
- * promise, and the "what happens next" strip. When the bundle is submitted, the
- * whole journey is sealed and this renders the executive summary instead.
- *
- * Fail-closed session + per-device OTP gate (a session that hasn't cleared OTP
- * is bounced to /a/verify, never served content).
+ * Fail-closed session + per-device OTP gate. While issued: the value-chain
+ * ribbon + what-happens-next + sticky submit. Once submitted: the sealed
+ * executive summary (stat strip + three buckets), print-clean. Restyled to the
+ * Executive Surface design; behavior unchanged.
  */
 
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireGuestSession, isDeviceVerified } from "@/lib/affirm/external/guards";
 import { touchGuestSession } from "@/lib/affirm/external/session";
 import { writeGuestEvent } from "@/lib/affirm/external/audit";
 import { issueSessionNonce } from "@/lib/affirm/external/csrf";
 import { getGuestJourney, getGuestSummary } from "@/lib/affirm/external/journey";
-import { JOURNEY_PROMISE, WHAT_HAPPENS_NEXT, BUCKET_MEANING } from "@/lib/affirm/external/copy";
-import { ProgressRing } from "@/components/affirm/external/ProgressRing";
+import { GuestShell } from "@/components/affirm/external/GuestShell";
+import { ValueChainRibbon } from "@/components/affirm/external/ValueChainRibbon";
+import { WhatHappensNext } from "@/components/affirm/external/WhatHappensNext";
 import { SubmitPanel } from "@/components/affirm/external/SubmitPanel";
 import { GuestGuide } from "@/components/affirm/external/GuestGuide";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function WhatHappensNext({ activeIndex = 0 }: { activeIndex?: number }) {
-  return (
-    <ol className="flex flex-wrap items-center gap-2 text-xs" aria-label="What happens next">
-      {WHAT_HAPPENS_NEXT.map((stage, i) => (
-        <li key={stage} className="flex items-center gap-2">
-          <span
-            className={`rounded-pill px-2.5 py-1 font-semibold ${
-              i <= activeIndex ? "bg-navy text-white" : "bg-ink-tint text-ink-muted"
-            }`}
-          >
-            {stage}
-          </span>
-          {i < WHAT_HAPPENS_NEXT.length - 1 && <span className="text-ink-disabled" aria-hidden="true">→</span>}
-        </li>
-      ))}
-    </ol>
-  );
-}
+const BUCKET_META = {
+  standard: {
+    label: "Adopted standard",
+    headerBg: "bg-[color-mix(in_srgb,var(--color-decision-standard)_15%,transparent)]",
+    text: "text-decision-standard",
+  },
+  discuss: {
+    label: "To discuss",
+    headerBg: "bg-[color-mix(in_srgb,var(--color-decision-configure)_15%,transparent)]",
+    text: "text-decision-configure",
+  },
+  deviate: {
+    label: "We differ",
+    headerBg: "bg-[color-mix(in_srgb,var(--color-decision-custom)_15%,transparent)]",
+    text: "text-decision-custom",
+  },
+} as const;
 
 export default async function AffirmHomePage() {
   const ctx = await requireGuestSession();
@@ -60,106 +56,135 @@ export default async function AffirmHomePage() {
 
   const sealed = ctx.bundle.state !== "issued";
 
-  // ── Sealed: executive summary ──
+  // ── Sealed: S8 executive summary ──
   if (sealed) {
-    const summary = await getGuestSummary(ctx.grant.id);
-    if (!summary) redirect("/a/expired");
-    const { buckets } = summary;
+    const s = await getGuestSummary(ctx.grant.id);
+    if (!s) redirect("/a/expired");
+    const stats = [
+      { n: s.counts.standard, l: "Adopted", cls: "text-decision-standard" },
+      { n: s.counts.discuss, l: "To discuss", cls: "text-decision-configure" },
+      { n: s.counts.deviate, l: "We differ", cls: "text-decision-custom" },
+      { n: s.total, l: "Total", cls: "text-navy" },
+    ];
     return (
-      <main className="mx-auto max-w-3xl px-4 py-12">
-        <header className="mb-8">
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
-            {summary.bundle.client} · Submitted
+      <GuestShell granteeName={s.grant.displayName} granteeRole={s.grant.roleLabel} clientName={s.bundle.client}>
+        <main className="mx-auto max-w-[880px] px-[clamp(16px,4vw,32px)] pb-20 pt-11">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+            Your review · Submitted
           </p>
-          <h1 className="font-serif text-3xl text-ink">
-            Thank you{summary.grant.displayName ? `, ${summary.grant.displayName}` : ""}
+          <h1 className="font-serif text-[30px] font-medium leading-10 text-ink">
+            Thank you{s.grant.displayName ? `, ${s.grant.displayName}` : ""}. Here&apos;s what you
+            told us.
           </h1>
-          <p className="mt-2 text-sm text-ink-soft">
-            Your answers are sealed and with your consultant. Here&apos;s what you told us.
+          <p className="mt-2 max-w-[58ch] text-[15px] leading-[1.55] text-ink-soft">
+            Your consultant is preparing the workshop from these answers.
           </p>
-        </header>
 
-        <section className="mb-8 grid gap-3 sm:grid-cols-3">
-          {(["standard", "discuss", "deviate"] as const).map((b) => (
-            <div key={b} className="rounded-card-warm border border-border-default bg-paper p-4">
-              <p className="font-serif text-3xl text-ink">{buckets[b]}</p>
-              <p className="mt-1 text-[13px] font-semibold text-ink">
-                {b === "standard" ? "Adopt standard" : b === "discuss" ? "Discuss" : "We differ"}
-              </p>
-              <p className="mt-1 text-xs leading-5 text-ink-muted">{BUCKET_MEANING[b]}</p>
-            </div>
-          ))}
-        </section>
+          {/* Stat strip */}
+          <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {stats.map((st) => (
+              <div key={st.l} className="ax-print-plain rounded-card-warm bg-paper px-3.5 py-[18px] shadow-card">
+                <p className={`font-serif text-[28px] font-medium leading-none ${st.cls}`}>{st.n}</p>
+                <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-ink-muted">
+                  {st.l}
+                </p>
+              </div>
+            ))}
+          </div>
 
-        <section className="rounded-card-warm border border-border-default bg-paper p-5">
-          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
-            What happens next
-          </p>
-          <WhatHappensNext activeIndex={1} />
-          <p className="mt-3 text-sm text-ink-soft">
-            Your consultant reviews every answer, then the workshop turns the &ldquo;discuss&rdquo; and
-            &ldquo;we differ&rdquo; items into a plan. Nothing is committed yet.
-          </p>
-        </section>
-      </main>
+          {/* Bucket cards */}
+          <div className="mt-4 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
+            {(["standard", "discuss", "deviate"] as const).map((key) => {
+              const meta = BUCKET_META[key];
+              const items = s.buckets[key];
+              return (
+                <div
+                  key={key}
+                  className="ax-print-plain flex flex-col overflow-hidden rounded-card-warm border border-border-default bg-paper shadow-card"
+                >
+                  <div className={`px-[18px] py-4 ${meta.headerBg}`}>
+                    <p className={`font-serif text-[28px] font-medium leading-none ${meta.text}`}>
+                      {items.length}
+                    </p>
+                    <p className={`mt-1 text-[11px] font-semibold uppercase tracking-[0.06em] ${meta.text}`}>
+                      {meta.label}
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-3 px-[18px] py-3.5">
+                    {items.length === 0 ? (
+                      <p className="text-[13px] text-ink-muted">Nothing here yet.</p>
+                    ) : (
+                      items.map((it) => (
+                        <div key={it.questionId} className="flex flex-col gap-1.5">
+                          <div className="flex gap-2">
+                            {it.scopeItemId && (
+                              <span className="inline-flex h-5 items-center rounded bg-navy px-1.5 font-mono text-[10px] font-bold text-white">
+                                {it.scopeItemId}
+                              </span>
+                            )}
+                            <span className="text-[13px] leading-[18px] text-ink-soft">{it.text}</span>
+                          </div>
+                          {key === "deviate" && it.reason && (
+                            <p className="rounded-input border border-[color-mix(in_srgb,var(--color-decision-custom)_30%,transparent)] bg-banner-warn px-2.5 py-1.5 text-[12px] leading-[17px] text-ink-soft">
+                              {it.reason}
+                            </p>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="ax-no-print mt-8">
+            <WhatHappensNext current={2} />
+          </div>
+        </main>
+      </GuestShell>
     );
   }
 
-  // ── Live: the journey home ──
+  // ── Live: S4 home ──
   const journey = await getGuestJourney(ctx.grant.id);
   if (!journey) redirect("/a/expired");
   const csrf = issueSessionNonce(ctx.session.id);
+  const greeting = `${journey.grant.displayName ?? "Welcome"}${
+    journey.grant.roleLabel ? ` · ${journey.grant.roleLabel}` : ""
+  }`.toUpperCase();
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-12">
-      <header className="mb-8">
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
-          {journey.bundle.client}
+    <GuestShell
+      granteeName={journey.grant.displayName}
+      granteeRole={journey.grant.roleLabel}
+      clientName={journey.bundle.client}
+    >
+      <main className="mx-auto max-w-[880px] px-[clamp(16px,4vw,32px)] pb-[140px] pt-11">
+        <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+          {greeting}
         </p>
-        <h1 className="font-serif text-3xl text-ink">
-          Welcome{journey.grant.displayName ? `, ${journey.grant.displayName}` : ""}
-          {journey.grant.roleLabel ? (
-            <span className="ml-2 align-middle rounded-pill bg-navy-soft px-2.5 py-1 text-xs font-medium text-navy">
-              {journey.grant.roleLabel}
-            </span>
-          ) : null}
+        <h1 className="mb-3 font-serif text-[30px] font-medium leading-10 text-ink">
+          Your processes, on one page.
         </h1>
-        <p className="mt-2 max-w-[640px] text-[15px] leading-6 text-ink-soft">{JOURNEY_PROMISE}</p>
-      </header>
-
-      <GuestGuide id="affirm-exec-home" />
-
-      {/* Value-chain ribbon */}
-      <section className="mb-8" aria-label="Your value streams">
-        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap">
-          {journey.streams.map((s) => (
-            <Link
-              key={s.streamId}
-              href={`/a/stream/${encodeURIComponent(s.streamId)}`}
-              className="group flex flex-1 items-center gap-4 rounded-card-warm border border-border-default bg-paper p-4 shadow-card transition hover:border-navy/40"
-            >
-              <ProgressRing value={s.answered} max={s.total} label={`${s.answered} of ${s.total} answered in ${s.streamName}`} />
-              <div className="min-w-0">
-                <p className="truncate font-serif text-lg text-ink group-hover:text-navy">{s.streamName}</p>
-                <p className="mt-0.5 truncate text-xs text-ink-muted">
-                  {s.subProcesses.length} area{s.subProcesses.length === 1 ? "" : "s"} · {s.answered}/{s.total} answered
-                </p>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* What happens next */}
-      <section className="mb-8 rounded-card-warm border border-border-default bg-cream p-4">
-        <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
-          What happens next
+        <p className="mb-8 max-w-[58ch] text-[15px] leading-[1.55] text-ink-soft">
+          See how the standard works, then tell us where your business differs.
         </p>
-        <WhatHappensNext activeIndex={0} />
-      </section>
 
-      {/* Submit */}
-      <SubmitPanel csrfNonce={csrf} total={journey.totals.total} answered={journey.totals.answered} />
-    </main>
+        <GuestGuide id="affirm-exec-home" />
+
+        <ValueChainRibbon streams={journey.streams} />
+
+        <WhatHappensNext current={1} />
+      </main>
+
+      <SubmitPanel
+        csrfNonce={csrf}
+        total={journey.totals.total}
+        answered={journey.totals.answered}
+        clientName={journey.bundle.client}
+        streams={journey.streams.map((s) => ({ name: s.streamName, answered: s.answered, total: s.total }))}
+      />
+    </GuestShell>
   );
 }

@@ -128,7 +128,7 @@ function Strip({
           className="flex shrink-0 items-center"
         >
           <div
-            className={`pf-step flex shrink-0 flex-col gap-1.5 rounded-[10px] border border-[var(--brand-navy-border,#CFD7E0)] bg-paper p-3 ${
+            className={`pf-step flex shrink-0 flex-col gap-1.5 rounded-step border border-navy-border bg-paper p-3 ${
               compact ? "w-[168px] px-3 py-2.5" : "w-[184px] px-3.5 py-3"
             }`}
           >

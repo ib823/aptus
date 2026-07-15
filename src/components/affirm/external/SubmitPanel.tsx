@@ -1,33 +1,68 @@
 "use client";
 
 /**
- * <SubmitPanel> — the external submit control on /a/home. Submit seals the
- * WHOLE bundle, so it opens a confirm dialog that states this plainly (and
- * warns about any unanswered questions) before POSTing /a/submit. On success
- * the page reloads into the sealed executive-summary view.
+ * <SubmitPanel> — S4 sticky submit bar + confirm modal. Submitting seals the
+ * WHOLE bundle, so the modal states that plainly, lists per-stream progress,
+ * and warns about unanswered questions ("submit anyway"). POSTs /a/submit, then
+ * reloads into the sealed executive summary. Token-only; focus-trapped modal.
  */
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+
+interface StreamRow {
+  name: string;
+  answered: number;
+  total: number;
+}
 
 interface Props {
   csrfNonce: string;
   total: number;
   answered: number;
+  clientName: string;
+  streams: StreamRow[];
 }
 
-export function SubmitPanel({ csrfNonce, total, answered }: Props) {
+export function SubmitPanel({ csrfNonce, total, answered, clientName, streams }: Props) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const dialogRef = useRef<HTMLDivElement>(null);
   const unanswered = Math.max(0, total - answered);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.activeElement as HTMLElement | null;
+    dialogRef.current?.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Tab" && dialogRef.current) {
+        const focusables = dialogRef.current.querySelectorAll<HTMLElement>(
+          "button,[href],input,textarea",
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0]!;
+        const last = focusables[focusables.length - 1]!;
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      prev?.focus();
+    };
+  }, [open]);
 
   function submit() {
     setError(null);
     start(async () => {
-      const res = await fetch("/a/submit", {
-        method: "POST",
-        headers: { "x-affirm-csrf": csrfNonce },
-      });
+      const res = await fetch("/a/submit", { method: "POST", headers: { "x-affirm-csrf": csrfNonce } });
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: string };
         setError(j.error ? `Could not submit (${j.error}).` : "Could not submit.");
@@ -38,61 +73,87 @@ export function SubmitPanel({ csrfNonce, total, answered }: Props) {
   }
 
   return (
-    <div className="rounded-card-warm border border-border-default bg-paper p-5 shadow-card">
-      <h2 className="font-serif text-xl text-ink">Ready to submit?</h2>
-      <p className="mt-1 text-sm text-ink-soft">
-        {answered} of {total} question{total === 1 ? "" : "s"} answered. Submitting seals everyone&apos;s
-        answers for this engagement and hands them to your consultant. Nothing is committed — the
-        workshop comes next.
-      </p>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="mt-3 rounded-input bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-hover"
-      >
-        Submit my answers
-      </button>
+    <>
+      {/* Sticky submit bar */}
+      <div className="ax-no-print fixed inset-x-0 bottom-0 z-30 border-t border-border-default bg-paper px-[clamp(16px,4vw,32px)] py-3.5 shadow-pop">
+        <div className="mx-auto flex max-w-[880px] items-center gap-4">
+          <p className="min-w-0 flex-1 text-[13px] text-ink-soft" aria-live="polite">
+            {answered} of {total} answered — you can still change answers until you submit.
+          </p>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="ax-touch shrink-0 rounded-input bg-cta px-4 py-2 text-[14px] font-semibold text-white transition hover:bg-cta-hover focus-visible:shadow-focus-ring focus-visible:outline-none"
+          >
+            Submit your review
+          </button>
+        </div>
+      </div>
 
       {open && (
         <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Confirm submit"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          className="ax-no-print fixed inset-0 z-[60] flex items-center justify-center bg-[color-mix(in_srgb,var(--color-ink)_40%,transparent)] px-5"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setOpen(false);
+          }}
         >
-          <div className="w-full max-w-md rounded-card-warm border border-border-default bg-paper p-6 shadow-card-warm-hover">
-            <h3 className="font-serif text-lg text-ink">Submit and seal your answers?</h3>
-            <p className="mt-2 text-sm text-ink-soft">
-              This seals the answers for the whole engagement and can&apos;t be undone here. Your
-              consultant reviews everything before anything is finalised.
+          <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="submit-title"
+            className="w-full max-w-[448px] rounded-card-warm border-2 border-cta bg-paper p-6 shadow-pop"
+          >
+            <h2 id="submit-title" className="font-serif text-[20px] font-medium text-ink">
+              Submit your review?
+            </h2>
+
+            <div className="mt-3 space-y-1">
+              {streams.map((s) => (
+                <div key={s.name} className="flex items-baseline justify-between gap-3 text-[13px]">
+                  <span className="text-ink">{s.name}</span>
+                  <span className="font-mono text-[12px] text-ink-muted">
+                    {s.answered} of {s.total} answered
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <p className="mt-3 text-[13px] leading-[19px] text-ink-soft">
+              This seals answers for everyone in {clientName}&apos;s review — done when your team is
+              done.
             </p>
+
             {unanswered > 0 && (
-              <p className="mt-2 rounded-input bg-banner-warn px-3 py-2 text-[13px] text-ink-soft">
-                {unanswered} question{unanswered === 1 ? "" : "s"} not yet answered will be recorded as
-                &ldquo;Adopt SAP standard&rdquo;.
+              <p className="mt-3 rounded-input border border-[color-mix(in_srgb,var(--color-decision-custom)_30%,transparent)] bg-banner-warn px-3 py-2 text-[13px] leading-[18px] text-ink-soft">
+                {unanswered} question{unanswered === 1 ? "" : "s"} still open — you can submit anyway
+                (they&apos;ll be recorded as &ldquo;Adopt SAP standard&rdquo;).
               </p>
             )}
-            {error && <p className="mt-2 text-xs text-cta" role="alert">{error}</p>}
+            {error && <p className="mt-2 text-[12px] text-status-revoked-fg" role="alert">{error}</p>}
+
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
+                data-autofocus
                 onClick={() => setOpen(false)}
-                className="rounded-input border border-border-default px-4 py-2 text-sm font-medium text-ink-soft hover:text-ink"
+                className="ax-touch rounded-input border border-border-default bg-paper px-4 py-2 text-[14px] font-semibold text-ink-soft transition hover:bg-ink-tint focus-visible:shadow-focus-ring focus-visible:outline-none"
               >
-                Not yet
+                Keep reviewing
               </button>
               <button
                 type="button"
                 onClick={submit}
                 disabled={pending}
-                className="rounded-input bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-hover disabled:opacity-60"
+                className="ax-touch rounded-input bg-cta px-4 py-2 text-[14px] font-semibold text-white transition hover:bg-cta-hover disabled:opacity-60 focus-visible:shadow-focus-ring focus-visible:outline-none"
               >
-                {pending ? "Submitting…" : "Submit and seal"}
+                {pending ? "Submitting…" : "Submit review"}
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

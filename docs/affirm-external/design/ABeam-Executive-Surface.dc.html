@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+--brand-navy:#002B5C;--brand-navy-hover:#001E40;--brand-navy-soft:#E6EBF1;--brand-navy-border:#CFD7E0;
+--cta-red:#C8102E;--cta-red-hover:#A30D26;--cta-red-focus:#FBE9EC;
+--surface-cream:#FAF9F5;--surface-paper:#FFFFFE;--surface-ink-tint:#F4F2EB;--surface-banner-warn:#FDF7E6;
+--ink-primary:#1A1A1A;--ink-secondary:#4A4A4A;--ink-muted:#8A8A8A;--ink-disabled:#C4C4C4;
+--border-default:#E5E1D6;--border-strong:#C4BFAE;
+--decision-standard:#0F766E;--decision-configure:#1D4ED8;--decision-custom:#B45309;--decision-open:#8A8A8A;
+--success:#166534;--warning:#B45309;--danger:#991B1B;--info:#1E40AF;
+--radius-input:8px;--radius-card:12px;--radius-pill:9999px;--radius-step:10px;
+--shadow-card:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+--shadow-card-hover:0 4px 12px rgba(0,0,0,.08);
+--shadow-pop:0 10px 24px rgba(20,20,20,.10),0 4px 10px rgba(20,20,20,.06);
+--shadow-modal:0 8px 24px rgba(0,0,0,.12);
+--shadow-focus-ring:0 0 0 3px #FBE9EC;
+--dur-snap:100ms;--ease-snap:cubic-bezier(0.2,0,0.13,1);
+--dur-calm:200ms;--ease-calm:cubic-bezier(0.4,0,0.2,1);
+--dur-hero:320ms;--ease-hero:cubic-bezier(0.16,1,0.3,1);
+--ff-serif:'Source Serif 4',Georgia,serif;--ff-sans:'Geist',system-ui,sans-serif;--ff-mono:'Geist Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--surface-cream);font-family:var(--ff-sans);color:var(--ink-primary);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:var(--brand-navy);text-decoration:none}
+a:hover{color:var(--brand-navy-hover)}
+button{font-family:inherit}
+textarea,input{font-family:inherit}
+::selection{background:var(--cta-red-focus)}
+@keyframes ab-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+@keyframes ab-pulse{0%,100%{opacity:.5}50%{opacity:.9}}
+@keyframes ab-fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+[data-inspect="on"] [data-token]{outline:1px dashed color-mix(in srgb,var(--cta-red) 55%,transparent);outline-offset:1px;cursor:help}
+@media(prefers-reduced-motion:reduce){*{animation-duration:0ms!important;transition-duration:0ms!important}}
+</style>
+</helmet>
+
+<div data-inspect="{{ inspectAttr }}" style="min-height:100vh;background:var(--surface-cream);display:flex;flex-direction:column">
+
+  <!-- ===== TOP BAR CHROME ===== -->
+  <header data-token="chrome/top-bar 56 · paper" style="position:sticky;top:0;z-index:40;height:56px;flex:none;background:var(--surface-paper);border-bottom:1px solid var(--border-default);display:flex;align-items:center;justify-content:space-between;padding:0 clamp(16px,4vw,32px)">
+    <button onClick="{{ goFoundation }}" data-token="component/wordmark md" style="display:flex;align-items:center;gap:8px;background:none;border:none;padding:0;cursor:pointer">
+      <span style="width:24px;height:24px;border-radius:4px;background:var(--brand-navy);display:flex;align-items:center;justify-content:center;font-family:var(--ff-serif);font-weight:600;font-size:15px;color:#fff;line-height:1">A</span>
+      <span style="font-family:var(--ff-serif);font-weight:500;font-size:16px;color:var(--brand-navy)">ABeam Workbench</span>
+    </button>
+    <div style="display:flex;align-items:center;gap:18px">
+      <sc-if value="{{ sessionOn }}" hint-placeholder-val="{{ true }}">
+        <span style="font-size:13px;color:var(--ink-secondary)"><span style="font-weight:600;color:var(--ink-primary)">{{ granteeName }}</span> · {{ granteeRole }}</span>
+      </sc-if>
+      <button onClick="{{ toggleInspect }}" data-token="dev/inspect-toggle" title="Toggle token inspector" style="display:flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:var(--radius-pill);border:1px solid var(--border-default);background:{{ inspectBtnBg }};color:{{ inspectBtnFg }};font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;transition:all var(--dur-calm) var(--ease-calm)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        Inspect
+      </button>
+    </div>
+  </header>
+
+  <div style="flex:1 0 auto">
+
+  <!-- ============ FOUNDATION SHEET ============ -->
+  <sc-if value="{{ isFoundation }}" hint-placeholder-val="{{ true }}">
+  <main style="max-width:1040px;margin:0 auto;padding:48px clamp(16px,4vw,32px) 72px">
+    <p style="margin:0 0 8px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted)">Foundation · PR-3 external surface</p>
+    <h1 style="margin:0 0 10px;font-family:var(--ff-serif);font-weight:500;font-size:30px;line-height:40px;color:var(--ink-primary)">The token sheet &amp; component vocabulary</h1>
+    <p style="margin:0 0 6px;font-size:15px;line-height:1.55;color:var(--ink-secondary);max-width:60ch">Every color, radius, shadow, font and duration below is declared once at <code style="font-family:var(--ff-mono);font-size:13px;color:var(--brand-navy)">:root</code>. Nothing in the journey is a stray literal — it all resolves to one of these tokens.</p>
+    <p style="margin:0 0 40px;font-size:13px;line-height:19px;color:var(--ink-secondary);max-width:60ch">Turn on <strong>Inspect</strong> (top-right) then hover any element to read its token reference.</p>
+
+    <!-- entry buttons -->
+    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:44px">
+      <button onClick="{{ enterJourney }}" data-token="component/button primary" style="height:40px;padding:0 20px;border:none;border-radius:var(--radius-input);background:var(--cta-red);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:var(--shadow-card);transition:background var(--dur-calm) var(--ease-calm)" style-hover="background:var(--cta-red-hover)">Enter the executive journey →</button>
+      <button onClick="{{ goHome }}" data-token="component/button secondary" style="height:40px;padding:0 18px;border:1px solid var(--border-default);border-radius:var(--radius-input);background:var(--surface-paper);color:var(--ink-primary);font-size:14px;font-weight:600;cursor:pointer" style-hover="background:var(--surface-ink-tint)">S4 · Executive home</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin:-28px 0 44px">
+      <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted);width:100%;margin-bottom:2px">Jump to a gate / terminal screen</span>
+      <button onClick="{{ goLanding }}" style="height:32px;padding:0 12px;border:1px solid var(--border-default);border-radius:var(--radius-pill);background:var(--surface-paper);color:var(--ink-secondary);font-size:12px;font-weight:600;cursor:pointer" style-hover="background:var(--surface-ink-tint)">S1 · Invitation</button>
+      <button onClick="{{ goVerify }}" style="height:32px;padding:0 12px;border:1px solid var(--border-default);border-radius:var(--radius-pill);background:var(--surface-paper);color:var(--ink-secondary);font-size:12px;font-weight:600;cursor:pointer" style-hover="background:var(--surface-ink-tint)">S2 · Device code</button>
+      <button onClick="{{ goTerminal }}" style="height:32px;padding:0 12px;border:1px solid var(--border-default);border-radius:var(--radius-pill);background:var(--surface-paper);color:var(--ink-secondary);font-size:12px;font-weight:600;cursor:pointer" style-hover="background:var(--surface-ink-tint)">S3 · Terminal</button>
+      <button onClick="{{ goSummary }}" style="height:32px;padding:0 12px;border:1px solid var(--border-default);border-radius:var(--radius-pill);background:var(--surface-paper);color:var(--ink-secondary);font-size:12px;font-weight:600;cursor:pointer" style-hover="background:var(--surface-ink-tint)">S8 · Summary</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin:-32px 0 44px">
+      <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted);width:100%;margin-bottom:2px">Preview a state</span>
+      <button onClick="{{ enterSealed }}" style="height:32px;padding:0 12px;border:1px solid var(--border-default);border-radius:var(--radius-pill);background:var(--surface-paper);color:var(--ink-secondary);font-size:12px;font-weight:600;cursor:pointer" style-hover="background:var(--surface-ink-tint)">Sealed / read-only (S7c)</button>
+      <button onClick="{{ skeletonHome }}" style="height:32px;padding:0 12px;border:1px solid var(--border-default);border-radius:var(--radius-pill);background:var(--surface-paper);color:var(--ink-secondary);font-size:12px;font-weight:600;cursor:pointer" style-hover="background:var(--surface-ink-tint)">Skeleton · L0</button>
+      <button onClick="{{ skeletonAffirm }}" style="height:32px;padding:0 12px;border:1px solid var(--border-default);border-radius:var(--radius-pill);background:var(--surface-paper);color:var(--ink-secondary);font-size:12px;font-weight:600;cursor:pointer" style-hover="background:var(--surface-ink-tint)">Skeleton · L2</button>
+      <button onClick="{{ goInternal }}" style="height:32px;padding:0 12px;border:1px solid var(--border-default);border-radius:var(--radius-pill);background:var(--surface-paper);color:var(--ink-secondary);font-size:12px;font-weight:600;cursor:pointer" style-hover="background:var(--surface-ink-tint)">S9 · Internal panel</button>
+    </div>
+
+    <!-- COLOR -->
+    <h2 data-token="type/section-head serif 20 navy" style="font-family:var(--ff-serif);font-weight:500;font-size:20px;color:var(--brand-navy);border-bottom:1px solid var(--border-default);padding-bottom:8px;margin:0 0 20px">Color</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:44px">
+      <sc-for list="{{ swatches }}" as="s" hint-placeholder-count="12">
+        <div data-token="{{ s.token }}" style="border:1px solid var(--border-default);border-radius:var(--radius-input);overflow:hidden;background:var(--surface-paper)">
+          <div style="height:52px;background:{{ s.swatchStyle }};border-bottom:1px solid var(--border-default)"></div>
+          <div style="padding:8px 10px">
+            <div style="font-family:var(--ff-mono);font-size:11px;color:var(--ink-primary)">{{ s.token }}</div>
+            <div style="font-family:var(--ff-mono);font-size:10px;color:var(--ink-muted);margin-top:2px">{{ s.value }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- TYPE -->
+    <h2 style="font-family:var(--ff-serif);font-weight:500;font-size:20px;color:var(--brand-navy);border-bottom:1px solid var(--border-default);padding-bottom:8px;margin:0 0 20px">Type ramp</h2>
+    <div style="display:flex;flex-direction:column;gap:2px;border:1px solid var(--border-default);border-radius:var(--radius-card);overflow:hidden;margin-bottom:44px;background:var(--surface-paper)">
+      <sc-for list="{{ typeRamp }}" as="t" hint-placeholder-count="8">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:24px;padding:14px 20px;border-bottom:1px solid var(--surface-ink-tint);background:{{ t.rowBg }}">
+          <span style="{{ t.sampleStyle }}">{{ t.sample }}</span>
+          <span style="font-family:var(--ff-mono);font-size:10px;color:var(--ink-muted);white-space:nowrap;text-align:right">{{ t.spec }}</span>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- SCALE TOKENS -->
+    <h2 style="font-family:var(--ff-serif);font-weight:500;font-size:20px;color:var(--brand-navy);border-bottom:1px solid var(--border-default);padding-bottom:8px;margin:0 0 20px">Radius · shadow · motion</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-bottom:20px">
+      <div data-token="--radius-input 8" style="height:70px;background:var(--surface-paper);border:1px solid var(--border-default);border-radius:var(--radius-input);display:flex;align-items:flex-end;padding:8px;font-family:var(--ff-mono);font-size:10px;color:var(--ink-muted)">input · 8px</div>
+      <div data-token="--radius-card 12" style="height:70px;background:var(--surface-paper);border:1px solid var(--border-default);border-radius:var(--radius-card);display:flex;align-items:flex-end;padding:8px;font-family:var(--ff-mono);font-size:10px;color:var(--ink-muted)">card · 12px</div>
+      <div data-token="--radius-step 10" style="height:70px;background:var(--surface-paper);border:1px solid var(--border-default);border-radius:var(--radius-step);display:flex;align-items:flex-end;padding:8px;font-family:var(--ff-mono);font-size:10px;color:var(--ink-muted)">step · 10px</div>
+      <div data-token="--radius-pill" style="height:70px;background:var(--surface-paper);border:1px solid var(--border-default);border-radius:var(--radius-pill);display:flex;align-items:flex-end;padding:8px;font-family:var(--ff-mono);font-size:10px;color:var(--ink-muted)">pill · 9999</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-bottom:44px">
+      <div data-token="--shadow-card" style="height:70px;background:var(--surface-paper);border-radius:var(--radius-card);box-shadow:var(--shadow-card);display:flex;align-items:flex-end;padding:10px;font-family:var(--ff-mono);font-size:10px;color:var(--ink-muted)">shadow-card</div>
+      <div data-token="--shadow-card-hover" style="height:70px;background:var(--surface-paper);border-radius:var(--radius-card);box-shadow:var(--shadow-card-hover);display:flex;align-items:flex-end;padding:10px;font-family:var(--ff-mono);font-size:10px;color:var(--ink-muted)">card-hover</div>
+      <div data-token="--shadow-pop" style="height:70px;background:var(--surface-paper);border-radius:var(--radius-card);box-shadow:var(--shadow-pop);display:flex;align-items:flex-end;padding:10px;font-family:var(--ff-mono);font-size:10px;color:var(--ink-muted)">shadow-pop</div>
+      <div data-token="--shadow-modal" style="height:70px;background:var(--surface-paper);border-radius:var(--radius-card);box-shadow:var(--shadow-modal);display:flex;align-items:flex-end;padding:10px;font-family:var(--ff-mono);font-size:10px;color:var(--ink-muted)">shadow-modal</div>
+    </div>
+
+    <!-- NEW COMPONENTS gallery -->
+    <h2 style="font-family:var(--ff-serif);font-weight:500;font-size:20px;color:var(--brand-navy);border-bottom:1px solid var(--border-default);padding-bottom:8px;margin:0 0 6px">New components (§3B)</h2>
+    <p style="margin:0 0 20px;font-size:13px;line-height:19px;color:var(--ink-secondary);max-width:62ch">Same DNA, token-only. <strong>No new tokens were required</strong> — decision badge/box fills use the permitted <span style="font-family:var(--ff-mono);font-size:12px">15% / 5% / 30%</span> alpha steps of the existing decision colors (via <code style="font-family:var(--ff-mono);font-size:12px">color-mix</code>), so the ≤3 derived-token budget is untouched.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+      <sc-for list="{{ galleryNotes }}" as="g" hint-placeholder-count="6">
+        <div style="background:var(--surface-paper);border:1px solid var(--border-default);border-radius:var(--radius-card);padding:18px;box-shadow:var(--shadow-card)">
+          <div style="font-family:var(--ff-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--brand-navy)">{{ g.id }}</div>
+          <div style="font-family:var(--ff-serif);font-weight:500;font-size:18px;margin:4px 0 6px">{{ g.name }}</div>
+          <div style="font-size:13px;line-height:19px;color:var(--ink-secondary)">{{ g.note }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ============ S4 · EXECUTIVE HOME (L0) ============ -->
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+  <main style="max-width:880px;margin:0 auto;padding:44px clamp(16px,4vw,32px) 140px">
+    <sc-if value="{{ homeSealed }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;gap:10px;align-items:flex-start;background:var(--brand-navy-soft);border:1px solid var(--brand-navy-border);border-radius:var(--radius-input);padding:14px 16px;margin-bottom:24px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--brand-navy)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px"><path d="M9 12l2 2 4-4"></path><circle cx="12" cy="12" r="9"></circle></svg>
+        <span style="font-size:13px;line-height:19px;color:var(--brand-navy)">{{ homeSealedBanner }}</span>
+      </div>
+    </sc-if>
+    <sc-if value="{{ skHome }}" hint-placeholder-val="{{ false }}">
+      <div data-token="component/skeleton (new §3B-27)" style="display:flex;flex-direction:column;gap:14px">
+        <div style="height:12px;width:200px;border-radius:var(--radius-pill);background:var(--surface-ink-tint);animation:ab-pulse 1.4s var(--ease-calm) infinite"></div>
+        <div style="height:34px;width:60%;border-radius:8px;background:var(--surface-ink-tint);animation:ab-pulse 1.4s var(--ease-calm) infinite;margin-bottom:18px"></div>
+        <sc-for list="{{ skRows }}" as="r" hint-placeholder-count="2">
+          <div style="height:120px;border-radius:var(--radius-card);background:var(--surface-ink-tint);animation:ab-pulse 1.4s var(--ease-calm) infinite"></div>
+        </sc-for>
+      </div>
+    </sc-if>
+    <sc-if value="{{ homeReady }}" hint-placeholder-val="{{ true }}">
+    <p style="margin:0 0 10px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted)">{{ greeting }}</p>
+    <h1 style="margin:0 0 12px;font-family:var(--ff-serif);font-weight:500;font-size:30px;line-height:40px;color:var(--ink-primary)">Your processes, on one page.</h1>
+    <p style="margin:0 0 32px;font-size:15px;line-height:1.55;color:var(--ink-secondary);max-width:58ch">See how the standard works, then tell us where your business differs.</p>
+
+    <!-- VALUE-CHAIN RIBBON (centerpiece) -->
+    <div data-token="component/value-chain-ribbon (new §3B-16)" style="display:flex;flex-direction:column;gap:14px;margin-bottom:36px">
+      <sc-for list="{{ ribbon }}" as="seg" hint-placeholder-count="2">
+        <button onClick="{{ seg.open }}" style="text-align:left;cursor:pointer;background:{{ seg.fill }};border:1px solid {{ seg.border }};border-radius:var(--radius-card);padding:22px 24px;box-shadow:var(--shadow-card);transition:box-shadow var(--dur-calm) var(--ease-calm),transform var(--dur-calm) var(--ease-calm)" style-hover="box-shadow:var(--shadow-card-hover);transform:translateY(-1px)">
+          <div style="display:flex;align-items:center;gap:20px">
+            <!-- progress ring -->
+            <div style="position:relative;width:56px;height:56px;flex:none">
+              <svg width="56" height="56" viewBox="0 0 56 56">
+                <circle cx="28" cy="28" r="24" fill="none" stroke="var(--surface-ink-tint)" stroke-width="6"></circle>
+                <circle cx="28" cy="28" r="24" fill="none" stroke="{{ seg.ringColor }}" stroke-width="6" stroke-linecap="round" stroke-dasharray="{{ seg.circ }}" stroke-dashoffset="{{ seg.dash }}" transform="rotate(-90 28 28)" style="transition:stroke-dashoffset var(--dur-hero) var(--ease-hero)"></circle>
+              </svg>
+              <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--ff-mono);font-size:11px;font-weight:600;color:var(--ink-secondary)">{{ seg.ringLabel }}</span>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <span style="font-family:var(--ff-serif);font-weight:500;font-size:20px;color:var(--brand-navy)">{{ seg.name }}</span>
+                <span style="font-family:var(--ff-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;padding:2px 8px;border-radius:var(--radius-pill);background:{{ seg.statusBg }};color:{{ seg.statusFg }}">{{ seg.statusLabel }}</span>
+              </div>
+              <div style="font-size:13px;line-height:19px;color:var(--ink-secondary);margin-top:4px">{{ seg.affirmedLabel }}</div>
+              <!-- sub-process nodes -->
+              <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+                <sc-for list="{{ seg.nodes }}" as="n" hint-placeholder-count="3">
+                  <span title="{{ n.name }}" style="display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:var(--radius-pill);background:{{ n.bg }};border:1px solid {{ n.border }};font-family:var(--ff-mono);font-size:10px;font-weight:600;color:{{ n.fg }}">
+                    <span style="width:6px;height:6px;border-radius:50%;background:{{ n.dot }}"></span>{{ n.scopeId }}
+                  </span>
+                </sc-for>
+              </div>
+            </div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--border-strong)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="m9 6 6 6-6 6"></path></svg>
+          </div>
+        </button>
+      </sc-for>
+    </div>
+
+    <!-- what-happens-next strip -->
+    <div data-token="component/what-happens-next (new §3B-24)" style="background:var(--surface-paper);border:1px solid var(--border-default);border-radius:var(--radius-card);padding:20px 24px;box-shadow:var(--shadow-card)">
+      <p style="margin:0 0 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted)">What happens next</p>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px">
+        <sc-for list="{{ nextStrip }}" as="step" hint-placeholder-count="4">
+          <div style="display:flex;align-items:center;flex:1;min-width:0">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:none;width:64px">
+              <span style="width:28px;height:28px;border-radius:50%;background:{{ step.dotBg }};border:1px solid {{ step.dotBorder }};display:flex;align-items:center;justify-content:center;font-family:var(--ff-mono);font-size:11px;font-weight:700;color:{{ step.dotFg }}">{{ step.n }}</span>
+              <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:{{ step.labelColor }};text-align:center;line-height:1.3">{{ step.label }}</span>
+            </div>
+            <sc-if value="{{ step.connector }}" hint-placeholder-val="{{ true }}"><span style="flex:1;height:1px;background:var(--border-default);margin-top:-20px"></span></sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    </sc-if>
+  </main>
+
+  <!-- sticky submit bar -->
+  <sc-if value="{{ showSubmitBar }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface-paper);border-top:1px solid var(--border-default);box-shadow:var(--shadow-pop);padding:14px clamp(16px,4vw,32px)">
+      <div style="max-width:880px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px">
+        <span style="font-size:13px;color:var(--ink-secondary)">You can still change answers until you submit.</span>
+        <button onClick="{{ openSubmit }}" style="height:40px;padding:0 22px;border:none;border-radius:var(--radius-input);background:var(--cta-red);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:var(--shadow-card)" style-hover="background:var(--cta-red-hover)">Submit your review</button>
+      </div>
+    </div>
+  </sc-if>
+  </sc-if>
+
+  <!-- ============ S5 · STREAM INDEX (L1) ============ -->
+  <sc-if value="{{ isStream }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:880px;margin:0 auto;padding:36px clamp(16px,4vw,32px) 80px">
+    <button onClick="{{ goHome }}" style="display:inline-flex;align-items:center;gap:6px;background:none;border:none;padding:0;margin:0 0 18px;cursor:pointer;font-family:var(--ff-mono);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted)" style-hover="color:var(--brand-navy)">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"></path></svg>
+      Home / {{ stream.crumb }}
+    </button>
+    <h1 style="margin:0 0 8px;font-family:var(--ff-serif);font-weight:500;font-size:30px;line-height:40px;color:var(--ink-primary)">{{ stream.name }}</h1>
+    <p style="margin:0 0 24px;font-size:15px;line-height:1.55;color:var(--ink-secondary);max-width:58ch">{{ stream.support }}</p>
+
+    <sc-if value="{{ stream.complete }}" hint-placeholder-val="{{ false }}">
+      <div style="background:color-mix(in srgb,var(--decision-standard) 12%,var(--surface-paper));border:1px solid color-mix(in srgb,var(--decision-standard) 30%,transparent);border-radius:var(--radius-input);padding:12px 16px;margin-bottom:24px;font-size:13px;color:var(--decision-standard);font-weight:500">All processes in this stream affirmed ✓</div>
+    </sc-if>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:16px">
+      <sc-for list="{{ stream.stories }}" as="st" hint-placeholder-count="3">
+        <!-- FULL story card vs FALLBACK compact -->
+        <sc-if value="{{ st.full }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ st.open }}" data-token="component/story-card full (new §3B-18)" style="text-align:left;cursor:pointer;background:var(--surface-paper);border:1px solid var(--border-default);border-radius:var(--radius-card);padding:20px;box-shadow:var(--shadow-card);display:flex;flex-direction:column;gap:12px;transition:box-shadow var(--dur-calm) var(--ease-calm),transform var(--dur-calm) var(--ease-calm)" style-hover="box-shadow:var(--shadow-card-hover);transform:translateY(-1px)">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="height:22px;padding:0 8px;display:inline-flex;align-items:center;border-radius:5px;background:var(--brand-navy);color:#fff;font-family:var(--ff-mono);font-size:11px;font-weight:700;letter-spacing:.04em">{{ st.scopeId }}</span>
+              <span style="font-family:var(--ff-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;padding:2px 8px;border-radius:var(--radius-pill);background:{{ st.statusBg }};color:{{ st.statusFg }}">{{ st.statusLabel }}</span>
+            </div>
+            <div style="font-family:var(--ff-serif);font-weight:500;font-size:18px;line-height:1.3;color:var(--ink-primary)">{{ st.headline }}</div>
+            <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px">
+              <sc-for list="{{ st.outcomes }}" as="o" hint-placeholder-count="3">
+                <li style="font-size:13px;line-height:19px;color:var(--ink-secondary)">{{ o }}</li>
+              </sc-for>
+            </ul>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:4px;padding-top:12px;border-top:1px solid var(--surface-ink-tint)">
+              <span style="font-size:11px;color:var(--ink-muted)"><span style="font-family:var(--ff-mono);font-weight:600;color:var(--ink-secondary)">{{ st.metaCount }}</span> · {{ st.metaChapters }}</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--brand-navy)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"></path></svg>
+            </div>
+          </button>
+        </sc-if>
+        <sc-if value="{{ st.fallback }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ st.open }}" data-token="component/story-card fallback (honest, no fake narrative)" style="text-align:left;cursor:pointer;background:var(--surface-paper);border:1px dashed var(--border-strong);border-radius:var(--radius-card);padding:18px;display:flex;flex-direction:column;gap:10px;transition:background var(--dur-calm) var(--ease-calm)" style-hover="background:var(--surface-ink-tint)">
+            <span style="height:22px;padding:0 8px;display:inline-flex;align-items:center;align-self:flex-start;border-radius:5px;background:var(--brand-navy);color:#fff;font-family:var(--ff-mono);font-size:11px;font-weight:700;letter-spacing:.04em">{{ st.scopeId }}</span>
+            <div style="font-size:13px;line-height:19px;color:var(--ink-secondary)">{{ st.description }}</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:2px">
+              <span style="font-family:var(--ff-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;padding:2px 8px;border-radius:var(--radius-pill);background:color-mix(in srgb,var(--decision-configure) 15%,transparent);color:var(--decision-configure)">{{ st.metaCount }}</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ink-muted)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"></path></svg>
+            </div>
+          </button>
+        </sc-if>
+      </sc-for>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ============ S6 · PROCESS STORY (L1) ============ -->
+  <sc-if value="{{ isProcess }}" hint-placeholder-val="{{ false }}">
+  <div>
+    <!-- journey progress bar (sticky) -->
+    <div data-token="component/journey-progress-bar (new §3B-23)" style="position:sticky;top:56px;z-index:20;background:var(--surface-paper);border-bottom:1px solid var(--border-default)">
+      <div style="max-width:880px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:10px clamp(16px,4vw,32px)">
+        <button onClick="{{ proc.backToStream }}" style="display:inline-flex;align-items:center;gap:5px;background:none;border:none;padding:0;cursor:pointer;font-size:12px;color:var(--ink-secondary)" style-hover="color:var(--brand-navy)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"></path></svg>
+        </button>
+        <span style="height:22px;padding:0 8px;display:inline-flex;align-items:center;border-radius:5px;background:var(--brand-navy);color:#fff;font-family:var(--ff-mono);font-size:11px;font-weight:700">{{ proc.scopeId }}</span>
+        <span style="font-size:13px;font-weight:600;color:var(--ink-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ proc.name }}</span>
+        <div style="flex:1;height:8px;border-radius:var(--radius-pill);background:var(--surface-ink-tint);overflow:hidden;display:flex">
+          <span style="width:{{ proc.pctStandard }}%;background:var(--decision-standard);transition:width var(--dur-hero) var(--ease-hero)"></span>
+          <span style="width:{{ proc.pctConfigure }}%;background:var(--decision-configure);transition:width var(--dur-hero) var(--ease-hero)"></span>
+          <span style="width:{{ proc.pctCustom }}%;background:var(--decision-custom);transition:width var(--dur-hero) var(--ease-hero)"></span>
+        </div>
+        <span style="font-family:var(--ff-mono);font-size:11px;color:var(--ink-muted);white-space:nowrap">{{ proc.answeredLabel }}</span>
+      </div>
+    </div>
+
+    <main style="max-width:880px;margin:0 auto;padding:32px clamp(16px,4vw,32px) 80px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <span style="height:22px;padding:0 8px;display:inline-flex;align-items:center;border-radius:5px;background:var(--brand-navy);color:#fff;font-family:var(--ff-mono);font-size:11px;font-weight:700;letter-spacing:.04em">{{ proc.scopeId }}</span>
+      </div>
+      <h1 style="margin:0 0 16px;font-family:var(--ff-serif);font-weight:500;font-size:30px;line-height:40px;color:var(--ink-primary);max-width:20ch">{{ proc.headline }}</h1>
+      <ul style="margin:0 0 32px;padding-left:20px;display:flex;flex-direction:column;gap:8px;max-width:60ch">
+        <sc-for list="{{ proc.outcomes }}" as="o" hint-placeholder-count="3">
+          <li style="font-size:14px;line-height:1.5;color:var(--ink-secondary)">{{ o }}</li>
+        </sc-for>
+      </ul>
+
+      <!-- CHAPTER BAND (component 19) -->
+      <sc-if value="{{ proc.hasChapters }}" hint-placeholder-val="{{ true }}">
+        <p style="margin:0 0 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted)">How this runs · {{ proc.chapterCount }} chapters</p>
+        <div style="display:flex;flex-direction:column;gap:0">
+          <sc-for list="{{ proc.chapters }}" as="ch" hint-placeholder-count="5">
+            <div data-token="component/chapter-card (new §3B-19)" style="position:relative;display:flex;gap:16px;padding-bottom:20px">
+              <!-- rail -->
+              <div style="display:flex;flex-direction:column;align-items:center;flex:none;width:28px">
+                <span style="width:28px;height:28px;border-radius:50%;background:var(--brand-navy);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--ff-serif);font-weight:500;font-size:14px">{{ ch.n }}</span>
+                <sc-if value="{{ ch.connector }}" hint-placeholder-val="{{ true }}"><span style="flex:1;width:1px;background:var(--brand-navy-border);margin-top:4px"></span></sc-if>
+              </div>
+              <div style="flex:1;min-width:0;background:var(--surface-paper);border:1px solid var(--border-default);border-radius:var(--radius-card);padding:18px 20px;box-shadow:var(--shadow-card)">
+                <div style="font-family:var(--ff-serif);font-weight:500;font-size:18px;color:var(--ink-primary)">{{ ch.title }}</div>
+                <div style="font-size:13px;line-height:19px;color:var(--ink-secondary);margin-top:6px">{{ ch.summary }}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">
+                  <sc-for list="{{ ch.roles }}" as="r" hint-placeholder-count="2">
+                    <span style="height:22px;padding:0 10px;display:inline-flex;align-items:center;border-radius:var(--radius-pill);background:var(--surface-ink-tint);font-size:11px;font-weight:600;color:var(--ink-secondary)">{{ r }}</span>
+                  </sc-for>
+                  <sc-for list="{{ ch.apps }}" as="a" hint-placeholder-count="2">
+                    <span style="height:22px;padding:0 10px;display:inline-flex;align-items:center;border-radius:var(--radius-pill);background:var(--brand-navy-soft);font-family:var(--ff-mono);font-size:10px;font-weight:600;color:var(--brand-navy)">{{ a }}</span>
+                  </sc-for>
+                </div>
+                <!-- verbatim collapsible: exact SAP steps -->
+                <button onClick="{{ ch.toggle }}" style="display:inline-flex;align-items:center;gap:6px;margin-top:14px;background:none;border:none;padding:0;cursor:pointer;font-size:11px;font-weight:500;color:var(--ink-muted)" style-hover="color:var(--brand-navy)">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="transform:{{ ch.chevron }};transition:transform var(--dur-calm) var(--ease-calm)"><path d="m9 6 6 6-6 6"></path></svg>
+                  See the exact SAP steps
+                </button>
+                <sc-if value="{{ ch.open }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:12px;background:var(--surface-ink-tint);border-radius:var(--radius-input);padding:14px;overflow-x:auto">
+                    <div style="font-family:var(--ff-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);margin-bottom:10px">SAP verbatim · source of truth · never changed</div>
+                    <div style="display:flex;align-items:stretch;gap:8px;min-width:min-content">
+                      <sc-for list="{{ ch.steps }}" as="stp" hint-placeholder-count="2">
+                        <div style="display:flex;align-items:center;gap:8px">
+                          <div style="width:172px;flex:none;background:var(--surface-paper);border:1px solid var(--brand-navy-border);border-radius:var(--radius-step);padding:12px">
+                            <span style="width:22px;height:22px;border-radius:50%;background:var(--brand-navy);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--ff-mono);font-size:11px;font-weight:700">{{ stp.n }}</span>
+                            <div style="font-size:13px;line-height:18px;font-weight:600;color:var(--ink-primary);margin-top:8px">{{ stp.name }}</div>
+                            <div style="font-family:var(--ff-mono);font-size:11px;color:var(--ink-muted);margin-top:4px">{{ stp.apps }}</div>
+                          </div>
+                          <sc-if value="{{ stp.connector }}" hint-placeholder-val="{{ true }}">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--border-strong)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="m9 6 6 6-6 6"></path></svg>
+                          </sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- FALLBACK: no chapters → flat embedded step strip -->
+      <sc-if value="{{ proc.isFallback }}" hint-placeholder-val="{{ false }}">
+        <div style="background:var(--surface-ink-tint);border-radius:var(--radius-input);padding:16px 14px;overflow-x:auto">
+          <div style="font-family:var(--ff-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);margin-bottom:12px">Where this sits · {{ proc.scopeId }} {{ proc.name }}</div>
+          <div style="display:flex;align-items:center;gap:8px;min-width:min-content">
+            <sc-for list="{{ proc.flatSteps }}" as="stp" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="width:184px;flex:none;background:var(--surface-paper);border:1px solid var(--brand-navy-border);border-radius:var(--radius-step);padding:12px">
+                  <span style="width:22px;height:22px;border-radius:50%;background:var(--brand-navy);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--ff-mono);font-size:11px;font-weight:700">{{ stp.n }}</span>
+                  <div style="font-size:13px;line-height:18px;font-weight:600;color:var(--ink-primary);margin-top:8px">{{ stp.name }}</div>
+                  <div style="font-family:var(--ff-mono);font-size:11px;color:var(--ink-muted);margin-top:4px">{{ stp.apps }}</div>
+                </div>
+                <sc-if value="{{ stp.connector }}" hint-placeholder-val="{{ true }}">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--border-strong)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="m9 6 6 6-6 6"></path></svg>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- attribution footer line -->
+      <div data-token="component/attribution-footer (new §3B-20)" style="margin-top:28px;padding-top:16px;border-top:1px solid var(--border-default);display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline">
+        <span style="font-family:var(--ff-mono);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted)">Source: SAP Best Practices · S/4HANA Cloud Public Edition 2602</span>
+        <a href="#" style="font-size:13px;color:var(--brand-navy);text-decoration:underline;text-underline-offset:2px">Open in SAP Signavio Process Navigator ↗</a>
+      </div>
+
+      <!-- CTA -->
+      <div style="margin-top:28px">
+        <button onClick="{{ proc.affirm }}" style="width:100%;height:44px;border-radius:var(--radius-input);border:{{ proc.ctaBorder }};background:{{ proc.ctaBg }};color:{{ proc.ctaFg }};font-size:14px;font-weight:600;cursor:pointer;box-shadow:{{ proc.ctaShadow }}" style-hover="{{ proc.ctaHover }}">{{ proc.ctaLabel }}</button>
+      </div>
+    </main>
+  </div>
+  </sc-if>
+
+  <!-- ============ S7 · AFFIRM (L2) ============ -->
+  <sc-if value="{{ isAffirm }}" hint-placeholder-val="{{ false }}">
+  <div>
+    <!-- journey progress bar (sticky) -->
+    <div style="position:sticky;top:56px;z-index:20;background:var(--surface-paper);border-bottom:1px solid var(--border-default)">
+      <div style="max-width:880px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:10px clamp(16px,4vw,32px)">
+        <button onClick="{{ aff.back }}" style="display:inline-flex;align-items:center;gap:5px;background:none;border:none;padding:0;cursor:pointer;font-size:12px;color:var(--ink-secondary)" style-hover="color:var(--brand-navy)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"></path></svg>
+        </button>
+        <span style="height:22px;padding:0 8px;display:inline-flex;align-items:center;border-radius:5px;background:var(--brand-navy);color:#fff;font-family:var(--ff-mono);font-size:11px;font-weight:700">{{ aff.scopeId }}</span>
+        <span style="font-size:13px;font-weight:600;color:var(--ink-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ aff.name }}</span>
+        <div style="flex:1;height:8px;border-radius:var(--radius-pill);background:var(--surface-ink-tint);overflow:hidden;display:flex">
+          <span style="width:{{ aff.pctStandard }}%;background:var(--decision-standard);transition:width var(--dur-hero) var(--ease-hero)"></span>
+          <span style="width:{{ aff.pctConfigure }}%;background:var(--decision-configure);transition:width var(--dur-hero) var(--ease-hero)"></span>
+          <span style="width:{{ aff.pctCustom }}%;background:var(--decision-custom);transition:width var(--dur-hero) var(--ease-hero)"></span>
+        </div>
+        <span style="font-family:var(--ff-mono);font-size:11px;color:var(--ink-muted);white-space:nowrap">{{ aff.answeredLabel }}</span>
+      </div>
+    </div>
+
+    <main style="max-width:880px;margin:0 auto;padding:32px clamp(16px,4vw,32px) 100px">
+      <sc-if value="{{ aff.sealed }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:10px;align-items:flex-start;background:var(--brand-navy-soft);border:1px solid var(--brand-navy-border);border-radius:var(--radius-input);padding:14px 16px;margin-bottom:24px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--brand-navy)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px"><rect x="4" y="10" width="16" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+          <span style="font-size:13px;line-height:19px;color:var(--brand-navy)">{{ aff.sealedBanner }}</span>
+        </div>
+      </sc-if>
+      <sc-if value="{{ skAffirm }}" hint-placeholder-val="{{ false }}">
+        <div data-token="component/skeleton (new §3B-27)" style="display:flex;flex-direction:column;gap:16px">
+          <div style="height:24px;width:220px;border-radius:8px;background:var(--surface-ink-tint);animation:ab-pulse 1.4s var(--ease-calm) infinite;margin-bottom:8px"></div>
+          <sc-for list="{{ skRows }}" as="r" hint-placeholder-count="2">
+            <div style="border:1px solid var(--border-default);border-radius:var(--radius-card);padding:22px 20px;background:var(--surface-paper);display:flex;flex-direction:column;gap:14px">
+              <div style="height:12px;width:40%;border-radius:var(--radius-pill);background:var(--surface-ink-tint);animation:ab-pulse 1.4s var(--ease-calm) infinite"></div>
+              <div style="height:16px;width:80%;border-radius:6px;background:var(--surface-ink-tint);animation:ab-pulse 1.4s var(--ease-calm) infinite"></div>
+              <div style="display:flex;gap:12px">
+                <sc-for list="{{ skChips }}" as="c" hint-placeholder-count="3">
+                  <div style="height:36px;flex:1;border-radius:var(--radius-pill);background:var(--surface-ink-tint);animation:ab-pulse 1.4s var(--ease-calm) infinite"></div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+      <sc-if value="{{ affirmReady }}" hint-placeholder-val="{{ true }}">
+      <sc-for list="{{ aff.groups }}" as="grp" hint-placeholder-count="2">
+        <section style="margin-bottom:36px">
+          <h2 style="font-family:var(--ff-serif);font-weight:500;font-size:20px;color:var(--brand-navy);border-bottom:1px solid var(--border-default);padding-bottom:8px;margin:0 0 20px">{{ grp.title }}</h2>
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <sc-for list="{{ grp.questions }}" as="q" hint-placeholder-count="2">
+              <div data-token="component/affirm-card (§3A-1)" style="background:var(--surface-paper);border:1px solid var(--border-default);border-radius:var(--radius-card);padding:22px 20px;box-shadow:var(--shadow-card)">
+                <!-- header row -->
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+                  <span style="font-size:14px;font-weight:600;color:var(--ink-secondary)">{{ q.category }}</span>
+                  <span style="height:20px;padding:0 8px;display:inline-flex;align-items:center;border-radius:var(--radius-pill);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;background:{{ q.badgeBg }};color:{{ q.badgeFg }}">{{ q.badgeLabel }}</span>
+                  <span style="margin-left:auto;font-family:var(--ff-mono);font-size:11px;color:var(--ink-muted)">{{ q.qid }}</span>
+                </div>
+                <div style="font-size:13px;line-height:19px;color:var(--ink-secondary);margin-bottom:8px">What this is about: {{ q.about }}</div>
+                <div style="font-size:15px;line-height:22px;color:var(--ink-primary);margin-bottom:16px">{{ q.text }}</div>
+
+                <!-- DECISION format: chips -->
+                <sc-if value="{{ q.isDecision }}" hint-placeholder-val="{{ true }}">
+                  <div role="radiogroup" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+                    <sc-for list="{{ q.chips }}" as="c" hint-placeholder-count="3">
+                      <div style="display:flex;flex-direction:column;gap:6px;min-width:140px;flex:1">
+                        <button role="radio" aria-checked="{{ c.checked }}" onClick="{{ c.onClick }}" style="{{ c.style }}" style-hover="{{ c.hover }}" style-focus="{{ c.focus }}">{{ c.label }}</button>
+                        <span style="font-size:11px;line-height:16px;color:var(--ink-muted);text-align:center">{{ c.helper }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+
+                  <!-- standard-means box -->
+                  <div style="background:color-mix(in srgb,var(--decision-standard) 5%,var(--surface-paper));border:1px solid color-mix(in srgb,var(--decision-standard) 30%,transparent);border-radius:var(--radius-input);padding:14px;margin-bottom:12px">
+                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;color:var(--decision-standard);margin-bottom:6px">What 'adopt SAP standard' means here</div>
+                    <div style="font-size:13px;line-height:19px;color:var(--ink-secondary)">{{ q.standardMeans }}</div>
+                  </div>
+
+                  <!-- expectation note (deviate/discuss) -->
+                  <sc-if value="{{ q.note.visible }}" hint-placeholder-val="{{ false }}">
+                    <div data-token="component/expectation-note (new §3B-21)" style="background:{{ q.note.bg }};border:1px solid {{ q.note.border }};border-radius:var(--radius-input);padding:14px;margin-bottom:12px;animation:ab-fade var(--dur-calm) var(--ease-calm)">
+                      <div style="font-size:13px;line-height:19px;color:var(--ink-secondary)">{{ q.note.text }}</div>
+                    </div>
+                  </sc-if>
+
+                  <!-- deviation reason (custom only) -->
+                  <sc-if value="{{ q.reason.visible }}" hint-placeholder-val="{{ false }}">
+                    <div style="background:var(--surface-banner-warn);border:1px solid color-mix(in srgb,var(--decision-custom) 30%,transparent);border-radius:var(--radius-input);padding:14px;margin-bottom:12px;animation:ab-fade var(--dur-calm) var(--ease-calm)">
+                      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.02em;color:var(--decision-custom);margin-bottom:8px">Why we differ</div>
+                      <sc-if value="{{ q.reason.sealed }}" hint-placeholder-val="{{ false }}">
+                        <div style="font-size:13px;line-height:19px;color:var(--ink-primary)">{{ q.reason.value }}</div>
+                      </sc-if>
+                      <sc-if value="{{ q.reason.editable }}" hint-placeholder-val="{{ true }}">
+                        <textarea onInput="{{ q.reason.onInput }}" placeholder="Describe what you do differently…" style="width:100%;min-height:60px;resize:vertical;border:none;background:transparent;outline:none;font-size:{{ inputFs }};line-height:19px;color:var(--ink-primary)">{{ q.reason.value }}</textarea>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+                </sc-if>
+
+                <!-- INFORMATION format: free text + flag -->
+                <sc-if value="{{ q.isInfo }}" hint-placeholder-val="{{ false }}">
+                  <sc-if value="{{ q.info.editable }}" hint-placeholder-val="{{ true }}">
+                    <textarea onInput="{{ q.info.onInput }}" placeholder="Type your answer…" style="width:100%;min-height:72px;resize:vertical;border:1px solid var(--border-default);border-radius:var(--radius-input);background:var(--surface-paper);padding:12px;outline:none;font-size:{{ inputFs }};line-height:20px;color:var(--ink-primary);margin-bottom:12px" style-focus="border-color:var(--brand-navy);box-shadow:var(--shadow-focus-ring)">{{ q.info.value }}</textarea>
+                    <button onClick="{{ q.flag.toggle }}" style="{{ q.flag.style }}">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15V4a1 1 0 0 1 1-1h11l-2 4 2 4H5"></path><path d="M4 22v-7"></path></svg>
+                      Flag for workshop discussion
+                    </button>
+                  </sc-if>
+                  <sc-if value="{{ q.info.sealed }}" hint-placeholder-val="{{ false }}">
+                    <div style="background:var(--surface-ink-tint);border-radius:var(--radius-input);padding:14px;margin-bottom:12px;font-size:14px;line-height:20px;color:var(--ink-primary)">{{ q.info.value }}</div>
+                    <sc-if value="{{ q.flag.on }}" hint-placeholder-val="{{ false }}">
+                      <span style="display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:var(--radius-pill);background:color-mix(in srgb,var(--decision-configure) 15%,transparent);color:var(--decision-configure);font-size:11px;font-weight:600">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15V4a1 1 0 0 1 1-1h11l-2 4 2 4H5"></path><path d="M4 22v-7"></path></svg>
+                        Flagged for workshop
+                      </span>
+                    </sc-if>
+                  </sc-if>
+                </sc-if>
+
+                <!-- verbatim collapsible -->
+                <button onClick="{{ q.toggleVerbatim }}" style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;background:none;border:none;padding:0;cursor:pointer;font-size:11px;font-weight:500;color:var(--ink-muted)" style-hover="color:var(--brand-navy)">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="transform:{{ q.chevron }};transition:transform var(--dur-calm) var(--ease-calm)"><path d="m9 6 6 6-6 6"></path></svg>
+                  SAP verbatim
+                </button>
+                <sc-if value="{{ q.verbatimOpen }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:10px;background:var(--surface-ink-tint);border-radius:var(--radius-input);padding:14px">
+                    <div style="font-family:var(--ff-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-muted);margin-bottom:8px">SAP verbatim · source of truth · never changed</div>
+                    <div style="font-size:12px;line-height:18px;color:var(--ink-secondary)">{{ q.verbatim }}</div>
+                  </div>
+                </sc-if>
+
+                <!-- autosave tick -->
+                <sc-if value="{{ q.saved }}" hint-placeholder-val="{{ false }}">
+                  <div aria-live="polite" style="display:flex;align-items:center;gap:5px;margin-top:12px;font-size:11px;color:var(--ink-muted);animation:ab-fade var(--dur-calm) var(--ease-calm)">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--decision-standard)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+                    Saved
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+      </sc-for>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <button onClick="{{ aff.next }}" style="height:40px;padding:0 22px;border:none;border-radius:var(--radius-input);background:var(--cta-red);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:var(--shadow-card)" style-hover="background:var(--cta-red-hover)">Next process →</button>
+        <button onClick="{{ aff.back }}" style="height:40px;padding:0 18px;border:1px solid var(--border-default);border-radius:var(--radius-input);background:var(--surface-paper);color:var(--ink-primary);font-size:14px;font-weight:600;cursor:pointer" style-hover="background:var(--surface-ink-tint)">Back to {{ aff.streamName }}</button>
+      </div>
+      </sc-if>
+    </main>
+  </div>
+  </sc-if>
+
+  <!-- ============ S1 · INVITATION LANDING ============ -->
+  <sc-if value="{{ isLanding }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:560px;margin:0 auto;padding:56px clamp(16px,4vw,32px) 72px;text-align:center">
+    <div data-token="component/wordmark lg" style="display:inline-flex;align-items:center;gap:10px;margin-bottom:32px">
+      <span style="width:32px;height:32px;border-radius:4px;background:var(--brand-navy);display:flex;align-items:center;justify-content:center;font-family:var(--ff-serif);font-weight:600;font-size:20px;color:#fff;line-height:1">A</span>
+      <span style="font-family:var(--ff-serif);font-weight:500;font-size:22px;color:var(--brand-navy)">ABeam Workbench</span>
+    </div>
+    <p style="margin:0 0 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted)">Executive scope review</p>
+    <h1 style="margin:0 0 20px;font-family:var(--ff-serif);font-weight:500;font-size:32px;line-height:38px;color:var(--ink-primary);text-wrap:balance">{{ landing.headline }}</h1>
+    <div style="display:flex;flex-direction:column;gap:8px;margin:0 auto 28px;max-width:46ch;text-align:left">
+      <p style="margin:0;font-size:15px;line-height:1.55;color:var(--ink-secondary)">A guided look at how SAP's standard processes would run your business — in plain language, no SAP knowledge needed.</p>
+      <p style="margin:0;font-size:15px;line-height:1.55;color:var(--ink-secondary)">About 20 minutes. You can pause and come back on the same link.</p>
+      <p style="margin:0;font-size:15px;line-height:1.55;color:var(--ink-secondary)">Every answer stays open until the workshop — <strong>nothing is committed yet.</strong></p>
+    </div>
+    <div style="background:var(--surface-paper);border:1px solid var(--border-default);border-radius:var(--radius-card);padding:22px 20px;box-shadow:var(--shadow-card);text-align:left;display:flex;flex-direction:column;gap:16px;margin-bottom:20px">
+      <button onClick="{{ landing.toggleAck }}" role="checkbox" aria-checked="{{ landing.ackC }}" style="display:flex;gap:12px;align-items:flex-start;text-align:left;background:none;border:none;padding:0;cursor:pointer" style-focus="outline:none">
+        <span style="{{ landing.ackBox }}">
+          <sc-if value="{{ landing.ack }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>
+        </span>
+        <span style="font-size:14px;line-height:20px;color:var(--ink-secondary)">I confirm I'm authorised to review scope decisions on behalf of {{ clientName }}.</span>
+      </button>
+      <button onClick="{{ landing.togglePdpa }}" role="checkbox" aria-checked="{{ landing.pdpaC }}" style="display:flex;gap:12px;align-items:flex-start;text-align:left;background:none;border:none;padding:0;cursor:pointer" style-focus="outline:none">
+        <span style="{{ landing.pdpaBox }}">
+          <sc-if value="{{ landing.pdpa }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>
+        </span>
+        <span style="font-size:14px;line-height:20px;color:var(--ink-secondary)">I consent to ABeam processing my responses for this review, including cross-border transfer to ABeam project systems, in line with the PDPA.</span>
+      </button>
+    </div>
+    <button onClick="{{ landing.begin }}" style="width:100%;height:44px;border:none;border-radius:var(--radius-input);background:var(--cta-red);color:#fff;font-size:14px;font-weight:600;box-shadow:var(--shadow-card);{{ landing.beginStyle }}" style-hover="background:var(--cta-red-hover)">Begin review</button>
+    <p style="margin:14px 0 0;font-size:11px;line-height:16px;color:var(--ink-muted)">Your link is personal. We'll verify your device with a one-time code. <a href="#" onClick="{{ landing.showInvalid }}" style="color:var(--brand-navy)">See the expired-link screen ↗</a></p>
+  </main>
+  </sc-if>
+
+  <!-- ============ S2 · DEVICE VERIFICATION ============ -->
+  <sc-if value="{{ isVerify }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:560px;margin:0 auto;padding:64px clamp(16px,4vw,32px) 72px;text-align:center">
+    <p style="margin:0 0 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted)">Device verification</p>
+    <h1 style="margin:0 0 8px;font-family:var(--ff-serif);font-weight:500;font-size:32px;line-height:38px;color:var(--ink-primary)">Enter the 6-digit code we emailed you</h1>
+    <p style="margin:0 0 28px;font-size:13px;color:var(--ink-muted)">Demo code: <span style="font-family:var(--ff-mono);color:var(--ink-secondary)">123456</span></p>
+    <div data-token="component/otp-box (new §3B-25)" style="display:flex;justify-content:center;gap:10px;margin-bottom:14px;{{ verify.shake }}">
+      <sc-for list="{{ verify.boxes }}" as="b" hint-placeholder-count="6">
+        <input data-otp="{{ b.idx }}" value="{{ b.v }}" onInput="{{ b.onInput }}" onKeyDown="{{ b.onKey }}" inputmode="numeric" maxlength="1" aria-label="Digit" style="width:48px;height:56px;text-align:center;font-family:var(--ff-mono);font-size:20px;border:1px solid var(--border-default);border-radius:var(--radius-input);background:var(--surface-paper);color:var(--ink-primary);outline:none" style-focus="border-color:var(--brand-navy);box-shadow:var(--shadow-focus-ring)" />
+      </sc-for>
+    </div>
+    <sc-if value="{{ verify.error }}" hint-placeholder-val="{{ false }}">
+      <p aria-live="assertive" style="margin:0 0 14px;font-size:13px;color:var(--danger)">{{ verify.attemptsLabel }}</p>
+    </sc-if>
+    <div style="margin:6px 0 24px;font-size:11px;color:var(--ink-muted)">
+      <sc-if value="{{ verify.canResend }}" hint-placeholder-val="{{ false }}"><a href="#" onClick="{{ verify.resend }}" style="color:var(--brand-navy)">Resend code</a></sc-if>
+      <sc-if value="{{ verify.canResend }}" hint-placeholder-val="{{ true }}"></sc-if>
+      <span>{{ verify.countdownLabel }}</span>
+    </div>
+    <button onClick="{{ verify.verify }}" style="width:100%;max-width:320px;height:44px;border:none;border-radius:var(--radius-input);background:var(--cta-red);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:var(--shadow-card)" style-hover="background:var(--cta-red-hover)">Verify</button>
+  </main>
+  </sc-if>
+
+  <!-- ============ S3 · TERMINAL ============ -->
+  <sc-if value="{{ isTerminal }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:560px;margin:0 auto;padding:64px clamp(16px,4vw,32px) 72px;text-align:center">
+    <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:32px">
+      <span style="width:32px;height:32px;border-radius:4px;background:var(--brand-navy);display:flex;align-items:center;justify-content:center;font-family:var(--ff-serif);font-weight:600;font-size:20px;color:#fff;line-height:1">A</span>
+      <span style="font-family:var(--ff-serif);font-weight:500;font-size:22px;color:var(--brand-navy)">ABeam Workbench</span>
+    </div>
+    <div data-token="component/terminal-shell (§3A-15)" style="background:var(--surface-paper);border:1px solid var(--border-default);border-radius:var(--radius-card);padding:40px 32px;box-shadow:var(--shadow-card);text-align:left">
+      <p style="margin:0 0 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted)">ABeam Workbench</p>
+      <h1 style="margin:0 0 14px;font-family:var(--ff-serif);font-weight:500;font-size:30px;line-height:38px;color:var(--ink-primary)">{{ terminal.h }}</h1>
+      <p style="margin:0 0 28px;font-size:15px;line-height:1.55;color:var(--ink-secondary)">{{ terminal.b }}</p>
+      <div data-token="component/consultant-contact-card (§3A-14)" style="border-top:1px solid var(--border-default);padding-top:24px;display:flex;gap:14px;align-items:center">
+        <span style="width:48px;height:48px;flex:none;border-radius:50%;background:var(--brand-navy-soft);display:flex;align-items:center;justify-content:center;font-family:var(--ff-serif);font-weight:600;font-size:17px;color:var(--brand-navy)">{{ terminal.consultant.initials }}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:16px;font-weight:600;color:var(--ink-primary)">{{ terminal.consultant.name }}</div>
+          <div style="font-size:13px;color:var(--ink-muted)">{{ terminal.consultant.role }}</div>
+          <div style="font-size:14px;color:var(--ink-secondary);margin-top:2px">{{ terminal.consultant.email }} · {{ terminal.consultant.phone }}</div>
+        </div>
+      </div>
+      <a href="#" style="display:inline-flex;align-items:center;justify-content:center;margin-top:20px;height:40px;padding:0 20px;border-radius:var(--radius-input);background:var(--cta-red);color:#fff;font-size:14px;font-weight:600" style-hover="background:var(--cta-red-hover)">Email your consultant</a>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ============ S8 · EXECUTIVE SUMMARY ============ -->
+  <sc-if value="{{ isSummary }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:880px;margin:0 auto;padding:44px clamp(16px,4vw,32px) 80px">
+    <p style="margin:0 0 10px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted)">{{ summary.eyebrow }}</p>
+    <h1 style="margin:0 0 8px;font-family:var(--ff-serif);font-weight:500;font-size:30px;line-height:40px;color:var(--ink-primary)">Thank you, {{ summary.name }}. Here's what you told us.</h1>
+    <p style="margin:0 0 28px;font-size:15px;line-height:1.55;color:var(--ink-secondary)">Your consultant is preparing the workshop from these answers. You can still download a copy for your records.</p>
+
+    <!-- stat strip -->
+    <div style="display:grid;grid-template-columns:{{ statCols }};gap:12px;margin-bottom:28px">
+      <sc-for list="{{ summary.stats }}" as="stat" hint-placeholder-count="4">
+        <div data-token="component/stat-tile (§3A-9)" style="background:var(--surface-paper);border:1px solid var(--border-default);border-radius:var(--radius-card);padding:18px 14px;box-shadow:var(--shadow-card)">
+          <div style="font-family:var(--ff-serif);font-weight:500;font-size:28px;color:{{ stat.color }}">{{ stat.n }}</div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-muted);margin-top:2px">{{ stat.label }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- bucket cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:32px">
+      <sc-for list="{{ summary.buckets }}" as="bk" hint-placeholder-count="3">
+        <div data-token="component/summary-bucket-card (new §3B-26)" style="background:var(--surface-paper);border:1px solid var(--border-default);border-radius:var(--radius-card);box-shadow:var(--shadow-card);overflow:hidden;display:flex;flex-direction:column">
+          <div style="background:{{ bk.headerBg }};padding:16px 18px">
+            <div style="font-family:var(--ff-serif);font-weight:500;font-size:28px;color:{{ bk.color }}">{{ bk.count }}</div>
+            <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:{{ bk.color }}">{{ bk.label }}</div>
+          </div>
+          <div style="padding:14px 18px;display:flex;flex-direction:column;gap:12px;flex:1">
+            <sc-if value="{{ bk.empty }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:13px;color:var(--ink-muted)">Nothing here yet.</div>
+            </sc-if>
+            <sc-for list="{{ bk.items }}" as="it" hint-placeholder-count="2">
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <div style="display:flex;gap:8px;align-items:flex-start">
+                  <span style="height:20px;padding:0 7px;flex:none;display:inline-flex;align-items:center;border-radius:5px;background:var(--brand-navy);color:#fff;font-family:var(--ff-mono);font-size:10px;font-weight:700">{{ it.scopeId }}</span>
+                  <span style="font-size:13px;line-height:18px;color:var(--ink-secondary)">{{ it.text }}</span>
+                </div>
+                <sc-if value="{{ it.hasReason }}" hint-placeholder-val="{{ false }}">
+                  <div style="background:var(--surface-banner-warn);border:1px solid color-mix(in srgb,var(--decision-custom) 30%,transparent);border-radius:var(--radius-input);padding:10px 12px;font-size:12px;line-height:17px;color:var(--ink-secondary)">{{ it.reason }}</div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- what-happens-next (workshop current) -->
+    <div style="background:var(--surface-paper);border:1px solid var(--border-default);border-radius:var(--radius-card);padding:20px 24px;box-shadow:var(--shadow-card);margin-bottom:28px">
+      <p style="margin:0 0 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted)">What happens next</p>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px">
+        <sc-for list="{{ nextStripSummary }}" as="step" hint-placeholder-count="4">
+          <div style="display:flex;align-items:center;flex:1;min-width:0">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:none;width:64px">
+              <span style="width:28px;height:28px;border-radius:50%;background:{{ step.dotBg }};border:1px solid {{ step.dotBorder }};display:flex;align-items:center;justify-content:center;font-family:var(--ff-mono);font-size:11px;font-weight:700;color:{{ step.dotFg }}">{{ step.n }}</span>
+              <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:{{ step.labelColor }};text-align:center;line-height:1.3">{{ step.label }}</span>
+            </div>
+            <sc-if value="{{ step.connector }}" hint-placeholder-val="{{ true }}"><span style="flex:1;height:1px;background:var(--border-default);margin-top:-20px"></span></sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- consultant card + download -->
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between">
+      <div style="display:flex;gap:14px;align-items:center">
+        <span style="width:48px;height:48px;flex:none;border-radius:50%;background:var(--brand-navy-soft);display:flex;align-items:center;justify-content:center;font-family:var(--ff-serif);font-weight:600;font-size:17px;color:var(--brand-navy)">{{ summary.consultant.initials }}</span>
+        <div>
+          <div style="font-size:16px;font-weight:600;color:var(--ink-primary)">{{ summary.consultant.name }}</div>
+          <div style="font-size:14px;color:var(--ink-secondary)">{{ summary.consultant.email }}</div>
+        </div>
+      </div>
+      <button style="height:40px;padding:0 18px;border:1px solid var(--border-default);border-radius:var(--radius-input);background:var(--surface-paper);color:var(--ink-primary);font-size:14px;font-weight:600;cursor:pointer" style-hover="background:var(--surface-ink-tint)">Download a copy</button>
+    </div>
+  </main>
+  </sc-if>
+
+  <!-- ============ S9 · CONSULTANT GRANTS PANEL (internal) ============ -->
+  <sc-if value="{{ isInternal }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:1040px;margin:0 auto;padding:40px clamp(16px,4vw,32px) 72px">
+    <p style="margin:0 0 8px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted)">Internal · Bundle review · PETRONAS Chemicals</p>
+    <h1 style="margin:0 0 24px;font-family:var(--ff-serif);font-weight:500;font-size:30px;line-height:40px;color:var(--ink-primary)">External reviewers</h1>
+
+    <div style="background:var(--surface-paper);border:1px solid var(--border-default);border-radius:var(--radius-card);box-shadow:var(--shadow-card);overflow:hidden">
+      <!-- header row -->
+      <div style="display:grid;grid-template-columns:1.6fr 1.8fr 1.4fr 1fr 1fr;gap:16px;padding:12px 20px;border-bottom:1px solid var(--border-default);background:var(--surface-ink-tint)">
+        <span style="font-family:var(--ff-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted)">Reviewer</span>
+        <span style="font-family:var(--ff-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted)">Email</span>
+        <span style="font-family:var(--ff-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted)">Stream scope</span>
+        <span style="font-family:var(--ff-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted)">Status</span>
+        <span style="font-family:var(--ff-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-muted);text-align:right">Actions</span>
+      </div>
+      <sc-for list="{{ internal.rows }}" as="row" hint-placeholder-count="6">
+        <div style="display:grid;grid-template-columns:1.6fr 1.8fr 1.4fr 1fr 1fr;gap:16px;padding:14px 20px;border-bottom:1px solid var(--surface-ink-tint);align-items:center">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--ink-primary)">{{ row.name }}</div>
+            <div style="font-size:12px;color:var(--ink-muted)">{{ row.role }}</div>
+          </div>
+          <span style="font-size:13px;color:var(--ink-secondary);word-break:break-all">{{ row.email }}</span>
+          <div style="display:flex;flex-wrap:wrap;gap:5px">
+            <sc-for list="{{ row.streams }}" as="stm" hint-placeholder-count="1">
+              <span style="height:22px;padding:0 8px;display:inline-flex;align-items:center;border-radius:var(--radius-pill);background:var(--brand-navy-soft);font-size:11px;font-weight:600;color:var(--brand-navy)">{{ stm }}</span>
+            </sc-for>
+          </div>
+          <div>
+            <span style="height:20px;padding:0 8px;display:inline-flex;align-items:center;border-radius:var(--radius-pill);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;background:{{ row.statusBg }};color:{{ row.statusFg }}">{{ row.statusLabel }}</span>
+            <sc-if value="{{ row.locked }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:11px;line-height:15px;color:var(--danger);margin-top:5px">OTP lockout — reissue to restore access</div>
+            </sc-if>
+          </div>
+          <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+            <sc-for list="{{ row.actions }}" as="act" hint-placeholder-count="2">
+              <button style="height:28px;padding:0 10px;border:1px solid var(--border-default);border-radius:var(--radius-input);background:var(--surface-paper);color:var(--ink-secondary);font-size:12px;font-weight:600;cursor:pointer" style-hover="background:var(--surface-ink-tint);border-color:var(--border-strong)">{{ act }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+
+      <!-- invite executive row -->
+      <div style="padding:18px 20px;background:var(--surface-ink-tint)">
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted);margin-bottom:12px">Invite executive</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+          <input placeholder="Full name" style="height:38px;flex:1;min-width:140px;border:1px solid var(--border-default);border-radius:var(--radius-input);background:var(--surface-paper);padding:0 12px;font-size:14px;color:var(--ink-primary);outline:none" style-focus="border-color:var(--brand-navy);box-shadow:var(--shadow-focus-ring)" />
+          <input placeholder="Email" style="height:38px;flex:1.4;min-width:160px;border:1px solid var(--border-default);border-radius:var(--radius-input);background:var(--surface-paper);padding:0 12px;font-size:14px;color:var(--ink-primary);outline:none" style-focus="border-color:var(--brand-navy);box-shadow:var(--shadow-focus-ring)" />
+          <input placeholder="Role label" style="height:38px;flex:1;min-width:120px;border:1px solid var(--border-default);border-radius:var(--radius-input);background:var(--surface-paper);padding:0 12px;font-size:14px;color:var(--ink-primary);outline:none" style-focus="border-color:var(--brand-navy);box-shadow:var(--shadow-focus-ring)" />
+          <button style="height:38px;padding:0 18px;border:none;border-radius:var(--radius-input);background:var(--cta-red);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:var(--shadow-card)" style-hover="background:var(--cta-red-hover)">Send invite</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">
+          <sc-for list="{{ internal.streamOptions }}" as="opt" hint-placeholder-count="3">
+            <span style="height:26px;padding:0 12px;display:inline-flex;align-items:center;border-radius:var(--radius-pill);border:1px dashed var(--border-strong);background:var(--surface-paper);font-size:12px;font-weight:600;color:var(--ink-secondary);cursor:pointer" style-hover="background:var(--brand-navy-soft);border-color:var(--brand-navy-border);color:var(--brand-navy)">+ {{ opt }}</span>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+    <p style="margin:16px 0 0;font-size:11px;color:var(--ink-muted)">This panel is a section inside the internal ABeam Workbench bundle-review screen — shown here on its own for the handoff.</p>
+  </main>
+  </sc-if>
+
+  <!-- ============ SUBMIT-CONFIRM MODAL ============ -->
+  <sc-if value="{{ submitModalOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:60;background:color-mix(in srgb,var(--ink-primary) 40%,transparent);display:flex;align-items:center;justify-content:center;padding:20px;animation:ab-fade var(--dur-hero) var(--ease-hero)">
+    <div data-token="component/danger-confirm modal (§3A-12)" style="width:100%;max-width:448px;background:var(--surface-paper);border:2px solid var(--cta-red);border-radius:var(--radius-card);box-shadow:var(--shadow-pop);padding:24px">
+      <h2 style="margin:0 0 12px;font-family:var(--ff-serif);font-weight:500;font-size:20px;color:var(--ink-primary)">Submit your review?</h2>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+        <sc-for list="{{ modal.streams }}" as="ms" hint-placeholder-count="2">
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--ink-secondary)">
+            <span>{{ ms.name }}</span><span style="font-family:var(--ff-mono);font-size:12px;color:var(--ink-muted)">{{ ms.label }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <p style="margin:0 0 12px;font-size:13px;line-height:19px;color:var(--ink-secondary)">{{ modal.sealText }}</p>
+      <sc-if value="{{ modal.hasUnanswered }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:8px;align-items:flex-start;background:var(--surface-banner-warn);border:1px solid color-mix(in srgb,var(--decision-custom) 30%,transparent);border-radius:var(--radius-input);padding:12px;margin-bottom:16px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--decision-custom)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px"><path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"></path></svg>
+          <span style="font-size:13px;line-height:18px;color:var(--decision-custom)">{{ modal.unansweredLabel }}</span>
+        </div>
+      </sc-if>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button onClick="{{ modal.close }}" style="height:40px;padding:0 16px;border:1px solid var(--border-default);border-radius:var(--radius-input);background:var(--surface-paper);color:var(--ink-primary);font-size:14px;font-weight:600;cursor:pointer" style-hover="background:var(--surface-ink-tint)">Keep reviewing</button>
+        <button onClick="{{ modal.confirm }}" style="height:40px;padding:0 18px;border:none;border-radius:var(--radius-input);background:var(--cta-red);color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:var(--shadow-card)" style-hover="background:var(--cta-red-hover)">Submit review</button>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  </div>
+
+  <!-- ===== FOOTER (always) ===== -->
+  <footer style="flex:none;border-top:1px solid var(--border-default);background:var(--surface-cream);padding:20px clamp(16px,4vw,32px)">
+    <div style="max-width:1040px;margin:0 auto;display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline">
+      <span style="font-size:11px;line-height:16px;color:var(--ink-muted)">Prepared by ABeam Consulting · Confidential — for {{ clientName }} executive review</span>
+      <a href="#" style="font-size:11px;color:var(--brand-navy)">PDPA notice</a>
+      <a href="#" style="font-size:11px;color:var(--brand-navy)">Terms</a>
+    </div>
+  </footer>
+
+  <!-- inspect cursor tooltip -->
+  <div id="ab-insp-tip" style="position:fixed;z-index:9999;pointer-events:none;display:none;background:var(--ink-primary);color:#fff;font-family:var(--ff-mono);font-size:11px;padding:4px 8px;border-radius:6px;box-shadow:var(--shadow-pop);max-width:280px"></div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  state = {
+    screen: 'foundation',
+    streamId: null,
+    processId: null,
+    answers: {},        // qid -> {choice, reason, info, flag}
+    verbatim: {},       // qid or chapterKey -> bool
+    inspect: false,
+    submitModal: false, submitted: false, submittedDate: '12 Jul 2026',
+    otp: ['', '', '', '', '', ''], otpError: false, attempts: 3, countdown: 60,
+    terminalKind: 'expired', ackChecked: false, pdpaChecked: false,
+    skeleton: 'none', isMobile: false,
+  };
+
+  // ---------- static data ----------
+  CLIENT = 'PETRONAS Chemicals';
+  NAME = 'Aisyah';
+  ROLE = 'Chief Financial Officer';
+
+  data() {
+    return {
+      l2c: {
+        id: 'l2c', name: 'Lead to Cash', crumb: 'Lead to Cash',
+        support: 'From a customer order through to the cash landing in your account — the day-to-day of selling.',
+        processes: [
+          {
+            id: 'bd9', scopeId: 'BD9', name: 'Sell from Stock', full: true,
+            headline: 'Take an order and ship from stock you already hold.',
+            outcomes: [
+              'A sales order is created and priced from your live price list.',
+              'Availability is checked against real-time stock before you promise a date.',
+              'Goods are picked, shipped, and invoiced — with cash applied on receipt.',
+            ],
+            chapters: [
+              { n: 1, title: 'Create the order', summary: 'A sales order is entered and each line is priced from the valid conditions.', roles: ['Sales Rep'], apps: ['Create Sales Orders', 'Manage Prices'], steps: [
+                { n: 1, name: 'Enter sales order', apps: 'Create Sales Orders' },
+                { n: 2, name: 'Determine pricing', apps: 'Manage Prices — Sales' } ] },
+              { n: 2, title: 'Check availability', summary: 'The system runs an availability check (ATP) and proposes a confirmable delivery date.', roles: ['Sales Rep', 'Planner'], apps: ['Manage Product Availability'], steps: [
+                { n: 3, name: 'Availability check (ATP)', apps: 'Product Availability' } ] },
+              { n: 3, title: 'Pick & ship', summary: 'An outbound delivery is created; goods are picked and goods-issue is posted.', roles: ['Warehouse Clerk'], apps: ['Create Outbound Deliveries', 'Pick Outbound'], steps: [
+                { n: 4, name: 'Create outbound delivery', apps: 'Create Outbound Deliveries' },
+                { n: 5, name: 'Pick & post goods issue', apps: 'Pick Outbound Delivery' } ] },
+              { n: 4, title: 'Invoice the customer', summary: 'A billing document is created from the delivery and released to accounting.', roles: ['Billing Clerk'], apps: ['Create Billing Documents'], steps: [
+                { n: 6, name: 'Create billing document', apps: 'Create Billing Documents' } ] },
+              { n: 5, title: 'Receive payment', summary: 'Incoming payment is applied to the open receivable and the order is closed.', roles: ['AR Accountant'], apps: ['Manage Incoming Payments'], steps: [
+                { n: 7, name: 'Post incoming payment', apps: 'Manage Incoming Payments' } ] },
+            ],
+            questions: [
+              { id: 'bd9q1', chapter: 'Create the order', category: 'Pricing', format: 'decision',
+                about: 'how a sales order gets priced when it is entered.',
+                text: 'Do you create sales orders from a standard price list, or are prices negotiated per order?',
+                standardMeans: 'SAP prices each order line automatically from the valid price list and condition records at the moment of entry.',
+                verbatim: 'BD9 Sell from Stock: Sales order is created with reference to master data; pricing is determined from condition records valid on the pricing date.' },
+              { id: 'bd9q2', chapter: 'Check availability', category: 'Availability', format: 'decision',
+                about: 'how you promise delivery dates to customers.',
+                text: 'Do you promise delivery dates from live stock availability (ATP), or from a manual check?',
+                standardMeans: 'SAP confirms dates from a real-time availability check against unrestricted stock and inbound supply.',
+                verbatim: 'Availability check (ATP) is executed at order entry; the confirmed schedule line reflects available-to-promise quantity.' },
+              { id: 'bd9q3', chapter: 'Pick & ship', category: 'Fulfilment', format: 'decision',
+                about: 'how you handle orders when stock is short.',
+                text: 'Do you ship complete only, or allow partial deliveries when stock is short?',
+                standardMeans: 'SAP supports partial deliveries by default; the delivery is created for the confirmed quantity and the remainder stays open.',
+                verbatim: 'Outbound delivery is created for confirmed quantities; partial delivery indicator on the customer master governs splitting.' },
+              { id: 'bd9q4', chapter: 'Invoice the customer', category: 'Billing', format: 'decision',
+                about: 'when and how invoices are raised.',
+                text: 'Do you invoice customers in stages tied to project milestones, rather than all at once?',
+                standardMeans: 'SAP creates one billing document from the completed delivery — full amount, on goods issue.',
+                verbatim: 'Billing document is created with reference to the outbound delivery; standard delivery-related billing bills the full delivered quantity.' },
+              { id: 'bd9q6', chapter: 'General', category: 'Currency', format: 'decision',
+                about: 'the currencies this flow runs in.',
+                text: 'Do you sell in more than one currency within this flow?',
+                standardMeans: 'SAP posts each order in the document currency and converts to company-code currency using the maintained exchange rate.',
+                verbatim: 'Document currency is taken from the customer master; conversion uses the exchange rate valid on the pricing date.' },
+              { id: 'bd9q5', chapter: 'Receive payment', category: 'Cash application', format: 'information',
+                about: 'anything specific about how incoming cash is matched to invoices.',
+                text: 'Anything about how cash application works in your business we should know before the workshop?',
+                standardMeans: '', verbatim: 'Incoming payments are matched to open items in Manage Incoming Payments; clearing may be manual or automatic.' },
+            ],
+          },
+          {
+            id: 'bkj', scopeId: 'BKJ', name: 'Sales Order Fulfillment Monitoring', full: true,
+            headline: 'Watch every open order and clear what is stuck.',
+            outcomes: [
+              'One worklist shows every order that cannot progress.',
+              'Issues are grouped by cause so the team clears the biggest blockers first.',
+            ],
+            chapters: [], questions: [
+              { id: 'bkjq1', chapter: 'General', category: 'Monitoring', format: 'decision',
+                about: 'who watches stuck orders and how often.',
+                text: 'Do you review the standard fulfilment issues worklist, or run your own tracker?',
+                standardMeans: 'SAP surfaces all blocked orders in the Sales Order Fulfilment app, grouped by issue type.',
+                verbatim: 'Sales Order Fulfilment monitors delivery/billing blocks and credit holds across open orders.' },
+            ],
+          },
+          {
+            id: 'j59', scopeId: 'J59', name: 'Accelerated Customer Returns', full: false,
+            description: 'Handle a customer returning goods — receipt, inspection, and credit. We have not built a guided story for this one yet; you can still see where it sits in SAP.',
+            chapters: [], questions: [
+              { id: 'j59q1', chapter: 'General', category: 'Returns', format: 'decision',
+                about: 'how returns are approved.',
+                text: 'Do returns need manager approval before a credit is raised?',
+                standardMeans: 'SAP can auto-create the return delivery and credit once the return order is saved.',
+                verbatim: 'Accelerated customer returns creates a returns order with follow-up return delivery and credit memo.' },
+            ],
+            flatSteps: [
+              { n: 1, name: 'Create returns order', apps: 'Manage Returns' },
+              { n: 2, name: 'Receive & inspect', apps: 'Post Goods Receipt' },
+              { n: 3, name: 'Raise credit memo', apps: 'Create Billing Documents' },
+            ],
+          },
+        ],
+      },
+      s2p: {
+        id: 's2p', name: 'Source to Pay', crumb: 'Source to Pay',
+        support: 'From needing something through to paying the supplier — how you buy.',
+        processes: [
+          {
+            id: 'j45', scopeId: 'J45', name: 'Procurement of Direct Materials', full: true,
+            headline: 'Buy the materials that go into what you make.',
+            outcomes: [
+              'A purchase requisition becomes a purchase order against a source of supply.',
+              'Goods receipt and invoice are matched before payment is released.',
+            ],
+            chapters: [
+              { n: 1, title: 'Requisition', summary: 'A demand is raised, manually or from planning.', roles: ['Requester'], apps: ['Manage Purchase Requisitions'], steps: [ { n: 1, name: 'Create requisition', apps: 'Manage Purchase Requisitions' } ] },
+              { n: 2, title: 'Order', summary: 'A purchase order is created against a contract or info record.', roles: ['Buyer'], apps: ['Manage Purchase Orders'], steps: [ { n: 2, name: 'Create purchase order', apps: 'Manage Purchase Orders' } ] },
+              { n: 3, title: 'Receive & pay', summary: 'Goods receipt and supplier invoice are three-way matched, then paid.', roles: ['Warehouse', 'AP Accountant'], apps: ['Post Goods Receipt', 'Create Supplier Invoices'], steps: [ { n: 3, name: 'Post goods receipt', apps: 'Post Goods Receipt' }, { n: 4, name: 'Match & pay invoice', apps: 'Create Supplier Invoices' } ] },
+            ],
+            questions: [
+              { id: 'j45q1', chapter: 'Order', category: 'Sourcing', format: 'decision',
+                about: 'how a supplier is chosen for an order.',
+                text: 'Do you order against pre-agreed contracts, or pick a supplier each time?',
+                standardMeans: 'SAP proposes the source of supply from contracts and info records automatically.',
+                verbatim: 'Source determination selects a valid outline agreement or info record for the material and plant.' },
+              { id: 'j45q2', chapter: 'Receive & pay', category: 'Invoice match', format: 'decision',
+                about: 'the checks before a supplier is paid.',
+                text: 'Do you require a three-way match (order, receipt, invoice) before paying?',
+                standardMeans: 'SAP blocks payment on any variance between PO, goods receipt, and invoice beyond tolerance.',
+                verbatim: 'Invoice verification performs three-way match; blocked invoices require manual release.' },
+            ],
+          },
+          {
+            id: '18j', scopeId: '18J', name: 'Requisitioning', full: false,
+            description: 'Self-service requesting of goods and services by any employee. No guided story yet — the SAP flow is shown below.',
+            chapters: [], questions: [], flatSteps: [
+              { n: 1, name: 'Create self-service request', apps: 'My Purchase Requisitions' },
+              { n: 2, name: 'Approve request', apps: 'Manage Workflows' },
+              { n: 3, name: 'Convert to PO', apps: 'Manage Purchase Orders' },
+            ],
+          },
+        ],
+      },
+    };
+  }
+
+  streams() { const d = this.data(); return [d.l2c, d.s2p]; }
+  getStream(id) { return this.data()[id]; }
+  getProcess(sid, pid) { const s = this.getStream(sid); return s && s.processes.find(p => p.id === pid); }
+
+  // ---------- answer helpers ----------
+  ans(qid) { return this.state.answers[qid] || {}; }
+  isAnswered(q) {
+    const a = this.ans(q.id);
+    if (q.format === 'information') return !!(a.info && a.info.trim()) || !!a.flag;
+    return !!a.choice;
+  }
+  procAnswered(p) { const qs = p.questions || []; return qs.length > 0 && qs.every(q => this.isAnswered(q)); }
+  procCounts(p) {
+    const qs = p.questions || []; let answered = 0, std = 0, cfg = 0, cus = 0;
+    qs.forEach(q => { if (this.isAnswered(q)) { answered++; const c = this.ans(q.id).choice;
+      if (c === 'standard') std++; else if (c === 'configure') cfg++; else if (c === 'custom') cus++; } });
+    return { total: qs.length, answered, std, cfg, cus };
+  }
+
+  setChoice(qid, choice) {
+    this.setState(s => ({ answers: { ...s.answers, [qid]: { ...(s.answers[qid] || {}), choice } } }));
+  }
+  setField(qid, key, val) {
+    this.setState(s => ({ answers: { ...s.answers, [qid]: { ...(s.answers[qid] || {}), [key]: val } } }));
+  }
+  toggleFlag(qid) {
+    this.setState(s => { const a = s.answers[qid] || {}; return { answers: { ...s.answers, [qid]: { ...a, flag: !a.flag } } }; });
+  }
+  toggleVerbatim(key) {
+    this.setState(s => ({ verbatim: { ...s.verbatim, [key]: !s.verbatim[key] } }));
+  }
+
+  go(screen, extra = {}) {
+    this.setState({ screen, ...extra });
+    if (screen === 'verify') { this.setState({ countdown: 60, otp: ['', '', '', '', '', ''], otpError: false, attempts: 3 }); this.startCountdown(); }
+    else if (this._cd) { clearInterval(this._cd); this._cd = null; }
+    if (typeof window !== 'undefined') window.scrollTo(0, 0);
+  }
+
+  consultant() { return { name: 'Rahim Osman', role: 'ABeam SAP Presales Lead', email: 'rahim.osman@abeam.com', phone: '+60 3-2168 4000', initials: 'RO' }; }
+
+  setOtp(i, e) {
+    const v = (e.target.value || '').replace(/\D/g, '').slice(-1);
+    this.setState(s => { const o = [...s.otp]; o[i] = v; return { otp: o, otpError: false }; });
+    if (v) { const nx = document.querySelector('[data-otp="' + (i + 1) + '"]'); if (nx) nx.focus(); }
+  }
+  otpKey(i, e) { if (e.key === 'Backspace' && !e.target.value) { const pv = document.querySelector('[data-otp="' + (i - 1) + '"]'); if (pv) pv.focus(); } }
+  submitOtp() {
+    const code = this.state.otp.join('');
+    if (code === '123456') { this.go('home'); return; }
+    this.setState(s => { const a = s.attempts - 1;
+      if (a <= 0) { if (this._cd) clearInterval(this._cd); return { attempts: 0, otpError: true, terminalKind: 'locked', screen: 'terminal' }; }
+      return { attempts: a, otpError: true, otp: ['', '', '', '', '', ''] }; });
+  }
+  resendOtp() { this.setState({ countdown: 60, otp: ['', '', '', '', '', ''], otpError: false }); this.startCountdown(); }
+  startCountdown() { if (this._cd) clearInterval(this._cd); this._cd = setInterval(() => {
+    this.setState(s => { if (s.countdown <= 1) { clearInterval(this._cd); this._cd = null; return { countdown: 0 }; } return { countdown: s.countdown - 1 }; }); }, 1000); }
+  openSubmitModal() { this.setState({ submitModal: true }); }
+  closeSubmitModal() { this.setState({ submitModal: false }); }
+  confirmSubmit() { this.setState({ submitModal: false, submitted: true }); this.go('summary'); }
+
+  // ---------- inspect overlay ----------
+  componentDidMount() {
+    this._tip = document.getElementById('ab-insp-tip');
+    this._onMove = (e) => {
+      if (!this.state.inspect || !this._tip) return;
+      const el = e.target.closest && e.target.closest('[data-token]');
+      if (el) { this._tip.textContent = el.getAttribute('data-token'); this._tip.style.display = 'block';
+        this._tip.style.left = Math.min(e.clientX + 14, window.innerWidth - 290) + 'px';
+        this._tip.style.top = (e.clientY + 16) + 'px'; }
+      else { this._tip.style.display = 'none'; }
+    };
+    document.addEventListener('mousemove', this._onMove);
+    this._mq = window.matchMedia('(max-width:767px)');
+    this._onMq = () => this.setState({ isMobile: this._mq.matches });
+    this._onMq();
+    if (this._mq.addEventListener) this._mq.addEventListener('change', this._onMq); else this._mq.addListener(this._onMq);
+  }
+  componentWillUnmount() { if (this._onMove) document.removeEventListener('mousemove', this._onMove); if (this._cd) clearInterval(this._cd);
+    if (this._mq && this._onMq) { if (this._mq.removeEventListener) this._mq.removeEventListener('change', this._onMq); else this._mq.removeListener(this._onMq); } }
+
+  seedAnswers() {
+    return {
+      bd9q1: { choice: 'standard' }, bd9q2: { choice: 'standard' },
+      bd9q3: { choice: 'configure' },
+      bd9q4: { choice: 'custom', reason: 'We bill EPC projects against three certified milestones — 30% on order, 40% on delivery, 30% on commissioning. A single delivery-related invoice would break our contract terms.' },
+      bd9q6: { choice: 'standard' },
+      bd9q5: { info: 'Cash is applied by our shared-service centre in Kuala Lumpur; remittance advices arrive by email and are matched manually.', flag: true },
+    };
+  }
+  enterSealed() { this.setState({ answers: this.seedAnswers(), submitted: true, skeleton: 'none', streamId: 'l2c', processId: 'bd9', screen: 'affirm' }); if (typeof window !== 'undefined') window.scrollTo(0, 0); }
+  setSkeleton(kind, screen) { this.setState({ skeleton: kind, submitted: false, answers: kind === 'none' ? this.state.answers : {}, screen: screen || this.state.screen }); if (typeof window !== 'undefined') window.scrollTo(0, 0); }
+
+  internalRows() {
+    return [
+      { name: 'Aisyah Rahman', role: 'CFO', email: 'aisyah.rahman@petronas-chem.com', streams: ['Lead to Cash', 'Source to Pay'], status: 'progress', progress: '8/12' },
+      { name: 'Tan Wei Ming', role: 'Head of SCM', email: 'wm.tan@petronas-chem.com', streams: ['Source to Pay'], status: 'submitted' },
+      { name: 'Nurul Huda', role: 'Financial Controller', email: 'nurul.huda@petronas-chem.com', streams: ['Lead to Cash'], status: 'verified' },
+      { name: 'Faiz Abdullah', role: 'Head of Sales Ops', email: 'faiz.a@petronas-chem.com', streams: ['Lead to Cash'], status: 'acknowledged' },
+      { name: 'Lim Choo Kiat', role: 'Treasury Lead', email: 'ck.lim@petronas-chem.com', streams: ['Source to Pay'], status: 'invited' },
+      { name: 'Devi Suppiah', role: 'Procurement Director', email: 'devi.s@petronas-chem.com', streams: ['Source to Pay'], status: 'lockedout' },
+    ];
+  }
+  statusPill(status, progress) {
+    const map = {
+      invited: { label: 'Invited', bg: '#F4F2EB', fg: '#4A4A4A' },
+      acknowledged: { label: 'Acknowledged', bg: '#E0EBF4', fg: '#1A4D6F' },
+      verified: { label: 'Verified', bg: '#FBE9D1', fg: '#8B5A00' },
+      progress: { label: 'In progress ' + (progress || ''), bg: '#E6EBF1', fg: '#002B5C' },
+      submitted: { label: 'Submitted', bg: '#DCEBE3', fg: '#166534' },
+      lockedout: { label: 'Revoked', bg: '#F4DEDB', fg: '#8E2A26' },
+    };
+    return map[status] || map.invited;
+  }
+
+  // ---------- foundation data ----------
+  swatchList() {
+    return [
+      ['--brand-navy', '#002B5C'], ['--brand-navy-soft', '#E6EBF1'], ['--brand-navy-border', '#CFD7E0'],
+      ['--cta-red', '#C8102E'], ['--cta-red-hover', '#A30D26'], ['--cta-red-focus', '#FBE9EC'],
+      ['--surface-cream', '#FAF9F5'], ['--surface-paper', '#FFFFFE'], ['--surface-ink-tint', '#F4F2EB'], ['--surface-banner-warn', '#FDF7E6'],
+      ['--ink-primary', '#1A1A1A'], ['--ink-secondary', '#4A4A4A'], ['--ink-muted', '#8A8A8A'], ['--ink-disabled', '#C4C4C4'],
+      ['--border-default', '#E5E1D6'], ['--border-strong', '#C4BFAE'],
+      ['--decision-standard', '#0F766E'], ['--decision-configure', '#1D4ED8'], ['--decision-custom', '#B45309'], ['--decision-open', '#8A8A8A'],
+      ['--success', '#166534'], ['--warning', '#B45309'], ['--danger', '#991B1B'], ['--info', '#1E40AF'],
+    ];
+  }
+  typeRampList() {
+    return [
+      { sample: 'Your processes, on one page.', spec: 'Page H1 · serif 30/40 · 500', style: "font-family:var(--ff-serif);font-weight:500;font-size:30px;line-height:40px;color:var(--ink-primary)", bg: 'var(--surface-paper)' },
+      { sample: 'This link is no longer active', spec: 'Hero H1 · serif 32/38 · 500', style: "font-family:var(--ff-serif);font-weight:500;font-size:32px;line-height:38px;color:var(--ink-primary)", bg: 'var(--surface-ink-tint)' },
+      { sample: 'How this runs', spec: 'Section head · serif 20 · 500 · navy', style: "font-family:var(--ff-serif);font-weight:500;font-size:20px;color:var(--brand-navy)", bg: 'var(--surface-paper)' },
+      { sample: 'Take an order and ship from stock.', spec: 'Card title · serif 18 · 500', style: "font-family:var(--ff-serif);font-weight:500;font-size:18px;color:var(--ink-primary)", bg: 'var(--surface-ink-tint)' },
+      { sample: 'Do you invoice in stages tied to milestones?', spec: 'Question · sans 15/22', style: "font-family:var(--ff-sans);font-size:15px;line-height:22px;color:var(--ink-primary)", bg: 'var(--surface-paper)' },
+      { sample: 'SAP prices each line from the valid conditions.', spec: 'Body · sans 14', style: "font-family:var(--ff-sans);font-size:14px;color:var(--ink-secondary)", bg: 'var(--surface-ink-tint)' },
+      { sample: 'EXECUTIVE SCOPE REVIEW', spec: 'Eyebrow · sans 11 · 600 · 0.08em', style: "font-family:var(--ff-sans);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted)", bg: 'var(--surface-paper)' },
+      { sample: 'BD9 · SAP VERBATIM · SOURCE OF TRUTH', spec: 'Mono meta · mono 11', style: "font-family:var(--ff-mono);font-size:11px;color:var(--ink-muted)", bg: 'var(--surface-ink-tint)' },
+    ];
+  }
+  galleryList() {
+    return [
+      { id: '§3B-16', name: 'Value-chain ribbon', note: 'The L0 hero — value streams as connected segments with a progress ring and lit sub-process nodes. One navy accent, never rainbow.' },
+      { id: '§3B-17', name: 'Progress ring', note: 'Circular indicator, ink-tint track, teal fill, mono count in the centre (e.g. 8/12).' },
+      { id: '§3B-18', name: 'Story card', note: 'Scope chip + serif headline + outcome bullets + question meta. Fallback variant is compact and never invents narrative.' },
+      { id: '§3B-19', name: 'Chapter card', note: 'Numbered navy node + serif title + role/app chips + a verbatim collapsible revealing the exact SAP step strip.' },
+      { id: '§3B-21', name: 'Expectation note', note: 'Calm reveal under a just-picked chip. Amber banner for "we differ", navy-soft for "discuss". Manages expectations without committing.' },
+      { id: '§3B-24', name: 'What-happens-next', note: 'Four connected nodes — Affirm → Workshop → Sizing → Decision — with the current node filled navy.' },
+    ];
+  }
+
+  // ---------- view model builders ----------
+  chipDefs() {
+    return [
+      { key: 'standard', label: 'Adopt SAP standard', helper: "Keep SAP's pre-delivered setup.", color: 'var(--decision-standard)' },
+      { key: 'configure', label: 'Discuss in workshop', helper: 'Unsure — raise it in the workshop.', color: 'var(--decision-configure)' },
+      { key: 'custom', label: 'We do this differently', helper: 'You have a specific requirement.', color: 'var(--decision-custom)' },
+    ];
+  }
+  buildQ(q, sealed) {
+    const a = this.ans(q.id);
+    const badge = q.format === 'decision'
+      ? { badgeLabel: 'Decision', badgeBg: 'color-mix(in srgb,var(--decision-configure) 15%,transparent)', badgeFg: 'var(--decision-configure)' }
+      : { badgeLabel: 'Information', badgeBg: 'var(--surface-ink-tint)', badgeFg: 'var(--ink-secondary)' };
+    const chips = this.chipDefs().map(cd => {
+      const sel = a.choice === cd.key;
+      const base = 'height:36px;border-radius:var(--radius-pill);font-size:12px;font-weight:600;transition:all var(--dur-snap) var(--ease-snap);padding:0 8px;width:100%;';
+      let style;
+      if (sealed) {
+        style = base + (sel ? `background:${cd.color};color:#fff;border:1px solid ${cd.color};cursor:default;`
+          : `background:var(--surface-ink-tint);color:var(--ink-disabled);border:1px solid var(--border-default);cursor:default;opacity:.7;`);
+      } else {
+        style = base + 'cursor:pointer;' + (sel
+          ? `background:${cd.color};color:#fff;border:1px solid ${cd.color};`
+          : 'background:var(--surface-paper);color:var(--ink-secondary);border:1px solid var(--border-default);');
+      }
+      const hover = (sealed || sel) ? '' : 'border-color:var(--border-strong);background:var(--surface-ink-tint)';
+      return { label: cd.label, helper: cd.helper, checked: sel ? 'true' : 'false',
+        style, hover, focus: sealed ? '' : 'box-shadow:var(--shadow-focus-ring);border-color:var(--brand-navy);outline:none',
+        onClick: sealed ? (() => {}) : (() => this.setChoice(q.id, cd.key)) };
+    });
+    let note = { visible: false };
+    if (a.choice === 'custom') note = { visible: true, bg: 'var(--surface-banner-warn)', border: 'color-mix(in srgb,var(--decision-custom) 30%,transparent)',
+      text: 'Noted — a difference here usually means extension work and longer testing. Your consultant will size it with you in the workshop. Nothing is committed yet.' };
+    else if (a.choice === 'configure') note = { visible: true, bg: 'var(--brand-navy-soft)', border: 'var(--brand-navy-border)',
+      text: 'Parked for the workshop agenda. No commitment implied.' };
+    return {
+      category: q.category, qid: q.id.toUpperCase(), about: q.about, text: q.text,
+      isDecision: q.format === 'decision', isInfo: q.format === 'information',
+      badgeLabel: badge.badgeLabel, badgeBg: badge.badgeBg, badgeFg: badge.badgeFg,
+      standardMeans: q.standardMeans, chips, note: sealed ? { visible: false } : note, sealed: !!sealed,
+      reason: { visible: a.choice === 'custom', sealed: !!sealed, editable: !sealed, value: a.reason || '', onInput: (e) => this.setField(q.id, 'reason', e.target.value) },
+      info: { value: a.info || '', sealed: !!sealed, editable: !sealed, hasInfo: !!(a.info && a.info.trim()), onInput: (e) => this.setField(q.id, 'info', e.target.value) },
+      flag: { on: !!a.flag, toggle: sealed ? (() => {}) : (() => this.toggleFlag(q.id)),
+        style: (a.flag
+          ? 'background:color-mix(in srgb,var(--decision-configure) 15%,transparent);color:var(--decision-configure);border:1px solid color-mix(in srgb,var(--decision-configure) 30%,transparent);'
+          : 'background:var(--surface-paper);color:var(--ink-secondary);border:1px solid var(--border-default);') + 'display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:var(--radius-pill);font-size:12px;font-weight:600;cursor:pointer;' },
+      verbatim: q.verbatim, verbatimOpen: !!this.state.verbatim[q.id], chevron: this.state.verbatim[q.id] ? 'rotate(90deg)' : 'rotate(0deg)',
+      toggleVerbatim: () => this.toggleVerbatim(q.id),
+      saved: !sealed && this.isAnswered(q),
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const screen = s.screen;
+    const sessionOn = ['home', 'stream', 'process', 'affirm', 'summary'].includes(screen);
+
+    const vals = {
+      inspectAttr: s.inspect ? 'on' : 'off',
+      inspectBtnBg: s.inspect ? 'var(--brand-navy)' : 'var(--surface-paper)',
+      inspectBtnFg: s.inspect ? '#fff' : 'var(--ink-muted)',
+      toggleInspect: () => this.setState(st => ({ inspect: !st.inspect })),
+      sessionOn, granteeName: this.NAME, granteeRole: this.ROLE, clientName: this.CLIENT,
+      isFoundation: screen === 'foundation', isHome: screen === 'home',
+      isStream: screen === 'stream', isProcess: screen === 'process', isAffirm: screen === 'affirm',
+      isLanding: screen === 'landing', isVerify: screen === 'verify', isTerminal: screen === 'terminal', isSummary: screen === 'summary',
+      isInternal: screen === 'internal',
+      skHome: s.skeleton === 'home' && screen === 'home', skAffirm: s.skeleton === 'affirm' && screen === 'affirm',
+      homeReady: screen === 'home' && s.skeleton !== 'home', affirmReady: screen === 'affirm' && s.skeleton !== 'affirm',
+      statCols: s.isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)',
+      inputFs: s.isMobile ? '16px' : '14px',
+      homeSealed: screen === 'home' && s.submitted,
+      homeSealedBanner: `Submitted ${s.submittedDate}. Your consultant is preparing the workshop.`,
+      enterSealed: () => this.enterSealed(),
+      skeletonHome: () => this.setSkeleton('home', 'home'),
+      skeletonAffirm: () => this.setSkeleton('affirm', 'affirm'),
+      clearSkeleton: () => this.setSkeleton('none'),
+      goInternal: () => this.go('internal'),
+      skRows: [1, 2, 3], skChips: [1, 2, 3, 4, 5],
+      goFoundation: () => this.go('foundation'),
+      goHome: () => this.go('home'),
+      enterJourney: () => this.go('landing'),
+      goLanding: () => this.go('landing'), goVerify: () => this.go('verify'),
+      goTerminal: () => this.go('terminal'), goSummary: () => this.go('summary'),
+      greeting: `GOOD MORNING, ${this.NAME.toUpperCase()} · ${this.ROLE.toUpperCase()}`,
+    };
+
+    // foundation
+    vals.swatches = this.swatchList().map(([token, value]) => ({ token, value,
+      swatchStyle: `var(${token})` }));
+    vals.typeRamp = this.typeRampList().map(t => ({ sample: t.sample, spec: t.spec, sampleStyle: t.style, rowBg: t.bg }));
+    vals.galleryNotes = this.galleryList();
+
+    // home ribbon
+    const streams = this.streams();
+    vals.ribbon = streams.map(st => {
+      const procs = st.processes;
+      const affirmed = procs.filter(p => this.procAnswered(p)).length;
+      const total = procs.length;
+      const pct = total ? affirmed / total : 0;
+      const r = 24, circ = 2 * Math.PI * r;
+      const complete = affirmed === total && total > 0;
+      const started = procs.some(p => this.procCounts(p).answered > 0);
+      const fill = complete ? 'color-mix(in srgb,var(--decision-standard) 12%,var(--surface-paper))'
+        : started ? 'var(--brand-navy-soft)' : 'var(--surface-paper)';
+      const border = complete ? 'color-mix(in srgb,var(--decision-standard) 30%,transparent)'
+        : started ? 'var(--brand-navy-border)' : 'var(--border-default)';
+      const status = complete ? { statusLabel: 'Complete', statusBg: 'color-mix(in srgb,var(--decision-standard) 15%,transparent)', statusFg: 'var(--decision-standard)' }
+        : started ? { statusLabel: 'In progress', statusBg: 'var(--brand-navy-soft)', statusFg: 'var(--brand-navy)' }
+        : { statusLabel: 'Not started', statusBg: 'var(--surface-ink-tint)', statusFg: 'var(--ink-muted)' };
+      const nodes = procs.map(p => {
+        const done = this.procAnswered(p);
+        const some = this.procCounts(p).answered > 0;
+        return { scopeId: p.scopeId, name: p.name,
+          bg: done ? 'color-mix(in srgb,var(--decision-standard) 12%,transparent)' : some ? 'var(--brand-navy-soft)' : 'var(--surface-ink-tint)',
+          border: done ? 'color-mix(in srgb,var(--decision-standard) 30%,transparent)' : some ? 'var(--brand-navy-border)' : 'var(--border-default)',
+          fg: done ? 'var(--decision-standard)' : some ? 'var(--brand-navy)' : 'var(--ink-muted)',
+          dot: done ? 'var(--decision-standard)' : some ? 'var(--brand-navy)' : 'var(--ink-disabled)' };
+      });
+      return { name: st.name, affirmedLabel: `${affirmed} of ${total} processes affirmed`,
+        ringColor: complete ? 'var(--decision-standard)' : 'var(--brand-navy)', circ: circ.toFixed(1),
+        dash: (circ * (1 - pct)).toFixed(1), ringLabel: `${affirmed}/${total}`,
+        fill, border, ...status, nodes, open: () => this.go('stream', { streamId: st.id }) };
+    });
+    // what-happens-next (parameterised by current node)
+    const buildNext = (cur) => [{ n: 1, label: 'Affirm' }, { n: 2, label: 'Workshop' }, { n: 3, label: 'Sizing' }, { n: 4, label: 'Decision' }]
+      .map((x, i, arr) => ({ n: x.n, label: x.label, connector: i < arr.length - 1,
+        dotBg: x.n === cur ? 'var(--brand-navy)' : (x.n < cur ? 'color-mix(in srgb,var(--brand-navy) 18%,var(--surface-paper))' : 'var(--surface-ink-tint)'),
+        dotBorder: x.n <= cur ? 'var(--brand-navy)' : 'var(--border-default)',
+        dotFg: x.n === cur ? '#fff' : (x.n < cur ? 'var(--brand-navy)' : 'var(--ink-muted)'),
+        labelColor: x.n <= cur ? 'var(--brand-navy)' : 'var(--ink-muted)' }));
+    vals.nextStrip = buildNext(1);
+    vals.nextStripSummary = buildNext(2);
+
+    // submit bar / modal / summary buckets
+    const triples = streams.flatMap(st => st.processes.flatMap(p => (p.questions || []).map(q => ({ q, p, st }))));
+    const allQ = triples.map(t => t.q);
+    vals.showSubmitBar = screen === 'home' && !s.submitted && allQ.length > 0 && allQ.every(q => this.isAnswered(q));
+    vals.openSubmit = () => this.openSubmitModal();
+
+    const adopted = [], discuss = [], differ = [];
+    triples.forEach(({ q, p }) => { if (!this.isAnswered(q)) return; const a = this.ans(q.id);
+      const item = { text: q.text, scopeId: p.scopeId, reason: a.reason || '', hasReason: !!(a.reason && a.reason.trim()) };
+      if (q.format === 'information') discuss.push(item);
+      else if (a.choice === 'standard') adopted.push(item);
+      else if (a.choice === 'configure') discuss.push(item);
+      else if (a.choice === 'custom') differ.push(item); });
+    const totalQ = triples.length, answeredN = adopted.length + discuss.length + differ.length;
+
+    // landing (S1)
+    vals.landing = {
+      headline: `${this.CLIENT}: see how the SAP standard runs your processes — and tell us where you differ.`,
+      ack: s.ackChecked, pdpa: s.pdpaChecked, ackC: s.ackChecked ? 'true' : 'false', pdpaC: s.pdpaChecked ? 'true' : 'false',
+      ackBox: 'width:20px;height:20px;flex:none;border-radius:6px;display:flex;align-items:center;justify-content:center;' + (s.ackChecked ? 'background:var(--brand-navy);border:1px solid var(--brand-navy);' : 'background:var(--surface-paper);border:1px solid var(--border-strong);'),
+      pdpaBox: 'width:20px;height:20px;flex:none;border-radius:6px;display:flex;align-items:center;justify-content:center;' + (s.pdpaChecked ? 'background:var(--brand-navy);border:1px solid var(--brand-navy);' : 'background:var(--surface-paper);border:1px solid var(--border-strong);'),
+      toggleAck: () => this.setState(st => ({ ackChecked: !st.ackChecked })),
+      togglePdpa: () => this.setState(st => ({ pdpaChecked: !st.pdpaChecked })),
+      canBegin: s.ackChecked && s.pdpaChecked,
+      beginStyle: (s.ackChecked && s.pdpaChecked) ? 'opacity:1;cursor:pointer' : 'opacity:.6;cursor:not-allowed',
+      begin: () => { if (s.ackChecked && s.pdpaChecked) this.go('verify'); },
+      showInvalid: () => this.setState({ terminalKind: 'expired', screen: 'terminal' }),
+    };
+
+    // verify (S2)
+    vals.verify = {
+      boxes: s.otp.map((v, i) => ({ v, idx: String(i), onInput: (e) => this.setOtp(i, e), onKey: (e) => this.otpKey(i, e) })),
+      shake: s.otpError ? 'animation:ab-shake var(--dur-calm) var(--ease-calm)' : '',
+      error: s.otpError, attemptsLabel: `That code didn't match — ${s.attempts} attempt${s.attempts === 1 ? '' : 's'} remaining`,
+      canResend: s.countdown === 0, countdownLabel: `Resend code in ${s.countdown}s`,
+      resend: () => this.resendOtp(), verify: () => this.submitOtp(),
+    };
+
+    // terminal (S3)
+    const tmap = {
+      expired: { h: 'This link is no longer active', b: 'Your review window has closed. Your ABeam consultant can send you a fresh link whenever you\u2019re ready to continue.' },
+      ended: { h: 'This review has ended', b: 'Thank you \u2014 nothing more is needed from you here. Your ABeam consultant will be in touch with next steps.' },
+      locked: { h: 'For security this link is now locked', b: 'To protect your data we\u2019ve locked this link. Your ABeam consultant can reissue access for you.' },
+    };
+    vals.terminal = { ...(tmap[s.terminalKind] || tmap.expired), consultant: this.consultant() };
+
+    // summary (S8)
+    const mkItems = arr => arr.map(it => ({ text: it.text, scopeId: it.scopeId, reason: it.reason, hasReason: it.hasReason }));
+    vals.summary = {
+      eyebrow: `YOUR REVIEW · SUBMITTED ${s.submittedDate}`, name: this.NAME,
+      stats: [
+        { n: adopted.length, label: 'Adopted', color: 'var(--decision-standard)' },
+        { n: discuss.length, label: 'To discuss', color: 'var(--decision-configure)' },
+        { n: differ.length, label: 'We differ', color: 'var(--decision-custom)' },
+        { n: totalQ, label: 'Total', color: 'var(--brand-navy)' },
+      ],
+      buckets: [
+        { label: 'Adopted standard', color: 'var(--decision-standard)', headerBg: 'color-mix(in srgb,var(--decision-standard) 15%,transparent)', count: adopted.length, items: mkItems(adopted), showReason: false, empty: adopted.length === 0 },
+        { label: 'To discuss', color: 'var(--decision-configure)', headerBg: 'color-mix(in srgb,var(--decision-configure) 15%,transparent)', count: discuss.length, items: mkItems(discuss), showReason: false, empty: discuss.length === 0 },
+        { label: 'We differ', color: 'var(--decision-custom)', headerBg: 'color-mix(in srgb,var(--decision-custom) 15%,transparent)', count: differ.length, items: mkItems(differ), showReason: true, empty: differ.length === 0 },
+      ],
+      consultant: this.consultant(),
+    };
+
+    // submit-confirm modal
+    vals.submitModalOpen = s.submitModal;
+    vals.modal = {
+      close: () => this.closeSubmitModal(), confirm: () => this.confirmSubmit(),
+      streams: streams.map(st => { const qs = st.processes.flatMap(p => p.questions || []); const an = qs.filter(q => this.isAnswered(q)).length; return { name: st.name, label: `${an} of ${qs.length} answered` }; }),
+      hasUnanswered: answeredN < totalQ, unansweredLabel: `${totalQ - answeredN} question${(totalQ - answeredN) === 1 ? '' : 's'} still open — you can submit anyway.`,
+      sealText: `This seals answers for everyone in ${this.CLIENT}'s review — done when your team is done.`,
+    };
+
+    // stream index
+    if (screen === 'stream' && s.streamId) {
+      const st = this.getStream(s.streamId);
+      const complete = st.processes.every(p => this.procAnswered(p));
+      vals.stream = { name: st.name, crumb: st.crumb.toUpperCase(), support: st.support, complete,
+        stories: st.processes.map(p => {
+          const c = this.procCounts(p);
+          const done = this.procAnswered(p);
+          const status = done ? { statusLabel: 'Affirmed', statusBg: 'color-mix(in srgb,var(--decision-standard) 15%,transparent)', statusFg: 'var(--decision-standard)' }
+            : c.answered > 0 ? { statusLabel: `${c.answered}/${c.total}`, statusBg: 'var(--brand-navy-soft)', statusFg: 'var(--brand-navy)' }
+            : { statusLabel: 'Not started', statusBg: 'var(--surface-ink-tint)', statusFg: 'var(--ink-muted)' };
+          return { full: p.full, fallback: !p.full, scopeId: p.scopeId, headline: p.headline,
+            description: p.description, outcomes: (p.outcomes || []).slice(0, 4),
+            metaCount: `${c.total} question${c.total === 1 ? '' : 's'}`,
+            metaChapters: (p.chapters && p.chapters.length) ? `${p.chapters.length} chapters` : 'flow view',
+            ...status, open: () => this.go('process', { streamId: st.id, processId: p.id }) };
+        }) };
+    }
+
+    // process story
+    if ((screen === 'process' || screen === 'affirm') && s.streamId && s.processId) {
+      const st = this.getStream(s.streamId);
+      const p = this.getProcess(s.streamId, s.processId);
+      const c = this.procCounts(p);
+      const pct = k => c.total ? Math.round((k / c.total) * 100) : 0;
+      const answeredLabel = `${c.answered} of ${c.total} answered`;
+      const hasChapters = (p.chapters || []).length > 0;
+
+      if (screen === 'process') {
+        const allAns = this.procAnswered(p);
+        vals.proc = {
+          scopeId: p.scopeId, name: p.name, headline: p.headline, outcomes: p.outcomes || [],
+          backToStream: () => this.go('stream', { streamId: st.id }),
+          pctStandard: pct(c.std), pctConfigure: pct(c.cfg), pctCustom: pct(c.cus), answeredLabel,
+          hasChapters, chapterCount: (p.chapters || []).length, isFallback: !hasChapters,
+          chapters: (p.chapters || []).map((ch, i, arr) => ({ n: ch.n, title: ch.title, summary: ch.summary,
+            roles: ch.roles || [], apps: ch.apps || [], connector: i < arr.length - 1,
+            open: !!this.state.verbatim['ch_' + p.id + '_' + ch.n],
+            chevron: this.state.verbatim['ch_' + p.id + '_' + ch.n] ? 'rotate(90deg)' : 'rotate(0deg)',
+            toggle: () => this.toggleVerbatim('ch_' + p.id + '_' + ch.n),
+            steps: (ch.steps || []).map((stp, j, a2) => ({ ...stp, connector: j < a2.length - 1 })) })),
+          flatSteps: (p.flatSteps || []).map((stp, i, a2) => ({ ...stp, connector: i < a2.length - 1 })),
+          ctaLabel: allAns ? 'Review your answers ✓' : `Affirm this process · ${c.total} question${c.total === 1 ? '' : 's'}`,
+          ctaBg: allAns ? 'var(--surface-paper)' : 'var(--cta-red)',
+          ctaFg: allAns ? 'var(--ink-primary)' : '#fff',
+          ctaBorder: allAns ? '1px solid var(--border-default)' : 'none',
+          ctaShadow: allAns ? 'none' : 'var(--shadow-card)',
+          ctaHover: allAns ? 'background:var(--surface-ink-tint)' : 'background:var(--cta-red-hover)',
+          affirm: () => this.go('affirm', { streamId: st.id, processId: p.id }),
+        };
+      }
+
+      if (screen === 'affirm') {
+        // group questions by chapter (chapter order), General last
+        const order = (p.chapters || []).map(ch => ch.title);
+        const groupsMap = {};
+        (p.questions || []).forEach(q => { const key = q.chapter || 'General'; (groupsMap[key] = groupsMap[key] || []).push(q); });
+        const keys = [];
+        order.forEach(t => { if (groupsMap[t]) keys.push(t); });
+        Object.keys(groupsMap).forEach(k => { if (!keys.includes(k) && k !== 'General') keys.push(k); });
+        if (groupsMap['General']) keys.push('General');
+        const sealed = s.submitted;
+        vals.aff = {
+          scopeId: p.scopeId, name: p.name, streamName: st.name, sealed,
+          sealedBanner: `Submitted ${s.submittedDate}. Your consultant is preparing the workshop. Answers are read-only.`,
+          back: () => this.go(sealed ? 'summary' : 'process', { streamId: st.id, processId: p.id }),
+          next: () => this.go(sealed ? 'summary' : 'process', { streamId: st.id, processId: p.id }),
+          pctStandard: pct(c.std), pctConfigure: pct(c.cfg), pctCustom: pct(c.cus), answeredLabel,
+          groups: keys.map(k => ({ title: k, questions: groupsMap[k].map(q => this.buildQ(q, sealed)) })),
+        };
+      }
+    }
+
+    // S9 internal grants panel
+    vals.internal = {
+      rows: this.internalRows().map(r => { const p = this.statusPill(r.status, r.progress);
+        return { name: r.name, role: r.role, email: r.email, streams: r.streams,
+          statusLabel: p.label, statusBg: p.bg, statusFg: p.fg,
+          locked: r.status === 'lockedout',
+          actions: r.status === 'lockedout' ? ['Reissue'] : (r.status === 'submitted' ? ['View'] : ['Resend', 'Revoke']) }; }),
+      streamOptions: ['Lead to Cash', 'Source to Pay', 'Record to Report'],
+    };
+
+    return vals;
+  }
+}
+</script>
+</body>
+</html>

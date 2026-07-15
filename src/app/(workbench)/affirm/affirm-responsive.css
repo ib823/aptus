@@ -494,7 +494,7 @@
     gap: 12px;
     padding: 14px 16px;
     padding-bottom: calc(14px + env(safe-area-inset-bottom, 0));
-    border-radius: var(--radius-card);
+    border-radius: var(--radius-card-warm);
   }
   .release-bar .info .t {
     font-size: 14px;
