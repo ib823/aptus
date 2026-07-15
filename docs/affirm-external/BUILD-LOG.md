@@ -117,3 +117,49 @@ ack; redeem POST → 303 `/a/home` with cookie (device pre-verified skips OTP);
 (same as `/c/*`) — they rely on the hardening headers + app-level OTP
 throttle/lockout. The consultant grant API is under `/api/affirm/*` and IS
 middleware-rate-limited.
+
+## PR-2 — Chaptered process content (feat/affirm-chaptered-content)
+
+**Migration:** `20260715130000_affirm_process_chapters` — adds
+`AffirmProcessChapter` (business chapters over step ranges) + `AffirmScopeItemStory`
+(exec story; `reviewedAt` is the render gate). Reverse relations on
+`AffirmScopeItem` (`chapters`, `story`) and `User` (`affirmStoriesReviewed`).
+
+**Pilot streams:** `lead-to-cash` + `source-to-pay` (the procurement stream —
+confirmed it contains scope item `J45`, per §3.4).
+
+**Pipeline:** `scripts/chapterize-process-flows.ts` groups each pilot scope
+item's ordered SAP steps into chapters (`src/lib/affirm/chapterize.ts`,
+pure/tested) and emits reviewable drafts to `curation-model/chapters/{stream}.json`
+(85 lead-to-cash + 38 source-to-pay items, 544 draft chapters). SAP-verbatim
+`activity` is never written — only step ranges + new copy.
+
+**Curation:** `curation-model/chapters/curated.json` — hand-authored, reviewed
+executive copy for **5 flagship items** (31Q, 1XF, J45, 16T, 1Z3) with accurate
+step ranges, roles, benefit notes, and stories. `scripts/import-process-chapters.ts`
+(+ shared `src/lib/affirm/chapters-import.ts`) merges drafts + curated overlay
+and stamps `reviewedAt/reviewedById` only for reviewed items. Wired into
+`prisma/seed.ts` (`seedChapters`) for fresh-DB reproducibility: **123 items,
+537 chapters, 5 reviewed**.
+
+**Read model** (`src/lib/affirm/process-flow.ts`): `getChapteredFlow` (null →
+flat-strip fallback when no story / unreviewed / no chapters; attaches
+SAP-verbatim steps per chapter) + `getStreamStories` (review-gated summaries,
+`story: null` → compact card).
+
+### PR-2 judgment calls / deviations
+- **"Floor 5" chapters applied only to flows with ≥10 steps.** The spec's literal
+  floor-5 would force a 6-step flow into 5 near-1:1 chapters (not a meaningful
+  grouping). Real pilot flows are mostly 1–9 steps; small flows keep their
+  natural boundary count, `<5` steps → one chapter per step, hard cap 9 always.
+- **`roles` left empty in generated drafts** — the step data carries no role
+  field, so fabricating roles would be dishonest. Curated items have
+  hand-written roles.
+- **`processNavigatorUrl` left null** — didn't guess the Process Navigator URL
+  shape (spec §7.2: "if uncertain, leave null rather than guess").
+- **`integrationNotes`** in drafts derived from `SapHubContent.title` where a row
+  matches the scope code (often empty); curated items have hand-written notes.
+- **Reviewed coverage is a curated pilot subset (5 items).** The other 118 pilot
+  items import as unreviewed drafts and fall back to the flat `ProcessFlowStrip`
+  — partial coverage is by design (§8 L1 index renders compact cards for items
+  without a reviewed story; never fake narrative).

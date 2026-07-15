@@ -1,0 +1,5551 @@
+{
+  "streamId": "lead-to-cash",
+  "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+  "itemCount": 85,
+  "items": [
+    {
+      "scopeItemId": "16T",
+      "description": "Intercompany Processes – Project-Based Services",
+      "reviewed": false,
+      "story": {
+        "headline": "How intercompany processes – project-based services runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Check Intercompany Sales Order",
+          "summary": "The team check intercompany sales order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Create Sales Orders -",
+            "List Sales Orders - Intercompany"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Customer/Internal Project",
+          "summary": "The team create customer/internal project.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Time Recording",
+          "summary": "The team time recording.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Create supplier invoice for Travel Expenses of Intercompany Resource",
+          "summary": "The team create supplier invoice for travel expenses of intercompany resource.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Run Intercompany Billing Process",
+          "summary": "The team run intercompany billing process.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "1A8",
+      "description": "Internal Project Management – Project-Based Services",
+      "reviewed": false,
+      "story": {
+        "headline": "How internal project management – project-based services runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Set up Internal Project",
+          "summary": "The team set up internal project.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Set up Work Packages and Time-Based Planning",
+          "summary": "Covers set up work packages and time-based planning, set up settlement rules and set up work package staffing (without scope item 6jo: resource management for projects).",
+          "stepStart": 2,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Plan Internal Projects",
+            "Project Control - Professional Services Projects"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Run Settlement",
+          "summary": "The team run settlement.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Display Settlement Documents",
+            "Schedule Overhead Accounting Jobs"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Set Project Status (Completed)",
+          "summary": "The team set project status (completed).",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Plan Internal Projects",
+            "Project Control - Professional Services Projects"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Close Internal Projects",
+          "summary": "The team close internal projects.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Plan Internal Projects",
+            "Project Control - Professional Services Projects"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "1B6",
+      "description": "Sales Rebate Processing",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales rebate processing runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Sales Rebate handle – One Customer",
+          "summary": "Covers sales rebate handle – one customer, sales rebate handle – multiple customers and sales rebate handle – two-step settlement.",
+          "stepStart": 1,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Goods Related Sales Rebate handle",
+          "summary": "The team goods related sales rebate handle.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Sales Rebate handle – Multiple Company Codes",
+          "summary": "Covers sales rebate handle – multiple company codes, sales rebate handle with approval workflow and sales rebate handle with different bases for rebate calculation and scale determination.",
+          "stepStart": 5,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Sales Rebate handle with Graduated Scales",
+          "summary": "Covers sales rebate handle with graduated scales, sales rebate handle with conditions maintained for product hierarchy nodes and sales rebate handle – fixed amount agreements.",
+          "stepStart": 8,
+          "stepEnd": 10,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "E-invoice submission",
+          "summary": "The team e-invoice submission.",
+          "stepStart": 11,
+          "stepEnd": 11,
+          "roles": [],
+          "fioriApps": [
+            "eDocument Cockpit"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "1EZ",
+      "description": "Credit Memo Processing",
+      "reviewed": false,
+      "story": {
+        "headline": "How credit memo processing runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Credit Memo Requests",
+          "summary": "The team create credit memo requests.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Credit Memo Requests - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Credit Memo",
+          "summary": "The team create credit memo.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Billing Document",
+            "Create Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "E-invoice submission",
+          "summary": "The team e-invoice submission.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "eDocument Cockpit"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "1F1",
+      "description": "Debit Memo Processing",
+      "reviewed": false,
+      "story": {
+        "headline": "How debit memo processing runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Debit Memo Request",
+          "summary": "The team create debit memo request.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Debit Memo Requests",
+            "Manage Debit Memo Requests - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Remove Billing Block",
+          "summary": "The team remove billing block.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Manage Debit Memo Requests - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create Debit Memo",
+          "summary": "The team create debit memo.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Billing Document",
+            "Create Billing Documents",
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "E-invoice submission",
+          "summary": "The team e-invoice submission.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "eDocument Cockpit"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "1HO",
+      "description": "Intercompany Sales Order Processing – Domestic",
+      "reviewed": false,
+      "story": {
+        "headline": "How intercompany sales order processing – domestic runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Order",
+          "summary": "The team create sales order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Delivery",
+          "summary": "The team create delivery.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Create Outbound Deliveries - From Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Perform Picking",
+          "summary": "The team perform picking.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Post Goods Issue",
+          "summary": "The team post goods issue.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Display Outbound Delivery",
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Create F2 Invoice",
+          "summary": "Covers create f2 invoice and create intercompany invoice.",
+          "stepStart": 5,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Display AP Journal Entry",
+          "summary": "The team display ap journal entry.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Manage Journal Entries"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "1IQ",
+      "description": "Sales Inquiry",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales inquiry runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Inquiry",
+          "summary": "The team create sales inquiry.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Inquiries"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Change Sales Inquiry",
+          "summary": "The team change sales inquiry.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Inquiries"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Reject Sales Inquiry",
+          "summary": "The team reject sales inquiry.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Inquiries"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "1IU",
+      "description": "Customer Consignment",
+      "reviewed": false,
+      "story": {
+        "headline": "How customer consignment runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Consignment Fill-Up",
+          "summary": "The team consignment fill-up.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Consignment Issue",
+          "summary": "The team consignment issue.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Consignment Pick-Up",
+          "summary": "The team consignment pick-up.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Consignment Return",
+          "summary": "The team consignment return.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "1MC",
+      "description": "Omnichannel Convergent Billing",
+      "reviewed": false,
+      "story": {
+        "headline": "How omnichannel convergent billing runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create a Billing Document with External Data",
+          "summary": "The team create a billing document with external data.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Test Billing Document Request API"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create a Billing Document Combining External Billing Data and Data from Professional Services",
+          "summary": "The team create a billing document combining external billing data and data from professional services.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Test Billing Document Request API"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create a Billing Document Combining External Billing Data and Data from Sell from Stock",
+          "summary": "The team create a billing document combining external billing data and data from sell from stock.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Test Billing Document Request API"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Create a Billing Document Combining External Data, Data from Sell from Stock and Data from Professional Services",
+          "summary": "The team create a billing document combining external data, data from sell from stock and data from professional services.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Test Billing Document Request API"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "1MI",
+      "description": "Delivery Processing Without Order Reference",
+      "reviewed": false,
+      "story": {
+        "headline": "How delivery processing without order reference runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Delivery",
+          "summary": "The team create delivery.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Create Outbound Delivery - Without Order Reference"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Execute Picking",
+          "summary": "The team execute picking.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Post Goods Issue",
+          "summary": "The team post goods issue.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Display Outbound Delivery",
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Create Billing Documents",
+          "summary": "The team create billing documents.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "1MX",
+      "description": "Intercompany Sales Order Processing – International",
+      "reviewed": false,
+      "story": {
+        "headline": "How intercompany sales order processing – international runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Orders",
+          "summary": "The team create sales orders.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Delivery",
+          "summary": "The team create delivery.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Create Outbound Deliveries - From Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Perform Picking",
+          "summary": "The team perform picking.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Post Goods Issue",
+          "summary": "The team post goods issue.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Create F2 Invoice",
+          "summary": "Covers create f2 invoice and create intercompany invoice.",
+          "stepStart": 5,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents -"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Display AP Accounting Document",
+          "summary": "The team display ap accounting document.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Manage Journal Entries"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "1WO",
+      "description": "Extended Intercompany Processes for Sales",
+      "reviewed": false,
+      "story": {
+        "headline": "How extended intercompany processes for sales runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Domestic",
+          "summary": "The team domestic.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "International",
+          "summary": "The team international.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "1Z1",
+      "description": "Digital Payments – Sales",
+      "reviewed": false,
+      "story": {
+        "headline": "How digital payments – sales runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Using Credit Card Data Maintained in Business Partner in Sales Document",
+          "summary": "The team using credit card data maintained in business partner in sales document.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Using One-time Credit Card Data in Sales Document",
+          "summary": "The team using one-time credit card data in sales document.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Reject Sales Order and Check Deleted Credit Card Authorization",
+          "summary": "The team reject sales order and check deleted credit card authorization.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "1Z3",
+      "description": "Customer Returns with Direct Shipment from Customer to Supplier",
+      "reviewed": false,
+      "story": {
+        "headline": "How customer returns with direct shipment from customer to supplier runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Returns Order",
+          "summary": "The team create returns order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Returns - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Supplier Credit Memo",
+          "summary": "The team create supplier credit memo.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Create Supplier Invoice - Advanced"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Determine Refund",
+          "summary": "The team determine refund.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Returns - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Display Returns Overview",
+          "summary": "The team display returns overview.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Returns - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Refund Customer with Credit Memo",
+          "summary": "Covers refund customer with credit memo and refund customer with replacement product.",
+          "stepStart": 5,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "1Z6",
+      "description": "External Billing",
+      "reviewed": false,
+      "story": {
+        "headline": "How external billing runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Check Invoice Ext. Transaction Billing Document Created in the SAP System",
+          "summary": "The team check invoice ext. transaction billing document created in the sap system.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Check Invoice Cancellation Billing Document Created in the SAP System",
+          "summary": "The team check invoice cancellation billing document created in the sap system.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2EL",
+      "description": "Integration of Sales with External Buyers",
+      "reviewed": false,
+      "story": {
+        "headline": "How integration of sales with external buyers runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create/Update/Cancel Sales Order from PO",
+          "summary": "The team create/update/cancel sales order from po.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Send Order Confirmation",
+          "summary": "The team send order confirmation.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Manage Sales Documents with Customer Expected Price",
+          "summary": "The team manage sales documents with customer expected price.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Docs with Customer-Expected Price"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Send Order Confirmation Change",
+          "summary": "The team send order confirmation change.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Create Delivery",
+          "summary": "The team create delivery.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Create Outbound Delivery - With Order Reference"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Executive Picking",
+          "summary": "The team executive picking.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Post Goods Issue",
+          "summary": "The team post goods issue.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Send Advance Shipping Notice",
+          "summary": "The team send advance shipping notice.",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 9,
+          "title": "Create Billing Document",
+          "summary": "The team create billing document.",
+          "stepStart": 9,
+          "stepEnd": 9,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2EQ",
+      "description": "Sale of Services",
+      "reviewed": false,
+      "story": {
+        "headline": "How sale of services runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Order",
+          "summary": "The team create sales order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Orders - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Billing Document",
+          "summary": "The team create billing document.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "E-invoice submission",
+          "summary": "The team e-invoice submission.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "eDocument Cockpit"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2ET",
+      "description": "Sales Order Processing for Non-Stock Material",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales order processing for non-stock material runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Order",
+          "summary": "The team create sales order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Orders - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Delivery",
+          "summary": "The team create delivery.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Create Outbound Deliveries - From Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Post Goods Issue",
+          "summary": "The team post goods issue.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Change Outbound Delivery"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Create Billing Document",
+          "summary": "The team create billing document.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2F4",
+      "description": "Intercompany Process for Customer Returns",
+      "reviewed": false,
+      "story": {
+        "headline": "How intercompany process for customer returns runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Generate Return Order",
+          "summary": "The team generate return order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Returns"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Perform Picking",
+          "summary": "The team perform picking.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Post goods receipt",
+          "summary": "The team post goods receipt.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Perform Material Inspection",
+          "summary": "The team perform material inspection.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Enter Inspection Results - From Warehouse"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Determine Refund",
+          "summary": "The team determine refund.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Returns"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Display Return Overview",
+          "summary": "The team display return overview.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Returns"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Refund Customer with Credit Memo",
+          "summary": "Covers refund customer with credit memo and refund customer with material replacement.",
+          "stepStart": 7,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "2TT",
+      "description": "Sales Commissions – External Sales Representative",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales commissions – external sales representative runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Commission handle – Billing Document",
+          "summary": "Covers commission handle – billing document, commission handle – billing document paid, commission handle – subscription billing, commission handle – settlement document, commission handle – single sales deal, commission handle with approval workflow, commission handle with graduated scales and commission handle with conditions maintained for product hierarchy nodes.",
+          "stepStart": 1,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "31Q",
+      "description": "Sales Order Processing for Sales Kits",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales order processing for sales kits runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Order",
+          "summary": "The team create sales order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Create Sales Orders -",
+            "Manage Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Delivery",
+          "summary": "The team create delivery.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Create Outbound Deliveries - From Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Execute Picking",
+          "summary": "The team execute picking.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Post Goods Issue",
+          "summary": "The team post goods issue.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Change Outbound Delivery"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Create Billing Document",
+          "summary": "The team create billing document.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Billing Document",
+            "Create Billing Documents",
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "3D2",
+      "description": "Service Order Management and Monitoring",
+      "reviewed": false,
+      "story": {
+        "headline": "How service order management and monitoring runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Service Order Templates",
+          "summary": "The team service order templates.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Service Order",
+          "summary": "The team service order.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Fixed Price Order",
+          "summary": "The team fixed price order.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "3HS",
+      "description": "Sales from Distribution Center",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales from distribution center runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Quotation",
+          "summary": "Covers create sales quotation and create sales orders.",
+          "stepStart": 1,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Create Sales Orders -",
+            "Manage Sales Quotations"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create an Outbound Delivery",
+          "summary": "Covers create an outbound delivery and process picking for outbound delivery.",
+          "stepStart": 3,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Create Outbound Deliveries - From Sales Orders",
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Post Goods Issue for Outbound Delivery",
+          "summary": "The team post goods issue for outbound delivery.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Create Billing Document",
+          "summary": "The team create billing document.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Create Debit Memo Request",
+          "summary": "The team create debit memo request.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Manage Debit Memo Requests"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Remove Billing Block",
+          "summary": "The team remove billing block.",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [
+            "Manage Debit Memo Requests"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Create Debit Memo",
+          "summary": "The team create debit memo.",
+          "stepStart": 9,
+          "stepEnd": 9,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Consignment Fill-Up",
+          "summary": "Covers consignment fill-up, consignment issue, consignment pick-up and consignment return.",
+          "stepStart": 10,
+          "stepEnd": 13,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 9,
+          "title": "Advanced Intercompany Sales",
+          "summary": "The team advanced intercompany sales.",
+          "stepStart": 14,
+          "stepEnd": 14,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "3HU",
+      "description": "In-Store Customer Order Management",
+      "reviewed": false,
+      "story": {
+        "headline": "How in-store customer order management runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Sell from Store: Immediate Pickup",
+          "summary": "The team sell from store: immediate pickup.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Sell from Store: Pickup at Later Date due to Stock Unavailability (Payment Done at Pickup)",
+          "summary": "The team sell from store: pickup at later date due to stock unavailability (payment done at pickup).",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "3HV",
+      "description": "Store Connectivity – Inbound",
+      "reviewed": false,
+      "story": {
+        "headline": "How store connectivity – inbound runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Process Aggregated Sales from POS or SAP Omnichannel Sales transfer and Audit",
+          "summary": "Covers process aggregated sales from pos or sap omnichannel sales transfer and audit, process sales per receipt from pos, process sales per receipt (returns) from pos, process aggregated payment list from pos, process customer order payment from pos and process finance data from pos.",
+          "stepStart": 1,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "3I4",
+      "description": "Sales Pricing for Retail",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales pricing for retail runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Change Planned Markup for Distribution Chain",
+          "summary": "Covers change planned markup for distribution chain, display planned markup for distribution chain, create planned markup for price list and set up price list type for site and merchandise category.",
+          "stepStart": 1,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Assign Merchandise Categories - Sites",
+            "Create Planned Markup - Price List",
+            "Display Planned Markup",
+            "Maintain Planned Markup"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Calculate Sales Price for Single Articles",
+          "summary": "Covers calculate sales price for single articles, display price overview, view generic article (with pricing profile ‘2’) and calculate sales price for generic article (with pricing profile ‘2’).",
+          "stepStart": 5,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [
+            "Create Sales Price Calculation",
+            "Determine Sales Prices",
+            "Maintain Article"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Display Pricing Document",
+          "summary": "Covers display pricing document, create sales prices for structures articles (sales set), change purchasing price for generic article and set up pricing reference article for generic articles and variants.",
+          "stepStart": 9,
+          "stepEnd": 12,
+          "roles": [],
+          "fioriApps": [
+            "Change Price Conditions - Purchasing",
+            "Create Sales Price Calculation",
+            "Display Pricing Document",
+            "Maintain Article"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Calculate Sales Price for Generic article (with Price Reference Article)",
+          "summary": "Covers calculate sales price for generic article (with price reference article), calculate sales price with price points, create pricing document and display pricing document by material.",
+          "stepStart": 13,
+          "stepEnd": 16,
+          "roles": [],
+          "fioriApps": [
+            "Create Sales Price Calculation",
+            "List Pricing Documents - for Articles"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Change Price Calculation",
+          "summary": "Covers change price calculation, two-step sales price calculation, display pricing document by organization structure and calculate sales price in background.",
+          "stepStart": 17,
+          "stepEnd": 20,
+          "roles": [],
+          "fioriApps": [
+            "Create Sales Price Calculation",
+            "List Pricing Documents - for Organizations",
+            "Maintain Sales Price Calculation",
+            "Schedule Sales Price Calculation Run"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Create Pricing Document - Single Article (for Pricing Worklist)",
+          "summary": "Covers create pricing document - single article (for pricing worklist), change purchasing price - single article (for pricing worklist), generate pricing worklist (distribution center distribution chain) and release pricing worklist (distribution center distribution chain).",
+          "stepStart": 21,
+          "stepEnd": 24,
+          "roles": [],
+          "fioriApps": [
+            "Change Price Conditions - Purchasing",
+            "Create Sales Price Calculation",
+            "Generate Sales Price Worklist",
+            "Release Sales Price Worklist - by Article"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Generate Pricing Worklist (Store Distribution Chain)",
+          "summary": "Covers generate pricing worklist (store distribution chain), release pricing worklist (store distribution chain), generate pricing worklist in background and create supplier (vendor) discount condition.",
+          "stepStart": 25,
+          "stepEnd": 28,
+          "roles": [],
+          "fioriApps": [
+            "Generate Sales Price Worklist",
+            "Release Sales Price Worklist - by Article",
+            "Schedule Generation of Sales Price Worklist"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Displaying Purchasing Conditions",
+          "summary": "Covers displaying purchasing conditions and create freight condition.",
+          "stepStart": 29,
+          "stepEnd": 30,
+          "roles": [],
+          "fioriApps": [
+            "Maintain Article",
+            "Maintain Purchasing Conditions"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 9,
+          "title": "Reset Site-Specific Price and Price List Price",
+          "summary": "Covers reset site-specific price and price list price and set up wholesale prices.",
+          "stepStart": 31,
+          "stepEnd": 32,
+          "roles": [],
+          "fioriApps": [
+            "Determine Sales Prices"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "3I5",
+      "description": "Assortments",
+      "reviewed": false,
+      "story": {
+        "headline": "How assortments runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Assortment Module",
+          "summary": "Covers create assortment module and create assortment module version.",
+          "stepStart": 1,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Manage Assortment Modules"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Assign Product to Assortment Module Version",
+          "summary": "Covers assign product to assortment module version and assign store to assortment module.",
+          "stepStart": 3,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Manage Assortment Modules"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Assign Products to Distribution Center",
+          "summary": "The team assign products to distribution center.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Assign Products to Distribution Centers"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "3MO",
+      "description": "Service Contract Management",
+      "reviewed": false,
+      "story": {
+        "headline": "How service contract management runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Service Contract Templates",
+          "summary": "The team service contract templates.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Service Contract Management",
+          "summary": "The team service contract management.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Service Contract Billing",
+          "summary": "The team service contract billing.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Service Contract Change Processes (optional)",
+          "summary": "The team service contract change processes (optional).",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "3NI",
+      "description": "Procurement for Service Management",
+      "reviewed": false,
+      "story": {
+        "headline": "How procurement for service management runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create purchase order against purchase request",
+          "summary": "The team create purchase order against purchase request.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Monitor purchase order Assignment in Service Document",
+          "summary": "The team monitor purchase order assignment in service document.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "View purchase order Output",
+          "summary": "The team view purchase order output.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Purchase Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Post goods receipt of Material Items for Consumption Materials",
+          "summary": "The team post goods receipt of material items for consumption materials.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Post Goods Receipt"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Monitor goods receipt in Service Document for Consumption Materials",
+          "summary": "The team monitor goods receipt in service document for consumption materials.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Check Service Entry Sheet Details for External Workforce",
+          "summary": "The team check service entry sheet details for external workforce.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Monitor Reverse goods receipt In Service Document for Consumption Materials",
+          "summary": "The team monitor reverse goods receipt in service document for consumption materials.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Create supplier invoice with PO Reference",
+          "summary": "The team create supplier invoice with po reference.",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 9,
+          "title": "Monitor supplier invoice Assignment In Service Document",
+          "summary": "The team monitor supplier invoice assignment in service document.",
+          "stepStart": 9,
+          "stepEnd": 9,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "3NR",
+      "description": "Sales Scheduling Agreements",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales scheduling agreements runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Scheduling Agreement",
+          "summary": "The team create sales scheduling agreement.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Scheduling Agreements"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Check Incoming Delivery Schedules in AIF (Message Dashboard) - EDI relevant",
+          "summary": "The team check incoming delivery schedules in aif (message dashboard) - edi relevant.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create Delivery",
+          "summary": "The team create delivery.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "My Sales Order Schedule Lines - Due for Delivery"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Execute Picking",
+          "summary": "The team execute picking.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Outbound Deliveries for Picking"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Post Goods Issue",
+          "summary": "The team post goods issue.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Outbound Deliveries for Goods Issue"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Create Billing Document",
+          "summary": "The team create billing document.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents -"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Send Invoice - EDI Relevant",
+          "summary": "The team send invoice - edi relevant.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Check Invoice in AIF (Message Dashboard) - EDI relevant",
+          "summary": "The team check invoice in aif (message dashboard) - edi relevant.",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "3QD",
+      "description": "Customer Returns Involving Supplier by Message Exchange",
+      "reviewed": false,
+      "story": {
+        "headline": "How customer returns involving supplier by message exchange runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Scenario 1: Returned Goods handle in Seller System",
+          "summary": "The team scenario 1: returned goods handle in seller system.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Maintain Business Partner",
+            "Manage Your Solution"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Scenario 2: Returned Goods handle in Supplier System",
+          "summary": "The team scenario 2: returned goods handle in supplier system.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "3TD",
+      "description": "Internal Commissions Settlement for Sales",
+      "reviewed": false,
+      "story": {
+        "headline": "How internal commissions settlement for sales runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Commissions handle Based on Workforce Condition Contracts",
+          "summary": "The team commissions handle based on workforce condition contracts.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Commissions handle with Integration to SAP SuccessFactors Incentive Management",
+          "summary": "The team commissions handle with integration to sap successfactors incentive management.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "3TE",
+      "description": "Customer Returns for Non-Stock and Service Materials",
+      "reviewed": false,
+      "story": {
+        "headline": "How customer returns for non-stock and service materials runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Returns Order",
+          "summary": "The team create returns order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Returns - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Post goods receipt (Statistical Confirmation)",
+          "summary": "The team post goods receipt (statistical confirmation).",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Change Outbound Delivery"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Determine Refund",
+          "summary": "The team determine refund.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Returns - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Display Returns Overview",
+          "summary": "The team display returns overview.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Returns - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Refund Customer with Credit Memo (Option A)",
+          "summary": "Covers refund customer with credit memo (option a) and refund customer with replacement product (option b).",
+          "stepStart": 5,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "3XK",
+      "description": "In-House Repair",
+      "reviewed": false,
+      "story": {
+        "headline": "How in-house repair runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create In-House Repair",
+          "summary": "The team create in-house repair.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Perform Prechecks",
+          "summary": "The team perform prechecks.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Perform Prechecks"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create Repair Order or Create Fixed Price Repair Order selected in Follow-Up Steps",
+          "summary": "The team create repair order or create fixed price repair order selected in follow-up steps.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Trigger Repair Planning in Repair Order",
+          "summary": "The team trigger repair planning in repair order.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Perform Prechecks"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Prepare and Release for Billing",
+          "summary": "The team prepare and release for billing.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Prepare for Billing"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "49X",
+      "description": "Service Order Processing with SAP Field Service Management",
+      "reviewed": false,
+      "story": {
+        "headline": "How service order processing with sap field service management runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "E2E Scenario: Synchronize a Service Contract from S/4HANA Cloud to FSM",
+          "summary": "Covers e2e scenario: synchronize a service contract from s/4hana cloud to fsm, e2e scenario: create a service order in s/4hana cloud and release it to fsm, e2e scenario: update a released service order in s/4hana cloud and re-release it, e2e scenario: update service order in s/4hana cloud when service call or activity is updated in fsm, e2e scenario: create service order with items in s/4hana cloud when service call or activity is created in fsm, e2e scenario: create a completed service confirmation in s/4hana cloud when time effort, expense, or material is approved in fsm, e2e scenario: complete a service order in sap s/4hana cloud public edition and corresponding service call is technically completed in fsm, e2e scenario: create a service order in s/4hana cloud, release it to fsm, and reject the service order and e2e scenario: create and release a repair order in s/4hana cloud; create and approve a time effort in fsm.",
+          "stepStart": 1,
+          "stepEnd": 9,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "4A1",
+      "description": "Automation of Order-to-Invoice with SAP Business Network",
+      "reviewed": false,
+      "story": {
+        "headline": "How automation of order-to-invoice with sap business network runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create purchase order",
+          "summary": "Covers create purchase order and display purchase order (as a supplier in sap business network).",
+          "stepStart": 1,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Display Purchase Order - Advanced",
+            "Manage Purchase Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Display Sales Orders",
+          "summary": "Covers display sales orders and send order confirmation.",
+          "stepStart": 3,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Check Order Confirmation (as a Supplier in SAP Business Network)",
+          "summary": "Covers check order confirmation (as a supplier in sap business network) and create outbound delivery.",
+          "stepStart": 5,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Create Outbound Deliveries - From Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Pick Delivery Item and Post Goods Issue",
+          "summary": "The team pick delivery item and post goods issue.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Change Outbound Delivery",
+            "Pick Outbound Delivery"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Send Advanced Shipping Notification",
+          "summary": "The team send advanced shipping notification.",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Check Advanced Shipping Notification (as a Supplier in SAP Business Network)",
+          "summary": "The team check advanced shipping notification (as a supplier in sap business network).",
+          "stepStart": 9,
+          "stepEnd": 9,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Create Billing Document",
+          "summary": "The team create billing document.",
+          "stepStart": 10,
+          "stepEnd": 10,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Send Customer Invoice",
+          "summary": "The team send customer invoice.",
+          "stepStart": 11,
+          "stepEnd": 11,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 9,
+          "title": "Check Invoice (as a Supplier in SAP Business Network)",
+          "summary": "The team check invoice (as a supplier in sap business network).",
+          "stepStart": 12,
+          "stepEnd": 12,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "4E9",
+      "description": "Project Billing – Project-Based Services",
+      "reviewed": false,
+      "story": {
+        "headline": "How project billing – project-based services runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Billing for Fixed Price Item",
+          "summary": "The team billing for fixed price item.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Preliminary Billing Documents - Services",
+            "Manage Project Billing"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Billing For Time and Expense Item",
+          "summary": "Covers billing for time and expense item, billing for periodic service item, billing for usage-based item and billing for additional items.",
+          "stepStart": 2,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Manage Project Billing"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Billing for On Account Prepayment",
+          "summary": "The team billing for on account prepayment.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Manage Project Billing"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Billing for Down Payment",
+          "summary": "The team billing for down payment.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Create Customer Projects",
+            "Create Preliminary Billing Documents",
+            "Manage Project Billing"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Schedule Repricing for Projects",
+          "summary": "The team schedule repricing for projects.",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [
+            "Schedule Repricing for Projects"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "4GA",
+      "description": "Service Quotation",
+      "reviewed": false,
+      "story": {
+        "headline": "How service quotation runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Service Quotation",
+          "summary": "The team service quotation.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Fixed Price Service Quotation",
+          "summary": "The team fixed price service quotation.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "4GG",
+      "description": "Credit and Debit Memo Processing for Service Management",
+      "reviewed": false,
+      "story": {
+        "headline": "How credit and debit memo processing for service management runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Credit Memo with Reference to Invoice for Service Contract, Service Order, or Service Confirmation",
+          "summary": "The team create credit memo with reference to invoice for service contract, service order, or service confirmation.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Debit Memo with Reference to Invoice for Service Contract, Service Order, or Service Confirmation",
+          "summary": "The team create debit memo with reference to invoice for service contract, service order, or service confirmation.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "4GT",
+      "description": "Solution Order Management",
+      "reviewed": false,
+      "story": {
+        "headline": "How solution order management runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Solution Order",
+          "summary": "The team solution order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Manage Sales Order",
+          "summary": "Covers manage sales order, manage service order, manage service contract, manage subscription billing, manage customer project and manage billing document.",
+          "stepStart": 2,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Credit Memo Request",
+          "summary": "The team credit memo request.",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Customer Returns",
+          "summary": "The team customer returns.",
+          "stepStart": 9,
+          "stepEnd": 9,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "4H2",
+      "description": "Self-Billing",
+      "reviewed": false,
+      "story": {
+        "headline": "How self-billing runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Handle Introduction",
+          "summary": "The team handle introduction.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Check Auto handle Result",
+          "summary": "The team check auto handle result.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Check Simulation Result",
+          "summary": "The team check simulation result.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Execute Self-Billing Document",
+          "summary": "The team execute self-billing document.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "4LZ",
+      "description": "Sales Scheduling Agreement with Consignment",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales scheduling agreement with consignment runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Scheduling Agreement Consignment Fill-up",
+          "summary": "The team scheduling agreement consignment fill-up.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Consignment Issue",
+          "summary": "Covers consignment issue, consignment pick-up and consignment return.",
+          "stepStart": 2,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Correction Delivery",
+          "summary": "The team correction delivery.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Change Sales Scheduling Agreements"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "External Agent Correction",
+          "summary": "The team external agent correction.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "4R6",
+      "description": "Sales Processing using Third-Party with Variant Configuration",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales processing using third-party with variant configuration runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Order with Configurable Material for 3rd Party Process",
+          "summary": "The team create sales order with configurable material for 3rd party process.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Orders"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "4X5",
+      "description": "Recurring Services",
+      "reviewed": false,
+      "story": {
+        "headline": "How recurring services runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Service Contract",
+          "summary": "The team create service contract.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Service Order Template",
+          "summary": "The team create service order template.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create Maintenance Plan",
+          "summary": "The team create maintenance plan.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "4X9",
+      "description": "Create Sales Orders from Unstructured Data",
+      "reviewed": false,
+      "story": {
+        "headline": "How create sales orders from unstructured data runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Orders by automatic Extraction from a PDF File",
+          "summary": "The team create sales orders by automatic extraction from a pdf file.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Create Sales Orders - Automatic Extraction"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "53Y",
+      "description": "Intercompany Billing for Service Documents",
+      "reviewed": false,
+      "story": {
+        "headline": "How intercompany billing for service documents runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Order",
+          "summary": "The team create order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Confirmation",
+          "summary": "The team create confirmation.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Generate Intercompany Billing Request",
+          "summary": "The team generate intercompany billing request.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Generate Intercompany Billing Request"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Create Intercompany Invoice",
+          "summary": "The team create intercompany invoice.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Create Billing Documents -"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "57Z",
+      "description": "Subscription Management with Sales Billing",
+      "reviewed": false,
+      "story": {
+        "headline": "How subscription management with sales billing runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Manage Subscription Billing",
+          "summary": "The team manage subscription billing.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Manage Billing Document",
+          "summary": "The team manage billing document.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create Credit Memo with Reference to Invoice",
+          "summary": "The team create credit memo with reference to invoice.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Create Debit Memo with reference to Invoice",
+          "summary": "The team create debit memo with reference to invoice.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "5CX",
+      "description": "Customer Returns for Sales Kits",
+      "reviewed": false,
+      "story": {
+        "headline": "How customer returns for sales kits runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Returns Order",
+          "summary": "The team create returns order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Returns",
+            "Manage Customer Returns - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Post goods receipt",
+          "summary": "The team post goods receipt.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Change Outbound Delivery"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Perform Material Inspection",
+          "summary": "The team perform material inspection.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Enter Inspection Results - From Warehouse"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Determine Refund",
+          "summary": "The team determine refund.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Returns"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Display Returns Overview",
+          "summary": "The team display returns overview.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Returns"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Refund Customer with Credit Memo",
+          "summary": "The team refund customer with credit memo.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "5D2",
+      "description": "Advanced Intercompany Sales",
+      "reviewed": false,
+      "story": {
+        "headline": "How advanced intercompany sales runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Order",
+          "summary": "The team create sales order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Delivery",
+          "summary": "The team create delivery.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Create Outbound Deliveries - From Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Perform Picking",
+          "summary": "The team perform picking.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Post Goods Issue",
+          "summary": "The team post goods issue.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Confirm Transfer of Control Dates",
+          "summary": "The team confirm transfer of control dates.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Create Intercompany Invoice",
+          "summary": "The team create intercompany invoice.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Display Intercompany supplier invoice",
+          "summary": "The team display intercompany supplier invoice.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Supplier Invoices List"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Create F2 Invoice",
+          "summary": "The team create f2 invoice.",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 9,
+          "title": "Monitor Intercompany Sales Value Chain",
+          "summary": "The team monitor intercompany sales value chain.",
+          "stepStart": 9,
+          "stepEnd": 9,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "5FH",
+      "description": "Business Partners for Retail",
+      "reviewed": false,
+      "story": {
+        "headline": "How business partners for retail runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Supplier and extend role as Customer",
+          "summary": "Covers create supplier and extend role as customer, create wholesale customer, create one-time customer, create b2c customer and create template customer (reference consumer).",
+          "stepStart": 1,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "5FZ",
+      "description": "Omnichannel Order Fulfillment for Retail",
+      "reviewed": false,
+      "story": {
+        "headline": "How omnichannel order fulfillment for retail runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Click and Reserve - Order Fulfillment in Store (Stock is Available in the Store)",
+          "summary": "The team click and reserve - order fulfillment in store (stock is available in the store).",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Click and Collect (Pre-Paid Order)- Order Fulfillment from Distribution Center to Store (Stock is Not Available in the Store)",
+          "summary": "The team click and collect (pre-paid order)- order fulfillment from distribution center to store (stock is not available in the store).",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Sell from Online Store, Delivery from Distribution Center to Customer (Pre-Paid Order)",
+          "summary": "The team sell from online store, delivery from distribution center to customer (pre-paid order).",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "5HL",
+      "description": "Sell from Stock – Consumer Products",
+      "reviewed": false,
+      "story": {
+        "headline": "How sell from stock – consumer products runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Sell from Stock",
+          "summary": "The team sell from stock.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Sell from Valuated Stock in Transit",
+          "summary": "The team sell from valuated stock in transit.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "5HR",
+      "description": "Warranty Claim Management – Supplier Recovery Processing",
+      "reviewed": false,
+      "story": {
+        "headline": "How warranty claim management – supplier recovery processing runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Supplier Claim",
+          "summary": "Covers create supplier claim and validate supplier claim.",
+          "stepStart": 1,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Manage Supplier Claims"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Adjust Supplier Claim",
+          "summary": "Covers adjust supplier claim and send to supplier.",
+          "stepStart": 3,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Manage Supplier Claims"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Set up Supplier Response",
+          "summary": "Covers set up supplier response and post supplier claim.",
+          "stepStart": 5,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Manage Supplier Claims"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Reverse Claim post",
+          "summary": "The team reverse claim post.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Manage Supplier Claims"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Reject Supplier Claim",
+          "summary": "The team reject supplier claim.",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [
+            "Manage Supplier Claims"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Cancel Supplier Claim",
+          "summary": "The team cancel supplier claim.",
+          "stepStart": 9,
+          "stepEnd": 9,
+          "roles": [],
+          "fioriApps": [
+            "Manage Supplier Claims"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Close Supplier Claim",
+          "summary": "The team close supplier claim.",
+          "stepStart": 10,
+          "stepEnd": 10,
+          "roles": [],
+          "fioriApps": [
+            "Manage Supplier Claims"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Reprocess Rejected Supplier Claim",
+          "summary": "The team reprocess rejected supplier claim.",
+          "stepStart": 11,
+          "stepEnd": 11,
+          "roles": [],
+          "fioriApps": [
+            "Manage Supplier Claims"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 9,
+          "title": "Reopen Supplier Claim",
+          "summary": "The team reopen supplier claim.",
+          "stepStart": 12,
+          "stepEnd": 12,
+          "roles": [],
+          "fioriApps": [
+            "Manage Supplier Claims"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "5MQ",
+      "description": "Sell from Stock with Valuated Stock in Transit",
+      "reviewed": false,
+      "story": {
+        "headline": "How sell from stock with valuated stock in transit runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Order",
+          "summary": "The team create sales order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Monitor Value Chains for Sales Order",
+          "summary": "The team monitor value chains for sales order.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Monitor Value Chains"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create Delivery",
+          "summary": "The team create delivery.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Change Outbound Delivery",
+            "Create Outbound Deliveries - From Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Monitor Value Chains",
+          "summary": "The team monitor value chains.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Monitor Value Chains"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Execute Picking",
+          "summary": "The team execute picking.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Post Goods Issue",
+          "summary": "The team post goods issue.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Display Outbound Delivery",
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Check Material Document Number of Goods Movements",
+          "summary": "The team check material document number of goods movements.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Display Material Document List - Deprecated"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Create Billing Document",
+          "summary": "The team create billing document.",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "61V",
+      "description": "Customer Returns Management – Consumer Products",
+      "reviewed": false,
+      "story": {
+        "headline": "How customer returns management – consumer products runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Goods are Returned to Seller",
+          "summary": "The team goods are returned to seller.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Scheduling Job (Alternative)",
+          "summary": "The team scheduling job (alternative).",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "637",
+      "description": "Retail Promotions",
+      "reviewed": false,
+      "story": {
+        "headline": "How retail promotions runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Manual Procedure",
+          "summary": "The team manual procedure.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Periodic Background Job",
+          "summary": "The team periodic background job.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "63Y",
+      "description": "Warranty Claim Management – Customer Claim Processing",
+      "reviewed": false,
+      "story": {
+        "headline": "How warranty claim management – customer claim processing runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Customer Claim",
+          "summary": "Covers create customer claim and discard customer claim.",
+          "stepStart": 1,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Claims"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Validate Customer Claim",
+          "summary": "Covers validate customer claim and adjust customer claim.",
+          "stepStart": 3,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Claims"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Request Customer Return Parts",
+          "summary": "Covers request customer return parts and request additional information from customer.",
+          "stepStart": 5,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Claims"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Information Provided",
+          "summary": "Covers information provided and start supplier process from customer.",
+          "stepStart": 7,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Claims"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Accept Customer Claim",
+          "summary": "Covers accept customer claim and post customer claim.",
+          "stepStart": 9,
+          "stepEnd": 10,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Claims"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Reverse post of Claim",
+          "summary": "Covers reverse post of claim and reject customer claim.",
+          "stepStart": 11,
+          "stepEnd": 12,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Claims"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Close Customer Claim",
+          "summary": "The team close customer claim.",
+          "stepStart": 13,
+          "stepEnd": 13,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Claims"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Reopen Customer Claim",
+          "summary": "The team reopen customer claim.",
+          "stepStart": 14,
+          "stepEnd": 14,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Claims"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 9,
+          "title": "Reprocess Customer Claim",
+          "summary": "The team reprocess customer claim.",
+          "stepStart": 15,
+          "stepEnd": 15,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Claims"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "6BU",
+      "description": "Solution Order – Advanced Product Bundling",
+      "reviewed": false,
+      "story": {
+        "headline": "How solution order – advanced product bundling runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Solution Order",
+          "summary": "The team solution order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "6BV",
+      "description": "Solution Order Quotation Management with SAP CPQ",
+      "reviewed": false,
+      "story": {
+        "headline": "How solution order quotation management with sap cpq runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Quotation in SAP CPQ",
+          "summary": "The team create quotation in sap cpq.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Display Solution Order in SAP S/4HANA Cloud Public Edition",
+          "summary": "The team display solution order in sap s/4hana cloud public edition.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Manage Solution Orders"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "6DI",
+      "description": "Seasons for Retail",
+      "reviewed": false,
+      "story": {
+        "headline": "How seasons for retail runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Season Master Data",
+          "summary": "The team season master data.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Assign Season Details to Products",
+          "summary": "The team assign season details to products.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Change Season Details",
+          "summary": "The team change season details.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Display Seasons Assignment",
+          "summary": "The team display seasons assignment.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Sales Document handle",
+          "summary": "The team sales document handle.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Purchase Document handle",
+          "summary": "The team purchase document handle.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "6GC",
+      "description": "Intercompany Sales Order Processing – Make-to-Order",
+      "reviewed": false,
+      "story": {
+        "headline": "How intercompany sales order processing – make-to-order runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Orders",
+          "summary": "The team create sales orders.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Orders"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "6GS",
+      "description": "Service Management with Advanced Variant Configuration",
+      "reviewed": false,
+      "story": {
+        "headline": "How service management with advanced variant configuration runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Service Order Quotation with Configurable Service Product Item",
+          "summary": "The team create service order quotation with configurable service product item.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Service Quotations - Overview"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Service Order with Configurable Service Product",
+          "summary": "The team create service order with configurable service product.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Manage Service Orders - To-Do List"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create Service Confirmation and Change Product Configuration",
+          "summary": "The team create service confirmation and change product configuration.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Service Orders - To-Do List",
+            "Process Service Orders - To-Do List"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Create Billing Document (Invoice)",
+          "summary": "The team create billing document (invoice).",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "6GU",
+      "description": "Service Contract Management with Advanced Variant Configuration",
+      "reviewed": false,
+      "story": {
+        "headline": "How service contract management with advanced variant configuration runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Service Contract Template",
+          "summary": "The team service contract template.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Service Contract Management",
+          "summary": "The team service contract management.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "6HY",
+      "description": "Solution Order Management with Advanced Variant Configuration",
+      "reviewed": false,
+      "story": {
+        "headline": "How solution order management with advanced variant configuration runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Solution Order",
+          "summary": "The team create solution order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Solution Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Release Solution Order Line Items",
+          "summary": "The team release solution order line items.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Print Solution Order",
+          "summary": "The team print solution order.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Manage Sales Order",
+          "summary": "Covers manage sales order, manage service order, manage service contract and manage billing document.",
+          "stepStart": 4,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "73P",
+      "description": "Sales Order Automation",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales order automation runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create or Edit Sales Order with Recommendations for Standard Orders",
+          "summary": "The team create or edit sales order with recommendations for standard orders.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Returns Order with Recommendations",
+          "summary": "The team create returns order with recommendations.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "7KW",
+      "description": "Customer Returns for Material with Variant Configuration",
+      "reviewed": false,
+      "story": {
+        "headline": "How customer returns for material with variant configuration runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Returns Order with Reference",
+          "summary": "The team create returns order with reference.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Returns - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Perform Picking",
+          "summary": "The team perform picking.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Post goods receipt",
+          "summary": "The team post goods receipt.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Perform Material Inspection",
+          "summary": "The team perform material inspection.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Enter Inspection Results - From Warehouse"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Determine Refund",
+          "summary": "The team determine refund.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Returns - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Display Returns Overview",
+          "summary": "The team display returns overview.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Returns - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Create Credit Memo",
+          "summary": "The team create credit memo.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BD3",
+      "description": "Sales Processing using Third-Party with Shipping Notification",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales processing using third-party with shipping notification runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Third-Party Sales Order",
+          "summary": "The team create third-party sales order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Display List of Purchase Requisitions to be Assigned",
+          "summary": "The team display list of purchase requisitions to be assigned.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Process Purchase Requisitions"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Convert Assigned Requisitions into Purchase Orders",
+          "summary": "The team convert assigned requisitions into purchase orders.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Process Purchase Requisitions"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Post Statistical goods receipt",
+          "summary": "The team post statistical goods receipt.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Post Goods Movement"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Create Billing Document",
+          "summary": "The team create billing document.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Create Invoice",
+          "summary": "The team create invoice.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Create Supplier Invoice - Advanced"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BD9",
+      "description": "Sell from Stock",
+      "reviewed": false,
+      "story": {
+        "headline": "How sell from stock runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Order",
+          "summary": "The team create sales order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Delivery",
+          "summary": "The team create delivery.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Change Outbound Delivery",
+            "Create Outbound Deliveries",
+            "Create Outbound Deliveries - From Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Execute Picking",
+          "summary": "The team execute picking.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Post Goods Issue",
+          "summary": "The team post goods issue.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Display Material Document List - Deprecated",
+            "Display Outbound Delivery",
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Create Billing Document",
+          "summary": "The team create billing document.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "E-invoice submission",
+          "summary": "The team e-invoice submission.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "eDocument Cockpit"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BDA",
+      "description": "Free of Charge Delivery",
+      "reviewed": false,
+      "story": {
+        "headline": "How free of charge delivery runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Order",
+          "summary": "The team create sales order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Orders Without Charge - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Delivery",
+          "summary": "The team create delivery.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Change Outbound Delivery",
+            "Create Outbound Deliveries - From Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Execute Picking",
+          "summary": "The team execute picking.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Post Goods Issue",
+          "summary": "The team post goods issue.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Display Outbound Delivery",
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Create Pro Forma Invoice",
+          "summary": "Covers create pro forma invoice and create customer invoice.",
+          "stepStart": 5,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BDD",
+      "description": "Lean Customer Returns",
+      "reviewed": false,
+      "story": {
+        "headline": "How lean customer returns runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Returns Order",
+          "summary": "The team create returns order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Create Sales Orders -"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Returns Delivery",
+          "summary": "The team create returns delivery.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Create Outbound Deliveries - From Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Post goods receipt",
+          "summary": "The team post goods receipt.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Remove Billing Block",
+          "summary": "The team remove billing block.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Manage Customer Returns - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Create Billing Document",
+          "summary": "The team create billing document.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BDG",
+      "description": "Sales Quotation",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales quotation runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Quotation",
+          "summary": "The team create sales quotation.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Quotations"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Change Quotation",
+          "summary": "The team change quotation.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Quotations"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Reject Sales Quotation",
+          "summary": "The team reject sales quotation.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Quotations"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BDH",
+      "description": "Sales Order Entry with One-Time Customer",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales order entry with one-time customer runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Order",
+          "summary": "The team create sales order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Create Sales Orders -",
+            "Manage Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Delivery",
+          "summary": "The team create delivery.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Change Outbound Delivery",
+            "Create Outbound Deliveries",
+            "Create Outbound Deliveries - From Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Execute Picking",
+          "summary": "The team execute picking.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Post Goods Issue",
+          "summary": "The team post goods issue.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Display Material Document List - Deprecated",
+            "Display Outbound Delivery",
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Create Billing Document",
+          "summary": "The team create billing document.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents -",
+            "Display Billing Documents"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BDK",
+      "description": "Sales Processing Using Third-Party Without Shipping Notification",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales processing using third-party without shipping notification runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Order",
+          "summary": "The team create sales order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Orders - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Display List of Purchase Requisitions to be Assigned",
+          "summary": "The team display list of purchase requisitions to be assigned.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Process Purchase Requisitions"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Convert Assigned Requisitions to Purchase Orders",
+          "summary": "The team convert assigned requisitions to purchase orders.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Process Purchase Requisitions"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Create supplier invoice",
+          "summary": "The team create supplier invoice.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Create Supplier Invoice"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Create Billing Document",
+          "summary": "The team create billing document.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BDN",
+      "description": "Sales of Non-Stock Item with Order-Specific Procurement",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales of non-stock item with order-specific procurement runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Order",
+          "summary": "The team create sales order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create purchase order",
+          "summary": "The team create purchase order.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Process Purchase Requisitions"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Post goods receipt",
+          "summary": "The team post goods receipt.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Post Goods Movement"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Create Delivery",
+          "summary": "The team create delivery.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Change Outbound Delivery",
+            "Create Outbound Deliveries - From Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Execute Picking",
+          "summary": "The team execute picking.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Post Goods Issue",
+          "summary": "The team post goods issue.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Display Material Document List - Deprecated",
+            "Display Outbound Delivery",
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Create Billing Document",
+          "summary": "The team create billing document.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Create supplier invoice",
+          "summary": "The team create supplier invoice.",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [
+            "Create Supplier Invoice"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BDQ",
+      "description": "Invoice Correction Process with Debit Memo",
+      "reviewed": false,
+      "story": {
+        "headline": "How invoice correction process with debit memo runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Debit Memo Request",
+          "summary": "The team create debit memo request.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Debit Memo Requests",
+            "Manage Debit Memo Requests - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Remove Billing Block",
+          "summary": "The team remove billing block.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Manage Debit Memo Requests - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create Debit Memo",
+          "summary": "The team create debit memo.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "E-invoice submission",
+          "summary": "The team e-invoice submission.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "eDocument Cockpit"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BDW",
+      "description": "Returnables Processing",
+      "reviewed": false,
+      "story": {
+        "headline": "How returnables processing runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Sales Process Including Returnable Materials",
+          "summary": "The team sales process including returnable materials.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Return Process for Returnable Materials",
+          "summary": "The team return process for returnable materials.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Return Process for Returnable Materials (Second Variant)",
+          "summary": "The team return process for returnable materials (second variant).",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Billing of Returnable Materials Which Were Not Returned",
+          "summary": "The team billing of returnable materials which were not returned.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BKA",
+      "description": "Free Goods Processing",
+      "reviewed": false,
+      "story": {
+        "headline": "How free goods processing runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Order",
+          "summary": "The team create sales order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Orders - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Delivery",
+          "summary": "The team create delivery.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Change Outbound Delivery",
+            "Create Outbound Deliveries - From Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Execute Picking",
+          "summary": "The team execute picking.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Post Goods Issue",
+          "summary": "The team post goods issue.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Display Material Document List - Deprecated",
+            "Display Outbound Delivery",
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Create Billing Document",
+          "summary": "The team create billing document.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Billing Document",
+            "Create Billing Documents",
+            "Manage Billing Documents",
+            "Open  Create Billing Documents ."
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BKJ",
+      "description": "Sales Order Processing with Customer Down Payment",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales order processing with customer down payment runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Sales Orders with Billing Plan",
+          "summary": "The team create sales orders with billing plan.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Change Sales Orders (Remove Billing Block)",
+          "summary": "The team change sales orders (remove billing block).",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Change Sales Orders -",
+            "Manage Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Create Down Payment Request",
+          "summary": "The team create down payment request.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents",
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Post a Down Payment",
+          "summary": "The team post a down payment.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Post Incoming Payments"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Create Delivery",
+          "summary": "The team create delivery.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [
+            "Analyze Delivery Logs",
+            "Change Outbound Delivery",
+            "Create Outbound Deliveries - From Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Execute Picking",
+          "summary": "The team execute picking.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Post Goods Issue",
+          "summary": "The team post goods issue.",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Display Material Document List - Deprecated",
+            "Display Outbound Delivery",
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Billing",
+          "summary": "The team billing.",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents -",
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 9,
+          "title": "E-invoice submission",
+          "summary": "The team e-invoice submission.",
+          "stepStart": 9,
+          "stepEnd": 9,
+          "roles": [],
+          "fioriApps": [
+            "eDocument Cockpit"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BKK",
+      "description": "Sales Order Fulfillment Monitoring and Operations",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales order fulfillment monitoring and operations runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Mass Change of Sales Documents",
+          "summary": "Covers mass change of sales documents and list incomplete sales inquiries.",
+          "stepStart": 1,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "List Incomplete Sales Inquiries",
+            "Mass Change of Sales Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "List Incomplete Sales Quotations",
+          "summary": "Covers list incomplete sales quotations and list incomplete sales documents.",
+          "stepStart": 3,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "List Incomplete Sales Documents",
+            "List Incomplete Sales Quotations"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "List Incomplete Sales Contracts",
+          "summary": "Covers list incomplete sales contracts and track sales orders.",
+          "stepStart": 5,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "List Incomplete Sales Contracts",
+            "Track Sales Orders"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Review Duplicate Sales Documents",
+          "summary": "Covers review duplicate sales documents and review sales order fulfillment.",
+          "stepStart": 7,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [
+            "Manage Duplicate Sales Documents",
+            "Sales Order Fulfillment - Analyze and Resolve Issues"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Review Sales Orders due for Delivery",
+          "summary": "Covers review sales orders due for delivery and review log of delivery create.",
+          "stepStart": 9,
+          "stepEnd": 10,
+          "roles": [],
+          "fioriApps": [
+            "Analyze Delivery Logs",
+            "My Sales Order Items - Due for Delivery"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Review Outbound Deliveries for Goods Issue",
+          "summary": "Covers review outbound deliveries for goods issue and review billing due list.",
+          "stepStart": 11,
+          "stepEnd": 12,
+          "roles": [],
+          "fioriApps": [
+            "Create Billing Documents -",
+            "Manage Outbound Deliveries - VL06O"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Review Log of Collective Invoice create",
+          "summary": "The team review log of collective invoice create.",
+          "stepStart": 13,
+          "stepEnd": 13,
+          "roles": [],
+          "fioriApps": [
+            "Schedule Billing Creation"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 8,
+          "title": "Review List of Blocked Billing Documents (for Accounting)",
+          "summary": "The team review list of blocked billing documents (for accounting).",
+          "stepStart": 14,
+          "stepEnd": 14,
+          "roles": [],
+          "fioriApps": [
+            "Manage Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 9,
+          "title": "Review Schedule Billing Release for Accounting",
+          "summary": "The team review schedule billing release for accounting.",
+          "stepStart": 15,
+          "stepEnd": 15,
+          "roles": [],
+          "fioriApps": [
+            "Manage Billing Documents",
+            "Schedule Billing Release"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BKL",
+      "description": "Invoice Correction Process with Credit Memo",
+      "reviewed": false,
+      "story": {
+        "headline": "How invoice correction process with credit memo runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Create Credit Memo Request",
+          "summary": "The team create credit memo request.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [
+            "Manage Credit Memo Requests - Version 2"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Create Credit Memo",
+          "summary": "The team create credit memo.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [
+            "Billing Document",
+            "Create Billing Documents"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "E-invoice submission",
+          "summary": "The team e-invoice submission.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "eDocument Cockpit"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BKP",
+      "description": "Customer Returns",
+      "reviewed": false,
+      "story": {
+        "headline": "How customer returns runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Scenario 1: Goods are Returned to Seller",
+          "summary": "The team scenario 1: goods are returned to seller.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Scenario 2: Goods are Inspected at Customer Site",
+          "summary": "The team scenario 2: goods are inspected at customer site.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Scenario 3: Goods are Returned to Supplier via Seller",
+          "summary": "The team scenario 3: goods are returned to supplier via seller.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Maintain Business Partner",
+            "Manage Your Solution"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "BKZ",
+      "description": "Sales Order Processing with Invoice List and Collective Billing",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales order processing with invoice list and collective billing runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Sales Order handle with Invoice Lists",
+          "summary": "The team sales order handle with invoice lists.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Sales Order handle with Collective Billing",
+          "summary": "The team sales order handle with collective billing.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "I9I",
+      "description": "Sales Contract Management",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales contract management runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Scenario 1: Sales Quantity or Sales Value Contract",
+          "summary": "Covers scenario 1: sales quantity or sales value contract, scenario 2: quantity contract based down payments, scenario 3: price agreement for quantity contract, scenario 4: price agreement for value contract with products and scenario 5: price agreement for value contract with product hierarchy.",
+          "stepStart": 1,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "J11",
+      "description": "Customer Project Management – Project-Based Services",
+      "reviewed": false,
+      "story": {
+        "headline": "How customer project management – project-based services runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Set up Customer Project",
+          "summary": "The team set up customer project.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Set up Work Packages and Time-Based Planning",
+          "summary": "Covers set up work packages and time-based planning and set up work package staffing (without scope item 6jo: resource management for projects).",
+          "stepStart": 2,
+          "stepEnd": 3,
+          "roles": [],
+          "fioriApps": [
+            "Plan Customer Projects",
+            "Project Control - Professional Services Projects"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Set up Customer Project Billing",
+          "summary": "The team set up customer project billing.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": [],
+          "fioriApps": [
+            "Plan Customer Projects",
+            "Project Control - Professional Services Projects",
+            "Run Realignment - Profitability Analysis",
+            "Schedule Repricing for Projects"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 4,
+          "title": "Create Billing Document Request",
+          "summary": "The team create billing document request.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 5,
+          "title": "Review Customer Project",
+          "summary": "The team review customer project.",
+          "stepStart": 6,
+          "stepEnd": 6,
+          "roles": [],
+          "fioriApps": [
+            "Project Control - Professional Services Projects",
+            "Review Customer Projects"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 6,
+          "title": "Set Project Status (Completed)",
+          "summary": "The team set project status (completed).",
+          "stepStart": 7,
+          "stepEnd": 7,
+          "roles": [],
+          "fioriApps": [
+            "Plan Customer Projects",
+            "Project Control - Professional Services Projects"
+          ],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 7,
+          "title": "Close Customer Projects",
+          "summary": "The team close customer projects.",
+          "stepStart": 8,
+          "stepEnd": 8,
+          "roles": [],
+          "fioriApps": [
+            "Plan Customer Projects",
+            "Project Control - Professional Services Projects"
+          ],
+          "benefitNote": null
+        }
+      ]
+    },
+    {
+      "scopeItemId": "J14",
+      "description": "Sales Order Processing – Project-Based Services",
+      "reviewed": false,
+      "story": {
+        "headline": "How sales order processing – project-based services runs, end to end",
+        "outcomeBullets": [],
+        "kpiHints": [],
+        "integrationNotes": [],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Billing",
+          "summary": "The team billing.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": [],
+          "fioriApps": [],
+          "benefitNote": null
+        }
+      ]
+    }
+  ]
+}

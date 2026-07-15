@@ -1,0 +1,261 @@
+{
+  "note": "Hand-authored, reviewed executive copy for the pilot's flagship scope items. Overrides the mechanically-generated drafts in <stream>.json. Chapter step ranges match the actual AffirmProcessStep rows. import-process-chapters.ts stamps these as reviewed (they render on /a/*); everything else stays an unreviewed draft and falls back to the flat ProcessFlowStrip.",
+  "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+  "items": [
+    {
+      "scopeItemId": "31Q",
+      "description": "Sales Order Processing for Sales Kits",
+      "reviewed": true,
+      "story": {
+        "headline": "Take a customer order for a bundled kit, ship it, and bill it — as one clean flow.",
+        "outcomeBullets": [
+          "One order captures the whole kit, so nothing is missed at picking",
+          "Warehouse and finance work from the same order, not re-keyed copies",
+          "The customer is invoiced automatically once the goods leave"
+        ],
+        "kpiHints": ["Order-to-ship time", "On-time-in-full delivery", "Order-to-invoice accuracy"],
+        "integrationNotes": [
+          "Delivery and billing hand off to inventory and finance without re-entry"
+        ],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Capture the customer's order",
+          "summary": "A sales colleague records what the customer wants, including every item in the kit, in a single order.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": ["Sales representative"],
+          "fioriApps": ["Create Sales Orders", "Manage Sales Orders"],
+          "benefitNote": "One order for the whole kit means fewer missed lines later."
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Prepare and ship the goods",
+          "summary": "The warehouse turns the order into a delivery, picks the items, and confirms they have left the building.",
+          "stepStart": 2,
+          "stepEnd": 4,
+          "roles": ["Warehouse operator", "Shipping clerk"],
+          "fioriApps": ["Create Outbound Deliveries", "Manage Outbound Deliveries", "Change Outbound Delivery"],
+          "benefitNote": "Stock levels update the moment goods are issued."
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Invoice the customer",
+          "summary": "Once the goods are gone, the system raises the customer's invoice from the same order — no re-keying.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": ["Billing specialist"],
+          "fioriApps": ["Create Billing Documents", "Manage Billing Documents"],
+          "benefitNote": "Billing reads the shipped order directly, so what you ship is what you bill."
+        }
+      ]
+    },
+    {
+      "scopeItemId": "1XF",
+      "description": "Request for Price",
+      "reviewed": true,
+      "story": {
+        "headline": "Ask several suppliers for a price, compare their quotes, and award the business — with a full trail.",
+        "outcomeBullets": [
+          "Every supplier is asked the same thing, so quotes are comparable",
+          "The award decision is recorded and auditable",
+          "The winning quote becomes an order without re-typing"
+        ],
+        "kpiHints": ["Sourcing cycle time", "Savings vs. first quote", "Number of competing quotes"],
+        "integrationNotes": [
+          "The awarded quote carries straight into a purchase order"
+        ],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Ask suppliers for a price",
+          "summary": "A buyer sends the same request out to the chosen suppliers so their answers can be compared fairly.",
+          "stepStart": 1,
+          "stepEnd": 2,
+          "roles": ["Buyer", "Supplier"],
+          "fioriApps": ["Manage RFQs"],
+          "benefitNote": "Asking everyone the same question keeps quotes comparable."
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Compare and award",
+          "summary": "The buyer lines up the quotes side by side and awards the business to the best one.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": ["Buyer"],
+          "fioriApps": ["Compare Supplier Quotations"],
+          "benefitNote": "A recorded comparison makes the award defensible later."
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Turn the award into an order",
+          "summary": "The winning quote is converted into the follow-on purchasing document, ready to buy.",
+          "stepStart": 4,
+          "stepEnd": 4,
+          "roles": ["Buyer"],
+          "fioriApps": ["Manage Supplier Quotations"],
+          "benefitNote": "No re-keying between the award and the order."
+        }
+      ]
+    },
+    {
+      "scopeItemId": "J45",
+      "description": "Procurement of Direct Materials",
+      "reviewed": true,
+      "story": {
+        "headline": "Buy the materials production needs — from the trigger, to the order, to a compliant e-invoice.",
+        "outcomeBullets": [
+          "Purchase orders raise themselves from the demand signal",
+          "The e-invoice is submitted in the country's required format",
+          "Buyers only step in on the exceptions"
+        ],
+        "kpiHints": ["Purchase requisition-to-order time", "Touchless PO rate", "e-Invoice compliance"],
+        "integrationNotes": [
+          "Local e-invoicing rules are handled in the submission step"
+        ],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Trigger the material purchase",
+          "summary": "Demand for a stocked material starts the buying process.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": ["Planner"],
+          "fioriApps": [],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Raise the purchase order automatically",
+          "summary": "The request becomes a purchase order without a buyer re-typing it.",
+          "stepStart": 2,
+          "stepEnd": 2,
+          "roles": ["Buyer"],
+          "fioriApps": [],
+          "benefitNote": "Touchless ordering frees buyers for the exceptions."
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Submit the compliant e-invoice",
+          "summary": "The supplier invoice is submitted electronically in the format the tax authority requires.",
+          "stepStart": 3,
+          "stepEnd": 3,
+          "roles": ["Accounts payable"],
+          "fioriApps": ["eDocument Cockpit"],
+          "benefitNote": "Local compliance is built into the flow, not bolted on."
+        }
+      ]
+    },
+    {
+      "scopeItemId": "16T",
+      "description": "Intercompany Processes – Project-Based Services",
+      "reviewed": true,
+      "story": {
+        "headline": "Deliver a project across two of your own companies and settle the value between them cleanly.",
+        "outcomeBullets": [
+          "Time and travel are captured against the right project",
+          "The two entities settle at the agreed intercompany price",
+          "One flow keeps both companies' books consistent"
+        ],
+        "kpiHints": ["Intercompany settlement lag", "Project margin", "Time capture completeness"],
+        "integrationNotes": [
+          "Time, travel expense, and billing feed the intercompany settlement"
+        ],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Set up the intercompany project",
+          "summary": "The receiving company confirms the intercompany order and stands up the project the work will run against.",
+          "stepStart": 1,
+          "stepEnd": 2,
+          "roles": ["Project manager", "Sales representative"],
+          "fioriApps": ["Create Sales Orders", "List Sales Orders - Intercompany"],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Record the work and its costs",
+          "summary": "People log their time to the project, and travel costs are captured as supplier invoices.",
+          "stepStart": 3,
+          "stepEnd": 4,
+          "roles": ["Consultant", "Accounts payable"],
+          "fioriApps": [],
+          "benefitNote": "Costs land on the project as they happen, not at month-end."
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Settle between the companies",
+          "summary": "The delivering company bills the receiving one at the agreed intercompany terms.",
+          "stepStart": 5,
+          "stepEnd": 5,
+          "roles": ["Finance"],
+          "fioriApps": [],
+          "benefitNote": "Both entities' books stay consistent automatically."
+        }
+      ]
+    },
+    {
+      "scopeItemId": "1Z3",
+      "description": "Customer Returns with Direct Shipment from Customer to Supplier",
+      "reviewed": true,
+      "story": {
+        "headline": "Handle a customer return that goes straight back to the supplier, and get everyone refunded correctly.",
+        "outcomeBullets": [
+          "The return is logged once and drives everything after it",
+          "The supplier credit and the customer refund stay in step",
+          "You can refund by credit note or by replacement"
+        ],
+        "kpiHints": ["Return cycle time", "Refund accuracy", "Supplier recovery rate"],
+        "integrationNotes": [
+          "The customer refund and the supplier credit are reconciled in one flow"
+        ],
+        "sourceAttribution": "SAP Best Practices, S/4HANA Cloud Public Edition 2602",
+        "processNavigatorUrl": null
+      },
+      "chapters": [
+        {
+          "chapterNumber": 1,
+          "title": "Log the customer return",
+          "summary": "The return is recorded, capturing what is coming back and why.",
+          "stepStart": 1,
+          "stepEnd": 1,
+          "roles": ["Customer service"],
+          "fioriApps": ["Manage Customer Returns"],
+          "benefitNote": null
+        },
+        {
+          "chapterNumber": 2,
+          "title": "Recover from the supplier and decide the refund",
+          "summary": "A credit is raised against the supplier, and the refund due to the customer is worked out and reviewed.",
+          "stepStart": 2,
+          "stepEnd": 4,
+          "roles": ["Accounts payable", "Customer service"],
+          "fioriApps": ["Create Supplier Invoice - Advanced", "Manage Customer Returns"],
+          "benefitNote": "Supplier recovery and customer refund are kept in step."
+        },
+        {
+          "chapterNumber": 3,
+          "title": "Refund the customer",
+          "summary": "The customer is made whole — either with a credit note or a replacement product.",
+          "stepStart": 5,
+          "stepEnd": 6,
+          "roles": ["Customer service", "Finance"],
+          "fioriApps": [],
+          "benefitNote": "One process supports both refund and replacement."
+        }
+      ]
+    }
+  ]
+}

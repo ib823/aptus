@@ -98,3 +98,143 @@ export async function getProcessFlowsForBundle(
   }
   return out;
 }
+
+// ─── PR-2: chaptered content read model (review-gated) ───────────────────────
+
+export interface ScopeItemStory {
+  headline: string;
+  outcomeBullets: string[];
+  kpiHints: string[];
+  integrationNotes: string[];
+  sourceAttribution: string;
+  processNavigatorUrl: string | null;
+}
+
+export interface FlowChapter {
+  chapterNumber: number;
+  title: string;
+  summary: string;
+  stepStart: number;
+  stepEnd: number;
+  roles: string[];
+  fioriApps: string[];
+  benefitNote: string | null;
+  /** The SAP-verbatim steps this chapter covers (unaltered). */
+  steps: ProcessFlowStep[];
+}
+
+export interface ChapteredFlow {
+  scopeItemId: string;
+  story: ScopeItemStory;
+  chapters: FlowChapter[];
+}
+
+/**
+ * Returns the reviewed, chaptered flow for a scope item, or null. Null when the
+ * scope item has no story, the story is UNREVIEWED (render gate), or it has no
+ * chapters — callers fall back to the flat <ProcessFlowStrip>. Chapters carry
+ * their SAP-verbatim steps unaltered.
+ */
+export async function getChapteredFlow(scopeItemId: string): Promise<ChapteredFlow | null> {
+  const story = await prisma.affirmScopeItemStory.findUnique({
+    where: { scopeItemId },
+  });
+  // Review gate: unreviewed stories never render.
+  if (!story || story.reviewedAt === null) return null;
+
+  const [chapters, flow] = await Promise.all([
+    prisma.affirmProcessChapter.findMany({
+      where: { scopeItemId },
+      orderBy: { chapterNumber: "asc" },
+    }),
+    prisma.affirmProcessFlow.findUnique({
+      where: { scopeItemId },
+      include: { steps: { orderBy: { stepNumber: "asc" } } },
+    }),
+  ]);
+  if (chapters.length === 0) return null;
+
+  const allSteps: ProcessFlowStep[] =
+    flow?.steps.map((s) => ({
+      stepNumber: s.stepNumber,
+      activity: s.activity,
+      fioriApps: s.fioriApps,
+    })) ?? [];
+
+  return {
+    scopeItemId,
+    story: {
+      headline: story.headline,
+      outcomeBullets: story.outcomeBullets,
+      kpiHints: story.kpiHints,
+      integrationNotes: story.integrationNotes,
+      sourceAttribution: story.sourceAttribution,
+      processNavigatorUrl: story.processNavigatorUrl,
+    },
+    chapters: chapters.map((c) => ({
+      chapterNumber: c.chapterNumber,
+      title: c.title,
+      summary: c.summary,
+      stepStart: c.stepStart,
+      stepEnd: c.stepEnd,
+      roles: c.roles,
+      fioriApps: c.fioriApps,
+      benefitNote: c.benefitNote,
+      steps: allSteps.filter((s) => s.stepNumber >= c.stepStart && s.stepNumber <= c.stepEnd),
+    })),
+  };
+}
+
+export interface StreamStorySummary {
+  scopeItemId: string;
+  description: string;
+  /** Present only when the story is reviewed; null → render a compact card. */
+  story: ScopeItemStory | null;
+  chapterCount: number;
+}
+
+/**
+ * L1-index summaries for a stream within a bundle: every scope item in the
+ * bundle that belongs to the stream, with its reviewed story (or null) and
+ * chapter count. Items whose story is unreviewed return story:null so the UI
+ * renders a compact card instead of a fake narrative.
+ */
+export async function getStreamStories(
+  bundleId: string,
+  streamId: string,
+): Promise<StreamStorySummary[]> {
+  const rows = await prisma.affirmBundleScopeItem.findMany({
+    where: { bundleId, scopeItem: { streamId } },
+    select: {
+      scopeItem: {
+        select: {
+          id: true,
+          description: true,
+          story: true,
+          _count: { select: { chapters: true } },
+        },
+      },
+    },
+    orderBy: { scopeItemId: "asc" },
+  });
+
+  return rows.map((r) => {
+    const s = r.scopeItem;
+    const reviewed = s.story && s.story.reviewedAt !== null ? s.story : null;
+    return {
+      scopeItemId: s.id,
+      description: s.description,
+      story: reviewed
+        ? {
+            headline: reviewed.headline,
+            outcomeBullets: reviewed.outcomeBullets,
+            kpiHints: reviewed.kpiHints,
+            integrationNotes: reviewed.integrationNotes,
+            sourceAttribution: reviewed.sourceAttribution,
+            processNavigatorUrl: reviewed.processNavigatorUrl,
+          }
+        : null,
+      chapterCount: s._count.chapters,
+    };
+  });
+}
