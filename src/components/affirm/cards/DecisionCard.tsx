@@ -35,6 +35,7 @@ export function DecisionCard({
   flows,
   scopeDescriptions,
   calibratedNotes,
+  saved,
 }: {
   q: CardQuestion;
   wording: string | null;
@@ -49,6 +50,8 @@ export function DecisionCard({
   flows: Record<string, ProcessFlow>;
   scopeDescriptions: Record<string, string>;
   calibratedNotes?: Partial<Record<AffirmChoice, string>>;
+  /** External autosave tick — internal omits it. */
+  saved?: boolean;
 }) {
   const isStd = answer.choice === "standard";
   const activeNote = calibratedNotes?.[answer.choice];
@@ -184,10 +187,15 @@ export function DecisionCard({
         })}
       </div>
 
-      {/* External calibrated note (qualitative expectation) — internal omits it. */}
+      {/* External calibrated note (qualitative expectation) — internal omits it.
+          custom → banner-warn + decision-custom border; discuss → navy note. */}
       {activeNote && answer.choice !== "standard" && (
         <p
-          className="calibrated-note mt-3 rounded-input border border-navy/15 bg-navy-soft px-3.5 py-2.5 text-[13px] leading-[19px] text-ink-soft"
+          className={`calibrated-note mt-3 rounded-input border px-3.5 py-2.5 text-[13px] leading-[19px] text-ink-soft ${
+            answer.choice === "deviate"
+              ? "border-[color-mix(in_srgb,var(--color-decision-custom)_30%,transparent)] bg-banner-warn"
+              : "border-navy-border bg-navy-soft"
+          }`}
           aria-live="polite"
         >
           {activeNote}
@@ -195,7 +203,7 @@ export function DecisionCard({
       )}
 
       {answer.choice === "deviate" && (
-        <div className="reason-block mt-3 rounded-input border border-[#E5D6A8] bg-banner-warn px-3.5 py-2.5 text-[13px] leading-[19px]">
+        <div className="reason-block mt-3 rounded-input border border-[color-mix(in_srgb,var(--color-decision-custom)_30%,transparent)] bg-banner-warn px-3.5 py-2.5 text-[13px] leading-[19px]">
           <span className="l mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-decision-custom">
             Why we differ
           </span>
@@ -213,7 +221,16 @@ export function DecisionCard({
         </div>
       )}
 
-      {answer.saving && <p className="mt-2 text-[11px] text-ink-muted" aria-live="polite">saving…</p>}
+      {answer.saving ? (
+        <p className="mt-2 text-[11px] text-ink-muted" aria-live="polite">saving…</p>
+      ) : saved && !answer.error ? (
+        <p className="mt-2 inline-flex items-center gap-1 text-[11px] text-ink-muted" aria-live="polite">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-decision-standard)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+          Saved
+        </p>
+      ) : null}
       {answer.error && <p className="mt-2 text-[11px] text-cta" role="alert">{answer.error}</p>}
     </article>
   );

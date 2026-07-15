@@ -11,6 +11,7 @@
  */
 
 import { useState, useTransition } from "react";
+import { StatusPill, type PillTone } from "@/components/affirm/external/StatusPill";
 
 export interface GrantClient {
   id: string;
@@ -34,25 +35,21 @@ interface GrantsPanelProps {
   initialGrants: GrantClient[];
 }
 
-const STATUS_META: Record<string, { label: string; className: string }> = {
-  invited: { label: "Invited", className: "bg-status-draft-bg text-status-draft-fg" },
-  acknowledged: { label: "Acknowledged", className: "bg-status-sent-bg text-status-sent-fg" },
-  verified: { label: "Verified", className: "bg-status-sent-bg text-status-sent-fg" },
-  in_progress: { label: "In progress", className: "bg-status-awaiting-bg text-status-awaiting-fg" },
-  answered: { label: "Answered", className: "bg-decision-standard/15 text-decision-standard" },
-  submitted: { label: "Submitted", className: "bg-decision-standard/15 text-decision-standard" },
-  locked_out: { label: "Locked out", className: "bg-banner-warn text-[#8B5A00]" },
-  revoked: { label: "Revoked", className: "bg-ink-disabled/20 text-ink-muted" },
-  reissued: { label: "Reissued", className: "bg-ink-disabled/20 text-ink-muted" },
+const STATUS_META: Record<string, { label: string; tone: PillTone }> = {
+  invited: { label: "Invited", tone: "invited" },
+  acknowledged: { label: "Acknowledged", tone: "acknowledged" },
+  verified: { label: "Verified", tone: "verified" },
+  in_progress: { label: "In progress", tone: "progress" },
+  answered: { label: "Answered", tone: "submitted" },
+  submitted: { label: "Submitted", tone: "submitted" },
+  locked_out: { label: "Revoked", tone: "revoked" },
+  revoked: { label: "Revoked", tone: "revoked" },
+  reissued: { label: "Reissued", tone: "neutral" },
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const meta = STATUS_META[status] ?? { label: status, className: "bg-ink-disabled/20 text-ink-muted" };
-  return (
-    <span className={`inline-flex h-[22px] items-center rounded-pill px-2.5 text-[11px] font-semibold ${meta.className}`}>
-      {meta.label}
-    </span>
-  );
+  const meta = STATUS_META[status] ?? { label: status, tone: "neutral" as PillTone };
+  return <StatusPill tone={meta.tone}>{meta.label}</StatusPill>;
 }
 
 export function GrantsPanel({ bundleId, streams, initialGrants }: GrantsPanelProps) {

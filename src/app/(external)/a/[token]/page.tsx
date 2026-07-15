@@ -1,19 +1,10 @@
 /**
- * GET /a/[token] — Affirm external executive landing.
+ * GET /a/[token] — S1 Invitation Landing.
  *
- * Idempotent and scanner-safe: NO DB writes, NO cookie set. A crawler that
- * hits this URL leaves no audit trail and creates no state. All side effects
- * live in POST /a/[token]/redeem.
- *
- * Fail-closed: 404 unless AFFIRM_EXTERNAL_ENABLED === "true".
- *
- * Polymorphic terminal handling: an invalid / revoked / superseded token, or a
- * bundle that is no longer client-facing (issued | submitted), all render the
- * same generic "link no longer active" state via /a/expired — we never oracle
- * which condition applies.
- *
- * The rendered form is a single-action click-through gate: legal acknowledgement
- * + PDPA cross-border consent + hidden CSRF nonce, posting to /a/[token]/redeem.
+ * Idempotent, scanner-safe: NO DB writes, NO cookie set. Fail-closed (404
+ * unless AFFIRM_EXTERNAL_ENABLED). Polymorphic terminal on any invalid/revoked/
+ * superseded/non-client-facing grant. Restyled to the Executive Surface design
+ * (token-only); behavior + the redeem POST contract are unchanged.
  */
 
 import { notFound, redirect } from "next/navigation";
@@ -22,7 +13,8 @@ import { hashToken } from "@/lib/affirm/external/tokens";
 import { issueRedeemNonce } from "@/lib/affirm/external/csrf";
 import { isAffirmExternalEnabled } from "@/lib/affirm/external/guards";
 import { isClientFacingState } from "@/lib/affirm/external/session";
-import { AFFIRM_PDPA_VERSION, AFFIRM_TIME_EXPECTATION } from "@/lib/affirm/external/legal";
+import { AFFIRM_PDPA_VERSION } from "@/lib/affirm/external/legal";
+import { GuestShell, Wordmark } from "@/components/affirm/external/GuestShell";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -33,88 +25,92 @@ interface PageProps {
 
 export default async function AffirmLandingPage({ params }: PageProps) {
   if (!isAffirmExternalEnabled()) notFound();
-
   const { token } = await params;
   if (!token || token.length < 16) notFound();
 
   const grant = await prisma.affirmAccessGrant.findUnique({
     where: { tokenHash: hashToken(token) },
-    include: { bundle: { select: { id: true, client: true, state: true } } },
+    include: { bundle: { select: { client: true, state: true } } },
   });
-
-  // Polymorphic: every failure lands on the same generic terminal page.
   if (!grant) redirect("/a/expired");
   if (grant.revokedAt) redirect("/a/expired");
   if (grant.supersededByGrantId) redirect("/a/expired");
   if (!isClientFacingState(grant.bundle.state)) redirect("/a/expired");
 
   const nonce = issueRedeemNonce(token);
+  const client = grant.bundle.client;
 
   return (
-    <main style={{ maxWidth: 560, margin: "64px auto", padding: "0 16px" }}>
-      <header style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 13, color: "#5A5A5A", marginBottom: 8 }}>ABeam Workbench</div>
-        <h1 style={{ fontSize: 28, fontWeight: 600, margin: 0, color: "#002B5C" }}>
-          {grant.bundle.client}
-        </h1>
-        <p style={{ marginTop: 12, color: "#3A3A3A", fontSize: 15, lineHeight: 1.6 }}>
-          Welcome{grant.displayName ? `, ${grant.displayName}` : ""}. You&apos;ll see how the
-          standard approach works for your business, then tell us where your business differs.
-          It takes {AFFIRM_TIME_EXPECTATION}, and your answers are saved as you go.
+    <GuestShell clientName={client}>
+      <main className="mx-auto max-w-[560px] px-[clamp(16px,4vw,32px)] pb-[72px] pt-14 text-center">
+        <div className="mb-6 flex justify-center">
+          <Wordmark size="lg" />
+        </div>
+
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+          Executive scope review
         </p>
-      </header>
+        <h1 className="mx-auto mb-6 text-balance font-serif text-[32px] font-medium leading-[38px] text-ink">
+          {client}: see how the SAP standard runs your processes — and tell us where you differ.
+        </h1>
 
-      <form
-        method="POST"
-        action={`/a/${encodeURIComponent(token)}/redeem`}
-        style={{
-          background: "#FFFFFF",
-          border: "1px solid #E5E1D6",
-          borderRadius: 12,
-          padding: 24,
-        }}
-      >
-        <input type="hidden" name="csrf" value={nonce} />
+        <div className="mx-auto mb-7 max-w-[46ch] space-y-3 text-left text-[15px] leading-[1.55] text-ink-soft">
+          <p>
+            A guided look at how SAP&apos;s standard processes would run your business — in plain
+            language, no SAP knowledge needed.
+          </p>
+          <p>About 20 minutes. You can pause and come back on the same link.</p>
+          <p>
+            Every answer stays open until the workshop — <strong>nothing is committed yet.</strong>
+          </p>
+        </div>
 
-        <label style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "flex-start" }}>
-          <input type="checkbox" name="acknowledge_legal" value="1" required style={{ marginTop: 4 }} />
-          <span style={{ fontSize: 14, lineHeight: 1.5 }}>
-            I confirm I am {grant.displayName ? `${grant.displayName}, ` : ""}the named recipient
-            ({grant.email}), and I&apos;m authorized to give input on behalf of{" "}
-            {grant.bundle.client}.
-          </span>
-        </label>
-
-        <label style={{ display: "flex", gap: 12, marginBottom: 24, alignItems: "flex-start" }}>
-          <input type="checkbox" name="pdpa_consent" value="1" style={{ marginTop: 4 }} />
-          <span style={{ fontSize: 14, lineHeight: 1.5 }}>
-            I consent to my access and answers being processed on infrastructure that may sit
-            outside Malaysia, in line with the PDPA cross-border notice (version{" "}
-            {AFFIRM_PDPA_VERSION}).
-          </span>
-        </label>
-
-        <button
-          type="submit"
-          style={{
-            background: "#002B5C",
-            color: "#FFFFFF",
-            border: "none",
-            padding: "13px 24px",
-            fontSize: 16,
-            fontWeight: 600,
-            borderRadius: 8,
-            cursor: "pointer",
-            width: "100%",
-          }}
+        <form
+          method="POST"
+          action={`/a/${encodeURIComponent(token)}/redeem`}
+          className="ax-input mx-auto rounded-card-warm border border-border-default bg-paper px-5 py-[22px] text-left shadow-card"
         >
-          Begin
-        </button>
-      </form>
+          <input type="hidden" name="csrf" value={nonce} />
 
-      <p style={{ marginTop: 20, fontSize: 12, color: "#8A8A8A", textAlign: "center" }}>
-        This is a secure, personal link prepared for you. Please do not forward it.
-      </p>
-    </main>
+          <label className="mb-4 flex items-start gap-3">
+            <input
+              type="checkbox"
+              name="acknowledge_legal"
+              value="1"
+              required
+              className="ax-touch mt-0.5 size-5 shrink-0 accent-navy"
+            />
+            <span className="text-[14px] leading-5 text-ink-soft">
+              I confirm I&apos;m authorised to review scope decisions on behalf of {client}.
+            </span>
+          </label>
+
+          <label className="mb-5 flex items-start gap-3">
+            <input
+              type="checkbox"
+              name="pdpa_consent"
+              value="1"
+              className="ax-touch mt-0.5 size-5 shrink-0 accent-navy"
+            />
+            <span className="text-[14px] leading-5 text-ink-soft">
+              I consent to ABeam processing my responses for this review, including cross-border
+              transfer to ABeam project systems, in line with the PDPA (version {AFFIRM_PDPA_VERSION}
+              ).
+            </span>
+          </label>
+
+          <button
+            type="submit"
+            className="ax-touch flex h-11 w-full items-center justify-center rounded-input bg-cta text-[14px] font-semibold text-white shadow-card transition hover:bg-cta-hover focus-visible:shadow-focus-ring focus-visible:outline-none"
+          >
+            Begin review
+          </button>
+        </form>
+
+        <p className="mx-auto mt-5 max-w-[46ch] text-[11px] leading-4 text-ink-muted">
+          Your link is personal. We&apos;ll verify your device with a one-time code.
+        </p>
+      </main>
+    </GuestShell>
   );
 }

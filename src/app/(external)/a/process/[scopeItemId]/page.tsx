@@ -1,10 +1,10 @@
 /**
- * GET /a/process/[scopeItemId] — L1 process story.
+ * GET /a/process/[scopeItemId] — S6 Process story (L1).
  *
- * Renders the reviewed, chaptered flow (ChapterBand) with the exec story,
- * source attribution, and a Process Navigator deep-link. When there is no
- * reviewed chaptered flow, falls back to the flat <ProcessFlowStrip> inside the
- * same page shell — never a fake narrative. CTA → the L2 affirm questions.
+ * The reviewed chaptered flow (ChapterBand) with the exec story, source
+ * attribution, and a Process Navigator deep-link. Flat ProcessFlowStrip
+ * fallback when there is no reviewed chaptered flow — never a fake narrative.
+ * Restyled to the Executive Surface design.
  */
 
 import Link from "next/link";
@@ -12,7 +12,9 @@ import { redirect } from "next/navigation";
 import { requireGuestSession, isDeviceVerified } from "@/lib/affirm/external/guards";
 import { touchGuestSession } from "@/lib/affirm/external/session";
 import { getGuestProcessPage } from "@/lib/affirm/external/journey";
+import { GuestShell } from "@/components/affirm/external/GuestShell";
 import { ChapterBand } from "@/components/affirm/external/ChapterBand";
+import { JourneyProgressBar } from "@/components/affirm/external/JourneyProgressBar";
 import { ProcessFlowStrip } from "@/components/affirm/ProcessFlowStrip";
 import { GuestGuide } from "@/components/affirm/external/GuestGuide";
 
@@ -35,30 +37,29 @@ export default async function AffirmProcessPage({ params }: PageProps) {
 
   const story = page.chaptered?.story ?? null;
   const affirmHref = `/a/affirm/${encodeURIComponent(scopeItemId)}`;
+  const streamHref = `/a/stream/${encodeURIComponent(page.streamId)}`;
+  const allAnswered = page.questionCount > 0 && page.answered >= page.questionCount;
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-12">
-      <nav className="mb-4 text-xs text-ink-muted">
-        <Link href="/a/home" className="hover:text-ink">
-          Home
-        </Link>
-        <span className="px-1.5 text-ink-disabled">/</span>
-        <Link href={`/a/stream/${encodeURIComponent(page.streamId)}`} className="hover:text-ink">
-          Stream
-        </Link>
-        <span className="px-1.5 text-ink-disabled">/</span>
-        <span className="text-ink">{page.description}</span>
-      </nav>
+    <GuestShell
+      granteeName={ctx.grant.displayName}
+      granteeRole={ctx.grant.roleLabel}
+      clientName={page.bundle.client}
+    >
+      <JourneyProgressBar
+        scopeItemId={page.scopeItemId}
+        name={page.description}
+        answered={page.answered}
+        total={page.questionCount}
+        backHref={streamHref}
+      />
 
-      <header className="mb-6">
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
-          {page.bundle.client}
-        </p>
-        <h1 className="font-serif text-3xl leading-tight text-ink">
+      <main className="mx-auto max-w-[880px] px-[clamp(16px,4vw,32px)] pb-20 pt-8">
+        <h1 className="max-w-[22ch] font-serif text-[30px] font-medium leading-10 text-ink">
           {story?.headline ?? page.description}
         </h1>
         {story && story.outcomeBullets.length > 0 && (
-          <ul className="mt-4 space-y-1.5">
+          <ul className="mt-4 max-w-[60ch] space-y-1.5">
             {story.outcomeBullets.slice(0, 4).map((b, i) => (
               <li key={i} className="flex gap-2 text-[14px] leading-6 text-ink-soft">
                 <span className="mt-2 size-1.5 shrink-0 rounded-full bg-decision-standard" aria-hidden="true" />
@@ -67,65 +68,75 @@ export default async function AffirmProcessPage({ params }: PageProps) {
             ))}
           </ul>
         )}
-      </header>
 
-      <GuestGuide id="affirm-exec-process" />
+        <div className="mt-6">
+          <GuestGuide id="affirm-exec-process" />
+        </div>
 
-      {page.chaptered ? (
-        <>
-          <ChapterBand chapters={page.chaptered.chapters} />
-          {story && story.integrationNotes.length > 0 && (
-            <section className="mt-6 rounded-card-warm border border-border-default bg-cream p-4">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
-                How this connects
-              </p>
-              <ul className="space-y-1.5">
-                {story.integrationNotes.map((n, i) => (
-                  <li key={i} className="text-[13px] leading-5 text-ink-soft">
-                    {n}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-        </>
-      ) : (
-        <ProcessFlowStrip
-          variant="standalone"
-          scopeItemId={page.scopeItemId}
-          scopeItemDescription={page.description}
-          flow={page.flatFlow}
-        />
-      )}
-
-      {/* Attribution + Process Navigator */}
-      <p className="mt-6 text-[11px] leading-5 text-ink-muted">
-        Source: {story?.sourceAttribution ?? "SAP Best Practices, S/4HANA Cloud Public Edition 2602"}
-        {story?.processNavigatorUrl ? (
+        {page.chaptered ? (
           <>
-            {" · "}
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+              How this runs · {page.chaptered.chapters.length} chapter
+              {page.chaptered.chapters.length === 1 ? "" : "s"}
+            </p>
+            <ChapterBand chapters={page.chaptered.chapters} />
+            {story && story.integrationNotes.length > 0 && (
+              <section className="mt-2 rounded-card-warm border border-border-default bg-cream p-4">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+                  How this connects
+                </p>
+                <ul className="space-y-1.5">
+                  {story.integrationNotes.map((n, i) => (
+                    <li key={i} className="text-[13px] leading-5 text-ink-soft">
+                      {n}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </>
+        ) : (
+          <ProcessFlowStrip
+            variant="standalone"
+            scopeItemId={page.scopeItemId}
+            scopeItemDescription={page.description}
+            flow={page.flatFlow}
+          />
+        )}
+
+        {/* Attribution */}
+        <div className="mt-7 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border-default pt-4">
+          <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-muted">
+            Source: SAP Best Practices · S/4HANA Cloud Public Edition 2602
+          </span>
+          {story?.processNavigatorUrl && (
             <a
               href={story.processNavigatorUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-navy hover:underline"
+              className="text-[13px] text-navy underline"
             >
-              Open in SAP Process Navigator ↗
+              Open in SAP Signavio Process Navigator ↗
             </a>
-          </>
-        ) : null}
-      </p>
+          )}
+        </div>
 
-      {/* CTA */}
-      <div className="mt-6">
-        <Link
-          href={affirmHref}
-          className="inline-flex items-center rounded-input bg-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-navy-hover"
-        >
-          Affirm this process
-          {page.questionCount > 0 ? ` (${page.questionCount} question${page.questionCount === 1 ? "" : "s"})` : ""}
-        </Link>
-      </div>
-    </main>
+        {/* CTA */}
+        <div className="mt-6">
+          <Link
+            href={affirmHref}
+            className={`ax-touch flex h-11 w-full items-center justify-center rounded-input text-[14px] font-semibold transition focus-visible:shadow-focus-ring focus-visible:outline-none ${
+              allAnswered
+                ? "border border-border-default bg-paper text-ink hover:bg-ink-tint"
+                : "bg-cta text-white shadow-card hover:bg-cta-hover"
+            }`}
+          >
+            {allAnswered
+              ? "Review your answers ✓"
+              : `Affirm this process${page.questionCount > 0 ? ` · ${page.questionCount} question${page.questionCount === 1 ? "" : "s"}` : ""}`}
+          </Link>
+        </div>
+      </main>
+    </GuestShell>
   );
 }

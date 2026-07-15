@@ -1,0 +1,98 @@
+/**
+ * ABeam Workbench — Affirm external executive surface responsive + motion CSS.
+ *
+ * Loaded only by the (external)/a layout, so it never touches /c or the
+ * consultant affirm screens. The surface is intrinsically responsive (flex-wrap
+ * / clamp / minmax / scroll-snap) with token-only values; this file adds the
+ * repo's mobile standards on top (≥44px touch targets ≤1023px, 16px inputs
+ * ≤767px to stop iOS zoom) and the prototype's calm motion, all through tokens.
+ *
+ * Design source of truth: docs/affirm-external/design/ABeam-Executive-Surface.dc.html
+ */
+
+/* ── Motion (respect reduced-motion) ─────────────────────────────────────── */
+@keyframes ax-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+@keyframes ax-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+.ax-skeleton {
+  animation: ax-pulse 1.4s ease infinite;
+}
+.ax-shake {
+  animation: ax-shake 0.4s ease;
+}
+
+/* ── Chapter band / step lanes: horizontal scroll-snap on desktop ────────── */
+.ax-snap-lane {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 8px;
+}
+.ax-snap-lane > * {
+  scroll-snap-align: start;
+}
+
+/* ── Mobile standards (repo convention) ──────────────────────────────────── */
+@media (max-width: 1023px) {
+  /* Touch targets ≥ 44×44 on the external surface's interactive controls. */
+  .ax-touch {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  /* Chapter band stacks vertically on narrow viewports. */
+  .ax-snap-lane {
+    flex-direction: column;
+    overflow-x: visible;
+    scroll-snap-type: none;
+  }
+  .ax-snap-lane > * {
+    width: 100% !important;
+  }
+}
+@media (max-width: 767px) {
+  /* 16px inputs prevent iOS Safari zoom-on-focus. */
+  .ax-input,
+  .ax-input input,
+  .ax-input textarea {
+    font-size: 16px;
+  }
+}
+
+/* ── Print: executive summary clean (black on white, no chrome) ──────────── */
+@media print {
+  .ax-no-print {
+    display: none !important;
+  }
+  .ax-print-plain {
+    box-shadow: none !important;
+    border-color: black !important;
+    background: white !important;
+    color: black !important;
+  }
+}

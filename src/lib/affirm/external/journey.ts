@@ -46,12 +46,24 @@ async function responsesByQuestion(bundleId: string): Promise<Map<string, Affirm
 
 // ─── L0: home value-chain ribbon ─────────────────────────────────────────────
 
+export type NodeState = "done" | "some" | "none";
+
+export interface RibbonNode {
+  scopeItemId: string;
+  state: NodeState;
+}
+
 export interface JourneyStreamSummary {
   streamId: string;
   streamName: string;
-  subProcesses: Array<{ id: string; name: string }>;
-  total: number;
+  /** Questions answered / total in the stream (drives the progress ring). */
   answered: number;
+  total: number;
+  /** Processes (scope items with questions) fully affirmed / total. */
+  processesAffirmed: number;
+  processesTotal: number;
+  status: "complete" | "started" | "not-started";
+  nodes: RibbonNode[];
 }
 
 export interface GuestJourney {
@@ -68,26 +80,70 @@ export async function getGuestJourney(grantId: string): Promise<GuestJourney | n
   if (!set) return null;
   const answers = await responsesByQuestion(grant.bundleId);
 
+  // Per-scope-item question tallies (a "process" = a scope item with questions).
+  const itemTally = new Map<string, { streamId: string; total: number; answered: number }>();
+  for (const item of set.scopeItems) {
+    const itemQs = set.questions.filter((q) => q.scopeItemRefs.includes(item.id));
+    if (itemQs.length === 0) continue;
+    itemTally.set(item.id, {
+      streamId: item.streamId,
+      total: itemQs.length,
+      answered: itemQs.filter((q) => answers.has(q.id)).length,
+    });
+  }
+
   const byStream = new Map<string, JourneyStreamSummary>();
+  const streamName = (id: string) =>
+    set.questions.find((q) => q.streamId === id)?.streamName ?? id;
   for (const q of set.questions) {
     const s =
       byStream.get(q.streamId) ??
       {
         streamId: q.streamId,
         streamName: q.streamName,
-        subProcesses: [] as Array<{ id: string; name: string }>,
-        total: 0,
         answered: 0,
+        total: 0,
+        processesAffirmed: 0,
+        processesTotal: 0,
+        status: "not-started" as const,
+        nodes: [] as RibbonNode[],
       };
     s.total += 1;
     if (answers.has(q.id)) s.answered += 1;
-    if (!s.subProcesses.some((sp) => sp.id === q.subProcessId)) {
-      s.subProcesses.push({ id: q.subProcessId, name: q.subProcessName });
-    }
     byStream.set(q.streamId, s);
   }
 
-  const streams = [...byStream.values()];
+  for (const [scopeItemId, t] of itemTally) {
+    const s =
+      byStream.get(t.streamId) ??
+      {
+        streamId: t.streamId,
+        streamName: streamName(t.streamId),
+        answered: 0,
+        total: 0,
+        processesAffirmed: 0,
+        processesTotal: 0,
+        status: "not-started" as const,
+        nodes: [] as RibbonNode[],
+      };
+    s.processesTotal += 1;
+    const state: NodeState = t.answered >= t.total ? "done" : t.answered > 0 ? "some" : "none";
+    if (state === "done") s.processesAffirmed += 1;
+    s.nodes.push({ scopeItemId, state });
+    byStream.set(t.streamId, s);
+  }
+
+  const streams = [...byStream.values()].map((s) => ({
+    ...s,
+    nodes: s.nodes.sort((a, b) => a.scopeItemId.localeCompare(b.scopeItemId)),
+    status:
+      s.processesTotal > 0 && s.processesAffirmed >= s.processesTotal
+        ? ("complete" as const)
+        : s.answered > 0
+          ? ("started" as const)
+          : ("not-started" as const),
+  }));
+
   const total = streams.reduce((n, s) => n + s.total, 0);
   const answered = streams.reduce((n, s) => n + s.answered, 0);
 
@@ -160,6 +216,7 @@ export interface GuestProcessPage {
   /** Flat fallback flow (used when chaptered is null). */
   flatFlow: ProcessFlow | null;
   questionCount: number;
+  answered: number;
 }
 
 /** Null when the scope item is not in the grant's scope. */
@@ -186,7 +243,8 @@ export async function getGuestProcessPage(
 
   const chaptered = await getChapteredFlow(scopeItemId);
   const flatFlow = chaptered ? null : await getProcessFlowForScopeItem(scopeItemId);
-  const questionCount = set.questions.filter((q) => q.scopeItemRefs.includes(scopeItemId)).length;
+  const itemQs = set.questions.filter((q) => q.scopeItemRefs.includes(scopeItemId));
+  const answers = await responsesByQuestion(grant.bundleId);
 
   return {
     bundle: set.bundle,
@@ -195,7 +253,8 @@ export async function getGuestProcessPage(
     streamId: item.streamId,
     chaptered,
     flatFlow,
-    questionCount,
+    questionCount: itemQs.length,
+    answered: itemQs.filter((q) => answers.has(q.id)).length,
   };
 }
 
@@ -255,14 +314,22 @@ export async function getGuestScopeAffirm(
 
 // ─── Submit summary ──────────────────────────────────────────────────────────
 
+export interface SummaryItem {
+  questionId: string;
+  scopeItemId: string;
+  text: string;
+  reason: string | null;
+}
+
 export interface GuestSummary {
   bundle: { client: string; state: string };
   grant: { displayName: string; roleLabel: string | null };
   buckets: {
-    standard: number;
-    discuss: number;
-    deviate: number;
+    standard: SummaryItem[];
+    discuss: SummaryItem[];
+    deviate: SummaryItem[];
   };
+  counts: { standard: number; discuss: number; deviate: number };
   total: number;
   answered: number;
 }
@@ -272,25 +339,41 @@ export async function getGuestSummary(grantId: string): Promise<GuestSummary | n
   if (!grant) return null;
   const set = await getAffirmSetForGrant(grantId);
   if (!set) return null;
-  const answers = await responsesByQuestion(grant.bundleId);
 
-  let standard = 0;
-  let discuss = 0;
-  let deviate = 0;
+  const rows = await prisma.affirmResponse.findMany({
+    where: { bundleId: grant.bundleId },
+    select: { questionId: true, choice: true, reason: true },
+  });
+  const byId = new Map(rows.map((r) => [r.questionId, r]));
+
+  const buckets = { standard: [] as SummaryItem[], discuss: [] as SummaryItem[], deviate: [] as SummaryItem[] };
   let answered = 0;
   for (const q of set.questions) {
-    const choice = answers.get(q.id);
-    if (!choice) continue;
+    const r = byId.get(q.id);
+    if (!r) continue;
     answered += 1;
-    if (choice === "standard") standard += 1;
-    else if (choice === "discuss") discuss += 1;
-    else if (choice === "deviate") deviate += 1;
+    const item: SummaryItem = {
+      questionId: q.id,
+      scopeItemId: q.scopeItemRefs[0] ?? "",
+      text: q.consultantWording ?? q.plainLanguageSuggested ?? q.sapVerbatim ?? q.id,
+      reason: r.reason,
+    };
+    // Information-format questions land in "discuss" (they carry no adopt-standard).
+    const choice = q.format === "information" ? (r.choice === "deviate" ? "discuss" : r.choice) : r.choice;
+    if (choice === "standard") buckets.standard.push(item);
+    else if (choice === "deviate") buckets.deviate.push(item);
+    else buckets.discuss.push(item);
   }
 
   return {
     bundle: set.bundle,
     grant: { displayName: grant.displayName, roleLabel: grant.roleLabel },
-    buckets: { standard, discuss, deviate },
+    buckets,
+    counts: {
+      standard: buckets.standard.length,
+      discuss: buckets.discuss.length,
+      deviate: buckets.deviate.length,
+    },
     total: set.questions.length,
     answered,
   };
