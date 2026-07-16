@@ -36,6 +36,7 @@ Ran against the committed artifacts to validate the two claims the plan rests on
 | D2 | Consultant dataset has **no `completeness` field**; client dataset does. Invariant 4 requires completeness badges everywhere a process renders, including the C2 library grid. | Consultant loader derives completeness by joining `scope_id` → client `id`. No data change. |
 | D3 | **46% of flow steps (1400/3035) and 31% of substeps (2877/9425) have an empty role**, but the .dc renders `{{ lane.role }}` with no fallback. | Resolved by the brief, which wins: *"Blank-role steps sit in a 'System / Automatic' lane."* No question outstanding. |
 | D4 | The .dc files use **literal hex, not CSS vars** — contrary to the prompt's description. 22 of 23 values map to existing repo tokens. **`#DDD9CC` has no token** (used once: export/print-preview backdrop). | Invariant 5 forbids new colors. Use `--border-strong` (`#C4BFAE`) for the export backdrop. Deviation logged; PR-3 scope. |
+| D11 | **The .dc's V2 search has no empty state.** An unmatched query hides every workflow section, leaving the reviewer looking at a fit bar, a search box and nothing else — with no explanation. It reads as a broken page. | Added an honest empty state ("No processes match '…'. Try a shorter search, or clear it to see the whole stream.") plus an `aria-live` result count, since a list that silently re-filters is invisible to a screen reader. The brief specifies neither; this is the smallest honest fix rather than an invention of scope. |
 | D10 | **The vendor-term guard scans comments, not just rendered strings** — and it fired on my own code twice: a comment quoting Affirm's landing copy (which names a product), and the phrase "enumeration **oracle**", where the ordinary security term collides with the vendor `Oracle`. | **Keep the guard strict; rephrase the prose.** Comments never render, so these were harmless — but exempting comments means parsing them out, and the parser becomes the thing that can be wrong. A guard that occasionally makes you reword a comment is cheap; a guard with a hole in it is not. Noted here so the next person hits the `Oracle`/"oracle" collision knowingly rather than fighting it. |
 | D9 | **The brief specifies no landing or verify screen** — its V1–V5 are all post-verify surfaces, and the .dc prototype starts at V1. But the journey needs an entry point. | Structure mirrors Affirm's landing/verify exactly. Copy is discovery's own, because Affirm's headline names a vendor product and invariant 1 forbids that here. The brief's §10 verbatim promises are used where they fit ("Your business on one page…", "See how the standard runs your process…", "Nothing is committed…"). Legal versions are discovery-specific (`discovery-pdpa-v1`), not Affirm's — pinning a grant to `affirm-pdpa-v1` would record consent to a notice the reviewer never read. |
 | D8 | **The mode switch (Present · Explore · Export) is not rendered in PR-2a.** | Brief §7 puts it in the shared chrome, but Present and Export are PR-3. A switch whose other two segments route nowhere is worse than no switch, and the "stub with the toast pattern" instruction can't be honoured: the .dc defines `flashToast` but **never calls it**, so the prototype supplies no toast copy — stubbing would mean inventing client-facing copy, which the plan forbids. It ships with the modes in PR-3. |
@@ -222,10 +223,10 @@ that must never ship, and they are not "conflicts" so much as artefacts:
 | 9 | V3 footnote: brief exact string vs .dc appends "Click a step for detail." | **Brief** | Verbatim §6/19. PR-2b. |
 | 10 | V3 promise "See how the standard runs your process…" — absent from .dc | **Brief** | §10 verbatim. Used on the landing (D9); also V3 in 2b. |
 | 11 | V3 fallback copy: §7 "No step flow catalogued for this process" vs §10 "No step flow is catalogued for this process yet — we'll map it with you." | **Brief §10** | The .dc already uses the §10 form; §10 is the verbatim-promise section. PR-2b. |
-| 12 | V3 provenance: brief mono-uppercase + "The process is yours; the reference names no vendor." vs .dc sentence-case, sentence dropped | **Brief** | The dropped sentence is the *point* of the line. PR-2b. |
+| 12 | V3 provenance: §6/12 "SOURCE: … · CURATED BY ABEAM · RENDERED PRODUCT-NEUTRAL" (mono 10 UPPERCASE, no second sentence) vs §10 sentence-case + "The process is yours; the reference names no vendor." | **§10 for the string, §6/12 for the style** | The brief conflicts with *itself*, not just the .dc. §10 is the "use exactly" list and wins the string — its second sentence is the product-agnostic promise stated out loud, and dropping it guts the line. §6/12 wins the style: mono, 10px, muted, shown never hidden. **Not force-uppercased** — shouting a two-sentence promise mangles it, and §6/12's uppercase was written for its own shorter form. |
 | 13 | Appendix A wireframe shows a vendor citation + product-mapping overlay on V3 | **Brief §12.6** | The brief self-conflicts; §12.6 is the hard rule and the .dc correctly omits both. Client views never show product mapping. |
 | 14 | Fit chip helper captions (4, per §9) — absent from .dc | **Brief** | PR-2b. |
-| 15 | Chip label: §9 table "We do this differently" vs §9 legend + Appendix A + .dc "We differ" | **"We differ"** | The brief uses the short form everywhere except one table cell; the long form is the outlier. Settled in `fit.ts`. |
+| 15 | Chip label: §9 table "We do this differently" vs §9 legend + Appendix A + .dc "We differ" | **BOTH — corrected in PR-2b** | ~~Originally resolved to "We differ" everywhere.~~ **That was wrong.** Reading §9 in full: its table's "Chip label" column is the selector's authority and says **"We do this differently"**; §6/17's fit-bar legend, Appendix A and V4's bucket say **"We differ"**. Two contexts, not a conflict — a 160px chip the reviewer clicks and a compact legend row have different jobs. `fit.ts` now carries `FIT_CHIP_LABELS` (selector) and `FIT_LABELS` (legend/bucket/heatmap), both asserted verbatim. |
 | 16 | "Not applicable" dims the row | **Brief** | PR-2b. |
 | 17 | Differ requires a reason before summary counts it complete | **Brief** | PR-2b. Server keeps `reason` nullable so a partial write preserves the selection and the summary counts it incomplete — losing the reviewer's click would be worse. |
 | 18 | Autosave tick + `aria-live` | **Brief** | PR-2b (rides with the selector). |
@@ -281,10 +282,71 @@ vacuously. It caught two real hits in my own code on first run (D10).
 are live and correct today; they simply always read `fresh` until 2b lands a way to
 decide anything.
 
+## PR-2b · V2 / V3 / V4 + the fit selector — GREEN
+
+Branch: `feat/neutral-discovery-explore-v2`.
+
+**Gates:** `typecheck:strict` ✓ · `lint:strict` ✓ · `pnpm test` ✓ (104 discovery tests).
+
+**⚠ e2e written, not executed** — same environment limit as 2a (no Postgres;
+`global-setup` opens Prisma before any spec). `discovery-explore.unauth.spec.ts`
+covers the full journey incl. one differ-with-reason, one N/A, the radiogroup
+arrow-key contract, the no-flow fallback, the sealed 409, and axe on V2–V4. It
+gates in preview. **Do not read "GREEN" as "the journey has run."**
+
+**The a11y debt is closed.** The fit selector is a real radiogroup: `role="radiogroup"`
+labelled by the prompt, `role="radio"` + `aria-checked` per chip, **roving tabindex**
+(one tab stop for the group, arrows move within it, wrapping, Home/End), visible
+focus everywhere, `aria-live="polite"` autosave tick. Chips are managed buttons
+rather than native radios because native `<input type=radio>` cannot carry the
+brief's two-line label+caption chip without label gymnastics.
+
+**Flow diagram** (§6/19) built properly: role lanes with the System / Automatic
+fallback, START/END nodes, and **cross-lane elbow connectors**. The geometry needs
+no DOM measurement — lane rows are a fixed uniform height, so a connector's elbow
+is derived from lane indices alone and renders correctly on the server, no refs or
+effects. Flows over 12 steps wrap into bands (§6/19's "Explore wraps to rows").
+
+**Compensating unit coverage** for what e2e can't prove here: `decisions.test.ts`
+(upsert key, reason-trimming, reason-clearing on state change, the differ gate)
+against a mocked client, and `copy.test.ts` asserting every §10 verbatim string
+character-for-character — so a well-meaning tweak to a client promise fails CI.
+
+### New in PR-2b
+
+- **Conflict #15 corrected** — see the table. The chip and the legend carry
+  different labels, both from the brief.
+- **Conflict #12 refined** — the brief conflicts with itself on provenance; §10
+  wins the string, §6/12 the style.
+- **D11** — the .dc's search has no empty state; added one.
+
 ## Parity checklist
 
 | Screen | State | Match / Deviation | Reason |
 |---|---|---|---|
+| V2 `/d/stream/[id]` | default | **Deviation — brief** | All 10 streams real; support line added (#5); no prototype scaffolding |
+| V2 | search / no match | **Deviation — D11** | .dc has no empty state; added one + `aria-live` count |
+| V2 | stream-complete | **Built from brief** | Teal 15% banner (#7) |
+| V2 | sealed | **Built from brief** | .dc models none |
+| V2 · process card | full / fallback / N/A | Match + §11 | Fit dot always paired with its label; N/A dims the row (#16) |
+| V3 `/d/process/[pid]` | undecided | Match | Chips unselected, no reveal box |
+| V3 | decided-standard | Match | standard-means box, verbatim |
+| V3 | differ-with-reason | Match + gate | Expectation note verbatim; incomplete state surfaced (#17) |
+| V3 | discuss-parked | Match | navy-soft note, verbatim |
+| V3 | not applicable | Match | No box; row dims on the V2 card |
+| V3 | **fallback (197 no-flow)** | Match | Honest panel; selector still available (§7 V3(e)); never an empty diagram |
+| V3 · flow | ≤12 steps | **Built from brief** | START/END + cross-lane elbows (#8) — .dc has neither |
+| V3 · flow | >12 steps | **Built from brief** | Wraps into bands (#8) |
+| V3 · flow | blank roles | Match | System / Automatic lane |
+| V3 · sub-step drill | expanded / empty | Match | Optional markers; "No further detail captured for this step." |
+| V3 · provenance | all | **Deviation — §10 over §6/12** | Keeps "the reference names no vendor"; mono style, not uppercased (#12) |
+| V3 · selector | all four + sealed | **Built from brief** | Real radiogroup + helper captions (#14, #26) |
+| V4 `/d/summary` | live | Match | Stat strip from live decisions; serif 28 (#24) |
+| V4 | incomplete differs | **Built from brief** | §9 honest gap capture, surfaced explicitly |
+| V4 · buckets | populated / empty | **Deviation — brief** | 15% bands + serif 28 (#22); reason inset keeps its amber border |
+| V4 · per-stream fit bars | all | **Built from brief** | .dc omits entirely (#21) |
+| V4 · eyebrow | all | **Built from brief** | `{DATE}` added (#19) |
+| V4 · export CTA | stub | **Deferred to PR-6** | Rendered disabled with an explanation, not a live button that does nothing |
 | Landing `/d/[token]` | default | Deviation — copy is discovery's own | Brief specifies no landing (D9); §10 promises used verbatim |
 | Landing | invalid/revoked/superseded/sealed | Match | Four guards → one terminal; never reveals which |
 | Verify `/d/verify` | default / invalid / expired / rate-limited / exhausted | Match | Mirrors Affirm; OtpInput reused unchanged |
