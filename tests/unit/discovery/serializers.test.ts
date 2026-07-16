@@ -13,10 +13,12 @@ import {
   SYSTEM_LANE,
   allClientProcesses,
   clientValueStreams,
+  coverageCounts,
   findClientProcess,
-  hasFlow,
   lanesForFlow,
   laneForRole,
+  noFlowProcesses,
+  withFlowProcesses,
 } from "@/lib/discovery/client-library";
 import {
   allConsultantProcessesWithCompleteness,
@@ -88,20 +90,65 @@ describe("D3 — blank-role steps fall into the System / Automatic lane", () => 
   });
 });
 
-describe("honesty rules — the 16 no-flow processes", () => {
-  it("exactly 16 processes have no flow", () => {
-    expect(allClientProcesses().filter((p) => !hasFlow(p)).length).toBe(16);
+/**
+ * D6 — these assertions were WRONG in PR-1 and passed anyway.
+ *
+ * PR-1 asserted "exactly 16 processes have no flow" and "every process with a
+ * flow carries a completeness badge". Both were green, because the 181 sentinel
+ * processes had a one-step fake flow AND an `outline` badge — so they counted as
+ * "with a flow" and satisfied the badge rule. The tests encoded the bug rather
+ * than catching it.
+ *
+ * Post-re-emission the honest split is 545 with a real flow / 197 without, and
+ * the no-flow set carries no completeness claim at all.
+ */
+describe("honesty rules — the 197 no-flow processes", () => {
+  it("exactly 197 processes have no flow (16 original + 181 de-sentinelled)", () => {
+    expect(noFlowProcesses().length).toBe(197);
   });
 
-  it("every no-flow process also has null completeness (fallback, never a guess)", () => {
-    const noFlow = allClientProcesses().filter((p) => !hasFlow(p));
-    expect(noFlow.every((p) => p.completeness === null)).toBe(true);
+  it("exactly 545 processes have a real flow", () => {
+    expect(withFlowProcesses().length).toBe(545);
+  });
+
+  it("with-flow and no-flow together account for all 742", () => {
+    expect(withFlowProcesses().length + noFlowProcesses().length).toBe(742);
+  });
+
+  it("no no-flow process claims a completeness badge (never a guess)", () => {
+    expect(noFlowProcesses().every((p) => p.completeness === null)).toBe(true);
   });
 
   it("every process WITH a flow carries a completeness badge", () => {
     // Invariant 4: completeness badges everywhere a process renders.
-    const withFlow = allClientProcesses().filter(hasFlow);
-    expect(withFlow.every((p) => p.completeness !== null)).toBe(true);
+    expect(withFlowProcesses().every((p) => p.completeness !== null)).toBe(true);
+  });
+
+  it("completeness distribution matches the corrected data", () => {
+    const dist = allClientProcesses().reduce<Record<string, number>>((acc, p) => {
+      const k = p.completeness ?? "none";
+      acc[k] = (acc[k] ?? 0) + 1;
+      return acc;
+    }, {});
+    expect(dist).toEqual({ detailed: 223, "detailed+variants": 177, outline: 145, none: 197 });
+  });
+});
+
+describe("coverage counts — what V1's stat row must read from", () => {
+  it("computes from the data, not from meta or MANIFEST", () => {
+    expect(coverageCounts()).toEqual({
+      processes: 742,
+      withFlow: 545,
+      noFlow: 197,
+      workflows: 85,
+      valueStreams: 10,
+      industrySpecific: 60,
+    });
+  });
+
+  it("never reports the pre-fix 726 (the sentinel-inflated figure)", () => {
+    // Showing 726 would overstate real flow coverage to the client by a third.
+    expect(coverageCounts().withFlow).not.toBe(726);
   });
 });
 
@@ -115,9 +162,9 @@ describe("D2 — consultant completeness is derived across the join", () => {
     expect(joined.length).toBe(742);
   });
 
-  it("leaves exactly 16 with null completeness (the no-flow set)", () => {
+  it("leaves exactly 197 with null completeness (the no-flow set)", () => {
     const joined = allConsultantProcessesWithCompleteness();
-    expect(joined.filter((p) => p.completeness === null).length).toBe(16);
+    expect(joined.filter((p) => p.completeness === null).length).toBe(197);
   });
 
   it("returns null for an unknown scope id rather than guessing", () => {

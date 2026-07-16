@@ -1,11 +1,13 @@
 {
- "generated": "2026-07-16",
- "source": "vendor-neutral-process-library.json (canonical, P1-P4 complete)",
+ "generated": "2026-07-17",
+ "source": "vendor-neutral-process-library.json (canonical, P1-P4 + sentinel-flow fix)",
+ "hash_algorithm": "sha256 truncated to 16 hex chars",
  "counts": {
   "processes": 742,
   "value_streams": 10,
   "workflows": 85,
-  "with_flow": 726,
+  "with_flow": 545,
+  "no_flow": 197,
   "with_substeps": 400,
   "origin": {
    "sap_base": 654,
@@ -14,9 +16,8 @@
   "parked_sap_enablers": 18
  },
  "files": {
-  "discovery-library.client.json": "71d5a13aa7ca59de",
-  "discovery-library.consultant.json": "626f605fc732f494",
-  "vendor-term-guard.json": "57749b0be400c9e2"
- },
- "client_dataset_vendor_leaks": 0
+  "discovery-library.client.json": "35f9efe4e8ce7bfd",
+  "discovery-library.consultant.json": "31feb5416252f702",
+  "vendor-term-guard.json": "13c982041670dae7"
+ }
 }
