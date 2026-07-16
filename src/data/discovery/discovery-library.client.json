@@ -5,7 +5,8 @@
   "total_processes": 742,
   "value_streams": 10,
   "workflows": 85,
-  "with_flow": 726
+  "with_flow": 545,
+  "no_flow": 197
  },
  "value_streams": [
   {
@@ -607,13 +608,7 @@
        "description": "Requests regulatory documentation from external service providers (e.g. customs filings).",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "6MT",
@@ -683,13 +678,7 @@
        "description": "Author and maintain product-compliance documents (safety data sheets, declarations) for regulated products.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       }
      ]
     },
@@ -1154,13 +1143,7 @@
        "description": "Collaborative project management with team workspaces, tasks, and milestones.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       }
      ]
     },
@@ -2174,13 +2157,7 @@
        "description": "Manages contractors and external workforce via an external-workforce system, including timesheets and invoicing.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "22Z",
@@ -2886,13 +2863,7 @@
        "description": "Track and return reusable packaging/containers back to suppliers.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "4N6",
@@ -2900,13 +2871,7 @@
        "description": "Processes incoming supplier invoices via central invoice management.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "4R2",
@@ -2914,13 +2879,7 @@
        "description": "Procures services using a supplier network and an external-workforce system for the contingent workforce.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7YH",
@@ -2928,13 +2887,7 @@
        "description": "Invoice processing using the procurement network integrated with the ERP.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "BNX",
@@ -3316,13 +3269,7 @@
        "description": "Predicts how much of a purchase contract's volume customers will likely use, to help with planning.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "2EJ",
@@ -4659,13 +4606,7 @@
        "description": "Procurement via guided buying and catalog procurement integrated with the ERP.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7YM",
@@ -4673,13 +4614,7 @@
        "description": "Procurement via guided buying \u2014 base edition (catalog and guided buying).",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "81Y",
@@ -4687,13 +4622,7 @@
        "description": "Procurement expansion package on top of guided buying \u2014 additional procurement capabilities.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "BMR",
@@ -4914,13 +4843,7 @@
        "description": "Live dashboards and KPIs for procurement teams to monitor purchasing activity, supplier performance, and spend as it happens.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "1XI",
@@ -4928,13 +4851,7 @@
        "description": "Lets central procurement raise requisitions on behalf of multiple subsidiaries in one place.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "2ME",
@@ -5085,13 +5002,7 @@
        "description": "Lets one central purchasing org run end-to-end purchasing on behalf of subsidiaries.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "3EN",
@@ -5099,13 +5010,7 @@
        "description": "Central buying with a guided buying experience via the procurement network on behalf of subsidiaries.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "3ZF",
@@ -5113,13 +5018,7 @@
        "description": "Central sourcing organization that runs sourcing events on behalf of subsidiaries.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "4B0",
@@ -5127,13 +5026,7 @@
        "description": "Central-procurement contracts authored in contract management and used across subsidiaries.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "4QN",
@@ -5141,13 +5034,7 @@
        "description": "Central procurement linked to strategic sourcing for strategic sourcing across subsidiaries.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5JT",
@@ -5155,13 +5042,7 @@
        "description": "Automates central procurement quotation requests via a supplier network.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5W3",
@@ -5461,13 +5342,7 @@
        "description": "Central procurement integrated with a supplier network for cross-supplier sourcing.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       }
      ]
     },
@@ -7331,13 +7206,7 @@
        "description": "Manages the full lifecycle of legal contracts \u2014 drafting, approvals, signatures, renewals \u2014 inside the ERP.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "2OQ",
@@ -7345,13 +7214,7 @@
        "description": "Connect the ERP to a specialist contract-assembly/authoring system for complex agreements.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "4AZ",
@@ -7450,13 +7313,7 @@
        "description": "Integration with a contract-authoring tool for contract assembly and CLM.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7VL",
@@ -7464,13 +7321,7 @@
        "description": "Search and discover suppliers on a supplier network from inside the ERP.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "BMD",
@@ -7704,13 +7555,7 @@
        "description": "Uses AI to predict when purchase order items will actually be delivered.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "SL4",
@@ -8172,13 +8017,7 @@
        "description": "Connects the ERP to an external MES on the shop floor to drive and confirm production operations.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "1YT",
@@ -8268,13 +8107,7 @@
        "description": "Uses AI to forecast supply chain metrics like demand or lead times, trained on historical ERP data.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "21D",
@@ -9739,13 +9572,7 @@
        "description": "Connects to a third-party shop-floor system for process-industry production execution.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "3W4",
@@ -9753,13 +9580,7 @@
        "description": "Connects to a third-party shop-floor system for discrete-industry production execution.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "42N",
@@ -12615,13 +12436,7 @@
        "description": "Group multiple production orders into a combined order to optimise setup and batch runs.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "BJ5",
@@ -14917,13 +14732,7 @@
        "description": "Capture and settle inbound freight/carrier invoices against shipments.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "4LU",
@@ -15377,13 +15186,7 @@
        "description": "Track and settle reusable/returnable packaging and containers moving between partners.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7L1",
@@ -17926,13 +17729,7 @@
        "description": "Plan and execute bulk/field logistics by container and voyage (upstream oil & gas movements).",
        "tier": "core",
        "industry": "Oil & Gas",
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "6NM",
@@ -18077,13 +17874,7 @@
        "description": "Analyse field-logistics movements, volumes and costs for bulk operations.",
        "tier": "core",
        "industry": "Oil & Gas",
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "71O",
@@ -20532,13 +20323,7 @@
        "description": "Make-to-order production of individually configured units (lot size of one).",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       }
      ]
     },
@@ -20739,13 +20524,7 @@
        "description": "EHS compliance management across the value chain (substances, waste, safety).",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "4XD",
@@ -20753,13 +20532,7 @@
        "description": "Captures and reports greenhouse gas emissions across the company's operations.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "4YX",
@@ -20767,13 +20540,7 @@
        "description": "Lightweight management-of-change process for plant/asset modifications.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "54A",
@@ -21000,13 +20767,7 @@
        "description": "Manages waste streams \u2014 categorization, disposal, recycling, regulatory reporting.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7L4",
@@ -21161,13 +20922,7 @@
        "description": "Audit and inspection management for Environment, Health, and Safety (EHS).",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7ZA",
@@ -21175,13 +20930,7 @@
        "description": "Occupational health management within Environment, Health, and Safety (EHS).",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       }
      ]
     },
@@ -23478,13 +23227,7 @@
        "description": "Sales planning apps where the team can set revenue targets, model scenarios, and compare to actuals.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "1VP",
@@ -23492,13 +23235,7 @@
        "description": "Pitches a sales opportunity in the CRM and converts it into a sales order in the ERP.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "2EL",
@@ -23602,13 +23339,7 @@
        "description": "Fulfil and deliver goods on behalf of another group company (intra-group drop-ship).",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "2YJ",
@@ -23616,13 +23347,7 @@
        "description": "Uses AI to forecast sales metrics like demand or customer behavior, trained on historical data.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "31Q",
@@ -24326,13 +24051,7 @@
        "description": "Opportunity-to-order flow using the CRM V2 (next-gen CRM).",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "73P",
@@ -26063,13 +25782,7 @@
        "description": "Resource planning and staffing for projects (matching people to roles).",
        "tier": "core",
        "industry": "Professional Services",
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7Z6",
@@ -26077,13 +25790,7 @@
        "description": "Apply omnichannel promotions and discounts to retail sales orders across channels.",
        "tier": "core",
        "industry": "Retail",
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7ZH",
@@ -26091,13 +25798,7 @@
        "description": "Plan, execute and evaluate trade promotions and pricing to grow net revenue (consumer goods).",
        "tier": "core",
        "industry": "Consumer Products",
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7ZJ",
@@ -26105,13 +25806,7 @@
        "description": "Handle staged customer down payments for retail orders such as big-ticket or special orders.",
        "tier": "core",
        "industry": "Retail",
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "J11",
@@ -26536,13 +26231,7 @@
        "description": "Bill goods and services delivered to a customer on a single combined invoice.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "4H2",
@@ -26588,13 +26277,7 @@
        "description": "Sell-from-stock order that requires and clears a customer down payment before final billing.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7TZ",
@@ -26602,13 +26285,7 @@
        "description": "Issue credit or debit memos for configurable (variant) products, adjusting for their specific options.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7UA",
@@ -26616,13 +26293,7 @@
        "description": "Sell-from-stock flow where the invoice is raised ahead of physical goods issue.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "BDQ",
@@ -26724,13 +26395,7 @@
        "description": "Process sales orders collected by SEPA direct debit, including mandate handling and bank collection.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "BKZ",
@@ -27516,13 +27181,7 @@
        "description": "Dashboards and KPIs for service operations \u2014 utilization, response times, resolution.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "49X",
@@ -28787,13 +28446,7 @@
        "description": "Manages customer complaints end-to-end \u2014 logging, investigation, resolution.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7KW",
@@ -29712,13 +29365,7 @@
        "description": "Intercompany sales of make-to-order, configurable products with cross-company costing and billing.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       }
      ]
     },
@@ -30438,13 +30085,7 @@
        "description": "Manage rebate/condition contracts across a customer hierarchy for consumer-goods trade terms.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7T7",
@@ -30452,13 +30093,7 @@
        "description": "Plan and settle omnichannel promotions for consumer-products customers.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "BKA",
@@ -31532,13 +31167,7 @@
        "description": "Manage software subscription lifecycles \u2014 provisioning, entitlements, renewals and billing.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7UQ",
@@ -31546,13 +31175,7 @@
        "description": "Margin optimization powered by solution extension (rebates, pricing programs).",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       }
      ]
     }
@@ -32000,13 +31623,7 @@
        "description": "Provides an AI assistant inside the ERP to help maintenance technicians with diagnostics and instructions.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "4VT",
@@ -32194,13 +31811,7 @@
        "description": "Plan and execute maintenance work orders through mobile field-service technicians, including scheduling, parts and confirmation.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7Z4",
@@ -32208,13 +31819,7 @@
        "description": "Issue and control safety work permits before high-risk maintenance tasks, enforcing sign-offs and hazard controls.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "BH1",
@@ -33443,13 +33048,7 @@
        "description": "Runs payroll through the payroll system and posts the results back to the finance system.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "3UP",
@@ -33457,13 +33056,7 @@
        "description": "Runs payroll using an on-premise payroll system and posts results to the finance system.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "JB1",
@@ -33624,13 +33217,7 @@
        "description": "Exchange employee, time and cost data between the core HR/payroll system and finance for posting.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "J12",
@@ -35461,13 +35048,7 @@
        "description": "Post supplier/customer invoices with their taxes and any complementary adjustment postings.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "1JT",
@@ -35475,13 +35056,7 @@
        "description": "Import and apply bank lockbox files to clear customer receivables automatically.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "1M1",
@@ -35489,13 +35064,7 @@
        "description": "Sends employee travel expenses from a travel & expense system into the ERP for accounting and reimbursement.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "1MV",
@@ -35503,13 +35072,7 @@
        "description": "Automatically matches incoming customer payments to open invoices using AI, reducing manual cash application work.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "1QM",
@@ -35776,13 +35339,7 @@
        "description": "Pulls credit scores and risk ratings from external credit agencies into the ERP for credit decisions.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "1S0",
@@ -35914,13 +35471,7 @@
        "description": "Manage bills of exchange as a payment/financing instrument through to clearing.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "2LZ",
@@ -36061,13 +35612,7 @@
        "description": "Generate and exchange legally-required electronic documents (e-invoices) with authorities.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "2UP",
@@ -36075,13 +35620,7 @@
        "description": "Record and track tax credits associated with fixed-asset investments.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "2UT",
@@ -36089,13 +35628,7 @@
        "description": "Issue complementary invoices to correct pricing differences (statutory, LatAm).",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "43D",
@@ -36103,13 +35636,7 @@
        "description": "Connect finance to third-party tax engines for real-time tax determination.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "4X8",
@@ -36117,13 +35644,7 @@
        "description": "Detects and reports advanced bank statement issues automatically (cash application improvements).",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "55I",
@@ -36355,13 +35876,7 @@
        "description": "VAT calculation and statutory reporting specific to Germany.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5IS",
@@ -36369,13 +35884,7 @@
        "description": "VAT calculation and statutory reporting specific to Belgium.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5Z0",
@@ -36383,13 +35892,7 @@
        "description": "VAT calculation and reporting for South Africa.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5Z1",
@@ -36397,13 +35900,7 @@
        "description": "VAT calculation and reporting for Sweden.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5Z2",
@@ -36411,13 +35908,7 @@
        "description": "VAT calculation and reporting for Czech Republic.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5Z8",
@@ -36425,13 +35916,7 @@
        "description": "Generate and review proposed tax postings before they are booked.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "6VP",
@@ -36439,13 +35924,7 @@
        "description": "Maintain statutory tax registers of input/output tax for reporting.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7DP",
@@ -36453,13 +35932,7 @@
        "description": "Run day-to-day tax operations \u2014 determination, postings and reporting.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7MA",
@@ -36467,13 +35940,7 @@
        "description": "Automate dunning, collections worklists and dispute cases for overdue receivables.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7MJ",
@@ -36481,13 +35948,7 @@
        "description": "Basic payment management for processing customer/supplier payments.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7VW",
@@ -36495,13 +35956,7 @@
        "description": "Configure country-specific bill-of-exchange handling through the localisation toolkit.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "BD6",
@@ -40397,13 +39852,7 @@
        "description": "Subleases an asset to another group company, with the lease accounting on both sides.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "2SA",
@@ -42621,13 +42070,7 @@
        "description": "Connect the ERP to a real-estate management system for lease and property data.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5VX",
@@ -42635,13 +42078,7 @@
        "description": "Set up real-estate objects for use and manage their occupancy/lease contracts.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5VY",
@@ -42649,13 +42086,7 @@
        "description": "Manage leases where the company is tenant in externally-owned property.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5VZ",
@@ -42663,13 +42094,7 @@
        "description": "Allocate space and occupancy costs to internal cost centres.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5W0",
@@ -42677,13 +42102,7 @@
        "description": "Manage occupancy and lease contracts between group companies.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5YU",
@@ -42691,13 +42110,7 @@
        "description": "Real-estate use and contract management, accounted under IFRS.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5YV",
@@ -42705,13 +42118,7 @@
        "description": "Tenant leases in external property, accounted under IFRS (IFRS 16).",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5YW",
@@ -42719,13 +42126,7 @@
        "description": "Intercompany occupancy and leases, accounted under IFRS.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "63Q",
@@ -42733,13 +42134,7 @@
        "description": "Real-estate use and contract management, accounted under US GAAP.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "63R",
@@ -42747,13 +42142,7 @@
        "description": "Tenant leases in external property, accounted under US GAAP.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "63S",
@@ -42761,13 +42150,7 @@
        "description": "Intercompany occupancy and leases, accounted under US GAAP.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "77V",
@@ -47701,13 +47084,7 @@
        "description": "Prepare and submit statutory data extracts for external tax audits.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "2VB",
@@ -48265,13 +47642,7 @@
        "description": "Apply the Canary Islands indirect-tax (IGIC) rules to relevant transactions.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "40Y",
@@ -48279,13 +47650,7 @@
        "description": "Reconciles open intercompany positions between group companies and resolves mismatches.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "4Q2",
@@ -48293,13 +47658,7 @@
        "description": "Calculate transaction taxes through an external tax engine and post the results.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "54D",
@@ -48307,13 +47666,7 @@
        "description": "Track and control recoverable tax credits arising on asset purchases.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5NU",
@@ -48321,13 +47674,7 @@
        "description": "Apply banking-industry accounting rules and enhancements to financial postings.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5W2",
@@ -48552,13 +47899,7 @@
        "description": "Calculates average daily account balances for banking-style interest and reporting.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "6IL",
@@ -48566,13 +47907,7 @@
        "description": "Account reconciliation using a close-automation tool (the ERP solution extension) for balance sheet substantiation.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "6IM",
@@ -48580,13 +47915,7 @@
        "description": "Transaction-level matching using a close-automation tool to reconcile high-volume transactions.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "6SZ",
@@ -48594,13 +47923,7 @@
        "description": "Banking error correction and suspense accounting for unclassified transactions.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "78I",
@@ -48608,13 +47931,7 @@
        "description": "Match and reconcile intercompany balances for banking entities before close.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "78J",
@@ -48622,13 +47939,7 @@
        "description": "Apply insurance-industry accounting rules and enhancements to financial postings.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7WP",
@@ -48636,13 +47947,7 @@
        "description": "Configure country-specific withholding-tax rules through the localisation toolkit.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "BEJ",
@@ -50069,13 +49374,7 @@
        "description": "Transfers master data (customers, suppliers, materials) to the global-trade system for compliance checks.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "1WC",
@@ -50356,13 +49655,7 @@
        "description": "Transfers contact-person master data into the global-trade system.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "24H",
@@ -50402,13 +49695,7 @@
        "description": "Connects a continuous control-monitoring system to monitor key business controls continuously as transactions happen.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "2U1",
@@ -50478,13 +49765,7 @@
        "description": "Monitors top operational risks using a risk-management system with key risk indicators.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "2U3",
@@ -50522,13 +49803,7 @@
        "description": "Sets up automated user provisioning and access reviews via an identity & access-governance system.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "3JX",
@@ -50608,13 +49883,7 @@
        "description": "Detects data-privacy risks (e.g. unauthorized PII access) using a risk & assurance system.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "3KY",
@@ -50622,13 +49891,7 @@
        "description": "Monitors internal controls (SOX-style) using a risk & assurance system.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5OL",
@@ -50636,13 +49899,7 @@
        "description": "Intrastat reporting (intra-EU trade statistics) specific to Germany.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5PA",
@@ -50650,13 +49907,7 @@
        "description": "Intrastat reporting specific to Belgium.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5Z3",
@@ -50664,13 +49915,7 @@
        "description": "Intrastat reporting for Sweden \u2014 EU intra-community trade statistics filing.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5Z4",
@@ -50678,13 +49923,7 @@
        "description": "Intrastat reporting for Czech Republic \u2014 EU intra-community trade statistics filing.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "BDT",
@@ -50692,13 +49931,7 @@
        "description": "Prepare and submit Intrastat declarations for intra-EU goods movements.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       }
      ]
     },
@@ -51064,13 +50297,7 @@
        "description": "Coordinates the close calendar and tasks across systems via an advanced financial-close tool.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "4PG",
@@ -51078,13 +50305,7 @@
        "description": "Provides additional flexibility in finance org structures (e.g. shared profit centers, business areas).",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "4RC",
@@ -51092,13 +50313,7 @@
        "description": "Integrated financial planning combining cost, revenue, and balance sheet drivers across the business.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5O6",
@@ -51106,13 +50321,7 @@
        "description": "Compliance/statutory reporting formats specific to Germany.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5P9",
@@ -51120,13 +50329,7 @@
        "description": "Compliance/statutory reporting formats specific to Belgium.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5XU",
@@ -51134,13 +50337,7 @@
        "description": "Statutory document and reporting compliance \u2014 e-invoicing, country reporting, audit files.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5Z5",
@@ -51148,13 +50345,7 @@
        "description": "Compliance/statutory reporting formats for South Africa.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5Z6",
@@ -51162,13 +50353,7 @@
        "description": "Compliance/statutory reporting formats for Sweden.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5Z7",
@@ -51176,13 +50361,7 @@
        "description": "Compliance/statutory reporting formats for Czech Republic.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "78L",
@@ -56125,13 +55304,7 @@
        "description": "Connects the treasury system to external trading platforms (e.g. 360T) to pull in deal data.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "2HU",
@@ -56724,13 +55897,7 @@
        "description": "Apply hedge accounting to FX forward contracts under local GAAP.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "3X2",
@@ -56738,13 +55905,7 @@
        "description": "Apply hedge accounting to FX option contracts under local GAAP.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "3X3",
@@ -57594,13 +56755,7 @@
        "description": "Maintain additional depreciation methods so assets can be valued under multiple local GAAPs.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "BF7",
@@ -58933,13 +58088,7 @@
        "description": "Break down planned vs actual product cost across the value-added flow for margin analysis.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7W3",
@@ -59738,13 +58887,7 @@
        "description": "Sends treasury payments to/from a treasury workstation system for centralized payment processing.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "3QM",
@@ -59752,13 +58895,7 @@
        "description": "Connects the treasury system to SWIFT for sending and receiving payment messages and confirmations.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "4MT",
@@ -59766,13 +58903,7 @@
        "description": "Coordinates payments centrally across multiple group companies with one strategic payment engine.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       }
      ]
     },
@@ -59785,13 +58916,7 @@
        "description": "Earmarks funds (reserves money) for real estate contract obligations \u2014 public sector use.",
        "tier": "core",
        "industry": "Public Sector",
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "6UC",
@@ -59799,13 +58924,7 @@
        "description": "Public-sector budget planning \u2014 builds government budgets by fund, function, and program.",
        "tier": "core",
        "industry": "Public Sector",
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "6X0",
@@ -59821,13 +58940,7 @@
        "description": "Public-sector budget execution and monitoring of government spending.",
        "tier": "core",
        "industry": "Public Sector",
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "71S",
@@ -59835,13 +58948,7 @@
        "description": "Public-sector grants management \u2014 awarded grants, spend tracking, reporting.",
        "tier": "core",
        "industry": "Public Sector",
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "78S",
@@ -59849,13 +58956,7 @@
        "description": "Earmarks funds (commitments/reservations) in finance for spending control.",
        "tier": "core",
        "industry": "Public Sector",
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7AU",
@@ -59863,13 +58964,7 @@
        "description": "Fund accounting for non-profit/public sector \u2014 separate funds with their own balances.",
        "tier": "core",
        "industry": "Public Sector",
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7O6",
@@ -59877,13 +58972,7 @@
        "description": "Apply GASB fund-accounting principles for US public-sector entities.",
        "tier": "core",
        "industry": "Public Sector",
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7QE",
@@ -59972,13 +59061,7 @@
        "description": "Enables an excise-tax system for industries with excise duties (alcohol, fuel, tobacco).",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5FT",
@@ -60044,13 +59127,7 @@
        "description": "Calculates product carbon footprint across the lifecycle and supply chain.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "6N8",
@@ -60058,13 +59135,7 @@
        "description": "Settle and allocate real-estate operating costs to contracts and occupants.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7Z8",
@@ -60072,13 +59143,7 @@
        "description": "Determine and post excise duties on regulated goods through a specialist engine.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       }
      ]
     },
@@ -62838,13 +61903,7 @@
        "description": "Consolidates the financials of all group companies into a single set of group accounts \u2014 the core legal consolidation tool.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "287",
@@ -62860,13 +61919,7 @@
        "description": "Builds and consolidates a planning version (budget/forecast) across group companies.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "2U6",
@@ -62882,13 +61935,7 @@
        "description": "Group reporting tailored for ESG (environmental, social, governance) data consolidation.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5PU",
@@ -62896,13 +61943,7 @@
        "description": "Builds group-level financial plans consolidated across subsidiaries.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       }
      ]
     },
@@ -63977,13 +63018,7 @@
        "description": "Finance receivables early through a supply-chain-finance / factoring programme.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7MG",
@@ -64197,13 +63232,7 @@
        "description": "Manages how long personal and business data is kept in the system and archives or deletes it when retention rules require.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "1N1",
@@ -64211,13 +63240,7 @@
        "description": "Cleans and harmonizes product master data when the same item is maintained in multiple ERP systems.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "1N3",
@@ -64225,13 +63248,7 @@
        "description": "Cleans and harmonizes customer/supplier master data when the same business partner exists in multiple ERP systems.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "1N5",
@@ -64239,13 +63256,7 @@
        "description": "Lets you update many product records at once instead of editing them one by one.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "1N7",
@@ -64253,13 +63264,7 @@
        "description": "Manages a single 'golden record' for customers and suppliers with approval workflows for changes.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "1RK",
@@ -64267,13 +63272,7 @@
        "description": "Lets you load and update many business partner records at once from a file.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "1RM",
@@ -64281,13 +63280,7 @@
        "description": "Lets you load and update many product records at once from a file.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "1RO",
@@ -64381,13 +63374,7 @@
        "description": "Monitors and improves data quality for business partner master data.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "4AQ",
@@ -64395,13 +63382,7 @@
        "description": "Monitors and improves data quality for product master data.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "53V",
@@ -64409,13 +63390,7 @@
        "description": "Foundation services for digital payments (tokenization, providers, configurations).",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "5I9",
@@ -64580,13 +63555,7 @@
        "description": "Mass loading and updating of business partners (customers, suppliers) in bulk.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7TE",
@@ -64594,13 +63563,7 @@
        "description": "Integration with WalkMe Premium for in-app user guidance.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       }
      ]
     },
@@ -64613,13 +63576,7 @@
        "description": "Lets workflow tasks automatically route to the right person based on role, region, or other rules.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "1NN",
@@ -64635,13 +63592,7 @@
        "description": "Integration with an intelligent document-processing service to read invoices/documents and post automatically.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7W6",
@@ -64649,13 +63600,7 @@
        "description": "Archiving integration with long-term document and data retention.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7WC",
@@ -64663,13 +63608,7 @@
        "description": "Content management integration with documents linked to the ERP objects.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7XY",
@@ -64677,13 +63616,7 @@
        "description": "Integration with a cloud document-management service for cloud document storage.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7Y0",
@@ -64691,13 +63624,7 @@
        "description": "Integration with an enterprise content-management system for enterprise content management.",
        "tier": "generalized",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       }
      ]
     },
@@ -65276,13 +64203,7 @@
        "description": "Controls how documents like order confirmations, invoices, and shipping notes are printed, emailed, or sent electronically.",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       },
       {
        "id": "7DJ",
@@ -65290,13 +64211,7 @@
        "description": "Integration with an external output management solution (printing/formatting).",
        "tier": "core",
        "industry": null,
-       "completeness": "outline",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ]
+       "completeness": null
       }
      ]
     },

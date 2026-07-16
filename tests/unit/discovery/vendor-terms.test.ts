@@ -19,6 +19,7 @@ import { readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
 
+import { allClientProcesses } from "@/lib/discovery/client-library";
 import { VendorTermGuardSchema } from "@/lib/discovery/schema";
 
 const DATA_DIR = join(process.cwd(), "src/data/discovery");
@@ -79,10 +80,75 @@ describe("vendor-term guard — the guard itself", () => {
   });
 });
 
+/**
+ * D6 — the sentinel-flow class. The pipeline once encoded "this process has no
+ * flow" as a single step titled "(no MY mandatory steps)", from the SAP source's
+ * "Mandatory MY flow" column. 181 processes carried one. Nothing caught it: the
+ * guard list had no matching term, every MANIFEST count was internally
+ * consistent, and a length check called it a real flow. It would have shipped a
+ * fake one-step diagram to 181 client pages and put SAP localisation jargon on a
+ * client surface.
+ *
+ * The pipeline fixed it and the guard list gained the term. These assertions are
+ * the belt-and-braces: the data is upstream of us, and a regression there must
+ * fail here rather than reach a client.
+ */
+const PLACEHOLDER_STEP_RE = /\((?:no|not)\b[^)]*\bsteps?\)/i;
+
+describe("D6 — no process may carry a placeholder flow", () => {
+  const processes = allClientProcesses();
+
+  it("the detector actually matches the sentinel that shipped", () => {
+    // If this stops matching, the assertions below are vacuous.
+    expect(PLACEHOLDER_STEP_RE.test("(no MY mandatory steps)")).toBe(true);
+    expect(PLACEHOLDER_STEP_RE.test("(no mandatory step)")).toBe(true);
+  });
+
+  it("does not fire on legitimate step names", () => {
+    // The dataset legitimately contains "(no asynchronous queue)",
+    // "(not physical goods)" etc. — parentheticals, but not step placeholders.
+    expect(PLACEHOLDER_STEP_RE.test("Post Goods Issue (not physical goods)")).toBe(false);
+    expect(PLACEHOLDER_STEP_RE.test("Release Order (no asynchronous queue)")).toBe(false);
+  });
+
+  it("no flow step is a placeholder", () => {
+    const offenders = processes
+      .flatMap((p) => (p.flow ?? []).map((s) => ({ id: p.id, step: s.step })))
+      .filter((s) => PLACEHOLDER_STEP_RE.test(s.step));
+    expect(
+      offenders,
+      `Placeholder flow steps found — these must be absent flows, not fake ones:\n${JSON.stringify(offenders.slice(0, 10), null, 2)}`,
+    ).toEqual([]);
+  });
+
+  it("no flow step contains a vendor term", () => {
+    const offenders = processes
+      .flatMap((p) => (p.flow ?? []).map((s) => ({ id: p.id, step: s.step })))
+      .filter((s) => Object.keys(vendorHits(s.step)).length > 0);
+    expect(offenders).toEqual([]);
+  });
+
+  it("no sub-step contains a vendor term or a placeholder", () => {
+    const offenders = processes
+      .flatMap((p) => (p.flow ?? []).flatMap((s) => s.substeps ?? []))
+      .filter((b) => PLACEHOLDER_STEP_RE.test(b.t) || Object.keys(vendorHits(b.t)).length > 0);
+    expect(offenders).toEqual([]);
+  });
+
+  it("a process with a flow has at least one real step (no empty diagrams)", () => {
+    const offenders = processes.filter((p) => p.flow !== undefined && p.flow.length === 0);
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe("vendor-term guard — client dataset (INVARIANT 1)", () => {
   it("discovery-library.client.json contains zero vendor terms", () => {
     const text = readFileSync(join(DATA_DIR, "discovery-library.client.json"), "utf8");
     expect(vendorHits(text)).toEqual({});
+  });
+
+  it("the guard list carries the sentinel term (D6 regression)", () => {
+    expect(guard.terms).toContain("no MY mandatory steps");
   });
 
   it("the consultant dataset DOES contain vendor terms (proves the scan works on real data)", () => {

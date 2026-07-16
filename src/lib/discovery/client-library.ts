@@ -85,9 +85,56 @@ export function lanesForFlow(flow: readonly FlowStep[]): string[] {
 }
 
 /**
- * True when a process has no catalogued flow (16 of 742). The brief: show a
- * "no step flow catalogued" fallback — never a fabricated flow.
+ * True when a process has a real catalogued flow (545 of 742). The other 197
+ * get the fallback panel — the brief is explicit: "never a fake flow".
+ *
+ * History (D6): the dataset used to encode absent flows as a single step titled
+ * "(no MY mandatory steps)" — a pipeline artifact from the SAP source's
+ * "Mandatory MY flow" column. 181 processes carried one. A length check alone
+ * called those "has a flow", which would have rendered a fake one-step diagram
+ * and leaked SAP localisation jargon onto a client surface. The pipeline has
+ * since removed them, so presence is now sufficient — but the guard test
+ * asserts no sentinel can return, because the data is upstream of us.
  */
 export function hasFlow(p: ClientProcess): boolean {
   return Array.isArray(p.flow) && p.flow.length > 0;
+}
+
+/**
+ * Processes with no catalogued flow (197 of 742): 16 that never had one plus
+ * the 181 the sentinel fix corrected. They carry no completeness claim.
+ */
+export function noFlowProcesses(): ClientProcess[] {
+  return allClientProcesses().filter((p) => !hasFlow(p));
+}
+
+/** Processes with a real flow (545 of 742) — what V1's coverage tile must count. */
+export function withFlowProcesses(): ClientProcess[] {
+  return allClientProcesses().filter(hasFlow);
+}
+
+/**
+ * V1's coverage counts, computed from the data — never read from `meta`, and
+ * never from MANIFEST (which is an integrity anchor, not a display source).
+ */
+export interface CoverageCounts {
+  processes: number;
+  withFlow: number;
+  noFlow: number;
+  workflows: number;
+  valueStreams: number;
+  industrySpecific: number;
+}
+
+export function coverageCounts(): CoverageCounts {
+  const streams = clientValueStreams();
+  const processes = allClientProcesses();
+  return {
+    processes: processes.length,
+    withFlow: processes.filter(hasFlow).length,
+    noFlow: processes.filter((p) => !hasFlow(p)).length,
+    workflows: streams.reduce((n, vs) => n + vs.workflows.length, 0),
+    valueStreams: streams.length,
+    industrySpecific: processes.filter((p) => p.industry !== null).length,
+  };
 }

@@ -33,17 +33,24 @@ import { ManifestSchema } from "@/lib/discovery/schema";
 const DATA_DIR = join(process.cwd(), "src/data/discovery");
 
 /**
- * MANIFEST records 16 hex chars. That is sha256 truncated to 16 — the algorithm
- * is NOT recorded in the file itself, so it is hardcoded here deliberately.
+ * sha256 truncated to 16 hex chars. The MANIFEST now records this itself in
+ * `hash_algorithm`, but it stays hardcoded here on purpose: a manifest that
+ * declared its own algorithm AND was trusted to could be swapped wholesale.
+ * The test asserts the two agree.
  */
 const HASH_ALGO = "sha256";
 const HASH_LENGTH = 16;
+const HASH_ALGO_DECLARED = "sha256 truncated to 16 hex chars";
 
-/** The pinned, canonical pipeline output. See BUILD-LOG.md "Data is FROZEN". */
+/**
+ * The pinned, canonical pipeline output. See BUILD-LOG.md "Data is FROZEN".
+ * Re-pinned 2026-07-17 for the data-only re-emission that removed the 181
+ * sentinel flows (see D6).
+ */
 const PINNED_HASHES: Record<string, string> = {
-  "discovery-library.client.json": "71d5a13aa7ca59de",
-  "discovery-library.consultant.json": "626f605fc732f494",
-  "vendor-term-guard.json": "57749b0be400c9e2",
+  "discovery-library.client.json": "35f9efe4e8ce7bfd",
+  "discovery-library.consultant.json": "31feb5416252f702",
+  "vendor-term-guard.json": "13c982041670dae7",
 };
 
 function hashOf(file: string): string {
@@ -73,6 +80,10 @@ describe("discovery MANIFEST integrity", () => {
   it("MANIFEST covers every dataset we pin", () => {
     expect(Object.keys(manifest.files).sort()).toEqual(Object.keys(PINNED_HASHES).sort());
   });
+
+  it("the MANIFEST's declared algorithm matches the one we hardcode", () => {
+    expect(manifest.hash_algorithm).toBe(HASH_ALGO_DECLARED);
+  });
 });
 
 describe("discovery MANIFEST counts vs actual data", () => {
@@ -92,9 +103,17 @@ describe("discovery MANIFEST counts vs actual data", () => {
     expect(workflows).toBe(manifest.counts.workflows);
   });
 
-  it("with_flow: 726", () => {
+  it("with_flow: 545", () => {
     const withFlow = processes.filter((p) => (p.flow?.length ?? 0) > 0).length;
     expect(withFlow).toBe(manifest.counts.with_flow);
+    expect(withFlow).toBe(545);
+  });
+
+  it("no_flow: 197 — and with_flow + no_flow accounts for every process", () => {
+    const noFlow = processes.filter((p) => (p.flow?.length ?? 0) === 0).length;
+    expect(noFlow).toBe(manifest.counts.no_flow);
+    expect(noFlow).toBe(197);
+    expect(manifest.counts.with_flow + manifest.counts.no_flow).toBe(manifest.counts.processes);
   });
 
   it("with_substeps: 400", () => {
@@ -118,26 +137,35 @@ describe("discovery MANIFEST counts vs actual data", () => {
     expect(loadManifest().counts.parked_sap_enablers).toBe(18);
   });
 
-  it("MANIFEST asserts the client dataset has zero vendor leaks", () => {
-    expect(manifest.client_dataset_vendor_leaks).toBe(0);
+  it("if MANIFEST self-declares a leak count, it must be zero", () => {
+    // The re-emission dropped this field, and that is an improvement. It was
+    // self-attestation: the old MANIFEST declared `client_dataset_vendor_leaks:
+    // 0` and was correct *by its own guard list*, while 181 SAP-localisation
+    // sentinel strings sat in the client data (D6). A dataset cannot certify
+    // itself. The authority is the live scan in vendor-terms.test.ts, which
+    // greps the real bytes against the real term list.
+    if (manifest.client_dataset_vendor_leaks !== undefined) {
+      expect(manifest.client_dataset_vendor_leaks).toBe(0);
+    }
   });
 });
 
 describe("D1 — dataset meta is never trusted for counts", () => {
-  it("consultant meta.completeness is still stale, and that is fine", () => {
-    // Documents the known remnant. If a future pipeline refresh fixes this, the
-    // test tells us — it does not mean anything is broken. MANIFEST remains the
-    // authority either way; nothing reads counts out of meta.
+  /**
+   * The 2026-07-17 re-emission made meta consistent with actuals, so D1's
+   * original remnant (stale consultant completeness) is gone. The STANCE still
+   * stands: meta is informational, MANIFEST is the authority, and nothing in the
+   * codebase reads a count from meta — enforced by typing meta as `unknown` in
+   * the schema. This test now pins the agreement rather than the discrepancy, so
+   * if meta ever drifts again we hear about it here.
+   */
+  it("consultant meta.with_flow now agrees with the actual data", () => {
     const raw = JSON.parse(
       readFileSync(join(DATA_DIR, "discovery-library.consultant.json"), "utf8"),
-    ) as { meta: { completeness?: Record<string, number> } };
+    ) as { meta: { with_flow?: number } };
 
-    const actual = allClientProcesses().reduce<Record<string, number>>((acc, p) => {
-      if (p.completeness) acc[p.completeness] = (acc[p.completeness] ?? 0) + 1;
-      return acc;
-    }, {});
-
-    expect(actual).toEqual({ detailed: 223, "detailed+variants": 177, outline: 326 });
-    expect(raw.meta.completeness).toEqual({ detailed: 155, "detailed+variants": 177, outline: 306 });
+    const actualWithFlow = allClientProcesses().filter((p) => (p.flow?.length ?? 0) > 0).length;
+    expect(raw.meta.with_flow).toBe(actualWithFlow);
+    expect(actualWithFlow).toBe(545);
   });
 });

@@ -131,17 +131,20 @@ export const ConsultantLibrarySchema = z.object({
 export const ManifestSchema = z.object({
   generated: z.string(),
   source: z.string(),
+  /** Recorded since the 2026-07-17 re-emission. Cross-checked against a hardcoded constant. */
+  hash_algorithm: z.string(),
   counts: z.object({
     processes: z.number(),
     value_streams: z.number(),
     workflows: z.number(),
     with_flow: z.number(),
+    no_flow: z.number(),
     with_substeps: z.number(),
     origin: z.object({ sap_base: z.number(), overlay: z.number() }),
     parked_sap_enablers: z.number(),
   }),
   files: z.record(z.string(), z.string()),
-  client_dataset_vendor_leaks: z.number(),
+  client_dataset_vendor_leaks: z.number().optional(),
 });
 
 export const VendorTermGuardSchema = z.object({

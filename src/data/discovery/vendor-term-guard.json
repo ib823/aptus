@@ -1,5 +1,5 @@
 {
- "description": "Vendor terms that must NEVER appear in any client-facing surface, route, or dataset. CI greps client routes + discovery-library.client.json against this list.",
+ "description": "Vendor terms and data sentinels that must NEVER appear in any client-facing surface, route, or dataset. CI greps client routes + discovery-library.client.json against this list.",
  "terms": [
   "SAP",
   "S/4HANA",
@@ -23,6 +23,7 @@
   "ServiceNow",
   "Salesforce",
   "Signavio",
-  "Hybris"
+  "Hybris",
+  "no MY mandatory steps"
  ]
 }

@@ -6,12 +6,12 @@
   "total_processes": 742,
   "value_streams": 10,
   "workflows": 85,
-  "with_flow": 726,
-  "enriched": 332,
+  "with_flow": 545,
+  "enriched": 400,
   "completeness": {
-   "detailed": 155,
+   "detailed": 223,
    "detailed+variants": 177,
-   "outline": 306
+   "outline": 145
   },
   "tiers": {
    "core": 584,
@@ -50,7 +50,8 @@
    "overlay": 88
   },
   "overlay_with_flow": 88,
-  "overlay_detailed": 30
+  "overlay_detailed": 30,
+  "no_flow": 197
  },
  "value_streams": [
   {
@@ -761,19 +762,12 @@
        "description": "Requests regulatory documentation from external service providers (e.g. customs filings).",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 16,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "2.0",
@@ -861,19 +855,12 @@
        "description": "Author and maintain product-compliance documents (safety data sheets, declarations) for regulated products.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 10,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "2.0",
@@ -1405,19 +1392,12 @@
        "description": "Collaborative project management with team workspaces, tasks, and milestones.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 25,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "2.0",
@@ -2516,19 +2496,12 @@
        "description": "Manages contractors and external workforce via an external-workforce system, including timesheets and invoicing.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 59,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -3300,19 +3273,12 @@
        "description": "Track and return reusable packaging/containers back to suppliers.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 6,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -3326,19 +3292,12 @@
        "description": "Processes incoming supplier invoices via central invoice management.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 5,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -3352,19 +3311,12 @@
        "description": "Procures services using a supplier network and an external-workforce system for the contingent workforce.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 21,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -3378,19 +3330,12 @@
        "description": "Invoice processing using the procurement network integrated with the ERP.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 14,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -3815,19 +3760,12 @@
        "description": "Predicts how much of a purchase contract's volume customers will likely use, to help with planning.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 4,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -5266,19 +5204,12 @@
        "description": "Procurement via guided buying and catalog procurement integrated with the ERP.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 8,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -5292,19 +5223,12 @@
        "description": "Procurement via guided buying \u2014 base edition (catalog and guided buying).",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 8,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -5318,19 +5242,12 @@
        "description": "Procurement expansion package on top of guided buying \u2014 additional procurement capabilities.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 6,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -5570,19 +5487,12 @@
        "description": "Live dashboards and KPIs for procurement teams to monitor purchasing activity, supplier performance, and spend as it happens.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 20,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -5596,19 +5506,12 @@
        "description": "Lets central procurement raise requisitions on behalf of multiple subsidiaries in one place.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 31,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -5777,19 +5680,12 @@
        "description": "Lets one central purchasing org run end-to-end purchasing on behalf of subsidiaries.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 42,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -5803,19 +5699,12 @@
        "description": "Central buying with a guided buying experience via the procurement network on behalf of subsidiaries.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 20,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -5829,19 +5718,12 @@
        "description": "Central sourcing organization that runs sourcing events on behalf of subsidiaries.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 13,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -5855,19 +5737,12 @@
        "description": "Central-procurement contracts authored in contract management and used across subsidiaries.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 4,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -5881,19 +5756,12 @@
        "description": "Central procurement linked to strategic sourcing for strategic sourcing across subsidiaries.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 23,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -5907,19 +5775,12 @@
        "description": "Automates central procurement quotation requests via a supplier network.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 15,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -6249,19 +6110,12 @@
        "description": "Central procurement integrated with a supplier network for cross-supplier sourcing.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 13,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -8277,19 +8131,12 @@
        "description": "Manages the full lifecycle of legal contracts \u2014 drafting, approvals, signatures, renewals \u2014 inside the ERP.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 10,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -8303,19 +8150,12 @@
        "description": "Connect the ERP to a specialist contract-assembly/authoring system for complex agreements.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 2,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -8444,19 +8284,12 @@
        "description": "Integration with a contract-authoring tool for contract assembly and CLM.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 3,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -8470,19 +8303,12 @@
        "description": "Search and discover suppliers on a supplier network from inside the ERP.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 8,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -8747,19 +8573,12 @@
        "description": "Uses AI to predict when purchase order items will actually be delivered.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 5,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "12.0",
@@ -9276,19 +9095,12 @@
        "description": "Connects the ERP to an external MES on the shop floor to drive and confirm production operations.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 12,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -9396,19 +9208,12 @@
        "description": "Uses AI to forecast supply chain metrics like demand or lead times, trained on historical ERP data.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 5,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -11035,19 +10840,12 @@
        "description": "Connects to a third-party shop-floor system for process-industry production execution.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 8,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -11061,19 +10859,12 @@
        "description": "Connects to a third-party shop-floor system for discrete-industry production execution.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 8,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -14103,19 +13894,12 @@
        "description": "Group multiple production orders into a combined order to optimise setup and batch runs.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 21,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -16770,19 +16554,12 @@
        "description": "Capture and settle inbound freight/carrier invoices against shipments.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 19,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -17362,19 +17139,12 @@
        "description": "Track and settle reusable/returnable packaging and containers moving between partners.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 18,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -20192,19 +19962,12 @@
        "description": "Plan and execute bulk/field logistics by container and voyage (upstream oil & gas movements).",
        "tier": "core",
        "industry": "Oil & Gas",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 79,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -20367,19 +20130,12 @@
        "description": "Analyse field-logistics movements, volumes and costs for bulk operations.",
        "tier": "core",
        "industry": "Oil & Gas",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 2,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -22955,19 +22711,12 @@
        "description": "Make-to-order production of individually configured units (lot size of one).",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 65,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "4.0",
@@ -23187,19 +22936,12 @@
        "description": "EHS compliance management across the value chain (substances, waste, safety).",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 10,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -23213,19 +22955,12 @@
        "description": "Captures and reports greenhouse gas emissions across the company's operations.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 16,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -23239,19 +22974,12 @@
        "description": "Lightweight management-of-change process for plant/asset modifications.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 10,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -23496,19 +23224,12 @@
        "description": "Manages waste streams \u2014 categorization, disposal, recycling, regulatory reporting.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 23,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -23681,19 +23402,12 @@
        "description": "Audit and inspection management for Environment, Health, and Safety (EHS).",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 3,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -23707,19 +23421,12 @@
        "description": "Occupational health management within Environment, Health, and Safety (EHS).",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 3,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -26245,19 +25952,12 @@
        "description": "Sales planning apps where the team can set revenue targets, model scenarios, and compare to actuals.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 2,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "3.0",
@@ -26271,19 +25971,12 @@
        "description": "Pitches a sales opportunity in the CRM and converts it into a sales order in the ERP.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 20,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "3.0",
@@ -26429,19 +26122,12 @@
        "description": "Fulfil and deliver goods on behalf of another group company (intra-group drop-ship).",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 22,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "3.0",
@@ -26455,19 +26141,12 @@
        "description": "Uses AI to forecast sales metrics like demand or customer behavior, trained on historical data.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 6,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "3.0",
@@ -27273,19 +26952,12 @@
        "description": "Opportunity-to-order flow using the CRM V2 (next-gen CRM).",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 12,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "3.0",
@@ -29263,19 +28935,12 @@
        "description": "Resource planning and staffing for projects (matching people to roles).",
        "tier": "core",
        "industry": "Professional Services",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 12,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "6.0",
@@ -29289,19 +28954,12 @@
        "description": "Apply omnichannel promotions and discounts to retail sales orders across channels.",
        "tier": "core",
        "industry": "Retail",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 5,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "6.0",
@@ -29315,19 +28973,12 @@
        "description": "Plan, execute and evaluate trade promotions and pricing to grow net revenue (consumer goods).",
        "tier": "core",
        "industry": "Consumer Products",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 7,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "6.0",
@@ -29341,19 +28992,12 @@
        "description": "Handle staged customer down payments for retail orders such as big-ticket or special orders.",
        "tier": "core",
        "industry": "Retail",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 26,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "6.0",
@@ -29869,19 +29513,12 @@
        "description": "Bill goods and services delivered to a customer on a single combined invoice.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 16,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "3.0",
@@ -29945,19 +29582,12 @@
        "description": "Sell-from-stock order that requires and clears a customer down payment before final billing.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 11,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "3.0",
@@ -29971,19 +29601,12 @@
        "description": "Issue credit or debit memos for configurable (variant) products, adjusting for their specific options.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 13,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "3.0",
@@ -29997,19 +29620,12 @@
        "description": "Sell-from-stock flow where the invoice is raised ahead of physical goods issue.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 12,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "3.0",
@@ -30153,19 +29769,12 @@
        "description": "Process sales orders collected by SEPA direct debit, including mandate handling and bank collection.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 24,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "3.0",
@@ -31018,19 +30627,12 @@
        "description": "Dashboards and KPIs for service operations \u2014 utilization, response times, resolution.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 37,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "6.0",
@@ -32482,19 +32084,12 @@
        "description": "Manages customer complaints end-to-end \u2014 logging, investigation, resolution.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 10,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "3.0",
@@ -33516,19 +33111,12 @@
        "description": "Intercompany sales of make-to-order, configurable products with cross-company costing and billing.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 24,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "3.0",
@@ -34291,19 +33879,12 @@
        "description": "Manage rebate/condition contracts across a customer hierarchy for consumer-goods trade terms.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 24,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "3.0",
@@ -34317,19 +33898,12 @@
        "description": "Plan and settle omnichannel promotions for consumer-products customers.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 2,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "3.0",
@@ -35520,19 +35094,12 @@
        "description": "Manage software subscription lifecycles \u2014 provisioning, entitlements, renewals and billing.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 84,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "3.0",
@@ -35546,19 +35113,12 @@
        "description": "Margin optimization powered by solution extension (rebates, pricing programs).",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 11,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "3.0",
@@ -36049,19 +35609,12 @@
        "description": "Provides an AI assistant inside the ERP to help maintenance technicians with diagnostics and instructions.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 44,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "10.0",
@@ -36279,19 +35832,12 @@
        "description": "Plan and execute maintenance work orders through mobile field-service technicians, including scheduling, parts and confirmation.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 28,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "10.0",
@@ -36305,19 +35851,12 @@
        "description": "Issue and control safety work permits before high-risk maintenance tasks, enforcing sign-offs and hazard controls.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 11,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "10.0",
@@ -37707,19 +37246,12 @@
        "description": "Runs payroll through the payroll system and posts the results back to the finance system.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 31,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "7.0",
@@ -37733,19 +37265,12 @@
        "description": "Runs payroll using an on-premise payroll system and posts results to the finance system.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 32,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "7.0",
@@ -37937,19 +37462,12 @@
        "description": "Exchange employee, time and cost data between the core HR/payroll system and finance for posting.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 1,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "7.0",
@@ -40003,19 +39521,12 @@
        "description": "Post supplier/customer invoices with their taxes and any complementary adjustment postings.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 84,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -40029,19 +39540,12 @@
        "description": "Import and apply bank lockbox files to clear customer receivables automatically.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 6,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -40055,19 +39559,12 @@
        "description": "Sends employee travel expenses from a travel & expense system into the ERP for accounting and reimbursement.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 43,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -40081,19 +39578,12 @@
        "description": "Automatically matches incoming customer payments to open invoices using AI, reducing manual cash application work.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 5,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -40378,19 +39868,12 @@
        "description": "Pulls credit scores and risk ratings from external credit agencies into the ERP for credit decisions.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 8,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -40552,19 +40035,12 @@
        "description": "Manage bills of exchange as a payment/financing instrument through to clearing.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 229,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -40747,19 +40223,12 @@
        "description": "Generate and exchange legally-required electronic documents (e-invoices) with authorities.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 49,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -40773,19 +40242,12 @@
        "description": "Record and track tax credits associated with fixed-asset investments.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 4,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -40799,19 +40261,12 @@
        "description": "Issue complementary invoices to correct pricing differences (statutory, LatAm).",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 2,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -40825,19 +40280,12 @@
        "description": "Connect finance to third-party tax engines for real-time tax determination.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 33,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -40851,19 +40299,12 @@
        "description": "Detects and reports advanced bank statement issues automatically (cash application improvements).",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 4,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -41113,19 +40554,12 @@
        "description": "VAT calculation and statutory reporting specific to Germany.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 9,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -41139,19 +40573,12 @@
        "description": "VAT calculation and statutory reporting specific to Belgium.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 9,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -41165,19 +40592,12 @@
        "description": "VAT calculation and reporting for South Africa.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 9,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -41191,19 +40611,12 @@
        "description": "VAT calculation and reporting for Sweden.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 7,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -41217,19 +40630,12 @@
        "description": "VAT calculation and reporting for Czech Republic.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 9,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -41243,19 +40649,12 @@
        "description": "Generate and review proposed tax postings before they are booked.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 2,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -41269,19 +40668,12 @@
        "description": "Maintain statutory tax registers of input/output tax for reporting.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 5,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -41295,19 +40687,12 @@
        "description": "Run day-to-day tax operations \u2014 determination, postings and reporting.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 3,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -41321,19 +40706,12 @@
        "description": "Automate dunning, collections worklists and dispute cases for overdue receivables.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 27,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -41347,19 +40725,12 @@
        "description": "Basic payment management for processing customer/supplier payments.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 1,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -41373,19 +40744,12 @@
        "description": "Configure country-specific bill-of-exchange handling through the localisation toolkit.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 16,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -45384,19 +44748,12 @@
        "description": "Subleases an asset to another group company, with the lease accounting on both sides.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 60,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -47680,19 +47037,12 @@
        "description": "Connect the ERP to a real-estate management system for lease and property data.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 3,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -47706,19 +47056,12 @@
        "description": "Set up real-estate objects for use and manage their occupancy/lease contracts.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 1,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -47732,19 +47075,12 @@
        "description": "Manage leases where the company is tenant in externally-owned property.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 3,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -47758,19 +47094,12 @@
        "description": "Allocate space and occupancy costs to internal cost centres.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 6,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -47784,19 +47113,12 @@
        "description": "Manage occupancy and lease contracts between group companies.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 7,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -47810,19 +47132,12 @@
        "description": "Real-estate use and contract management, accounted under IFRS.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 1,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -47836,19 +47151,12 @@
        "description": "Tenant leases in external property, accounted under IFRS (IFRS 16).",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 3,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -47862,19 +47170,12 @@
        "description": "Intercompany occupancy and leases, accounted under IFRS.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 7,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -47888,19 +47189,12 @@
        "description": "Real-estate use and contract management, accounted under US GAAP.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 1,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -47914,19 +47208,12 @@
        "description": "Tenant leases in external property, accounted under US GAAP.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 3,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -47940,19 +47227,12 @@
        "description": "Intercompany occupancy and leases, accounted under US GAAP.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 7,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -53198,19 +52478,12 @@
        "description": "Prepare and submit statutory data extracts for external tax audits.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 22,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -53810,19 +53083,12 @@
        "description": "Apply the Canary Islands indirect-tax (IGIC) rules to relevant transactions.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 36,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -53836,19 +53102,12 @@
        "description": "Reconciles open intercompany positions between group companies and resolves mismatches.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 17,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -53862,19 +53121,12 @@
        "description": "Calculate transaction taxes through an external tax engine and post the results.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 7,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -53888,19 +53140,12 @@
        "description": "Track and control recoverable tax credits arising on asset purchases.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 4,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -53914,19 +53159,12 @@
        "description": "Apply banking-industry accounting rules and enhancements to financial postings.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 89,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -54193,19 +53431,12 @@
        "description": "Calculates average daily account balances for banking-style interest and reporting.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 2,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -54219,19 +53450,12 @@
        "description": "Account reconciliation using a close-automation tool (the ERP solution extension) for balance sheet substantiation.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 7,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -54245,19 +53469,12 @@
        "description": "Transaction-level matching using a close-automation tool to reconcile high-volume transactions.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 2,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -54271,19 +53488,12 @@
        "description": "Banking error correction and suspense accounting for unclassified transactions.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 10,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -54297,19 +53507,12 @@
        "description": "Match and reconcile intercompany balances for banking entities before close.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 14,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -54323,19 +53526,12 @@
        "description": "Apply insurance-industry accounting rules and enhancements to financial postings.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 72,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -54349,19 +53545,12 @@
        "description": "Configure country-specific withholding-tax rules through the localisation toolkit.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 5,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -56072,19 +55261,12 @@
        "description": "Transfers master data (customers, suppliers, materials) to the global-trade system for compliance checks.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 12,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -56395,19 +55577,12 @@
        "description": "Transfers contact-person master data into the global-trade system.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 6,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -56477,19 +55652,12 @@
        "description": "Connects a continuous control-monitoring system to monitor key business controls continuously as transactions happen.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 16,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -56577,19 +55745,12 @@
        "description": "Monitors top operational risks using a risk-management system with key risk indicators.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 7,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -56645,19 +55806,12 @@
        "description": "Sets up automated user provisioning and access reviews via an identity & access-governance system.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 43,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -56755,19 +55909,12 @@
        "description": "Detects data-privacy risks (e.g. unauthorized PII access) using a risk & assurance system.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 4,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -56781,19 +55928,12 @@
        "description": "Monitors internal controls (SOX-style) using a risk & assurance system.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 7,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -56807,19 +55947,12 @@
        "description": "Intrastat reporting (intra-EU trade statistics) specific to Germany.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 14,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -56833,19 +55966,12 @@
        "description": "Intrastat reporting specific to Belgium.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 14,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -56859,19 +55985,12 @@
        "description": "Intrastat reporting for Sweden \u2014 EU intra-community trade statistics filing.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 14,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -56885,19 +56004,12 @@
        "description": "Intrastat reporting for Czech Republic \u2014 EU intra-community trade statistics filing.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 14,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -56911,19 +56023,12 @@
        "description": "Prepare and submit Intrastat declarations for intra-EU goods movements.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 46,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "11.0",
@@ -57392,19 +56497,12 @@
        "description": "Coordinates the close calendar and tasks across systems via an advanced financial-close tool.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 3,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -57418,19 +56516,12 @@
        "description": "Provides additional flexibility in finance org structures (e.g. shared profit centers, business areas).",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 17,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -57444,19 +56535,12 @@
        "description": "Integrated financial planning combining cost, revenue, and balance sheet drivers across the business.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 75,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -57470,19 +56554,12 @@
        "description": "Compliance/statutory reporting formats specific to Germany.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 10,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -57496,19 +56573,12 @@
        "description": "Compliance/statutory reporting formats specific to Belgium.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 3,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -57522,19 +56592,12 @@
        "description": "Statutory document and reporting compliance \u2014 e-invoicing, country reporting, audit files.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 29,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -57548,19 +56611,12 @@
        "description": "Compliance/statutory reporting formats for South Africa.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 4,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -57574,19 +56630,12 @@
        "description": "Compliance/statutory reporting formats for Sweden.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 2,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -57600,19 +56649,12 @@
        "description": "Compliance/statutory reporting formats for Czech Republic.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 4,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -62867,19 +61909,12 @@
        "description": "Connects the treasury system to external trading platforms (e.g. 360T) to pull in deal data.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 135,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -63550,19 +62585,12 @@
        "description": "Apply hedge accounting to FX forward contracts under local GAAP.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 78,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -63576,19 +62604,12 @@
        "description": "Apply hedge accounting to FX option contracts under local GAAP.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 85,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -64541,19 +63562,12 @@
        "description": "Maintain additional depreciation methods so assets can be valued under multiple local GAAPs.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 8,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -66025,19 +65039,12 @@
        "description": "Break down planned vs actual product cost across the value-added flow for margin analysis.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 10,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -66947,19 +65954,12 @@
        "description": "Sends treasury payments to/from a treasury workstation system for centralized payment processing.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 13,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -66973,19 +65973,12 @@
        "description": "Connects the treasury system to SWIFT for sending and receiving payment messages and confirmations.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 12,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -66999,19 +65992,12 @@
        "description": "Coordinates payments centrally across multiple group companies with one strategic payment engine.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 43,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -67031,19 +66017,12 @@
        "description": "Earmarks funds (reserves money) for real estate contract obligations \u2014 public sector use.",
        "tier": "core",
        "industry": "Public Sector",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 8,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -67057,19 +66036,12 @@
        "description": "Public-sector budget planning \u2014 builds government budgets by fund, function, and program.",
        "tier": "core",
        "industry": "Public Sector",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 22,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -67095,19 +66067,12 @@
        "description": "Public-sector budget execution and monitoring of government spending.",
        "tier": "core",
        "industry": "Public Sector",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 28,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -67121,19 +66086,12 @@
        "description": "Public-sector grants management \u2014 awarded grants, spend tracking, reporting.",
        "tier": "core",
        "industry": "Public Sector",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 9,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -67147,19 +66105,12 @@
        "description": "Earmarks funds (commitments/reservations) in finance for spending control.",
        "tier": "core",
        "industry": "Public Sector",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 16,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -67173,19 +66124,12 @@
        "description": "Fund accounting for non-profit/public sector \u2014 separate funds with their own balances.",
        "tier": "core",
        "industry": "Public Sector",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 2,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -67199,19 +66143,12 @@
        "description": "Apply GASB fund-accounting principles for US public-sector entities.",
        "tier": "core",
        "industry": "Public Sector",
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 6,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -67335,19 +66272,12 @@
        "description": "Enables an excise-tax system for industries with excise duties (alcohol, fuel, tobacco).",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 5,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -67431,19 +66361,12 @@
        "description": "Calculates product carbon footprint across the lifecycle and supply chain.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 4,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -67457,19 +66380,12 @@
        "description": "Settle and allocate real-estate operating costs to contracts and occupants.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 10,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -67483,19 +66399,12 @@
        "description": "Determine and post excise duties on regulated goods through a specialist engine.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 10,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -70420,19 +69329,12 @@
        "description": "Consolidates the financials of all group companies into a single set of group accounts \u2014 the core legal consolidation tool.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 132,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -70458,19 +69360,12 @@
        "description": "Builds and consolidates a planning version (budget/forecast) across group companies.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 41,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -70496,19 +69391,12 @@
        "description": "Group reporting tailored for ESG (environmental, social, governance) data consolidation.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 19,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -70522,19 +69410,12 @@
        "description": "Builds group-level financial plans consolidated across subsidiaries.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 10,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -71714,19 +70595,12 @@
        "description": "Finance receivables early through a supply-chain-finance / factoring programme.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 15,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "9.0",
@@ -71959,19 +70833,12 @@
        "description": "Manages how long personal and business data is kept in the system and archives or deletes it when retention rules require.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 16,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "13.0",
@@ -71985,19 +70852,12 @@
        "description": "Cleans and harmonizes product master data when the same item is maintained in multiple ERP systems.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 8,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "13.0",
@@ -72011,19 +70871,12 @@
        "description": "Cleans and harmonizes customer/supplier master data when the same business partner exists in multiple ERP systems.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 8,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "13.0",
@@ -72037,19 +70890,12 @@
        "description": "Lets you update many product records at once instead of editing them one by one.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 7,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "13.0",
@@ -72063,19 +70909,12 @@
        "description": "Manages a single 'golden record' for customers and suppliers with approval workflows for changes.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 20,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "13.0",
@@ -72089,19 +70928,12 @@
        "description": "Lets you load and update many business partner records at once from a file.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 23,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "13.0",
@@ -72115,19 +70947,12 @@
        "description": "Lets you load and update many product records at once from a file.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 18,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "13.0",
@@ -72243,19 +71068,12 @@
        "description": "Monitors and improves data quality for business partner master data.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 8,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "13.0",
@@ -72269,19 +71087,12 @@
        "description": "Monitors and improves data quality for product master data.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 8,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "13.0",
@@ -72295,19 +71106,12 @@
        "description": "Foundation services for digital payments (tokenization, providers, configurations).",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 2,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "13.0",
@@ -72506,19 +71310,12 @@
        "description": "Mass loading and updating of business partners (customers, suppliers) in bulk.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 24,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "13.0",
@@ -72532,19 +71329,12 @@
        "description": "Integration with WalkMe Premium for in-app user guidance.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 2,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "13.0",
@@ -72564,19 +71354,12 @@
        "description": "Lets workflow tasks automatically route to the right person based on role, region, or other rules.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 6,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "8.0",
@@ -72602,19 +71385,12 @@
        "description": "Integration with an intelligent document-processing service to read invoices/documents and post automatically.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 1,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "8.0",
@@ -72628,19 +71404,12 @@
        "description": "Archiving integration with long-term document and data retention.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 6,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "8.0",
@@ -72654,19 +71423,12 @@
        "description": "Content management integration with documents linked to the ERP objects.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 6,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "8.0",
@@ -72680,19 +71442,12 @@
        "description": "Integration with a cloud document-management service for cloud document storage.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 6,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "8.0",
@@ -72706,19 +71461,12 @@
        "description": "Integration with an enterprise content-management system for enterprise content management.",
        "tier": "generalized",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 6,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "8.0",
@@ -73365,19 +72113,12 @@
        "description": "Controls how documents like order confirmations, invoices, and shipping notes are printed, emailed, or sent electronically.",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 10,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "13.0",
@@ -73391,19 +72132,12 @@
        "description": "Integration with an external output management solution (printing/formatting).",
        "tier": "core",
        "industry": null,
-       "flow": [
-        {
-         "step": "(no MY mandatory steps)",
-         "role": ""
-        }
-       ],
        "provenance": {
-        "source": "SAP Best Practices 2602 (rendered neutral)",
-        "main_steps": 1,
+        "source": "SAP Best Practices 2602 (rendered neutral) \u00b7 no step flow catalogued",
+        "main_steps": 0,
         "sub_steps": 0,
         "total_activities": 3,
-        "optional_paths": 0,
-        "completeness": "outline"
+        "optional_paths": 0
        },
        "apqc": {
         "code": "13.0",
