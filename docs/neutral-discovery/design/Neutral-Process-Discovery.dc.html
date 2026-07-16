@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;500;600&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#FAF9F5;font-family:'Geist',ui-sans-serif,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:#002B5C}
+  a:hover{color:#001E40}
+  ::selection{background:#E6EBF1}
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#FAF9F5;color:#1A1A1A;display:flex;flex-direction:column">
+
+  <!-- ── TOP BAR ─────────────────────────────────────────────────────── -->
+  <div style="position:sticky;top:0;z-index:30;height:56px;background:#FFFFFE;border-bottom:1px solid #E5E1D6;display:flex;align-items:center;gap:20px;padding:0 24px">
+    <div style="display:flex;align-items:center;gap:8px;cursor:pointer" onClick="{{ goOverview }}">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="4" fill="#002B5C"></rect><path d="M7 18 L12 6 L17 18 M9 14 L15 14" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"></path></svg>
+      <span style="font-family:'Source Serif 4',Georgia,serif;font-size:16px;font-weight:500;color:#002B5C;letter-spacing:-.005em">ABeam Workbench</span>
+    </div>
+    <div style="width:1px;height:20px;background:#E5E1D6"></div>
+    <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A">Neutral Process Discovery</span>
+
+    <div style="margin-left:auto;display:flex;align-items:center;gap:16px">
+      <div style="display:flex;background:#F4F2EB;border-radius:9999px;padding:3px;gap:2px" role="tablist" aria-label="Mode">
+        <button style-hover="opacity:0.85" style="{{ presentBtnStyle }}" onClick="{{ setModePresent }}">Present</button>
+        <button style="{{ exploreBtnStyle }}" onClick="{{ setModeExplore }}">Explore</button>
+        <button style-hover="opacity:0.85" style="{{ exportBtnStyle }}" onClick="{{ setModeExport }}">Export</button>
+      </div>
+      <div style="text-align:right;line-height:1.2">
+        <div style="font-size:13px;font-weight:600;color:#1A1A1A">Asia Meals Group</div>
+        <div style="font-size:11px;color:#8A8A8A">FMCG · Process Discovery</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TOAST ───────────────────────────────────────────────────────── -->
+  <sc-if value="{{ toast }}">
+    <div style="position:fixed;bottom:24px;right:24px;z-index:50;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 10px 24px rgba(20,20,20,.10),0 4px 10px rgba(20,20,20,.06);padding:14px 18px;max-width:320px;font-size:13px;color:#4A4A4A">{{ toast }}</div>
+  </sc-if>
+
+  <!-- ══════════════════════════════ V5 · PRESENT MODE SHELL ══════════════════════════════ -->
+  <sc-if value="{{ isPresentMode }}">
+    <div style="flex:1;background:#FAF9F5;display:flex;flex-direction:column;padding:32px 48px 100px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <span style="font-family:'Geist Mono',monospace;font-size:13px;letter-spacing:.04em;color:#4A4A4A;text-transform:uppercase">Asia Meals Group · Source-to-Pay</span>
+        <span style="font-family:'Geist Mono',monospace;font-size:13px;color:#8A8A8A">Process {{ presentPosition }} of {{ presentTotal }}</span>
+      </div>
+      <h1 style="margin:0 0 4px;font-family:'Source Serif 4',serif;font-size:44px;line-height:52px;font-weight:500;color:#1A1A1A">{{ proc.name }}</h1>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <span style="{{ procBadgeStyle }}">{{ procBadgeLabel }}</span>
+        <span style="{{ statusPillStyle }}">{{ statusPillLabel }}</span>
+      </div>
+
+      <sc-if value="{{ noFlow }}">
+        <div style="border:1px solid #E5E1D6;border-radius:12px;background:#FFFFFE;padding:40px;text-align:center;color:#8A8A8A;font-size:18px">
+          No step flow is catalogued for this process yet — we'll map it with you.
+        </div>
+      </sc-if>
+      <sc-if value="{{ hasFlow }}">
+        <div style="border:1px solid #CFD7E0;border-radius:12px;background:#FFFFFE;padding:28px;margin-bottom:20px;overflow:auto">
+          <sc-for list="{{ flowLanes }}" as="lane" hint-placeholder-count="3">
+            <div style="display:flex;gap:18px;margin-bottom:20px;align-items:flex-start">
+              <div style="width:160px;flex-shrink:0;padding:8px 12px;background:#F4F2EB;border-radius:8px;font-size:15px;font-weight:600;color:#1A1A1A;border-left:4px solid #002B5C">{{ lane.role }}</div>
+              <div style="display:flex;gap:0;flex-wrap:wrap;flex:1">
+                <sc-for list="{{ lane.steps }}" as="st" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:flex-start">
+                    <div style="width:230px;padding:16px 18px;border:1px solid #CFD7E0;border-radius:10px;background:#FFFFFE;display:flex;flex-direction:column;gap:10px">
+                      <span style="display:inline-flex;width:28px;height:28px;align-items:center;justify-content:center;border-radius:9999px;background:#002B5C;color:white;font-family:'Geist Mono',monospace;font-size:13px;font-weight:700">{{ st.num }}</span>
+                      <span style="font-size:16px;line-height:22px;font-weight:600;color:#1A1A1A">{{ st.title }}</span>
+                    </div>
+                    <sc-if value="{{ st.hasNext }}">
+                      <span style="flex-shrink:0;display:flex;align-items:center;padding:0 10px;color:#C4BFAE;height:28px;margin-top:16px">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+                      </span>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+          <p style="margin:6px 0 0;font-size:13px;color:#8A8A8A">Steps are the standard happy-path; roles indicative — refine with client.</p>
+        </div>
+      </sc-if>
+
+      <p style="margin:0 0 10px;font-size:20px;font-weight:600;color:#1A1A1A">How does this fit? <span style="font-size:14px;font-weight:400;color:#8A8A8A">(keys 1–4)</span></p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <button onClick="{{ selectStandard }}" style="{{ chipStandardStylePresent }}">1 · Runs as standard</button>
+        <button onClick="{{ selectDiffer }}" style="{{ chipDifferStylePresent }}">2 · We differ</button>
+        <button onClick="{{ selectDiscuss }}" style="{{ chipDiscussStylePresent }}">3 · Discuss in workshop</button>
+        <button onClick="{{ selectNA }}" style="{{ chipNaStylePresent }}">4 · Not applicable</button>
+      </div>
+    </div>
+
+    <div style="position:fixed;left:0;right:0;bottom:0;height:64px;background:#FFFFFE;box-shadow:0 10px 24px rgba(20,20,20,.10),0 4px 10px rgba(20,20,20,.06);display:flex;align-items:center;gap:20px;padding:0 32px;z-index:40">
+      <button onClick="{{ presentPrev }}" style="height:40px;padding:0 16px;border:1px solid #E5E1D6;border-radius:8px;background:#FFFFFE;color:#1A1A1A;font-size:13px;font-weight:600;cursor:pointer">◀ Prev</button>
+      <button onClick="{{ presentNext }}" style="height:40px;padding:0 16px;border:1px solid #E5E1D6;border-radius:8px;background:#FFFFFE;color:#1A1A1A;font-size:13px;font-weight:600;cursor:pointer">Next ▶</button>
+      <div style="height:8px;width:200px;border-radius:9999px;background:#F4F2EB;overflow:hidden;display:flex">
+        <sc-for list="{{ streamFitSegments }}" as="seg" hint-placeholder-count="4">
+          <div style="{{ seg.style }}"></div>
+        </sc-for>
+      </div>
+      <span style="font-size:12px;color:#8A8A8A;font-family:'Geist Mono',monospace">{{ liveTallyLabel }}</span>
+      <button onClick="{{ presentPark }}" style="height:40px;padding:0 16px;border:none;border-radius:8px;background:#1D4ED8;color:white;font-size:13px;font-weight:600;cursor:pointer">⚑ Park for workshop</button>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <input type="text" placeholder="Jump to…" value="{{ presentSearch }}" onChange="{{ onPresentSearch }}" style="height:40px;width:180px;padding:0 12px;border:1px solid #E5E1D6;border-radius:8px;font-size:13px;font-family:inherit;outline:none" />
+        <button onClick="{{ presentJumpGo }}" style="height:40px;padding:0 14px;border:1px solid #E5E1D6;border-radius:8px;background:#F4F2EB;color:#1A1A1A;font-size:13px;font-weight:600;cursor:pointer">Go</button>
+      </div>
+      <span style="font-family:'Geist Mono',monospace;font-size:12px;color:#8A8A8A">{{ presentPosition }} / {{ presentTotal }}</span>
+    </div>
+  </sc-if>
+
+  <!-- ══════════════════════════════ V7 · EXPORT PACK (print preview) ══════════════════════════════ -->
+  <sc-if value="{{ isExportMode }}">
+    <div style="flex:1;background:#DDD9CC;display:flex;flex-direction:column;align-items:center;gap:24px;padding:32px 0 80px">
+      <div style="width:794px;display:flex;justify-content:flex-end">
+        <button onClick="{{ backToExplore }}" style="height:36px;padding:0 16px;border:1px solid #002B5C;border-radius:8px;background:#FFFFFE;color:#002B5C;font-size:13px;font-weight:600;cursor:pointer">← Back to Explore</button>
+      </div>
+
+      <!-- Cover -->
+      <div style="width:794px;min-height:1000px;background:#fff;color:#000;box-shadow:0 4px 16px rgba(0,0,0,.2);padding:64px;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:120px">
+          <svg width="24" height="24" viewBox="0 0 24 24"><rect width="24" height="24" rx="4" fill="#000"></rect><path d="M7 18 L12 6 L17 18 M9 14 L15 14" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"></path></svg>
+          <span style="font-family:'Source Serif 4',serif;font-size:16px;font-weight:500">ABeam Workbench</span>
+        </div>
+        <p style="margin:0 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#555">Process Discovery · Reference Pack</p>
+        <h1 style="margin:0 0 16px;font-family:'Source Serif 4',serif;font-size:34px;line-height:42px;font-weight:500">Asia Meals Group</h1>
+        <p style="margin:0 0 200px;font-size:14px;color:#333;max-width:480px">Your business processes, mapped product-neutral — before any system is chosen. Prepared for pre-workshop reading.</p>
+        <p style="margin-top:auto;font-family:'Geist Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:#666">Source: established ERP best-practice references, curated by ABeam and rendered product-neutral · Prepared by ABeam Consulting · Confidential</p>
+      </div>
+
+      <!-- Overview -->
+      <div style="width:794px;min-height:1000px;background:#fff;color:#000;box-shadow:0 4px 16px rgba(0,0,0,.2);padding:56px">
+        <h2 style="margin:0 0 20px;font-family:'Source Serif 4',serif;font-size:22px;font-weight:500;border-bottom:1px solid #000;padding-bottom:8px">Your value streams</h2>
+        <sc-for list="{{ exportStreamRows }}" as="r" hint-placeholder-count="8">
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #ccc;font-size:12px">
+            <span style="font-weight:600">{{ r.name }}</span>
+            <span style="color:#555">{{ r.countLabel }}</span>
+          </div>
+        </sc-for>
+
+        <h2 style="margin:32px 0 16px;font-family:'Source Serif 4',serif;font-size:22px;font-weight:500;border-bottom:1px solid #000;padding-bottom:8px">Where you differ</h2>
+        <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+          <sc-for list="{{ exportLegend }}" as="lg" hint-placeholder-count="4">
+            <span style="display:flex;align-items:center;gap:6px;font-size:11px"><span style="{{ lg.swatch }}"></span>{{ lg.label }}</span>
+          </sc-for>
+        </div>
+        <sc-for list="{{ exportHeatmapRows }}" as="row" hint-placeholder-count="8">
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #eee;font-size:11px">
+            <span style="width:150px;flex-shrink:0;font-weight:600">{{ row.name }}</span>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <sc-for list="{{ row.cells }}" as="cell" hint-placeholder-count="4">
+                <span style="display:flex;align-items:center;gap:4px"><span style="{{ cell.swatch }}"></span>{{ cell.label }}</span>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+        <p style="margin-top:24px;font-family:'Geist Mono',monospace;font-size:9px;text-transform:uppercase;color:#888">Page 2 · Prepared by ABeam Consulting · Confidential</p>
+      </div>
+
+      <!-- Source-to-Pay process register -->
+      <div style="width:794px;min-height:1000px;background:#fff;color:#000;box-shadow:0 4px 16px rgba(0,0,0,.2);padding:56px">
+        <h2 style="margin:0 0 6px;font-family:'Source Serif 4',serif;font-size:22px;font-weight:500;border-bottom:1px solid #000;padding-bottom:8px">Source-to-Pay · process register</h2>
+        <p style="margin:0 0 20px;font-size:11px;color:#666">{{ presentTotal }} processes reviewed with the client in this pack.</p>
+        <sc-for list="{{ exportProcessRows }}" as="p" hint-placeholder-count="10">
+          <div style="padding:10px 0;border-bottom:1px solid #eee">
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+              <span style="font-family:'Geist Mono',monospace;font-size:10px;font-weight:700;border:1px solid #000;padding:1px 5px;border-radius:3px">{{ p.id }}</span>
+              <span style="font-weight:600;flex:1">{{ p.name }}</span>
+              <span style="color:#666">{{ p.stepLabel }}</span>
+              <span style="{{ p.swatch }}"></span>
+              <span style="font-size:10px;color:#555;width:120px;text-align:right">{{ p.statusLabel }}</span>
+            </div>
+            <sc-if value="{{ p.reason }}">
+              <p style="margin:4px 0 0 0;font-size:11px;color:#444;padding-left:8px;border-left:2px solid #000">{{ p.reason }}</p>
+            </sc-if>
+          </div>
+        </sc-for>
+        <p style="margin-top:24px;font-family:'Geist Mono',monospace;font-size:9px;text-transform:uppercase;color:#888">Page 3 · Prepared by ABeam Consulting · Confidential</p>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isExploreShell }}">
+  <div style="flex:1;max-width:1040px;width:100%;margin:0 auto;padding:40px 32px 80px">
+    <div>
+    <!-- ══════════════════════════════ V1 · OVERVIEW ══════════════════════════════ -->
+    <sc-if value="{{ isOverview }}">
+      <div>
+        <p style="margin:0 0 10px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A">Process Discovery · Asia Meals Group</p>
+        <h1 style="margin:0 0 28px;font-family:'Source Serif 4',Georgia,serif;font-size:32px;line-height:38px;font-weight:500;color:#1A1A1A;max-width:720px;text-wrap:pretty">Your business on one page — before you pick a system.</h1>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:36px">
+          <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:20px 22px;box-shadow:0 1px 2px rgba(20,20,20,.04),0 1px 0 rgba(20,20,20,.02)">
+            <div style="font-family:'Source Serif 4',serif;font-size:28px;font-weight:500;color:#002B5C">654</div>
+            <div style="margin-top:4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A">business processes</div>
+          </div>
+          <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:20px 22px;box-shadow:0 1px 2px rgba(20,20,20,.04),0 1px 0 rgba(20,20,20,.02)">
+            <div style="font-family:'Source Serif 4',serif;font-size:28px;font-weight:500;color:#0F766E">638</div>
+            <div style="margin-top:4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A">with a step flow</div>
+          </div>
+          <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:20px 22px;box-shadow:0 1px 2px rgba(20,20,20,.04),0 1px 0 rgba(20,20,20,.02)">
+            <div style="font-family:'Source Serif 4',serif;font-size:28px;font-weight:500;color:#002B5C">55</div>
+            <div style="margin-top:4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A">workflows · 8 value streams</div>
+          </div>
+        </div>
+
+        <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A;margin:0 0 12px">Your value streams</p>
+        <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:36px">
+          <sc-for list="{{ ribbonRows }}" as="s" hint-placeholder-count="8">
+            <div onClick="{{ s.onOpen }}" style-hover="box-shadow:0 4px 10px rgba(20,20,20,.06),0 2px 4px rgba(20,20,20,.04);transform:translateY(-1px)" style="{{ s.segStyle }}">
+              <div style="{{ s.ringStyle }}">
+                <svg width="{{ s.ringSize }}" height="{{ s.ringSize }}" viewBox="0 0 56 56">
+                  <circle cx="28" cy="28" r="25" fill="none" stroke="#F4F2EB" stroke-width="6"></circle>
+                  <circle cx="28" cy="28" r="25" fill="none" stroke="{{ s.ringColor }}" stroke-width="6" stroke-linecap="round" stroke-dasharray="{{ s.ringDash }}" transform="rotate(-90 28 28)"></circle>
+                </svg>
+                <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Geist Mono',monospace;font-size:11px;font-weight:600;color:#4A4A4A">{{ s.ringLabel }}</span>
+              </div>
+              <div style="min-width:0;flex:1">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                  <span style="font-family:'Source Serif 4',serif;font-size:20px;font-weight:500;color:#002B5C">{{ s.name }}</span>
+                  <span style="{{ s.pillStyle }}">{{ s.pillLabel }}</span>
+                </div>
+                <p style="margin:4px 0 0;font-size:13px;line-height:19px;color:#4A4A4A">{{ s.subline }}</p>
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C4BFAE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+            </div>
+          </sc-for>
+        </div>
+
+        <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A;margin:0 0 12px">Where you differ</p>
+        <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:18px 20px;margin-bottom:36px">
+          <sc-for list="{{ heatmapRows }}" as="row" hint-placeholder-count="8">
+            <div style="display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid #F4F2EB">
+              <div style="width:170px;flex-shrink:0;font-size:12px;font-weight:600;color:#1A1A1A">{{ row.name }}</div>
+              <div style="display:flex;gap:4px;flex:1;flex-wrap:wrap">
+                <sc-for list="{{ row.cells }}" as="cell" hint-placeholder-count="4">
+                  <div title="{{ cell.title }}" style="{{ cell.style }}">{{ cell.label }}</div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:20px 24px;box-shadow:0 1px 2px rgba(20,20,20,.04),0 1px 0 rgba(20,20,20,.02)">
+          <p style="margin:0 0 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A">What happens next</p>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <sc-for list="{{ nextStages }}" as="stg" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="{{ stg.nodeStyle }}">{{ stg.n }}</span>
+                <span style="{{ stg.textStyle }}">{{ stg.label }}</span>
+                <sc-if value="{{ stg.hasNext }}"><span style="width:24px;height:1px;background:#E5E1D6"></span></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ══════════════════════════════ V2 · STREAM INDEX ══════════════════════════════ -->
+    <sc-if value="{{ isStream }}">
+      <div>
+        <div style="font-family:'Geist Mono',monospace;font-size:11px;color:#8A8A8A;margin-bottom:10px">
+          <a href="#" onClick="{{ goOverview }}" style="color:#8A8A8A;text-decoration:none">OVERVIEW</a> / {{ streamNameUpper }}
+        </div>
+        <h1 style="margin:0 0 6px;font-family:'Source Serif 4',serif;font-size:30px;line-height:40px;font-weight:500;color:#1A1A1A">{{ streamName }}</h1>
+        <div style="height:8px;border-radius:9999px;background:#F4F2EB;overflow:hidden;display:flex;max-width:420px;margin:14px 0 8px">
+          <sc-for list="{{ streamFitSegments }}" as="seg" hint-placeholder-count="4">
+            <div style="{{ seg.style }}"></div>
+          </sc-for>
+        </div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px">
+          <sc-for list="{{ streamFitLegend }}" as="lg" hint-placeholder-count="4">
+            <span style="display:flex;align-items:center;gap:6px;font-size:11px;color:#4A4A4A"><span style="{{ lg.dotStyle }}"></span>{{ lg.label }}</span>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ isSourceToPay }}">
+          <input type="text" placeholder="Search processes…" value="{{ search }}" onChange="{{ onSearch }}" style="width:100%;max-width:360px;height:40px;padding:0 14px;border:1px solid #E5E1D6;border-radius:8px;background:#FFFFFE;font-size:14px;color:#1A1A1A;margin-bottom:28px;font-family:inherit;outline:none" />
+
+          <sc-for list="{{ workflowSections }}" as="wf" hint-placeholder-count="6">
+            <sc-if value="{{ wf.visible }}">
+              <div style="margin-bottom:32px">
+                <div style="display:flex;align-items:baseline;gap:10px;border-bottom:1px solid #E5E1D6;padding-bottom:8px;margin-bottom:14px">
+                  <span style="font-family:'Source Serif 4',serif;font-size:20px;font-weight:500;color:#002B5C">{{ wf.name }}</span>
+                  <span style="font-size:11px;color:#8A8A8A">{{ wf.countLabel }}</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">
+                  <sc-for list="{{ wf.processes }}" as="p" hint-placeholder-count="3">
+                    <div onClick="{{ p.onOpen }}" style-hover="box-shadow:0 4px 10px rgba(20,20,20,.06),0 2px 4px rgba(20,20,20,.04);transform:translateY(-1px)" style="cursor:pointer;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:18px 20px;box-shadow:0 1px 2px rgba(20,20,20,.04),0 1px 0 rgba(20,20,20,.02);transition:box-shadow .2s,transform .2s">
+                      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+                        <span style="display:inline-flex;height:22px;align-items:center;border-radius:5px;background:#002B5C;padding:0 7px;font-family:'Geist Mono',monospace;font-size:11px;font-weight:700;color:white">{{ p.id }}</span>
+                        <span style="{{ p.badgeStyle }}">{{ p.badgeLabel }}</span>
+                        <span style="{{ p.fitDotStyle }}"></span>
+                      </div>
+                      <div style="font-family:'Source Serif 4',serif;font-size:18px;font-weight:500;color:#1A1A1A;margin-bottom:6px">{{ p.name }}</div>
+                      <p style="margin:0 0 10px;font-size:13px;line-height:19px;color:#4A4A4A">{{ p.oneLiner }}</p>
+                      <div style="font-size:11px;color:#8A8A8A">{{ p.stepCountLabel }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+          </sc-for>
+        </sc-if>
+
+        <sc-if value="{{ isFallbackStream }}">
+          <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:32px;text-align:center;color:#8A8A8A;font-size:14px">
+            {{ fallbackStreamNote }}
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- ══════════════════════════════ V3 · PROCESS DETAIL ══════════════════════════════ -->
+    <sc-if value="{{ isProcess }}">
+      <div>
+        <div style="position:sticky;top:56px;z-index:20;background:#FAF9F5;padding:10px 0;margin-bottom:8px;border-bottom:1px solid #E5E1D6">
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px">
+            <a href="#" onClick="{{ backToStream }}" style="color:#4A4A4A;text-decoration:none">←</a>
+            <span style="font-family:'Geist Mono',monospace;font-size:11px;color:#8A8A8A">{{ streamNameUpper }} / {{ workflowNameUpper }}</span>
+            <span style="display:inline-flex;height:22px;align-items:center;border-radius:5px;background:#002B5C;padding:0 7px;font-family:'Geist Mono',monospace;font-size:11px;font-weight:700;color:white">{{ proc.id }}</span>
+            <span style="flex:1;min-width:0;font-weight:600;color:#1A1A1A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ proc.name }}</span>
+            <span style="{{ statusPillStyle }}">{{ statusPillLabel }}</span>
+          </div>
+        </div>
+
+        <h1 style="margin:18px 0 8px;font-family:'Source Serif 4',serif;font-size:30px;line-height:40px;font-weight:500;color:#1A1A1A">{{ proc.name }}</h1>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="{{ procBadgeStyle }}">{{ procBadgeLabel }}</span>
+        </div>
+        <p style="margin:0 0 28px;font-size:15px;line-height:22px;color:#4A4A4A;max-width:640px">{{ proc.oneLiner }}</p>
+
+        <sc-if value="{{ noFlow }}">
+          <div style="border:1px solid #E5E1D6;border-radius:12px;background:#FFFFFE;padding:28px;text-align:center;color:#8A8A8A;font-size:14px;margin-bottom:24px">
+            No step flow is catalogued for this process yet — we'll map it with you.
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasFlow }}">
+          <div style="border:1px solid #CFD7E0;border-radius:12px;background:#FFFFFE;padding:22px;margin-bottom:8px">
+            <p style="margin:0 0 16px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A">Process flow</p>
+            <sc-for list="{{ flowLanes }}" as="lane" hint-placeholder-count="3">
+              <div style="display:flex;gap:14px;margin-bottom:16px;align-items:flex-start">
+                <div style="width:130px;flex-shrink:0;padding:6px 10px;background:#F4F2EB;border-radius:8px;font-size:12px;font-weight:600;color:#1A1A1A;border-left:3px solid #002B5C">{{ lane.role }}</div>
+                <div style="display:flex;gap:0;flex-wrap:wrap;flex:1">
+                  <sc-for list="{{ lane.steps }}" as="st" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:flex-start">
+                      <div style="display:flex;flex-direction:column;gap:6px">
+                        <div onClick="{{ st.onToggle }}" style-hover="box-shadow:0 4px 10px rgba(20,20,20,.06),0 2px 4px rgba(20,20,20,.04)" style="cursor:pointer;width:200px;padding:12px 14px;border:1px solid #CFD7E0;border-radius:10px;background:#FFFFFE;display:flex;flex-direction:column;gap:8px;transition:box-shadow .2s">
+                          <span style="display:inline-flex;width:22px;height:22px;align-items:center;justify-content:center;border-radius:9999px;background:#002B5C;color:white;font-family:'Geist Mono',monospace;font-size:11px;font-weight:700">{{ st.num }}</span>
+                          <span style="font-size:13px;line-height:18px;font-weight:600;color:#1A1A1A">{{ st.title }}</span>
+                        </div>
+                        <sc-if value="{{ st.expanded }}">
+                          <div style="width:200px;padding:10px 12px;background:#F4F2EB;border-radius:8px;font-size:12px;line-height:17px;color:#4A4A4A;display:flex;flex-direction:column;gap:6px">
+                            <sc-for list="{{ st.substeps }}" as="sub" hint-placeholder-count="2">
+                              <div style="display:flex;align-items:baseline;gap:6px">
+                                <span style="flex:1">{{ sub.text }}</span>
+                                <sc-if value="{{ sub.optional }}"><span style="font-size:9px;font-weight:700;text-transform:uppercase;color:#8A8A8A;flex-shrink:0">optional</span></sc-if>
+                              </div>
+                            </sc-for>
+                            <sc-if value="{{ st.noSubsteps }}"><span style="color:#8A8A8A">No further detail captured for this step.</span></sc-if>
+                          </div>
+                        </sc-if>
+                      </div>
+                      <sc-if value="{{ st.hasNext }}">
+                        <span style="flex-shrink:0;display:flex;align-items:center;padding:0 8px;color:#C4BFAE;height:22px;margin-top:11px">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+                        </span>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+            <p style="margin:6px 0 0;font-size:11px;line-height:16px;color:#8A8A8A">Steps are the standard happy-path; roles indicative — refine with client. Click a step for detail.</p>
+          </div>
+        </sc-if>
+
+        <p style="margin:0 0 28px;font-family:'Geist Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#8A8A8A">Source: established ERP best-practice references, curated by ABeam and rendered product-neutral.</p>
+
+        <div style="border-top:1px solid #E5E1D6;padding-top:24px">
+          <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#1A1A1A">How does this fit?</p>
+          <p style="margin:0 0 14px;font-size:13px;color:#8A8A8A">Nothing is committed — this is discovery, not a decision.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+            <button onClick="{{ selectStandard }}" style="{{ chipStandardStyle }}">Runs as standard</button>
+            <button onClick="{{ selectDiffer }}" style="{{ chipDifferStyle }}">We differ</button>
+            <button onClick="{{ selectDiscuss }}" style="{{ chipDiscussStyle }}">Discuss in workshop</button>
+            <button onClick="{{ selectNA }}" style="{{ chipNaStyle }}">Not applicable</button>
+          </div>
+
+          <sc-if value="{{ showStandardBox }}">
+            <div style="border:1px solid rgba(15,118,110,.3);background:rgba(15,118,110,.05);border-radius:8px;padding:14px 16px;font-size:13px;line-height:19px;color:#4A4A4A">
+              <p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0F766E">What "runs as standard" means here</p>
+              The steps above happen in this order, with no extra approvals, fields, or systems layered on top.
+            </div>
+          </sc-if>
+          <sc-if value="{{ showDifferBox }}">
+            <div style="background:#FDF7E6;border:1px solid rgba(180,83,9,.3);border-radius:8px;padding:14px 16px">
+              <p style="margin:0 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#B45309">Why we differ</p>
+              <textarea placeholder="Tell us how this really runs for you…" value="{{ reasonText }}" onChange="{{ onReasonChange }}" style="width:100%;min-height:70px;border:none;background:transparent;resize:vertical;font-size:13px;line-height:19px;color:#1A1A1A;font-family:inherit;outline:none"></textarea>
+              <p style="margin:10px 0 0;font-size:12px;line-height:17px;color:#4A4A4A;border-top:1px solid rgba(180,83,9,.2);padding-top:10px">Noted — a difference here usually means extra build and testing, whichever product you choose. We'll size it in the workshop. Nothing is committed.</p>
+            </div>
+          </sc-if>
+          <sc-if value="{{ showDiscussBox }}">
+            <div style="background:#E6EBF1;border-radius:8px;padding:14px 16px;font-size:13px;color:#4A4A4A">Parked for the workshop agenda.</div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ══════════════════════════════ V4 · SCOPE SUMMARY ══════════════════════════════ -->
+    <sc-if value="{{ isSummary }}">
+      <div>
+        <p style="margin:0 0 10px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A">Discovery Summary · Asia Meals Group</p>
+        <h1 style="margin:0 0 28px;font-family:'Source Serif 4',serif;font-size:30px;line-height:40px;font-weight:500;color:#1A1A1A;max-width:640px">Here's how Asia Meals Group runs — and where you differ.</h1>
+
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:32px">
+          <sc-for list="{{ statTiles }}" as="t" hint-placeholder-count="5">
+            <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:16px 14px;box-shadow:0 1px 2px rgba(20,20,20,.04)">
+              <div style="font-family:'Source Serif 4',serif;font-size:26px;font-weight:500;color:{{ t.color }}">{{ t.value }}</div>
+              <div style="margin-top:4px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#8A8A8A">{{ t.label }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:32px">
+          <sc-for list="{{ buckets }}" as="b" hint-placeholder-count="3">
+            <div style="border:1px solid #E5E1D6;border-radius:12px;overflow:hidden;background:#FFFFFE">
+              <div style="{{ b.headerStyle }}">
+                <span style="font-family:'Source Serif 4',serif;font-size:24px;font-weight:500">{{ b.count }}</span>
+                <span style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-left:8px">{{ b.title }}</span>
+              </div>
+              <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;max-height:260px;overflow:auto">
+                <sc-for list="{{ b.items }}" as="it" hint-placeholder-count="3">
+                  <div>
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span style="display:inline-flex;height:20px;align-items:center;border-radius:5px;background:#002B5C;padding:0 6px;font-family:'Geist Mono',monospace;font-size:10px;font-weight:700;color:white">{{ it.id }}</span>
+                      <span style="font-size:12px;color:#1A1A1A">{{ it.name }}</span>
+                    </div>
+                    <sc-if value="{{ it.reason }}">
+                      <div style="margin:6px 0 0 26px;background:#FDF7E6;border-radius:6px;padding:6px 8px;font-size:11px;color:#4A4A4A">{{ it.reason }}</div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ b.empty }}"><span style="font-size:12px;color:#C4C4C4">None yet.</span></sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:20px 24px;margin-bottom:24px">
+          <p style="margin:0 0 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A">What happens next</p>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <sc-for list="{{ nextStagesSummary }}" as="stg" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="{{ stg.nodeStyle }}">{{ stg.n }}</span>
+                <span style="{{ stg.textStyle }}">{{ stg.label }}</span>
+                <sc-if value="{{ stg.hasNext }}"><span style="width:24px;height:1px;background:#E5E1D6"></span></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <button onClick="{{ onExport }}" style="height:40px;padding:0 20px;border:none;border-radius:8px;background:#C8102E;color:white;font-size:14px;font-weight:600;cursor:pointer">Export the pack</button>
+      </div>
+    </sc-if>
+
+    <!-- ── nav row (Explore mode) ── -->
+    <sc-if value="{{ showBottomNav }}">
+      <div style="display:flex;gap:10px;margin-top:48px;padding-top:24px;border-top:1px solid #E5E1D6">
+        <button onClick="{{ goOverview }}" style="{{ navBtnStyle('overview') }}">Overview</button>
+        <button onClick="{{ goSourceToPay }}" style="{{ navBtnStyle('stream') }}">Source to Pay</button>
+        <button onClick="{{ goSummary }}" style="{{ navBtnStyle('summary') }}">Scope Summary</button>
+      </div>
+    </sc-if>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isExploreShell }}">
+    <div style="border-top:1px solid #E5E1D6;padding:16px 32px;text-align:center;font-family:'Geist Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#8A8A8A">
+      Prepared by ABeam Consulting · product-agnostic process discovery · Confidential
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+
+const NAVY='#002B5C', NAVY_SOFT='#E6EBF1', NAVY_BORDER='#CFD7E0';
+const STANDARD='#0F766E', CONFIGURE='#1D4ED8', CUSTOM='#B45309', OPEN='#8A8A8A';
+
+const STREAMS = [
+  {id:'concept-to-market', name:'Concept-to-Market', domain:'Innovation & Product Lifecycle', processCount:24, workflowCount:4},
+  {id:'source-to-pay', name:'Source-to-Pay', domain:'Procurement', processCount:61, workflowCount:6},
+  {id:'plan-to-fulfill', name:'Plan-to-Fulfill', domain:'Supply Chain & Manufacturing', processCount:140, workflowCount:7},
+  {id:'lead-to-cash', name:'Lead-to-Cash', domain:'Sales & Service', processCount:106, workflowCount:10},
+  {id:'acquire-to-retire', name:'Acquire-to-Retire', domain:'Asset & Maintenance Management', processCount:11, workflowCount:1},
+  {id:'hire-to-retire', name:'Hire-to-Retire', domain:'Human Capital Management', processCount:7, workflowCount:2},
+  {id:'record-to-report', name:'Record-to-Report', domain:'Finance & Treasury', processCount:273, workflowCount:20},
+  {id:'enterprise-foundation', name:'Enterprise Foundation', domain:'Master Data, Integration & Analytics', processCount:32, workflowCount:5},
+];
+
+const WORKFLOWS = [
+  {id:'invoice-management', name:'Invoice Management', processCount:14},
+  {id:'operational-procurement', name:'Operational Procurement', processCount:13},
+  {id:'central-procurement', name:'Central Procurement', processCount:12},
+  {id:'procurement-other-industry', name:'Procurement - Other & Industry', processCount:11},
+  {id:'sourcing-contract-management', name:'Sourcing & Contract Management', processCount:8},
+  {id:'supplier-management', name:'Supplier Management', processCount:3},
+];
+
+// flow step shape: [title, role, substeps[]]; substeps: [text, role, optional]
+const NOFLOW = [['(no MY mandatory steps)', '', []]];
+
+const PROCESSES = [
+  {id:'18J', name:'Requisitioning', workflow:'invoice-management', completeness:'detailed', mainSteps:9, subSteps:15,
+    oneLiner:'Lets employees raise purchase requests for goods or services through a simple shopping-cart style interface, which then routes for approval.',
+    flow:[
+      ['Create Purchase Requisition','',[
+        ['Create Purchase Requisition with Cost Center','',false],
+        ['Create Purchase Requisition with Cost Center — Single Account Assignment','Employee',false],
+        ['Create Purchase Requisition with Cost Center — Multiple Account Assignment Category','Employee',false],
+        ['Create Purchase Requisition with Unknown Product','',false],
+        ['Change Purchase Requisition','Employee',false],
+        ['Create Purchase Requisition with Enhanced Limit item','Employee',false],
+        ['Manage Catalog Items','Configuration Expert',false],
+        ['Create Purchase Requisition with Catalog','Employee',false],
+      ]],
+      ['Approve Purchase Requisition','Administrator',[]],
+      ['Change Purchase Requisition','Employee',[]],
+      ['Convert Purchase Requisition to Purchase Order','Purchaser',[]],
+      ['Approve Purchase Order','Administrator',[]],
+      ['Change Purchase Order','Purchaser',[]],
+      ['Confirm Receipt of Goods','Employee',[]],
+      ['Create Supplier Invoice','Asset Accountant',[]],
+      ['Purchase Requisition with Reservation','',[
+        ['Submit self-billing e-Tax invoice','Billing Clerk',false],
+        ['Create Purchase Requisition with Auto-Reservation','Employee',false],
+        ['Display self-billing e-Tax invoice','Billing Clerk',false],
+        ['Check My Purchase Requisition','Employee',false],
+        ['Post Goods Issue for Reservation','Inventory Manager',false],
+      ]],
+    ]},
+  {id:'22K', name:'External Workforce Procurement', workflow:'invoice-management', completeness:'outline', mainSteps:1, subSteps:0,
+    oneLiner:'Manages contractors and external workforce via an external-workforce system, including timesheets and invoicing.', flow:NOFLOW},
+  {id:'22Z', name:'Procurement of Services', workflow:'invoice-management', completeness:'detailed+variants', mainSteps:4, subSteps:54,
+    oneLiner:'The end-to-end purchasing of services — raise a service PO, confirm completion, and pay the supplier.',
+    flow:[
+      ['Standard Procurement of Service','',[
+        ['Create Purchase Requisition','Purchaser',false],
+        ['Convert Purchase Requisition to Purchase Order','Purchaser',false],
+        ['Create Purchasing Contract','Purchaser',false],
+        ['Change Purchase Order','Purchaser',false],
+        ['Approve Purchase Order','Billing Clerk',true],
+        ['Maintain Service Entry Sheet with Flexible Workflow','Purchaser',false],
+        ['Approve Service Entry Sheet with Flexible Workflow','Billing Clerk',false],
+        ['Create Supplier Invoice with PO/GR Relation','',false],
+        ['Release Blocked Supplier Invoice','Accounts Payable Accountant',true],
+        ['Invoice Entry with Pro-Rata and with PO/GR','Asset Accountant',false],
+      ]],
+      ['Multiple Account Assignment for Procurement of Services','',[
+        ['Create Purchase Requisition','Purchaser',false],
+        ['Automatic Creation of POs for Service Materials','Purchaser',false],
+        ['Change Purchase Order','Purchaser',false],
+        ['Approve Purchase Order','Billing Clerk',true],
+        ['Maintain Service Entry Sheet with Flexible Workflow','',false],
+        ['Approve Service Entry Sheet with Flexible Workflow','Billing Clerk',false],
+        ['Create Supplier Invoice','Asset Accountant',false],
+        ['E-Document Processing','Billing Clerk',false],
+      ]],
+      ['Automatic Purchase Order Creation from Purchase Requisition','',[]],
+      ['Employee Self Services Procurement','',[
+        ['Create Purchase Requisition','',false],
+        ['Approve Purchase Requisition','Billing Clerk',true],
+        ['Convert Purchase Requisition to Purchase Order','Purchaser',false],
+        ['Approve Purchase Order','Billing Clerk',true],
+        ['Maintain Service Entry Sheet with Flexible Workflow','',false],
+        ['Approve Service Entry Sheet with Flexible Workflow','Billing Clerk',false],
+        ['Create Supplier Invoice','Asset Accountant',false],
+      ]],
+    ]},
+  {id:'2LG', name:'Supplier Consignment', workflow:'invoice-management', completeness:'outline', mainSteps:4, subSteps:0,
+    oneLiner:'Lets a supplier store stock at your site — you only pay when you actually consume it.',
+    flow:[
+      ['Create Purchase Order','Purchaser',[]],
+      ['Post Goods Receipt','Inventory Manager',[]],
+      ['Transfer Stock','Inventory Manager',[]],
+      ['Invoice Receipt from Consignment Withdrawal','',[]],
+    ]},
+  {id:'1QR', name:'Predictive Analytics for Purchase Contract Quantity Consumption', workflow:'operational-procurement', completeness:'outline', mainSteps:1, subSteps:0,
+    oneLiner:"Predicts how much of a purchase contract's volume customers will likely use, to help with planning.", flow:NOFLOW},
+  {id:'2EJ', name:'Integration of Procurement with External Suppliers', workflow:'operational-procurement', completeness:'detailed+variants', mainSteps:1, subSteps:13,
+    oneLiner:'Connects the procurement system to external suppliers electronically for orders and confirmations.',
+    flow:[
+      ['System-to-System Integration','',[
+        ['Complete Supplier Master Data','Accounts Payable Accountant',false],
+        ['Create Purchase Order Manually','Purchaser',false],
+        ['Review Purchase Order','Purchaser',false],
+        ['Change Purchase Order','Purchaser',true],
+        ['Review Order Confirmation','Purchaser',true],
+        ['Review Shipping Notification','Purchaser',true],
+        ['Review Supplier Invoice','Accounts Payable Accountant',false],
+        ['Confirm Quantities for Putaway and Post Goods Receipt for Inbound Delivery','Receiving Specialist',false],
+        ['Create Supplier Invoice with PO/GR Relation','Accounts Payable Accountant',false],
+        ['Create Return Purchase Order','Purchaser',true],
+        ['Return Goods to Supplier','',true],
+        ['Display Credit Memo','Accounts Payable Accountant',true],
+      ]],
+    ]},
+  {id:'2NV', name:'Guided Buying', workflow:'operational-procurement', completeness:'detailed', mainSteps:11, subSteps:1,
+    oneLiner:'Buys non-strategic goods and services through a guided, catalog-driven shopping experience.',
+    flow:[
+      ['Create Shopping Cart','',[]],
+      ['Create Purchase Requisition','Environmental Manager',[]],
+      ['Approve Shopping Cart','',[]],
+      ['Update Purchase Requisition','Environmental Manager',[]],
+      ['Create Reservation (Automated)','',[]],
+      ['Display Shopping Cart','',[]],
+      ['Post Goods Movement','Inventory Manager',[]],
+      ['Create Purchase Order (Automated)','',[['Create Purchase Order (Manually)','Purchaser',false]]],
+      ['Create Service Entry Sheet','Purchaser',[]],
+      ['Post Goods Receipt','Inventory Manager',[]],
+      ['Create Supplier Invoice','Asset Accountant',[]],
+    ]},
+  {id:'2NX', name:'Scheduling Agreement for Subcontracting Procurement', workflow:'operational-procurement', completeness:'detailed+variants', mainSteps:2, subSteps:29,
+    oneLiner:'Sets up scheduled call-offs for subcontracted work — you send components, the supplier returns finished goods.',
+    flow:[
+      ['Part 1: Without Serial Number Management','',[
+        ['Create Scheduling Agreement — Direct','Purchaser',false],
+        ['Create Purchase Requisition','Environmental Manager',false],
+        ['Convert Purchase Requisition to Scheduling Agreement','Purchaser',false],
+        ['Approve Scheduling Agreement','Billing Clerk',true],
+        ['Create Planned Independent Requirements','Replenishment Specialist',false],
+        ['Evaluate Stock Requirement Situation','Material Planner',false],
+        ['Maintain Delivery Schedule','Purchaser',false],
+        ['Print Scheduling Agreement','Purchaser',false],
+        ['Create Outbound Delivery','Inventory Manager',false],
+        ['Pick and Post Goods Issue','Shipping Specialist',false],
+        ['Receive Goods from Subcontracting PO','Warehouse Clerk',false],
+        ['Post Goods Receipt','Inventory Manager',false],
+      ]],
+      ['Part 2: With Serial Number Management','',[
+        ['Create Scheduling Agreement','Purchaser',false],
+        ['Approve Scheduling Agreement','Billing Clerk',true],
+        ['Maintain Delivery Schedule','Purchaser',false],
+        ['Create Outbound Delivery','Inventory Manager',false],
+        ['Pick and Post Goods Issue','Shipping Specialist',false],
+        ['Create Inbound Delivery','Receiving Specialist',false],
+        ['Post Goods Receipt for Inbound Delivery','Receiving Specialist',false],
+        ['Create Supplier Invoice','Asset Accountant',false],
+      ]],
+    ]},
+  {id:'1JI', name:'Real-Time Reporting and Monitoring for Procurement', workflow:'central-procurement', completeness:'outline', mainSteps:1, subSteps:0,
+    oneLiner:'Live dashboards and KPIs for procurement teams to monitor purchasing activity, supplier performance, and spend as it happens.', flow:NOFLOW},
+  {id:'1XI', name:'Central Requisitioning', workflow:'central-procurement', completeness:'outline', mainSteps:1, subSteps:0,
+    oneLiner:'Lets central procurement raise requisitions on behalf of multiple subsidiaries in one place.', flow:NOFLOW},
+  {id:'2ME', name:'Central Purchase Contracts', workflow:'central-procurement', completeness:'detailed+variants', mainSteps:5, subSteps:21,
+    oneLiner:'Lets one central purchasing org issue contracts that subsidiary plants can call off against.',
+    flow:[
+      ['Central Purchase Contracts','',[
+        ['Create Central Purchase Contracts and Distribution','Purchaser',false],
+        ['Release Central Purchase Contract','Billing Clerk',true],
+        ['Display Central Purchase Contracts','Purchaser',false],
+        ['Import Release Orders','Configuration Expert',false],
+        ['Display Release Order Information','Purchaser',false],
+        ['Renew Central Purchase Contracts','Purchaser',false],
+        ['Block Central Purchase Contract Items','Purchaser',false],
+      ]],
+      ['Mass Changes to Central Purchase Contracts','Purchaser',[]],
+      ['Price History for Central Purchase Contract Items','Purchaser',[
+        ['Schedule Update of Price Details','Configuration Expert',false],
+        ['Price History for Central Purchase Contract Items','Purchaser',false],
+      ]],
+      ['Hierarchy Central Contracts','',[
+        ['Create Hierarchy Central Contracts','Purchaser',false],
+        ['Release Hierarchy Central Contract','Billing Clerk',true],
+        ['Display Subordinate Central Contracts','Purchaser',false],
+      ]],
+      ['Versioning of Central Purchase Contracts','',[
+        ['Create Central Purchase Contract','Purchaser',false],
+        ['Release Central Purchase Contract','Billing Clerk',true],
+        ['Change Central Purchase Contracts','Purchaser',false],
+        ['Display Version History','Purchaser',false],
+      ]],
+    ]},
+  {id:'2XT', name:'Central Purchasing', workflow:'central-procurement', completeness:'outline', mainSteps:1, subSteps:0,
+    oneLiner:'Lets one central purchasing org run end-to-end purchasing on behalf of subsidiaries.', flow:NOFLOW},
+  {id:'2LH', name:'Automated Invoice Settlement', workflow:'procurement-other-industry', completeness:'outline', mainSteps:3, subSteps:0,
+    oneLiner:'Automates settlement of supplier or customer invoices via a pay-on-receipt or self-billing model.',
+    flow:[
+      ['Create Purchase Order','Purchaser',[]],
+      ['Post Goods Receipt','Inventory Manager',[]],
+      ['Execute Evaluated Receipt Settlement','Accounts Payable Accountant',[]],
+    ]},
+  {id:'2XU', name:'Procurement of Materials with Variant Configuration', workflow:'procurement-other-industry', completeness:'detailed', mainSteps:3, subSteps:2,
+    oneLiner:'Procures configurable materials (with options/variants) through the standard purchasing flow.',
+    flow:[
+      ['Create Purchase Orders','',[
+        ['Create Purchase Order','Purchaser',false],
+        ['Create Purchase Order with Inbound Delivery','Purchaser',false],
+      ]],
+      ['Post Goods Receipt','Inventory Manager',[]],
+      ['Create Supplier Invoice','Asset Accountant',[]],
+    ]},
+  {id:'5FM', name:'Procurement for Retail', workflow:'procurement-other-industry', completeness:'detailed', mainSteps:5, subSteps:15,
+    oneLiner:'Procurement processes adapted for retail — article-based, with seasonality and assortments.',
+    flow:[
+      ['Create Purchase Order Directly','Purchaser',[]],
+      ['Create Purchase Order with Reference to Purchase Requisition','Purchaser',[
+        ['Convert Purchase Requisition out of the Stock/Requirements List','Replenishment Specialist',false],
+        ['Create Purchase Order with Reference to Purchase Requisition','Purchaser',false],
+      ]],
+      ['Monitor Purchase Order','',[
+        ['Display Purchase Orders','External Auditor',false],
+        ['Display Status of Purchase Order','Accounts Payable Accountant',false],
+        ['Display Procurement Overview','Purchaser',false],
+      ]],
+      ['Message Determination','',[
+        ['Output from a Purchase Order','Accounts Payable Accountant',false],
+        ['Purchase Order EDI Output','Accounts Payable Accountant',false],
+      ]],
+      ['Quantity Optimization in Purchase Order','',[
+        ['Maintain Rounding Profile in the Purchasing Info Record','Master Data Specialist',false],
+        ['Create Purchase Order with Quantity Optimization','Purchaser',false],
+        ['Simulate Quantity Optimizing','Purchaser',false],
+      ]],
+    ]},
+  {id:'5FN', name:'Invoice Verification for Retail', workflow:'procurement-other-industry', completeness:'detailed', mainSteps:5, subSteps:3,
+    oneLiner:'Retail-specific invoice verification, e.g. with allowances and off-invoice deductions.',
+    flow:[
+      ['Create Supplier Invoice using Purchase Order','Accounts Payable Accountant',[]],
+      ['Display Supplier Invoice','Accounts Payable Accountant',[]],
+      ['Create Supplier Invoice with Freight Condition','Accounts Payable Accountant',[]],
+      ['Create Invoice Verification in Background','',[
+        ['Enter Supplier Invoice for Background Verification','Accounts Payable Accountant',false],
+        ['Schedule Supplier Invoice Jobs','Accounts Payable Accountant',false],
+      ]],
+      ['Create Supplier Invoice Using API','',[['Create Supplier Invoice with reference to Purchase Order using API','',false]]],
+    ]},
+  {id:'1XF', name:'Request for Price', workflow:'sourcing-contract-management', completeness:'outline', mainSteps:4, subSteps:0,
+    oneLiner:'Sends a formal request for price to suppliers and collects their quotes.',
+    flow:[
+      ['Create Price Request','Purchaser',[]],
+      ['Create Supplier Quotation','Purchaser',[]],
+      ['Compare and Award Supplier Quotation','Purchaser',[]],
+      ['Create Follow-on Documents','Purchaser',[]],
+    ]},
+  {id:'1XV', name:'Enterprise Contract Management', workflow:'sourcing-contract-management', completeness:'outline', mainSteps:1, subSteps:0,
+    oneLiner:'Manages the full lifecycle of legal contracts — drafting, approvals, signatures, renewals — inside the ERP.', flow:NOFLOW},
+  {id:'2OQ', name:'Contract Assembly', workflow:'sourcing-contract-management', completeness:'outline', mainSteps:1, subSteps:0,
+    oneLiner:'Connects the ERP to a specialist contract-assembly/authoring system for complex agreements.', flow:NOFLOW},
+  {id:'4AZ', name:'Strategic Contract Management', workflow:'sourcing-contract-management', completeness:'outline', mainSteps:3, subSteps:0,
+    oneLiner:'Manages contract authoring and lifecycle using a contract management system integrated with the ERP.',
+    flow:[
+      ['Create Contract or Scheduling Agreement in the Contract System','',[]],
+      ['Review Contract in the ERP','Purchaser',[]],
+      ['Check Updated Contract ID in the Contract System','',[]],
+    ]},
+  {id:'19E', name:'Supplier Classification and Segmentation', workflow:'supplier-management', completeness:'outline', mainSteps:2, subSteps:0,
+    oneLiner:'Groups suppliers by category, risk, or strategic importance so procurement can manage them differently.',
+    flow:[
+      ['Create Purchasing Categories','Purchaser',[]],
+      ['Manage Purchasing Categories','Purchaser',[]],
+    ]},
+  {id:'3FY', name:'Prediction of Delivery Date for Purchase Order Items', workflow:'supplier-management', completeness:'outline', mainSteps:1, subSteps:0,
+    oneLiner:'Uses predictive analytics to forecast when purchase order items will actually be delivered.', flow:NOFLOW},
+  {id:'SL4', name:'Supplier Evaluation and Performance Monitoring', workflow:'supplier-management', completeness:'detailed', mainSteps:4, subSteps:22,
+    oneLiner:'Evaluates and monitors supplier performance across quality, delivery, price, and service KPIs.',
+    flow:[
+      ['Operational Supplier Evaluation','',[
+        ['Create Supplier Evaluation Weighting and Scoring','Purchaser',false],
+        ['Display Supplier Evaluation by Quantity','Purchaser',false],
+        ['Display Supplier Evaluation by Price','Purchaser',false],
+        ['Display Supplier Evaluation by Time','Purchaser',false],
+        ['Adjust Supplier Evaluation Scores Manually','Purchaser',false],
+      ]],
+      ['Supplier Evaluation by Questionnaire','',[
+        ['Create Evaluation Questionnaire','Purchaser',false],
+        ['Create Group-Based Evaluation Template','Purchaser',false],
+        ['Start Group-Based Evaluation','Purchaser',false],
+        ['Maintain Evaluation Response as Appraiser','Employee',false],
+        ['Display Scorecards','Purchaser',false],
+        ['Monitor Response','Purchaser',false],
+      ]],
+      ['Supplier Evaluation by User-Defined Criteria','',[
+        ['Manage User-Defined Criteria for Supplier Evaluation','Purchaser',false],
+        ['Display Overall Supplier Evaluation Score','Purchaser',false],
+      ]],
+      ['Manage Supplier Evaluation Score','',[
+        ['Display Supplier Evaluation Score History','Purchaser',false],
+        ['Output Supplier Evaluation Score','Purchaser',false],
+      ]],
+    ]},
+];
+
+function fitColor(status){
+  if(status==='standard') return STANDARD;
+  if(status==='differ') return CUSTOM;
+  if(status==='discuss') return CONFIGURE;
+  if(status==='na') return OPEN;
+  return OPEN;
+}
+function fitLabel(status){
+  if(status==='standard') return 'Runs as standard';
+  if(status==='differ') return 'We differ';
+  if(status==='discuss') return 'Discuss in workshop';
+  if(status==='na') return 'Not applicable';
+  return 'Undecided';
+}
+function completenessMeta(c){
+  if(c==='detailed+variants') return {label:'Detailed + variants', color: STANDARD, bg:'rgba(15,118,110,.12)'};
+  if(c==='detailed') return {label:'Detailed', color: NAVY, bg:NAVY_SOFT};
+  return {label:'Outline', color:'#8A8A8A', bg:'#F4F2EB'};
+}
+function isNoFlow(proc){ return proc.flow.length===1 && proc.flow[0][0].indexOf('no MY mandatory steps')>=0; }
+function patternStyle(status){
+  if(status==='standard') return `background:${STANDARD}`;
+  if(status==='differ') return `background:repeating-linear-gradient(45deg,${CUSTOM} 0 4px,#fff 4px 8px)`;
+  if(status==='discuss') return `background:radial-gradient(circle,${CONFIGURE} 1.4px,#fff 1.6px) 0 0/7px 7px`;
+  return `background:#fff;border:1px solid #999`;
+}
+
+class Component extends DCLogic {
+  state = {
+    view: 'overview',
+    mode: 'explore',
+    activeStreamId: null,
+    activeProcessId: null,
+    search: '',
+    expandedSteps: {},
+    toast: null,
+    decisions: {
+      '18J': {status:'differ', reason:'We invoice in stages tied to delivery milestones, not all at once.'},
+      '19E': {status:'standard'},
+      '1XF': {status:'discuss'},
+    },
+    presentSearch: '',
+  };
+
+  componentDidMount() {
+    this._onKeyDown = (e) => {
+      if (this.state.mode !== 'present') return;
+      if (e.key === 'ArrowRight') { this.presentNext(); }
+      else if (e.key === 'ArrowLeft') { this.presentPrev(); }
+      else if (e.key === '1') { this.setDecision('standard')(); }
+      else if (e.key === '2') { this.setDecision('differ')(); }
+      else if (e.key === '3') { this.setDecision('discuss')(); }
+      else if (e.key === '4') { this.setDecision('na')(); }
+      else if (e.key === 'p' || e.key === 'P') { this.presentPark(); }
+      else if (e.key === 'Escape' || e.key === 'e' || e.key === 'E') { this.setModeExplore(); }
+    };
+    window.addEventListener('keydown', this._onKeyDown);
+  }
+  componentWillUnmount() {
+    window.removeEventListener('keydown', this._onKeyDown);
+  }
+
+  presentPrev = () => {
+    const ids = PROCESSES.map(p=>p.id);
+    const idx = Math.max(0, ids.indexOf(this.state.activeProcessId));
+    const next = (idx - 1 + ids.length) % ids.length;
+    this.setState({activeProcessId: ids[next]});
+  };
+  presentNext = () => {
+    const ids = PROCESSES.map(p=>p.id);
+    const idx = Math.max(0, ids.indexOf(this.state.activeProcessId));
+    const next = (idx + 1) % ids.length;
+    this.setState({activeProcessId: ids[next]});
+  };
+  presentPark = () => this.setDecision('discuss')();
+  onPresentSearch = (e) => this.setState({presentSearch: e.target.value});
+  presentJumpGo = () => {
+    const q = (this.state.presentSearch||'').toLowerCase();
+    if (!q) return;
+    const found = PROCESSES.find(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q));
+    if (found) this.setState({activeProcessId: found.id, presentSearch: ''});
+  };
+
+  goOverview = () => this.setState({view:'overview', activeStreamId:null, activeProcessId:null});
+  goStream = (id) => () => this.setState({view:'stream', activeStreamId:id, activeProcessId:null, search:''});
+  goSourceToPay = () => this.setState({view:'stream', activeStreamId:'source-to-pay', activeProcessId:null, search:''});
+  goProcess = (id) => () => this.setState({view:'process', activeProcessId:id});
+  goSummary = () => this.setState({view:'summary'});
+  backToStream = (e) => { e.preventDefault(); this.setState({view:'stream'}); };
+  onSearch = (e) => this.setState({search: e.target.value});
+  onReasonChange = (e) => {
+    const id = this.state.activeProcessId;
+    this.setState(s => ({decisions:{...s.decisions,[id]:{...(s.decisions[id]||{}),reason:e.target.value}}}));
+  };
+
+  flashToast = (msg) => {
+    this.setState({toast: msg});
+    setTimeout(() => this.setState({toast: null}), 3200);
+  };
+  setModeExplore = () => this.setState({mode:'explore'});
+  setModePresent = () => {
+    const fallback = this.state.activeProcessId || PROCESSES[0].id;
+    this.setState({mode:'present', activeProcessId: fallback});
+  };
+  setModeExport = () => this.setState({mode:'export'});
+  onExport = () => this.setState({mode:'export'});
+
+  setDecision = (status) => () => {
+    const id = this.state.activeProcessId;
+    this.setState(s => ({decisions:{...s.decisions,[id]:{...(s.decisions[id]||{}),status}}}));
+  };
+
+  toggleStep = (key) => () => this.setState(s => ({expandedSteps:{...s.expandedSteps,[key]:!s.expandedSteps[key]}}));
+
+  navBtnStyle = (v) => {
+    const active = this.state.view === v;
+    return `height:36px;padding:0 16px;border-radius:8px;border:1px solid ${active?'#002B5C':'#E5E1D6'};background:${active?'#002B5C':'#FFFFFE'};color:${active?'white':'#4A4A4A'};font-size:13px;font-weight:600;cursor:pointer`;
+  };
+
+  computeFit(scopeIds){
+    const c = {standard:0, differ:0, discuss:0, na:0, open:0};
+    scopeIds.forEach(id => {
+      const d = this.state.decisions[id];
+      const st = (d && d.status) ? d.status : 'open';
+      c[st] = (c[st]||0) + 1;
+    });
+    return c;
+  }
+
+  fitSegments(counts, total){
+    const order = [['standard',STANDARD],['differ',CUSTOM],['discuss',CONFIGURE],['na',OPEN],['open','#F4F2EB']];
+    return order.filter(([k])=>counts[k]>0).map(([k,color])=>({
+      style:`width:${total>0?(counts[k]/total*100):0}%;background:${color}`
+    }));
+  }
+
+  renderVals() {
+    const s = this.state;
+    const allScopeIds = PROCESSES.map(p=>p.id);
+    const streamCounts = this.computeFit(allScopeIds); // all loaded processes belong to Source-to-Pay
+    const streamTotal = allScopeIds.length;
+
+    const segBase = 'height:30px;padding:0 14px;border-radius:9999px;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit';
+    const presentBtnStyle = segBase + `;background:transparent;color:#8A8A8A`;
+    const exploreBtnStyle = segBase + `;background:#002B5C;color:white`;
+    const exportBtnStyle = segBase + `;background:transparent;color:#8A8A8A`;
+
+    // ── V1 ribbon rows ──
+    const ribbonRows = STREAMS.map(st => {
+      const isS2P = st.id === 'source-to-pay';
+      const counts = isS2P ? streamCounts : null;
+      const decided = isS2P ? (streamTotal - counts.open) : 0;
+      const loaded = isS2P ? streamTotal : 0;
+      const pct = isS2P && loaded>0 ? Math.min(1, decided/loaded) : 0;
+      const c = 2*Math.PI*25;
+      const dash = `${c*pct} ${c-c*pct}`;
+      const started = isS2P && decided>0;
+      return {
+        name: st.name,
+        onOpen: this.goStream(st.id),
+        segStyle: `cursor:pointer;display:flex;align-items:center;gap:20px;border-radius:12px;border:1px solid ${started?NAVY_BORDER:'#E5E1D6'};background:${started?NAVY_SOFT:'#FFFFFE'};padding:22px 24px;box-shadow:0 1px 2px rgba(20,20,20,.04);transition:box-shadow .2s,transform .2s`,
+        ringStyle: 'position:relative;width:56px;height:56px;flex-shrink:0',
+        ringSize: 56,
+        ringColor: isS2P ? NAVY : '#CFD7E0',
+        ringDash: dash,
+        ringLabel: isS2P ? `${decided}/${loaded}` : '—',
+        pillStyle: `display:inline-flex;height:22px;align-items:center;border-radius:9999px;padding:0 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;background:${started?NAVY_SOFT:'#F4F2EB'};color:${started?NAVY:'#8A8A8A'}`,
+        pillLabel: isS2P ? (decided===loaded?'Reviewed':'In progress') : 'Not started',
+        subline: isS2P ? `${decided} of ${loaded} loaded processes reviewed · ${st.processCount} in this stream` : `${st.processCount} processes · not modeled in this prototype pass`,
+      };
+    });
+
+    // ── V1 heatmap ──
+    const heatmapRows = STREAMS.map(st => {
+      if (st.id !== 'source-to-pay') {
+        return {name: st.name, cells:[{title:`${st.processCount} processes — not modeled in this pass`, label:`${st.processCount} processes`, style:`flex:1;height:22px;border-radius:6px;background:#F4F2EB;color:#8A8A8A;font-size:10px;display:flex;align-items:center;justify-content:center`}]};
+      }
+      const cells = WORKFLOWS.map(wf => {
+        const ids = PROCESSES.filter(p=>p.workflow===wf.id).map(p=>p.id);
+        const counts = this.computeFit(ids);
+        let dominant='open', max=-1;
+        Object.keys(counts).forEach(k=>{ if(counts[k]>max){max=counts[k];dominant=k;} });
+        const color = dominant==='open' ? '#F4F2EB' : fitColor(dominant);
+        const fg = dominant==='open' ? '#C4C4C4' : 'white';
+        return {title:`${wf.name}: ${fitLabel(dominant==='open'?null:dominant)}`, label:wf.name.split(' ')[0], style:`flex:1;min-width:70px;height:22px;border-radius:6px;background:${color};color:${fg};font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 4px;text-align:center`};
+      });
+      return {name: st.name, cells};
+    });
+
+    const nextStages = ['Discover','Workshop','Shortlist','Decide'].map((label,i)=>({
+      n:i+1, label,
+      nodeStyle:`display:flex;width:28px;height:28px;align-items:center;justify-content:center;border-radius:9999px;font-family:'Geist Mono',monospace;font-size:11px;font-weight:700;background:${i===0?NAVY:'#F4F2EB'};color:${i===0?'white':'#8A8A8A'}`,
+      textStyle:`font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:${i===0?'#1A1A1A':'#8A8A8A'}`,
+      hasNext: i<3,
+    }));
+    const nextStagesSummary = ['Discover','Workshop','Shortlist','Decide'].map((label,i)=>({
+      n:i+1, label,
+      nodeStyle:`display:flex;width:28px;height:28px;align-items:center;justify-content:center;border-radius:9999px;font-family:'Geist Mono',monospace;font-size:11px;font-weight:700;background:${i===1?NAVY:'#F4F2EB'};color:${i===1?'white':'#8A8A8A'}`,
+      textStyle:`font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:${i===1?'#1A1A1A':'#8A8A8A'}`,
+      hasNext: i<3,
+    }));
+
+    // ── V2 stream view ──
+    const activeStream = STREAMS.find(x=>x.id===s.activeStreamId);
+    const isSourceToPay = s.activeStreamId === 'source-to-pay';
+    const search = (s.search||'').toLowerCase();
+    const workflowSections = WORKFLOWS.map(wf => {
+      const procs = PROCESSES.filter(p=>p.workflow===wf.id && (!search || p.name.toLowerCase().includes(search) || p.id.toLowerCase().includes(search)));
+      return {
+        id: wf.id, name: wf.name,
+        countLabel: `${procs.length} of ${wf.processCount} processes shown`,
+        visible: procs.length>0,
+        processes: procs.map(p => {
+          const d = s.decisions[p.id];
+          const status = d && d.status;
+          const cm = completenessMeta(p.completeness);
+          return {
+            id: p.id, name: p.name, oneLiner: p.oneLiner,
+            stepCountLabel: isNoFlow(p) ? 'No step flow catalogued' : `${p.mainSteps} main step${p.mainSteps===1?'':'s'}${p.subSteps>0?` · ${p.subSteps} sub-steps`:''}`,
+            onOpen: this.goProcess(p.id),
+            fitDotStyle: `display:inline-block;width:8px;height:8px;border-radius:9999px;background:${status?fitColor(status):'#C4C4C4'}`,
+            badgeStyle: `display:inline-flex;height:20px;align-items:center;border-radius:9999px;padding:0 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;background:${cm.bg};color:${cm.color}`,
+            badgeLabel: cm.label,
+          };
+        }),
+      };
+    });
+    const streamFitCounts = isSourceToPay ? streamCounts : {standard:0,differ:0,discuss:0,na:0,open:0};
+    const streamFitSegments = this.fitSegments(streamFitCounts, streamTotal);
+    const streamFitLegend = [['standard',STANDARD,'Runs as standard'],['differ',CUSTOM,'We differ'],['discuss',CONFIGURE,'Discuss'],['na',OPEN,'Not applicable']].map(([k,c,l])=>({
+      dotStyle:`display:inline-block;width:8px;height:8px;border-radius:9999px;background:${c}`,
+      label:`${l} (${streamFitCounts[k]||0})`,
+    }));
+
+    // ── V3 process view ──
+    const proc = PROCESSES.find(p=>p.id===s.activeProcessId) || PROCESSES[0];
+    const decision = s.decisions[proc.id] || {};
+    const status = decision.status;
+    const noFlow = isNoFlow(proc);
+    const cm = completenessMeta(proc.completeness);
+
+    let flowLanes = [];
+    if (!noFlow) {
+      const laneMap = {}; const laneOrder = [];
+      proc.flow.forEach(([title, role, substeps], idx) => {
+        const laneName = role && role.length ? role : 'System / Automatic';
+        if (!laneMap[laneName]) { laneMap[laneName] = []; laneOrder.push(laneName); }
+        laneMap[laneName].push({idx, title, substeps});
+      });
+      flowLanes = laneOrder.map(role => ({
+        role,
+        steps: laneMap[role].map((st, i) => {
+          const key = proc.id + '-' + st.idx;
+          return {
+            key, num: st.idx+1, title: st.title,
+            substeps: st.substeps.map(([text,r,o]) => ({text: r && r.length ? `${text} (${r})` : text, optional: !!o})),
+            noSubsteps: st.substeps.length===0,
+            expanded: !!s.expandedSteps[key],
+            onToggle: this.toggleStep(key),
+            hasNext: i < laneMap[role].length - 1,
+          };
+        }),
+      }));
+    }
+
+    const chipBase = 'height:36px;min-width:140px;padding:0 16px;border-radius:9999px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .1s';
+    const chipStyle = (key,color) => status===key
+      ? `${chipBase};border:1px solid ${color};background:${color};color:white`
+      : `${chipBase};border:1px solid #E5E1D6;background:#FFFFFE;color:#1A1A1A`;
+
+    const workflow = WORKFLOWS.find(w=>w.id===proc.workflow);
+
+    const chipBaseP = 'height:48px;min-width:220px;padding:0 20px;border-radius:9999px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit';
+    const chipStyleP = (key,color) => status===key
+      ? `${chipBaseP};border:1px solid ${color};background:${color};color:white`
+      : `${chipBaseP};border:1px solid #E5E1D6;background:#FFFFFE;color:#1A1A1A`;
+    const presentIds = PROCESSES.map(p=>p.id);
+    const presentPosition = presentIds.indexOf(proc.id) + 1;
+
+    return {
+      isOverview: s.view==='overview', isStream: s.view==='stream', isProcess: s.view==='process', isSummary: s.view==='summary',
+      isPresentMode: s.mode==='present', isExportMode: s.mode==='export', isExploreShell: s.mode==='explore',
+      presentPosition, presentTotal: presentIds.length,
+      presentPrev: this.presentPrev, presentNext: this.presentNext, presentPark: this.presentPark,
+      presentSearch: s.presentSearch, onPresentSearch: this.onPresentSearch, presentJumpGo: this.presentJumpGo,
+      liveTallyLabel: `${streamCounts.standard} std · ${streamCounts.differ} differ · ${streamCounts.discuss} discuss · ${streamCounts.open} open`,
+      chipStandardStylePresent: chipStyleP('standard',STANDARD), chipDifferStylePresent: chipStyleP('differ',CUSTOM),
+      chipDiscussStylePresent: chipStyleP('discuss',CONFIGURE), chipNaStylePresent: chipStyleP('na',OPEN),
+      toast: s.toast,
+      goOverview: this.goOverview, goSourceToPay: this.goSourceToPay, goSummary: this.goSummary, backToStream: this.backToStream,
+      presentBtnStyle: s.mode==='present'?exploreBtnStyle:presentBtnStyle,
+      exploreBtnStyle: s.mode==='explore'?exploreBtnStyle:presentBtnStyle,
+      exportBtnStyle: s.mode==='export'?exploreBtnStyle:exportBtnStyle,
+      setModeExplore: this.setModeExplore, setModePresent: this.setModePresent, setModeExport: this.setModeExport,
+
+      ribbonRows, heatmapRows, nextStages, nextStagesSummary,
+
+      streamName: activeStream ? activeStream.name : '',
+      streamNameUpper: activeStream ? activeStream.name.toUpperCase() : '',
+      isSourceToPay, isFallbackStream: !!activeStream && !isSourceToPay,
+      fallbackStreamNote: activeStream ? `Workflow detail for ${activeStream.name} isn't modeled in this prototype pass (${activeStream.processCount} processes catalogued) — Source-to-Pay is fully modeled to prove the flow diagram and decision loop first.` : '',
+      workflowSections, search: s.search, onSearch: this.onSearch,
+      streamFitSegments, streamFitLegend,
+
+      proc, workflowNameUpper: workflow ? workflow.name.toUpperCase() : '',
+      procBadgeStyle: `display:inline-flex;height:20px;align-items:center;border-radius:9999px;padding:0 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;background:${cm.bg};color:${cm.color}`,
+      procBadgeLabel: noFlow ? 'No flow catalogued' : `${cm.label} · ${proc.mainSteps + proc.subSteps} steps`,
+      flowLanes, hasFlow: !noFlow, noFlow,
+      statusPillStyle: `display:inline-flex;height:22px;align-items:center;border-radius:9999px;padding:0 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;background:${status?fitColor(status):'#F4F2EB'};color:${status?'white':'#8A8A8A'}`,
+      statusPillLabel: fitLabel(status),
+      chipStandardStyle: chipStyle('standard',STANDARD), chipDifferStyle: chipStyle('differ',CUSTOM),
+      chipDiscussStyle: chipStyle('discuss',CONFIGURE), chipNaStyle: chipStyle('na',OPEN),
+      selectStandard: this.setDecision('standard'), selectDiffer: this.setDecision('differ'),
+      selectDiscuss: this.setDecision('discuss'), selectNA: this.setDecision('na'),
+      showStandardBox: status==='standard', showDifferBox: status==='differ', showDiscussBox: status==='discuss',
+      reasonText: decision.reason || '', onReasonChange: this.onReasonChange,
+
+      statTiles: [
+        {value:streamCounts.standard, label:'Runs as standard', color:STANDARD},
+        {value:streamCounts.discuss, label:'Discuss', color:CONFIGURE},
+        {value:streamCounts.differ, label:'We differ', color:CUSTOM},
+        {value:streamCounts.na, label:'Not applicable', color:OPEN},
+        {value:streamTotal, label:'Total processes loaded', color:NAVY},
+      ],
+      buckets: [
+        {title:'Standard', count:streamCounts.standard, headerStyle:`padding:10px 16px;background:rgba(15,118,110,.12);color:${STANDARD}`,
+          items: PROCESSES.filter(p=>s.decisions[p.id]&&s.decisions[p.id].status==='standard').map(p=>({id:p.id,name:p.name,reason:null})),
+          empty: streamCounts.standard===0},
+        {title:'Discuss', count:streamCounts.discuss, headerStyle:`padding:10px 16px;background:rgba(29,78,216,.12);color:${CONFIGURE}`,
+          items: PROCESSES.filter(p=>s.decisions[p.id]&&s.decisions[p.id].status==='discuss').map(p=>({id:p.id,name:p.name,reason:null})),
+          empty: streamCounts.discuss===0},
+        {title:'We differ', count:streamCounts.differ, headerStyle:`padding:10px 16px;background:rgba(180,83,9,.12);color:${CUSTOM}`,
+          items: PROCESSES.filter(p=>s.decisions[p.id]&&s.decisions[p.id].status==='differ').map(p=>({id:p.id,name:p.name,reason:(s.decisions[p.id].reason||'No reason captured yet.')})),
+          empty: streamCounts.differ===0},
+      ],
+      onExport: this.onExport,
+      showBottomNav: true,
+      navBtnStyle: this.navBtnStyle,
+
+      exportStreamRows: STREAMS.map(st => ({
+        name: st.name, domain: st.domain,
+        countLabel: st.id==='source-to-pay' ? `${st.processCount} processes · ${streamTotal} loaded in this pack` : `${st.processCount} processes`,
+      })),
+      exportHeatmapRows: STREAMS.map(st => {
+        if (st.id !== 'source-to-pay') return {name: st.name, cells:[{label:'Not modeled in this pass', swatch:'background:#eee;border:1px solid #999'}]};
+        return {name: st.name, cells: WORKFLOWS.map(wf => {
+          const ids = PROCESSES.filter(p=>p.workflow===wf.id).map(p=>p.id);
+          const counts = this.computeFit(ids);
+          let dominant='open', max=-1;
+          Object.keys(counts).forEach(k=>{ if(counts[k]>max){max=counts[k];dominant=k;} });
+          return {label: wf.name, swatch: patternStyle(dominant==='open'?null:dominant) + ';width:14px;height:14px;border-radius:3px;display:inline-block;flex-shrink:0', statusLabel: fitLabel(dominant==='open'?null:dominant)};
+        })};
+      }),
+      exportProcessRows: PROCESSES.map(p => {
+        const d = s.decisions[p.id];
+        const st2 = d && d.status;
+        return {
+          id:p.id, name:p.name, oneLiner:p.oneLiner,
+          stepLabel: isNoFlow(p) ? 'No flow catalogued' : `${p.mainSteps} steps`,
+          swatch: patternStyle(st2) + ';width:14px;height:14px;border-radius:3px;display:inline-block;flex-shrink:0',
+          statusLabel: fitLabel(st2),
+          reason: (st2==='differ' && d.reason) ? d.reason : null,
+        };
+      }),
+      exportLegend: [
+        {label:'Runs as standard', swatch: patternStyle('standard')+';width:14px;height:14px;border-radius:3px;display:inline-block'},
+        {label:'We differ', swatch: patternStyle('differ')+';width:14px;height:14px;border-radius:3px;display:inline-block'},
+        {label:'Discuss in workshop', swatch: patternStyle('discuss')+';width:14px;height:14px;border-radius:3px;display:inline-block'},
+        {label:'Undecided / not applicable', swatch: patternStyle('open')+';width:14px;height:14px;border-radius:3px;display:inline-block'},
+      ],
+      backToExplore: this.setModeExplore,
+    };
+  }
+}
+
+</script>
+</body>
+</html>
