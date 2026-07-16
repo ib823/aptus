@@ -36,6 +36,10 @@ Ran against the committed artifacts to validate the two claims the plan rests on
 | D2 | Consultant dataset has **no `completeness` field**; client dataset does. Invariant 4 requires completeness badges everywhere a process renders, including the C2 library grid. | Consultant loader derives completeness by joining `scope_id` → client `id`. No data change. |
 | D3 | **46% of flow steps (1400/3035) and 31% of substeps (2877/9425) have an empty role**, but the .dc renders `{{ lane.role }}` with no fallback. | Resolved by the brief, which wins: *"Blank-role steps sit in a 'System / Automatic' lane."* No question outstanding. |
 | D4 | The .dc files use **literal hex, not CSS vars** — contrary to the prompt's description. 22 of 23 values map to existing repo tokens. **`#DDD9CC` has no token** (used once: export/print-preview backdrop). | Invariant 5 forbids new colors. Use `--border-strong` (`#C4BFAE`) for the export backdrop. Deviation logged; PR-3 scope. |
+| D10 | **The vendor-term guard scans comments, not just rendered strings** — and it fired on my own code twice: a comment quoting Affirm's landing copy (which names a product), and the phrase "enumeration **oracle**", where the ordinary security term collides with the vendor `Oracle`. | **Keep the guard strict; rephrase the prose.** Comments never render, so these were harmless — but exempting comments means parsing them out, and the parser becomes the thing that can be wrong. A guard that occasionally makes you reword a comment is cheap; a guard with a hole in it is not. Noted here so the next person hits the `Oracle`/"oracle" collision knowingly rather than fighting it. |
+| D9 | **The brief specifies no landing or verify screen** — its V1–V5 are all post-verify surfaces, and the .dc prototype starts at V1. But the journey needs an entry point. | Structure mirrors Affirm's landing/verify exactly. Copy is discovery's own, because Affirm's headline names a vendor product and invariant 1 forbids that here. The brief's §10 verbatim promises are used where they fit ("Your business on one page…", "See how the standard runs your process…", "Nothing is committed…"). Legal versions are discovery-specific (`discovery-pdpa-v1`), not Affirm's — pinning a grant to `affirm-pdpa-v1` would record consent to a notice the reviewer never read. |
+| D8 | **The mode switch (Present · Explore · Export) is not rendered in PR-2a.** | Brief §7 puts it in the shared chrome, but Present and Export are PR-3. A switch whose other two segments route nowhere is worse than no switch, and the "stub with the toast pattern" instruction can't be honoured: the .dc defines `flashToast` but **never calls it**, so the prototype supplies no toast copy — stubbing would mean inventing client-facing copy, which the plan forbids. It ships with the modes in PR-3. |
+| D7 | **`cookies.ts` mirrored, not parameterized** (deviation from the approved option). | The Affirm file is marked *"Contractual — change requires security review"*. Threading a name/path argument through it would edit security-reviewed code for no functional gain; the constants are the only difference. Approved retroactively. |
 | D6 | **181 sentinel flows in the frozen client dataset** — see the dedicated section below. Corrected upstream by a data-only re-emission. Honest totals are now **545 with a flow / 197 without**. | `hasFlow()` is flow-presence only (sentinels no longer exist). A permanent CI assertion rejects any flow step matching `/\((?:no\|not)\b[^)]*\bsteps?\)/i` or any guard term, at step and sub-step level. V1's stat row reads `coverageCounts()` — computed from the data, never from `meta` or MANIFEST. |
 | D5 | **`typecheck:strict` OOMs** (V8 heap exhausted) on a plain `import raw from "…client.json"`. With `resolveJsonModule`, tsc infers a full structural literal type across all 742 processes and their nested flows. Verified against baseline: clean `main` passes; adding the import alone tips it over. | Ambient declaration in `src/types/discovery-data.d.ts` types the two datasets as `unknown`, stopping the inference. Nothing is lost — the loaders never trusted the inferred shape; they zod-parse the raw value, which is a *stronger* guarantee (runtime validation vs. compile-time literal). Scoped to the discovery datasets, so JSON imports elsewhere keep normal inference. |
 
@@ -177,10 +181,122 @@ bug rewritten to the honest 545/197 split.
 - **The boundary test walks transitively, not by grep.** The realistic leak is two hops: a shared helper imports the consultant loader, a client route imports the helper. A direct grep never sees it.
 - **One honest gap:** the vendor-term scan over `app/(external)/d/**` and `components/discovery/**` currently scans **zero files** — those roots do not exist until PR-2. It passes vacuously today. Rather than fake a non-empty assertion, it is marked `it.todo("PR-2: assert CLIENT_SOURCE_ROOTS scan a non-empty file set")`. **PR-2 must close this**, mirroring the Affirm hex guard's non-empty self-check.
 
-## Parity checklist
+## Standing policy (approved)
 
-_Per screen · state · match/deviation · reason — populated per PR._
+These are settled and apply to the rest of the build:
+
+1. **`coverageCounts()` is the only display source.** MANIFEST is integrity-only — an anchor, not a number to show a client. Conflating the two is how 726 nearly shipped.
+2. **The MANIFEST guard cross-checks `hash_algorithm`** against its own hardcoded constant. A manifest trusted to declare its own algorithm can be swapped wholesale.
+3. **No self-certifying fields.** CI computes cleanliness; it never reads a claim of it. (`client_dataset_vendor_leaks: 0` was true by its own guard list while 181 jargon strings sat in the data.)
+4. **Data corrections arrive as data-only re-emissions**, never local edits; a hash change outside one is a failure — stop, do not re-pin.
+5. **5 discovery tables incl. `DiscoveryEngagement`** (approved — grants need a parent, and derived sealed state needs somewhere to live).
+6. **`cookies.ts` mirrored, not parameterized** (D7).
+7. **The migration is hand-written and verified against `prisma migrate diff`, but has NEVER run against a real Postgres** — first preview-env task.
+8. **Affirm's "bundle" wording in the shared lockout email is accepted** — consultant-facing, one word, not worth forking a template over.
+
+## The .dc prototype is not the spec
+
+The brief wins, and this is the standing frame for every row below: the `.dc` is a
+**verified prototype**, not a design intent. Three of its properties are scaffolding
+that must never ship, and they are not "conflicts" so much as artefacts:
+
+- **Source-to-Pay-only modeling.** 23 processes loaded; the other 7 streams render a
+  "not modeled in this prototype pass" note. We render **all 10 streams / 742
+  processes** from the loader.
+- **Hardcoded stats** (654 / 638 / 55 / 8) — pre-overlay figures. We read
+  `coverageCounts()`: **742 / 545 / 60**.
+- **Fixture client** ("Asia Meals Group"). Client identity comes from the session.
+
+### The 35 resolutions
+
+| # | Conflict | Winner | Rationale |
+|---|---|---|---|
+| 1 | V1 coverage chips: brief "654 / 638 / 60 industry-specific" vs .dc "654 / 638 / 55 workflows · 8 streams" | **Neither — the loader** | Both are prototype-era. `coverageCounts()` gives 742/545/60. The brief's *third* tile (60 industry-specific) matches our data exactly; its first two are its own numbers brought up to date. |
+| 2 | V1 states: brief (a) fresh (b) mid (c) all-reviewed teal banner (d) Present (e) Export (f) skeleton vs .dc mid-progress only | **Brief** | (a)(b)(c)(f) built in 2a; (d)(e) are PR-3. §12.8: "skeleton is first-class, not an afterthought". |
+| 3 | V1 ribbon: brief horizontal connected segments + per-stream fit bar, vertical on mobile vs .dc always-vertical, no fit bar | **Brief** | Fit bar added per §6/17; 2-col grid at `lg`, stacked below. |
+| 4 | V1 heatmap: brief 15% fill + hover/tap + print-safe label+pattern vs .dc solid 100% + `title=` only | **Brief** | 15% via `color-mix`. `title=` is hover-only (invisible to touch/keyboard) — cells are real buttons with the count in the accessible name and an `aria-live` detail line. Pattern is PR-3 (Export). |
+| 5 | V2 stream H1 support line | **Brief** | PR-2b. |
+| 6 | V2 stream-level fallback: .dc replaces the whole index with a prototype-scope note | **Brief** | Scaffolding — does not ship. All streams are real. |
+| 7 | V2 stream-complete teal banner | **Brief** | PR-2b. |
+| 8 | V3 flow: brief START/END nodes, cross-lane elbow arrows, >12-step pagination vs .dc none | **Brief** | PR-2b. |
+| 9 | V3 footnote: brief exact string vs .dc appends "Click a step for detail." | **Brief** | Verbatim §6/19. PR-2b. |
+| 10 | V3 promise "See how the standard runs your process…" — absent from .dc | **Brief** | §10 verbatim. Used on the landing (D9); also V3 in 2b. |
+| 11 | V3 fallback copy: §7 "No step flow catalogued for this process" vs §10 "No step flow is catalogued for this process yet — we'll map it with you." | **Brief §10** | The .dc already uses the §10 form; §10 is the verbatim-promise section. PR-2b. |
+| 12 | V3 provenance: brief mono-uppercase + "The process is yours; the reference names no vendor." vs .dc sentence-case, sentence dropped | **Brief** | The dropped sentence is the *point* of the line. PR-2b. |
+| 13 | Appendix A wireframe shows a vendor citation + product-mapping overlay on V3 | **Brief §12.6** | The brief self-conflicts; §12.6 is the hard rule and the .dc correctly omits both. Client views never show product mapping. |
+| 14 | Fit chip helper captions (4, per §9) — absent from .dc | **Brief** | PR-2b. |
+| 15 | Chip label: §9 table "We do this differently" vs §9 legend + Appendix A + .dc "We differ" | **"We differ"** | The brief uses the short form everywhere except one table cell; the long form is the outlier. Settled in `fit.ts`. |
+| 16 | "Not applicable" dims the row | **Brief** | PR-2b. |
+| 17 | Differ requires a reason before summary counts it complete | **Brief** | PR-2b. Server keeps `reason` nullable so a partial write preserves the selection and the summary counts it incomplete — losing the reviewer's click would be worse. |
+| 18 | Autosave tick + `aria-live` | **Brief** | PR-2b (rides with the selector). |
+| 19 | V4 eyebrow needs `{DATE}` | **Brief** | PR-2b. |
+| 20 | V4 stat strip order/labels | **Match** | Both agree. |
+| 21 | V4 per-stream fit bars | **Brief** | PR-2b. |
+| 22 | V4 bucket bands: brief 15% + serif 28 vs .dc 12% + serif 24/26 | **Brief** | 12% is outside §2's permitted alpha steps. PR-2b. |
+| 23 | V4 bucket order | **Match** | Both agree. |
+| 24 | Type ramp: V4 stat 26 / label 10px are off-ramp in the .dc | **Brief §3** | PR-2b. |
+| 25 | Radii: .dc adds 3/5/6px beyond §2's 8/12/10/9999 | **Brief, with §6/2 for the chip** | §6/2 explicitly specifies "radius 5" for the scope chip, so the brief self-conflicts; §6 wins for that one element. The 6px heatmap cell is retained (it is the .dc's only sane fit at 22px height) — logged as a knowing deviation. |
+| 26 | A11y: .dc has zero focus styles, chips are `<button>` not radiogroup, `outline:none` on inputs | **Brief §11** | The debt the plan exists to close. 2a ships focus rings, landmarks, `aria-live` on progress, 44px targets, 16px inputs. Radiogroup lands with the selector in 2b. |
+| 27 | Motion: .dc hardcodes `.1s/.2s`, no reduced-motion | **Brief §2** | Uses `--dur-calm`/`--ease-calm` tokens + `motion-reduce:` variants. |
+| 28 | Icons: .dc uses `◀ ▶ ⚑` glyphs | **Brief §12.4** | Inline stroke SVG. Affects PR-3's facilitator bar mostly. |
+| 29 | Mode-switch keyboard `P/E/X` | **Brief** | PR-3, with the modes (D8). |
+| 30 | Breadcrumb shape | **Equivalent** | .dc's STREAM / WORKFLOW + chip + name conveys §5's requirement. PR-2b. |
+| 31 | Present H1 44/52 + 20px floor; .dc's facilitator bar is 12–13px | **Brief** | PR-3. |
+| 32 | Process naming: brief's illustrative "Requisition to Pay" vs .dc's real catalogue data ("Requisitioning", 18J) | **The loader** | Neither is authoritative for *content* — the committed dataset is. The brief's *copy* strings still win. |
+| 33 | Present ←/→ moves steps (brief) vs processes (.dc) | **Brief** | PR-3. |
+| 34 | Content max-width 1040 / 1280 Present | **Match** | Explore is 1040 here. |
+| 35 | Present "Park" as its own action vs .dc aliasing it to `discuss` | **Brief** | PR-3. Note: if Park and Discuss stay the same state, the brief's distinction is cosmetic — flag for PR-3. |
+
+## PR-2a · Guest infra + entry + V1 — GREEN
+
+Branch: `feat/neutral-discovery-guest-v1`.
+
+**Gates:** `typecheck:strict` ✓ · `lint:strict` ✓ · `pnpm test` ✓ (77 discovery tests).
+
+**⚠ The e2e gates are WRITTEN BUT UNVERIFIED in this environment.** No Postgres is
+reachable (`P1001` on localhost:5432), and `tests/e2e/global-setup.ts` opens a Prisma
+client before any spec runs — so every Playwright spec fails at setup, including the
+flag-off one, which needs no database of its own. Attempting it returned
+`PrismaClientInitializationError`, exit 1.
+
+This log briefly claimed "flag-off e2e ✓". That was wrong: the shell pipeline's exit
+status masked the failure and I read it as a pass. Corrected here rather than
+quietly. **The e2e evidence for PR-2a is outstanding and must be produced in an
+environment with a database** — alongside the migration, which has still never been
+executed (standing policy 7).
+
+Compensating control added: `tests/unit/discovery/flag-gate.test.ts` statically
+asserts that every route module under `app/(external)/d/**` is flag-gated. It runs
+with no database and catches the realistic regression (a new /d route that forgets
+its check). It is not a substitute for the e2e — it proves the check is *present*,
+not that the response is *404*.
+
+**Closed:** PR-1's `it.todo` — the vendor scan now covers `app/(external)/d/**` and
+`components/discovery/**` with a non-empty self-check, so it can no longer pass
+vacuously. It caught two real hits in my own code on first run (D10).
+
+**Decisions write path:** the `DiscoveryDecision` table, the read path
+(`decisionsForEngagement`), and the whole V1 fit-mix arithmetic ship in **2a**. The
+**write** path — the fit selector — is **2b**. So V1's fresh/mid/all-reviewed states
+are live and correct today; they simply always read `fresh` until 2b lands a way to
+decide anything.
+
+## Parity checklist
 
 | Screen | State | Match / Deviation | Reason |
 |---|---|---|---|
-| _pending PR-2_ | | | |
+| Landing `/d/[token]` | default | Deviation — copy is discovery's own | Brief specifies no landing (D9); §10 promises used verbatim |
+| Landing | invalid/revoked/superseded/sealed | Match | Four guards → one terminal; never reveals which |
+| Verify `/d/verify` | default / invalid / expired / rate-limited / exhausted | Match | Mirrors Affirm; OtpInput reused unchanged |
+| Terminal `/d/expired` | default | Match | Polymorphic; `GuestTerminal` reused |
+| Terminal `/d/ended` | default | Match | Friendly sign-out variant |
+| V1 `/d/home` | (a) fresh 0% | **Built from brief** | .dc models no fresh state |
+| V1 | (b) mid-progress | Match | Ribbon segments + rings |
+| V1 | (c) all-reviewed | **Built from brief** | Teal banner, verbatim: "Every stream reviewed — ready for the workshop." |
+| V1 | (f) skeleton | **Built from brief** | .dc models none; `Suspense` fallback mirrors real geometry |
+| V1 | sealed / read-only | **Built from brief** | Derived `state != "issued"`; .dc models no sealed state |
+| V1 · coverage row | all | **Deviation — loader, not .dc** | 742/545/60 vs .dc's 654/638/55·8 |
+| V1 · ribbon | untouched / in-progress / reviewed | **Deviation — brief** | Per-stream fit bar added; reviewed gets its own teal treatment |
+| V1 · heatmap | all | **Deviation — brief** | 15% fill; real buttons + `aria-live` instead of `title=` |
+| V1 · what-happens-next | current=1 | Match | Ordered list; connectors decorative |
+| V1 · mode switch | — | **Deferred to PR-3** | D8 — no toast copy exists to stub with |
