@@ -176,9 +176,20 @@ describe("vendor-term guard — client-facing source", () => {
     ).toEqual([]);
   });
 
-  // The Affirm no-stray-hex guard pairs its scan with a non-empty assertion so it
-  // cannot pass vacuously. The same risk applies here, but these roots do not
-  // exist until PR-2 ships the client routes. This test records that honestly
-  // rather than asserting a count that is legitimately zero today.
-  it.todo("PR-2: assert CLIENT_SOURCE_ROOTS scan a non-empty file set");
+  /**
+   * Closes PR-1's it.todo. The roots now exist, so the scan above is real —
+   * and this assertion is what keeps it real. A guard that scans zero files
+   * passes vacuously and reports success while checking nothing; the Affirm
+   * no-stray-hex guard pairs its scan with the same self-check for exactly
+   * this reason.
+   */
+  it("scans a non-empty set of client-facing files (the scan is not vacuous)", () => {
+    expect(files.length).toBeGreaterThan(0);
+  });
+
+  it("covers both client-facing roots", () => {
+    const rel = files.map((f) => f.replace(process.cwd() + "/", ""));
+    expect(rel.some((f) => f.startsWith("src/app/(external)/d/"))).toBe(true);
+    expect(rel.some((f) => f.startsWith("src/components/discovery/"))).toBe(true);
+  });
 });

@@ -20,15 +20,18 @@
 
 import { cookies } from "next/headers";
 import { guestUaHash } from "@/lib/affirm/external/guards";
+import { isNeutralDiscoveryEnabled } from "../guards";
 import { DISCOVERY_GUEST_COOKIE_NAME } from "./cookies";
 import { readGuestSession, type ResolvedDiscoverySession } from "./session";
 
 export { guestIp, guestUaHash } from "@/lib/affirm/external/guards";
 
-/** The master kill-switch. Every /d/* page and route is 404 unless this is on. */
-export function isNeutralDiscoveryEnabled(): boolean {
-  return process.env.NEUTRAL_DISCOVERY_ENABLED === "true";
-}
+/**
+ * The master kill-switch, re-exported from the single definition in
+ * ../guards.ts. It is defined once on purpose: a duplicated security gate is a
+ * gate that drifts, and "the flag is off" must mean the same thing everywhere.
+ */
+export { isNeutralDiscoveryEnabled };
 
 export interface DiscoveryGuestContext extends ResolvedDiscoverySession {
   uaHash: string;
