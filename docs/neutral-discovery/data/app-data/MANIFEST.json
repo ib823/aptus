@@ -1,0 +1,22 @@
+{
+ "generated": "2026-07-16",
+ "source": "vendor-neutral-process-library.json (canonical, P1-P4 complete)",
+ "counts": {
+  "processes": 742,
+  "value_streams": 10,
+  "workflows": 85,
+  "with_flow": 726,
+  "with_substeps": 400,
+  "origin": {
+   "sap_base": 654,
+   "overlay": 88
+  },
+  "parked_sap_enablers": 18
+ },
+ "files": {
+  "discovery-library.client.json": "71d5a13aa7ca59de",
+  "discovery-library.consultant.json": "626f605fc732f494",
+  "vendor-term-guard.json": "57749b0be400c9e2"
+ },
+ "client_dataset_vendor_leaks": 0
+}
