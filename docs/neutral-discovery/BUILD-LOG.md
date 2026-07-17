@@ -1,5 +1,115 @@
 # Neutral Process Discovery — Build Log
 
+---
+
+# CLOSING SUMMARY (PR-6)
+
+The build is complete: client surface, consultant workbench, the seam, and the
+P4 loop. What remains is **verification in an environment with a database**, then
+the pilot.
+
+## PR map
+
+| PR | Branch | What |
+|---|---|---|
+| Artifacts | `docs/neutral-discovery-artifacts` | The 10 source-of-truth artifacts, verbatim + pre-flight |
+| PR-1 | `feat/neutral-discovery-data-layer` | Data layer, zod, serializer allowlist, 3 CI guards |
+| PR-2a | `feat/neutral-discovery-guest-v1` | Guest infra (5 tables), /d entry, V1 |
+| PR-2b | `feat/neutral-discovery-explore-v2` | V2/V3/V4, the fit selector, decisions |
+| PR-3 | `feat/neutral-discovery-present-export` | Present (V5), Export (V7), mode switch, notes |
+| PR-4 | `feat/neutral-discovery-workbench-core` | C1/C2/C3/C4/C6/C10, the fence, both walls |
+| PR-5 | `feat/neutral-discovery-sessions-seam` | C7/C8, the live seam, effective scope |
+| PR-6 | `feat/neutral-discovery-outputs-capture` | C9, two-lane export, C5 + the P4 wizard |
+
+## Decision index
+
+| # | One line |
+|---|---|
+| D1 | `meta` is informational; MANIFEST is the authority. Typed `unknown` so a violation is a compile error. |
+| D2 | Consultant dataset has no `completeness`; derived across the `scope_id ↔ id` join. |
+| D3 | Blank-role steps → "System / Automatic" lane (46% of steps). |
+| D4 | `#DDD9CC` → `var(--border-strong)`; the print palette is the one sanctioned token exception, exempted by path. |
+| D5 | `typecheck:strict` OOMs on a plain JSON import; datasets typed `unknown`, zod-parsed. |
+| **D6** | **181 sentinel flows.** Fixed upstream. Honest split is 545 / 197, not 726 / 16. |
+| D7 | `cookies.ts` mirrored, not parameterized (the Affirm file is security-review-frozen). |
+| D8 | Mode switch deferred from PR-2a → shipped PR-3. |
+| D9 | The brief specifies no landing/verify screen; structure from Affirm, copy from §10. |
+| D10 | The vendor guard scans comments. Kept strict; prose reworded. |
+| D11 | The .dc's V2 search has no empty state; added one. |
+| D12 | `P` is claimed twice (mode vs park); resolved by context. |
+| D13 | The Export register lists decided processes only. |
+| **D14** | **`meta.apqc_coverage` is stale.** All 7 "known gaps" are filled; the 2 real ones aren't in it. Register derived live. |
+| D15 | The context chip's default lies on the fence; C6 says "Consultant only — not shared". |
+| D16 | C10 ships with no audit trail — the .dc's is invented and attributed to a real person. |
+| D17 | C1's "Import the base library" state is unreachable; not built. |
+| D18 | Seam = SSE, poll-behind-stream, mirroring the repo's workshop route. |
+| **D19** | **Scope was grant-only and would have leaked.** Effective scope = engagement ∩ grant. |
+| D20 | Promotions never touch the committed JSON; the library views compose (this PR). |
+
+## What the guards actually caught
+
+Not theory — these fired on real code during the build:
+
+- **D6**: 181 fake flows in "final, QA'd" data — would have shipped SAP localisation jargon to 181 client pages and overstated coverage by a third. Found by reading content, not counts; **every count matched**.
+- **D14**: a governance view that would have named 7 well-covered categories as gaps while hiding the 2 real ones.
+- **D19**: a scoping leak that would have shown a late-invited reviewer all 10 streams.
+- The **stray-hex guard** caught `stroke="#fff"` in the siderail wordmark.
+- The **vendor guard** caught a quoted vendor headline and "enumeration **oracle**" in my own comments.
+- The **wall** caught a deliberate breach and traced it transitively (I tested it by breaking it).
+- The **notes-privacy guard** caught PR-6's `packs.ts` legitimately reading notes — forcing the allowlist to be explicit rather than a directory rule.
+
+Four times a guard of mine matched its own documentation rather than code. The
+fix that stuck was a comment-stripper plus a test proving the stripper works —
+not rewording prose a fifth time.
+
+## ⚠ PREVIEW-ENV DEBT — the runbook for the next phase
+
+**Nothing below has ever executed.** The build environment has no Postgres, and
+`tests/e2e/global-setup.ts` opens Prisma before any spec, so every Playwright
+spec dies at setup. Unit tests, typecheck and lint are green throughout; **e2e is
+written, lint-clean, and unproven.**
+
+1. **Run the five migrations, in order.** All hand-written; each verified
+   statement-for-statement against `prisma migrate diff` (exact match) and proven
+   additive, but **never executed against a real Postgres**:
+   `20260717000000_neutral_discovery_guest_infra` ·
+   `20260717120000_discovery_facilitator_notes` ·
+   `20260717150000_discovery_workbench_core` ·
+   `20260717180000_discovery_session_seam` ·
+   `20260717210000_discovery_p4_capture`
+2. **Run the full e2e suite** with `NEUTRAL_DISCOVERY_ENABLED=true` and
+   `DISCOVERY_E2E=1`: `discovery-journey` · `discovery-explore` ·
+   `discovery-present-export` · `discovery-workbench` · `discovery-seam` ·
+   `discovery-capture`.
+3. **Live flag-off check**: with the flag unset, `/d/*` and `/discovery/*` must
+   404 in a real deploy. `discovery-flag-off.unauth.spec.ts` covers it and has
+   never run.
+4. **The two-browser seam** (PR-5) is the highest-value unproven path: a
+   consultant drives, a client follows, and the facilitator's note must be absent
+   from the client's network traffic.
+5. **Generate both packs against real data** and run the vendor guard over the
+   client artifact (the plan's step 2 evidence).
+6. **One P4 capture end-to-end**, including the second-reviewer gate.
+
+### Open prerequisites this build cannot close (P4 §9)
+
+- **Legal reuse clause** — P4 §5.4 requires confirming engagement terms permit
+  generalized reuse *before harvesting*. There is no contract-check gate in the
+  wizard because there is no contract field to check; captures stay register-only
+  by default until this is settled.
+- **Second-reviewer roster** — §9 lists "⟨2 names⟩" as open. Until it exists,
+  every account is eligible and the gate is "someone other than you".
+- **Pilot client** — the plan's `⟨pilot client⟩` placeholder.
+
+### Known upstream data debt (fix in the post-pilot re-emission, not mid-build)
+
+- `meta.apqc_coverage` is stale (D14): counts sum to 654, 7 of 13 categories
+  disagree, category 1.0 absent. Ignored in code; pinned by test.
+- Promoted entries live in the DB and compose at read time (D20). Folding them
+  into the JSON is the re-emission's job.
+
+---
+
 ## Pre-flight verification (before PR-1)
 
 Ran against the committed artifacts to validate the two claims the plan rests on:
@@ -36,6 +146,7 @@ Ran against the committed artifacts to validate the two claims the plan rests on
 | D2 | Consultant dataset has **no `completeness` field**; client dataset does. Invariant 4 requires completeness badges everywhere a process renders, including the C2 library grid. | Consultant loader derives completeness by joining `scope_id` → client `id`. No data change. |
 | D3 | **46% of flow steps (1400/3035) and 31% of substeps (2877/9425) have an empty role**, but the .dc renders `{{ lane.role }}` with no fallback. | Resolved by the brief, which wins: *"Blank-role steps sit in a 'System / Automatic' lane."* No question outstanding. |
 | D4 | ~~The .dc uses literal hex; `#DDD9CC` has no token.~~ **CLOSED in PR-3.** | The export print-preview backdrop is now `var(--border-strong)`. It is decorative desk-space around the A4 page and never prints, so no new colour entered the system. **Separately**, PR-3 opened the one sanctioned exception to invariant 5: the pack itself must print pure black on white (§3) with label+pattern decisions (§11), which the warm on-screen palette cannot do. That palette lives only in `d/export/discovery-export.css`, scoped to `.dx-root`, exempted **by path** in the stray-hex guard — and the guard asserts the exemption is exactly one file, that the file exists, and that nothing else imports it, so the exception cannot quietly widen. The export components carry no hex at all; they use `currentColor`. |
+| D20 | **The P4 wizard never writes the committed library.** The JSON is byte-frozen and hash-pinned; promotions land in `DiscoveryPromotedEntry` and the consultant views compose committed-JSON + promoted rows, badged `client-captured`. | Per the architectural directive. Nothing in the wizard needed to touch `src/data/discovery/*` — the composition point is `composeLibrary()`, and a test asserts no capture/promotion code calls any fs write. The pinned-hash guard stayed green throughout. Folding promotions into the JSON is the post-pilot re-emission's job, upstream. **Only SHARED-visible promotions compose in** (§5.3): a sensitive pattern at one client must not appear in a view a consultant could screen-share. |
 | D19 | **Scope was grant-only and would have leaked.** PR-2a put `valueStreamIds` on the grant (a persona scope) and nothing on the engagement. A session "scoped to 3 streams" was therefore only scoped if every grant repeated the list — and a reviewer invited *after* scoping would have an empty grant, which means "unrestricted", so they would see all 10 streams. | **Effective scope = engagement ∩ grant.** `valueStreamIds` added to `DiscoveryEngagement` (the session's scope); the grant may narrow within it and can never widen past it. Enforced in the serializer path every /d view goes through, and in the decisions write path — not the UI. Note `null` (unrestricted) is deliberately distinct from `[]` (nothing visible): a grant scoped entirely outside its session sees nothing, where a naive `length === 0 ? all : filter` would hand over the whole library. |
 | D18 | **Seam mechanism: SSE, poll-behind-stream.** | Mirrors `api/assessments/[id]/workshops/[sessionId]/stream/route.ts` — the repo's existing precedent for this exact shape (a facilitator drives, a room follows): the server polls every 3s and pushes only on change, with a 15s heartbeat and a 1h cap. Chosen over websockets (no infra here) and over client polling (one open stream degrades to a reconnect, rather than putting a hard 5s floor of requests under every reviewer in the room). **Degrades**: EventSource retries itself; after 3 real failures the client falls back to a 15s `router.refresh()`, so a reviewer behind a proxy that eats event-streams still follows, just less promptly. If nothing is driving it does nothing — a reviewer exploring alone is never yanked to another page. |
 | D17 | **C1's "first-run empty" state (brief §7-C1) is not built.** Its CTA is "Import the base library". | The library is a committed, hash-pinned JSON file — it is never absent, so the state is unreachable and the button could not do anything. Shipping it would be a control that lies about what the product can do. The engagements table has a real empty state instead ("No discovery engagements yet"), because zero engagements genuinely happens. |
@@ -506,10 +617,64 @@ still decide after the room breaks up.
 | — | Revoke ends live sessions | Revoking access that leaves a live session open is not revoking access. |
 | — | Resend re-issues an OTP, not a token | The invite link the reviewer already has keeps working. |
 
+## PR-6 · Outputs, the two-lane export, and the P4 wizard — GREEN
+
+Branch: `feat/neutral-discovery-outputs-capture`. Closes the build.
+
+**Gates:** `typecheck:strict` ✓ · `lint:strict` ✓ · `pnpm test` ✓ (all guards,
+both walls, the pinned-hash guard still green — the library JSON is untouched).
+
+**The two-lane export is two serializers, not one with a flag.** That is the
+whole design: a single builder with `includeProductMap: boolean` would put a
+client's safety one inverted boolean away from a vendor name in their inbox.
+`buildClientPack` has no reference to the product map — not a filter against it,
+no reference at all — and its return type has nowhere to put one. The endpoint
+takes a **required** `lane` with no default, because a default is exactly the
+single point of failure §9.3 exists to remove. The internal pack *composes* the
+client pack rather than rebuilding it, so the two lanes can never drift about
+what a decision says.
+
+`packs.test.ts` proves it by construction: it generates **both artifacts** and
+runs the real vendor guard over the client one (0 hits across all 24 terms),
+asserts the internal one carries the map and the register, and asserts the client
+pack's key set has no room for either.
+
+**The P4 gates are pure functions, enforced server-side.** §5.5's second reviewer
+must be a **distinct identity** — a field that merely has a value satisfies the
+form and defeats the gate, and the method doc is explicit that "the author of a
+capture is the worst judge". §5.3's threshold holds a sensitive pattern
+register-only until observed at ≥2 clients. Both are refused by the write path
+regardless of what the UI allowed: a disabled button is a courtesy, a refused
+write is a control.
+
+**The dual record is two tables, not two views of one.** The register keeps
+`clientRef` and `rawText`; the shared entry has no column for either, no
+engagement relation, and the FK points register → entry — so a read of the shared
+table cannot walk to attribution. Asserted against the schema itself.
+
+### Deviations, PR-6
+
+| # | Deviation | Reason |
+|---|---|---|
+| — | Harvest takes explained differs only | An unexplained "we differ" has nothing to generalize. It shows on C9 as an incomplete flag instead. |
+| — | The author is the session user, never a form field | Otherwise §5.5's gate is satisfied by typing someone else's name. |
+| — | The reviewer select omits the current user | The gate is enforced server-side; the UI simply never offers the invalid choice. |
+| — | No contract-check gate | P4 §5.4 requires it, but there is no contract field to check — the clause is an open prerequisite (§9). Flagged in the debt list rather than faked with a checkbox that asserts nothing. |
+| — | Quarter granularity on `captured` | Sharper than a quarter starts narrowing toward identification. |
+| — | CC### and `.var-n` minted server-side | Sequence collisions are not a UI concern. |
+
 ## Parity checklist
 
 | Screen | State | Match / Deviation | Reason |
 |---|---|---|---|
+| C5 `/discovery/sources` | empty / harvested / triaged | **Honest empty** | "No captures yet." — never invented candidates |
+| C5 · wizard | classify → generalize → anonymize → review → promote | **Built from P4 §3** | Checklist + sign-off are required steps |
+| C5 · wizard | blocked | **Built from P4 §5** | Refused without the checklist or a distinct reviewer |
+| C5 · promoted list | shared / register-only | **Built from P4 §5.3** | "Register only" until a second client |
+| C9 `/discovery/outputs/[id]` | live | Match | Real decisions; reads the client pack itself |
+| C9 | incomplete differs | **Built from brief** | Cannot be sized, cannot be harvested |
+| C9 · export | two lanes | Match | Two buttons, two confirms, two serializers |
+| C2 | client-captured rows | **Built from P4 §4** | Composed + badged; JSON untouched |
 | C7 `/discovery/sessions` | list / empty | **Honest empty** | No fixture sessions |
 | C7 `/discovery/sessions/[id]` | scope + reviewers | **Deviation — brief** | Derived status; scope chips; D19 |
 | C8 `/discovery/sessions/[id]/facilitate` | not projecting | **Built from brief** | Honest "reviewers can still explore" |

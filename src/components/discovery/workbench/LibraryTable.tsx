@@ -239,7 +239,12 @@ function cellContent(label: string, row: LibraryRow) {
       return <span className="text-[11px] text-ink-muted">{row.industry ?? "—"}</span>;
     case "Origin":
       // Origin is consultant-only vocabulary; it never crosses to /d.
-      return (
+      // client-captured entries are badged, per P4 §4 ("visible in the C2 grid").
+      return row.origin === "client-captured" ? (
+        <span className="inline-flex h-[18px] items-center rounded-input bg-[color-mix(in_srgb,var(--decision-standard)_15%,transparent)] px-1.5 text-[10px] font-bold text-decision-standard">
+          Captured
+        </span>
+      ) : (
         <span className="font-mono text-[10px] uppercase text-ink-muted">
           {row.origin === "sap-base" ? "Base" : "Overlay"}
         </span>
