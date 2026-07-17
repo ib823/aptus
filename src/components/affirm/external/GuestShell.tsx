@@ -51,12 +51,12 @@ export function GuestShell({
       <div className="flex-1">{children}</div>
 
       <footer className="ax-no-print mt-auto border-t border-border-default bg-cream px-[clamp(16px,4vw,32px)] py-5">
-        <div className="mx-auto flex max-w-[1040px] flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-muted">
+        <div className="mx-auto flex max-w-[1040px] flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-soft">
           <span>
             Prepared by ABeam Consulting · Confidential
             {clientName ? ` — for ${clientName} executive review` : " — for executive review"}
           </span>
-          <span className="text-ink-disabled">·</span>
+          <span className="text-ink-soft">·</span>
           <span className="text-navy">PDPA notice</span>
           <span className="text-navy">Terms</span>
         </div>
