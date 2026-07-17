@@ -35,11 +35,13 @@ Ran against the committed artifacts to validate the two claims the plan rests on
 | D1 | **Resolved by the 2026-07-17 re-emission.** Both datasets' `meta` blocks are now consistent with actuals; the stale-completeness remnant is gone. | **The stance stands regardless: MANIFEST is authoritative, `meta` is informational.** The loader reads no count from `meta` — enforced by typing it `unknown` in the schema, so a violation is a compile error. Data is never edited locally; corrections arrive as data-only re-emissions (D6 is the first). |
 | D2 | Consultant dataset has **no `completeness` field**; client dataset does. Invariant 4 requires completeness badges everywhere a process renders, including the C2 library grid. | Consultant loader derives completeness by joining `scope_id` → client `id`. No data change. |
 | D3 | **46% of flow steps (1400/3035) and 31% of substeps (2877/9425) have an empty role**, but the .dc renders `{{ lane.role }}` with no fallback. | Resolved by the brief, which wins: *"Blank-role steps sit in a 'System / Automatic' lane."* No question outstanding. |
-| D4 | The .dc files use **literal hex, not CSS vars** — contrary to the prompt's description. 22 of 23 values map to existing repo tokens. **`#DDD9CC` has no token** (used once: export/print-preview backdrop). | Invariant 5 forbids new colors. Use `--border-strong` (`#C4BFAE`) for the export backdrop. Deviation logged; PR-3 scope. |
+| D4 | ~~The .dc uses literal hex; `#DDD9CC` has no token.~~ **CLOSED in PR-3.** | The export print-preview backdrop is now `var(--border-strong)`. It is decorative desk-space around the A4 page and never prints, so no new colour entered the system. **Separately**, PR-3 opened the one sanctioned exception to invariant 5: the pack itself must print pure black on white (§3) with label+pattern decisions (§11), which the warm on-screen palette cannot do. That palette lives only in `d/export/discovery-export.css`, scoped to `.dx-root`, exempted **by path** in the stray-hex guard — and the guard asserts the exemption is exactly one file, that the file exists, and that nothing else imports it, so the exception cannot quietly widen. The export components carry no hex at all; they use `currentColor`. |
+| D13 | **The Export register lists DECIDED processes only.** All 742 would be ~120 pages of "Undecided" — not a document anyone reads. | The per-stream summary already carries the undecided counts, and the cover stamps the draft state, so nothing is hidden: the pack says how many are unreviewed, it just does not enumerate them. If a full register is ever wanted, it is a flag on this page, not a redesign. |
+| D12 | **`P` is claimed by two brief sections** — §6/22 makes it the Present mode key, §6/23 makes it Park. | No real conflict: outside Present, `P` enters Present; inside Present you are already there, so `P` parks. `E`/`X` always switch. The mode switch yields the key when `mode === "present"`; the facilitator bar owns it. All accelerators are suppressed inside text fields — a reviewer typing "we **p**ark expensive orders" must not teleport (asserted in the e2e). |
 | D11 | **The .dc's V2 search has no empty state.** An unmatched query hides every workflow section, leaving the reviewer looking at a fit bar, a search box and nothing else — with no explanation. It reads as a broken page. | Added an honest empty state ("No processes match '…'. Try a shorter search, or clear it to see the whole stream.") plus an `aria-live` result count, since a list that silently re-filters is invisible to a screen reader. The brief specifies neither; this is the smallest honest fix rather than an invention of scope. |
 | D10 | **The vendor-term guard scans comments, not just rendered strings** — and it fired on my own code twice: a comment quoting Affirm's landing copy (which names a product), and the phrase "enumeration **oracle**", where the ordinary security term collides with the vendor `Oracle`. | **Keep the guard strict; rephrase the prose.** Comments never render, so these were harmless — but exempting comments means parsing them out, and the parser becomes the thing that can be wrong. A guard that occasionally makes you reword a comment is cheap; a guard with a hole in it is not. Noted here so the next person hits the `Oracle`/"oracle" collision knowingly rather than fighting it. |
 | D9 | **The brief specifies no landing or verify screen** — its V1–V5 are all post-verify surfaces, and the .dc prototype starts at V1. But the journey needs an entry point. | Structure mirrors Affirm's landing/verify exactly. Copy is discovery's own, because Affirm's headline names a vendor product and invariant 1 forbids that here. The brief's §10 verbatim promises are used where they fit ("Your business on one page…", "See how the standard runs your process…", "Nothing is committed…"). Legal versions are discovery-specific (`discovery-pdpa-v1`), not Affirm's — pinning a grant to `affirm-pdpa-v1` would record consent to a notice the reviewer never read. |
-| D8 | **The mode switch (Present · Explore · Export) is not rendered in PR-2a.** | Brief §7 puts it in the shared chrome, but Present and Export are PR-3. A switch whose other two segments route nowhere is worse than no switch, and the "stub with the toast pattern" instruction can't be honoured: the .dc defines `flashToast` but **never calls it**, so the prototype supplies no toast copy — stubbing would mean inventing client-facing copy, which the plan forbids. It ships with the modes in PR-3. |
+| D8 | ~~**The mode switch is not rendered in PR-2a.**~~ **CLOSED in PR-3.** | Deferred because Present/Export did not exist and the .dc supplies no toast copy to stub with (it defines `flashToast` and never calls it). Both modes exist now, so the switch ships functional: segmented, persisted per session via a `/d`-scoped cookie read server-side (no flash of Explore before Present), `P/E/X` bound. Built as links-with-`aria-current` rather than the .dc's `role="tablist"` of plain buttons — a tablist would be a lie, since nothing here is a tabpanel and each mode is a real destination. |
 | D7 | **`cookies.ts` mirrored, not parameterized** (deviation from the approved option). | The Affirm file is marked *"Contractual — change requires security review"*. Threading a name/path argument through it would edit security-reviewed code for no functional gain; the constants are the only difference. Approved retroactively. |
 | D6 | **181 sentinel flows in the frozen client dataset** — see the dedicated section below. Corrected upstream by a data-only re-emission. Honest totals are now **545 with a flow / 197 without**. | `hasFlow()` is flow-presence only (sentinels no longer exist). A permanent CI assertion rejects any flow step matching `/\((?:no\|not)\b[^)]*\bsteps?\)/i` or any guard term, at step and sub-step level. V1's stat row reads `coverageCounts()` — computed from the data, never from `meta` or MANIFEST. |
 | D5 | **`typecheck:strict` OOMs** (V8 heap exhausted) on a plain `import raw from "…client.json"`. With `resolveJsonModule`, tsc infers a full structural literal type across all 742 processes and their nested flows. Verified against baseline: clean `main` passes; adding the import alone tips it over. | Ambient declaration in `src/types/discovery-data.d.ts` types the two datasets as `unknown`, stopping the inference. Nothing is lost — the loaders never trusted the inferred shape; they zod-parse the raw value, which is a *stronger* guarantee (runtime validation vs. compile-time literal). Scoped to the discovery datasets, so JSON imports elsewhere keep normal inference. |
@@ -320,10 +322,80 @@ character-for-character — so a well-meaning tweak to a client promise fails CI
   wins the string, §6/12 the style.
 - **D11** — the .dc's search has no empty state; added one.
 
+## PR-3 · Present + Export — GREEN
+
+Branch: `feat/neutral-discovery-present-export`. Completes the client surface.
+
+**Gates:** `typecheck:strict` ✓ · `lint:strict` ✓ · `pnpm test` ✓ (127 discovery tests).
+
+**⚠ e2e written, not executed** — unchanged environment limit (no Postgres;
+`global-setup` opens Prisma before any spec). `discovery-present-export.unauth.spec.ts`
+covers the mode switch, `P/E/X`, `1–4`, arrows-walk-steps vs shift-walks-processes,
+Space reveal, `P`-parks, the hotkey-suppression-while-typing case, the Draft stamp,
+label-not-colour, selectable text, axe on both, and a print snapshot. Gates in preview.
+
+**Closed here:** D8 (mode switch) and D4 (`#DDD9CC` → `var(--border-strong)`).
+
+**New table:** `DiscoveryNote` — additive, verified statement-for-statement against
+`prisma migrate diff --from-empty` (exact match), all statements target
+`DiscoveryNote`. Deliberately its own table rather than a column on
+`DiscoveryDecision`: a column would ride along with every decision read, making
+privacy depend on every future `select` remembering to exclude it. A separate table
+means a client read must opt IN to leaking.
+
+**The notes-privacy seam contract** (`notes-privacy.test.ts`) is asserted now, before
+PR-5's C8 exists to rely on it, from three independent angles: no client view model
+queries the table; the serializer allowlist has no mapper that could carry a note;
+and `/d/notes` is write-only — POST exists, no GET/PUT/PATCH/DELETE, `create` is the
+only verb it uses, and its response body carries no note content.
+
+### Present (V5)
+
+`PresentShell` is the *opposite* chrome, not `DiscoveryShell` with a flag — §8 says
+hide nav, breadcrumbs, sidebars and search, so sharing a shell would have meant
+negating most of it. Keyboard per §6/23 verbatim: **←/→ walk steps, ⇧←/⇧→ walk
+processes** (the .dc has this backwards — conflict #33), Space reveals, `P` parks,
+`1–4` set the fit (§6/21). §8's "never scroll inside a step — paginate" is why
+Present shows ONE step at a time at full size rather than a scrollable swimlane;
+that is what makes it legible at 3 m. The whole-flow swimlane stays Explore's job.
+
+### Export (V7)
+
+No shell, no links, no buttons (§8: "strip all chrome and interaction"). A link in a
+printed pack is a dead artefact, and on screen it invites clicking something that
+won't exist on paper. Decisions render as **SVG `<pattern>` fills + a text label** —
+SVG because CSS `background-image` is what printers drop first, and the label is the
+actual answer with the pattern reinforcing it.
+
+**The Draft stamp is the honesty control here.** The pack renders for in-progress
+engagements *and says so*, on the cover and in every page footer, with the real
+counts. A pack that looks final in a boardroom because nobody noticed the numbers
+don't add up is exactly what invariant 4 exists to prevent.
+
+### Remaining conflicts closed in PR-3
+
+| # | Resolution |
+|---|---|
+| 28 | Icons: inline stroke SVG throughout the facilitator bar (§12.4) — not the .dc's `◀ ▶ ⚑` glyphs. |
+| 29 | Mode-switch keyboard `P/E/X`, persisted per session. See D12 for the `P` collision. |
+| 31 | Present type: serif 44/52 H1, 28/36 step text, ≥20px floor honoured. The .dc's 12–13px facilitator text is replaced by 13px mono metadata only — the *content* type meets the floor. |
+| 33 | ←/→ walk steps; ⇧←/⇧→ walk processes. Brief wins over the .dc. |
+| 35 | **Park is a distinct ACTION, the same STATE.** §9 fixes the vocabulary at four and says "never introduce a fifth colour", so Park cannot be a fifth state; §6/23 makes it its own control. It sets `discuss`, and the button says what it does. The .dc aliases them too — so the brief's distinction is real but cosmetic, exactly as flagged in PR-2a. |
+
 ## Parity checklist
 
 | Screen | State | Match / Deviation | Reason |
 |---|---|---|---|
+| Present `/d/*` (mode) | pre-start / live | **Built from brief** | Full-bleed; nav/breadcrumb/search hidden per §8 |
+| Present · flow-hero | step / step-drill | **Built from brief** | One step at a time (§8 "never scroll inside a step") |
+| Present · selector | all four + sealed | Match | Oversized, radiogroup preserved, `1–4` bound |
+| Present · facilitator bar | live tally | Match | Real decisions, not a mock; ≥56px; keyboard-mirrored |
+| Present · keyboard hints | fade after 4s | **Deviation — a11y** | Fade is visual only: stays in the a11y tree, returns on keypress, `motion-reduce` keeps it visible |
+| Export `/d/export` | sealed | Match | Black-on-white, label+pattern, page footers |
+| Export | in-progress | **Built from brief** | "Draft — decisions incomplete" + real counts |
+| Export | no decisions yet | **Deviation — D13** | Register collapses to one explanatory page rather than 120 pages of "Undecided" |
+| Export · heatmap | linearised | Match | §8: hover-only reveal gains an always-expanded equivalent |
+| Mode switch | all three | **Built from brief** | Links + `aria-current`, not the .dc's fake tablist |
 | V2 `/d/stream/[id]` | default | **Deviation — brief** | All 10 streams real; support line added (#5); no prototype scaffolding |
 | V2 | search / no match | **Deviation — D11** | .dc has no empty state; added one + `aria-live` count |
 | V2 | stream-complete | **Built from brief** | Teal 15% banner (#7) |

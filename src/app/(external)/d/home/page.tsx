@@ -18,11 +18,13 @@
 
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { CoverageRow } from "@/components/discovery/CoverageRow";
 import { DifferHeatmap } from "@/components/discovery/DifferHeatmap";
 import { DiscoveryHomeSkeleton } from "@/components/discovery/DiscoveryHomeSkeleton";
 import { DiscoveryShell } from "@/components/discovery/DiscoveryShell";
+import { DISCOVERY_MODE_COOKIE, parseMode } from "@/lib/discovery/mode";
 import { ValueStreamRibbon } from "@/components/discovery/ValueStreamRibbon";
 import { WhatHappensNextStrip } from "@/components/discovery/WhatHappensNextStrip";
 import { getDiscoveryHome } from "@/lib/discovery/external/journey";
@@ -48,11 +50,13 @@ async function DiscoveryHomeContent() {
     sealed: isSealed(ctx.engagement),
   });
 
+  const mode = parseMode((await cookies()).get(DISCOVERY_MODE_COOKIE)?.value);
   const decided = view.streams.reduce((n, s) => n + s.decided, 0);
   const totalInScope = view.streams.reduce((n, s) => n + s.processCount, 0);
 
   return (
     <DiscoveryShell
+      mode={mode}
       clientName={view.identity.client}
       engagementLabel="Process Discovery"
       granteeName={view.identity.displayName}
