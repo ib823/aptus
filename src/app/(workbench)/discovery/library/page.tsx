@@ -9,19 +9,23 @@
 import type { Metadata } from "next";
 import { WorkbenchView } from "@/components/discovery/workbench/WorkbenchView";
 import { LibraryManager } from "@/components/discovery/workbench/LibraryManager";
-import { libraryFacets, libraryRows } from "@/lib/discovery/workbench/library";
+import { composeLibrary, libraryFacets } from "@/lib/discovery/workbench/library";
+import { promotedEntries } from "@/lib/discovery/workbench/capture";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Library manager" };
 
-export default function LibraryPage() {
-  const rows = libraryRows();
+export default async function LibraryPage() {
+  // Committed JSON + promoted entries. The JSON stays byte-frozen; the view
+  // composes (P4 §4 / the PR-6 architectural directive).
+  const composed = composeLibrary(await promotedEntries());
+  const rows = composed.rows;
   const facets = libraryFacets();
   return (
     <WorkbenchView
       breadcrumb="Library"
       title="Library manager"
-      caption={`${rows.length} processes · ${facets.hasFlow.yes} with a step flow · ${facets.hasFlow.no} without`}
+      caption={`${rows.length} processes · ${facets.hasFlow.yes} with a step flow${composed.promotedCount > 0 ? ` · ${composed.promotedCount} client-captured` : ""}${composed.registerOnlyCount > 0 ? ` · ${composed.registerOnlyCount} held in the register` : ""}`}
     >
       <LibraryManager rows={rows} facets={facets} />
     </WorkbenchView>

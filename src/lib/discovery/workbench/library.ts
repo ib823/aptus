@@ -18,10 +18,29 @@ import {
 } from "@/lib/discovery/consultant-library";
 import type { Completeness, Tier } from "@/lib/discovery/schema";
 
-export type Origin = "sap-base" | "overlay";
+/**
+ * P4 §4 adds a third origin. `client-captured` entries do NOT live in the
+ * committed JSON — it stays byte-frozen and hash-pinned. They live in
+ * DiscoveryPromotedEntry, and the library views COMPOSE the two. Folding them
+ * into the JSON is the post-pilot re-emission's job, upstream.
+ */
+export type Origin = "sap-base" | "overlay" | "client-captured";
 
-/** One row of the C2 grid — flattened, with its stream/workflow context. */
-export interface LibraryRow extends ConsultantProcessWithCompleteness {
+export const ORIGIN_LABELS: Record<Origin, string> = {
+  "sap-base": "Base",
+  overlay: "Overlay",
+  "client-captured": "Client-captured",
+};
+
+/**
+ * One row of the C2 grid — flattened, with its stream/workflow context.
+ *
+ * `origin` is widened past the dataset's own union: the committed JSON only ever
+ * carries sap-base | overlay, but the composed view also holds client-captured
+ * rows that come from DiscoveryPromotedEntry, not the JSON.
+ */
+export interface LibraryRow extends Omit<ConsultantProcessWithCompleteness, "origin"> {
+  origin: Origin;
   streamId: string;
   streamName: string;
   workflowName: string;
@@ -204,6 +223,62 @@ export function queryLibrary(q: LibraryQuery): LibraryRow[] {
 
 export function findLibraryRow(scopeId: string): LibraryRow | null {
   return libraryRows().find((r) => r.scope_id === scopeId) ?? null;
+}
+
+/**
+ * The composed view: committed JSON + promoted entries, badged.
+ *
+ * Only SHARED-visible promotions compose in (P4 §5.3): a sensitive pattern
+ * observed at one client stays in the internal register, so it must not appear
+ * in a view a consultant could screen-share or export.
+ */
+export interface ComposedLibrary {
+  rows: LibraryRow[];
+  promotedCount: number;
+  registerOnlyCount: number;
+}
+
+export function composeLibrary(promoted: PromotedComposable[]): ComposedLibrary {
+  const shared = promoted.filter((p) => p.sharedVisible);
+  const rows: LibraryRow[] = shared.map((p) => {
+    const parent = p.linkedProcessId ? findLibraryRow(p.linkedProcessId) : null;
+    return {
+      scope_id: p.scopeId,
+      name: p.name,
+      description: p.description,
+      tier: "generalized",
+      industry: p.observedIndustry,
+      origin: "client-captured",
+      completeness: null,
+      flow: undefined,
+      provenance: null,
+      apqc: parent?.apqc ?? null,
+      // A variant inherits its parent's placement; a net-new CC### process has
+      // no parent, and saying "Unplaced" is more honest than inventing a home.
+      streamId: parent?.streamId ?? "",
+      streamName: parent?.streamName ?? "Unplaced",
+      workflowName: parent?.workflowName ?? "Client-captured",
+      apqcCode: parent?.apqcCode ?? null,
+      apqcCategory: parent?.apqcCategory ?? null,
+      mainSteps: 0,
+      subSteps: 0,
+      hasFlow: false,
+    } as LibraryRow;
+  });
+  return {
+    rows: [...libraryRows(), ...rows],
+    promotedCount: shared.length,
+    registerOnlyCount: promoted.length - shared.length,
+  };
+}
+
+export interface PromotedComposable {
+  scopeId: string;
+  name: string;
+  description: string;
+  linkedProcessId: string | null;
+  observedIndustry: string;
+  sharedVisible: boolean;
 }
 
 // ─── APQC coverage (C4) ──────────────────────────────────────────────────────
