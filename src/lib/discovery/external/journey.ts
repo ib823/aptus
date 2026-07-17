@@ -30,6 +30,7 @@ import {
   type FitStatus,
 } from "@/lib/discovery/fit";
 import { toDiscoveryProcess, type DiscoveryProcess } from "@/lib/discovery/serializers";
+import { isStreamInScope } from "./scope";
 import type { ClientProcess, Completeness } from "@/lib/discovery/schema";
 
 // ─── Output shapes ───────────────────────────────────────────────────────────
@@ -70,6 +71,8 @@ export interface DiscoveryHomeView {
   allReviewed: boolean;
   /** Nothing decided yet — drives the fresh 0% state. */
   fresh: boolean;
+  /** The session is scoped to a subset of streams — drives V1's honest note. */
+  scoped: boolean;
 }
 
 export interface DiscoveryDecisionView {
@@ -220,23 +223,21 @@ export async function saveDecision(args: {
 // ─── View model ──────────────────────────────────────────────────────────────
 
 /**
- * Build V1. `valueStreamIds` scopes the reviewer's persona: empty means all 10
- * streams (the default), matching the Affirm grant convention.
+ * Build V1. `scope` is the EFFECTIVE scope (engagement ∩ grant) computed by
+ * ./scope.ts; null means all 10 streams.
  */
 export async function getDiscoveryHome(args: {
   engagementId: string;
   client: string;
   displayName: string;
   roleLabel: string | null;
-  valueStreamIds: string[];
+  /** Effective scope (engagement ∩ grant); null = all streams. See ./scope.ts. */
+  scope: string[] | null;
   sealed: boolean;
 }): Promise<DiscoveryHomeView> {
   const decisions = await decisionsForEngagement(args.engagementId);
 
-  const scoped =
-    args.valueStreamIds.length > 0
-      ? clientValueStreams().filter((vs) => args.valueStreamIds.includes(vs.id))
-      : clientValueStreams();
+  const scoped = clientValueStreams().filter((vs) => isStreamInScope(vs.id, args.scope));
 
   const totals = emptyFitMix();
   const streams: DiscoveryStreamSummary[] = scoped.map((vs) => {
@@ -290,6 +291,7 @@ export async function getDiscoveryHome(args: {
     totals,
     allReviewed: streams.length > 0 && streams.every((s) => s.decided === s.processCount),
     fresh: decidedTotal === 0,
+    scoped: args.scope !== null,
   };
 }
 
@@ -308,13 +310,14 @@ export async function getDiscoveryStream(args: {
   client: string;
   displayName: string;
   roleLabel: string | null;
-  valueStreamIds: string[];
+  /** Effective scope (engagement ∩ grant); null = all streams. See ./scope.ts. */
+  scope: string[] | null;
   sealed: boolean;
   streamId: string;
 }): Promise<DiscoveryStreamView | null> {
-  // Persona scope is enforced here, not in the page: a reviewer scoped to two
-  // streams must not reach a third by editing the URL.
-  if (args.valueStreamIds.length > 0 && !args.valueStreamIds.includes(args.streamId)) return null;
+  // Scope is enforced here, not in the page: a reviewer scoped to two streams
+  // must not reach a third by editing the URL.
+  if (!isStreamInScope(args.streamId, args.scope)) return null;
 
   const vs = clientValueStreams().find((s) => s.id === args.streamId);
   if (!vs) return null;
@@ -385,13 +388,14 @@ export async function getDiscoveryProcess(args: {
   client: string;
   displayName: string;
   roleLabel: string | null;
-  valueStreamIds: string[];
+  /** Effective scope (engagement ∩ grant); null = all streams. See ./scope.ts. */
+  scope: string[] | null;
   sealed: boolean;
   processId: string;
 }): Promise<DiscoveryProcessView | null> {
   const found = locateProcess(args.processId);
   if (!found) return null;
-  if (args.valueStreamIds.length > 0 && !args.valueStreamIds.includes(found.vsId)) return null;
+  if (!isStreamInScope(found.vsId, args.scope)) return null;
 
   const decisions = await decisionDetailsForEngagement(args.engagementId);
   const order = streamProcessOrder(found.vsId);
@@ -418,15 +422,13 @@ export async function getDiscoverySummary(args: {
   client: string;
   displayName: string;
   roleLabel: string | null;
-  valueStreamIds: string[];
+  /** Effective scope (engagement ∩ grant); null = all streams. See ./scope.ts. */
+  scope: string[] | null;
   sealed: boolean;
 }): Promise<DiscoverySummaryView> {
   const decisions = await decisionDetailsForEngagement(args.engagementId);
 
-  const scoped =
-    args.valueStreamIds.length > 0
-      ? clientValueStreams().filter((vs) => args.valueStreamIds.includes(vs.id))
-      : clientValueStreams();
+  const scoped = clientValueStreams().filter((vs) => isStreamInScope(vs.id, args.scope));
 
   const mix = emptyFitMix();
   let incomplete = 0;

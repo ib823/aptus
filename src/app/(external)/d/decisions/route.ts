@@ -16,6 +16,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { writeDiscoveryEvent } from "@/lib/discovery/external/audit";
 import { verifySessionNonce } from "@/lib/discovery/external/csrf";
 import { requireGuestSession, isDeviceVerified } from "@/lib/discovery/external/guards";
+import { effectiveStreamIds } from "@/lib/discovery/external/scope";
 import { saveDecision } from "@/lib/discovery/external/journey";
 import { isSealed, touchGuestSession } from "@/lib/discovery/external/session";
 import { isFitStatus } from "@/lib/discovery/fit";
@@ -48,13 +49,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const process = findClientProcess(processId);
   if (!process) return NextResponse.json({ error: "bad_request" }, { status: 400 });
 
-  // Persona scope: a reviewer scoped to some streams cannot decide outside them.
-  if (ctx.grant.valueStreamIds.length > 0) {
+  // Scope: a reviewer cannot decide outside their EFFECTIVE scope (the session's
+  // scope intersected with their persona's). The read path enforces the same
+  // rule via the serializer; a write path that trusted the grant alone would let
+  // a reviewer invited after scoping decide on any of the 742.
+  const scope = effectiveStreamIds({
+    engagementStreamIds: ctx.engagement.valueStreamIds,
+    grantStreamIds: ctx.grant.valueStreamIds,
+  });
+  if (scope !== null) {
     const { clientValueStreams } = await import("@/lib/discovery/client-library");
     const owning = clientValueStreams().find((vs) =>
       vs.workflows.some((wf) => wf.processes.some((p) => p.id === processId)),
     );
-    if (!owning || !ctx.grant.valueStreamIds.includes(owning.id)) {
+    if (!owning || !scope.includes(owning.id)) {
       await writeDiscoveryEvent({
         engagementId: ctx.engagement.id,
         type: "external_action_denied",

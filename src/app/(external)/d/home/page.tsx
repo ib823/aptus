@@ -29,6 +29,7 @@ import { ValueStreamRibbon } from "@/components/discovery/ValueStreamRibbon";
 import { WhatHappensNextStrip } from "@/components/discovery/WhatHappensNextStrip";
 import { getDiscoveryHome } from "@/lib/discovery/external/journey";
 import { isDeviceVerified, requireGuestSession } from "@/lib/discovery/external/guards";
+import { effectiveStreamIds } from "@/lib/discovery/external/scope";
 import { isSealed, touchGuestSession } from "@/lib/discovery/external/session";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +47,10 @@ async function DiscoveryHomeContent() {
     client: ctx.engagement.client,
     displayName: ctx.grant.displayName,
     roleLabel: ctx.grant.roleLabel,
-    valueStreamIds: ctx.grant.valueStreamIds,
+    scope: effectiveStreamIds({
+      engagementStreamIds: ctx.engagement.valueStreamIds,
+      grantStreamIds: ctx.grant.valueStreamIds,
+    }),
     sealed: isSealed(ctx.engagement),
   });
 
@@ -80,6 +84,16 @@ async function DiscoveryHomeContent() {
       {view.allReviewed && !view.sealed && (
         <p className="mb-6 rounded-input border border-decision-standard/30 bg-[color-mix(in_srgb,var(--decision-standard)_15%,transparent)] px-4 py-3 text-[13px] font-semibold text-decision-standard">
           Every stream reviewed — ready for the workshop.
+        </p>
+      )}
+
+      {/* Scoped sessions say so. Without this, a client whose session covers 3
+          streams would see "Every stream reviewed" and believe their whole
+          business had been looked at. */}
+      {view.scoped && (
+        <p className="mb-6 rounded-input border border-navy-border bg-navy-soft px-4 py-3 text-[13px] text-navy">
+          This discovery covers {view.streams.length} of your {view.coverage.valueStreams} value
+          streams. The rest are catalogued but out of scope for this review.
         </p>
       )}
 

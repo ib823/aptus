@@ -36,6 +36,8 @@ Ran against the committed artifacts to validate the two claims the plan rests on
 | D2 | Consultant dataset has **no `completeness` field**; client dataset does. Invariant 4 requires completeness badges everywhere a process renders, including the C2 library grid. | Consultant loader derives completeness by joining `scope_id` → client `id`. No data change. |
 | D3 | **46% of flow steps (1400/3035) and 31% of substeps (2877/9425) have an empty role**, but the .dc renders `{{ lane.role }}` with no fallback. | Resolved by the brief, which wins: *"Blank-role steps sit in a 'System / Automatic' lane."* No question outstanding. |
 | D4 | ~~The .dc uses literal hex; `#DDD9CC` has no token.~~ **CLOSED in PR-3.** | The export print-preview backdrop is now `var(--border-strong)`. It is decorative desk-space around the A4 page and never prints, so no new colour entered the system. **Separately**, PR-3 opened the one sanctioned exception to invariant 5: the pack itself must print pure black on white (§3) with label+pattern decisions (§11), which the warm on-screen palette cannot do. That palette lives only in `d/export/discovery-export.css`, scoped to `.dx-root`, exempted **by path** in the stray-hex guard — and the guard asserts the exemption is exactly one file, that the file exists, and that nothing else imports it, so the exception cannot quietly widen. The export components carry no hex at all; they use `currentColor`. |
+| D19 | **Scope was grant-only and would have leaked.** PR-2a put `valueStreamIds` on the grant (a persona scope) and nothing on the engagement. A session "scoped to 3 streams" was therefore only scoped if every grant repeated the list — and a reviewer invited *after* scoping would have an empty grant, which means "unrestricted", so they would see all 10 streams. | **Effective scope = engagement ∩ grant.** `valueStreamIds` added to `DiscoveryEngagement` (the session's scope); the grant may narrow within it and can never widen past it. Enforced in the serializer path every /d view goes through, and in the decisions write path — not the UI. Note `null` (unrestricted) is deliberately distinct from `[]` (nothing visible): a grant scoped entirely outside its session sees nothing, where a naive `length === 0 ? all : filter` would hand over the whole library. |
+| D18 | **Seam mechanism: SSE, poll-behind-stream.** | Mirrors `api/assessments/[id]/workshops/[sessionId]/stream/route.ts` — the repo's existing precedent for this exact shape (a facilitator drives, a room follows): the server polls every 3s and pushes only on change, with a 15s heartbeat and a 1h cap. Chosen over websockets (no infra here) and over client polling (one open stream degrades to a reconnect, rather than putting a hard 5s floor of requests under every reviewer in the room). **Degrades**: EventSource retries itself; after 3 real failures the client falls back to a 15s `router.refresh()`, so a reviewer behind a proxy that eats event-streams still follows, just less promptly. If nothing is driving it does nothing — a reviewer exploring alone is never yanked to another page. |
 | D17 | **C1's "first-run empty" state (brief §7-C1) is not built.** Its CTA is "Import the base library". | The library is a committed, hash-pinned JSON file — it is never absent, so the state is unreachable and the button could not do anything. Shipping it would be a control that lies about what the product can do. The engagements table has a real empty state instead ("No discovery engagements yet"), because zero engagements genuinely happens. |
 | D16 | **C10 ships with no audit trail.** The .dc has one: three rows, hardcoded, attributed to a named real person with invented timestamps ("2d ago · 18J Requisitioning — description edited · Ikmal"). | Omitted entirely. An audit trail that lies is worse than no audit trail — it is the one component whose entire value is that you can trust it. It ships when there is a real edit log to show, which is PR-6 (the P4 pipeline is the first thing that writes library changes). |
 | D15 | **The context chip's default lies on the fence.** §9.1 makes the chip's whole job "tells the consultant whether the current surface is internal-only or paired with a client projection", but the .dc computes it as "Live session — {client}" / "Session setup" / **"Editing library" for everything else** — so it reads "Editing library" while the fenced product map is on screen. | "Editing library" stays the default as instructed, but C6 passes `consultant-only` → **"Consultant only — not shared"**, in the fence's own palette. A chip that says "Editing library" on the one view where being wrong is worst is not a default, it is a bug. |
@@ -456,10 +458,68 @@ pre-colours Oracle and NetSuite grey regardless of value.
 | C10 | Staleness in days + pinned hashes + algorithm | #27. The .dc shows a "2602" literal and no age. |
 | All | No fixture data anywhere | The .dc carries fabricated reviewer names with working-looking emails, invented audit rows attributed to a real person, a fabricated client quote on the wrong process, and ~30 "ships in the next pass" toasts. None ship. |
 
+## PR-5 · Sessions, facilitation, and the seam (C7 + C8) — GREEN
+
+Branch: `feat/neutral-discovery-sessions-seam`.
+
+**Gates:** `typecheck:strict` ✓ · `lint:strict` ✓ · `pnpm test` ✓ (177 discovery
+tests). Two-browser seam e2e written; gates in preview.
+
+**The seam (§8).** The consultant drives from C8; the client's Present view
+follows via SSE (D18). The payload is `{live, processId}` and nothing else —
+selected explicitly from two columns, so it cannot widen when someone adds a
+column to `DiscoveryEngagement`. A client that can hear the stream learns only
+which process the room is looking at, which is what it can already see on the
+projector.
+
+**Privacy is structural, not a setting (§9.4).** The notes contract asserted back
+in PR-3 finally has its consumer: `lib/discovery/workbench/session.ts`, the ONLY
+reader of `DiscoveryNote` — asserted by a source scan — and it sits behind the
+wall the boundary test walks. There is no "share this note" control in C8 because
+there is no code path that could put one on the seam. The two-browser e2e proves
+it from the other side: the consultant writes a note, and the client's browser
+records every response body it receives and must contain none of it.
+
+**D19 is the important find.** Scope was grant-only, which meant a reviewer
+invited after a session was scoped would default to *all 10 streams*. Now
+effective scope is engagement ∩ grant, enforced in the serializer and the write
+path. `null` vs `[]` matters: a grant scoped entirely outside its session sees
+nothing, where the obvious `length === 0 ? all : filter` would have handed over
+the whole library.
+
+**Scoping honesty.** A scoped session tells the client so on V1 — "This discovery
+covers 1 of your 10 value streams." Without it, "Every stream reviewed — ready
+for the workshop" would read as *your whole business has been looked at*.
+
+**End session ≠ seal.** Ending a projection clears `liveAt` and nothing else.
+Sealing stays the explicit action it already was: conflating them would seal a
+client's record because a laptop lid closed, and the e2e asserts the client can
+still decide after the room breaks up.
+
+### Deviations, PR-5
+
+| # | Deviation | Reason |
+|---|---|---|
+| — | No fabricated reviewers | The .dc ships three invented people with working-looking emails at a real-looking domain. Reviewer rows come from real grants; status is **derived** from the grant lifecycle (revoked → superseded → verified → acknowledged → invited), never a stored label. |
+| — | No fixture client or seeded decisions | The .dc hardcodes `sessionClient: 'Asia Meals Group'` and pre-decides `{18J: differ, 19E: standard, 1XF: discuss}`, which seeds its tally and all five C9 stat tiles. The tally here is real decisions or zero. |
+| — | Park list = the `discuss` decisions | Park is an action, not a fifth state (#35). Parking in Present and choosing "Discuss in workshop" on /d therefore land in the same place — which is the point, not a coincidence. |
+| — | Revoke ends live sessions | Revoking access that leaves a live session open is not revoking access. |
+| — | Resend re-issues an OTP, not a token | The invite link the reviewer already has keeps working. |
+
 ## Parity checklist
 
 | Screen | State | Match / Deviation | Reason |
 |---|---|---|---|
+| C7 `/discovery/sessions` | list / empty | **Honest empty** | No fixture sessions |
+| C7 `/discovery/sessions/[id]` | scope + reviewers | **Deviation — brief** | Derived status; scope chips; D19 |
+| C8 `/discovery/sessions/[id]/facilitate` | not projecting | **Built from brief** | Honest "reviewers can still explore" |
+| C8 | LIVE — projecting | Match | cta-red banner + chip (D15); End control |
+| C8 · tally | live | Match | Real decisions, polled |
+| C8 · park list | populated / empty | Match | "Nothing parked yet." |
+| C8 · notes | private | **Structural** | Only reader is behind the wall; no share path exists |
+| Present (client) | following | **Built from brief** | Follows the driver; "Following the session" badge |
+| Present (client) | not driven | Match | Reviewer explores freely; never yanked |
+| V1 | scoped session | **Built from brief** | Honest scoped note |
 | C1 `/discovery` | populated | **Built from brief** | Health tiles computed; engagements from the 2a tables |
 | C1 | no engagements | **Honest empty** | Not "Import the base library" (D17) |
 | C2 `/discovery/library` | populated / filtered / no match | **Deviation — brief** | Real table, 7 facets, keyboard grid |

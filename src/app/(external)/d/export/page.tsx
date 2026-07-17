@@ -35,6 +35,7 @@ import {
   getDiscoveryHome,
 } from "@/lib/discovery/external/journey";
 import { isDeviceVerified, requireGuestSession } from "@/lib/discovery/external/guards";
+import { effectiveStreamIds } from "@/lib/discovery/external/scope";
 import { isSealed, touchGuestSession } from "@/lib/discovery/external/session";
 import { clientValueStreams } from "@/lib/discovery/client-library";
 import { fitMixDecided, type FitState } from "@/lib/discovery/fit";
@@ -70,7 +71,10 @@ export default async function DiscoveryExportPage() {
     client: ctx.engagement.client,
     displayName: ctx.grant.displayName,
     roleLabel: ctx.grant.roleLabel,
-    valueStreamIds: ctx.grant.valueStreamIds,
+    scope: effectiveStreamIds({
+      engagementStreamIds: ctx.engagement.valueStreamIds,
+      grantStreamIds: ctx.grant.valueStreamIds,
+    }),
     sealed,
   });
   const decisions = await decisionDetailsForEngagement(ctx.engagement.id);
