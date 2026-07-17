@@ -84,7 +84,7 @@ export function ProductMapTable({ rows }: ProductMapTableProps) {
                             <span className="sr-only"> mapped (derived from the library)</span>
                           </span>
                         ) : (
-                          <span className="inline-flex h-[22px] items-center rounded-pill bg-ink-tint px-2.5 text-[11px] font-bold text-ink-muted">
+                          <span className="inline-flex h-[22px] items-center rounded-pill bg-ink-tint px-2.5 text-[11px] font-bold text-ink-soft">
                             to map
                             <span className="sr-only">
                               {" "}
@@ -109,7 +109,7 @@ export function ProductMapTable({ rows }: ProductMapTableProps) {
                           if ((next.trim() || null) !== value) void save(r.scopeId, p, next);
                         }}
                         disabled={saving === `${r.scopeId}:${p}`}
-                        className="h-[26px] w-full rounded-input border border-navy-border bg-navy-soft px-2 text-[11px] text-ink placeholder:font-bold placeholder:text-ink-muted focus-visible:border-navy focus-visible:shadow-focus-ring focus-visible:outline-none"
+                        className="h-[26px] w-full rounded-input border border-navy-border bg-navy-soft px-2 text-[11px] text-ink placeholder:font-bold placeholder:text-ink-soft focus-visible:border-navy focus-visible:shadow-focus-ring focus-visible:outline-none"
                       />
                     </td>
                   );
@@ -119,7 +119,7 @@ export function ProductMapTable({ rows }: ProductMapTableProps) {
           </tbody>
         </table>
       </div>
-      <p aria-live="polite" className="mt-2 min-h-[16px] text-[11px] text-ink-muted">{note}</p>
+      <p aria-live="polite" className="mt-2 min-h-[16px] text-[11px] text-ink-soft">{note}</p>
     </>
   );
 }

@@ -125,14 +125,14 @@ export function FacilitatorBar({
       </div>
 
       {/* Step counter, mono (§6/23). */}
-      <p className="font-mono text-[13px] text-ink-muted" aria-live="polite">
+      <p className="font-mono text-[13px] text-ink-soft" aria-live="polite">
         {stepCount > 0 ? (
           <>
             Step {stepIndex + 1}
-            <span className="text-ink-disabled">/{stepCount}</span>
+            <span className="text-ink-soft">/{stepCount}</span>
           </>
         ) : (
-          <span className="text-ink-disabled">No flow</span>
+          <span className="text-ink-soft">No flow</span>
         )}
       </p>
 

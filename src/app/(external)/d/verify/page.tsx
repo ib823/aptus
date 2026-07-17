@@ -46,13 +46,13 @@ export default async function DiscoveryVerifyPage({ searchParams }: PageProps) {
   return (
     <GuestShell clientName={ctx.engagement.client}>
       <main id="main" className="mx-auto max-w-[560px] px-[clamp(16px,4vw,32px)] pb-[72px] pt-16 text-center">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-soft">
           Device verification
         </p>
         <h1 className="mb-3 font-serif text-[32px] font-medium leading-[38px] text-ink">
           Enter the 6-digit code we emailed you
         </h1>
-        <p className="mb-7 text-[13px] text-ink-muted">
+        <p className="mb-7 text-[13px] text-ink-soft">
           We sent a code to <span className="font-mono text-ink-soft">{ctx.grant.email}</span>.
         </p>
 
@@ -80,7 +80,7 @@ export default async function DiscoveryVerifyPage({ searchParams }: PageProps) {
           <input type="hidden" name="csrf" value={issueSessionNonce(ctx.session.id)} />
           <button
             type="submit"
-            className="ax-touch text-[11px] text-ink-muted underline transition hover:text-navy focus-visible:shadow-focus-ring focus-visible:outline-none"
+            className="ax-touch text-[11px] text-ink-soft underline transition hover:text-navy focus-visible:shadow-focus-ring focus-visible:outline-none"
           >
             Resend code
           </button>

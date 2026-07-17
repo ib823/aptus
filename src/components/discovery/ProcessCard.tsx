@@ -50,7 +50,7 @@ export function ProcessCard({ process }: ProcessCardProps) {
             {process.id}
           </span>
           <CompletenessBadge completeness={process.completeness} />
-          <span className="ml-auto inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-ink-muted">
+          <span className="ml-auto inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-ink-soft">
             <span className={`size-2 shrink-0 rounded-pill ${DOT[process.state]}`} aria-hidden="true" />
             {/* Label, not colour alone (§11). */}
             {FIT_LABELS[process.state]}
@@ -61,7 +61,7 @@ export function ProcessCard({ process }: ProcessCardProps) {
         <span className="mb-2.5 block text-[13px] leading-[19px] text-ink-soft">
           {process.description}
         </span>
-        <span className="block text-[11px] text-ink-muted">{stepCountLabel(process)}</span>
+        <span className="block text-[11px] text-ink-soft">{stepCountLabel(process)}</span>
       </Link>
     </li>
   );

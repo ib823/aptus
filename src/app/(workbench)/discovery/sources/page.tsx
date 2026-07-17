@@ -77,7 +77,7 @@ export default async function SourcesPage({
 
       <h2 className="mb-2 mt-8 font-serif text-base font-medium text-navy">Promoted entries</h2>
       {promoted.length === 0 ? (
-        <p className="rounded-input border border-border-default bg-paper px-6 py-8 text-center text-[13px] text-ink-muted">
+        <p className="rounded-input border border-border-default bg-paper px-6 py-8 text-center text-[13px] text-ink-soft">
           Nothing promoted yet. Promotions appear in the library badged{" "}
           <span className="font-semibold">client-captured</span>.
         </p>
@@ -90,7 +90,7 @@ export default async function SourcesPage({
             <thead className="bg-ink-tint">
               <tr>
                 {["Ref", "Name", "Type", "Observed in", "Seen at", "Visibility"].map((h) => (
-                  <th key={h} scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-muted">
+                  <th key={h} scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-soft">
                     {h}
                   </th>
                 ))}
@@ -101,7 +101,7 @@ export default async function SourcesPage({
                 <tr key={p.scopeId} className="border-b border-ink-tint">
                   <th scope="row" className="px-3.5 py-3 font-mono text-[11px] font-bold text-navy">{p.scopeId}</th>
                   <td className="px-3.5 py-3 text-xs text-ink">{p.name}</td>
-                  <td className="px-3.5 py-3 font-mono text-[11px] text-ink-muted">{p.type}</td>
+                  <td className="px-3.5 py-3 font-mono text-[11px] text-ink-soft">{p.type}</td>
                   <td className="px-3.5 py-3 text-[11px] text-ink-soft">{p.observedIndustry}</td>
                   <td className="px-3.5 py-3 font-mono text-[11px] text-ink-soft">
                     {p.observedCount} {p.observedCount === 1 ? "client" : "clients"}

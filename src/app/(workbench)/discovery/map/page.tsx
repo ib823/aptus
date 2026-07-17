@@ -44,7 +44,7 @@ export default async function ProductMapPage() {
             <p className="font-serif text-[22px] font-medium text-navy">
               {Math.round(c.share * 100)}%
             </p>
-            <p className="mt-0.5 text-[11px] font-semibold uppercase text-ink-muted">
+            <p className="mt-0.5 text-[11px] font-semibold uppercase text-ink-soft">
               {c.label} mapped
             </p>
             <div
@@ -60,7 +60,7 @@ export default async function ProductMapPage() {
                 style={{ width: `${c.share * 100}%` }}
               />
             </div>
-            <p className="mt-1 font-mono text-[10px] text-ink-muted">
+            <p className="mt-1 font-mono text-[10px] text-ink-soft">
               {c.mapped} / {c.total}
             </p>
           </li>

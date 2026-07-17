@@ -56,7 +56,7 @@ export default async function CoveragePage() {
           <thead className="bg-ink-tint">
             <tr>
               {["Code", "Category", "Processes", "With a flow", "Coverage", "Detail held"].map((h) => (
-                <th key={h} scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-muted">
+                <th key={h} scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-soft">
                   {h}
                 </th>
               ))}
@@ -69,14 +69,14 @@ export default async function CoveragePage() {
                 <td className="px-3.5 py-3 text-xs text-ink">{c.category}</td>
                 <td className="px-3.5 py-3 font-mono text-xs text-ink-soft">{c.total}</td>
                 <td className="px-3.5 py-3 font-mono text-xs text-ink-soft">
-                  {c.withFlow} <span className="text-ink-muted">({Math.round(c.flowShare * 100)}%)</span>
+                  {c.withFlow} <span className="text-ink-soft">({Math.round(c.flowShare * 100)}%)</span>
                 </td>
                 <td className="px-3.5 py-3">
                   <span className={`inline-flex h-5 items-center rounded-pill px-2 text-[10px] font-bold uppercase ${LEVEL_CLASS[c.level]}`}>
                     {COVERAGE_LEVEL_LABELS[c.level]}
                   </span>
                 </td>
-                <td className="px-3.5 py-3 text-[11px] text-ink-muted">
+                <td className="px-3.5 py-3 text-[11px] text-ink-soft">
                   {c.detailed} detailed · {c.outline} outline · {c.none} no flow
                 </td>
               </tr>
@@ -86,7 +86,7 @@ export default async function CoveragePage() {
       </div>
 
       <h2 className="mb-1 font-serif text-base font-medium text-navy">Gap register</h2>
-      <p className="mb-3.5 text-xs text-ink-muted">
+      <p className="mb-3.5 text-xs text-ink-soft">
         {gaps.length === 0
           ? "No category is thin, minimal or unmapped — every APQC category carries flows for most of its processes."
           : `${gaps.length} ${gaps.length === 1 ? "category" : "categories"} below 50% flow coverage, worst first. Derived from the library on every load, not a fixed list.`}

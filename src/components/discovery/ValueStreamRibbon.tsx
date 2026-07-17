@@ -42,7 +42,7 @@ const SEGMENT_CLASS: Record<SegmentState, string> = {
 };
 
 const PILL_CLASS: Record<SegmentState, string> = {
-  untouched: "bg-ink-tint text-ink-muted",
+  untouched: "bg-ink-tint text-ink-soft",
   "in-progress": "bg-navy-soft text-navy",
   reviewed: "bg-[color-mix(in_srgb,var(--decision-standard)_15%,transparent)] text-decision-standard",
 };

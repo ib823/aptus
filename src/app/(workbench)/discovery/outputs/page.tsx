@@ -22,7 +22,7 @@ export default async function OutputsIndexPage() {
   return (
     <WorkbenchView breadcrumb="Outputs" title="Decisions & outputs">
       {engagements.length === 0 ? (
-        <p className="rounded-input border border-border-default bg-paper px-6 py-10 text-center text-[13px] text-ink-muted">
+        <p className="rounded-input border border-border-default bg-paper px-6 py-10 text-center text-[13px] text-ink-soft">
           No engagements yet.
         </p>
       ) : (
@@ -34,7 +34,7 @@ export default async function OutputsIndexPage() {
                 className="block rounded-input border border-border-default bg-paper px-4 py-3.5 hover:border-navy focus-visible:shadow-focus-ring focus-visible:outline-none"
               >
                 <span className="block text-[13px] font-semibold text-ink">{e.client}</span>
-                <span className="mt-1 block text-[11px] text-ink-muted">
+                <span className="mt-1 block text-[11px] text-ink-soft">
                   {e._count.decisions} decisions · {e.state}
                 </span>
               </Link>

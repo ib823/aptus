@@ -39,7 +39,7 @@ export function CoverageRow({ coverage }: CoverageRowProps) {
           <p className={`font-serif text-[28px] font-medium leading-none ${t.tone}`}>
             {t.value.toLocaleString("en")}
           </p>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted">
+          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft">
             {t.label}
           </p>
         </li>

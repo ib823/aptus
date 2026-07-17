@@ -32,7 +32,7 @@ export function TwoLaneExport({ engagementId }: TwoLaneExportProps) {
 
   return (
     <>
-      <p className="mb-3 text-xs text-ink-muted">
+      <p className="mb-3 text-xs text-ink-soft">
         Two lanes, never one toggle — a client export must never carry the product map.
       </p>
 
