@@ -24,7 +24,7 @@ export function WhatHappensNextStrip({ current = 1, className }: WhatHappensNext
     >
       <h2
         id="what-happens-next"
-        className="mb-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted"
+        className="mb-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-soft"
       >
         What happens next
       </h2>
@@ -36,7 +36,7 @@ export function WhatHappensNextStrip({ current = 1, className }: WhatHappensNext
               <span className="flex items-center gap-2">
                 <span
                   className={`flex size-7 items-center justify-center rounded-pill font-mono text-[11px] font-bold ${
-                    isCurrent ? "bg-navy text-white" : "bg-ink-tint text-ink-muted"
+                    isCurrent ? "bg-navy text-white" : "bg-ink-tint text-ink-soft"
                   }`}
                   aria-hidden="true"
                 >
@@ -44,7 +44,7 @@ export function WhatHappensNextStrip({ current = 1, className }: WhatHappensNext
                 </span>
                 <span
                   className={`text-[11px] font-semibold uppercase tracking-[0.06em] ${
-                    isCurrent ? "text-ink" : "text-ink-muted"
+                    isCurrent ? "text-ink" : "text-ink-soft"
                   }`}
                 >
                   {label}

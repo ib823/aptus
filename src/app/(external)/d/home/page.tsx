@@ -66,7 +66,7 @@ async function DiscoveryHomeContent() {
       granteeName={view.identity.displayName}
       granteeRole={view.identity.roleLabel}
     >
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-soft">
         Process Discovery · {view.identity.client}
       </p>
       <h1 className="mb-7 max-w-[720px] text-pretty font-serif text-[32px] font-medium leading-[38px] text-ink">
@@ -99,7 +99,7 @@ async function DiscoveryHomeContent() {
 
       <CoverageRow coverage={view.coverage} />
 
-      <h2 className="mb-3.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+      <h2 className="mb-3.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-soft">
         Your value streams
       </h2>
 
@@ -113,7 +113,7 @@ async function DiscoveryHomeContent() {
 
       <ValueStreamRibbon streams={view.streams} />
 
-      <h2 className="mb-3.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+      <h2 className="mb-3.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-soft">
         Where you differ
       </h2>
       <DifferHeatmap streams={view.streams} />

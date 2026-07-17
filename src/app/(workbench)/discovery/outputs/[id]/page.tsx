@@ -41,7 +41,7 @@ export default async function OutputsPage({ params }: { params: Promise<{ id: st
     { v: pack.totals.standard, l: FIT_LABELS.standard, c: "text-decision-standard" },
     { v: pack.totals.discuss, l: FIT_LABELS.discuss, c: "text-decision-configure" },
     { v: pack.totals.differ, l: FIT_LABELS.differ, c: "text-decision-custom" },
-    { v: pack.totals.na, l: FIT_LABELS.na, c: "text-ink-muted" },
+    { v: pack.totals.na, l: FIT_LABELS.na, c: "text-ink-soft" },
     { v: pack.processCount, l: "Processes in scope", c: "text-navy" },
   ];
 
@@ -63,7 +63,7 @@ export default async function OutputsPage({ params }: { params: Promise<{ id: st
         {tiles.map((t) => (
           <li key={t.l} className="rounded-input border border-border-default bg-paper px-3.5 py-4">
             <p className={`font-serif text-[28px] font-medium ${t.c}`}>{t.v}</p>
-            <p className="mt-1 text-[10px] font-semibold uppercase text-ink-muted">{t.l}</p>
+            <p className="mt-1 text-[10px] font-semibold uppercase text-ink-soft">{t.l}</p>
           </li>
         ))}
       </ul>

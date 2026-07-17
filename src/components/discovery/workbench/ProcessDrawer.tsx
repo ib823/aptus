@@ -98,7 +98,7 @@ export function ProcessDrawer({ row, map }: ProcessDrawerProps) {
           <button
             type="button"
             onClick={close}
-            className="flex size-8 items-center justify-center rounded-input text-ink-muted hover:bg-ink-tint focus-visible:shadow-focus-ring focus-visible:outline-none"
+            className="flex size-8 items-center justify-center rounded-input text-ink-soft hover:bg-ink-tint focus-visible:shadow-focus-ring focus-visible:outline-none"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
@@ -113,7 +113,7 @@ export function ProcessDrawer({ row, map }: ProcessDrawerProps) {
           </p>
 
           <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase text-ink-muted">Name</p>
+            <p className="mb-1 text-[11px] font-semibold uppercase text-ink-soft">Name</p>
             <p className="rounded-input border border-border-default bg-paper px-2.5 py-2 text-[13px] text-ink">{row.name}</p>
           </div>
 
@@ -127,14 +127,14 @@ export function ProcessDrawer({ row, map }: ProcessDrawerProps) {
               ["Origin", row.origin === "sap-base" ? "Base catalogue" : "ABeam overlay"],
             ].map(([k, v]) => (
               <div key={k}>
-                <dt className="mb-1 text-[11px] font-semibold uppercase text-ink-muted">{k}</dt>
+                <dt className="mb-1 text-[11px] font-semibold uppercase text-ink-soft">{k}</dt>
                 <dd className="rounded-input border border-border-default bg-paper px-2.5 py-2 text-xs text-ink-soft">{v}</dd>
               </div>
             ))}
           </dl>
 
           <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase text-ink-muted">Description</p>
+            <p className="mb-1 text-[11px] font-semibold uppercase text-ink-soft">Description</p>
             <p className="rounded-input border border-border-default bg-paper px-2.5 py-2 text-[13px] text-ink-soft">{row.description}</p>
           </div>
 
@@ -142,7 +142,7 @@ export function ProcessDrawer({ row, map }: ProcessDrawerProps) {
               source string on every row, including the 88 overlay processes it
               did not come from. */}
           <section className="rounded-input border border-border-default bg-cream p-4">
-            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted">Provenance</h3>
+            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft">Provenance</h3>
             <dl className="grid grid-cols-2 gap-y-1.5 text-xs text-ink-soft">
               <dt className="font-semibold">Source</dt>
               <dd>{prov?.source ?? "Not recorded"}</dd>
@@ -162,9 +162,9 @@ export function ProcessDrawer({ row, map }: ProcessDrawerProps) {
           </section>
 
           <section>
-            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted">Flow</h3>
+            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft">Flow</h3>
             {!row.hasFlow ? (
-              <p className="rounded-input border border-border-default px-5 py-5 text-center text-[13px] text-ink-muted">
+              <p className="rounded-input border border-border-default px-5 py-5 text-center text-[13px] text-ink-soft">
                 No step flow catalogued for this process yet.
               </p>
             ) : (
@@ -185,7 +185,7 @@ export function ProcessDrawer({ row, map }: ProcessDrawerProps) {
                         {s.substeps!.map((b, j) => (
                           <li key={j}>
                             {b.t}
-                            {b.r ? <span className="text-ink-muted"> ({b.r})</span> : null}
+                            {b.r ? <span className="text-ink-soft"> ({b.r})</span> : null}
                             {b.o ? <span className="ml-1.5 text-[9px] font-bold uppercase text-decision-custom">optional</span> : null}
                           </li>
                         ))}
@@ -195,7 +195,7 @@ export function ProcessDrawer({ row, map }: ProcessDrawerProps) {
                 ))}
               </ol>
             )}
-            <p className="mt-2 text-[11px] text-ink-muted">Roles indicative.</p>
+            <p className="mt-2 text-[11px] text-ink-soft">Roles indicative.</p>
           </section>
 
           {/* The fence, inside the drawer — same guard treatment as C6 itself. */}
@@ -212,7 +212,7 @@ export function ProcessDrawer({ row, map }: ProcessDrawerProps) {
                     className={`inline-flex h-[22px] items-center rounded-pill px-2.5 text-[11px] font-bold ${
                       ref
                         ? "bg-[color-mix(in_srgb,var(--decision-standard)_15%,transparent)] text-decision-standard"
-                        : "bg-ink-tint text-ink-muted"
+                        : "bg-ink-tint text-ink-soft"
                     }`}
                   >
                     {ref ? `${label} ✓ ${ref}` : `${label} · to map`}
@@ -241,7 +241,7 @@ export function ProcessDrawer({ row, map }: ProcessDrawerProps) {
           >
             Edit process
           </button>
-          <p id="edit-note" className="text-[11px] text-ink-muted">
+          <p id="edit-note" className="text-[11px] text-ink-soft">
             {EDIT_DISABLED_NOTE}
           </p>
         </footer>

@@ -71,7 +71,7 @@ export function FlowDiagram({ flow }: FlowDiagramProps) {
 
   return (
     <div className="mb-2 rounded-card-warm border border-navy-border bg-paper p-[22px]">
-      <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+      <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-soft">
         Process flow
       </h2>
 
@@ -82,7 +82,7 @@ export function FlowDiagram({ flow }: FlowDiagramProps) {
             className={bandIndex > 0 ? "mt-6 border-t border-border-default pt-6" : ""}
           >
             {bands.length > 1 && (
-              <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.04em] text-ink-muted">
+              <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.04em] text-ink-soft">
                 Steps {band[0]!.number}–{band[band.length - 1]!.number} of {positioned.length}
               </p>
             )}
@@ -152,7 +152,7 @@ export function FlowDiagram({ flow }: FlowDiagramProps) {
                             {ps.number}
                           </span>
                           {ps.step.optional && (
-                            <span className="text-[9px] font-bold uppercase tracking-[0.04em] text-ink-muted">
+                            <span className="text-[9px] font-bold uppercase tracking-[0.04em] text-ink-soft">
                               {OPTIONAL_TAG}
                             </span>
                           )}
@@ -206,7 +206,7 @@ export function FlowDiagram({ flow }: FlowDiagramProps) {
                   id={`substeps-${ps.number}`}
                   className="mt-3 rounded-input bg-ink-tint px-3 py-2.5"
                 >
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-muted">
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-soft">
                     Step {ps.number} · {ps.step.lane}
                   </p>
                   {ps.step.substeps.length === 0 ? (
@@ -220,10 +220,10 @@ export function FlowDiagram({ flow }: FlowDiagramProps) {
                         >
                           <span className="flex-1">
                             {sub.title}
-                            <span className="text-ink-muted"> ({sub.lane})</span>
+                            <span className="text-ink-soft"> ({sub.lane})</span>
                           </span>
                           {sub.optional && (
-                            <span className="shrink-0 text-[9px] font-bold uppercase text-ink-muted">
+                            <span className="shrink-0 text-[9px] font-bold uppercase text-ink-soft">
                               {OPTIONAL_TAG}
                             </span>
                           )}
@@ -239,7 +239,7 @@ export function FlowDiagram({ flow }: FlowDiagramProps) {
       </div>
 
       {/* §6/19 verbatim. The .dc appends "Click a step for detail."; brief wins. */}
-      <p className="mt-3 text-[11px] leading-4 text-ink-muted">{FLOW_FOOTNOTE}</p>
+      <p className="mt-3 text-[11px] leading-4 text-ink-soft">{FLOW_FOOTNOTE}</p>
     </div>
   );
 }

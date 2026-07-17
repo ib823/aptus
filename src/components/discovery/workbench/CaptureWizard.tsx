@@ -166,7 +166,7 @@ export function CaptureWizard({ captures, reviewers, currentUserId, engagementId
         >
           Harvest from this engagement
         </button>
-        <p className="text-xs text-ink-muted">
+        <p className="text-xs text-ink-soft">
           Pulls every explained “we differ” out of the session. Run at engagement close — the
           workshop stays a discovery, not a data-entry exercise.
         </p>
@@ -174,7 +174,7 @@ export function CaptureWizard({ captures, reviewers, currentUserId, engagementId
       <p aria-live="polite" className="mb-3 min-h-[16px] text-xs text-ink-soft">{message}</p>
 
       {captures.length === 0 ? (
-        <p className="rounded-input border border-border-default bg-paper px-6 py-10 text-center text-[13px] text-ink-muted">
+        <p className="rounded-input border border-border-default bg-paper px-6 py-10 text-center text-[13px] text-ink-soft">
           No captures yet. Harvest an engagement once its decisions are in.
         </p>
       ) : (
@@ -187,7 +187,7 @@ export function CaptureWizard({ captures, reviewers, currentUserId, engagementId
             <thead className="bg-ink-tint">
               <tr>
                 {["Type", "Captured text (internal only)", "Process", "Status", "Action"].map((h) => (
-                  <th key={h} scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-muted">
+                  <th key={h} scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-soft">
                     {h}
                   </th>
                 ))}
@@ -196,7 +196,7 @@ export function CaptureWizard({ captures, reviewers, currentUserId, engagementId
             <tbody>
               {captures.map((c) => (
                 <tr key={c.id} className="border-b border-ink-tint">
-                  <td className="px-3.5 py-3 font-mono text-[11px] text-ink-muted">{c.type}</td>
+                  <td className="px-3.5 py-3 font-mono text-[11px] text-ink-soft">{c.type}</td>
                   <td className="px-3.5 py-3 text-xs text-ink">{c.rawText}</td>
                   <td className="px-3.5 py-3 text-[11px] text-ink-soft">
                     {c.linkedProcessId ? (
@@ -243,7 +243,7 @@ export function CaptureWizard({ captures, reviewers, currentUserId, engagementId
                         </button>
                       </div>
                     ) : (
-                      <span className="text-[11px] text-ink-disabled">—</span>
+                      <span className="text-[11px] text-ink-soft">—</span>
                     )}
                   </td>
                 </tr>
@@ -254,7 +254,7 @@ export function CaptureWizard({ captures, reviewers, currentUserId, engagementId
       )}
 
       {candidates.length === 0 && captures.length > 0 && (
-        <p className="mt-3 text-xs text-ink-muted">
+        <p className="mt-3 text-xs text-ink-soft">
           Every capture has been triaged. P4 expects roughly 30–50% promoted — 100% means triage
           isn&apos;t filtering.
         </p>
@@ -271,13 +271,13 @@ export function CaptureWizard({ captures, reviewers, currentUserId, engagementId
             <h2 id="wizard-title" className="mb-1 font-serif text-lg font-medium text-navy">
               Promote to the library
             </h2>
-            <p className="mb-4 text-xs text-ink-muted">
+            <p className="mb-4 text-xs text-ink-soft">
               Generalize, anonymize, get a second pair of eyes, then commit.
             </p>
 
             {/* 1 · Triage */}
             <fieldset className="mb-4">
-              <legend className="mb-1.5 text-[11px] font-semibold uppercase text-ink-muted">
+              <legend className="mb-1.5 text-[11px] font-semibold uppercase text-ink-soft">
                 1 · Classify
               </legend>
               <select
@@ -302,7 +302,7 @@ export function CaptureWizard({ captures, reviewers, currentUserId, engagementId
 
             {/* 2 · Generalize */}
             <fieldset className="mb-4">
-              <legend className="mb-1.5 text-[11px] font-semibold uppercase text-ink-muted">
+              <legend className="mb-1.5 text-[11px] font-semibold uppercase text-ink-soft">
                 2 · Generalize
               </legend>
               <label htmlFor="w-name" className="sr-only">Generalized name</label>
@@ -322,7 +322,7 @@ export function CaptureWizard({ captures, reviewers, currentUserId, engagementId
                 placeholder="Describe the practice, not this client's instance."
                 className="w-full resize-y rounded-input border border-navy-border bg-navy-soft px-2 py-1.5 text-xs text-ink focus-visible:border-navy focus-visible:shadow-focus-ring focus-visible:outline-none"
               />
-              <label htmlFor="w-industry" className="mt-2 block text-[11px] text-ink-muted">
+              <label htmlFor="w-industry" className="mt-2 block text-[11px] text-ink-soft">
                 Observed in — sector level only, never narrower
               </label>
               <input
@@ -372,10 +372,10 @@ export function CaptureWizard({ captures, reviewers, currentUserId, engagementId
 
             {/* 4 · Second-reviewer sign-off — required, and must be someone else */}
             <fieldset className="mb-4">
-              <legend className="mb-1.5 text-[11px] font-semibold uppercase text-ink-muted">
+              <legend className="mb-1.5 text-[11px] font-semibold uppercase text-ink-soft">
                 4 · Second-consultant review
               </legend>
-              <label htmlFor="w-reviewer" className="mb-1 block text-[11px] text-ink-muted">
+              <label htmlFor="w-reviewer" className="mb-1 block text-[11px] text-ink-soft">
                 Who reviewed this? The author of a capture is the worst judge of whether it still
                 identifies the client.
               </label>

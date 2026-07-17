@@ -85,7 +85,7 @@ export function GapRegister({ gaps, stored }: GapRegisterProps) {
           <thead className="bg-ink-tint">
             <tr>
               {["Code", "Category", "Coverage", "What's missing", "Fill source", "Status"].map((h) => (
-                <th key={h} scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-muted">
+                <th key={h} scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-soft">
                   {h}
                 </th>
               ))}
@@ -142,7 +142,7 @@ export function GapRegister({ gaps, stored }: GapRegisterProps) {
           </tbody>
         </table>
       </div>
-      <p aria-live="polite" className="mt-2 min-h-[16px] text-[11px] text-ink-muted">{note}</p>
+      <p aria-live="polite" className="mt-2 min-h-[16px] text-[11px] text-ink-soft">{note}</p>
     </>
   );
 }

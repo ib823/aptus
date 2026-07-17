@@ -133,7 +133,7 @@ export function FitSelector({
       <h2 id={`fit-prompt-${processId}`} className="mb-1 text-[15px] font-semibold text-ink">
         {FIT_PROMPT}
       </h2>
-      <p className="mb-3.5 text-[13px] text-ink-muted">{PROMISE_NOT_COMMITTED}</p>
+      <p className="mb-3.5 text-[13px] text-ink-soft">{PROMISE_NOT_COMMITTED}</p>
 
       <div
         role="radiogroup"
@@ -160,7 +160,7 @@ export function FitSelector({
             >
               <span className="text-xs font-semibold">{FIT_CHIP_LABELS[s]}</span>
               {/* Helper caption — brief §9. The .dc renders none (conflict #14). */}
-              <span className={`text-[11px] leading-4 ${selected ? "text-white/80" : "text-ink-muted"}`}>
+              <span className={`text-[11px] leading-4 ${selected ? "text-white/80" : "text-ink-soft"}`}>
                 {FIT_CHIP_CAPTIONS[s]}
               </span>
             </button>
@@ -219,7 +219,7 @@ export function FitSelector({
       )}
 
       {/* Autosave tick — brief §6/21 + §11 aria-live=polite. */}
-      <p aria-live="polite" className="mt-3 min-h-[16px] text-[11px] text-ink-muted">
+      <p aria-live="polite" className="mt-3 min-h-[16px] text-[11px] text-ink-soft">
         {sealed
           ? null
           : save === "saving"

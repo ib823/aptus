@@ -33,7 +33,7 @@ const CELL_CLASS: Record<FitState, string> = {
   differ: "bg-[color-mix(in_srgb,var(--decision-custom)_15%,transparent)] text-decision-custom",
   discuss: "bg-[color-mix(in_srgb,var(--decision-configure)_15%,transparent)] text-decision-configure",
   na: "bg-[color-mix(in_srgb,var(--decision-open)_15%,transparent)] text-ink-soft",
-  open: "bg-ink-tint text-ink-disabled",
+  open: "bg-ink-tint text-ink-soft",
 };
 
 export interface DifferHeatmapProps {
@@ -79,7 +79,7 @@ export function DifferHeatmap({ streams }: DifferHeatmapProps) {
       </ul>
 
       {/* The hover/tap detail, announced politely rather than trapped in a title. */}
-      <p aria-live="polite" className="mt-3 min-h-[16px] text-[11px] text-ink-muted">
+      <p aria-live="polite" className="mt-3 min-h-[16px] text-[11px] text-ink-soft">
         {active
           ? streams
               .flatMap((s) => s.workflows.map((wf) => ({ key: `${s.id}:${wf.name}`, s, wf })))

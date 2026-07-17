@@ -44,7 +44,7 @@ export default async function SessionsPage() {
       }
     >
       {engagements.length === 0 ? (
-        <p className="rounded-input border border-border-default bg-paper px-6 py-10 text-center text-[13px] text-ink-muted">
+        <p className="rounded-input border border-border-default bg-paper px-6 py-10 text-center text-[13px] text-ink-soft">
           No sessions yet. Create one to scope the library and invite the client&apos;s reviewers.
         </p>
       ) : (
@@ -54,7 +54,7 @@ export default async function SessionsPage() {
             <thead className="bg-ink-tint">
               <tr>
                 {["Client", "Scope", "Reviewers", "Decisions", "Status", "Open"].map((h) => (
-                  <th key={h} scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-muted">
+                  <th key={h} scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-soft">
                     {h}
                   </th>
                 ))}

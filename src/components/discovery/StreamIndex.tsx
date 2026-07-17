@@ -61,7 +61,7 @@ export function StreamIndex({ workflows }: StreamIndexProps) {
       </div>
 
       {filtered.length === 0 ? (
-        <p className="rounded-card-warm border border-border-default bg-paper px-8 py-8 text-center text-sm text-ink-muted">
+        <p className="rounded-card-warm border border-border-default bg-paper px-8 py-8 text-center text-sm text-ink-soft">
           No processes match “{query}”. Try a shorter search, or clear it to see the whole stream.
         </p>
       ) : (
@@ -69,7 +69,7 @@ export function StreamIndex({ workflows }: StreamIndexProps) {
           <section key={wf.name} className="mb-8">
             <div className="mb-3.5 flex items-baseline gap-2.5 border-b border-border-default pb-2">
               <h2 className="font-serif text-xl font-medium text-navy">{wf.name}</h2>
-              <p className="text-[11px] text-ink-muted">
+              <p className="text-[11px] text-ink-soft">
                 {wf.processes.length} of {wf.processCount} processes shown
               </p>
             </div>

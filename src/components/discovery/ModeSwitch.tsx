@@ -95,14 +95,14 @@ export function ModeSwitch({ mode, exportHref = "/d/export" }: ModeSwitchProps) 
                 onClick={() => setMode(m)}
                 aria-current={selected ? "page" : undefined}
                 className={`ax-touch flex h-[30px] items-center rounded-pill px-3.5 text-xs font-semibold transition-colors duration-[var(--dur-hero)] focus-visible:shadow-focus-ring focus-visible:outline-none motion-reduce:transition-none ${
-                  selected ? "bg-navy text-white" : "bg-transparent text-ink-muted hover:opacity-85"
+                  selected ? "bg-navy text-white" : "bg-transparent text-ink-soft hover:opacity-85"
                 }`}
               >
                 {MODE_LABELS[m]}
                 <span className="sr-only"> mode{selected ? " (current)" : ""}</span>
                 <kbd
                   aria-hidden="true"
-                  className={`ml-1.5 hidden font-mono text-[9px] uppercase lg:inline ${selected ? "text-white/60" : "text-ink-disabled"}`}
+                  className={`ml-1.5 hidden font-mono text-[9px] uppercase lg:inline ${selected ? "text-white/60" : "text-ink-soft"}`}
                 >
                   {MODE_KEYS[m]}
                 </kbd>
