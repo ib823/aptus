@@ -30,37 +30,62 @@ async function land(page: Page) {
   await page.getByRole("checkbox", { name: /named recipient/i }).check();
   await page.getByRole("button", { name: /^Begin$/ }).click();
   await expect(page).toHaveURL(/\/d\/home$/);
+  /**
+   * Wait for the shell to be INTERACTIVE, not merely for the URL.
+   *
+   * /d/home streams: the URL matches while Suspense is still showing
+   * DiscoveryHomeSkeleton, whose fallback <DiscoveryShell> is passed no props —
+   * so ModeSwitch has not mounted and its keydown listener does not exist yet.
+   * Every `keyboard.press` fired here was swallowed, no mode cookie was written,
+   * and the test silently continued in Explore.
+   *
+   * The mode switch is the right thing to await: it is the control that owns the
+   * P/E/X listener, so its presence is exactly the precondition those tests need.
+   * (Clicking always worked — Playwright auto-waits for the element. Only the
+   * keyboard path was racing.)
+   */
+  await expect(page.getByRole("navigation", { name: "View mode" })).toBeVisible();
 }
+
+/**
+ * FILE-LEVEL fixture. Both describes use `token`, and the Export block has no
+ * hooks of its own — so scoping the fixture to the Present describe meant that
+ * any test retried in a fresh worker (module state reset, only the enclosing
+ * describe's hooks re-run) landed on /d/ with token === "" and got a 404. That
+ * masked the real failures behind `locator.check` timeouts.
+ *
+ * Same class of bug as the PR-2a spec's (7fed756). Fixed the same way.
+ */
+test.beforeAll(async () => {
+  if (!RUN) return;
+  const e = await prisma.discoveryEngagement.create({
+    data: { client: CLIENT_LABEL, state: "issued", issuedAt: new Date() },
+  });
+  engagementId = e.id;
+  token = mintRawToken();
+  await prisma.discoveryAccessGrant.create({
+    data: {
+      engagementId,
+      email: "present.reviewer@e2e.test",
+      displayName: "Present Reviewer",
+      roleLabel: "COO",
+      tokenHash: hashToken(token),
+      valueStreamIds: [],
+      otpVerifiedUaHashes: [hashUserAgent(UA)],
+    },
+  });
+});
+
+test.afterAll(async () => {
+  if (engagementId) {
+    await prisma.discoveryEngagement.delete({ where: { id: engagementId } }).catch(() => {});
+  }
+  await prisma.$disconnect();
+});
 
 test.describe("Present mode (PR-3)", () => {
   test.skip(!RUN, "Set DISCOVERY_E2E=1 and boot with NEUTRAL_DISCOVERY_ENABLED=true");
   test.use({ userAgent: UA, viewport: { width: 1920, height: 1080 } });
-
-  test.beforeAll(async () => {
-    const e = await prisma.discoveryEngagement.create({
-      data: { client: CLIENT_LABEL, state: "issued", issuedAt: new Date() },
-    });
-    engagementId = e.id;
-    token = mintRawToken();
-    await prisma.discoveryAccessGrant.create({
-      data: {
-        engagementId,
-        email: "present.reviewer@e2e.test",
-        displayName: "Present Reviewer",
-        roleLabel: "COO",
-        tokenHash: hashToken(token),
-        valueStreamIds: [],
-        otpVerifiedUaHashes: [hashUserAgent(UA)],
-      },
-    });
-  });
-
-  test.afterAll(async () => {
-    if (engagementId) {
-      await prisma.discoveryEngagement.delete({ where: { id: engagementId } }).catch(() => {});
-    }
-    await prisma.$disconnect();
-  });
 
   test("the mode switch enters Present and persists across navigation", async ({ page }) => {
     await land(page);
