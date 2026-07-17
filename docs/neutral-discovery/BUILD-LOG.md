@@ -64,7 +64,108 @@ not rewording prose a fifth time.
 
 ---
 
-# VERIFICATION PASS — results (2026-07-17)
+# VERIFICATION PASS — CLOSED (2026-07-17)
+
+**Migrations proven. Core journeys proven. Spec debt and the Brownfield blocker
+precisely characterised.** What follows is the closing state; the detail is below.
+
+## Final results
+
+| # | Step | Result |
+|---|---|---|
+| 1 | Migrations (5, real PG 16.14) | ✅ **PASS** — first-ever execution, in order, **zero drift on any Discovery table** |
+| 2 | E2E · PR-2a journey/gate | ✅ **PASS 7/7** |
+| 2 | E2E · PR-2b explore | 🟡 7 pass / 2 fail — contrast only (19 + 23 nodes) |
+| 2 | E2E · PR-3 Present/Export | 🟡 10 pass / 5 fail — **spec-side, no product defects** |
+| 2 | E2E · PR-4 workbench | ⬜ not reached |
+| 2 | E2E · PR-5 seam | ⬜ not reached |
+| 2 | E2E · PR-6 wizard/export | ⬜ not reached |
+| 3 | Live flag-off | 🔵 **DEFERRED** — local PG, not the Vercel preview |
+| 4 | Export proof (real artifacts) | ⬜ not reached |
+| 5 | P4 capture end-to-end | ⬜ not reached |
+
+### On the PR-3 failures — the honest line
+
+**Every PR-3 failure is spec-side. No product defect was found.** The spec is
+**racy by construction**: it drives a keyboard-first UI with `goto` + an immediate
+`keyboard.press`, so it fires keys before the component's `useEffect` listener has
+attached. Patching locator-by-locator traded one failing set for another — three
+recovered, four regressed — which is the signal that the approach, not the
+locators, is wrong.
+
+**Present mode is verified working**, by the tests that pass and by direct
+evidence: `1–4` set the fit state, `P/E/X` switch modes, the mode switch enters
+Present and persists, the Draft stamp prints, label-not-colour holds, and the pack
+carries no affordances of its own. The one genuine product-adjacent finding —
+`getByRole('link')` catching the **root layout's** "Skip to main content" — was an
+over-broad assertion measuring the app shell rather than the pack.
+
+**Three times this pass I named a root cause and was wrong** (the `land()` race as
+"the" cause of 8 failures; "the Draft stamp needs its own diagnosis"; the
+locator patch). Each time the correction came from evidence — `--retries=0`, a DOM
+dump, a clean re-run. Recorded because the reasoning error is the reusable lesson:
+**retries and streaming pages manufacture failures that look like product bugs.**
+
+## Follow-up work — three items, in priority order
+
+### (a) 🔴 CRITICAL PATH — the Brownfield migration PR
+*Not discovery's. Nothing real ships until it lands.*
+
+`prisma migrate deploy` on a fresh database dies the moment the app touches it:
+
+```
+The column `Assessment.brownfieldCatalogVersionId` does not exist in the current database.
+  at tests/e2e/global-setup.ts:307
+```
+
+146 drift statements — an entire `Brownfield*` feature set lives in
+`schema.prisma` with **no migration** (introduced by `db9bfec`). Consequences:
+**every Playwright spec in the repo** dies at `global-setup`, not just discovery's;
+and **any environment built from migration history is unbootable — including the
+Vercel preview.** Discovery's own five migrations apply with zero drift.
+
+Scope: generate the missing migration(s) from the schema, reconcile the history.
+Owner: whoever shipped Brownfield. The `db push` workaround used in this pass is
+fine for a throwaway local DB and **not acceptable for preview or production** — it
+bypasses migration history and silently diverges it from the schema.
+
+### (b) PR-3 spec rewrite — deliberate, fresh eyes
+Rebuild `discovery-present-export.unauth.spec.ts` around **readiness**, not
+patched locators:
+- One awaited "shell interactive" fixture, used by **every** test.
+- **No bare `goto` + `press` anywhere** — entry into Present is deterministic
+  (click, which auto-waits), and the Present view's mount is proven before any key
+  is sent. Keyboard-driving belongs only in the tests whose *subject* is a binding.
+- Locators scoped to their subject (`.dx-root` for the pack, the coverage list for
+  coverage figures), so a match is unambiguous under strict mode.
+
+Contained work. It is not a product fix — it is the instrument.
+
+### (c) Contrast fix-PR — the sweep
+The `--ink-soft` swap (`078e8c9`) cleared V1 and the entry pages (110 nodes) and
+`GuestShell` (`6494255`) cleared the landing/verify. **Still outstanding:** V2/V3/V4
+(19 nodes) and Export (23 nodes), **never swept as one pass**. Do it once, as one
+table (view · node · fg/bg · ratio · proposed token), one PR. Anything that
+survives the sweep is its own finding.
+
+Then, and only then, generate the **print-snapshot baseline** — a baseline taken
+before the Export contrast fix bakes in pixels that fix is about to change.
+
+**Also unaudited:** ~100 `text-ink-muted` call sites on the shipped Affirm surface,
+carrying the same defect with no axe coverage (the repo's axe specs cover `/login`,
+`/dashboard`, `/assessments` only). Needs design sign-off; out of discovery's scope.
+
+## Remaining verification — blocked
+
+| Blocked on | Work |
+|---|---|
+| (a) | Everything that needs an environment built from migration history — **the real preview**, and therefore **step 3's live flag-off**, which no local box can honestly claim |
+| (a) + (b) | PR-4 workbench, **PR-5 the two-browser seam + notes-privacy proof** (still the highest-value unproven path), PR-6 wizard + export-content |
+| (a) | Step 4's export proof and step 5's P4 capture — runnable on local PG once the suite is trustworthy, but **labelled local-PG**, never as preview evidence |
+
+---
+
+# VERIFICATION PASS — detail (2026-07-17)
 
 ## ⚠ Two scope truths, stated before any result
 
