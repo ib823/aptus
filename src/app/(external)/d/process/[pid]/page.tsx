@@ -13,11 +13,15 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { CompletenessBadge } from "@/components/discovery/CompletenessBadge";
 import { DiscoveryShell } from "@/components/discovery/DiscoveryShell";
 import { FitSelector } from "@/components/discovery/FitSelector";
 import { FlowDiagram } from "@/components/discovery/FlowDiagram";
+import { PresentProcess } from "@/components/discovery/PresentProcess";
+import { PresentShell } from "@/components/discovery/PresentShell";
+import { DISCOVERY_MODE_COOKIE, parseMode } from "@/lib/discovery/mode";
 import {
   NO_FLOW_FALLBACK,
   PROMISE_V3,
@@ -25,7 +29,7 @@ import {
   SEALED_NOTICE,
 } from "@/lib/discovery/copy";
 import { issueSessionNonce } from "@/lib/discovery/external/csrf";
-import { getDiscoveryProcess } from "@/lib/discovery/external/journey";
+import { getDiscoveryProcess, getDiscoveryStream } from "@/lib/discovery/external/journey";
 import { isDeviceVerified, requireGuestSession } from "@/lib/discovery/external/guards";
 import { isSealed, touchGuestSession } from "@/lib/discovery/external/session";
 import { FIT_LABELS } from "@/lib/discovery/fit";
@@ -58,9 +62,41 @@ export default async function DiscoveryProcessPage({ params }: PageProps) {
 
   const p = view.process;
   const state = view.decision?.status ?? "open";
+  const mode = parseMode((await cookies()).get(DISCOVERY_MODE_COOKIE)?.value);
+  const csrf = issueSessionNonce(ctx.session.id);
+
+  // Present (§7 V5): the opposite chrome — full-bleed, no nav, projected scale.
+  if (mode === "present") {
+    // The facilitator bar's live tally reads the CURRENT stream's real
+    // decisions, not a mock: the room watches this number move.
+    const stream = await getDiscoveryStream({
+      engagementId: ctx.engagement.id,
+      client: ctx.engagement.client,
+      displayName: ctx.grant.displayName,
+      roleLabel: ctx.grant.roleLabel,
+      valueStreamIds: ctx.grant.valueStreamIds,
+      sealed: isSealed(ctx.engagement),
+      streamId: view.streamId,
+    });
+    return (
+      <PresentShell
+        clientName={view.identity.client}
+        context={view.streamName}
+        counter={stream ? `${stream.decided} / ${stream.processCount} reviewed` : null}
+        mode={mode}
+      >
+        <PresentProcess
+          view={view}
+          csrf={csrf}
+          streamMix={stream?.mix ?? { standard: 0, differ: 0, discuss: 0, na: 0, open: 0 }}
+        />
+      </PresentShell>
+    );
+  }
 
   return (
     <DiscoveryShell
+      mode={mode}
       clientName={view.identity.client}
       engagementLabel="Process Discovery"
       granteeName={view.identity.displayName}
@@ -124,7 +160,7 @@ export default async function DiscoveryProcessPage({ params }: PageProps) {
         initialStatus={view.decision?.status ?? null}
         initialReason={view.decision?.reason ?? null}
         sealed={view.sealed}
-        csrf={issueSessionNonce(ctx.session.id)}
+        csrf={csrf}
       />
 
       <nav aria-label="Process navigation" className="mt-10 flex gap-2.5 border-t border-border-default pt-6">

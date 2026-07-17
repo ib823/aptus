@@ -14,8 +14,10 @@
  */
 
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { DiscoveryShell } from "@/components/discovery/DiscoveryShell";
+import { DISCOVERY_MODE_COOKIE, parseMode } from "@/lib/discovery/mode";
 import { FitBar } from "@/components/discovery/FitBar";
 import { SummaryBuckets } from "@/components/discovery/SummaryBuckets";
 import { WhatHappensNextStrip } from "@/components/discovery/WhatHappensNextStrip";
@@ -43,6 +45,8 @@ export default async function DiscoverySummaryPage() {
     sealed: isSealed(ctx.engagement),
   });
 
+  const mode = parseMode((await cookies()).get(DISCOVERY_MODE_COOKIE)?.value);
+
   // {DATE} per brief §7 V4. Rendered from the request's own clock, formatted
   // en-GB so the reader sees a date, not an ISO stamp.
   const date = new Intl.DateTimeFormat("en-GB", {
@@ -61,6 +65,7 @@ export default async function DiscoverySummaryPage() {
 
   return (
     <DiscoveryShell
+      mode={mode}
       clientName={view.identity.client}
       engagementLabel="Process Discovery"
       granteeName={view.identity.displayName}

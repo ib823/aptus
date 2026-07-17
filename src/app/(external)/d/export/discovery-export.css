@@ -1,0 +1,240 @@
+/*
+ * ABeam Workbench — Neutral Process Discovery Export pack (V7) print styles.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║ SANCTIONED EXCEPTION TO THE TOKEN RULE (invariant 5).                    ║
+ * ║ The brief mandates print output in "pure black #000 on white" (§3) with  ║
+ * ║ decisions as "label + shape, never color alone" (§11). The token palette ║
+ * ║ is a warm on-screen system — cream paper, taupe borders, navy ink. None  ║
+ * ║ of it is correct for a document that must survive a mono office printer  ║
+ * ║ and a photocopier.                                                       ║
+ * ║                                                                          ║
+ * ║ So the print palette is declared HERE and ONLY here, scoped to .dx-root. ║
+ * ║ It cannot leak: every colour is a descendant selector of that root, and  ║
+ * ║ the export components themselves carry no hex — they use currentColor.   ║
+ * ║ tests/unit/discovery/no-stray-hex.test.ts exempts this one file, by path,║
+ * ║ with a comment pointing back here.                                       ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
+ * D4: the .dc's export viewport backdrop is #DDD9CC, the one colour of its 23
+ * with no matching token. It is decorative desk-space around the A4 page and
+ * never prints, so it becomes var(--border-strong) — no new colour enters the
+ * system. See BUILD-LOG D4.
+ */
+
+/* The screen preview's desk backdrop. Never printed. D4: token, not #DDD9CC. */
+.dx-viewport {
+  background: var(--border-strong);
+  padding: 32px 0;
+  min-height: 100vh;
+}
+
+/* ── The pack itself: pure black on white, per §3 ─────────────────────────── */
+
+.dx-root {
+  color: #000;
+  background: #fff;
+  font-size: 10.5pt; /* §3: "Export/print: body 10.5pt" */
+  line-height: 1.45;
+}
+
+/* A4 portrait (§7 V7). 794px @96dpi is the .dc's own working width. */
+.dx-page {
+  width: 794px;
+  max-width: 100%;
+  margin: 0 auto 24px;
+  padding: 48px 56px 72px;
+  background: #fff;
+  position: relative;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.2); /* screen affordance only; drops in print */
+}
+
+.dx-page + .dx-page {
+  /* §8: "page breaks between streams" */
+  break-before: page;
+}
+
+.dx-rule {
+  border: 0;
+  border-top: 1px solid #000;
+  margin: 16px 0;
+}
+
+.dx-hairline {
+  border: 0;
+  border-top: 1px solid #999;
+  margin: 10px 0;
+}
+
+.dx-h1 {
+  font-family: var(--font-serif);
+  font-size: 26pt;
+  font-weight: 500;
+  line-height: 1.15;
+  margin: 0 0 12px;
+}
+
+.dx-h2 {
+  font-family: var(--font-serif);
+  font-size: 15pt;
+  font-weight: 500;
+  margin: 0 0 8px;
+}
+
+.dx-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 8pt;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #555;
+  margin: 0 0 6px;
+}
+
+.dx-muted {
+  color: #555;
+}
+
+.dx-mono {
+  font-family: var(--font-mono);
+}
+
+/* Scope chip — outline, not fill: a navy block prints as a black smudge. */
+.dx-chip {
+  display: inline-block;
+  border: 1px solid #000;
+  border-radius: 3px;
+  padding: 0 4px;
+  font-family: var(--font-mono);
+  font-size: 8pt;
+  font-weight: 700;
+}
+
+/* ── Decision swatches (§11: pattern + label, never colour alone) ─────────── */
+
+.dx-swatch-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.dx-swatch {
+  flex: none;
+}
+
+.dx-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  font-size: 8.5pt;
+}
+
+/* ── Linearised ribbon / heatmap / register ──────────────────────────────── */
+
+.dx-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9pt;
+}
+
+.dx-table th,
+.dx-table td {
+  border-bottom: 1px solid #ccc;
+  padding: 5px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.dx-table th {
+  border-bottom: 1px solid #000;
+  font-size: 8pt;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* The differ reason, ruled rather than tinted — a banner-warn wash prints grey. */
+.dx-reason {
+  border-left: 2px solid #000;
+  padding-left: 8px;
+  margin: 4px 0 0;
+  font-size: 8.5pt;
+}
+
+.dx-footer {
+  position: absolute;
+  left: 56px;
+  right: 56px;
+  bottom: 32px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid #ccc;
+  padding-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 7pt;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #555;
+}
+
+.dx-draft {
+  border: 1px solid #000;
+  padding: 6px 10px;
+  margin: 0 0 16px;
+  font-weight: 700;
+  font-size: 9pt;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.dx-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Print ───────────────────────────────────────────────────────────────── */
+
+@page {
+  size: A4 portrait;
+  margin: 14mm;
+}
+
+@media print {
+  .dx-viewport {
+    background: #fff;
+    padding: 0;
+  }
+
+  .dx-page {
+    width: auto;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    break-after: page;
+  }
+
+  .dx-page:last-child {
+    break-after: auto;
+  }
+
+  .dx-footer {
+    position: fixed;
+    bottom: 0;
+  }
+
+  /* Patterns must survive the printer's "economy" colour dropping. */
+  .dx-root {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
