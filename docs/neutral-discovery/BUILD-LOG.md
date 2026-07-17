@@ -62,34 +62,150 @@ Four times a guard of mine matched its own documentation rather than code. The
 fix that stuck was a comment-stripper plus a test proving the stripper works —
 not rewording prose a fifth time.
 
-## ⚠ PREVIEW-ENV DEBT — the runbook for the next phase
+---
 
-**Nothing below has ever executed.** The build environment has no Postgres, and
-`tests/e2e/global-setup.ts` opens Prisma before any spec, so every Playwright
-spec dies at setup. Unit tests, typecheck and lint are green throughout; **e2e is
-written, lint-clean, and unproven.**
+# VERIFICATION PASS — results (2026-07-17)
 
-1. **Run the five migrations, in order.** All hand-written; each verified
-   statement-for-statement against `prisma migrate diff` (exact match) and proven
-   additive, but **never executed against a real Postgres**:
+## ⚠ Two scope truths, stated before any result
+
+**1. This was NOT the Vercel preview environment.** It is a **local Postgres 16.14
+in a Docker container inside the build box**, stood up during the pass because
+`DATABASE_URL` pointed at a closed `localhost:5432`. Everything below that passed,
+passed *there*. It genuinely proves the migrations execute and the specs run — the
+substance of the runbook — but it cannot prove deploy-time behaviour.
+
+> **Step 3 (live flag-off check) is DEFERRED to the real preview deploy,
+> unconditionally, whatever else passes here.** A local 404 is not a deployed 404.
+
+**2. The pass made repairs, beyond its "nothing new gets built" remit.** Each is
+listed with its authorisation:
+
+| Repair | Commit | Authorisation |
+|---|---|---|
+| `--ink-soft` contrast swap (40 files) | `078e8c9` | Explicitly approved mid-pass, after the axe gate failed |
+| `GuestShell` footer contrast | `6494255` | Explicitly approved mid-pass; the plan permits touching "shared components you extend" |
+| Two PR-2a spec bugs | `7fed756` | In-scope repair of the pass's own instruments |
+| Playwright system libs (`libatk-1.0.so.0` …) | — | Environment fix, no code |
+| `prisma db push` after `migrate deploy` | — | Workaround for pre-existing drift (see below), no code |
+
+Two things the runbook asked for were **deliberately not done**, because doing them
+would have been wrong:
+- **The print-snapshot baseline** stays uncommitted until the Export contrast fix
+  lands — a baseline captured now bakes in pixels that fix is about to change, and
+  bakes in a currently-failing page state.
+- **"Timebox the 19.7-minute test"** — there is no slow test. That was the *spec's*
+  total: 8 failures × (60s timeout + retry). My earlier report was wrong; the
+  runtime collapses when the root cause is fixed.
+
+## Results
+
+| # | Step | Result |
+|---|---|---|
+| 1 | Migrations (5, real PG 16.14) | **PASS** — first-ever execution; **zero drift on any Discovery table** |
+| 2 | E2E · PR-2a journey/gate | **PASS — 7/7** |
+| 2 | E2E · PR-2b explore | **PARTIAL — 7 passed, 2 failed** (contrast, 19+23 nodes; one `toContain`) |
+| 2 | E2E · PR-3 Present/Export | **FAIL — 2 passed, 8 failed, 1 flaky** (one root cause suspected; diagnosis pending) |
+| 2 | E2E · PR-4 workbench | **NOT REACHED** |
+| 2 | E2E · PR-5 seam | **NOT REACHED** |
+| 2 | E2E · PR-6 wizard/export | **NOT REACHED** |
+| 3 | Live flag-off | **DEFERRED — not possible here** (see scope truth 1) |
+| 4 | Export proof (real artifacts) | **NOT REACHED** |
+| 5 | P4 capture end-to-end | **NOT REACHED** |
+| 6 | BUILD-LOG updated | this section |
+
+### What the pass proved that no unit test could
+
+- The **core journeys work against real Postgres**: landing → OTP → V1 with all 10
+  streams and the honest 742 / 545 / 60 counts; the full Explore journey including
+  differ-with-reason, N/A, the radiogroup arrow contract, the no-flow fallback, and
+  the sealed 409.
+- **The design system fails WCAG AA** and always has (110 nodes on V1 alone). Nothing
+  had ever looked: the repo's axe specs cover `/login`, `/dashboard`, `/assessments`.
+- **Two real bugs in my own specs**, both of which had the app right and the test wrong.
+- **`migrate deploy` alone yields an unbootable database** — see the Brownfield
+  section below. That is the critical path now.
+
+## 🔴 BLOCKER — pre-existing Brownfield migration drift (NOT discovery's)
+
+**This blocks the real preview verification, so it is the critical path.**
+
+**What.** `prisma migrate diff --from-schema-datasource --to-schema-datamodel`
+against a database built purely from the committed migration history reports **146
+drift statements**. They are an entire `Brownfield*` feature set — `BrownfieldCatalogVersion`,
+`BrownfieldAssessment`, `BrownfieldClassificationPass`, `BrownfieldGuide`,
+`BrownfieldLineOfBusiness`, `BrownfieldApplicationArea` and their FKs — plus
+`Assessment.brownfieldCatalogVersionId`, `ClientRequirement.crossCuttingTag`,
+`SapApiReference.apiType`, and a dropped `SapApiReference_scopeItemCodes_gin_idx`.
+
+**Why it matters.** These models exist in `prisma/schema.prisma` but **no migration
+creates them**. So `prisma migrate deploy` on a fresh environment produces a database
+the application cannot boot against. It is not a cosmetic mismatch:
+
+```
+PrismaClientKnownRequestError:
+Invalid `prisma.assessment.findFirst()` invocation in tests/e2e/global-setup.ts:307
+The column `Assessment.brownfieldCatalogVersionId` does not exist in the current database.
+```
+
+`global-setup` dies there, so **every Playwright spec in the repo fails at setup** —
+not just discovery's.
+
+**Provenance.** Introduced by `db9bfec feat(brownfield): Phase 14 catalog + EWA ingest
+adapters`. **Pre-existing and entirely unrelated to this build.** Discovery's own five
+migrations apply cleanly with **zero drift**.
+
+**Workaround used here, and its limit.** `prisma db push` after `migrate deploy`, to
+sync the missing schema so the pass could continue. That is acceptable for a local
+throwaway database and **is not acceptable for the preview or production**: it
+bypasses migration history, leaves no audit trail, and silently diverges the two.
+
+**Owner / next step.** Its own PR, owned by whoever shipped Brownfield: generate the
+missing migration(s) from the schema and reconcile the history. **Not folded into this
+pass** — it is not discovery's defect, and fixing it here would hide it.
+
+## PREVIEW-ENV DEBT — status after the verification pass
+
+~~Nothing below has ever executed.~~ **Partly retired.** The pass stood up a local
+Postgres and executed items 1 and part of 2. Item 3 is deferred by nature; 4-6 were
+not reached. Each item now carries its result.
+
+1. ✅ **DONE — the five migrations executed.** First-ever run, against real
+   PG 16.14, in order, via `migrate deploy`. **Zero drift on any Discovery table.**
+   ⚠ But see the Brownfield blocker above: `migrate deploy` ALONE leaves the app
+   unbootable, for reasons that are not discovery's.
    `20260717000000_neutral_discovery_guest_infra` ·
    `20260717120000_discovery_facilitator_notes` ·
    `20260717150000_discovery_workbench_core` ·
    `20260717180000_discovery_session_seam` ·
    `20260717210000_discovery_p4_capture`
-2. **Run the full e2e suite** with `NEUTRAL_DISCOVERY_ENABLED=true` and
-   `DISCOVERY_E2E=1`: `discovery-journey` · `discovery-explore` ·
-   `discovery-present-export` · `discovery-workbench` · `discovery-seam` ·
-   `discovery-capture`.
-3. **Live flag-off check**: with the flag unset, `/d/*` and `/discovery/*` must
-   404 in a real deploy. `discovery-flag-off.unauth.spec.ts` covers it and has
-   never run.
-4. **The two-browser seam** (PR-5) is the highest-value unproven path: a
-   consultant drives, a client follows, and the facilitator's note must be absent
-   from the client's network traffic.
-5. **Generate both packs against real data** and run the vendor guard over the
-   client artifact (the plan's step 2 evidence).
-6. **One P4 capture end-to-end**, including the second-reviewer gate.
+2. 🟡 **PARTIAL — the e2e suite.** `discovery-journey` **7/7 PASS**.
+   `discovery-explore` **7 pass / 2 fail** (contrast). `discovery-present-export`
+   **2 pass / 8 fail** (one root cause, diagnosis pending). `discovery-workbench`,
+   `discovery-seam`, `discovery-capture` **not reached**.
+   Also required first: Playwright system libs (`libatk-1.0.so.0` et al) were
+   missing — Chromium could not launch at all. Fixed via `playwright install-deps`.
+3. 🔵 **DEFERRED — live flag-off.** Cannot be honestly claimed from a local box.
+   Must run against the real preview deploy, with the flag unset, confirming
+   `/d/*` and `/discovery/*` 404. `discovery-flag-off.unauth.spec.ts` covers it and
+   has still never run. **Blocked behind the Brownfield PR.**
+4. ⬜ **NOT REACHED — the two-browser seam** (PR-5). Still the highest-value
+   unproven path: a consultant drives, a client follows, and the facilitator's
+   note must be absent from the client's network traffic.
+5. ⬜ **NOT REACHED — generate both packs against real data** and run the vendor
+   guard over the client artifact.
+6. ⬜ **NOT REACHED — one P4 capture end-to-end**, including the second-reviewer gate.
+
+### Ordered critical path from here
+
+1. **Brownfield migration PR** (not discovery's) — until it lands, no environment
+   built from migration history can boot the app, so the real preview verification
+   cannot start.
+2. Diagnose + fix **PR-3's 8 failures** (one suspected root cause).
+3. **Characterise the whole contrast surface** in one sweep — V2/V3/V4/Export —
+   and fix in one PR. No more view-by-view.
+4. Generate the **print-snapshot baseline** (only after 3, or it bakes in stale pixels).
+5. Finish e2e (PR-4/5/6), then steps 4-5 of the runbook, on the local PG, labelled as such.
+6. **Real preview deploy** → step 3's live flag-off + a repeat of the full suite.
 
 ### Open prerequisites this build cannot close (P4 §9)
 
