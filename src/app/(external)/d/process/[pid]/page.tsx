@@ -19,6 +19,7 @@ import { CompletenessBadge } from "@/components/discovery/CompletenessBadge";
 import { DiscoveryShell } from "@/components/discovery/DiscoveryShell";
 import { FitSelector } from "@/components/discovery/FitSelector";
 import { FlowDiagram } from "@/components/discovery/FlowDiagram";
+import { PresentFollower } from "@/components/discovery/PresentFollower";
 import { PresentProcess } from "@/components/discovery/PresentProcess";
 import { PresentShell } from "@/components/discovery/PresentShell";
 import { DISCOVERY_MODE_COOKIE, parseMode } from "@/lib/discovery/mode";
@@ -31,6 +32,7 @@ import {
 import { issueSessionNonce } from "@/lib/discovery/external/csrf";
 import { getDiscoveryProcess, getDiscoveryStream } from "@/lib/discovery/external/journey";
 import { isDeviceVerified, requireGuestSession } from "@/lib/discovery/external/guards";
+import { effectiveStreamIds } from "@/lib/discovery/external/scope";
 import { isSealed, touchGuestSession } from "@/lib/discovery/external/session";
 import { FIT_LABELS } from "@/lib/discovery/fit";
 
@@ -54,7 +56,10 @@ export default async function DiscoveryProcessPage({ params }: PageProps) {
     client: ctx.engagement.client,
     displayName: ctx.grant.displayName,
     roleLabel: ctx.grant.roleLabel,
-    valueStreamIds: ctx.grant.valueStreamIds,
+    scope: effectiveStreamIds({
+      engagementStreamIds: ctx.engagement.valueStreamIds,
+      grantStreamIds: ctx.grant.valueStreamIds,
+    }),
     sealed: isSealed(ctx.engagement),
     processId: pid,
   });
@@ -74,7 +79,10 @@ export default async function DiscoveryProcessPage({ params }: PageProps) {
       client: ctx.engagement.client,
       displayName: ctx.grant.displayName,
       roleLabel: ctx.grant.roleLabel,
-      valueStreamIds: ctx.grant.valueStreamIds,
+      scope: effectiveStreamIds({
+      engagementStreamIds: ctx.engagement.valueStreamIds,
+      grantStreamIds: ctx.grant.valueStreamIds,
+    }),
       sealed: isSealed(ctx.engagement),
       streamId: view.streamId,
     });
@@ -85,6 +93,8 @@ export default async function DiscoveryProcessPage({ params }: PageProps) {
         counter={stream ? `${stream.decided} / ${stream.processCount} reviewed` : null}
         mode={mode}
       >
+        {/* The seam's client half: follows the consultant's driving. */}
+        <PresentFollower currentProcessId={p.id} />
         <PresentProcess
           view={view}
           csrf={csrf}

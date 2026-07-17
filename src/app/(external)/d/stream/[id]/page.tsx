@@ -21,6 +21,7 @@ import { StreamIndex } from "@/components/discovery/StreamIndex";
 import { SEALED_NOTICE, STREAM_COMPLETE_BANNER } from "@/lib/discovery/copy";
 import { getDiscoveryStream } from "@/lib/discovery/external/journey";
 import { isDeviceVerified, requireGuestSession } from "@/lib/discovery/external/guards";
+import { effectiveStreamIds } from "@/lib/discovery/external/scope";
 import { isSealed, touchGuestSession } from "@/lib/discovery/external/session";
 
 export const dynamic = "force-dynamic";
@@ -43,7 +44,10 @@ export default async function DiscoveryStreamPage({ params }: PageProps) {
     client: ctx.engagement.client,
     displayName: ctx.grant.displayName,
     roleLabel: ctx.grant.roleLabel,
-    valueStreamIds: ctx.grant.valueStreamIds,
+    scope: effectiveStreamIds({
+      engagementStreamIds: ctx.engagement.valueStreamIds,
+      grantStreamIds: ctx.grant.valueStreamIds,
+    }),
     sealed: isSealed(ctx.engagement),
     streamId: id,
   });
