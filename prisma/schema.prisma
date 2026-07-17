@@ -4599,6 +4599,8 @@ model DiscoveryProductMap {
   /// Free-text building-block reference, or null for an honest "to map" slot.
   oracleRef   String?
   netsuiteRef String?
+  /// Brief §6B.8's fourth Rosetta column — any other product a consultant binds.
+  otherRef    String?
 
   notedById String?
   createdAt DateTime @default(now())

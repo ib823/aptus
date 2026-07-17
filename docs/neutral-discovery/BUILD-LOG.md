@@ -36,6 +36,9 @@ Ran against the committed artifacts to validate the two claims the plan rests on
 | D2 | Consultant dataset has **no `completeness` field**; client dataset does. Invariant 4 requires completeness badges everywhere a process renders, including the C2 library grid. | Consultant loader derives completeness by joining `scope_id` → client `id`. No data change. |
 | D3 | **46% of flow steps (1400/3035) and 31% of substeps (2877/9425) have an empty role**, but the .dc renders `{{ lane.role }}` with no fallback. | Resolved by the brief, which wins: *"Blank-role steps sit in a 'System / Automatic' lane."* No question outstanding. |
 | D4 | ~~The .dc uses literal hex; `#DDD9CC` has no token.~~ **CLOSED in PR-3.** | The export print-preview backdrop is now `var(--border-strong)`. It is decorative desk-space around the A4 page and never prints, so no new colour entered the system. **Separately**, PR-3 opened the one sanctioned exception to invariant 5: the pack itself must print pure black on white (§3) with label+pattern decisions (§11), which the warm on-screen palette cannot do. That palette lives only in `d/export/discovery-export.css`, scoped to `.dx-root`, exempted **by path** in the stray-hex guard — and the guard asserts the exemption is exactly one file, that the file exists, and that nothing else imports it, so the exception cannot quietly widen. The export components carry no hex at all; they use `currentColor`. |
+| D17 | **C1's "first-run empty" state (brief §7-C1) is not built.** Its CTA is "Import the base library". | The library is a committed, hash-pinned JSON file — it is never absent, so the state is unreachable and the button could not do anything. Shipping it would be a control that lies about what the product can do. The engagements table has a real empty state instead ("No discovery engagements yet"), because zero engagements genuinely happens. |
+| D16 | **C10 ships with no audit trail.** The .dc has one: three rows, hardcoded, attributed to a named real person with invented timestamps ("2d ago · 18J Requisitioning — description edited · Ikmal"). | Omitted entirely. An audit trail that lies is worse than no audit trail — it is the one component whose entire value is that you can trust it. It ships when there is a real edit log to show, which is PR-6 (the P4 pipeline is the first thing that writes library changes). |
+| D15 | **The context chip's default lies on the fence.** §9.1 makes the chip's whole job "tells the consultant whether the current surface is internal-only or paired with a client projection", but the .dc computes it as "Live session — {client}" / "Session setup" / **"Editing library" for everything else** — so it reads "Editing library" while the fenced product map is on screen. | "Editing library" stays the default as instructed, but C6 passes `consultant-only` → **"Consultant only — not shared"**, in the fence's own palette. A chip that says "Editing library" on the one view where being wrong is worst is not a default, it is a bug. |
 | D14 | **`meta.apqc_coverage` is stale — the D1 remnant that the D6 re-emission did not reach.** Its counts sum to **654** (pre-overlay); **7 of 13 categories disagree with live data**; category **1.0 is absent entirely**. Critically, all seven codes in `meta.gaps` (`6.0 5.0 10.0 7.0 12.0 8.0 1.0`) were **filled by the 88-process overlay** — six are now `strong`, one `moderate`, none thin. The two genuinely thin categories, **11.0 Risk & Compliance (11/29, 38%)** and **13.0 Business Capabilities (9/25, 36%)**, appear nowhere in `meta.gaps`. | **Derive the register live** from counts + flow-share thresholds; never read `meta.gaps` (approved). Seeding from the "known 7" — as the .dc hardcodes and PR-4's brief instructed — would have printed *"The 7 thin/minimal/none categories"* against data proving all seven are well covered, while hiding the two real gaps. That is the D1/D6 failure mode again: a declared field trusted over computed content. Standing policy 1 already forbids it (`meta` is typed `unknown`, so reading it needs a deliberate cast); this records why the instruction was overruled. The register now self-corrects on every re-emission instead of needing a code change. |
 | D13 | **The Export register lists DECIDED processes only.** All 742 would be ~120 pages of "Undecided" — not a document anyone reads. | The per-stream summary already carries the undecided counts, and the cover stamps the draft state, so nothing is hidden: the pack says how many are unreviewed, it just does not enumerate them. If a full register is ever wanted, it is a flag on this page, not a redesign. |
 | D12 | **`P` is claimed by two brief sections** — §6/22 makes it the Present mode key, §6/23 makes it Park. | No real conflict: outside Present, `P` enters Present; inside Present you are already there, so `P` parks. `E`/`X` always switch. The mode switch yields the key when `mode === "present"`; the facilitator bar owns it. All accelerators are suppressed inside text fields — a reviewer typing "we **p**ark expensive orders" must not teleport (asserted in the e2e). |
@@ -383,10 +386,88 @@ don't add up is exactly what invariant 4 exists to prevent.
 | 33 | ←/→ walk steps; ⇧←/⇧→ walk processes. Brief wins over the .dc. |
 | 35 | **Park is a distinct ACTION, the same STATE.** §9 fixes the vocabulary at four and says "never introduce a fifth colour", so Park cannot be a fifth state; §6/23 makes it its own control. It sets `discuss`, and the button says what it does. The .dc aliases them too — so the brief's distinction is real but cosmetic, exactly as flagged in PR-2a. |
 
+## PR-4 · Consultant core (C1, C2, C3, C4, C6, C10) — GREEN
+
+Branch: `feat/neutral-discovery-workbench-core`.
+
+**Gates:** `typecheck:strict` ✓ · `lint:strict` ✓ · `pnpm test` ✓ (160 discovery tests).
+E2E + axe specs written; gate in preview (unchanged environment limit).
+
+**The wall now holds both directions, and it is proven, not asserted.** The
+bidirectional test walks the transitive import graph from every `(external)`
+entry against the consultant library, the workbench projection, the product-map
+module, its API route, and both consultant-only directories. **I deliberately
+breached it** — added a `loadProductMap` import to `/d/home` — and it failed with
+the full path traced through to `discovery-library.consultant.json`, then went
+green on restore. A guard nobody has watched fail is a guard nobody should trust.
+
+It also carries a second angle the import walk cannot reach: a **content** scan
+asserting the fence's vocabulary ("Consultant only", "Rosetta", "to map",
+"DiscoveryProductMap"…) never appears in client-facing source. The import walk
+catches a client module *importing* the fence; it cannot catch someone retyping a
+vendor name into a `/d` component by hand, which is the likelier mistake and the
+one that puts a product name on a client screen. Comments are stripped first —
+a `/d` file may legitimately explain in prose why it names no product.
+
+And a third: the wall is asserted to be **one-way**. The consultant side may
+import client-safe modules (C2 derives completeness from the client dataset per
+D2); if that ever fails, someone has over-tightened the wall into a duplication
+generator.
+
+### C6 — the fence
+
+`origin = sap-base` → the scope_id *is* the reference (mapped by construction).
+`origin = overlay` → ABeam authored it, no base reference exists, honest "to map".
+So `DiscoveryProductMap` stores **only** hand-entered Oracle/NetSuite/other refs,
+and there is no code path — not even an authenticated one — that can record a SAP
+reference the library does not support. The `.dc`'s entire Rosetta comes from a
+fixture named `product_map_mock`, fed by a seed file that **is not in the repo**;
+every SAP ref, every mapped state and every coverage % in the prototype is
+invented while its caption claims "SAP populated from the discovery library".
+Deriving makes the claim true.
+
+Coverage meters are computed (`role="meter"` with real values). The .dc
+pre-colours Oracle and NetSuite grey regardless of value.
+
+### Deviations from the .dc, by view
+
+| View | Deviation | Reason |
+|---|---|---|
+| Chrome | Siderail links only the sections PR-4 ships | The .dc navigates to a stub reading "Pass 2/3 of the consultant workbench build" — shipped copy admitting the product is unfinished. Absent until they exist (PR-5/6). |
+| Chrome | Every icon is inline stroke SVG | §12.4: "no icon-library glyphs, no emoji" (#21). The .dc's `⇄` also announces as "left right arrow" to a screen reader. |
+| Chrome | Per-view breadcrumb | The .dc's falls through to an empty string on five views — a bug. |
+| C1 | Built from the brief alone | The .dc has no C1 (#1). |
+| C1 | No "Import the base library" | D17 — unreachable state, impossible button. |
+| C2 | Real `<table>` + caption + `th scope` + rowheaders | §11 (#25). The .dc is CSS-grid `div`s: 742 × 11 unlabelled cells with no row/column context. |
+| C2 | WAI-ARIA grid keyboard (arrows / Home / End / PageUp/Dn / ⏎ / Space), one tab stop | §11 (#25). Without it, reaching row 700 costs ~7,700 Tab presses. |
+| C2 | APQC + industry facets added; origin column added | #4. The .dc omits both facets. |
+| C2 | Zebra + hover | #3. The .dc has neither. |
+| C3 | **Read-first** — full inspection, edit affordances disabled with "Editing arrives with the capture pipeline" | Logged decision. The library is read-only until PR-6's P4 pipeline. The .dc's editable fields silently discard: it resets the description draft to `''` on open, so Save would wipe a real description, and its own toast admits "session only". A control that lies is worse than a disabled one. |
+| C3 | Focus trap + return + Escape | §11 (#25). The .dc has no trap; its backdrop click discards silently. |
+| C3 | Per-process provenance | #11. The .dc hardcodes "Source: SAP Best Practices 2602" on every row — including the 88 overlay processes it did not come from. |
+| C4 | Matrix + register computed live | **D14.** |
+| C4 | Five coverage levels | §6B.5 (#13). The .dc collapses Minimal and None into one grey fallback, making "a few flows" look like "none". |
+| C4 | Register has fill-source + status (open/sourcing/drafting/filled) + owner | §6B.6 (#15). The .dc hardcodes "Open" on all rows and drops owner. Owner is the signed-in user — we do not ask a consultant to type their own name. |
+| C4 | "What's missing" is computed | The honest answer is exactly how many processes lack a flow. |
+| C4 | All-strong state built | §7-C4 (#16). Honest, not confetti. |
+| C6 | Chip reads "Consultant only — not shared" | **D15.** |
+| C6 | "Other" column added | §6B.8 (#17). |
+| C10 | No audit trail | **D16.** |
+| C10 | Staleness in days + pinned hashes + algorithm | #27. The .dc shows a "2602" literal and no age. |
+| All | No fixture data anywhere | The .dc carries fabricated reviewer names with working-looking emails, invented audit rows attributed to a real person, a fabricated client quote on the wrong process, and ~30 "ships in the next pass" toasts. None ship. |
+
 ## Parity checklist
 
 | Screen | State | Match / Deviation | Reason |
 |---|---|---|---|
+| C1 `/discovery` | populated | **Built from brief** | Health tiles computed; engagements from the 2a tables |
+| C1 | no engagements | **Honest empty** | Not "Import the base library" (D17) |
+| C2 `/discovery/library` | populated / filtered / no match | **Deviation — brief** | Real table, 7 facets, keyboard grid |
+| C3 `/discovery/library/[id]` | read-first | **Logged decision** | Edits disabled with an honest reason |
+| C3 | no-flow process | Match | "No step flow catalogued for this process yet." |
+| C4 `/discovery/coverage` | matrix / register / all-strong | **Deviation — D14** | Computed, never meta.gaps |
+| C6 `/discovery/map` | fenced | **Deviation — brief** | Derived SAP; honest "to map"; computed meters |
+| C10 `/discovery/health` | healthy / stale | **Deviation — D16** | No invented audit trail |
 | Present `/d/*` (mode) | pre-start / live | **Built from brief** | Full-bleed; nav/breadcrumb/search hidden per §8 |
 | Present · flow-hero | step / step-drill | **Built from brief** | One step at a time (§8 "never scroll inside a step") |
 | Present · selector | all four + sealed | Match | Oversized, radiogroup preserved, `1–4` bound |

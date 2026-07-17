@@ -16,6 +16,7 @@ CREATE TABLE "DiscoveryProductMap" (
     "processId" TEXT NOT NULL,
     "oracleRef" TEXT,
     "netsuiteRef" TEXT,
+    "otherRef" TEXT,
     "notedById" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
