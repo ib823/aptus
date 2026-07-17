@@ -32,35 +32,41 @@ const prisma = new PrismaClient();
 let engagementId = "";
 let token = "";
 
+/**
+ * FILE-LEVEL fixture. Both describes share this token — the OTP block below
+ * exercises the same grant from an unverified device. Tearing it down inside the
+ * first describe's afterAll left the second running against a deleted grant.
+ */
+test.beforeAll(async () => {
+  if (!RUN) return;
+  const engagement = await prisma.discoveryEngagement.create({
+    data: { client: CLIENT_LABEL, state: "issued", issuedAt: new Date() },
+  });
+  engagementId = engagement.id;
+  token = mintRawToken();
+  await prisma.discoveryAccessGrant.create({
+    data: {
+      engagementId,
+      email: "journey.reviewer@e2e.test",
+      displayName: "Journey Reviewer",
+      roleLabel: "COO",
+      tokenHash: hashToken(token),
+      valueStreamIds: [], // empty = all 10 streams
+      otpVerifiedUaHashes: [hashUserAgent(UA)], // device pre-verified: skips OTP
+    },
+  });
+});
+
+test.afterAll(async () => {
+  if (engagementId) {
+    await prisma.discoveryEngagement.delete({ where: { id: engagementId } }).catch(() => {});
+  }
+  await prisma.$disconnect();
+});
+
 test.describe("Neutral Process Discovery guest journey (PR-2a)", () => {
   test.skip(!RUN, "Set DISCOVERY_E2E=1 and boot the server with NEUTRAL_DISCOVERY_ENABLED=true");
   test.use({ userAgent: UA });
-
-  test.beforeAll(async () => {
-    const engagement = await prisma.discoveryEngagement.create({
-      data: { client: CLIENT_LABEL, state: "issued", issuedAt: new Date() },
-    });
-    engagementId = engagement.id;
-    token = mintRawToken();
-    await prisma.discoveryAccessGrant.create({
-      data: {
-        engagementId,
-        email: "journey.reviewer@e2e.test",
-        displayName: "Journey Reviewer",
-        roleLabel: "COO",
-        tokenHash: hashToken(token),
-        valueStreamIds: [], // empty = all 10 streams
-        otpVerifiedUaHashes: [hashUserAgent(UA)], // device pre-verified: skips OTP
-      },
-    });
-  });
-
-  test.afterAll(async () => {
-    if (engagementId) {
-      await prisma.discoveryEngagement.delete({ where: { id: engagementId } }).catch(() => {});
-    }
-    await prisma.$disconnect();
-  });
 
   test("landing → ack → redeem → V1 renders all 10 streams", async ({ page }) => {
     await page.goto(`/d/${token}`);
@@ -95,14 +101,18 @@ test.describe("Neutral Process Discovery guest journey (PR-2a)", () => {
     await expect(page.getByText(/not modeled in this prototype pass/i)).toHaveCount(0);
 
     // Coverage row reads the loader's truth, not meta and not the .dc's numbers.
-    await expect(page.getByText("742")).toBeVisible();
-    await expect(page.getByText("545")).toBeVisible();
-    await expect(page.getByText("60")).toBeVisible();
+    // Scoped to the coverage list and exact-matched: "742" also legitimately
+    // appears in the progress line ("Nothing reviewed yet — 742 processes…"),
+    // which is a strict-mode violation, not a bug.
+    const coverage = page.getByRole("list").filter({ hasText: "business processes" }).first();
+    await expect(coverage.getByText("742", { exact: true })).toBeVisible();
+    await expect(coverage.getByText("545", { exact: true })).toBeVisible();
+    await expect(coverage.getByText("60", { exact: true })).toBeVisible();
     // 726 is the pre-D6 sentinel-inflated figure; it must never render.
-    await expect(page.getByText("726")).toHaveCount(0);
+    await expect(page.getByText("726", { exact: true })).toHaveCount(0);
     // 654/638 are the brief's pre-overlay numbers; superseded by the loader.
-    await expect(page.getByText("654")).toHaveCount(0);
-    await expect(page.getByText("638")).toHaveCount(0);
+    await expect(page.getByText("654", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("638", { exact: true })).toHaveCount(0);
   });
 
   test("fresh state: nothing decided yet", async ({ page }) => {
