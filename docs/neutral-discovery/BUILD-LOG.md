@@ -8,6 +8,55 @@ The build is complete: client surface, consultant workbench, the seam, and the
 P4 loop. What remains is **verification in an environment with a database**, then
 the pilot.
 
+## CHAIN LANDED ON MAIN (2026-07-18)
+
+The Brownfield migration drift (the critical-path blocker below) was fixed and
+merged **first** as PR #100 — a guarded, additive reconciliation migration
+(`20260716000000`) plus the `migration-integrity` CI gate that now protects
+discovery too. Prod schema-parity was verified against the live database and
+passed.
+
+The discovery chain was then rebased onto that main and merged **dark**, in
+dependency order, each PR green on the runner (Migration Integrity parity,
+Quality Gates — typecheck:strict/lint:strict/unit/build, E2E Smoke, Vercel):
+
+| PR | # | main merge |
+|---|---|---|
+| PR-1 data layer | #101 | `bfea4c5` |
+| PR-2a guest infra | #102 | `fc60a58` |
+| PR-2b explore V2/V3/V4 | #103 | `e5af8d8` |
+| PR-3 present/export/notes | #104 | `6e87a01` |
+| PR-4 workbench core | #105 | `c1b2528` |
+| PR-5 sessions/seam | #106 | `f6adf3e` |
+| PR-6 outputs/capture | #107 | _this PR_ |
+
+**`NEUTRAL_DISCOVERY_ENABLED` stays UNSET throughout.** The flag is read-only
+(`src/lib/discovery/guards.ts`), set in no committed config, so a merge cannot
+enable it. Every `/d` route and the workbench discovery `layout.tsx` call
+`notFound()` when the flag is off; `discovery-flag-off.unauth.spec.ts` asserts
+this in CI. Prod is dark: `/d` 404s, the workbench discovery section is absent.
+
+One infra addition was needed to land the chain: **`chore(build)` raises the
+Next build heap to 4GB** (`--max-old-space-size=4096` on `build`, `vercel-build`,
+and the pre-push hook) — the ~1.9MB discovery library JSON pushes `next build`'s
+type-check worker past Node's default ~2GB heap. Approved and landed on PR-1.
+
+### Tracked debt — carried, NOT fixed in the chain (deferred to the flagged pass)
+
+Two known items ride along untouched, by instruction; they do not gate the dark
+merge and are not product defects:
+
+1. **Racy PR-3 Present/Export e2e spec** (`discovery-present-export.unauth.spec.ts`)
+   — spec-side flakiness (retries + streaming pages manufacture failures), no
+   product defect. Gated behind `DISCOVERY_E2E=1`, which CI's E2E Smoke does not
+   set, so it is **skipped in CI**. See item (b) below for the rewrite.
+2. **WCAG-AA contrast defect** on the /d small-text surfaces (V2/V3/V4/Export)
+   — the `--ink-muted` (#8A8A8A ≈ 3.45:1) sweep to `--ink-soft`. See item (c).
+
+The **flagged verification** (two-browser seam + notes-privacy proof, full
+flagged e2e with `NEUTRAL_DISCOVERY_ENABLED=true`) is the deferred dedicated
+preview pass — intentionally NOT run during this dark landing.
+
 ## PR map
 
 | PR | Branch | What |
