@@ -1,0 +1,141 @@
+name: Migration Integrity
+
+# Closes the root cause behind the Brownfield drift: CI built its database with
+# `prisma db push` (schema-first) while production builds with `prisma migrate
+# deploy` (history-first), so CI was structurally unable to notice a model that
+# no migration created. This workflow builds the database the way production
+# does — from migration history — and asserts it matches schema.prisma. The
+# `db push` fast jobs in ci.yml are intentionally left in place; these gates run
+# alongside them.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/migration_integrity
+  DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/migration_integrity
+  SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/migration_integrity_shadow
+  RECONCILE_MIGRATION: prisma/migrations/20260716000000_brownfield_subsystem_reconcile/migration.sql
+
+jobs:
+  migration-integrity:
+    name: History-built DB + schema parity
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: migration_integrity
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      # ------------------------------------------------------------------ #
+      # GATE 1 — no destructive statement in the reconciliation migration. #
+      # Enforces the "additive, guarded, zero-destructive" contract as a   #
+      # mechanical check rather than a claim. SQL comment lines (which      #
+      # describe the safety model in prose) are stripped before matching.  #
+      # ------------------------------------------------------------------ #
+      - name: Assert reconciliation migration is non-destructive
+        run: |
+          set -euo pipefail
+          # Strip full-line SQL comments, then scan executable SQL for any
+          # destructive DDL/DML. A match fails the build.
+          BAD=$(grep -vE '^[[:space:]]*--' "$RECONCILE_MIGRATION" \
+            | grep -inE '\bDROP[[:space:]]+(TABLE|COLUMN|CONSTRAINT|INDEX|SCHEMA|TYPE|VIEW|SEQUENCE|DATABASE)\b|\bTRUNCATE\b|\bDELETE[[:space:]]+FROM\b|ALTER[[:space:]]+TABLE[^;]*\bDROP\b' \
+            || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::Reconciliation migration contains destructive statement(s):"
+            echo "$BAD"
+            exit 1
+          fi
+          echo "OK: $RECONCILE_MIGRATION contains no destructive statement."
+
+      # ------------------------------------------------------------------ #
+      # GATE 2 — parity: a database built from migration history must be    #
+      # identical to schema.prisma. Exit code 2 (drift) fails the build;    #
+      # any future `db push` shortcut that skips a migration lands here.    #
+      # ------------------------------------------------------------------ #
+      - name: Create shadow database for diff
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d migration_integrity \
+            -c 'CREATE DATABASE migration_integrity_shadow;'
+
+      - name: Assert migration history == schema.prisma (no drift)
+        run: |
+          set -euo pipefail
+          npx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "$SHADOW_DATABASE_URL" \
+            --exit-code
+          # --exit-code: 0 = empty (no drift, pass), 2 = drift (fail), 1 = error.
+          echo "OK: migration history reconciles to schema.prisma with zero drift."
+
+      # ------------------------------------------------------------------ #
+      # GATE 3 — the database production actually gets: built from history  #
+      # via `migrate deploy`, then smoke-queried against the objects that   #
+      # the drift previously left missing (the app's first boot failures).  #
+      # ------------------------------------------------------------------ #
+      - name: Build database from migration history (migrate deploy)
+        run: npx prisma migrate deploy
+
+      - name: Smoke-query previously-drifted objects
+        run: |
+          set -euo pipefail
+          PSQL="PGPASSWORD=postgres psql -h localhost -U postgres -d migration_integrity -v ON_ERROR_STOP=1 -tAc"
+          # Each of these errored on a db-push-blind, history-built database
+          # before the reconciliation migration existed.
+          eval "$PSQL \"SELECT \\\"brownfieldCatalogVersionId\\\" FROM \\\"Assessment\\\" LIMIT 1;\"" >/dev/null && echo "OK: Assessment.brownfieldCatalogVersionId column present"
+          eval "$PSQL \"SELECT 1 FROM \\\"BrownfieldCatalogVersion\\\" LIMIT 1;\"" >/dev/null && echo "OK: BrownfieldCatalogVersion table present"
+          eval "$PSQL \"SELECT 1 FROM \\\"CustomerProcess\\\" LIMIT 1;\"" >/dev/null && echo "OK: CustomerProcess table present"
+          GIN=$(eval "$PSQL \"SELECT am.amname FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid JOIN pg_am am ON am.oid=c.relam WHERE c.relname='SapApiReference_scopeItemCodes_gin_idx';\"")
+          [ "$GIN" = "gin" ] && echo "OK: SapApiReference_scopeItemCodes_gin_idx is a GIN index" || { echo "::error::GIN index missing or wrong type: '$GIN'"; exit 1; }
+
+      - name: Boot smoke — the exact query that died on the drifted schema
+        # The script MUST live inside the workspace: Node ESM resolves the bare
+        # `@prisma/client` import from the nearest node_modules on the file's
+        # path, so a /tmp script cannot see the repo's dependencies (NODE_PATH
+        # does not help ESM bare specifiers). Write and run it from the repo root.
+        run: |
+          set -euo pipefail
+          cat > "$GITHUB_WORKSPACE/boot-smoke.mjs" <<'JS'
+          import { PrismaClient } from "@prisma/client";
+          const prisma = new PrismaClient();
+          try {
+            await prisma.assessment.findMany({ take: 1 });   // selects brownfieldCatalogVersionId
+            await prisma.brownfieldCatalogVersion.findMany({ take: 1 });
+            await prisma.customerProcess.findMany({ take: 1 });
+            console.log("OK: Prisma client boots against the history-built database.");
+          } catch (e) {
+            console.error("BOOT FAILED:", e.message.split("\n")[0]);
+            process.exit(1);
+          } finally { await prisma.$disconnect(); }
+          JS
+          node "$GITHUB_WORKSPACE/boot-smoke.mjs"
+          rm -f "$GITHUB_WORKSPACE/boot-smoke.mjs"
