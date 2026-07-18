@@ -63,13 +63,16 @@ start=$(date +%s)
 
 # Use npx directly to bypass the pnpm engine check that fires when running
 # under codespaces with a Node version different from package.json#engines.
-# The actual build command is identical: 'prisma generate && next build'.
+# The build command mirrors package.json 'build': 'prisma generate && next
+# build', including NODE_OPTIONS=--max-old-space-size=4096 — the discovery
+# datasets push next build's type-check worker past Node's default ~2GB heap,
+# and the pnpm script sets this flag, so the hook must set it too to match.
 if ! npx prisma generate >/dev/null 2>&1; then
   printf "\n\033[31m✗\033[0m pre-push: 'prisma generate' failed — push REJECTED.\n"
   exit 1
 fi
 
-if ! npx next build; then
+if ! NODE_OPTIONS=--max-old-space-size=4096 npx next build; then
   end=$(date +%s)
   printf "\n\033[31m✗\033[0m pre-push: 'next build' failed in $((end-start))s — push REJECTED.\n"
   printf "   Vercel would also reject this build. Fix locally first.\n"
