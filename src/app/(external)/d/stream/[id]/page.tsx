@@ -12,8 +12,10 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { DiscoveryShell } from "@/components/discovery/DiscoveryShell";
+import { DISCOVERY_MODE_COOKIE, parseMode } from "@/lib/discovery/mode";
 import { FitBar } from "@/components/discovery/FitBar";
 import { StreamIndex } from "@/components/discovery/StreamIndex";
 import { SEALED_NOTICE, STREAM_COMPLETE_BANNER } from "@/lib/discovery/copy";
@@ -47,8 +49,11 @@ export default async function DiscoveryStreamPage({ params }: PageProps) {
   });
   if (!view) redirect("/d/home");
 
+  const mode = parseMode((await cookies()).get(DISCOVERY_MODE_COOKIE)?.value);
+
   return (
     <DiscoveryShell
+      mode={mode}
       clientName={view.identity.client}
       engagementLabel="Process Discovery"
       granteeName={view.identity.displayName}

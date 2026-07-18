@@ -4412,6 +4412,7 @@ model DiscoveryEngagement {
   grants    DiscoveryAccessGrant[]
   events    DiscoveryEvent[]
   decisions DiscoveryDecision[]
+  notes     DiscoveryNote[]
 
   @@index([state])
 }
@@ -4461,6 +4462,7 @@ model DiscoveryAccessGrant {
   supersedes   DiscoveryAccessGrant[]  @relation("DiscoveryGrantSupersession")
   sessions     DiscoveryGuestSession[]
   decisions    DiscoveryDecision[]
+  notes        DiscoveryNote[]
 
   @@index([engagementId])
   @@index([email])
@@ -4532,4 +4534,37 @@ model DiscoveryDecision {
   @@unique([engagementId, processId])
   @@index([engagementId])
   @@index([grantId])
+}
+
+/// Facilitator notes captured during a Present session (PR-3).
+///
+/// ⚠ CONSULTANT-VISIBLE ONLY. These are the facilitator's private red-lines,
+/// typed in the room while the client watches the projected view. They must
+/// NEVER appear in a client-readable payload — not in a /d view model, not in
+/// the client export pack (PR-6), not in any serializer output. The walker test
+/// in tests/unit/discovery asserts this by construction; PR-5's C8 console is
+/// where they surface, and this table is that seam's contract.
+///
+/// Deliberately a separate table rather than a column on DiscoveryDecision: a
+/// column would ride along with every decision read, and the privacy property
+/// would depend on every future `select` remembering to exclude it. A separate
+/// table means a client read has to opt IN to leaking, rather than opt out.
+model DiscoveryNote {
+  id           String  @id @default(cuid())
+  engagementId String
+  /// The grant whose session captured it (the facilitator drives the room).
+  grantId      String?
+  /// Client dataset process id (e.g. "31G"); null = a session-level note.
+  processId    String?
+
+  body String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  engagement DiscoveryEngagement   @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  grant      DiscoveryAccessGrant? @relation(fields: [grantId], references: [id], onDelete: SetNull)
+
+  @@index([engagementId, processId])
+  @@index([engagementId, createdAt])
 }
