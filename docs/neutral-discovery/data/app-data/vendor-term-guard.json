@@ -1,0 +1,29 @@
+{
+ "description": "Vendor terms and data sentinels that must NEVER appear in any client-facing surface, route, or dataset. CI greps client routes + discovery-library.client.json against this list.",
+ "terms": [
+  "SAP",
+  "S/4HANA",
+  "S4HANA",
+  "Ariba",
+  "Fiori",
+  "Fieldglass",
+  "Concur",
+  "SuccessFactors",
+  "BlackLine",
+  "Vistex",
+  "OpenText",
+  "Icertis",
+  "EWM",
+  "Business Network",
+  "Convergent Invoicing",
+  "Taulia",
+  "Oracle",
+  "NetSuite",
+  "Workday",
+  "ServiceNow",
+  "Salesforce",
+  "Signavio",
+  "Hybris",
+  "no MY mandatory steps"
+ ]
+}
