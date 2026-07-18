@@ -1543,6 +1543,8 @@ model User {
   // stays additive and the users table is untouched.
   discoveryEventsByUser  DiscoveryEvent[]       @relation("DiscoveryEventsByUser")
   discoveryGrantsRevoked DiscoveryAccessGrant[] @relation("DiscoveryGrantsRevoked")
+  discoveryProductMaps   DiscoveryProductMap[]  @relation("DiscoveryProductMapsNotedBy")
+  discoveryGapsOwned     DiscoveryGap[]         @relation("DiscoveryGapsOwnedBy")
 
   @@index([role])
   @@index([organizationId])
@@ -4567,4 +4569,68 @@ model DiscoveryNote {
 
   @@index([engagementId, processId])
   @@index([engagementId, createdAt])
+}
+
+// =============================================================
+// ABeam Workbench — Neutral Process Discovery consultant workbench (PR-4)
+// =============================================================
+// Additive tables for consultant-side state. NOTE the distinction that matters:
+// the process LIBRARY is committed JSON and stays read-only until PR-6's P4
+// pipeline. These tables are not library data — they are the consultant's own
+// working state ABOUT the library, so writing them is legitimate now.
+
+/// One product-mapping row per process (C6 — THE FENCE).
+///
+/// ⚠ CONSULTANT-ONLY. This is the private bridge from the neutral discovery to
+/// whichever product is later shortlisted. It names vendors. It must be
+/// unreachable from any client surface — not in /d, not in the client export
+/// pack, not in any serializer output. Brief §6/24: "never in Present, Explore,
+/// Export, or any surface the client can see, project, or receive."
+///
+/// The SAP column is DERIVED, not stored: origin=sap-base → the scope_id is the
+/// reference; origin=overlay → no reference exists. Only the Oracle/NetSuite
+/// mappings a consultant enters by hand live here, so the table cannot
+/// manufacture a fill the library does not support.
+model DiscoveryProductMap {
+  id        String @id @default(cuid())
+  /// Client dataset process id (e.g. "31G"). The library is JSON, so no FK.
+  processId String
+
+  /// Free-text building-block reference, or null for an honest "to map" slot.
+  oracleRef   String?
+  netsuiteRef String?
+  /// Brief §6B.8's fourth Rosetta column — any other product a consultant binds.
+  otherRef    String?
+
+  notedById String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  notedBy User? @relation("DiscoveryProductMapsNotedBy", fields: [notedById], references: [id])
+
+  @@unique([processId])
+}
+
+/// The gap register (C4). Editable consultant state over the APQC coverage
+/// analysis — which gaps we know about, and where we intend to fill them from.
+model DiscoveryGap {
+  id String @id @default(cuid())
+
+  /// APQC category code the gap sits in (e.g. "5.0").
+  apqcCode   String
+  title      String
+  /// Where the fill is expected to come from (client capture, overlay, partner…).
+  fillSource String?
+  /// open | in-progress | filled | accepted
+  status     String  @default("open")
+  note       String?
+
+  ownedById String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ownedBy User? @relation("DiscoveryGapsOwnedBy", fields: [ownedById], references: [id])
+
+  @@index([apqcCode])
+  @@index([status])
 }
