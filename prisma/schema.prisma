@@ -1538,6 +1538,12 @@ model User {
   affirmGrantsRevoked    AffirmAccessGrant[]    @relation("AffirmGrantsRevoked")
   affirmStoriesReviewed  AffirmScopeItemStory[] @relation("AffirmStoriesReviewed")
 
+  // ABeam Workbench — Neutral Process Discovery (PR-2a, 2026-07-17).
+  // Back-relations only: Prisma emits no column for these, so the migration
+  // stays additive and the users table is untouched.
+  discoveryEventsByUser  DiscoveryEvent[]       @relation("DiscoveryEventsByUser")
+  discoveryGrantsRevoked DiscoveryAccessGrant[] @relation("DiscoveryGrantsRevoked")
+
   @@index([role])
   @@index([organizationId])
   @@index([email])
@@ -4363,4 +4369,167 @@ model AffirmScopeItemStory {
   reviewedBy User?           @relation("AffirmStoriesReviewed", fields: [reviewedById], references: [id])
 
   @@index([reviewedAt])
+}
+
+// =============================================================
+// ABeam Workbench — Neutral Process Discovery (PR-2a, 2026-07-17)
+// =============================================================
+// Token + OTP guest surface for the /d discovery journey. Mirrors the Affirm
+// external guest stack (AffirmAccessGrant / AffirmGuestSession) on its own
+// tables — the same move Affirm made from the presales stack, and the house
+// pattern for a new guest surface. Purely additive: no existing table is
+// touched. Fail-closed behind NEUTRAL_DISCOVERY_ENABLED.
+//
+// Why parallel tables rather than shared ones: sharing would need a
+// discriminator column on AffirmAccessGrant (altering a shipped table) and
+// would couple the surfaces — an Affirm bundle state change would kill
+// discovery sessions through the shared isClientFacingState gate.
+//
+// Guest-side DiscoveryEvent rows carry actorId=null and payload.grantId (there
+// is no User actor). Event vocabulary lives in
+// src/lib/discovery/external/events.ts (String column, no enum migration).
+
+/// One discovery engagement — the client-facing container. State machine:
+///   draft      consultant is preparing
+///   issued     issued to the client (open for decisions)
+///   submitted  client has sealed their decisions
+///   released   consultant has reviewed; outputs generated
+/// Sealed/read-only is DERIVED as state != "issued", never a column — the same
+/// rule as AffirmBundle, enforced at session, server and UI layers.
+model DiscoveryEngagement {
+  id     String @id @default(cuid())
+  client String // free-text engagement label (pre-onboarding, no Organization row yet)
+  state  String @default("draft")
+
+  createdById String?
+  issuedAt    DateTime?
+  submittedAt DateTime?
+  releasedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  grants    DiscoveryAccessGrant[]
+  events    DiscoveryEvent[]
+  decisions DiscoveryDecision[]
+
+  @@index([state])
+}
+
+/// One per-reviewer access grant. Raw token appears only in the invite URL; we
+/// store SHA-256(token). otpAttemptCount==5 -> permanent lockout, which revokes
+/// the grant. Re-issue chains via supersededByGrantId.
+model DiscoveryAccessGrant {
+  id           String @id @default(cuid())
+  engagementId String
+
+  // Identity (the client reviewer)
+  email       String
+  displayName String
+  roleLabel   String? // "COO", "Head of Finance" — display only
+
+  // Token (the credential) — SHA-256 of the raw token; raw lives only in the URL
+  tokenHash String @unique // 64 hex chars
+
+  // Persona scope: value streams this reviewer may see. Empty = all 10 streams.
+  valueStreamIds String[]
+
+  // Legal acknowledgement (set on POST /d/[token]/redeem)
+  ackAt       DateTime?
+  pdpaVersion String?
+
+  // OTP gate. otpAttemptCount==5 -> permanent lockout.
+  otpHash             String?
+  otpExpiresAt        DateTime?
+  otpAttemptCount     Int       @default(0)
+  // Per-device verification: sha256(normalized UA) values that cleared OTP.
+  otpVerifiedUaHashes String[]
+
+  lastAccessAt DateTime?
+
+  // Lifecycle
+  revokedAt           DateTime?
+  revokedById         String?
+  supersededByGrantId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  engagement   DiscoveryEngagement     @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  revoker      User?                   @relation("DiscoveryGrantsRevoked", fields: [revokedById], references: [id])
+  supersededBy DiscoveryAccessGrant?   @relation("DiscoveryGrantSupersession", fields: [supersededByGrantId], references: [id])
+  supersedes   DiscoveryAccessGrant[]  @relation("DiscoveryGrantSupersession")
+  sessions     DiscoveryGuestSession[]
+  decisions    DiscoveryDecision[]
+
+  @@index([engagementId])
+  @@index([email])
+}
+
+/// Short-lived guest cookie session for /d. NOT NextAuth. Cookie scope:
+/// Path=/d, SameSite=Strict, HttpOnly. 8h absolute, 60min sliding idle. The
+/// cookie carries the raw token; lookup is by SHA-256(raw), so the DB never
+/// holds a replayable credential.
+model DiscoveryGuestSession {
+  id      String @id @default(cuid())
+  grantId String
+
+  tokenHash String @unique
+  uaHash    String
+
+  createdAt   DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  endedAt     DateTime?
+  // expired | idle | logout | ended_by_consultant | engagement_state_change | superseded
+  endedReason String?
+
+  grant DiscoveryAccessGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@index([grantId])
+}
+
+/// Append-only audit log for the discovery flow. Guest rows: actorId=null,
+/// payload.grantId.
+model DiscoveryEvent {
+  id           String   @id @default(cuid())
+  engagementId String
+  type         String
+  actorId      String?
+  payload      Json     @default("{}")
+  createdAt    DateTime @default(now())
+
+  engagement DiscoveryEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  actor      User?               @relation("DiscoveryEventsByUser", fields: [actorId], references: [id])
+
+  @@index([engagementId, createdAt])
+  @@index([type, createdAt])
+}
+
+/// One fit decision per process per engagement. processId is the client
+/// dataset's process id (e.g. "31G") — the library is committed JSON, not a
+/// table, so this is intentionally not an FK.
+///
+/// status: standard | differ | discuss | na
+/// reason is required by the UI for `differ` (the completeness gate) but is
+/// nullable here: the server must accept a partial write and let the summary
+/// count it incomplete, rather than lose the reviewer's selection.
+model DiscoveryDecision {
+  id           String @id @default(cuid())
+  engagementId String
+  grantId      String
+
+  processId String
+  status    String
+  reason    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  engagement DiscoveryEngagement  @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  grant      DiscoveryAccessGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  // One decision per process per engagement — the reviewer edits in place.
+  @@unique([engagementId, processId])
+  @@index([engagementId])
+  @@index([grantId])
 }
