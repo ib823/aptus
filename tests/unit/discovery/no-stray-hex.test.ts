@@ -19,6 +19,15 @@ import { describe, expect, it } from "vitest";
 
 const ROOTS = ["src/app/(external)/d", "src/components/discovery"];
 
+/**
+ * The ONE sanctioned exception (PR-3). The Export pack must print pure black on
+ * white with decisions as label+pattern (brief §3, §11); the warm on-screen
+ * token palette is wrong for a mono printer. That palette is declared only in
+ * this file, scoped to `.dx-root`, and the export components carry no hex —
+ * they use currentColor. See the file's own header, and BUILD-LOG D4.
+ */
+const PRINT_PALETTE_EXEMPTION = "src/app/(external)/d/export/discovery-export.css";
+
 // #fff, #ffffff, #ffffffff — a hex color literal.
 const HEX = /#[0-9a-fA-F]{3,8}\b/;
 
@@ -37,11 +46,38 @@ function walk(dir: string, out: string[]): void {
 }
 
 describe("no stray hex literals on the discovery surface", () => {
-  const files: string[] = [];
-  for (const r of ROOTS) walk(join(process.cwd(), r), files);
+  const all: string[] = [];
+  for (const r of ROOTS) walk(join(process.cwd(), r), all);
+  const rel = (f: string) => f.replace(process.cwd() + "/", "");
+  const files = all.filter((f) => rel(f) !== PRINT_PALETTE_EXEMPTION);
 
   it("scans a non-empty set of discovery files", () => {
     expect(files.length).toBeGreaterThan(0);
+  });
+
+  it("the print-palette exemption points at a file that actually exists", () => {
+    // An exemption for a path that has moved is an exemption that silently
+    // widens: the guard would keep passing while the real file went unscanned.
+    expect(all.map(rel)).toContain(PRINT_PALETTE_EXEMPTION);
+  });
+
+  it("the exemption is exactly one file", () => {
+    expect(all.length - files.length).toBe(1);
+  });
+
+  it("the print palette stays inside the export root — nothing else imports it", () => {
+    // If another surface imported this stylesheet, black-on-white would leak
+    // onto a screen view and the exemption would stop being contained.
+    //
+    // Matches an actual import, not the filename: a bare substring check also
+    // hits FitPatternSwatch.tsx, whose comment names the stylesheet to explain
+    // where the palette lives. That is prose, not a leak.
+    const IMPORTS_EXPORT_CSS = /(?:^|\n)\s*import\s+["'][^"']*discovery-export\.css["']/;
+    const importers = all
+      .filter((f) => /\.(tsx|ts)$/.test(f))
+      .filter((f) => IMPORTS_EXPORT_CSS.test(readFileSync(f, "utf8")))
+      .map(rel);
+    expect(importers).toEqual(["src/app/(external)/d/export/page.tsx"]);
   });
 
   it("contains no raw hex color literals (token system only)", () => {

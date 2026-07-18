@@ -13,15 +13,15 @@
  * three props to a shipped component to serve another surface's chrome would
  * make it a config bag; this keeps both readable.
  *
- * The MODE SWITCH is deliberately not rendered in PR-2a — see BUILD-LOG D8.
- * Present and Export land in PR-3; a switch whose other two segments route
- * nowhere is worse than no switch, and stubbing it would mean inventing
- * client-facing copy (the .dc defines `flashToast` but never calls it, so the
- * prototype supplies no toast copy to build from). It arrives with the modes.
+ * The mode switch (§6/22) ships here as of PR-3, closing D8. It is omitted on
+ * the pre-session surfaces (landing, verify, terminals) — switching mode before
+ * you have a session to view is meaningless.
  */
 
 import type { ReactNode } from "react";
 import { Wordmark } from "@/components/affirm/external/GuestShell";
+import type { DiscoveryMode } from "@/lib/discovery/mode";
+import { ModeSwitch } from "./ModeSwitch";
 
 export interface DiscoveryShellProps {
   children: ReactNode;
@@ -30,6 +30,8 @@ export interface DiscoveryShellProps {
   engagementLabel?: string | null;
   granteeName?: string | null;
   granteeRole?: string | null;
+  /** Omit to hide the switch (pre-session surfaces). */
+  mode?: DiscoveryMode;
 }
 
 export function DiscoveryShell({
@@ -38,6 +40,7 @@ export function DiscoveryShell({
   engagementLabel,
   granteeName,
   granteeRole,
+  mode,
 }: DiscoveryShellProps) {
   return (
     <div className="flex min-h-screen flex-col bg-cream">
@@ -49,6 +52,7 @@ export function DiscoveryShell({
         </p>
 
         <div className="ml-auto flex items-center gap-4 text-right leading-tight">
+          {mode ? <ModeSwitch mode={mode} /> : null}
           {clientName ? (
             <span className="block">
               <span className="block text-[13px] font-semibold text-ink">{clientName}</span>
