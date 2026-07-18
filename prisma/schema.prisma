@@ -369,9 +369,6 @@ model SapApiReference {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  // GIN index on scopeItemCodes would speed `&& ARRAY[...]` lookups;
-  // Prisma doesn't support it natively — ingest will write a raw SQL
-  // index alongside the migration if query latency becomes an issue.
 
   @@index([status])
   @@index([apiType])
@@ -379,6 +376,11 @@ model SapApiReference {
   @@index([appliesToPublic])
   @@index([appliesToPrivate])
   @@index([appliesToOnPrem])
+  // GIN index on scopeItemCodes speeds `WHERE scopeItemCodes && ARRAY['J60', ...]`
+  // membership lookups the classifier runs at every batch. Declared here (Prisma
+  // 6.x supports `type: Gin` with `ArrayOps`) with `map:` pinning the existing
+  // index name so `migrate diff` adopts the live index rather than dropping it.
+  @@index([scopeItemCodes(ops: ArrayOps)], type: Gin, map: "SapApiReference_scopeItemCodes_gin_idx")
 }
 
 /// Every content type SAP publishes on the Business Accelerator Hub for a
