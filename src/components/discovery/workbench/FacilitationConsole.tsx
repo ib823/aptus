@@ -132,22 +132,22 @@ export function FacilitationConsole({ view }: FacilitationConsoleProps) {
 
         {/* Current process + drive controls. */}
         <section className="mb-5 rounded-input border border-border-default bg-paper p-4">
-          <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted">
+          <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft">
             The room is looking at
           </h2>
           {current >= 0 ? (
             <p className="font-serif text-lg font-medium text-ink">
               <span className="mr-2 font-mono text-xs text-navy">{view.order[current]!.id}</span>
               {view.order[current]!.name}
-              <span className="ml-2 text-xs text-ink-muted">{view.order[current]!.streamName}</span>
+              <span className="ml-2 text-xs text-ink-soft">{view.order[current]!.streamName}</span>
             </p>
           ) : (
-            <p className="text-[13px] text-ink-muted">
+            <p className="text-[13px] text-ink-soft">
               Nothing yet — jump to a process to put it on the projector.
             </p>
           )}
 
-          <p className="mt-2 font-mono text-[11px] text-ink-muted" aria-live="polite">
+          <p className="mt-2 font-mono text-[11px] text-ink-soft" aria-live="polite">
             {current >= 0 ? `Process ${current + 1} of ${view.order.length}` : `${view.order.length} in scope`}
           </p>
 
@@ -173,7 +173,7 @@ export function FacilitationConsole({ view }: FacilitationConsoleProps) {
 
         {/* Jump-to (§6B.23 — replaces the search bar Present hides). */}
         <section className="mb-5">
-          <label htmlFor="jump" className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted">
+          <label htmlFor="jump" className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft">
             Jump to
           </label>
           <input
@@ -208,7 +208,7 @@ export function FacilitationConsole({ view }: FacilitationConsoleProps) {
 
         {/* The live tally — real decisions, refreshed as the room decides. */}
         <section className="rounded-input border border-border-default bg-paper p-4">
-          <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted">
+          <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft">
             Live tally
           </h2>
           <p className="mb-2 text-[13px] text-ink-soft" aria-live="polite">
@@ -221,11 +221,11 @@ export function FacilitationConsole({ view }: FacilitationConsoleProps) {
       <aside className="flex flex-col gap-5">
         {/* Park list — the discuss decisions, from either surface. */}
         <section className="rounded-input border border-border-default bg-paper p-4">
-          <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted">
+          <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft">
             Parked for the workshop ({view.parked.length})
           </h2>
           {view.parked.length === 0 ? (
-            <p className="text-xs text-ink-disabled">Nothing parked yet.</p>
+            <p className="text-xs text-ink-soft">Nothing parked yet.</p>
           ) : (
             <ul className="flex flex-col gap-1.5">
               {view.parked.map((p) => (

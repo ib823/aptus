@@ -88,10 +88,10 @@ export function SessionSetup({ session, streams }: SessionSetupProps) {
   return (
     <>
       <section className="mb-6">
-        <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted">
+        <h2 className="mb-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft">
           Value-stream scope
         </h2>
-        <p className="mb-2.5 text-xs text-ink-muted">
+        <p className="mb-2.5 text-xs text-ink-soft">
           {scope.length === 0
             ? "No streams selected — the client sees all 10."
             : `${scope.length} of 10 selected — the client sees only these. Reviewers scoped to a stream outside this list see nothing from it.`}
@@ -111,23 +111,23 @@ export function SessionSetup({ session, streams }: SessionSetupProps) {
                   }`}
                 >
                   {s.name}
-                  <span className={on ? "text-white/70" : "text-ink-muted"}>{s.processCount}</span>
+                  <span className={on ? "text-white/70" : "text-ink-soft"}>{s.processCount}</span>
                 </button>
               </li>
             );
           })}
         </ul>
-        <p className="mt-2 font-mono text-[11px] text-ink-muted" aria-live="polite">
+        <p className="mt-2 font-mono text-[11px] text-ink-soft" aria-live="polite">
           {scopedCount} processes in scope
         </p>
       </section>
 
       <section>
-        <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted">
+        <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft">
           Reviewers
         </h2>
         {session.reviewers.length === 0 ? (
-          <p className="rounded-input border border-border-default bg-paper px-6 py-8 text-center text-[13px] text-ink-muted">
+          <p className="rounded-input border border-border-default bg-paper px-6 py-8 text-center text-[13px] text-ink-soft">
             No reviewers invited yet.
           </p>
         ) : (
@@ -137,7 +137,7 @@ export function SessionSetup({ session, streams }: SessionSetupProps) {
               <thead className="bg-ink-tint">
                 <tr>
                   {["Name", "Email", "Role", "Scope", "Status", "Last access", "Actions"].map((h) => (
-                    <th key={h} scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-muted">
+                    <th key={h} scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-soft">
                       {h}
                     </th>
                   ))}
@@ -148,8 +148,8 @@ export function SessionSetup({ session, streams }: SessionSetupProps) {
                   <tr key={r.id} className="border-b border-ink-tint">
                     <th scope="row" className="px-3.5 py-3 text-xs font-semibold text-ink">{r.displayName}</th>
                     <td className="px-3.5 py-3 font-mono text-[11px] text-ink-soft">{r.email}</td>
-                    <td className="px-3.5 py-3 text-[11px] text-ink-muted">{r.roleLabel ?? "—"}</td>
-                    <td className="px-3.5 py-3 text-[11px] text-ink-muted">
+                    <td className="px-3.5 py-3 text-[11px] text-ink-soft">{r.roleLabel ?? "—"}</td>
+                    <td className="px-3.5 py-3 text-[11px] text-ink-soft">
                       {r.streamIds.length === 0 ? "Session scope" : `${r.streamIds.length} streams`}
                     </td>
                     <td className="px-3.5 py-3">
@@ -157,7 +157,7 @@ export function SessionSetup({ session, streams }: SessionSetupProps) {
                         {STATUS_LABEL[r.status]}
                       </span>
                     </td>
-                    <td className="px-3.5 py-3 text-[11px] text-ink-muted">
+                    <td className="px-3.5 py-3 text-[11px] text-ink-soft">
                       {r.lastAccessAt ? r.lastAccessAt.toISOString().slice(0, 10) : "Never"}
                     </td>
                     <td className="px-3.5 py-3">
@@ -186,7 +186,7 @@ export function SessionSetup({ session, streams }: SessionSetupProps) {
             </table>
           </div>
         )}
-        <p aria-live="polite" className="mt-2 min-h-[16px] text-[11px] text-ink-muted">{status}</p>
+        <p aria-live="polite" className="mt-2 min-h-[16px] text-[11px] text-ink-soft">{status}</p>
       </section>
     </>
   );

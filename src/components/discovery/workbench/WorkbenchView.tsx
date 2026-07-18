@@ -37,7 +37,7 @@ export function WorkbenchView({
       <div className="flex flex-1 flex-col px-6 py-5">
         <div className="mb-3.5 flex flex-wrap items-center gap-4">
           <nav aria-label="Breadcrumb">
-            <p className="font-mono text-[11px] text-ink-muted">
+            <p className="font-mono text-[11px] text-ink-soft">
               Workbench <span aria-hidden="true">▸</span> {breadcrumb}
             </p>
           </nav>
@@ -47,7 +47,7 @@ export function WorkbenchView({
 
         <div className="mb-3.5 flex flex-wrap items-baseline gap-2.5">
           <h1 className="font-serif text-base font-medium text-navy">{title}</h1>
-          {caption ? <p className="text-xs text-ink-muted">{caption}</p> : null}
+          {caption ? <p className="text-xs text-ink-soft">{caption}</p> : null}
         </div>
 
         {children}

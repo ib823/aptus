@@ -142,10 +142,36 @@ describe("the notes consumer lives on the consultant side only", () => {
 
     const readers = files
       .filter((f) => /\b(?:prisma|tx|db)\s*\.\s*discoveryNote\s*\.\s*findMany\b/.test(stripComments(readFileSync(f, "utf8"))))
-      .map((f) => f.replace(ROOT + "/", ""));
+      .map((f) => f.replace(ROOT + "/", ""))
+      .sort();
 
-    // Exactly one reader, and it is behind the wall.
-    expect(readers).toEqual(["src/lib/discovery/workbench/session.ts"]);
+    /**
+     * The allowlist is deliberately explicit rather than a directory rule: every
+     * addition to it should cost someone a decision.
+     *
+     *  - workbench/session.ts — the C8 console (PR-5).
+     *  - workbench/packs.ts   — the INTERNAL pack only (PR-6). buildClientPack
+     *    does not touch this table; packs.test.ts asserts that separately, by
+     *    scanning the function body.
+     *
+     * Both live under lib/discovery/workbench/, which the wall test walks against
+     * every (external) entry point transitively. A reader appearing anywhere else
+     * fails here.
+     */
+    expect(readers).toEqual([
+      "src/lib/discovery/workbench/packs.ts",
+      "src/lib/discovery/workbench/session.ts",
+    ]);
+  });
+
+  it("the CLIENT pack builder never reads notes, even though its module does", () => {
+    // packs.ts is on the allowlist above because the internal pack carries
+    // notes. That is exactly the case where a module-level allowlist is too
+    // coarse — so assert the client-side function itself.
+    const src = read("src/lib/discovery/workbench/packs.ts");
+    const fn = /export async function buildClientPack[\s\S]*?\n}\n/.exec(stripComments(src))?.[0] ?? "";
+    expect(fn.length).toBeGreaterThan(0);
+    expect(fn).not.toMatch(/\b(?:prisma|tx|db)\s*\.\s*discoveryNote\b/);
   });
 
   it("the console view model is unreachable from the client surface", () => {

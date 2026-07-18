@@ -165,7 +165,7 @@ export function LibraryManager({ rows, facets }: LibraryManagerProps) {
         </button>
       </div>
 
-      <p aria-live="polite" className="mb-2.5 text-xs text-ink-muted">
+      <p aria-live="polite" className="mb-2.5 text-xs text-ink-soft">
         Showing {filtered.length} of {rows.length} processes
         {filtered.length !== rows.length ? " matching these filters" : ""}.
       </p>

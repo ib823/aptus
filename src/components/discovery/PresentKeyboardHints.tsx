@@ -48,7 +48,7 @@ export function PresentKeyboardHints() {
       }`}
     >
       {HINTS.map((h) => (
-        <li key={h.keys} className="flex items-center gap-1.5 text-[11px] text-ink-muted">
+        <li key={h.keys} className="flex items-center gap-1.5 text-[11px] text-ink-soft">
           <kbd className="rounded-[5px] border border-border-default bg-paper px-1.5 py-0.5 font-mono text-[10px] text-ink-soft">
             {h.keys}
           </kbd>

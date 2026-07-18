@@ -48,8 +48,8 @@ const COMPLETENESS_PILL: Record<string, string> = {
   "detailed+variants":
     "bg-[color-mix(in_srgb,var(--decision-standard)_15%,transparent)] text-decision-standard",
   detailed: "bg-navy-soft text-navy",
-  outline: "bg-ink-tint text-ink-muted",
-  none: "bg-ink-tint text-ink-muted",
+  outline: "bg-ink-tint text-ink-soft",
+  none: "bg-ink-tint text-ink-soft",
 };
 
 export interface LibraryTableProps {
@@ -144,7 +144,7 @@ export function LibraryTable({ rows, total, matched, sort, dir, onSort }: Librar
                   key={col.label}
                   scope="col"
                   aria-sort={isSorted ? (dir === "asc" ? "ascending" : "descending") : undefined}
-                  className={`border-b border-border-default px-1.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-muted ${col.className ?? ""}`}
+                  className={`border-b border-border-default px-1.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-soft ${col.className ?? ""}`}
                 >
                   {col.key ? (
                     <button
@@ -207,7 +207,7 @@ export function LibraryTable({ rows, total, matched, sort, dir, onSort }: Librar
       </table>
 
       {rows.length === 0 && (
-        <p className="px-6 py-16 text-center text-[13px] text-ink-muted">
+        <p className="px-6 py-16 text-center text-[13px] text-ink-soft">
           No processes match these filters.
         </p>
       )}
@@ -224,23 +224,28 @@ function cellContent(label: string, row: LibraryRow) {
     case "Workflow":
       return row.workflowName;
     case "APQC":
-      return <span className="font-mono text-[11px] text-ink-muted">{row.apqcCode ?? "—"}</span>;
+      return <span className="font-mono text-[11px] text-ink-soft">{row.apqcCode ?? "—"}</span>;
     case "Tier":
       return (
         <span
           className={`inline-flex h-[18px] items-center rounded-input px-1.5 text-[10px] font-bold ${
-            row.tier === "core" ? "bg-navy-soft text-navy" : "bg-ink-tint text-ink-muted"
+            row.tier === "core" ? "bg-navy-soft text-navy" : "bg-ink-tint text-ink-soft"
           }`}
         >
           {row.tier === "core" ? "Core" : "Generalized"}
         </span>
       );
     case "Industry":
-      return <span className="text-[11px] text-ink-muted">{row.industry ?? "—"}</span>;
+      return <span className="text-[11px] text-ink-soft">{row.industry ?? "—"}</span>;
     case "Origin":
       // Origin is consultant-only vocabulary; it never crosses to /d.
-      return (
-        <span className="font-mono text-[10px] uppercase text-ink-muted">
+      // client-captured entries are badged, per P4 §4 ("visible in the C2 grid").
+      return row.origin === "client-captured" ? (
+        <span className="inline-flex h-[18px] items-center rounded-input bg-[color-mix(in_srgb,var(--decision-standard)_15%,transparent)] px-1.5 text-[10px] font-bold text-decision-standard">
+          Captured
+        </span>
+      ) : (
+        <span className="font-mono text-[10px] uppercase text-ink-soft">
           {row.origin === "sap-base" ? "Base" : "Overlay"}
         </span>
       );
@@ -266,7 +271,7 @@ function cellContent(label: string, row: LibraryRow) {
           <span className="sr-only">Has a step flow</span>
         </span>
       ) : (
-        <span className="text-ink-disabled">
+        <span className="text-ink-soft">
           <span aria-hidden="true">–</span>
           <span className="sr-only">No step flow catalogued</span>
         </span>

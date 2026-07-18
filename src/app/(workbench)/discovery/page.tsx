@@ -87,7 +87,7 @@ export default async function DiscoveryHomePage() {
               className="block rounded-input border border-border-default bg-paper px-3.5 py-4 hover:border-navy focus-visible:shadow-focus-ring focus-visible:outline-none"
             >
               <span className="block font-serif text-2xl font-medium text-navy">{t.v}</span>
-              <span className="mt-1 block text-[10px] font-semibold uppercase text-ink-muted">{t.l}</span>
+              <span className="mt-1 block text-[10px] font-semibold uppercase text-ink-soft">{t.l}</span>
             </Link>
           </li>
         ))}
@@ -97,7 +97,7 @@ export default async function DiscoveryHomePage() {
       {engagements.length === 0 ? (
         // Honest empty. Not "Import the base library" (D17) — the library is
         // committed and present; there is nothing to import.
-        <p className="rounded-input border border-border-default bg-paper px-6 py-10 text-center text-[13px] text-ink-muted">
+        <p className="rounded-input border border-border-default bg-paper px-6 py-10 text-center text-[13px] text-ink-soft">
           No discovery engagements yet. Sessions arrive in the next pass — the library above is
           ready to curate in the meantime.
         </p>
@@ -108,7 +108,7 @@ export default async function DiscoveryHomePage() {
             <thead className="bg-ink-tint">
               <tr>
                 {["Client", "Reviewers", "Decisions", "Status", "Last activity"].map((c) => (
-                  <th key={c} scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-muted">
+                  <th key={c} scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-soft">
                     {c}
                   </th>
                 ))}
@@ -125,7 +125,7 @@ export default async function DiscoveryHomePage() {
                       {e.state}
                     </span>
                   </td>
-                  <td className="px-3.5 py-3 text-[11px] text-ink-muted">{ago(e.updatedAt, now)}</td>
+                  <td className="px-3.5 py-3 text-[11px] text-ink-soft">{ago(e.updatedAt, now)}</td>
                 </tr>
               ))}
             </tbody>

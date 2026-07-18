@@ -57,7 +57,7 @@ export default async function DiscoveryLandingPage({ params }: PageProps) {
           <Wordmark size="lg" />
         </div>
 
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-soft">
           Process Discovery
         </p>
         <h1 className="mx-auto mb-6 text-balance font-serif text-[32px] font-medium leading-[38px] text-ink">
@@ -115,7 +115,7 @@ export default async function DiscoveryLandingPage({ params }: PageProps) {
           </button>
         </form>
 
-        <p className="mx-auto mt-5 max-w-[46ch] text-[11px] leading-4 text-ink-muted">
+        <p className="mx-auto mt-5 max-w-[46ch] text-[11px] leading-4 text-ink-soft">
           Your link is personal. We&apos;ll verify your device with a one-time code.
         </p>
       </main>
