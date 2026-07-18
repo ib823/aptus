@@ -118,9 +118,13 @@ jobs:
           [ "$GIN" = "gin" ] && echo "OK: SapApiReference_scopeItemCodes_gin_idx is a GIN index" || { echo "::error::GIN index missing or wrong type: '$GIN'"; exit 1; }
 
       - name: Boot smoke — the exact query that died on the drifted schema
+        # The script MUST live inside the workspace: Node ESM resolves the bare
+        # `@prisma/client` import from the nearest node_modules on the file's
+        # path, so a /tmp script cannot see the repo's dependencies (NODE_PATH
+        # does not help ESM bare specifiers). Write and run it from the repo root.
         run: |
           set -euo pipefail
-          cat > /tmp/boot-smoke.mjs <<'JS'
+          cat > "$GITHUB_WORKSPACE/boot-smoke.mjs" <<'JS'
           import { PrismaClient } from "@prisma/client";
           const prisma = new PrismaClient();
           try {
@@ -133,4 +137,5 @@ jobs:
             process.exit(1);
           } finally { await prisma.$disconnect(); }
           JS
-          node /tmp/boot-smoke.mjs
+          node "$GITHUB_WORKSPACE/boot-smoke.mjs"
+          rm -f "$GITHUB_WORKSPACE/boot-smoke.mjs"
