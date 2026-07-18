@@ -63,7 +63,7 @@ export default async function DiscoverySummaryPage() {
     { value: view.mix.standard, label: "Runs as standard", tone: "text-decision-standard" },
     { value: view.mix.discuss, label: "Discuss", tone: "text-decision-configure" },
     { value: view.mix.differ, label: "We differ", tone: "text-decision-custom" },
-    { value: view.mix.na, label: "Not applicable", tone: "text-ink-muted" },
+    { value: view.mix.na, label: "Not applicable", tone: "text-ink-soft" },
     { value: view.total, label: "Total processes loaded", tone: "text-navy" },
   ];
 
@@ -75,7 +75,7 @@ export default async function DiscoverySummaryPage() {
       granteeName={view.identity.displayName}
       granteeRole={view.identity.roleLabel}
     >
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-soft">
         Discovery Summary · {view.identity.client} · {date}
       </p>
       <h1 className="mb-7 max-w-[640px] font-serif text-[30px] font-medium leading-10 text-ink">
@@ -96,7 +96,7 @@ export default async function DiscoverySummaryPage() {
           >
             {/* Serif 28 per §3's ramp — the .dc's 26 is off-ramp (conflict #24). */}
             <p className={`font-serif text-[28px] font-medium leading-none ${t.tone}`}>{t.value}</p>
-            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted">
+            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft">
               {t.label}
             </p>
           </li>
@@ -117,7 +117,7 @@ export default async function DiscoverySummaryPage() {
 
       <SummaryBuckets buckets={view.buckets} />
 
-      <h2 className="mb-3.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+      <h2 className="mb-3.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-soft">
         By value stream
       </h2>
       <ul className="mb-8 flex flex-col gap-3.5">
@@ -142,7 +142,7 @@ export default async function DiscoverySummaryPage() {
       >
         {EXPORT_CTA}
       </button>
-      <p id="export-stub-note" className="mt-2 text-[11px] text-ink-muted">
+      <p id="export-stub-note" className="mt-2 text-[11px] text-ink-soft">
         The export pack arrives in a later pass.
       </p>
     </DiscoveryShell>

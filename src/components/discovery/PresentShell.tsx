@@ -42,12 +42,12 @@ export function PresentShell({
     <div className="flex min-h-screen flex-col bg-cream">
       {/* Top strip — no nav, no breadcrumb, no search (§8). */}
       <header className="flex flex-none items-center gap-4 px-12 pt-8">
-        <p className="font-mono text-[13px] uppercase tracking-[0.04em] text-ink-muted">
+        <p className="font-mono text-[13px] uppercase tracking-[0.04em] text-ink-soft">
           {clientName}
-          {context ? <span className="text-ink-disabled"> · {context}</span> : null}
+          {context ? <span className="text-ink-soft"> · {context}</span> : null}
         </p>
         {counter ? (
-          <p className="font-mono text-[13px] text-ink-muted" aria-live="polite">
+          <p className="font-mono text-[13px] text-ink-soft" aria-live="polite">
             {counter}
           </p>
         ) : null}

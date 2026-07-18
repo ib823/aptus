@@ -47,7 +47,7 @@ export function DiscoveryShell({
       <header className="ax-no-print sticky top-0 z-30 flex h-14 flex-none items-center gap-5 border-b border-border-default bg-paper px-[clamp(16px,4vw,24px)]">
         <Wordmark size="md" />
         <span className="hidden h-5 w-px bg-border-default sm:block" aria-hidden="true" />
-        <p className="hidden text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted sm:block">
+        <p className="hidden text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-soft sm:block">
           Neutral Process Discovery
         </p>
 
@@ -57,7 +57,7 @@ export function DiscoveryShell({
             <span className="block">
               <span className="block text-[13px] font-semibold text-ink">{clientName}</span>
               {engagementLabel ? (
-                <span className="block text-[11px] text-ink-muted">{engagementLabel}</span>
+                <span className="block text-[11px] text-ink-soft">{engagementLabel}</span>
               ) : null}
             </span>
           ) : null}
@@ -75,7 +75,7 @@ export function DiscoveryShell({
       </main>
 
       <footer className="ax-no-print mt-auto border-t border-border-default bg-cream px-8 py-4">
-        <p className="text-center font-mono text-[10px] uppercase tracking-[0.04em] text-ink-muted">
+        <p className="text-center font-mono text-[10px] uppercase tracking-[0.04em] text-ink-soft">
           Prepared by ABeam Consulting · product-agnostic process discovery · Confidential
         </p>
       </footer>

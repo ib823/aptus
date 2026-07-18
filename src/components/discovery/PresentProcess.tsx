@@ -148,7 +148,7 @@ export function PresentProcess({ view, csrf, streamMix }: PresentProcessProps) {
   return (
     <>
       <div className="mx-auto max-w-[1280px]">
-        <p className="mb-3 font-mono text-[13px] uppercase tracking-[0.04em] text-ink-muted">
+        <p className="mb-3 font-mono text-[13px] uppercase tracking-[0.04em] text-ink-soft">
           {p.id} · {view.workflowName}
         </p>
         {/* Present H1 — serif 44/52 (§3). */}
@@ -156,7 +156,7 @@ export function PresentProcess({ view, csrf, streamMix }: PresentProcessProps) {
 
         {!p.hasFlow || !step ? (
           <div className="rounded-card-warm border border-border-default bg-paper px-12 py-16 text-center">
-            <p className="text-xl text-ink-muted">{NO_FLOW_FALLBACK}</p>
+            <p className="text-xl text-ink-soft">{NO_FLOW_FALLBACK}</p>
           </div>
         ) : (
           <div className="rounded-card-warm border border-navy-border bg-paper p-10">
@@ -174,7 +174,7 @@ export function PresentProcess({ view, csrf, streamMix }: PresentProcessProps) {
                     {step.lane}
                   </span>
                   {step.optional && (
-                    <span className="text-xs font-bold uppercase tracking-[0.04em] text-ink-muted">
+                    <span className="text-xs font-bold uppercase tracking-[0.04em] text-ink-soft">
                       {OPTIONAL_TAG}
                     </span>
                   )}
@@ -194,9 +194,9 @@ export function PresentProcess({ view, csrf, streamMix }: PresentProcessProps) {
                         {step.substeps.map((s, i) => (
                           <li key={i} className="text-xl leading-7 text-ink-soft">
                             {s.title}
-                            <span className="text-ink-muted"> ({s.lane})</span>
+                            <span className="text-ink-soft"> ({s.lane})</span>
                             {s.optional && (
-                              <span className="ml-2 text-xs font-bold uppercase text-ink-muted">
+                              <span className="ml-2 text-xs font-bold uppercase text-ink-soft">
                                 {OPTIONAL_TAG}
                               </span>
                             )}
@@ -209,7 +209,7 @@ export function PresentProcess({ view, csrf, streamMix }: PresentProcessProps) {
               </div>
             </div>
 
-            <p className="mt-6 text-sm text-ink-muted">{FLOW_FOOTNOTE}</p>
+            <p className="mt-6 text-sm text-ink-soft">{FLOW_FOOTNOTE}</p>
           </div>
         )}
 
@@ -218,7 +218,7 @@ export function PresentProcess({ view, csrf, streamMix }: PresentProcessProps) {
         <section className="mt-8">
           <h2 id="present-fit" className="mb-4 text-xl font-semibold text-ink">
             How does this fit?{" "}
-            <span className="text-sm font-normal text-ink-muted">(keys 1–4)</span>
+            <span className="text-sm font-normal text-ink-soft">(keys 1–4)</span>
           </h2>
           <div role="radiogroup" aria-labelledby="present-fit" className="flex flex-wrap gap-3">
             {FIT_STATUSES.map((s, i) => {

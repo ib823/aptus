@@ -1541,10 +1541,13 @@ model User {
   // ABeam Workbench — Neutral Process Discovery (PR-2a, 2026-07-17).
   // Back-relations only: Prisma emits no column for these, so the migration
   // stays additive and the users table is untouched.
-  discoveryEventsByUser  DiscoveryEvent[]       @relation("DiscoveryEventsByUser")
-  discoveryGrantsRevoked DiscoveryAccessGrant[] @relation("DiscoveryGrantsRevoked")
-  discoveryProductMaps   DiscoveryProductMap[]  @relation("DiscoveryProductMapsNotedBy")
-  discoveryGapsOwned     DiscoveryGap[]         @relation("DiscoveryGapsOwnedBy")
+  discoveryEventsByUser       DiscoveryEvent[]         @relation("DiscoveryEventsByUser")
+  discoveryGrantsRevoked      DiscoveryAccessGrant[]   @relation("DiscoveryGrantsRevoked")
+  discoveryProductMaps        DiscoveryProductMap[]    @relation("DiscoveryProductMapsNotedBy")
+  discoveryGapsOwned          DiscoveryGap[]           @relation("DiscoveryGapsOwnedBy")
+  discoveryCaptures           DiscoveryCapture[]       @relation("DiscoveryCapturesBy")
+  discoveryPromotionsAuthored DiscoveryPromotedEntry[] @relation("DiscoveryPromotionsAuthored")
+  discoveryPromotionsReviewed DiscoveryPromotedEntry[] @relation("DiscoveryPromotionsReviewed")
 
   @@index([role])
   @@index([organizationId])
@@ -4430,6 +4433,7 @@ model DiscoveryEngagement {
   events    DiscoveryEvent[]
   decisions DiscoveryDecision[]
   notes     DiscoveryNote[]
+  captures  DiscoveryCapture[]
 
   @@index([state])
 }
@@ -4648,4 +4652,105 @@ model DiscoveryGap {
 
   @@index([apqcCode])
   @@index([status])
+}
+
+// =============================================================
+// ABeam Workbench — P4 client-capture pipeline (PR-6)
+// =============================================================
+// The committed library JSON stays byte-frozen and hash-pinned. Promotions land
+// HERE, and the consultant library views compose committed-JSON + these rows,
+// badged origin=client-captured. Folding promotions into the JSON is the
+// post-pilot data-only re-emission's job, upstream — not this wizard's.
+//
+// P4 §4 mandates TWO records per promoted item, and the split is the whole
+// confidentiality design: the internal register keeps attribution, the shared
+// entry never does. They are separate tables so a shared read cannot reach
+// attribution by forgetting a `select`.
+
+/// Internal capture register (P4 §4) — CONSULTANT-ONLY, per engagement.
+///
+/// ⚠ Holds `clientRef` and `rawText`: the client's own words, attributable.
+/// Never reachable from a client surface, never in a client pack.
+model DiscoveryCapture {
+  id           String @id @default(cuid())
+  engagementId String
+
+  /// T1-variant | T2-step | T3-process | T4-alias
+  type            String
+  /// The client's verbatim words. Attributable — register-only, always.
+  rawText         String
+  /// Internal CRM ref. P4 §4: "never in the library".
+  clientRef       String?
+  /// The library process this attaches to (T1/T2/T4). Null for T3 net-new.
+  linkedProcessId String?
+
+  /// candidate | promoted | merged | dropped
+  status     String  @default("candidate")
+  /// e.g. "BD9.var-2" once promoted.
+  promotedAs String?
+
+  capturedById String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  engagement DiscoveryEngagement     @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  capturedBy User?                   @relation("DiscoveryCapturesBy", fields: [capturedById], references: [id])
+  promoted   DiscoveryPromotedEntry?
+
+  @@index([engagementId, status])
+  @@index([linkedProcessId])
+}
+
+/// The shared, generalized library entry (P4 §4) — what everyone sees.
+///
+/// Carries NO client identity by construction: there is no clientRef, no
+/// rawText, and no engagement relation. `observedIndustry` is sector-level only
+/// (§4: "never narrower, never geography+sector combinations that could
+/// identify").
+model DiscoveryPromotedEntry {
+  id String @id @default(cuid())
+
+  /// CC### for T3 net-new; ‹id›.var-n for T1 variants (P4 §4).
+  scopeId     String @unique
+  name        String
+  /// The generalized description — the practice, never the client's instance.
+  description String
+
+  /// T1-variant | T2-step | T3-process | T4-alias
+  type            String
+  /// The library process this attaches to. Null for a net-new CC### process.
+  linkedProcessId String?
+
+  /// P4 §4 observed_in — sector-level only, plus the count that is the asset.
+  observedIndustry String
+  observedCount    Int    @default(1)
+
+  /// variant-outline | outline | detailed
+  completeness    String @default("variant-outline")
+  /// e.g. "2026-Q3"
+  capturedQuarter String
+
+  /// P4 §5.3 — competitively distinctive practice stays register-only until
+  /// observed at >= 2 independent clients. Enforced in the write path.
+  sensitive Boolean @default(false)
+
+  /// P4 §5.5 — mandatory second-consultant review. A promotion without a
+  /// reviewer DISTINCT from the author does not commit.
+  authoredById String?
+  reviewedById String?
+  reviewedAt   DateTime?
+
+  /// The one link back to the register. It points register→entry, so a read of
+  /// this table cannot walk to attribution.
+  captureId String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  capture    DiscoveryCapture? @relation(fields: [captureId], references: [id], onDelete: SetNull)
+  authoredBy User?             @relation("DiscoveryPromotionsAuthored", fields: [authoredById], references: [id])
+  reviewedBy User?             @relation("DiscoveryPromotionsReviewed", fields: [reviewedById], references: [id])
+
+  @@index([linkedProcessId])
+  @@index([type])
 }

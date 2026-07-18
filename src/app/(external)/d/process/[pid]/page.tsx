@@ -123,11 +123,11 @@ export default async function DiscoveryProcessPage({ params }: PageProps) {
             <span className="sr-only">Back to {view.streamName}</span>
           </Link>
           <nav aria-label="Breadcrumb">
-            <p className="font-mono text-[11px] uppercase text-ink-muted">
+            <p className="font-mono text-[11px] uppercase text-ink-soft">
               {view.streamName} / {view.workflowName}
             </p>
           </nav>
-          <span className="ml-auto inline-flex h-[22px] items-center rounded-pill bg-ink-tint px-2 text-[10px] font-bold uppercase tracking-[0.06em] text-ink-muted">
+          <span className="ml-auto inline-flex h-[22px] items-center rounded-pill bg-ink-tint px-2 text-[10px] font-bold uppercase tracking-[0.06em] text-ink-soft">
             {FIT_LABELS[state]}
           </span>
         </div>
@@ -155,13 +155,13 @@ export default async function DiscoveryProcessPage({ params }: PageProps) {
       ) : (
         /* One of the 197. Never an empty diagram — brief §6/18: "never a fake flow". */
         <div className="mb-2 rounded-card-warm border border-border-default bg-paper px-8 py-10 text-center">
-          <p className="text-sm text-ink-muted">{NO_FLOW_FALLBACK}</p>
+          <p className="text-sm text-ink-soft">{NO_FLOW_FALLBACK}</p>
         </div>
       )}
 
       {/* Attribution — §6/12 style (mono 10, muted, shown never hidden),
           §10 string (verbatim, incl. "the reference names no vendor"). */}
-      <p className="mb-7 font-mono text-[10px] leading-4 text-ink-muted">{PROVENANCE_CLIENT}</p>
+      <p className="mb-7 font-mono text-[10px] leading-4 text-ink-soft">{PROVENANCE_CLIENT}</p>
 
       <p className="sr-only">{PROMISE_V3}</p>
 

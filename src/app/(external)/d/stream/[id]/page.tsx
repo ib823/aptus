@@ -64,11 +64,11 @@ export default async function DiscoveryStreamPage({ params }: PageProps) {
       granteeRole={view.identity.roleLabel}
     >
       <nav aria-label="Breadcrumb" className="mb-2.5">
-        <ol className="flex items-center gap-1.5 font-mono text-[11px] uppercase text-ink-muted">
+        <ol className="flex items-center gap-1.5 font-mono text-[11px] uppercase text-ink-soft">
           <li>
             <Link
               href="/d/home"
-              className="text-ink-muted underline-offset-2 hover:text-navy hover:underline focus-visible:shadow-focus-ring focus-visible:outline-none"
+              className="text-ink-soft underline-offset-2 hover:text-navy hover:underline focus-visible:shadow-focus-ring focus-visible:outline-none"
             >
               Overview
             </Link>

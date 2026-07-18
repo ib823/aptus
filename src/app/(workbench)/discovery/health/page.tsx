@@ -40,12 +40,12 @@ export default function HealthPage() {
         ].map((t) => (
           <li key={t.l} className="rounded-input border border-border-default bg-paper px-3.5 py-4">
             <p className={`font-serif text-2xl font-medium ${t.c}`}>{t.v}</p>
-            <p className="mt-1 text-[10px] font-semibold uppercase text-ink-muted">{t.l}</p>
+            <p className="mt-1 text-[10px] font-semibold uppercase text-ink-soft">{t.l}</p>
           </li>
         ))}
       </ul>
 
-      <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted">
+      <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft">
         Completeness distribution
       </h2>
       <div className="mb-1.5 flex h-2.5 max-w-[500px] overflow-hidden rounded-pill bg-ink-tint" aria-hidden="true">
@@ -60,7 +60,7 @@ export default function HealthPage() {
         <li>No flow catalogued ({h.completeness.none})</li>
       </ul>
 
-      <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted">
+      <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft">
         Origin
       </h2>
       <ul className="mb-7 flex flex-wrap gap-4 text-[11px] text-ink-soft">
@@ -68,7 +68,7 @@ export default function HealthPage() {
         <li>ABeam overlay ({h.origin.overlay})</li>
       </ul>
 
-      <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted">
+      <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft">
         Integrity
       </h2>
       <div className="overflow-auto rounded-input border border-border-default bg-paper">
@@ -76,8 +76,8 @@ export default function HealthPage() {
           <caption className="sr-only">Pinned dataset hashes and their algorithm.</caption>
           <thead className="bg-ink-tint">
             <tr>
-              <th scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-muted">File</th>
-              <th scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-muted">Pinned hash</th>
+              <th scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-soft">File</th>
+              <th scope="col" className="border-b border-border-default px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.05em] text-ink-soft">Pinned hash</th>
             </tr>
           </thead>
           <tbody>
@@ -90,10 +90,10 @@ export default function HealthPage() {
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-[11px] text-ink-muted">
+      <p className="mt-2 text-[11px] text-ink-soft">
         {h.hashAlgorithm} · generated {h.generated} · {h.source}
       </p>
-      <p className="mt-1 text-[11px] text-ink-muted">
+      <p className="mt-1 text-[11px] text-ink-soft">
         CI verifies these hashes against the files on every run. A change outside a data-only
         re-emission is a failure, not a refresh.
       </p>

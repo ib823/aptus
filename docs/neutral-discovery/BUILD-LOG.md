@@ -1,5 +1,381 @@
 # Neutral Process Discovery — Build Log
 
+---
+
+# CLOSING SUMMARY (PR-6)
+
+The build is complete: client surface, consultant workbench, the seam, and the
+P4 loop. What remains is **verification in an environment with a database**, then
+the pilot.
+
+## CHAIN LANDED ON MAIN (2026-07-18)
+
+The Brownfield migration drift (the critical-path blocker below) was fixed and
+merged **first** as PR #100 — a guarded, additive reconciliation migration
+(`20260716000000`) plus the `migration-integrity` CI gate that now protects
+discovery too. Prod schema-parity was verified against the live database and
+passed.
+
+The discovery chain was then rebased onto that main and merged **dark**, in
+dependency order, each PR green on the runner (Migration Integrity parity,
+Quality Gates — typecheck:strict/lint:strict/unit/build, E2E Smoke, Vercel):
+
+| PR | # | main merge |
+|---|---|---|
+| PR-1 data layer | #101 | `bfea4c5` |
+| PR-2a guest infra | #102 | `fc60a58` |
+| PR-2b explore V2/V3/V4 | #103 | `e5af8d8` |
+| PR-3 present/export/notes | #104 | `6e87a01` |
+| PR-4 workbench core | #105 | `c1b2528` |
+| PR-5 sessions/seam | #106 | `f6adf3e` |
+| PR-6 outputs/capture | #107 | _this PR_ |
+
+**`NEUTRAL_DISCOVERY_ENABLED` stays UNSET throughout.** The flag is read-only
+(`src/lib/discovery/guards.ts`), set in no committed config, so a merge cannot
+enable it. Every `/d` route and the workbench discovery `layout.tsx` call
+`notFound()` when the flag is off; `discovery-flag-off.unauth.spec.ts` asserts
+this in CI. Prod is dark: `/d` 404s, the workbench discovery section is absent.
+
+One infra addition was needed to land the chain: **`chore(build)` raises the
+Next build heap to 4GB** (`--max-old-space-size=4096` on `build`, `vercel-build`,
+and the pre-push hook) — the ~1.9MB discovery library JSON pushes `next build`'s
+type-check worker past Node's default ~2GB heap. Approved and landed on PR-1.
+
+### Tracked debt — carried, NOT fixed in the chain (deferred to the flagged pass)
+
+Two known items ride along untouched, by instruction; they do not gate the dark
+merge and are not product defects:
+
+1. **Racy PR-3 Present/Export e2e spec** (`discovery-present-export.unauth.spec.ts`)
+   — spec-side flakiness (retries + streaming pages manufacture failures), no
+   product defect. Gated behind `DISCOVERY_E2E=1`, which CI's E2E Smoke does not
+   set, so it is **skipped in CI**. See item (b) below for the rewrite.
+2. **WCAG-AA contrast defect** on the /d small-text surfaces (V2/V3/V4/Export)
+   — the `--ink-muted` (#8A8A8A ≈ 3.45:1) sweep to `--ink-soft`. See item (c).
+
+The **flagged verification** (two-browser seam + notes-privacy proof, full
+flagged e2e with `NEUTRAL_DISCOVERY_ENABLED=true`) is the deferred dedicated
+preview pass — intentionally NOT run during this dark landing.
+
+## PR map
+
+| PR | Branch | What |
+|---|---|---|
+| Artifacts | `docs/neutral-discovery-artifacts` | The 10 source-of-truth artifacts, verbatim + pre-flight |
+| PR-1 | `feat/neutral-discovery-data-layer` | Data layer, zod, serializer allowlist, 3 CI guards |
+| PR-2a | `feat/neutral-discovery-guest-v1` | Guest infra (5 tables), /d entry, V1 |
+| PR-2b | `feat/neutral-discovery-explore-v2` | V2/V3/V4, the fit selector, decisions |
+| PR-3 | `feat/neutral-discovery-present-export` | Present (V5), Export (V7), mode switch, notes |
+| PR-4 | `feat/neutral-discovery-workbench-core` | C1/C2/C3/C4/C6/C10, the fence, both walls |
+| PR-5 | `feat/neutral-discovery-sessions-seam` | C7/C8, the live seam, effective scope |
+| PR-6 | `feat/neutral-discovery-outputs-capture` | C9, two-lane export, C5 + the P4 wizard |
+
+## Decision index
+
+| # | One line |
+|---|---|
+| D1 | `meta` is informational; MANIFEST is the authority. Typed `unknown` so a violation is a compile error. |
+| D2 | Consultant dataset has no `completeness`; derived across the `scope_id ↔ id` join. |
+| D3 | Blank-role steps → "System / Automatic" lane (46% of steps). |
+| D4 | `#DDD9CC` → `var(--border-strong)`; the print palette is the one sanctioned token exception, exempted by path. |
+| D5 | `typecheck:strict` OOMs on a plain JSON import; datasets typed `unknown`, zod-parsed. |
+| **D6** | **181 sentinel flows.** Fixed upstream. Honest split is 545 / 197, not 726 / 16. |
+| D7 | `cookies.ts` mirrored, not parameterized (the Affirm file is security-review-frozen). |
+| D8 | Mode switch deferred from PR-2a → shipped PR-3. |
+| D9 | The brief specifies no landing/verify screen; structure from Affirm, copy from §10. |
+| D10 | The vendor guard scans comments. Kept strict; prose reworded. |
+| D11 | The .dc's V2 search has no empty state; added one. |
+| D12 | `P` is claimed twice (mode vs park); resolved by context. |
+| D13 | The Export register lists decided processes only. |
+| **D14** | **`meta.apqc_coverage` is stale.** All 7 "known gaps" are filled; the 2 real ones aren't in it. Register derived live. |
+| D15 | The context chip's default lies on the fence; C6 says "Consultant only — not shared". |
+| D16 | C10 ships with no audit trail — the .dc's is invented and attributed to a real person. |
+| D17 | C1's "Import the base library" state is unreachable; not built. |
+| D18 | Seam = SSE, poll-behind-stream, mirroring the repo's workshop route. |
+| **D19** | **Scope was grant-only and would have leaked.** Effective scope = engagement ∩ grant. |
+| D20 | Promotions never touch the committed JSON; the library views compose (this PR). |
+
+## What the guards actually caught
+
+Not theory — these fired on real code during the build:
+
+- **D6**: 181 fake flows in "final, QA'd" data — would have shipped SAP localisation jargon to 181 client pages and overstated coverage by a third. Found by reading content, not counts; **every count matched**.
+- **D14**: a governance view that would have named 7 well-covered categories as gaps while hiding the 2 real ones.
+- **D19**: a scoping leak that would have shown a late-invited reviewer all 10 streams.
+- The **stray-hex guard** caught `stroke="#fff"` in the siderail wordmark.
+- The **vendor guard** caught a quoted vendor headline and "enumeration **oracle**" in my own comments.
+- The **wall** caught a deliberate breach and traced it transitively (I tested it by breaking it).
+- The **notes-privacy guard** caught PR-6's `packs.ts` legitimately reading notes — forcing the allowlist to be explicit rather than a directory rule.
+
+Four times a guard of mine matched its own documentation rather than code. The
+fix that stuck was a comment-stripper plus a test proving the stripper works —
+not rewording prose a fifth time.
+
+---
+
+# VERIFICATION PASS — CLOSED (2026-07-17)
+
+**Migrations proven. Core journeys proven. Spec debt and the Brownfield blocker
+precisely characterised.** What follows is the closing state; the detail is below.
+
+## Final results
+
+| # | Step | Result |
+|---|---|---|
+| 1 | Migrations (5, real PG 16.14) | ✅ **PASS** — first-ever execution, in order, **zero drift on any Discovery table** |
+| 2 | E2E · PR-2a journey/gate | ✅ **PASS 7/7** |
+| 2 | E2E · PR-2b explore | 🟡 7 pass / 2 fail — contrast only (19 + 23 nodes) |
+| 2 | E2E · PR-3 Present/Export | 🟡 10 pass / 5 fail — **spec-side, no product defects** |
+| 2 | E2E · PR-4 workbench | ⬜ not reached |
+| 2 | E2E · PR-5 seam | ⬜ not reached |
+| 2 | E2E · PR-6 wizard/export | ⬜ not reached |
+| 3 | Live flag-off | 🔵 **DEFERRED** — local PG, not the Vercel preview |
+| 4 | Export proof (real artifacts) | ⬜ not reached |
+| 5 | P4 capture end-to-end | ⬜ not reached |
+
+### On the PR-3 failures — the honest line
+
+**Every PR-3 failure is spec-side. No product defect was found.** The spec is
+**racy by construction**: it drives a keyboard-first UI with `goto` + an immediate
+`keyboard.press`, so it fires keys before the component's `useEffect` listener has
+attached. Patching locator-by-locator traded one failing set for another — three
+recovered, four regressed — which is the signal that the approach, not the
+locators, is wrong.
+
+**Present mode is verified working**, by the tests that pass and by direct
+evidence: `1–4` set the fit state, `P/E/X` switch modes, the mode switch enters
+Present and persists, the Draft stamp prints, label-not-colour holds, and the pack
+carries no affordances of its own. The one genuine product-adjacent finding —
+`getByRole('link')` catching the **root layout's** "Skip to main content" — was an
+over-broad assertion measuring the app shell rather than the pack.
+
+**Three times this pass I named a root cause and was wrong** (the `land()` race as
+"the" cause of 8 failures; "the Draft stamp needs its own diagnosis"; the
+locator patch). Each time the correction came from evidence — `--retries=0`, a DOM
+dump, a clean re-run. Recorded because the reasoning error is the reusable lesson:
+**retries and streaming pages manufacture failures that look like product bugs.**
+
+## Follow-up work — three items, in priority order
+
+### (a) 🔴 CRITICAL PATH — the Brownfield migration PR
+*Not discovery's. Nothing real ships until it lands.*
+
+`prisma migrate deploy` on a fresh database dies the moment the app touches it:
+
+```
+The column `Assessment.brownfieldCatalogVersionId` does not exist in the current database.
+  at tests/e2e/global-setup.ts:307
+```
+
+146 drift statements — an entire `Brownfield*` feature set lives in
+`schema.prisma` with **no migration** (introduced by `db9bfec`). Consequences:
+**every Playwright spec in the repo** dies at `global-setup`, not just discovery's;
+and **any environment built from migration history is unbootable — including the
+Vercel preview.** Discovery's own five migrations apply with zero drift.
+
+Scope: generate the missing migration(s) from the schema, reconcile the history.
+Owner: whoever shipped Brownfield. The `db push` workaround used in this pass is
+fine for a throwaway local DB and **not acceptable for preview or production** — it
+bypasses migration history and silently diverges it from the schema.
+
+### (b) PR-3 spec rewrite — deliberate, fresh eyes
+Rebuild `discovery-present-export.unauth.spec.ts` around **readiness**, not
+patched locators:
+- One awaited "shell interactive" fixture, used by **every** test.
+- **No bare `goto` + `press` anywhere** — entry into Present is deterministic
+  (click, which auto-waits), and the Present view's mount is proven before any key
+  is sent. Keyboard-driving belongs only in the tests whose *subject* is a binding.
+- Locators scoped to their subject (`.dx-root` for the pack, the coverage list for
+  coverage figures), so a match is unambiguous under strict mode.
+
+Contained work. It is not a product fix — it is the instrument.
+
+### (c) Contrast fix-PR — the sweep
+The `--ink-soft` swap (`078e8c9`) cleared V1 and the entry pages (110 nodes) and
+`GuestShell` (`6494255`) cleared the landing/verify. **Still outstanding:** V2/V3/V4
+(19 nodes) and Export (23 nodes), **never swept as one pass**. Do it once, as one
+table (view · node · fg/bg · ratio · proposed token), one PR. Anything that
+survives the sweep is its own finding.
+
+Then, and only then, generate the **print-snapshot baseline** — a baseline taken
+before the Export contrast fix bakes in pixels that fix is about to change.
+
+**Also unaudited:** ~100 `text-ink-muted` call sites on the shipped Affirm surface,
+carrying the same defect with no axe coverage (the repo's axe specs cover `/login`,
+`/dashboard`, `/assessments` only). Needs design sign-off; out of discovery's scope.
+
+## Remaining verification — blocked
+
+| Blocked on | Work |
+|---|---|
+| (a) | Everything that needs an environment built from migration history — **the real preview**, and therefore **step 3's live flag-off**, which no local box can honestly claim |
+| (a) + (b) | PR-4 workbench, **PR-5 the two-browser seam + notes-privacy proof** (still the highest-value unproven path), PR-6 wizard + export-content |
+| (a) | Step 4's export proof and step 5's P4 capture — runnable on local PG once the suite is trustworthy, but **labelled local-PG**, never as preview evidence |
+
+---
+
+# VERIFICATION PASS — detail (2026-07-17)
+
+## ⚠ Two scope truths, stated before any result
+
+**1. This was NOT the Vercel preview environment.** It is a **local Postgres 16.14
+in a Docker container inside the build box**, stood up during the pass because
+`DATABASE_URL` pointed at a closed `localhost:5432`. Everything below that passed,
+passed *there*. It genuinely proves the migrations execute and the specs run — the
+substance of the runbook — but it cannot prove deploy-time behaviour.
+
+> **Step 3 (live flag-off check) is DEFERRED to the real preview deploy,
+> unconditionally, whatever else passes here.** A local 404 is not a deployed 404.
+
+**2. The pass made repairs, beyond its "nothing new gets built" remit.** Each is
+listed with its authorisation:
+
+| Repair | Commit | Authorisation |
+|---|---|---|
+| `--ink-soft` contrast swap (40 files) | `078e8c9` | Explicitly approved mid-pass, after the axe gate failed |
+| `GuestShell` footer contrast | `6494255` | Explicitly approved mid-pass; the plan permits touching "shared components you extend" |
+| Two PR-2a spec bugs | `7fed756` | In-scope repair of the pass's own instruments |
+| Playwright system libs (`libatk-1.0.so.0` …) | — | Environment fix, no code |
+| `prisma db push` after `migrate deploy` | — | Workaround for pre-existing drift (see below), no code |
+
+Two things the runbook asked for were **deliberately not done**, because doing them
+would have been wrong:
+- **The print-snapshot baseline** stays uncommitted until the Export contrast fix
+  lands — a baseline captured now bakes in pixels that fix is about to change, and
+  bakes in a currently-failing page state.
+- **"Timebox the 19.7-minute test"** — there is no slow test. That was the *spec's*
+  total: 8 failures × (60s timeout + retry). My earlier report was wrong; the
+  runtime collapses when the root cause is fixed.
+
+## Results
+
+| # | Step | Result |
+|---|---|---|
+| 1 | Migrations (5, real PG 16.14) | **PASS** — first-ever execution; **zero drift on any Discovery table** |
+| 2 | E2E · PR-2a journey/gate | **PASS — 7/7** |
+| 2 | E2E · PR-2b explore | **PARTIAL — 7 passed, 2 failed** (contrast, 19+23 nodes; one `toContain`) |
+| 2 | E2E · PR-3 Present/Export | **FAIL — 2 passed, 8 failed, 1 flaky** (one root cause suspected; diagnosis pending) |
+| 2 | E2E · PR-4 workbench | **NOT REACHED** |
+| 2 | E2E · PR-5 seam | **NOT REACHED** |
+| 2 | E2E · PR-6 wizard/export | **NOT REACHED** |
+| 3 | Live flag-off | **DEFERRED — not possible here** (see scope truth 1) |
+| 4 | Export proof (real artifacts) | **NOT REACHED** |
+| 5 | P4 capture end-to-end | **NOT REACHED** |
+| 6 | BUILD-LOG updated | this section |
+
+### What the pass proved that no unit test could
+
+- The **core journeys work against real Postgres**: landing → OTP → V1 with all 10
+  streams and the honest 742 / 545 / 60 counts; the full Explore journey including
+  differ-with-reason, N/A, the radiogroup arrow contract, the no-flow fallback, and
+  the sealed 409.
+- **The design system fails WCAG AA** and always has (110 nodes on V1 alone). Nothing
+  had ever looked: the repo's axe specs cover `/login`, `/dashboard`, `/assessments`.
+- **Two real bugs in my own specs**, both of which had the app right and the test wrong.
+- **`migrate deploy` alone yields an unbootable database** — see the Brownfield
+  section below. That is the critical path now.
+
+## 🔴 BLOCKER — pre-existing Brownfield migration drift (NOT discovery's)
+
+**This blocks the real preview verification, so it is the critical path.**
+
+**What.** `prisma migrate diff --from-schema-datasource --to-schema-datamodel`
+against a database built purely from the committed migration history reports **146
+drift statements**. They are an entire `Brownfield*` feature set — `BrownfieldCatalogVersion`,
+`BrownfieldAssessment`, `BrownfieldClassificationPass`, `BrownfieldGuide`,
+`BrownfieldLineOfBusiness`, `BrownfieldApplicationArea` and their FKs — plus
+`Assessment.brownfieldCatalogVersionId`, `ClientRequirement.crossCuttingTag`,
+`SapApiReference.apiType`, and a dropped `SapApiReference_scopeItemCodes_gin_idx`.
+
+**Why it matters.** These models exist in `prisma/schema.prisma` but **no migration
+creates them**. So `prisma migrate deploy` on a fresh environment produces a database
+the application cannot boot against. It is not a cosmetic mismatch:
+
+```
+PrismaClientKnownRequestError:
+Invalid `prisma.assessment.findFirst()` invocation in tests/e2e/global-setup.ts:307
+The column `Assessment.brownfieldCatalogVersionId` does not exist in the current database.
+```
+
+`global-setup` dies there, so **every Playwright spec in the repo fails at setup** —
+not just discovery's.
+
+**Provenance.** Introduced by `db9bfec feat(brownfield): Phase 14 catalog + EWA ingest
+adapters`. **Pre-existing and entirely unrelated to this build.** Discovery's own five
+migrations apply cleanly with **zero drift**.
+
+**Workaround used here, and its limit.** `prisma db push` after `migrate deploy`, to
+sync the missing schema so the pass could continue. That is acceptable for a local
+throwaway database and **is not acceptable for the preview or production**: it
+bypasses migration history, leaves no audit trail, and silently diverges the two.
+
+**Owner / next step.** Its own PR, owned by whoever shipped Brownfield: generate the
+missing migration(s) from the schema and reconcile the history. **Not folded into this
+pass** — it is not discovery's defect, and fixing it here would hide it.
+
+## PREVIEW-ENV DEBT — status after the verification pass
+
+~~Nothing below has ever executed.~~ **Partly retired.** The pass stood up a local
+Postgres and executed items 1 and part of 2. Item 3 is deferred by nature; 4-6 were
+not reached. Each item now carries its result.
+
+1. ✅ **DONE — the five migrations executed.** First-ever run, against real
+   PG 16.14, in order, via `migrate deploy`. **Zero drift on any Discovery table.**
+   ⚠ But see the Brownfield blocker above: `migrate deploy` ALONE leaves the app
+   unbootable, for reasons that are not discovery's.
+   `20260717000000_neutral_discovery_guest_infra` ·
+   `20260717120000_discovery_facilitator_notes` ·
+   `20260717150000_discovery_workbench_core` ·
+   `20260717180000_discovery_session_seam` ·
+   `20260717210000_discovery_p4_capture`
+2. 🟡 **PARTIAL — the e2e suite.** `discovery-journey` **7/7 PASS**.
+   `discovery-explore` **7 pass / 2 fail** (contrast). `discovery-present-export`
+   **2 pass / 8 fail** (one root cause, diagnosis pending). `discovery-workbench`,
+   `discovery-seam`, `discovery-capture` **not reached**.
+   Also required first: Playwright system libs (`libatk-1.0.so.0` et al) were
+   missing — Chromium could not launch at all. Fixed via `playwright install-deps`.
+3. 🔵 **DEFERRED — live flag-off.** Cannot be honestly claimed from a local box.
+   Must run against the real preview deploy, with the flag unset, confirming
+   `/d/*` and `/discovery/*` 404. `discovery-flag-off.unauth.spec.ts` covers it and
+   has still never run. **Blocked behind the Brownfield PR.**
+4. ⬜ **NOT REACHED — the two-browser seam** (PR-5). Still the highest-value
+   unproven path: a consultant drives, a client follows, and the facilitator's
+   note must be absent from the client's network traffic.
+5. ⬜ **NOT REACHED — generate both packs against real data** and run the vendor
+   guard over the client artifact.
+6. ⬜ **NOT REACHED — one P4 capture end-to-end**, including the second-reviewer gate.
+
+### Ordered critical path from here
+
+1. **Brownfield migration PR** (not discovery's) — until it lands, no environment
+   built from migration history can boot the app, so the real preview verification
+   cannot start.
+2. Diagnose + fix **PR-3's 8 failures** (one suspected root cause).
+3. **Characterise the whole contrast surface** in one sweep — V2/V3/V4/Export —
+   and fix in one PR. No more view-by-view.
+4. Generate the **print-snapshot baseline** (only after 3, or it bakes in stale pixels).
+5. Finish e2e (PR-4/5/6), then steps 4-5 of the runbook, on the local PG, labelled as such.
+6. **Real preview deploy** → step 3's live flag-off + a repeat of the full suite.
+
+### Open prerequisites this build cannot close (P4 §9)
+
+- **Legal reuse clause** — P4 §5.4 requires confirming engagement terms permit
+  generalized reuse *before harvesting*. There is no contract-check gate in the
+  wizard because there is no contract field to check; captures stay register-only
+  by default until this is settled.
+- **Second-reviewer roster** — §9 lists "⟨2 names⟩" as open. Until it exists,
+  every account is eligible and the gate is "someone other than you".
+- **Pilot client** — the plan's `⟨pilot client⟩` placeholder.
+
+### Known upstream data debt (fix in the post-pilot re-emission, not mid-build)
+
+- `meta.apqc_coverage` is stale (D14): counts sum to 654, 7 of 13 categories
+  disagree, category 1.0 absent. Ignored in code; pinned by test.
+- Promoted entries live in the DB and compose at read time (D20). Folding them
+  into the JSON is the re-emission's job.
+
+---
+
 ## Pre-flight verification (before PR-1)
 
 Ran against the committed artifacts to validate the two claims the plan rests on:
@@ -36,6 +412,7 @@ Ran against the committed artifacts to validate the two claims the plan rests on
 | D2 | Consultant dataset has **no `completeness` field**; client dataset does. Invariant 4 requires completeness badges everywhere a process renders, including the C2 library grid. | Consultant loader derives completeness by joining `scope_id` → client `id`. No data change. |
 | D3 | **46% of flow steps (1400/3035) and 31% of substeps (2877/9425) have an empty role**, but the .dc renders `{{ lane.role }}` with no fallback. | Resolved by the brief, which wins: *"Blank-role steps sit in a 'System / Automatic' lane."* No question outstanding. |
 | D4 | ~~The .dc uses literal hex; `#DDD9CC` has no token.~~ **CLOSED in PR-3.** | The export print-preview backdrop is now `var(--border-strong)`. It is decorative desk-space around the A4 page and never prints, so no new colour entered the system. **Separately**, PR-3 opened the one sanctioned exception to invariant 5: the pack itself must print pure black on white (§3) with label+pattern decisions (§11), which the warm on-screen palette cannot do. That palette lives only in `d/export/discovery-export.css`, scoped to `.dx-root`, exempted **by path** in the stray-hex guard — and the guard asserts the exemption is exactly one file, that the file exists, and that nothing else imports it, so the exception cannot quietly widen. The export components carry no hex at all; they use `currentColor`. |
+| D20 | **The P4 wizard never writes the committed library.** The JSON is byte-frozen and hash-pinned; promotions land in `DiscoveryPromotedEntry` and the consultant views compose committed-JSON + promoted rows, badged `client-captured`. | Per the architectural directive. Nothing in the wizard needed to touch `src/data/discovery/*` — the composition point is `composeLibrary()`, and a test asserts no capture/promotion code calls any fs write. The pinned-hash guard stayed green throughout. Folding promotions into the JSON is the post-pilot re-emission's job, upstream. **Only SHARED-visible promotions compose in** (§5.3): a sensitive pattern at one client must not appear in a view a consultant could screen-share. |
 | D19 | **Scope was grant-only and would have leaked.** PR-2a put `valueStreamIds` on the grant (a persona scope) and nothing on the engagement. A session "scoped to 3 streams" was therefore only scoped if every grant repeated the list — and a reviewer invited *after* scoping would have an empty grant, which means "unrestricted", so they would see all 10 streams. | **Effective scope = engagement ∩ grant.** `valueStreamIds` added to `DiscoveryEngagement` (the session's scope); the grant may narrow within it and can never widen past it. Enforced in the serializer path every /d view goes through, and in the decisions write path — not the UI. Note `null` (unrestricted) is deliberately distinct from `[]` (nothing visible): a grant scoped entirely outside its session sees nothing, where a naive `length === 0 ? all : filter` would hand over the whole library. |
 | D18 | **Seam mechanism: SSE, poll-behind-stream.** | Mirrors `api/assessments/[id]/workshops/[sessionId]/stream/route.ts` — the repo's existing precedent for this exact shape (a facilitator drives, a room follows): the server polls every 3s and pushes only on change, with a 15s heartbeat and a 1h cap. Chosen over websockets (no infra here) and over client polling (one open stream degrades to a reconnect, rather than putting a hard 5s floor of requests under every reviewer in the room). **Degrades**: EventSource retries itself; after 3 real failures the client falls back to a 15s `router.refresh()`, so a reviewer behind a proxy that eats event-streams still follows, just less promptly. If nothing is driving it does nothing — a reviewer exploring alone is never yanked to another page. |
 | D17 | **C1's "first-run empty" state (brief §7-C1) is not built.** Its CTA is "Import the base library". | The library is a committed, hash-pinned JSON file — it is never absent, so the state is unreachable and the button could not do anything. Shipping it would be a control that lies about what the product can do. The engagements table has a real empty state instead ("No discovery engagements yet"), because zero engagements genuinely happens. |
@@ -506,10 +883,64 @@ still decide after the room breaks up.
 | — | Revoke ends live sessions | Revoking access that leaves a live session open is not revoking access. |
 | — | Resend re-issues an OTP, not a token | The invite link the reviewer already has keeps working. |
 
+## PR-6 · Outputs, the two-lane export, and the P4 wizard — GREEN
+
+Branch: `feat/neutral-discovery-outputs-capture`. Closes the build.
+
+**Gates:** `typecheck:strict` ✓ · `lint:strict` ✓ · `pnpm test` ✓ (all guards,
+both walls, the pinned-hash guard still green — the library JSON is untouched).
+
+**The two-lane export is two serializers, not one with a flag.** That is the
+whole design: a single builder with `includeProductMap: boolean` would put a
+client's safety one inverted boolean away from a vendor name in their inbox.
+`buildClientPack` has no reference to the product map — not a filter against it,
+no reference at all — and its return type has nowhere to put one. The endpoint
+takes a **required** `lane` with no default, because a default is exactly the
+single point of failure §9.3 exists to remove. The internal pack *composes* the
+client pack rather than rebuilding it, so the two lanes can never drift about
+what a decision says.
+
+`packs.test.ts` proves it by construction: it generates **both artifacts** and
+runs the real vendor guard over the client one (0 hits across all 24 terms),
+asserts the internal one carries the map and the register, and asserts the client
+pack's key set has no room for either.
+
+**The P4 gates are pure functions, enforced server-side.** §5.5's second reviewer
+must be a **distinct identity** — a field that merely has a value satisfies the
+form and defeats the gate, and the method doc is explicit that "the author of a
+capture is the worst judge". §5.3's threshold holds a sensitive pattern
+register-only until observed at ≥2 clients. Both are refused by the write path
+regardless of what the UI allowed: a disabled button is a courtesy, a refused
+write is a control.
+
+**The dual record is two tables, not two views of one.** The register keeps
+`clientRef` and `rawText`; the shared entry has no column for either, no
+engagement relation, and the FK points register → entry — so a read of the shared
+table cannot walk to attribution. Asserted against the schema itself.
+
+### Deviations, PR-6
+
+| # | Deviation | Reason |
+|---|---|---|
+| — | Harvest takes explained differs only | An unexplained "we differ" has nothing to generalize. It shows on C9 as an incomplete flag instead. |
+| — | The author is the session user, never a form field | Otherwise §5.5's gate is satisfied by typing someone else's name. |
+| — | The reviewer select omits the current user | The gate is enforced server-side; the UI simply never offers the invalid choice. |
+| — | No contract-check gate | P4 §5.4 requires it, but there is no contract field to check — the clause is an open prerequisite (§9). Flagged in the debt list rather than faked with a checkbox that asserts nothing. |
+| — | Quarter granularity on `captured` | Sharper than a quarter starts narrowing toward identification. |
+| — | CC### and `.var-n` minted server-side | Sequence collisions are not a UI concern. |
+
 ## Parity checklist
 
 | Screen | State | Match / Deviation | Reason |
 |---|---|---|---|
+| C5 `/discovery/sources` | empty / harvested / triaged | **Honest empty** | "No captures yet." — never invented candidates |
+| C5 · wizard | classify → generalize → anonymize → review → promote | **Built from P4 §3** | Checklist + sign-off are required steps |
+| C5 · wizard | blocked | **Built from P4 §5** | Refused without the checklist or a distinct reviewer |
+| C5 · promoted list | shared / register-only | **Built from P4 §5.3** | "Register only" until a second client |
+| C9 `/discovery/outputs/[id]` | live | Match | Real decisions; reads the client pack itself |
+| C9 | incomplete differs | **Built from brief** | Cannot be sized, cannot be harvested |
+| C9 · export | two lanes | Match | Two buttons, two confirms, two serializers |
+| C2 | client-captured rows | **Built from P4 §4** | Composed + badged; JSON untouched |
 | C7 `/discovery/sessions` | list / empty | **Honest empty** | No fixture sessions |
 | C7 `/discovery/sessions/[id]` | scope + reviewers | **Deviation — brief** | Derived status; scope chips; D19 |
 | C8 `/discovery/sessions/[id]/facilitate` | not projecting | **Built from brief** | Honest "reviewers can still explore" |

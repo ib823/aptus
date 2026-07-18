@@ -9,11 +9,10 @@
  * they are also a screen-reader hazard (a `⇄` announces as "left right arrow").
  * Here every icon is decorative and the label is the accessible name.
  *
- * Only the sections PR-4 ships are linked. Sources (C5), Sessions (C7/C8) and
- * Outputs (C9) arrive in PR-5/PR-6; rather than render dead nav that navigates
- * to a stub saying "pass 2/3 of the build" — which is what the .dc does, and is
- * shipped copy admitting the product is unfinished — they are simply absent
- * until they exist.
+ * Every section is linked as of PR-6 — each one exists. Through PR-4 the rail
+ * showed only what shipped, rather than the .dc's dead nav that navigates to a
+ * stub reading "pass 2/3 of the build" (shipped copy admitting the product is
+ * unfinished).
  */
 
 "use client";
@@ -60,11 +59,38 @@ const ITEMS: RailItem[] = [
     ),
   },
   {
+    href: "/discovery/sources",
+    label: "Sources",
+    icon: (
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M5 4h9l5 5v11H5z M14 4v5h5" {...S} />
+      </svg>
+    ),
+  },
+  {
+    href: "/discovery/sessions",
+    label: "Sessions",
+    icon: (
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M9 6l9 6-9 6z" {...S} />
+      </svg>
+    ),
+  },
+  {
     href: "/discovery/map",
     label: "Product map",
     icon: (
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M4 8h11l-2-2M20 16H9l2 2" {...S} />
+      </svg>
+    ),
+  },
+  {
+    href: "/discovery/outputs",
+    label: "Outputs",
+    icon: (
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14" {...S} />
       </svg>
     ),
   },

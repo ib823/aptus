@@ -67,7 +67,7 @@ export function SummaryBuckets({ buckets }: SummaryBucketsProps) {
 
             <div className="max-h-[260px] overflow-auto px-4 py-3.5">
               {items.length === 0 ? (
-                <p className="text-xs text-ink-disabled">{BUCKET_EMPTY}</p>
+                <p className="text-xs text-ink-soft">{BUCKET_EMPTY}</p>
               ) : (
                 <ul className="flex flex-col gap-2.5">
                   {items.map((it) => (

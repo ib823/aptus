@@ -23,10 +23,10 @@ const META: Record<Completeness, { label: string; className: string }> = {
       "bg-[color-mix(in_srgb,var(--decision-standard)_15%,transparent)] text-decision-standard",
   },
   detailed: { label: "Detailed", className: "bg-navy-soft text-navy" },
-  outline: { label: "Outline", className: "bg-ink-tint text-ink-muted" },
+  outline: { label: "Outline", className: "bg-ink-tint text-ink-soft" },
 };
 
-const NO_FLOW = { label: "No flow catalogued", className: "bg-ink-tint text-ink-muted" };
+const NO_FLOW = { label: "No flow catalogued", className: "bg-ink-tint text-ink-soft" };
 
 export interface CompletenessBadgeProps {
   completeness: Completeness | null;
