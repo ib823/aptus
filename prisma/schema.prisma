@@ -4403,6 +4403,21 @@ model DiscoveryEngagement {
   client String // free-text engagement label (pre-onboarding, no Organization row yet)
   state  String @default("draft")
 
+  /// PR-5 — the SESSION's stream scope. Empty = all 10 streams.
+  ///
+  /// Distinct from DiscoveryAccessGrant.valueStreamIds, which is a PERSONA
+  /// scope. Effective scope is the intersection: a session scoped to 3 streams
+  /// cannot be widened by a grant, and a CFO grant can narrow further within it.
+  /// Scope on the grant alone would leak — a reviewer invited after the session
+  /// was scoped would default to all 10 streams.
+  valueStreamIds String[]
+
+  /// PR-5 — the live seam. The consultant drives; the client's Present view
+  /// follows. Null when nobody is projecting.
+  liveAt          DateTime?
+  drivenProcessId String?
+  drivenAt        DateTime?
+
   createdById String?
   issuedAt    DateTime?
   submittedAt DateTime?

@@ -24,6 +24,7 @@ import { WhatHappensNextStrip } from "@/components/discovery/WhatHappensNextStri
 import { EXPORT_CTA, SEALED_NOTICE } from "@/lib/discovery/copy";
 import { getDiscoverySummary } from "@/lib/discovery/external/journey";
 import { isDeviceVerified, requireGuestSession } from "@/lib/discovery/external/guards";
+import { effectiveStreamIds } from "@/lib/discovery/external/scope";
 import { isSealed, touchGuestSession } from "@/lib/discovery/external/session";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +42,10 @@ export default async function DiscoverySummaryPage() {
     client: ctx.engagement.client,
     displayName: ctx.grant.displayName,
     roleLabel: ctx.grant.roleLabel,
-    valueStreamIds: ctx.grant.valueStreamIds,
+    scope: effectiveStreamIds({
+      engagementStreamIds: ctx.engagement.valueStreamIds,
+      grantStreamIds: ctx.grant.valueStreamIds,
+    }),
     sealed: isSealed(ctx.engagement),
   });
 
