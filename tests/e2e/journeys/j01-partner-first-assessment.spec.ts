@@ -25,7 +25,9 @@ test.describe("T-E2E-J01 — Partner Self-Service First Assessment", () => {
   test("Step 01 — Navigate to signup page", async ({ page }) => {
     const auth = new AuthPage(page);
     await auth.goToSignup();
-    await expect(page).toHaveTitle(/ABeam/);
+    // The signup route sets its own page title ("Create Account") via
+    // src/app/(auth)/signup/layout.tsx, so assert that rather than the brand.
+    await expect(page).toHaveTitle(/Create Account/i);
     await expect(auth.emailInput).toBeVisible();
   });
 

@@ -392,7 +392,10 @@ export class AssessmentPage extends BasePage {
       await this.industrySelect.selectOption(data.industry);
     }
     if (data.country) {
-      await this.countrySelect.fill(data.country);
+      // The country field is a custom Select that renders a native <select>
+      // (see src/components/ui/select.tsx), so choose by option value rather
+      // than typing — .fill() throws because the element isn't an <input>.
+      await this.countrySelect.selectOption(data.country);
     }
     if (data.companySize) {
       await this.companySizeSelect.selectOption(data.companySize);
