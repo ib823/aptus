@@ -67,11 +67,29 @@ const SURFACES: readonly SurfaceCard[] = [
   },
 ];
 
+/** Feature-gated third surface. Only rendered when NEUTRAL_DISCOVERY_ENABLED
+ * is "true" (the same flag the /discovery routes and middleware allow-list
+ * check), so the hub never advertises a surface the deployment can't reach. */
+const DISCOVERY_SURFACE: SurfaceCard = {
+  href: '/discovery',
+  eyebrow: 'Process Discovery',
+  title: 'APQC process library',
+  body:
+    'Explore the neutral APQC-based process library, track coverage gaps ' +
+    'against the client, and run discovery sessions before the SAP scope and ' +
+    'workshop agenda are fixed.',
+  cta: 'Open discovery',
+};
+
 export default function WorkbenchHomePage() {
   const sampleEnabled =
     process.env.INTERNAL_TEST_DEPLOYMENT === "true" ||
     process.env.WORKBENCH_ONLY === "true";
   const showSap = sapTddConfigured();
+  const surfaces =
+    process.env.NEUTRAL_DISCOVERY_ENABLED === "true"
+      ? [...SURFACES, DISCOVERY_SURFACE]
+      : SURFACES;
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-12">
@@ -94,7 +112,7 @@ export default function WorkbenchHomePage() {
           (the click registers but the route never changes). A full-document
           navigation always lands. Same fix as the /sap-explorer link. */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        {SURFACES.map((s) => (
+        {surfaces.map((s) => (
           <a
             key={s.href}
             href={s.href}
