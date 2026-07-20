@@ -71,11 +71,13 @@ const WORKBENCH_PATHS = [
   '/sap-explorer',      // SAP Operations — live S/4HANA Cloud TDD explorer
   '/presales',          // consultant surface (auth-gated under (workbench))
   '/affirm',            // value-stream affirm-set workbench
+  '/discovery',         // neutral (APQC) process-discovery workbench — feature-gated by NEUTRAL_DISCOVERY_ENABLED
   '/c/',                // presales guest token surface (under (external))
   '/a/',                // affirm external executive guest surface (under (external))
   '/api/auth/',         // NextAuth callbacks must work on WORKBENCH_HOST
   '/api/presales/',     // presales REST API
   '/api/affirm/',       // affirm-set REST API
+  '/api/discovery/',    // neutral-discovery REST API
   '/api/health',        // probes
   '/_next/',            // build assets
   '/icons/',            // brand assets
