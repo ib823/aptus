@@ -27,6 +27,8 @@ interface HubItem {
   description: string;
   packageId: string | null;
   apiType: string | null;
+  source?: "sap" | "partner";
+  domain?: string | null;
   communicationScenarios: string[];
   scopeItemCodes: string[];
   itemCount: number | null;
@@ -43,7 +45,7 @@ interface HubData {
   total: number;
   page: number;
   limit: number;
-  counts: { byType: Record<string, number>; byStatus: Record<HubStatus, number>; probeableRuntime: number; probed: number; lastProbedAt?: string | null; dataConfirmed?: number; dataProbe?: boolean };
+  counts: { byType: Record<string, number>; byTypeItems?: Record<string, number>; aiApis?: number; byStatus: Record<HubStatus, number>; probeableRuntime: number; probed: number; lastProbedAt?: string | null; dataConfirmed?: number; dataProbe?: boolean };
   catalogueImported: boolean;
   tenant: string | null;
   isAdmin?: boolean;
@@ -122,6 +124,9 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
   const [contentType, setContentType] = useState<HubContentType | "ALL">("ALL");
   const [status, setStatus] = useState<StatusFilter>("ALL");
   const [dataProbe, setDataProbe] = useState(false);
+  // Source/domain facets: SAP-only (hide partner) and AI-only (domain=AI).
+  const [sapOnly, setSapOnly] = useState(false);
+  const [aiOnly, setAiOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
@@ -157,6 +162,8 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
       if (status !== "ALL") sp.set("status", status);
       if (q) sp.set("q", q);
       if (dataProbe) sp.set("dataProbe", "1");
+      if (sapOnly) sp.set("source", "sap");
+      if (aiOnly) sp.set("domain", "AI");
       const res = await fetch(`/api/sap/tdd/hub-content?${sp.toString()}`);
       const json = (await res.json()) as { data?: HubData; error?: { message?: string } };
       if (!res.ok || !json.data) throw new Error(json.error?.message ?? "Failed to load the catalogue");
@@ -168,7 +175,7 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
     } finally {
       setLoading(false);
     }
-  }, [product, page, contentType, status, q, dataProbe]);
+  }, [product, page, contentType, status, q, dataProbe, sapOnly, aiOnly]);
 
   useEffect(() => {
     void load();
@@ -215,6 +222,9 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
   }, [load]);
 
   const byType = data?.counts.byType ?? {};
+  const byTypeItems = data?.counts.byTypeItems ?? {};
+  const totalItems = Object.values(byTypeItems).reduce((n, c) => n + c, 0);
+  const aiApis = data?.counts.aiApis ?? 0;
   const byStatus: Record<HubStatus, number> = data?.counts.byStatus ?? {
     ACTIVATED: 0,
     NEEDS_SETUP: 0,
@@ -315,6 +325,8 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
               probeable={probeable}
               apiTotal={apiTotal}
               reference={byStatus.REFERENCE}
+              totalItems={totalItems}
+              aiApis={aiApis}
               lastProbedAt={lastProbedAt}
             />
           </div>
@@ -345,7 +357,39 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
             </p>
           </div>
           <div data-tour="sap-tiles">
-            <ContentTypeTiles byType={byType} activeType={contentType} onSelect={setContentType} />
+            <ContentTypeTiles byType={byType} byTypeItems={byTypeItems} activeType={contentType} onSelect={setContentType} />
+          </div>
+
+          {/* Source / domain facets — SAP-only (hide partner) + AI-only. Read from
+              rawMetadataJson server-side; makes the 158 integrations & 26 AI APIs findable. */}
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Source and domain filter">
+            <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--ink-muted)" }}>Source</span>
+            <button
+              type="button"
+              aria-pressed={sapOnly}
+              onClick={() => { setSapOnly((v) => !v); setPage(1); }}
+              className="rounded-[var(--radius-pill)] px-2.5 py-1 text-xs font-medium transition"
+              style={{
+                background: sapOnly ? "var(--brand-navy)" : "var(--surface-paper)",
+                color: sapOnly ? "var(--surface-paper)" : "var(--ink-secondary)",
+                border: `1px solid ${sapOnly ? "var(--brand-navy)" : "var(--border-default)"}`,
+              }}
+            >
+              SAP only {sapOnly ? "· partner hidden" : "· incl. partner"}
+            </button>
+            <button
+              type="button"
+              aria-pressed={aiOnly}
+              onClick={() => { setAiOnly((v) => !v); setPage(1); }}
+              className="rounded-[var(--radius-pill)] px-2.5 py-1 text-xs font-medium transition"
+              style={{
+                background: aiOnly ? "var(--brand-navy)" : "var(--surface-paper)",
+                color: aiOnly ? "var(--surface-paper)" : "var(--ink-secondary)",
+                border: `1px solid ${aiOnly ? "var(--brand-navy)" : "var(--border-default)"}`,
+              }}
+            >
+              AI APIs only{aiApis ? ` · ${aiApis}` : ""}
+            </button>
           </div>
 
           {/* status filter + search */}

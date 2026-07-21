@@ -20,16 +20,35 @@ import { glossaryIdForContentType } from "@/constants/sap-glossary";
 const INDICATIVE_NOTE =
   "Indicative published volume from an SAP Business Accelerator Hub snapshot; not pinned to a release. Refresh from a logged-in Hub check for release-accurate figures.";
 
+/** Types with no distinct content in the S/4 Public product — their content
+ *  lives inside other types, so they will never have a "real export". Show an
+ *  honest n/a instead of "Not loaded · ~N published". */
+/** Short VISIBLE label (must not name other tiles — it becomes the tab's
+ *  accessible name). The full explanation goes in the tooltip via NA_TITLE. */
+const NA_NOTE: Partial<Record<HubContentType, string>> = {
+  PROCESS_BLUEPRINT: "n/a — covered elsewhere",
+};
+const NA_TITLE: Partial<Record<HubContentType, string>> = {
+  PROCESS_BLUEPRINT: "not a distinct type in S/4 Public — covered under Scenarios / Live Processes",
+};
+
 export function ContentTypeTiles({
   byType,
+  byTypeItems,
   activeType,
   onSelect,
 }: {
+  /** Loaded-row count per type — decides loaded vs empty. */
   byType: Record<string, number>;
+  /** Item volume per type (grouped rows expand by itemCount) — the headline. */
+  byTypeItems?: Record<string, number>;
   activeType?: HubContentType | "ALL";
   onSelect?: (type: HubContentType | "ALL") => void;
 }) {
-  const total = Object.values(byType).reduce((n, c) => n + c, 0);
+  // ALL tile headlines total items (grouped rows counted by their itemCount).
+  const total = byTypeItems
+    ? Object.values(byTypeItems).reduce((n, c) => n + c, 0)
+    : Object.values(byType).reduce((n, c) => n + c, 0);
   // Tap the "?" on a tile → plain-language definition of that content type.
   const { openGlossary } = useAffirmLearn();
 
@@ -42,6 +61,8 @@ export function ContentTypeTiles({
     selected: boolean,
     empty: boolean,
     defineId?: string,
+    naNote?: string,
+    naTitle?: string,
   ) => {
     // Tiles speak COVERAGE, never tenant status. Loaded → the real count is the
     // truth (no "indicative"). Not loaded → "~Y published" is the SCALE of what
@@ -50,7 +71,9 @@ export function ContentTypeTiles({
     const hasPublished = published != null && published > 0;
     const isAll = key === "ALL";
     const title = empty
-      ? `${label}: not loaded — no rows imported yet. ${hasPublished ? `~${published!.toLocaleString()} published by SAP. ${INDICATIVE_NOTE} ` : ""}Drop a logged-in Hub export in sap-references/hub-content/${key}.json.`
+      ? naNote
+        ? `${label}: ${naTitle ?? naNote}.`
+        : `${label}: not loaded — no rows imported yet. ${hasPublished ? `~${published!.toLocaleString()} published by SAP. ${INDICATIVE_NOTE} ` : ""}Drop a logged-in Hub export in sap-references/hub-content/${key}.json.`
       : label;
     return (
       <div
@@ -79,7 +102,7 @@ export function ContentTypeTiles({
           </span>
           {isAll ? null : empty ? (
             <span className="text-[10px] tabular-nums" style={{ color: "var(--ink-muted)" }}>
-              Not loaded{hasPublished ? ` · ~${published!.toLocaleString()} published` : ""}
+              {naNote ?? `Not loaded${hasPublished ? ` · ~${published!.toLocaleString()} published` : ""}`}
             </span>
           ) : (
             <span className="text-[10px] uppercase tracking-wide" style={{ color: "var(--ink-muted)" }}>
@@ -112,12 +135,17 @@ export function ContentTypeTiles({
         tile(
           t,
           HUB_CONTENT_TYPE_META[t].label,
-          byType[t] ?? 0,
-          S4_PUBLIC_PUBLISHED_COUNTS[t] ?? null,
+          // Headline the ITEM count (grouped rows expand by itemCount); fall back
+          // to the row count if byTypeItems wasn't supplied.
+          byTypeItems?.[t] ?? byType[t] ?? 0,
+          // Suppress "~N published" for n/a types — nothing is pending for them.
+          NA_NOTE[t] ? null : S4_PUBLIC_PUBLISHED_COUNTS[t] ?? null,
           isRuntimeType(t) ? "runtime" : "reference",
           activeType === t,
           (byType[t] ?? 0) === 0,
           glossaryIdForContentType(t),
+          NA_NOTE[t],
+          NA_TITLE[t],
         ),
       )}
     </div>

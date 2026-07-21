@@ -69,6 +69,22 @@ async function rebuildApiSlice(): Promise<ApiSliceStats> {
   const codeToFA = new Map<string, string>();
   for (const si of scopeItems) if (si.functionalArea && !codeToFA.has(si.scopeCode)) codeToFA.set(si.scopeCode, si.functionalArea);
 
+  // Preserve tenant-keyed probe status across a rebuild. The API-slice upsert
+  // refreshes metadata, but its rawMetadataJson ({source, apiId}) must NOT wipe
+  // the stored probes[tenantKey] written by Probe-all — else "Rebuild from API
+  // reference" would reset every Activated row to Not-checked. Read each row's
+  // existing rawMetadataJson first, then MERGE on update (see below).
+  const existingRaw = new Map<string, Record<string, unknown>>();
+  const existingApiRows = await prisma.sapHubContent.findMany({
+    where: { contentType: API },
+    select: { externalId: true, rawMetadataJson: true },
+  });
+  for (const r of existingApiRows) {
+    if (r.rawMetadataJson && typeof r.rawMetadataJson === "object" && !Array.isArray(r.rawMetadataJson)) {
+      existingRaw.set(r.externalId, r.rawMetadataJson as Record<string, unknown>);
+    }
+  }
+
   let imported = 0;
   let apiTypeBackfilled = 0;
   const byLob: Record<string, number> = {};
@@ -77,6 +93,7 @@ async function rebuildApiSlice(): Promise<ApiSliceStats> {
     const fas = a.scopeItemCodes.map((c) => codeToFA.get(c)).filter((f): f is string => Boolean(f));
     const lob = resolveLineOfBusiness(fas, a.apiName);
     byLob[lob] = (byLob[lob] ?? 0) + 1;
+    const freshRaw = { source: "SapApiReference", apiId: a.apiId };
     const data = {
       title: a.apiName,
       description: a.description ?? "",
@@ -90,12 +107,16 @@ async function rebuildApiSlice(): Promise<ApiSliceStats> {
       scopeItemCodes: a.scopeItemCodes,
       itemCount: null,
       hubUrl: a.apiHubUrl,
-      rawMetadataJson: { source: "SapApiReference", apiId: a.apiId } as Prisma.InputJsonValue,
+      rawMetadataJson: freshRaw as Prisma.InputJsonValue,
     };
+    // On UPDATE, spread the existing rawMetadataJson first so probes (and any
+    // sibling keys) survive; freshRaw only refreshes source/apiId.
+    const prevRaw = existingRaw.get(a.apiId);
+    const mergedRaw = (prevRaw ? { ...prevRaw, ...freshRaw } : freshRaw) as Prisma.InputJsonValue;
     await prisma.sapHubContent.upsert({
       where: { contentType_externalId: { contentType: API, externalId: a.apiId } },
       create: { contentType: API, externalId: a.apiId, ...data },
-      update: data,
+      update: { ...data, rawMetadataJson: mergedRaw },
     });
     imported++;
   }
