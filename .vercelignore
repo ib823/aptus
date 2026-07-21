@@ -17,12 +17,17 @@ content-quality-audit-report.md
 implications-panel-audit-report.md
 
 # Test infrastructure
-tests/
-playwright.config.ts
-vitest.config.ts
-test-results/
-coverage/
-playwright-report/
+# NOTE: keep these patterns root-anchored (leading "/"). An unanchored pattern
+# like "coverage/" also matches app-route directories at any depth — e.g.
+# src/app/(workbench)/discovery/coverage/ — which silently strips that route
+# from the Vercel upload and makes it 404 in production only (builds fine
+# locally, since .vercelignore is Vercel-upload-only). See discovery/coverage.
+/tests/
+/playwright.config.ts
+/vitest.config.ts
+/test-results/
+/coverage/
+/playwright-report/
 
 # Large binaries that should never ship
 *.zip
