@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   upsert: vi.fn(),
   count: vi.fn(),
   findUnique: vi.fn(),
+  hubFindMany: vi.fn(),
   create: vi.fn(),
   update: vi.fn(),
   scopeItemFindMany: vi.fn(),
@@ -20,7 +21,7 @@ vi.mock("@/lib/auth/admin-guard", () => ({
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     sapApiReference: { findMany: mocks.apiFindMany },
-    sapHubContent: { upsert: mocks.upsert, count: mocks.count, findUnique: mocks.findUnique, create: mocks.create, update: mocks.update },
+    sapHubContent: { upsert: mocks.upsert, count: mocks.count, findUnique: mocks.findUnique, findMany: mocks.hubFindMany, create: mocks.create, update: mocks.update },
     scopeItem: { findMany: mocks.scopeItemFindMany },
     scopeCatalogVersion: { findFirst: mocks.catalogFindFirst },
   },
@@ -48,6 +49,7 @@ beforeEach(() => {
   mocks.count.mockResolvedValue(API_ROWS.length);
   mocks.catalogFindFirst.mockResolvedValue({ id: "cv-public" });
   mocks.scopeItemFindMany.mockResolvedValue([{ scopeCode: "J60", functionalArea: "Sourcing and Procurement" }]);
+  mocks.hubFindMany.mockResolvedValue([]); // no pre-existing hub rows by default
 });
 
 describe("POST /api/sap/tdd/hub-content/seed (rebuild from SapApiReference)", () => {
@@ -89,6 +91,30 @@ describe("POST /api/sap/tdd/hub-content/seed (rebuild from SapApiReference)", ()
 
     expect(body.data.byLob).toBeTruthy();
     expect(mocks.logDecision.mock.calls[0]![0]).toMatchObject({ action: "SAP_HUB_SEED_IMPORTED" });
+  });
+
+  it("a rebuild PRESERVES a row's stored tenant probes (does not reset Activated)", async () => {
+    // An existing API row already carries a Probe-all result for a tenant.
+    mocks.hubFindMany.mockResolvedValue([
+      {
+        externalId: "API_PURCHASEORDER_PROCESS_SRV",
+        rawMetadataJson: { source: "SapApiReference", apiId: "API_PURCHASEORDER_PROCESS_SRV", probes: { customizing: { http: 200, at: "2026-07-21T00:00:00Z" } } },
+      },
+    ]);
+    const res = await POST(makeRequest({ confirmation: "REBUILD SAP HUB CATALOGUE" }));
+    expect(res.status).toBe(200);
+
+    // The upsert for that api must MERGE — its update.rawMetadataJson keeps probes.
+    const call = mocks.upsert.mock.calls.find(
+      (c) => c![0].where.contentType_externalId.externalId === "API_PURCHASEORDER_PROCESS_SRV",
+    )!;
+    expect(call[0].update.rawMetadataJson).toMatchObject({
+      source: "SapApiReference",
+      apiId: "API_PURCHASEORDER_PROCESS_SRV",
+      probes: { customizing: { http: 200, at: "2026-07-21T00:00:00Z" } },
+    });
+    // A NEW row (create) has no stored probe to preserve — fresh raw is fine.
+    expect(call[0].create.rawMetadataJson).toEqual({ source: "SapApiReference", apiId: "API_PURCHASEORDER_PROCESS_SRV" });
   });
 
   it("contentType=EVENT imports the bundled type WITHOUT touching the API slice", async () => {
