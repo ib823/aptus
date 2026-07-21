@@ -80,10 +80,12 @@ export function ContentTypeTiles({
         ? `${label}: ${naHelp ?? naNote}`
         : `${label}: not loaded — no rows imported yet. ${hasPublished ? `~${published!.toLocaleString()} published by SAP. ${INDICATIVE_NOTE} ` : ""}Drop a logged-in Hub export in sap-references/hub-content/${key}.json.`
       : label;
-    // Explicit accessible name — stable and collision-free. n/a types say
-    // "not applicable" (never the sublabel, which names other tiles).
+    // Explicit accessible name for the per-type tiles — stable and collision
+    // free (n/a types say "not applicable", never the sublabel that names other
+    // tiles). The ALL tile keeps its default text-content name (starts with the
+    // count) so it never collides with the status "All" filter tab.
     const ariaLabel = isAll
-      ? `All types: ${count.toLocaleString()}`
+      ? undefined
       : naNote
         ? `${label}: not applicable`
         : empty
