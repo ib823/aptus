@@ -136,3 +136,30 @@ If a push slipped through (someone bypassed, or the hook missed something), you'
 4. Fix and re-push (don't bypass the hook this time)
 
 Don't let failed deploys pile up. They make rollback harder and mask real outages.
+
+## Dependency security — automated, with a 2-minute manual fallback
+
+Security bumps are automated so a newly-disclosed CVE never red-gates every open
+PR for long:
+
+- **Dependabot** (`.github/dependabot.yml`) raises PRs for version updates
+  (weekly, grouped minor+patch) and — once *Settings → Code security → "Dependabot
+  security updates"* is on — for each CVE, as an individual PR.
+- **Auto-merge** (`.github/workflows/dependabot-auto-merge.yml`) merges patch/minor
+  and security PRs once CI is green (`gh pr merge --auto`, so branch protection
+  still gates it). Major bumps stay manual.
+- **The audit gate** (`scripts/ci-audit-gate.mjs`) fails on any **direct-dependency**
+  or **fixable** high/critical, and only *warns* on a genuinely-unfixable transitive
+  advisory. It never passes a fixable or direct vuln.
+
+### Unblocking a transitive CVE by hand (when you can't wait for Dependabot)
+
+A fixable transitive high/critical still fails the gate. To clear it in ~2 minutes:
+
+1. Read the advisory the gate printed — note the **patched versions** (e.g. `>=3.1.3`).
+2. Add or widen a pnpm override in `package.json` → `"pnpm": { "overrides": { … } }`,
+   e.g. `"fast-uri": ">=3.1.3"`. Stay in the same major line when the patch allows it.
+3. `pnpm install` (updates `pnpm-lock.yaml`), then `node scripts/ci-audit-gate.mjs`
+   to confirm **0 blocking**.
+4. Open a single-purpose `chore(security): …` PR. It merges first; open feature PRs
+   then rebase onto the green main.
