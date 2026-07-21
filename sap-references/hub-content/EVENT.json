@@ -1909,5 +1909,57 @@
     "regId": "f662ae52b8a94045b59b74c335515921",
     "version": "1.0.0",
     "source": "api.sap.com catalog.svc ContentPackages(SAPS4HANACloudBusinessEvents)/Artifacts"
+  },
+  {
+    "contentType": "EVENT",
+    "externalId": "SAPSubscriptionBillingBusinessEvents_AllowanceEvents",
+    "title": "Allowance Events",
+    "description": "Informs about the life cycle of an allowance, such as when the allowance expires or reaches a designated usage threshold.",
+    "packageId": "Subscription Billing",
+    "apiType": null,
+    "communicationScenarios": [],
+    "hubUrl": "https://api.sap.com/event/SAPSubscriptionBillingBusinessEvents_AllowanceEvents/overview",
+    "regId": "be38b0ec081b4c1c94e9fe765f1521e1",
+    "version": "1.0.0",
+    "source": "api.sap.com catalog.svc ContentPackages(SAPSubscriptionBillingBusinessEvents)/Artifacts"
+  },
+  {
+    "contentType": "EVENT",
+    "externalId": "SAPSubscriptionBillingBusinessEvents_BillingForecastEvents",
+    "title": "Billing Forecast Events",
+    "description": "Informs about the billing forecast, such as when the billing forecast was created or updated.",
+    "packageId": "Subscription Billing",
+    "apiType": null,
+    "communicationScenarios": [],
+    "hubUrl": "https://api.sap.com/event/SAPSubscriptionBillingBusinessEvents_BillingForecastEvents/overview",
+    "regId": "d863b3f433fc4b5ab864e6ee7c98eaab",
+    "version": "1.0.0",
+    "source": "api.sap.com catalog.svc ContentPackages(SAPSubscriptionBillingBusinessEvents)/Artifacts"
+  },
+  {
+    "contentType": "EVENT",
+    "externalId": "SAPSubscriptionBillingBusinessEvents_BillEvents",
+    "title": "Bill Events",
+    "description": "Informs about the life cycle of a bill, such as when the bill was opened or closed, or becomes due.",
+    "packageId": "Subscription Billing",
+    "apiType": null,
+    "communicationScenarios": [],
+    "hubUrl": "https://api.sap.com/event/SAPSubscriptionBillingBusinessEvents_BillEvents/overview",
+    "regId": "73b21d1fcead4407a9699f906fe9998a",
+    "version": "1.0.0",
+    "source": "api.sap.com catalog.svc ContentPackages(SAPSubscriptionBillingBusinessEvents)/Artifacts"
+  },
+  {
+    "contentType": "EVENT",
+    "externalId": "SAPSubscriptionBillingBusinessEvents_SubscriptionEvents",
+    "title": "Subscription Events",
+    "description": "Informs about the life cycle of a subscription, such as when the subscription was canceled, extended or will expire.",
+    "packageId": "Subscription Billing",
+    "apiType": null,
+    "communicationScenarios": [],
+    "hubUrl": "https://api.sap.com/event/SAPSubscriptionBillingBusinessEvents_SubscriptionEvents/overview",
+    "regId": "2ce8d8ed8e3a4cbd8931d61007e3739b",
+    "version": "1.0.0",
+    "source": "api.sap.com catalog.svc ContentPackages(SAPSubscriptionBillingBusinessEvents)/Artifacts"
   }
 ]
