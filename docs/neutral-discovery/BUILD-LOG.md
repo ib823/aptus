@@ -1007,3 +1007,21 @@ table cannot walk to attribution. Asserted against the schema itself.
 | V1 · heatmap | all | **Deviation — brief** | 15% fill; real buttons + `aria-live` instead of `title=` |
 | V1 · what-happens-next | current=1 | Match | Ordered list; connectors decorative |
 | V1 · mode switch | — | **Deferred to PR-3** | D8 — no toast copy exists to stub with |
+
+---
+
+## Follow-up — CI Security-audit gate blocks unrelated PRs (logged 2026-07-21, decision deferred)
+
+**Ticket (not actioned — decision for later):** Adopt proactive dependency tooling and/or split the audit gate.
+
+**Trigger.** `chore(security)` PR #111 had to be cut and merged first just to unblock the unrelated deploy-config fix PR #110 (`/discovery/coverage` route). A newly-disclosed high advisory (`brace-expansion`, GHSA-3jxr-9vmj-r5cp — patched thresholds raised to 1.1.16 / 2.1.2 / 5.0.7) turned the `Security audit` step of Quality Gates red on `main` and on **every** open PR at once.
+
+**Why it blocks everything.** The audit runs first in Quality Gates under `set -e`, so a single new transitive-dep advisory fails the whole job and short-circuits typecheck/lint/build/tests — regardless of what the PR changed.
+
+**This is the second occurrence.** Same pattern as the `adm-zip` advisory in #100. A time-based disclosure (nothing in anyone's diff) blocks all human PRs until someone hand-bumps an override.
+
+**Recommendation (evaluate later):**
+1. Turn on **Dependabot** or **Renovate** with security updates enabled, so patched versions land via automated PRs *before* they can block a human's PR.
+2. Optionally split the gate: **blocking** for highs/criticals in *direct* deps, **advisory-only (non-blocking warning)** for *transitive* deps — keeps the signal without wedging unrelated work.
+
+**Owner / decision:** TBD.
