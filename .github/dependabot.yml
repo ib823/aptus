@@ -1,0 +1,41 @@
+# Automated dependency updates. Dependabot reads pnpm-lock.yaml via the "npm"
+# ecosystem. Scheduled VERSION updates land here (grouped minor+patch); SECURITY
+# updates are raised automatically as individual PRs once the repo Settings
+# toggle is on (Settings → Code security → "Dependabot security updates").
+#
+# Patch/minor + security PRs auto-merge when CI is green (see
+# .github/workflows/dependabot-auto-merge.yml); MAJOR bumps stay manual.
+version: 2
+updates:
+  - package-ecosystem: "npm" # pnpm — Dependabot parses pnpm-lock.yaml
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      # One PR per week for the low-risk churn; security PRs stay ungrouped so
+      # each CVE fix is its own reviewable, individually-revertable change.
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Major bumps are reviewed by hand (breaking-change surface).
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(ci)"
