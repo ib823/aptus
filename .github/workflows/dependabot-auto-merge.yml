@@ -1,0 +1,35 @@
+name: Dependabot auto-merge
+
+# Auto-merge Dependabot patch/minor + security PRs once all required checks are
+# green, so a transitive CVE fix lands on main without a human babysitting it;
+# open feature PRs then just rebase onto a green main. MAJOR bumps are left for
+# manual review. `--auto` only merges after branch-protection checks pass, so
+# this never bypasses the gate.
+#
+# Requires: repo Settings → General → "Allow auto-merge" enabled.
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: ${{ github.actor == 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for patch/minor (incl. security fixes)
+        if: >-
+          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+          steps.meta.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
