@@ -154,12 +154,32 @@ export const RATE_LIMITS = {
   /** Report generation: 10 per minute */
   report: { limit: 10, windowMs: 60 * 1000 },
   /**
-   * Expensive LIVE-SAP routes (/operations, /entities?probe=1, hub-content
-   * Probe-all): a tight, dedicated bucket so they can't amplify load onto the
-   * SAP tenant even within the generous apiRead/apiMutation ceilings.
+   * Expensive LIVE-SAP routes (see isLiveSapTenantRoute): a tight, dedicated
+   * bucket so they can't amplify load onto the SAP tenant even within the
+   * generous apiRead/apiMutation ceilings.
    */
   sapLive: { limit: 20, windowMs: 60 * 1000 },
 } as const;
+
+/**
+ * Routes that reach the live SAP tenant and therefore belong in the tight
+ * `sapLive` bucket. Every path here amplifies onto the tenant on a cache miss:
+ *   - /operations                 curated live sample
+ *   - /preview                    per-entity live row reads (universal show-data)
+ *   - /entities                   metadata inspect + the ~3.6s probe=1 confirm
+ *   - /hub-content/probe-all      the bounded live probe sweep
+ * Kept as a pure pathname predicate (no query-string dependence) so /preview
+ * and /entities are throttled regardless of params — a per-service fan-out must
+ * not be able to slip the throttle by omitting probe=1.
+ */
+export function isLiveSapTenantRoute(pathname: string): boolean {
+  return (
+    pathname === "/api/sap/tdd/operations" ||
+    pathname === "/api/sap/tdd/preview" ||
+    pathname === "/api/sap/tdd/entities" ||
+    pathname === "/api/sap/tdd/hub-content/probe-all"
+  );
+}
 
 /**
  * Extract client IP from request headers.

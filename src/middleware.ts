@@ -1,7 +1,7 @@
 /** Middleware: Bridge NextAuth JWT sessions + API rate limiting */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/security/rate-limit";
+import { checkRateLimit, getClientIp, isLiveSapTenantRoute, RATE_LIMITS } from "@/lib/security/rate-limit";
 
 /** Attach observability headers to all responses */
 function withObservabilityHeaders(
@@ -216,12 +216,10 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
       const isAuthMutation = pathname.startsWith("/api/auth");
       const isReportRoute = pathname.startsWith("/api/assessments/") && pathname.includes("/report/");
       // Expensive live-SAP routes get their own tight bucket so they can't
-      // amplify load onto the SAP tenant: /operations, /entities?probe=1, and
-      // the hub-content Probe-all sweep.
-      const isSapLive =
-        pathname === "/api/sap/tdd/operations" ||
-        (pathname === "/api/sap/tdd/entities" && request.nextUrl.searchParams.get("probe") === "1") ||
-        pathname === "/api/sap/tdd/hub-content/probe-all";
+      // amplify load onto the SAP tenant. The universal "show the data" surface
+      // fans /preview + /entities out per activated service, so both must be
+      // capped — not just probe=1 — before that fan-out can amplify load.
+      const isSapLive = isLiveSapTenantRoute(pathname);
 
       // Auth mutations and report generation get tighter limits. Other
       // endpoints use method-based limits.
