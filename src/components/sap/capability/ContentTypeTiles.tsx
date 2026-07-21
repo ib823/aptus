@@ -21,15 +21,18 @@ const INDICATIVE_NOTE =
   "Indicative published volume from an SAP Business Accelerator Hub snapshot; not pinned to a release. Refresh from a logged-in Hub check for release-accurate figures.";
 
 /** Types with no distinct content in the S/4 Public product — their content
- *  lives inside other types, so they will never have a "real export". Show an
- *  honest n/a instead of "Not loaded · ~N published". */
-/** Short VISIBLE label (must not name other tiles — it becomes the tab's
- *  accessible name). The full explanation goes in the tooltip via NA_TITLE. */
+ *  lives inside other types, so they will never have a "real export". Rendered
+ *  as an honest "n/a by design", never "0 · ~N published". A tile with an
+ *  NA_NOTE shows "—" (not "0"), the NA_NOTE sublabel, no published figure, and
+ *  the NA_HELP text on its "?". The tile's accessible NAME comes from an
+ *  explicit aria-label (see `ariaLabel` below), so the sublabel can freely name
+ *  other tiles without colliding with their tab names. */
 const NA_NOTE: Partial<Record<HubContentType, string>> = {
-  PROCESS_BLUEPRINT: "n/a — covered elsewhere",
+  PROCESS_BLUEPRINT: "Not a separate type — covered under Scenarios & Live Processes",
 };
-const NA_TITLE: Partial<Record<HubContentType, string>> = {
-  PROCESS_BLUEPRINT: "not a distinct type in S/4 Public — covered under Scenarios / Live Processes",
+const NA_HELP: Partial<Record<HubContentType, string>> = {
+  PROCESS_BLUEPRINT:
+    "SAP delivers standard end-to-end processes for S/4HANA Cloud Public as Scenarios (308) and Live Processes (43). There is no distinct Process Blueprint content type, so this is empty by design — not a pending import.",
 };
 
 export function ContentTypeTiles({
@@ -62,7 +65,7 @@ export function ContentTypeTiles({
     empty: boolean,
     defineId?: string,
     naNote?: string,
-    naTitle?: string,
+    naHelp?: string,
   ) => {
     // Tiles speak COVERAGE, never tenant status. Loaded → the real count is the
     // truth (no "indicative"). Not loaded → "~Y published" is the SCALE of what
@@ -70,11 +73,24 @@ export function ContentTypeTiles({
     // never renders "~0". The ALL tile (published null) shows no coverage line.
     const hasPublished = published != null && published > 0;
     const isAll = key === "ALL";
+    // n/a-by-design types show an em dash, never "0" (0 reads as missing/broken).
+    const displayCount = naNote ? "—" : count.toLocaleString();
     const title = empty
       ? naNote
-        ? `${label}: ${naTitle ?? naNote}.`
+        ? `${label}: ${naHelp ?? naNote}`
         : `${label}: not loaded — no rows imported yet. ${hasPublished ? `~${published!.toLocaleString()} published by SAP. ${INDICATIVE_NOTE} ` : ""}Drop a logged-in Hub export in sap-references/hub-content/${key}.json.`
       : label;
+    // Explicit accessible name for the per-type tiles — stable and collision
+    // free (n/a types say "not applicable", never the sublabel that names other
+    // tiles). The ALL tile keeps its default text-content name (starts with the
+    // count) so it never collides with the status "All" filter tab.
+    const ariaLabel = isAll
+      ? undefined
+      : naNote
+        ? `${label}: not applicable`
+        : empty
+          ? `${label}: not loaded`
+          : `${label}: ${count.toLocaleString()} loaded${tag ? `, ${tag}` : ""}`;
     return (
       <div
         key={key}
@@ -89,13 +105,14 @@ export function ContentTypeTiles({
           type="button"
           role="tab"
           aria-selected={selected}
+          aria-label={ariaLabel}
           onClick={() => !empty && onSelect?.(key)}
           disabled={empty}
           title={title}
           className="flex w-full flex-col items-start gap-1 px-3 py-2 pr-7 text-left transition disabled:cursor-not-allowed"
         >
           <span className="text-lg font-bold tabular-nums" style={{ color: empty ? "var(--ink-muted)" : "var(--brand-navy)" }}>
-            {count.toLocaleString()}
+            {displayCount}
           </span>
           <span className="text-xs font-medium" style={{ color: "var(--ink-primary)" }}>
             {label}
@@ -110,12 +127,12 @@ export function ContentTypeTiles({
             </span>
           )}
         </button>
-        {defineId && (
+        {(defineId || naHelp) && (
           <button
             type="button"
-            onClick={() => openGlossary(defineId)}
-            title={`What is "${label}"?`}
-            aria-label={`What is "${label}"?`}
+            onClick={() => defineId && openGlossary(defineId)}
+            title={naHelp ?? `What is "${label}"?`}
+            aria-label={naHelp ? `About ${label}` : `What is "${label}"?`}
             className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full text-[11px] leading-none"
             style={{ color: "var(--ink-muted)", border: "1px solid var(--border-default)" }}
           >
@@ -145,7 +162,7 @@ export function ContentTypeTiles({
           (byType[t] ?? 0) === 0,
           glossaryIdForContentType(t),
           NA_NOTE[t],
-          NA_TITLE[t],
+          NA_HELP[t],
         ),
       )}
     </div>
