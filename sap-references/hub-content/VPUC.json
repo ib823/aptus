@@ -1,1 +1,77 @@
-[]
+[
+  {
+    "contentType": "VPUC",
+    "externalId": "KTernAIforRISEwithSAPDXaaS",
+    "title": "KTern.AI for RISE with SAP DXaaS",
+    "description": "Business ChallengeTraditional approaches to digital transformation for SAP S/4HANA can be optimized for efficiency, speed and reliability. There is a huge opportunity to automate migration of your customization from SAP ERP core to side-by-side extensions on SAP BTP, which today is a manual, time consuming and risky task. This will lead to shorter upgrade cycles, simplify integrations and ensure business continuity.Value StoryDriven by SAP Business AI, the KTern.AI platform helps you achieve AI-",
+    "packageId": "Supply Chain,Manufacturing,Maintenance and Engineering,Sourcing and Procurement,Finance,Plant Operations and Maintenance,Service,Sales,R&D Engineering,Human Resources,Asset Management,Commerce,Sustainability",
+    "apiType": null,
+    "communicationScenarios": [],
+    "itemCount": null,
+    "source": "sap",
+    "vendor": "Kaar Technologies",
+    "originPackageId": "KTernAIforRISEwithSAPDXaaS",
+    "hubUrl": "https://api.sap.com/package/KTernAIforRISEwithSAPDXaaS/overview",
+    "provenance": "api.sap.com catalog.svc Products(SAPS4HANACloud)/ContentPackages [Category=VPUC, package-level; content stored as Files/URLs]"
+  },
+  {
+    "contentType": "VPUC",
+    "externalId": "Streamlined_custom_table_maintenance",
+    "title": "Streamlined Custom Table Maintenance",
+    "description": "Business ChallengeOur solution, running on SAP Business Technology Platform (BTP), streamlines SAP custom table maintenance by enabling business and external users to manage data without requiring full system access. With granular privilege control, users can only modify data they’re authorized to, ensuring security and compliance. Ideal for SAP BW and custom tables, our platform reduces errors, boosts efficiency, and integrates seamlessly into your existing SAP environment — all while leveragin",
+    "packageId": "VPUC",
+    "apiType": null,
+    "communicationScenarios": [],
+    "itemCount": null,
+    "source": "sap",
+    "vendor": "BIGCube GmbH",
+    "originPackageId": "Streamlined_custom_table_maintenance",
+    "hubUrl": "https://api.sap.com/package/Streamlined_custom_table_maintenance/overview",
+    "provenance": "api.sap.com catalog.svc Products(SAPS4HANACloud)/ContentPackages [Category=VPUC, package-level; content stored as Files/URLs]"
+  },
+  {
+    "contentType": "VPUC",
+    "externalId": "AI_based_Maintenance_Assistant_in_SAP_EAM",
+    "title": "AI based Maintenance Assistant in SAP EAM",
+    "description": "Business ChallengeAI powered corrective maintenance to ensure reliability and efficiency of enterprise operations.Value StoryChallenge &amp; Objective:\nIn situations where service technician on the job is attending to issues (Corrective Maintenance), quicker, faster and best resolution is the key to avoid stoppages or breakdown durations (increase productive efficiency, reliability, reduction of breakdown cost) and reduce repair time.\nWith beginners or technicians with less experience this becom",
+    "packageId": "VPUC",
+    "apiType": null,
+    "communicationScenarios": [],
+    "itemCount": null,
+    "source": "sap",
+    "vendor": "ATOS INTERNATIONAL SAS",
+    "originPackageId": "AI_based_Maintenance_Assistant_in_SAP_EAM",
+    "hubUrl": "https://api.sap.com/package/AI_based_Maintenance_Assistant_in_SAP_EAM/overview",
+    "provenance": "api.sap.com catalog.svc Products(SAPS4HANACloud)/ContentPackages [Category=VPUC, package-level; content stored as Files/URLs]"
+  },
+  {
+    "contentType": "VPUC",
+    "externalId": "FacilitiesandRealEstateManagementwithPlanon",
+    "title": "SAP Real Estate and Facilities Management by Planon",
+    "description": "Business ChallengeFor many organizations, real estate represents the second highest expense after people. And, it has a major impact on energy consumption and sustainability. Yet real estate data often resides in its own silo outside your ERP system. This makes it hard to manage real estate finances, take the right ESG actions, and optimize your real estate portfolio.Value StorySAP Real Estate and Facilities Management by Planon is a Solution extension that extends the scope of SAP S/4HANA to en",
+    "packageId": "VPUC",
+    "apiType": null,
+    "communicationScenarios": [],
+    "itemCount": null,
+    "source": "sap",
+    "vendor": "Planon Group BV",
+    "originPackageId": "FacilitiesandRealEstateManagementwithPlanon",
+    "hubUrl": "https://api.sap.com/package/FacilitiesandRealEstateManagementwithPlanon/overview",
+    "provenance": "api.sap.com catalog.svc Products(SAPS4HANACloud)/ContentPackages [Category=VPUC, package-level; content stored as Files/URLs]"
+  },
+  {
+    "contentType": "VPUC",
+    "externalId": "CallAgentProductAIAssistant",
+    "title": "Call Agent Product AI Assistant",
+    "description": "Business ChallengeCustomer Service Call Agents are normally not technical, but your customers often are. Technical products have multiple technical attributes and long form descriptions making search complex. In addition to these challenges, when selling directly or indirectly your best opportunity to sell or upsell is with an inbound product request, yet because of these challenges often the Call Agent lacks the knowledge to do so resulting in lost revenue. Value StoryCall Agent Product AI Assi",
+    "packageId": "VPUC",
+    "apiType": null,
+    "communicationScenarios": [],
+    "itemCount": null,
+    "source": "sap",
+    "vendor": "NTT DATA Business Solutions Ltd",
+    "originPackageId": "CallAgentProductAIAssistant",
+    "hubUrl": "https://api.sap.com/package/CallAgentProductAIAssistant/overview",
+    "provenance": "api.sap.com catalog.svc Products(SAPS4HANACloud)/ContentPackages [Category=VPUC, package-level; content stored as Files/URLs]"
+  }
+]
