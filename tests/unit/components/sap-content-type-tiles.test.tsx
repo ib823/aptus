@@ -35,4 +35,18 @@ describe("ContentTypeTiles — coverage language, not status", () => {
     const tile = screen.getByRole("tab", { name: /Live Processes/i });
     expect(tile.getAttribute("title")).not.toMatch(/~0 published/);
   });
+
+  it("Process Blueprints is n/a by design — em dash, honest sublabel, no '~N published'", () => {
+    render(<ContentTypeTiles byType={{ API: 943 }} />);
+    // Accessible name is stable ("not applicable") — does NOT collide with the
+    // Scenarios / Live Processes tabs even though the sublabel names them.
+    const tile = screen.getByRole("tab", { name: /Process Blueprints: not applicable/i });
+    expect(tile.textContent).toContain("—"); // em dash, never "0"
+    expect(tile.textContent).not.toMatch(/\b0\b/);
+    expect(tile.textContent).toMatch(/Not a separate type — covered under Scenarios & Live Processes/);
+    expect(tile.textContent).not.toMatch(/published/i); // no "~15 published"
+    // The "?" carries the honest explanation.
+    const help = screen.getByRole("button", { name: /About Process Blueprints/i });
+    expect(help.getAttribute("title")).toMatch(/empty by design — not a pending import/i);
+  });
 });
