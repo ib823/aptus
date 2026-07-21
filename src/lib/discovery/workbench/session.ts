@@ -66,6 +66,13 @@ function reviewerStatus(g: {
 }
 
 export async function getSession(engagementId: string): Promise<SessionSummary | null> {
+  // Guard the lookup: a blank or absent id is a miss, not a query. findUnique
+  // already returns null for any non-matching string (so it never throws on a
+  // malformed id), but treating "no id" as notFound() up front keeps a bad or
+  // deleted session link a clean 404 on both hard nav and RSC prefetch — never
+  // a 500/503 — and avoids a pointless round-trip.
+  if (typeof engagementId !== "string" || engagementId.trim() === "") return null;
+
   const e = await prisma.discoveryEngagement.findUnique({
     where: { id: engagementId },
     select: {
