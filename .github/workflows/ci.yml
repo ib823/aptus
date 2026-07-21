@@ -133,6 +133,17 @@ jobs:
       - name: Run Playwright smoke suite
         run: pnpm test:e2e:smoke
 
+      # Neutral-discovery consultant surfaces are flag-gated and run on the
+      # `consultant` project, so the smoke suite above never touches them. This
+      # step boots the app with the flag on and DISCOVERY_E2E=1 so the C7
+      # "New session" spec actually executes — the PR-5 gap where the entry
+      # point to the client workflow shipped without a route and no CI ran it.
+      - name: Run discovery session e2e
+        run: pnpm test:e2e:discovery-session
+        env:
+          NEUTRAL_DISCOVERY_ENABLED: "true"
+          DISCOVERY_E2E: "1"
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4

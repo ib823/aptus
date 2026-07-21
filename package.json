@@ -36,6 +36,7 @@
     "test:e2e:journeys": "playwright test --project=journeys",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:smoke": "playwright test tests/e2e/login.unauth.spec.ts tests/e2e/portal.auth.spec.ts tests/e2e/accessibility.unauth.spec.ts tests/e2e/accessibility.auth.spec.ts --project=unauthenticated --project=authenticated",
+    "test:e2e:discovery-session": "playwright test tests/e2e/discovery-new-session.consultant.spec.ts --project=consultant",
     "test:visual": "playwright test --config=playwright.visual.config.ts",
     "test:visual:update": "playwright test --config=playwright.visual.config.ts --update-snapshots",
     "test:visual-app": "playwright test --config=playwright.visual-app.config.ts",
