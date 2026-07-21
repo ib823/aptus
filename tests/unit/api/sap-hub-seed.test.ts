@@ -97,11 +97,14 @@ describe("POST /api/sap/tdd/hub-content/seed (rebuild from SapApiReference)", ()
     const body = await res.json();
     expect(body.data.source).toBe("bundled:EVENT");
     expect(body.data.contentType).toBe("EVENT");
-    // Bundled EVENT.json ships empty → 0 rows, no fabrication.
-    expect(body.data.inserted).toBe(0);
-    // NEVER reads SapApiReference or upserts API rows for a non-API import.
+    // Bundled EVENT.json now ships the 147 real S/4HANA Cloud Public business
+    // events (sourced from api.sap.com; see EVENT.json). Each becomes a create.
+    expect(body.data.inserted).toBe(147);
+    // NEVER reads SapApiReference or upserts API rows for a non-API import —
+    // events are created, and the API slice is untouched.
     expect(mocks.apiFindMany).not.toHaveBeenCalled();
     expect(mocks.upsert).not.toHaveBeenCalled();
+    expect(mocks.create).toHaveBeenCalledTimes(147);
     expect(mocks.logDecision.mock.calls[0]![0]).toMatchObject({ action: "SAP_HUB_TYPE_IMPORTED" });
   });
 
