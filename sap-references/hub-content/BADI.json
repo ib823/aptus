@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "contentType": "BADI",
+    "externalId": "S4HANACloudBADI",
+    "title": "Business Add-Ins (BAdIs) — S/4HANA Cloud Public Edition",
+    "description": "Released Business Add-Ins for SAP S/4HANA Cloud Public Edition — design-time extension points (grouped; 1715 BAdIs in the package).",
+    "packageId": "Extensibility",
+    "apiType": null,
+    "communicationScenarios": [],
+    "itemCount": 1715,
+    "hubUrl": "https://api.sap.com/package/S4HANACloudBADI/badis/overview",
+    "source": "api.sap.com catalog.svc ContentPackages(S4HANACloudBADI) [grouped, itemCount via $inlinecount]"
+  }
+]
