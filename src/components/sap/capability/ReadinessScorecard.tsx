@@ -34,6 +34,8 @@ export function ReadinessScorecard({
   probeable,
   apiTotal,
   reference,
+  totalItems,
+  aiApis,
   lastProbedAt,
 }: {
   activated: number;
@@ -46,6 +48,10 @@ export function ReadinessScorecard({
   probeable: number;
   apiTotal: number;
   reference: number;
+  /** Total items across all content types (grouped rows counted by itemCount). */
+  totalItems?: number;
+  /** AI-domain API count, surfaced separately from the S/4 API total. */
+  aiApis?: number;
   lastProbedAt?: string | null;
 }) {
   const pct = readinessPercent(activated, probed);
@@ -106,9 +112,11 @@ export function ReadinessScorecard({
 
       {/* catalogue scale — shown separately, never folded into the ratio */}
       <p className="mt-2 text-xs" style={{ color: "var(--ink-muted)" }}>
-        Catalogue scale: <strong style={{ color: "var(--ink-secondary)" }}>{apiTotal.toLocaleString()}</strong> APIs ·{" "}
-        <strong style={{ color: "var(--ink-secondary)" }}>{probeable.toLocaleString()}</strong> OData probeable (V2 + best-effort V4) ·
-        other content types pending real exports
+        Catalogue scale:{" "}
+        <strong style={{ color: "var(--ink-secondary)" }}>{(totalItems ?? apiTotal).toLocaleString()}</strong> items across 12 content
+        types · <strong style={{ color: "var(--ink-secondary)" }}>{probeable.toLocaleString()}</strong> OData-probeable (V2 + best-effort
+        V4){aiApis ? <> · <strong style={{ color: "var(--ink-secondary)" }}>{aiApis.toLocaleString()}</strong> AI APIs</> : null} · the
+        rest reference
       </p>
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">

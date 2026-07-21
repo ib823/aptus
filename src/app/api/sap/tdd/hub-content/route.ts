@@ -138,6 +138,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const VALID_STATUS: HubStatus[] = ["ACTIVATED", "NEEDS_SETUP", "NOT_FOUND", "NOT_CHECKED", "NOT_PROBEABLE", "AVAILABLE", "REFERENCE"];
   const status: HubStatus | "ALL" = (VALID_STATUS as string[]).includes(statusParam) ? (statusParam as HubStatus) : "ALL";
   const q = (params.get("q") ?? "").trim();
+  // Source/domain facets (rawMetadataJson.raw): "sap" = SAP-only (exclude
+  // partner); "AI" = only AI-domain rows. Read-only JSON-path filters.
+  const sourceFilter = params.get("source") === "sap" ? "sap" : null;
+  const domainFilter = params.get("domain") ? params.get("domain")!.trim() : null;
   const page = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
   const limit = Math.min(200, Math.max(1, Number.parseInt(params.get("limit") ?? "50", 10) || 50));
 
@@ -174,8 +178,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // TENANT; a row's status here is ONLY the requested tenant's stored result.
   const allRows = await prisma.sapHubContent.findMany({
     where: { appliesToPublic: true },
-    select: { externalId: true, contentType: true, apiType: true, rawMetadataJson: true },
+    select: { externalId: true, contentType: true, apiType: true, itemCount: true, rawMetadataJson: true },
   });
+  // Headline ITEM volume, not grouped-row count: a grouped row (BAdI, CDS LoB,
+  // integration package) stands for itemCount items; an individual row is 1.
+  const byTypeItems: Record<string, number> = Object.fromEntries(HUB_CONTENT_TYPES.map((t) => [t, 0]));
+  let aiApis = 0;
+  for (const r of allRows) {
+    byTypeItems[r.contentType] = (byTypeItems[r.contentType] ?? 0) + (r.itemCount ?? 1);
+    const raw = r.rawMetadataJson;
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      const inner = (raw as Record<string, unknown>).raw as Record<string, unknown> | undefined;
+      if (inner?.domain === "AI") aiApis++;
+    }
+  }
   const outcomes = new Map<string, number>();
   const capabilities = new Map<string, { read: boolean; write: boolean }>();
   let lastProbedAt: string | null = null;
@@ -224,6 +240,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // ── build the WHERE from filters (status pre-filters via the classified ids) ──
   const and: Prisma.SapHubContentWhereInput[] = [{ appliesToPublic: true }];
   if (contentType) and.push({ contentType });
+  // SAP-only: exclude rows explicitly stamped partner (rawMetadataJson.raw.source).
+  if (sourceFilter === "sap") {
+    and.push({ NOT: { rawMetadataJson: { path: ["raw", "source"], equals: "partner" } } });
+  }
+  if (domainFilter) {
+    and.push({ rawMetadataJson: { path: ["raw", "domain"], equals: domainFilter } });
+  }
   if (q) {
     and.push({
       OR: [
@@ -250,7 +273,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }),
   ]);
 
-  const items = rows.map((r) => ({
+  const items = rows.map((r) => {
+    // source (sap|partner) + domain (AI) are stamped in rawMetadataJson.raw at
+    // import time. API/curated rows carry no `raw` → default source "sap".
+    const inner =
+      r.rawMetadataJson && typeof r.rawMetadataJson === "object" && !Array.isArray(r.rawMetadataJson)
+        ? ((r.rawMetadataJson as Record<string, unknown>).raw as Record<string, unknown> | undefined)
+        : undefined;
+    const source = inner?.source === "partner" ? "partner" : "sap";
+    const domain = typeof inner?.domain === "string" ? inner.domain : null;
+    return {
     id: r.id,
     contentType: r.contentType,
     externalId: r.externalId,
@@ -258,6 +290,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     description: r.description,
     packageId: r.packageId,
     apiType: r.apiType,
+    source,
+    domain,
     communicationScenarios: r.communicationScenarios,
     scopeItemCodes: r.scopeItemCodes,
     itemCount: r.itemCount,
@@ -267,7 +301,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     dataConfirmed: dataConfirmed.has(r.externalId),
     // Real read/write for the ~60 probed rows (else undefined → "not probed").
     capability: capabilities.get(r.externalId) ?? null,
-  }));
+    };
+  });
 
   // ── counts across the full edition set (ignoring the type/status filter
   //    so the chips always show the whole menu) ──────────────────────────
@@ -303,7 +338,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       total,
       page,
       limit,
-      counts: { byType, byStatus, probeableRuntime, probed, lastProbedAt, dataConfirmed: dataConfirmed.size, dataProbe },
+      counts: { byType, byTypeItems, aiApis, byStatus, probeableRuntime, probed, lastProbedAt, dataConfirmed: dataConfirmed.size, dataProbe },
       catalogueImported: true,
       tenant: tenant?.label ?? null,
       tenantKey: tenantKey ?? null,
