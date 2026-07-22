@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ActivatedServicesList } from "@/components/sap/operations/ActivatedServicesList";
+import { useGentleAutoRefresh } from "@/hooks/useGentleAutoRefresh";
 
 interface TenantOption {
   key: string;
@@ -54,6 +55,8 @@ interface OperationsResponse {
   data: {
     tenant: TenantOption;
     generatedAt: string;
+    /** true when the 30s server cache served this read (not a fresh tenant hit). */
+    fromCache?: boolean;
     sections: OperationSection[];
   };
 }
@@ -89,8 +92,10 @@ export function SapOperationsDashboard({ product = "s4hana" }: { product?: strin
   const [tenantKey, setTenantKey] = useState("");
   const [sections, setSections] = useState<OperationSection[]>([]);
   const [generatedAt, setGeneratedAt] = useState("");
+  const [fromCache, setFromCache] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(false);
 
   const selectedTenant = tenants.find((tenant) => tenant.key === tenantKey);
   // Two honest tallies: sections returning data (green) vs reachable-but-empty
@@ -104,13 +109,15 @@ export function SapOperationsDashboard({ product = "s4hana" }: { product?: strin
     [sections],
   );
 
-  const loadOperations = useCallback(async (nextTenantKey: string) => {
+  // force=true → ?refresh=1 (a live re-read, only when the user clicks Refresh).
+  // Auto-refresh always calls with force=false so it reuses the 30s server cache.
+  const loadOperations = useCallback(async (nextTenantKey: string, force = false) => {
     if (!nextTenantKey) return;
     setLoading(true);
     setError(null);
     try {
       const response = await fetch(
-        `/api/sap/tdd/operations?tenant=${encodeURIComponent(nextTenantKey)}&product=${encodeURIComponent(product)}`,
+        `/api/sap/tdd/operations?tenant=${encodeURIComponent(nextTenantKey)}&product=${encodeURIComponent(product)}${force ? "&refresh=1" : ""}`,
       );
       const json = (await response.json()) as Partial<OperationsResponse> & {
         error?: { message?: string };
@@ -120,10 +127,12 @@ export function SapOperationsDashboard({ product = "s4hana" }: { product?: strin
       }
       setSections(json.data.sections);
       setGeneratedAt(json.data.generatedAt);
+      setFromCache(Boolean(json.data.fromCache));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load SAP operations");
       setSections([]);
       setGeneratedAt("");
+      setFromCache(false);
     } finally {
       setLoading(false);
     }
@@ -159,6 +168,18 @@ export function SapOperationsDashboard({ product = "s4hana" }: { product?: strin
     if (tenantKey) void loadOperations(tenantKey);
   }, [loadOperations, tenantKey]);
 
+  // Gentle, opt-in auto-refresh of the VISIBLE Featured read only. It calls
+  // loadOperations WITHOUT force, so it reuses the 30s server cache (never a
+  // forced live re-read). It re-reads only the always-visible Featured grid —
+  // the activated list's collapsed cards are never touched, so no per-card fan-
+  // out onto the tenant can happen on a timer.
+  useGentleAutoRefresh({
+    enabled: autoRefresh && Boolean(tenantKey),
+    onRefresh: () => {
+      if (tenantKey) void loadOperations(tenantKey, false);
+    },
+  });
+
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -169,7 +190,12 @@ export function SapOperationsDashboard({ product = "s4hana" }: { product?: strin
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--ink-muted)" }}>
             <Server className="size-4" />
             <span>{selectedTenant?.label ?? "No SAP tenant"}</span>
-            {generatedAt && <span>{new Date(generatedAt).toLocaleTimeString()}</span>}
+            {generatedAt && (
+              <span>
+                {fromCache ? "cached read · as of " : "live read · "}
+                {new Date(generatedAt).toLocaleTimeString()}
+              </span>
+            )}
           </div>
           {/* Featured = the curated 4 (eager, 25-row sample). The full activated
               set now lives right below in "All activated services". */}
@@ -200,13 +226,31 @@ export function SapOperationsDashboard({ product = "s4hana" }: { product?: strin
           </Select>
           <Button
             variant="outline"
-            onClick={() => void loadOperations(tenantKey)}
+            onClick={() => void loadOperations(tenantKey, true)}
             disabled={!tenantKey || loading}
+            title="Force a fresh live read (bypasses the 30s cache)"
           >
             <RefreshCw />
             Refresh
           </Button>
         </div>
+      </div>
+
+      {/* Opt-in gentle auto-refresh of the Featured read (on focus / every 60s),
+          cache-reusing — never a forced live re-read, never touches collapsed
+          activated cards. Label is associated via htmlFor (not nested) so the
+          input isn't inside its own label. */}
+      <div className="flex w-fit items-center gap-2 text-xs" style={{ color: "var(--ink-secondary)" }}>
+        <input
+          id="sap-ops-auto-refresh"
+          type="checkbox"
+          checked={autoRefresh}
+          onChange={(e) => setAutoRefresh(e.target.checked)}
+          disabled={!tenantKey}
+        />
+        <label htmlFor="sap-ops-auto-refresh" className="cursor-pointer">
+          Auto-refresh Featured (on focus / 60s, cache-reusing)
+        </label>
       </div>
 
       {error && (

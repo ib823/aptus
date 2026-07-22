@@ -13,8 +13,8 @@
  * (on-open, one-at-a-time, cached). Switching tenant re-derives the whole set
  * from that tenant's ACTIVATED ids.
  */
-import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AlertTriangle, ChevronDown, ChevronRight, RadioTower, RefreshCw } from "lucide-react";
 import type { HubContentType, HubStatus } from "@/lib/sap-public/hub-content";
 import { CapabilityDetail } from "../capability/CapabilityDetail";
 import { CapabilityChips } from "../capability/CapabilityChips";
@@ -44,6 +44,13 @@ export function ActivatedServicesList({ product, tenantKey }: { product: string;
   // Lifted live-probe status from the expanded detail, so the collapsed card's
   // badge can never contradict what the detail actually found on this tenant.
   const [resolved, setResolved] = useState<Record<string, HubStatus>>({});
+  // Status freshness: the activated SET is derived from the STORED per-tenant
+  // probe; lastProbedAt is when that probe last ran. It only changes on an
+  // explicit "Refresh status" re-probe — never on a timer.
+  const [lastProbedAt, setLastProbedAt] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [reprobing, setReprobing] = useState(false);
+  const [reprobeError, setReprobeError] = useState<string | null>(null);
 
   // Switching tenant re-derives the whole set: back to page 1, collapse, and
   // drop the previous tenant's resolved statuses.
@@ -58,32 +65,62 @@ export function ActivatedServicesList({ product, tenantKey }: { product: string;
     setResolved({});
   }, [tenantKey]);
 
-  useEffect(() => {
+  // Re-derive the activated set from the STORED per-tenant probe. This reads
+  // Postgres only — it NEVER touches the SAP tenant (no dataProbe), so calling
+  // it (even after a probe, or on tenant switch) can't amplify onto the tenant.
+  const reqId = useRef(0);
+  const loadList = useCallback(async () => {
     if (!tenantKey) return;
-    let cancelled = false;
+    const token = ++reqId.current; // ignore results from a superseded call
     setLoading(true);
     setError(null);
-    const qs = new URLSearchParams({
-      product,
-      tenant: tenantKey,
-      status: "ACTIVATED",
-      page: String(page),
-      limit: String(PAGE_SIZE),
-    });
-    fetch(`/api/sap/tdd/hub-content?${qs.toString()}`)
-      .then((r) => r.json())
-      .then((j: { data?: { items: ActivatedItem[]; total: number }; error?: { message?: string } }) => {
-        if (cancelled) return;
-        if (!j.data) throw new Error(j.error?.message ?? "Failed to load activated services");
-        setItems(j.data.items);
-        setTotal(j.data.total);
-      })
-      .catch((e: unknown) => !cancelled && setError(e instanceof Error ? e.message : "Failed to load activated services"))
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
+    const qs = new URLSearchParams({ product, tenant: tenantKey, status: "ACTIVATED", page: String(page), limit: String(PAGE_SIZE) });
+    try {
+      const r = await fetch(`/api/sap/tdd/hub-content?${qs.toString()}`);
+      const j = (await r.json()) as {
+        data?: { items: ActivatedItem[]; total: number; isAdmin?: boolean; counts?: { lastProbedAt?: string | null } };
+        error?: { message?: string };
+      };
+      if (token !== reqId.current) return; // a newer load (e.g. tenant switch) won
+      if (!j.data) throw new Error(j.error?.message ?? "Failed to load activated services");
+      setItems(j.data.items);
+      setTotal(j.data.total);
+      setIsAdmin(Boolean(j.data.isAdmin));
+      setLastProbedAt(j.data.counts?.lastProbedAt ?? null);
+    } catch (e) {
+      if (token === reqId.current) setError(e instanceof Error ? e.message : "Failed to load activated services");
+    } finally {
+      if (token === reqId.current) setLoading(false);
+    }
   }, [product, tenantKey, page]);
+
+  useEffect(() => {
+    void loadList();
+  }, [loadList]);
+
+  // "Refresh status" — an EXPLICIT, admin-gated, rate-limited re-probe (the same
+  // bounded Probe-all the catalogue uses: read-only $metadata, concurrency 8,
+  // in the tight sapLive bucket). Never runs on a timer. On completion the set
+  // re-derives, so a newly-activated API appears only after this runs.
+  const refreshStatus = useCallback(async () => {
+    setReprobing(true);
+    setReprobeError(null);
+    try {
+      const r = await fetch("/api/sap/tdd/hub-content/probe-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: "PROBE ALL SAP SERVICES", product, tenant: tenantKey }),
+      });
+      const j = (await r.json()) as { data?: { probed: number }; error?: { message?: string } };
+      if (!r.ok) throw new Error(j.error?.message ?? "Refresh status failed (admin only)");
+      setExpandedId(null);
+      await loadList();
+    } catch (e) {
+      setReprobeError(e instanceof Error ? e.message : "Refresh status failed");
+    } finally {
+      setReprobing(false);
+    }
+  }, [product, tenantKey, loadList]);
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
@@ -105,6 +142,38 @@ export function ActivatedServicesList({ product, tenantKey }: { product: string;
           {loading ? "Loading…" : total > 0 ? `${from}–${to} of ${total}` : ""}
         </div>
       </div>
+
+      {/* Status freshness: the set reflects a STORED probe, not a live read.
+          State it plainly, with when it was taken and how to update it. */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-input)] px-3 py-2 text-xs" style={{ background: "var(--surface-ink-tint)", color: "var(--ink-secondary)" }}>
+        <span>
+          Status as of{" "}
+          <strong style={{ color: "var(--ink-primary)" }}>
+            {lastProbedAt ? new Date(lastProbedAt).toLocaleString() : "never probed"}
+          </strong>{" "}
+          (stored, not live). A newly-activated API appears here only after{" "}
+          {isAdmin ? "Refresh status" : "an admin runs Refresh status / Probe-all"}.
+        </span>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => void refreshStatus()}
+            disabled={reprobing || !tenantKey}
+            className="inline-flex items-center gap-1.5 rounded-[var(--radius-input)] border px-2.5 py-1 disabled:opacity-40"
+            style={{ borderColor: "var(--border-default)", color: "var(--ink-primary)" }}
+            title="Bounded, rate-limited re-probe of this tenant (read-only $metadata). Then re-derives the set."
+          >
+            <RadioTower className={`size-3 ${reprobing ? "animate-pulse" : ""}`} />
+            {reprobing ? "Re-probing…" : "Refresh status"}
+          </button>
+        )}
+      </div>
+
+      {reprobeError && (
+        <div className="rounded-[var(--radius-input)] border px-3 py-2 text-sm" style={{ background: "var(--status-revoked-bg)", borderColor: "var(--status-revoked-fg)", color: "var(--status-revoked-fg)" }}>
+          {reprobeError}
+        </div>
+      )}
 
       {error && (
         <div
