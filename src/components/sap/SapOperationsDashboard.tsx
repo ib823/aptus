@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ActivatedServicesList } from "@/components/sap/operations/ActivatedServicesList";
 
 interface TenantOption {
   key: string;
@@ -170,17 +171,18 @@ export function SapOperationsDashboard({ product = "s4hana" }: { product?: strin
             <span>{selectedTenant?.label ?? "No SAP tenant"}</span>
             {generatedAt && <span>{new Date(generatedAt).toLocaleTimeString()}</span>}
           </div>
-          {/* Coherence: this is a curated live sample, not the full activated set. */}
+          {/* Featured = the curated 4 (eager, 25-row sample). The full activated
+              set now lives right below in "All activated services". */}
           <p className="mt-1.5 max-w-2xl text-xs" style={{ color: "var(--ink-secondary)" }}>
-            Curated live sample: 4 key services, 25-row cap — not the full activated set. See the{" "}
-            <a href="#sap-capability-catalogue" onClick={(e) => scrollToSection(e, "sap-capability-catalogue")} className="cursor-pointer font-medium underline" style={{ color: "var(--cta-red)" }}>
-              Capability Catalogue
+            <strong style={{ color: "var(--ink-primary)" }}>Featured:</strong> 4 key services, 25-row sample, loaded
+            eagerly. For every service this tenant has activated, see{" "}
+            <a href="#sap-activated-services" onClick={(e) => scrollToSection(e, "sap-activated-services")} className="cursor-pointer font-medium underline" style={{ color: "var(--cta-red)" }}>
+              All activated services
             </a>{" "}
-            above for all activated services, or inspect any activated service by apiId in the{" "}
+            below (each opens on demand), or inspect any service by apiId in the{" "}
             <a href="#sap-entity-explorer" onClick={(e) => scrollToSection(e, "sap-entity-explorer")} className="cursor-pointer font-medium underline" style={{ color: "var(--cta-red)" }}>
               Entity Explorer
-            </a>{" "}
-            below.
+            </a>.
           </p>
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(220px,280px)_auto]">
@@ -297,6 +299,15 @@ export function SapOperationsDashboard({ product = "s4hana" }: { product?: strin
           </section>
         ))}
       </div>
+
+      {/* WS2: the full activated set for this tenant — collapsed cards, rows on
+          demand. Reuses the same tenantKey so it re-derives when the tenant
+          selector above changes. */}
+      {tenantKey && (
+        <div className="border-t pt-4" style={{ borderColor: "var(--border-default)" }}>
+          <ActivatedServicesList product={product} tenantKey={tenantKey} />
+        </div>
+      )}
     </section>
   );
 }
