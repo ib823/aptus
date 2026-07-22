@@ -560,6 +560,7 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
                             <CapabilityDetail
                               id={item.id}
                               product={product}
+                              tenant={data?.tenant ?? null}
                               onClose={() => setExpandedId(null)}
                               onResolved={(s, cap) => {
                                 setProbedStatus((m) => (m[item.id] === s ? m : { ...m, [item.id]: s }));
