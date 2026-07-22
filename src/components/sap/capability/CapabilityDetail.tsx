@@ -5,7 +5,7 @@
  * per-entity C/R/U/D, and the Phase-3 dependencies + honest debug hint, from
  * GET /api/sap/tdd/hub-content/[id]. Colour via var(--token) only.
  */
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import type { HubContentType, HubStatus } from "@/lib/sap-public/hub-content";
 import { ProcessBlueprintView, type BlueprintStep } from "./ProcessBlueprintView";
@@ -57,14 +57,40 @@ function crud(v: boolean | null): { glyph: string; text: string; color: string }
   return { glyph: "?", text: "Not probed", color: "var(--ink-muted)" };
 }
 
+/** One entity set's live row read — kept per entity so a repeat open is instant. */
+interface RowPreview {
+  loading: boolean;
+  ok: boolean;
+  status: number;
+  rows: Array<Record<string, unknown>>;
+  fields: string[];
+  durationMs: number;
+  error: string | null;
+}
+
+/** Compact a cell value for the preview grid without exploding the layout. */
+function cell(v: unknown): string {
+  if (v == null) return "";
+  if (typeof v === "object") return Array.isArray(v) ? `[${v.length}]` : "{…}";
+  const s = String(v);
+  return s.length > 60 ? `${s.slice(0, 57)}…` : s;
+}
+
 export function CapabilityDetail({
   id,
   product = "s4hana",
+  tenant,
   onClose,
   onResolved,
 }: {
   id: string;
   product?: string;
+  /**
+   * Tenant key the row-preview reads target. Without it, live "View rows" is
+   * disabled (the ladder/CRUD from the item probe still render) — we never
+   * guess a tenant for a data read.
+   */
+  tenant?: string | null;
   onClose?: () => void;
   /** Lift the detail's live-probe status + capability up so the list can't contradict it. */
   onResolved?: (status: HubStatus, capability: { read: boolean; write: boolean } | null) => void;
@@ -72,6 +98,57 @@ export function CapabilityDetail({
   const [data, setData] = useState<DetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Live row previews, keyed by entity-set name. On-demand only (a user clicks
+  // "View rows"), one open at a time, cached here so re-opening is free and no
+  // read fires per render — the "never hammer the tenant" guardrail.
+  const [openEntity, setOpenEntity] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<Record<string, RowPreview>>({});
+
+  const loadRows = (entityName: string) => {
+    // Toggle closed if already open; serve from cache without a re-read.
+    if (openEntity === entityName) {
+      setOpenEntity(null);
+      return;
+    }
+    setOpenEntity(entityName);
+    if (previews[entityName] && !previews[entityName].loading) return; // cached
+    if (!tenant || !data) return;
+    setPreviews((m) => ({
+      ...m,
+      [entityName]: { loading: true, ok: false, status: 0, rows: [], fields: [], durationMs: 0, error: null },
+    }));
+    const qs = new URLSearchParams({
+      product,
+      tenant,
+      service: data.item.externalId,
+      entity: entityName,
+      limit: "10",
+    });
+    fetch(`/api/sap/tdd/preview?${qs.toString()}`)
+      .then((r) => r.json())
+      .then((j: { data?: { ok: boolean; status: number; rows?: Array<Record<string, unknown>>; fields?: string[]; durationMs?: number }; error?: { message?: string } }) => {
+        setPreviews((m) => ({
+          ...m,
+          [entityName]: j.data
+            ? {
+                loading: false,
+                ok: j.data.ok,
+                status: j.data.status,
+                rows: j.data.rows ?? [],
+                fields: j.data.fields ?? [],
+                durationMs: j.data.durationMs ?? 0,
+                error: null,
+              }
+            : { loading: false, ok: false, status: 0, rows: [], fields: [], durationMs: 0, error: j.error?.message ?? "Failed to read rows" },
+        }));
+      })
+      .catch((e: unknown) => {
+        setPreviews((m) => ({
+          ...m,
+          [entityName]: { loading: false, ok: false, status: 0, rows: [], fields: [], durationMs: 0, error: e instanceof Error ? e.message : "Failed to read rows" },
+        }));
+      });
+  };
   // Hold the latest callback in a ref so an inline parent arrow doesn't retrigger
   // the fetch every render (it would loop). The probe runs once per id/product.
   const onResolvedRef = useRef(onResolved);
@@ -81,6 +158,8 @@ export function CapabilityDetail({
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setOpenEntity(null);
+    setPreviews({});
     fetch(`/api/sap/tdd/hub-content/${encodeURIComponent(id)}?product=${encodeURIComponent(product)}`)
       .then((r) => r.json())
       .then((j: { data?: DetailData; error?: { message?: string } }) => {
@@ -189,32 +268,84 @@ export function CapabilityDetail({
                   </tr>
                 </thead>
                 <tbody>
-                  {data.entities.slice(0, 50).map((e) => (
-                    <tr key={e.name} style={{ borderTop: "1px solid var(--border-default)" }}>
-                      <td className="px-2 py-1" style={{ color: "var(--ink-primary)" }}>
-                        {e.name}
-                      </td>
-                      {[e.readable, e.creatable, e.updatable, e.deletable].map((v, i) => {
-                        const c = crud(v);
-                        return (
-                          <td
-                            key={i}
-                            className="px-2 py-1 text-center font-semibold"
-                            style={{ color: c.color }}
-                            title={c.text}
-                            aria-label={c.text}
-                          >
-                            <span aria-hidden>{c.glyph}</span>
+                  {data.entities.slice(0, 50).map((e) => {
+                    const p = previews[e.name];
+                    const isOpen = openEntity === e.name;
+                    const canRead = e.readable && !!tenant;
+                    return (
+                      <Fragment key={e.name}>
+                        <tr style={{ borderTop: "1px solid var(--border-default)" }}>
+                          <td className="px-2 py-1" style={{ color: "var(--ink-primary)" }}>
+                            {canRead ? (
+                              <button
+                                type="button"
+                                onClick={() => loadRows(e.name)}
+                                aria-expanded={isOpen}
+                                className="inline-flex items-center gap-1.5 text-left hover:underline"
+                                style={{ color: "var(--cta-red)" }}
+                              >
+                                {e.name}
+                                <span className="text-[10px] font-normal" style={{ color: "var(--ink-muted)" }}>
+                                  {isOpen ? "hide rows" : "view rows"}
+                                </span>
+                              </button>
+                            ) : (
+                              <span title={e.readable ? "Select a tenant to read live rows" : "Not readable on this tenant"}>{e.name}</span>
+                            )}
                           </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
+                          {[e.readable, e.creatable, e.updatable, e.deletable].map((v, i) => {
+                            const c = crud(v);
+                            return (
+                              <td
+                                key={i}
+                                className="px-2 py-1 text-center font-semibold"
+                                style={{ color: c.color }}
+                                title={c.text}
+                                aria-label={c.text}
+                              >
+                                <span aria-hidden>{c.glyph}</span>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        {isOpen && (
+                          <tr>
+                            <td colSpan={5} className="px-2 pb-3">
+                              {(!p || p.loading) && (
+                                <div className="flex items-center gap-2 text-xs" style={{ color: "var(--ink-muted)" }}>
+                                  <RefreshCw className="size-3 animate-spin" /> Reading live rows from {tenant}…
+                                </div>
+                              )}
+                              {p && !p.loading && p.error && (
+                                <div className="text-xs" style={{ color: "var(--status-revoked-fg)" }}>
+                                  Live read failed: {p.error}
+                                </div>
+                              )}
+                              {p && !p.loading && !p.error && !p.ok && (
+                                <div className="text-xs" style={{ color: "var(--ink-muted)" }}>
+                                  Not reachable on {tenant} — HTTP {p.status}. This entity set is likely not activated or needs setup on this tenant.
+                                </div>
+                              )}
+                              {p && !p.loading && !p.error && p.ok && p.rows.length === 0 && (
+                                <div className="text-xs" style={{ color: "var(--ink-muted)" }}>
+                                  No records on {tenant}. The service is reachable (HTTP {p.status}) but this entity set returned zero rows.
+                                </div>
+                              )}
+                              {p && !p.loading && !p.error && p.ok && p.rows.length > 0 && (
+                                <RowGrid preview={p} tenant={tenant ?? ""} />
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
               {/* Legend so the glyphs are unambiguous without relying on colour. */}
               <p className="mt-1.5 px-2 text-[11px]" style={{ color: "var(--ink-muted)" }}>
                 <span style={{ color: "var(--decision-standard)" }}>✓</span> supported · — not supported · ? not probed
+                {tenant ? " · a readable entity set opens live rows on demand" : ""}
               </p>
             </div>
           )}
@@ -270,6 +401,48 @@ export function CapabilityDetail({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * RowGrid — the actual live records for one entity set (a genuine tenant read,
+ * not stored probe state). Columns are capped for width; the footer states the
+ * read is live, from which tenant, and how long it took, so stored-vs-live is
+ * never ambiguous.
+ */
+function RowGrid({ preview, tenant }: { preview: RowPreview; tenant: string }) {
+  const MAX_COLS = 8;
+  const cols = preview.fields.slice(0, MAX_COLS);
+  const moreCols = preview.fields.length - cols.length;
+  return (
+    <div className="overflow-x-auto rounded-[var(--radius-input)]" style={{ border: "1px solid var(--border-default)" }}>
+      <table className="w-full min-w-[420px] text-xs">
+        <thead>
+          <tr style={{ background: "var(--surface-ink-tint)", color: "var(--ink-muted)" }}>
+            {cols.map((f) => (
+              <th key={f} scope="col" className="px-2 py-1 text-left font-medium whitespace-nowrap">
+                {f}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {preview.rows.map((row, ri) => (
+            <tr key={ri} style={{ borderTop: "1px solid var(--border-default)" }}>
+              {cols.map((f) => (
+                <td key={f} className="px-2 py-1 whitespace-nowrap" style={{ color: "var(--ink-primary)" }} title={cell(row[f])}>
+                  {cell(row[f])}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="px-2 py-1 text-[11px]" style={{ color: "var(--ink-muted)" }}>
+        Live read · {preview.rows.length} row{preview.rows.length === 1 ? "" : "s"} from {tenant} · HTTP {preview.status} · {preview.durationMs}ms
+        {moreCols > 0 ? ` · +${moreCols} more field${moreCols === 1 ? "" : "s"}` : ""}
+      </p>
     </div>
   );
 }
