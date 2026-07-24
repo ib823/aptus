@@ -1,21 +1,25 @@
 /** Security headers configuration (Phase 27 + Security Audit hardening) */
 
 /**
- * Build the Content-Security-Policy directive string.
+ * Build the Content-Security-Policy directive string for a specific request,
+ * bound to a per-request `nonce`.
  *
- * Note on 'unsafe-inline': Next.js App Router injects inline scripts for
- * hydration and route prefetching. Until Next.js supports nonce-based CSP
- * in the App Router (tracked upstream), 'unsafe-inline' is required.
+ * script-src uses `'nonce-<n>' 'strict-dynamic'` and NO `'unsafe-inline'`:
+ * only the nonce'd bootstrap scripts (Next.js framework scripts — auto-nonced
+ * when this header is present on the request — plus next-themes, which receives
+ * the nonce explicitly) execute, and strict-dynamic lets those load their chunks
+ * while still blocking any attacker-injected inline or src script. `'self'` is
+ * intentionally omitted from script-src because strict-dynamic ignores it.
  *
- * DO NOT add 'strict-dynamic' without also implementing nonce-based scripts.
- * Per CSP Level 3, 'strict-dynamic' causes 'self' and 'unsafe-inline' to be
- * ignored — which blocks ALL scripts and breaks React hydration entirely.
+ * style-src keeps `'unsafe-inline'` for now: Next/font and Tailwind inject inline
+ * styles, and style injection is a much weaker vector than script injection.
+ * `'unsafe-eval'` is added only in development for React Fast Refresh.
  */
-export function getCspDirectives(): string {
+export function getCspWithNonce(nonce: string): string {
   const isDev = process.env.NODE_ENV === "development";
   return [
     "default-src 'self'",
-    `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://api.qrserver.com",
     "font-src 'self' data:",
@@ -29,14 +33,14 @@ export function getCspDirectives(): string {
 }
 
 /**
- * Return the full set of security headers for Next.js headers() config.
+ * Return the static security headers for Next.js headers() config.
+ *
+ * Content-Security-Policy is intentionally NOT here — it is per-request
+ * (nonce-bound) and set in middleware via getCspWithNonce(). Everything else is
+ * request-independent and applied globally through next.config.
  */
 export function getSecurityHeaders(): Array<{ key: string; value: string }> {
   return [
-    {
-      key: "Content-Security-Policy",
-      value: getCspDirectives(),
-    },
     {
       key: "X-Frame-Options",
       value: "DENY",
