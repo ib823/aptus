@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Source_Serif_4 } from "next/font/google";
@@ -58,11 +59,13 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // CSP nonce set by middleware; forwarded to next-themes' inline script.
+  const nonce = (await headers()).get("x-nonce");
   return (
     <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable} ${sourceSerif.variable}`}>
       <head />
@@ -73,7 +76,7 @@ export default function RootLayout({
         >
           Skip to main content
         </a>
-        <Providers>
+        <Providers {...(nonce ? { nonce } : {})}>
           <ServiceWorkerProvider />
           <TooltipProvider>
             <div id="main-content">{children}</div>

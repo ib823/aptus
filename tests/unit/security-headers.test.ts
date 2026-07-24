@@ -1,7 +1,7 @@
 /** Unit tests for security-headers.ts (Phase 27) */
 
 import { describe, it, expect } from "vitest";
-import { getSecurityHeaders, getCspDirectives } from "@/lib/pwa/security-headers";
+import { getSecurityHeaders, getCspWithNonce } from "@/lib/pwa/security-headers";
 
 describe("getSecurityHeaders", () => {
   const headers = getSecurityHeaders();
@@ -11,10 +11,9 @@ describe("getSecurityHeaders", () => {
     expect(headers.length).toBeGreaterThan(0);
   });
 
-  it("includes Content-Security-Policy (enforced)", () => {
+  it("does NOT include Content-Security-Policy (it is per-request/nonce-bound, set in middleware)", () => {
     const csp = headers.find((h) => h.key === "Content-Security-Policy");
-    expect(csp).toBeDefined();
-    expect(csp!.value.length).toBeGreaterThan(0);
+    expect(csp).toBeUndefined();
   });
 
   it("includes X-Frame-Options set to DENY", () => {
@@ -64,15 +63,20 @@ describe("getSecurityHeaders", () => {
   });
 });
 
-describe("getCspDirectives", () => {
-  const csp = getCspDirectives();
+describe("getCspWithNonce", () => {
+  const nonce = "test-nonce-abc123";
+  const csp = getCspWithNonce(nonce);
 
   it("includes default-src 'self'", () => {
     expect(csp).toContain("default-src 'self'");
   });
 
-  it("includes script-src", () => {
-    expect(csp).toContain("script-src");
+  it("binds script-src to the given nonce with strict-dynamic and no unsafe-inline", () => {
+    expect(csp).toContain(`script-src 'nonce-${nonce}'`);
+    expect(csp).toContain("'strict-dynamic'");
+    // The whole point: inline scripts are no longer trusted wholesale.
+    const scriptSrc = csp.split(";").find((d) => d.trim().startsWith("script-src")) ?? "";
+    expect(scriptSrc).not.toContain("'unsafe-inline'");
   });
 
   it("includes frame-ancestors 'none'", () => {
@@ -81,5 +85,9 @@ describe("getCspDirectives", () => {
 
   it("includes object-src 'none'", () => {
     expect(csp).toContain("object-src 'none'");
+  });
+
+  it("emits a distinct policy per nonce", () => {
+    expect(getCspWithNonce("nonce-a")).not.toBe(getCspWithNonce("nonce-b"));
   });
 });

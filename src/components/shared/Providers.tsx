@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { clearSensitiveClientCaches } from "@/lib/pwa/client-cache";
 import type { ReactNode } from "react";
 
-export function Providers({ children }: { children: ReactNode }) {
+export function Providers({ children, nonce }: { children: ReactNode; nonce?: string }) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -31,7 +31,7 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider>
-        <NextThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+        <NextThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange {...(nonce ? { nonce } : {})}>
           {children}
         </NextThemeProvider>
       </SessionProvider>
