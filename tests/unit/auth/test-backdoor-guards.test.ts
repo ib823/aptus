@@ -44,6 +44,33 @@ describe("isIpAllowed", () => {
     vi.stubEnv(ENV, "unknown");
     expect(isIpAllowed(makeHeaders(null), ENV)).toBe(true);
   });
+
+  it("fails CLOSED in production when no allow-list is configured", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv(ENV, "");
+    expect(isIpAllowed(makeHeaders("1.2.3.4"), ENV)).toBe(false);
+  });
+
+  it("honours the explicit opt-out for secret-only production deployments", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv(ENV, "");
+    vi.stubEnv("ALLOW_BACKDOOR_WITHOUT_IP_ALLOWLIST", "true");
+    expect(isIpAllowed(makeHeaders("1.2.3.4"), ENV)).toBe(true);
+  });
+
+  it("prefers the Vercel-trusted IP over a spoofed x-forwarded-for", () => {
+    vi.stubEnv(ENV, "1.2.3.4");
+    // Attacker spoofs XFF to an allow-listed value, but Vercel's header wins.
+    const h = new Headers();
+    h.set("x-forwarded-for", "1.2.3.4");
+    h.set("x-vercel-forwarded-for", "9.9.9.9");
+    expect(isIpAllowed(h, ENV)).toBe(false);
+
+    const h2 = new Headers();
+    h2.set("x-forwarded-for", "9.9.9.9");
+    h2.set("x-vercel-forwarded-for", "1.2.3.4");
+    expect(isIpAllowed(h2, ENV)).toBe(true);
+  });
 });
 
 describe("logBackdoorAttempt", () => {
