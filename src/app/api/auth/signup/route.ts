@@ -35,40 +35,54 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const { orgName, fullName, email } = parsed.data;
 
-  // Enforce security policy (Whitelist / Invitation Only)
+  // Neutral response returned for EVERY non-malformed signup, whether or not the
+  // email already has an account, the org name collides, or the domain policy
+  // blocks registration. This prevents account/org enumeration: an
+  // unauthenticated caller can no longer tell registered emails apart from
+  // unregistered ones by the status code or body. The real outcome (link sent,
+  // already-registered, policy-blocked) is only ever visible in the recipient's
+  // inbox, never in the HTTP response.
+  const neutralResponse = () =>
+    NextResponse.json(
+      {
+        data: {
+          message:
+            "If those details are eligible, we've sent a sign-in link to that email address.",
+        },
+      },
+      { status: 200 },
+    );
+
+  // Enforce security policy (Whitelist / Invitation Only). A blocked email gets
+  // the same neutral response — no email is sent, but the caller cannot tell.
   const policy = canRegister(email);
   if (!policy.allowed) {
-    return NextResponse.json(
-      { error: { code: "FORBIDDEN", message: policy.reason } },
-      { status: 403 },
-    );
+    return neutralResponse();
   }
 
-  // Check if email is already taken
+  // Already registered: send a normal sign-in link (works for existing users)
+  // and return the neutral response without creating anything.
   const existingUser = await prisma.user.findUnique({
     where: { email },
     select: { id: true },
   });
-
   if (existingUser) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "An account with this email already exists" } },
-      { status: 409 },
-    );
+    await sendMagicLink(email);
+    return neutralResponse();
   }
 
-  // Check if org slug is taken
-  const slug = generateSlug(orgName);
-  const existingOrg = await prisma.organization.findUnique({
-    where: { slug },
-    select: { id: true },
-  });
-
-  if (existingOrg) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "An organization with a similar name already exists" } },
-      { status: 409 },
-    );
+  // Derive a unique org slug. On collision we suffix rather than 409, so the
+  // response never reveals whether an org name is already taken and signup still
+  // succeeds.
+  const baseSlug = generateSlug(orgName);
+  let slug = baseSlug;
+  for (let attempt = 2; attempt <= 50; attempt++) {
+    const taken = await prisma.organization.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+    if (!taken) break;
+    slug = `${baseSlug}-${attempt}`;
   }
 
   // Create organization + user in a transaction
@@ -99,19 +113,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   await createTrial(result.org.id);
 
   // Send the magic-link email so the user can sign in immediately
-  const { sent } = await sendMagicLink(email);
+  await sendMagicLink(email);
 
-  return NextResponse.json(
-    {
-      data: {
-        organizationId: result.org.id,
-        userId: result.user.id,
-        emailSent: sent,
-        message: sent
-          ? "Account created. Check your email for a sign-in link."
-          : "Account created. Visit the login page to request a sign-in link.",
-      },
-    },
-    { status: 201 },
-  );
+  return neutralResponse();
 }
