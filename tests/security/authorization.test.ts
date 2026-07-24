@@ -220,8 +220,8 @@ describe("Authorization Security", () => {
       const result = checkScimAccess(
         orgA.id,
         orgB.id,
-        orgA.scimBearerToken!,
-        orgB.scimBearerToken!,
+        OrgFactory.scimTokenFor(orgA.id),
+        OrgFactory.scimTokenFor(orgB.id),
       );
       expect(result.allowed).toBe(false);
       expect(result.status).toBe(403);
@@ -234,8 +234,8 @@ describe("Authorization Security", () => {
       const result = checkScimAccess(
         org.id,
         org.id,
-        org.scimBearerToken!,
-        org.scimBearerToken!,
+        OrgFactory.scimTokenFor(org.id),
+        OrgFactory.scimTokenFor(org.id),
       );
       expect(result.allowed).toBe(true);
       expect(result.status).toBe(200);
