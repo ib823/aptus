@@ -2,6 +2,15 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { checkRateLimit, getClientIp, isLiveSapTenantRoute, RATE_LIMITS } from "@/lib/security/rate-limit";
+import { getCspWithNonce } from "@/lib/pwa/security-headers";
+
+/** Per-request CSP nonce: 16 random bytes, base64. Edge-runtime safe. */
+function generateNonce(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
 
 /** Attach observability headers to all responses */
 function withObservabilityHeaders(
@@ -92,7 +101,28 @@ function isWorkbenchPath(pathname: string): boolean {
   return WORKBENCH_PATHS.some((p) => pathname.startsWith(p));
 }
 
-export async function middleware(request: NextRequest): Promise<NextResponse | undefined> {
+export async function middleware(request: NextRequest): Promise<NextResponse> {
+  // Per-request CSP nonce. Placed on the REQUEST headers so Next.js auto-nonces
+  // its own framework/hydration scripts on every document path, and echoed as
+  // `x-nonce` so server components (root layout → next-themes) can read it. The
+  // enforced CSP response header is set on whatever response the router returns.
+  const nonce = generateNonce();
+  const csp = getCspWithNonce(nonce);
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", csp);
+
+  const response =
+    (await handleRequest(request, requestHeaders)) ??
+    NextResponse.next({ request: { headers: requestHeaders } });
+  response.headers.set("Content-Security-Policy", csp);
+  return response;
+}
+
+async function handleRequest(
+  request: NextRequest,
+  requestHeaders: Headers,
+): Promise<NextResponse | undefined> {
   const { pathname } = request.nextUrl;
   const requestId = crypto.randomUUID();
   const requestStart = Date.now();
@@ -265,7 +295,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
 
       // Non-auth API routes: return immediately with rate limit headers
       if (!isAuthMutation) {
-        const response = NextResponse.next();
+        const response = NextResponse.next({ request: { headers: requestHeaders } });
         response.headers.set(
           "X-RateLimit-Remaining",
           String(result.remaining),
@@ -314,8 +344,8 @@ export async function middleware(request: NextRequest): Promise<NextResponse | u
   // Propagate pathname to server components via REQUEST headers (so the
   // (portal) layout can build a `?next=` redirect for the MFA step-up flow).
   // Setting it on the response — as the prior code did — was a no-op because
-  // server components only see the request side.
-  const requestHeaders = new Headers(request.headers);
+  // server components only see the request side. We reuse the shared
+  // requestHeaders (which already carry the CSP nonce) rather than rebuilding.
   requestHeaders.set("x-pathname", pathname);
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   return withObservabilityHeaders(response, requestId, requestStart);

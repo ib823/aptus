@@ -402,7 +402,7 @@ describe("Security Headers Configuration", () => {
     expect(content).toContain("headers()");
   });
 
-  test("getSecurityHeaders returns all required security headers", async () => {
+  test("getSecurityHeaders returns all required static security headers", async () => {
     const { getSecurityHeaders } = await import("@/lib/pwa/security-headers");
     const headers = getSecurityHeaders();
     const allValues = headers.map((h) => `${h.key}: ${h.value}`).join("\n");
@@ -412,10 +412,21 @@ describe("Security Headers Configuration", () => {
     expect(allValues).toContain("X-Frame-Options");
     expect(allValues).toContain("DENY");
     expect(allValues).toContain("Strict-Transport-Security");
-    expect(allValues).toContain("Content-Security-Policy");
     expect(allValues).toContain("Referrer-Policy");
     expect(allValues).toContain("Permissions-Policy");
-    expect(allValues).toContain("frame-ancestors 'none'");
-    expect(allValues).toContain("object-src 'none'");
+    // Content-Security-Policy is intentionally NOT in the static header set — it
+    // is per-request (nonce-bound) and emitted by middleware via getCspWithNonce.
+    expect(allValues).not.toContain("Content-Security-Policy");
+  });
+
+  test("getCspWithNonce emits an enforced, nonce-bound script policy", async () => {
+    const { getCspWithNonce } = await import("@/lib/pwa/security-headers");
+    const csp = getCspWithNonce("abc123");
+    expect(csp).toContain("script-src 'nonce-abc123'");
+    expect(csp).toContain("'strict-dynamic'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("object-src 'none'");
+    const scriptSrc = csp.split(";").find((d) => d.trim().startsWith("script-src")) ?? "";
+    expect(scriptSrc).not.toContain("'unsafe-inline'");
   });
 });
