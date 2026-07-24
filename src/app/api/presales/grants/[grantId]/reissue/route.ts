@@ -31,7 +31,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
 import { dispatchEmail, renderMagicLinkEmail } from '@/lib/presales/emails';
-import { canPerformPresalesAction } from '@/lib/presales/rbac';
+import { canPerformPresalesAction, lacksTenantScope } from '@/lib/presales/rbac';
 
 interface RouteCtx {
   params: Promise<{ grantId: string }>;
@@ -58,6 +58,12 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   if (!user) return err('UNAUTHENTICATED', 'Sign in required.', 401);
   if (!canPerformPresalesAction(user.role, 'reissue_grant')) {
     return err('FORBIDDEN', 'Your role cannot reissue grants.', 403);
+  }
+  // A non-admin with no org would drop the org filter below and match grants in
+  // ANY tenant — reissuing (and re-dispatching a magic-link for) another org's
+  // grant. Reject before querying. Matches revoke/extend.
+  if (lacksTenantScope(user)) {
+    return err('FORBIDDEN', 'No organization scope.', 403);
   }
 
   const { grantId } = await ctx.params;

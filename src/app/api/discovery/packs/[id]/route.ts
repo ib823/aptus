@@ -13,6 +13,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { buildClientPack, buildInternalPack } from "@/lib/discovery/workbench/packs";
 import { isNeutralDiscoveryEnabled } from "@/lib/discovery/guards";
+import { requireDiscoveryEngagementAccess } from "@/lib/discovery/authz";
 
 export async function GET(
   req: NextRequest,
@@ -23,6 +24,14 @@ export async function GET(
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { id } = await ctx.params;
+
+  // Scope to the engagement's owner (creator) or platform_admin. Without this,
+  // any authenticated user could export any engagement's pack by ID — the
+  // internal lane in particular carries consultant-only product map / notes /
+  // capture data. Matches the guard on the sibling notes/grants/drive routes.
+  const access = await requireDiscoveryEngagementAccess(id, user);
+  if (!access.ok) return access.response;
+
   const lane = req.nextUrl.searchParams.get("lane");
 
   if (lane === "client") {
