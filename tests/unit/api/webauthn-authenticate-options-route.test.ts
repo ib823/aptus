@@ -62,8 +62,10 @@ describe("POST /api/auth/webauthn/authenticate/options — enumeration resistanc
   });
 
   it("is indistinguishable in shape between a known-with-passkey and an unknown email", async () => {
-    // Unknown email → decoys.
-    const unknown = (await allowCredentialsFor({ email: "nobody@example.com" })) as unknown[];
+    // Unknown email → decoys (deterministic count 1–2).
+    const unknown = (await allowCredentialsFor({ email: "nobody@example.com" })) as Array<{
+      transports: unknown;
+    }>;
 
     // Known active user WITH a passkey → real descriptors.
     mocks.findUser.mockResolvedValueOnce({ id: "u1", isActive: true });
@@ -72,11 +74,27 @@ describe("POST /api/auth/webauthn/authenticate/options — enumeration resistanc
     ]);
     const known = (await allowCredentialsFor({ email: "real@example.com" })) as Array<{
       credentialId: string;
+      transports: unknown;
     }>;
 
-    // Both non-empty and same array length — no populated-vs-empty oracle.
-    expect(unknown.length).toBe(known.length);
+    // Both populated — no populated-vs-empty oracle.
+    expect(unknown.length).toBeGreaterThan(0);
+    expect(known.length).toBeGreaterThan(0);
+
+    // The real credential id is still surfaced (login must keep working)...
     expect(known[0]?.credentialId).toBe("real-cred-id");
+
+    // ...but its real transport (["internal"]) is NOT: every descriptor, real or
+    // decoy, exposes an empty transports list, so transport type can never
+    // distinguish a real account (e.g. one exposing ["usb"]) from a decoy.
+    for (const d of [...unknown, ...known]) {
+      expect(d.transports).toEqual([]);
+    }
+
+    // A single real passkey (length 1) sits inside the decoy count range {1,2},
+    // so descriptor count is not a clean real-vs-decoy oracle either.
+    expect([1, 2]).toContain(unknown.length);
+    expect([1, 2]).toContain(known.length);
   });
 
   it("is deterministic: the same unknown email yields the same decoy", async () => {

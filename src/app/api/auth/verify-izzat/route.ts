@@ -29,6 +29,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Not available" }, { status: 404 });
   }
 
+  // Runtime production kill-switch. The build-time env check (check-production-env.js)
+  // already blocks Vercel deploys that carry ENABLE_SIMULATION_BRIDGE, but that gate
+  // can be skipped (non-Vercel runtime, env set post-build). Refuse in production
+  // unless explicitly opted in — parity with test-login's ALLOW_TEST_LOGIN_IN_PROD.
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.ALLOW_SIMULATION_BRIDGE_IN_PROD !== "true"
+  ) {
+    logBackdoorAttempt({ endpoint: ENDPOINT, outcome: "denied:env", headers: request.headers });
+    return NextResponse.json({ error: "Not available" }, { status: 404 });
+  }
+
   // Refuse trivially-short secrets in production — a 4-char secret protecting
   // a real session is a configuration mistake, not a working setup.
   if (process.env.NODE_ENV === "production" && bridgeSecret.length < 24) {

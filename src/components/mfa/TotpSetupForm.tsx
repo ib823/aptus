@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import QRCode from "qrcode";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UI_TEXT } from "@/constants/ui-text";
@@ -15,6 +16,25 @@ export function TotpSetupForm({ qrUri, secret, onVerified }: TotpSetupFormProps)
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [qrDataUri, setQrDataUri] = useState<string | null>(null);
+
+  // Render the QR locally from the otpauth:// URI. The URI embeds the raw TOTP
+  // seed, so it must never leave the browser — an earlier version passed it to a
+  // third-party image API (api.qrserver.com), which exposed the shared secret to
+  // that host and anyone observing the request.
+  useEffect(() => {
+    let cancelled = false;
+    QRCode.toDataURL(qrUri, { width: 200, margin: 2, errorCorrectionLevel: "M" })
+      .then((url) => {
+        if (!cancelled) setQrDataUri(url);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Could not render the QR code. Use the manual key below.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [qrUri]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -45,20 +65,25 @@ export function TotpSetupForm({ qrUri, secret, onVerified }: TotpSetupFormProps)
     [code, secret, onVerified],
   );
 
-  // Generate a QR code URL using a public QR code API
-  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUri)}`;
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col items-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={qrImageUrl}
-          alt="Scan this QR code with your authenticator app"
-          width={200}
-          height={200}
-          className="rounded-lg border"
-        />
+        {qrDataUri ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={qrDataUri}
+            alt="Scan this QR code with your authenticator app"
+            width={200}
+            height={200}
+            className="rounded-lg border"
+          />
+        ) : (
+          <div
+            className="rounded-lg border bg-muted/40 flex items-center justify-center"
+            style={{ width: 200, height: 200 }}
+            aria-label="Generating QR code"
+          />
+        )}
       </div>
 
       <div className="bg-muted/40 rounded-lg p-4">
