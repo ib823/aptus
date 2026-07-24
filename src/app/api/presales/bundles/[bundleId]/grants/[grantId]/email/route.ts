@@ -17,7 +17,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
-import { canPerformPresalesAction } from '@/lib/presales/rbac';
+import { canPerformPresalesAction, lacksTenantScope } from '@/lib/presales/rbac';
 
 interface RouteCtx {
   params: Promise<{ bundleId: string; grantId: string }>;
@@ -27,6 +27,12 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: { code: 'UNAUTHENTICATED' } }, { status: 401 });
   if (!canPerformPresalesAction(user.role, 'edit_bundle_draft')) {
+    return NextResponse.json({ error: { code: 'FORBIDDEN' } }, { status: 403 });
+  }
+  // Reject non-admin/no-org users before the org filter below is dropped, which
+  // would otherwise match (and let them rewrite the recipient email on) any
+  // tenant's grant. Matches the sibling revoke/extend/reissue routes.
+  if (lacksTenantScope(user)) {
     return NextResponse.json({ error: { code: 'FORBIDDEN' } }, { status: 403 });
   }
 
