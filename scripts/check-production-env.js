@@ -49,6 +49,7 @@ const RECOMMENDED_VARS = [
 // Backdoors that must NEVER be enabled on a production deploy — no override.
 const DANGEROUS_IN_PRODUCTION = [
   { key: "ENABLE_SIMULATION_BRIDGE", reason: "Enables /api/auth/verify-izzat backdoor that issues real sessions" },
+  { key: "ALLOW_SIMULATION_BRIDGE_IN_PROD", reason: "Overrides the runtime production kill-switch for the /api/auth/verify-izzat backdoor" },
   { key: "ALLOW_DEV_SEED_IN_PROD", reason: "Enables /api/dev/seed-* backdoors that mint real sessions and mutate data in production" },
 ];
 
