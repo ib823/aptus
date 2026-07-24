@@ -30,6 +30,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
+import { requireAffirmBundleAccess } from "@/lib/affirm/authz";
 
 const PutBody = z.object({
   consultantWording: z.string().max(4000).nullable().optional(),
@@ -51,6 +52,8 @@ export async function PUT(
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id, qid } = await ctx.params;
+  const access = await requireAffirmBundleAccess(id, user);
+  if (!access.ok) return access.response;
 
   const parsed = PutBody.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) {
@@ -140,6 +143,8 @@ export async function DELETE(
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id, qid } = await ctx.params;
+  const access = await requireAffirmBundleAccess(id, user);
+  if (!access.ok) return access.response;
 
   const result = await prisma.$transaction(async (tx) => {
     const bundle = await tx.affirmBundle.findUnique({

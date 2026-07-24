@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth/assessment-guard";
 import { hasRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
+import { sanitizeSvgContent } from "@/lib/security/sanitize";
 import { ERROR_CODES } from "@/types/api";
 import type { UserRole } from "@/types/assessment";
 
@@ -47,7 +48,9 @@ export async function POST(
     );
   }
 
-  // Validate content type
+  // Validate content type. `file.type` is the client-supplied part header and is
+  // spoofable, so it is only the first gate — the magic-byte / structural check
+  // below is authoritative.
   const mimeType = file.type;
   if (!ALLOWED_TYPES[mimeType]) {
     return NextResponse.json(
@@ -64,10 +67,45 @@ export async function POST(
     );
   }
 
-  // Convert to base64 data URI
   const arrayBuffer = await file.arrayBuffer();
-  const base64 = Buffer.from(arrayBuffer).toString("base64");
-  const dataUri = `data:${mimeType};base64,${base64}`;
+  const bytes = Buffer.from(arrayBuffer);
+
+  // Authoritative content validation by inspecting the actual bytes, not the
+  // claimed MIME. Raster formats are checked by magic number; SVG is XML text
+  // that is a known XSS vector, so it is sanitized (scripts / event handlers /
+  // external refs stripped) before being stored as a data URI.
+  const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47];
+  const JPEG_MAGIC = [0xff, 0xd8, 0xff];
+  const startsWith = (magic: number[]) => magic.every((b, i) => bytes[i] === b);
+
+  let dataUri: string;
+  if (mimeType === "image/png") {
+    if (!startsWith(PNG_MAGIC)) {
+      return NextResponse.json(
+        { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "File content does not match a PNG image" } },
+        { status: 400 },
+      );
+    }
+    dataUri = `data:${mimeType};base64,${bytes.toString("base64")}`;
+  } else if (mimeType === "image/jpeg") {
+    if (!startsWith(JPEG_MAGIC)) {
+      return NextResponse.json(
+        { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "File content does not match a JPEG image" } },
+        { status: 400 },
+      );
+    }
+    dataUri = `data:${mimeType};base64,${bytes.toString("base64")}`;
+  } else {
+    // image/svg+xml — sanitize the markup, then re-encode the cleaned SVG.
+    const cleaned = sanitizeSvgContent(bytes.toString("utf-8"));
+    if (!cleaned.includes("<svg")) {
+      return NextResponse.json(
+        { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "File content does not match a valid SVG image" } },
+        { status: 400 },
+      );
+    }
+    dataUri = `data:image/svg+xml;base64,${Buffer.from(cleaned, "utf-8").toString("base64")}`;
+  }
 
   // Upsert branding with logo
   await prisma.reportBranding.upsert({

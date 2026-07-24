@@ -9,8 +9,14 @@ if (dsn) {
     dsn,
     environment: process.env.NODE_ENV,
     tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+    // Never attach IP/cookies/headers by default.
+    sendDefaultPii: false,
     replaysOnErrorSampleRate: 1.0,
     replaysSessionSampleRate: 0,
-    integrations: [Sentry.replayIntegration()],
+    // Error replays can capture on-screen client/tenant data — mask all text and
+    // block media so PII never leaves the browser.
+    integrations: [
+      Sentry.replayIntegration({ maskAllText: true, blockAllMedia: true }),
+    ],
   });
 }

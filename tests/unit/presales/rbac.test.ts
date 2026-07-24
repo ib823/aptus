@@ -10,6 +10,7 @@ import {
   canAccessPresales,
   canPerformPresalesAction,
   isReadOnlyRole,
+  lacksTenantScope,
 } from '@/lib/presales/rbac';
 
 describe('canAccessPresales', () => {
@@ -80,5 +81,19 @@ describe('isReadOnlyRole', () => {
     expect(isReadOnlyRole('project_manager')).toBe(true);
     expect(isReadOnlyRole('consultant')).toBe(false);
     expect(isReadOnlyRole('platform_admin')).toBe(false);
+  });
+});
+
+describe('lacksTenantScope', () => {
+  it('blocks a non-admin user with no organization (the cross-org scope drop that was fixed)', () => {
+    expect(lacksTenantScope({ organizationId: null, role: 'consultant' })).toBe(true);
+  });
+
+  it('allows a non-admin user who belongs to an organization', () => {
+    expect(lacksTenantScope({ organizationId: 'org_1', role: 'consultant' })).toBe(false);
+  });
+
+  it('allows a platform_admin even with a null organization (global access)', () => {
+    expect(lacksTenantScope({ organizationId: null, role: 'platform_admin' })).toBe(false);
   });
 });

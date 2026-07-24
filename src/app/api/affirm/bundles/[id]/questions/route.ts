@@ -24,6 +24,7 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
+import { requireAffirmBundleAccess } from "@/lib/affirm/authz";
 
 const PostBody = z.object({
   subProcessId: z.string().trim().min(1),
@@ -49,6 +50,8 @@ export async function POST(
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
+  const access = await requireAffirmBundleAccess(id, user);
+  if (!access.ok) return access.response;
 
   const parsed = PostBody.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) {

@@ -92,11 +92,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const at = setLiveCache(cacheKey, { entitySets, probes });
     return NextResponse.json({ data: { entitySets, probes, generatedAt: new Date(at).toISOString(), fromCache: false } });
   } catch (error) {
+    console.error("[sap/tdd/entities] request failed:", error);
     return NextResponse.json(
       {
         error: {
           code: ERROR_CODES.INTERNAL_ERROR,
-          message: error instanceof Error ? error.message : "SAP metadata request failed",
+          message: "SAP metadata request failed",
         },
       },
       { status: 502 },

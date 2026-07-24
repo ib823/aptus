@@ -41,11 +41,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const preview = await previewSapEntitySet(product.envPrefix, tenant, service, entity, limit);
     return NextResponse.json({ data: preview });
   } catch (error) {
+    // Do not reflect the raw connector error to the client — it can carry SAP
+    // tenant labels, upstream HTTP status, and topology detail useful for recon.
+    // Log server-side; return a generic message.
+    console.error("[sap/tdd/preview] request failed:", error);
     return NextResponse.json(
       {
         error: {
           code: ERROR_CODES.INTERNAL_ERROR,
-          message: error instanceof Error ? error.message : "SAP preview request failed",
+          message: "SAP preview request failed",
         },
       },
       { status: 502 },

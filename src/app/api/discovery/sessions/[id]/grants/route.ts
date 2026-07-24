@@ -14,6 +14,7 @@ import { clientValueStreams } from "@/lib/discovery/client-library";
 import { writeDiscoveryEvent } from "@/lib/discovery/external/audit";
 import { issueGuestOtp } from "@/lib/discovery/external/otp";
 import { isNeutralDiscoveryEnabled } from "@/lib/discovery/guards";
+import { requireDiscoveryEngagementAccess } from "@/lib/discovery/authz";
 
 export async function POST(
   req: NextRequest,
@@ -30,8 +31,8 @@ export async function POST(
   }
   const { action, valueStreamIds, grantId } = body as Record<string, unknown>;
 
-  const engagement = await prisma.discoveryEngagement.findUnique({ where: { id }, select: { id: true } });
-  if (!engagement) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  const access = await requireDiscoveryEngagementAccess(id, user);
+  if (!access.ok) return access.response;
 
   if (action === "scope") {
     if (!Array.isArray(valueStreamIds) || valueStreamIds.some((v) => typeof v !== "string")) {

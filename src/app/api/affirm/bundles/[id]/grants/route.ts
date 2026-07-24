@@ -15,6 +15,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { createGrant, listGrantsForBundle } from "@/lib/affirm/external/grants";
 import { dispatchEmail } from "@/lib/presales/emails";
 import { renderAffirmInviteEmail } from "@/lib/affirm/external/emails";
+import { requireAffirmBundleAccess } from "@/lib/affirm/authz";
 
 const Body = z.object({
   email: z.string().email(),
@@ -33,6 +34,8 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
+  const access = await requireAffirmBundleAccess(id, user);
+  if (!access.ok) return access.response;
 
   const bundle = await prisma.affirmBundle.findUnique({ where: { id }, select: { id: true } });
   if (!bundle) return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -45,6 +48,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
+  const access = await requireAffirmBundleAccess(id, user);
+  if (!access.ok) return access.response;
 
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: "invalid_body" }, { status: 400 });

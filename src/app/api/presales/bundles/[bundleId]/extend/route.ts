@@ -21,7 +21,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
-import { canPerformPresalesAction } from '@/lib/presales/rbac';
+import { canPerformPresalesAction, lacksTenantScope } from '@/lib/presales/rbac';
 
 const MAX_DAYS_AHEAD = 90;
 
@@ -45,6 +45,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   if (!canPerformPresalesAction(user.role, 'extend_bundle')) {
     return err('FORBIDDEN', 'Your role cannot extend bundles.', 403);
   }
+  if (lacksTenantScope(user)) return err('FORBIDDEN', 'No organization scope.', 403);
 
   const { bundleId } = await ctx.params;
   const bundle = await prisma.presalesBundle.findFirst({

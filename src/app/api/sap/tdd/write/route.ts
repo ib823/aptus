@@ -136,11 +136,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
     return NextResponse.json({ data: result }, { status: result.ok ? 200 : 502 });
   } catch (error) {
+    console.error("[sap/tdd/write] request failed:", error);
     return NextResponse.json(
       {
         error: {
           code: ERROR_CODES.INTERNAL_ERROR,
-          message: error instanceof Error ? error.message : "SAP write-back request failed",
+          message: "SAP write-back request failed",
         },
       },
       { status: 502 },

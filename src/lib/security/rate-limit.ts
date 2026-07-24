@@ -123,7 +123,16 @@ export async function checkRateLimit(
     } catch (error) {
       if (!warnedAboutBackendFailure) {
         warnedAboutBackendFailure = true;
-        console.error("[RATE LIMIT] Shared backend failed, falling back to in-memory limiter", error);
+        console.error("[RATE LIMIT] Shared backend failed", error);
+      }
+      // Fail CLOSED in production. The per-instance in-memory limiter is
+      // ineffective on serverless, so falling back to it during a Redis outage
+      // would silently disable throttling on exactly the sensitive buckets this
+      // guards (auth brute-force, SAP-tenant amplification). Denying for the
+      // duration of the outage is the safer trade for those routes. In dev we
+      // fall through to the in-memory limiter so local work is unaffected.
+      if (process.env.NODE_ENV === "production") {
+        return { allowed: false, remaining: 0, resetMs: config.windowMs };
       }
     }
   }
@@ -182,14 +191,32 @@ export function isLiveSapTenantRoute(pathname: string): boolean {
 }
 
 /**
- * Extract client IP from request headers.
- * Takes the first IP from X-Forwarded-For (leftmost = client).
+ * Extract the client IP used to key rate limits.
+ *
+ * SECURITY: the leftmost `x-forwarded-for` entry is supplied by the client and
+ * is trivially spoofable — using it lets an attacker rotate the header per
+ * request so every request gets a fresh rate-limit bucket, defeating brute-force
+ * and SAP-amplification throttles. On Vercel the platform injects the true
+ * connecting IP into `x-vercel-forwarded-for` (and `x-real-ip`); these sit above
+ * any client-provided XFF and cannot be forged by the client. Prefer them, and
+ * fall back to XFF only for non-Vercel / local environments.
  */
 export function getClientIp(headers: Headers): string {
+  // Vercel-trusted, not client-forgeable.
+  const vercelForwarded = headers.get("x-vercel-forwarded-for");
+  if (vercelForwarded) {
+    const ip = vercelForwarded.split(",")[0]?.trim();
+    if (ip) return ip;
+  }
+  const realIp = headers.get("x-real-ip");
+  if (realIp?.trim()) return realIp.trim();
+
+  // Last resort (local dev / non-Vercel proxies): the leftmost XFF hop. This is
+  // spoofable, so it must never be the trusted source in production.
   const forwarded = headers.get("x-forwarded-for");
   if (forwarded) {
     const firstIp = forwarded.split(",")[0]?.trim();
     if (firstIp) return firstIp;
   }
-  return headers.get("x-real-ip") ?? "unknown";
+  return "unknown";
 }
