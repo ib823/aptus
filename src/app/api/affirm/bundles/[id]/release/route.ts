@@ -13,6 +13,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { assertTransition } from "@/lib/affirm/bundle";
 import { buildAgenda, buildSignedRecord, type QuestionContext } from "@/lib/affirm/agenda";
 import type { AffirmChoice } from "@/lib/affirm/types";
+import { requireAffirmBundleAccess } from "@/lib/affirm/authz";
 
 export async function POST(
   _req: Request,
@@ -21,6 +22,8 @@ export async function POST(
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
+  const access = await requireAffirmBundleAccess(id, user);
+  if (!access.ok) return access.response;
 
   const result = await prisma.$transaction(async (tx) => {
     const bundle = await tx.affirmBundle.findUnique({

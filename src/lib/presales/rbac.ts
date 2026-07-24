@@ -20,6 +20,8 @@
  * Anyone else → 403 from the layout-level gate.
  */
 
+import { isAdminRole } from '@/lib/auth/permissions';
+
 export type PresalesRole =
   | 'consultant'
   | 'partner_lead'
@@ -100,4 +102,19 @@ export function canPerformPresalesAction(
 
 export function isReadOnlyRole(role: string | null | undefined): boolean {
   return role === 'executive_sponsor' || role === 'project_manager';
+}
+
+/**
+ * A non-admin user with no `organizationId` has no tenant to scope presales
+ * queries to. Several routes previously dropped the org filter entirely for such
+ * users (`...(user.organizationId ? {...} : {})`), which silently matched bundles
+ * across ALL organizations. Callers must reject these users before querying.
+ * platform_admin is exempt: a global admin may legitimately carry a null org and
+ * is allowed to act across tenants.
+ */
+export function lacksTenantScope(user: {
+  organizationId: string | null;
+  role: string | null | undefined;
+}): boolean {
+  return !user.organizationId && !isAdminRole(user.role ?? '');
 }

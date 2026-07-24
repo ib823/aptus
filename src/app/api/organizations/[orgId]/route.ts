@@ -113,6 +113,34 @@ export async function PUT(
     );
   }
 
+  // Security-sensitive org settings are platform_admin-only. Org managers
+  // (partner_lead / client_admin) may edit branding/name/slug but must not be
+  // able to weaken their own tenant's posture (e.g. mfaPolicy -> "disabled") or
+  // change org type / SSO / SCIM / session limits.
+  const PRIVILEGED_FIELDS = [
+    "orgType",
+    "mfaPolicy",
+    "ssoEnabled",
+    "ssoProvider",
+    "ssoDomain",
+    "scimEnabled",
+    "maxConcurrentSessions",
+  ] as const;
+  if (role !== "platform_admin") {
+    const attempted = PRIVILEGED_FIELDS.filter((f) => parsed.data[f] !== undefined);
+    if (attempted.length > 0) {
+      return NextResponse.json(
+        {
+          error: {
+            code: ERROR_CODES.FORBIDDEN,
+            message: `Only a platform administrator can change: ${attempted.join(", ")}`,
+          },
+        },
+        { status: 403 },
+      );
+    }
+  }
+
   // Check slug uniqueness if updating slug
   if (parsed.data.slug) {
     const existing = await prisma.organization.findUnique({

@@ -14,6 +14,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { reissueGrant } from "@/lib/affirm/external/grants";
 import { dispatchEmail } from "@/lib/presales/emails";
 import { renderAffirmInviteEmail } from "@/lib/affirm/external/emails";
+import { requireAffirmBundleAccess } from "@/lib/affirm/authz";
 
 function inviteUrl(req: NextRequest, rawToken: string): string {
   const origin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? new URL(req.url).origin;
@@ -27,6 +28,8 @@ export async function POST(
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id, grantId } = await ctx.params;
+  const access = await requireAffirmBundleAccess(id, user);
+  if (!access.ok) return access.response;
 
   const existing = await prisma.affirmAccessGrant.findUnique({
     where: { id: grantId },

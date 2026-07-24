@@ -37,11 +37,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const result = await callAribaEndpoint(endpoint, realm, limit);
     return NextResponse.json({ data: result });
   } catch (error) {
+    console.error("[sap/ariba/call] request failed:", error);
     return NextResponse.json(
       {
         error: {
           code: ERROR_CODES.INTERNAL_ERROR,
-          message: error instanceof Error ? error.message : "Ariba call failed",
+          message: "Ariba call failed",
         },
       },
       { status: 502 },

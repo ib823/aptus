@@ -9,7 +9,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
-import { canAccessPresales } from '@/lib/presales/rbac';
+import { canAccessPresales, lacksTenantScope } from '@/lib/presales/rbac';
 
 interface RouteCtx {
   params: Promise<{ bundleId: string }>;
@@ -21,6 +21,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   if (!canAccessPresales(user.role)) {
     return NextResponse.json({ error: { code: 'FORBIDDEN' } }, { status: 403 });
   }
+  if (lacksTenantScope(user)) return NextResponse.json({ error: { code: 'FORBIDDEN' } }, { status: 403 });
 
   const { bundleId } = await ctx.params;
   const url = new URL(req.url);

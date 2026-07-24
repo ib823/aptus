@@ -11,7 +11,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
 import { assertBundleDraft, SnapshotLockedError } from '@/lib/presales/guards';
-import { canPerformPresalesAction } from '@/lib/presales/rbac';
+import { canPerformPresalesAction, lacksTenantScope } from '@/lib/presales/rbac';
 
 interface RouteCtx {
   params: Promise<{ bundleId: string }>;
@@ -23,6 +23,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   if (!canPerformPresalesAction(user.role, 'edit_bundle_draft')) {
     return NextResponse.json({ error: { code: 'FORBIDDEN' } }, { status: 403 });
   }
+  if (lacksTenantScope(user)) return NextResponse.json({ error: { code: 'FORBIDDEN' } }, { status: 403 });
 
   const { bundleId } = await ctx.params;
   const bundle = await prisma.presalesBundle.findFirst({

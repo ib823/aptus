@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
+import { requireAffirmBundleAccess } from "@/lib/affirm/authz";
 
 const Body = z.object({
   scopeItemIds: z.array(z.string().trim().min(1)).max(672),
@@ -20,6 +21,8 @@ export async function PUT(
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { id } = await ctx.params;
+  const access = await requireAffirmBundleAccess(id, user);
+  if (!access.ok) return access.response;
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
