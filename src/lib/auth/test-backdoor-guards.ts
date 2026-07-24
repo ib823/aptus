@@ -10,19 +10,7 @@
  * disabling it entirely.
  */
 
-function getClientIp(headers: Headers): string {
-  // Vercel populates x-forwarded-for with `<client>, <proxy>, ...`.
-  // The leftmost entry is the originating client per the X-F-F spec but
-  // can be spoofed; we trust it here only for *audit logging* and IP
-  // allow-listing where downside is "operator misses an attempt", not
-  // privilege escalation.
-  const xff = headers.get("x-forwarded-for");
-  if (xff) {
-    const first = xff.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return headers.get("x-real-ip")?.trim() ?? "unknown";
-}
+import { getClientIp } from "@/lib/security/client-ip";
 
 function parseAllowList(raw: string | undefined): Set<string> {
   if (!raw) return new Set();
@@ -35,14 +23,33 @@ function parseAllowList(raw: string | undefined): Set<string> {
 }
 
 /**
- * Returns true if either:
- *   - no allow-list is configured (fail-open by design — the env flag is
- *     the primary gate), OR
- *   - the configured allow-list contains the client's IP.
+ * Returns true if the client's IP is permitted to reach a backdoor endpoint.
+ *
+ * When an allow-list IS configured, the client IP (resolved from the
+ * Vercel-trusted, non-spoofable header — see getClientIp) must be a member.
+ *
+ * When NO allow-list is configured:
+ *   - in development we stay open (the env flag + secret are the primary gates),
+ *   - in production we fail CLOSED, so an enabled backdoor is never reachable
+ *     from an unrestricted IP range by default. An operator who deliberately
+ *     runs secret-only (e.g. an internal E2E deployment that cannot pin caller
+ *     IPs) can opt back in with ALLOW_BACKDOOR_WITHOUT_IP_ALLOWLIST=true.
+ *
+ * (In real production these backdoors are already blocked outright by
+ * scripts/check-production-env.js unless INTERNAL_TEST_DEPLOYMENT is set, so this
+ * is defence-in-depth for the internal-test case.)
  */
 export function isIpAllowed(headers: Headers, allowListEnv: string): boolean {
   const allowList = parseAllowList(process.env[allowListEnv]);
-  if (allowList.size === 0) return true;
+  if (allowList.size === 0) {
+    if (
+      process.env.NODE_ENV === "production" &&
+      process.env.ALLOW_BACKDOOR_WITHOUT_IP_ALLOWLIST !== "true"
+    ) {
+      return false;
+    }
+    return true;
+  }
   const ip = getClientIp(headers);
   return allowList.has(ip);
 }
