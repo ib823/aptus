@@ -11,6 +11,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { findClientProcess } from "@/lib/discovery/client-library";
 import { isNeutralDiscoveryEnabled } from "@/lib/discovery/guards";
+import { requireDiscoveryEngagementAccess } from "@/lib/discovery/authz";
 
 const MAX_NOTE_LENGTH = 2000;
 
@@ -37,8 +38,8 @@ export async function POST(
     }
   }
 
-  const engagement = await prisma.discoveryEngagement.findUnique({ where: { id }, select: { id: true } });
-  if (!engagement) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  const access = await requireDiscoveryEngagementAccess(id, user);
+  if (!access.ok) return access.response;
 
   await prisma.discoveryNote.create({
     data: {

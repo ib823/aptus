@@ -21,6 +21,7 @@ import { writeDiscoveryEvent } from "@/lib/discovery/external/audit";
 import { effectiveStreamIds } from "@/lib/discovery/external/scope";
 import { clientValueStreams } from "@/lib/discovery/client-library";
 import { isNeutralDiscoveryEnabled } from "@/lib/discovery/guards";
+import { requireDiscoveryEngagementAccess } from "@/lib/discovery/authz";
 
 const ACTIONS = new Set(["start", "goto", "end"]);
 
@@ -33,6 +34,8 @@ export async function POST(
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { id } = await ctx.params;
+  const access = await requireDiscoveryEngagementAccess(id, user);
+  if (!access.ok) return access.response;
   const body: unknown = await req.json().catch(() => null);
   if (!body || typeof body !== "object") {
     return NextResponse.json({ error: "bad_request" }, { status: 400 });

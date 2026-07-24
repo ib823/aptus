@@ -3,6 +3,23 @@
 const BRAND_COLOR = "#002B5C"; // brand-navy per ABeam Workbench tokens
 const BRAND_NAME = "ABeam Workbench";
 
+/**
+ * HTML-escape a user-controlled value before interpolating it into an email
+ * body. Stakeholder/assessment/inviter names, gap titles, resolutions, device
+ * strings, etc. all originate from user input and must never be trusted as
+ * markup — otherwise an attacker-chosen name like `<a href=…>` injects
+ * arbitrary content (phishing links, spoofed buttons) into the recipient's
+ * inbox. System-generated URLs are exempt (they are not user-authored).
+ */
+function esc(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function baseLayout(content: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -69,7 +86,7 @@ export function magicLinkEmail(url: string, email: string): { subject: string; h
     html: baseLayout(`
       <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#111827;">Sign in to your account</h2>
       <p style="margin:0 0 4px;font-size:14px;color:#6b7280;line-height:1.6;">
-        Click the button below to sign in as <strong>${email}</strong>.
+        Click the button below to sign in as <strong>${esc(email)}</strong>.
       </p>
       <p style="margin:0 0 16px;font-size:13px;color:#9ca3af;">
         This link expires in 15 minutes. If you didn't request this, you can safely ignore this email.
@@ -96,7 +113,7 @@ export function workbenchSigninEmail(url: string, email: string): { subject: str
     html: baseLayout(`
       <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#111827;">Sign in to ${BRAND_NAME}</h2>
       <p style="margin:0 0 4px;font-size:14px;color:#6b7280;line-height:1.6;">
-        Click the button below to sign in as <strong>${email}</strong>.
+        Click the button below to sign in as <strong>${esc(email)}</strong>.
       </p>
       <p style="margin:0 0 16px;font-size:13px;color:#9ca3af;">
         This link expires in 15 minutes. If you didn't request this, you can safely ignore this email.
@@ -125,11 +142,11 @@ export function stakeholderInviteEmail(params: {
     html: baseLayout(`
       <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#111827;">You're invited</h2>
       <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
-        Hi ${params.recipientName},
+        Hi ${esc(params.recipientName)},
       </p>
       <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
-        <strong>${params.inviterName}</strong> has invited you as a <strong>${roleName}</strong>
-        to the assessment for <strong>${params.assessmentName}</strong>.
+        <strong>${esc(params.inviterName)}</strong> has invited you as a <strong>${esc(roleName)}</strong>
+        to the assessment for <strong>${esc(params.assessmentName)}</strong>.
       </p>
       ${button(params.loginUrl, "View Assessment")}
     `),
@@ -153,12 +170,12 @@ export function assessmentStatusEmail(params: {
     html: baseLayout(`
       <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#111827;">Assessment Status Updated</h2>
       <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
-        Hi ${params.recipientName},
+        Hi ${esc(params.recipientName)},
       </p>
       <p style="margin:0 0 8px;font-size:14px;color:#6b7280;line-height:1.6;">
-        The assessment for <strong>${params.assessmentName}</strong> has been moved from
-        <strong>${params.oldStatus.replace(/_/g, " ")}</strong> to
-        <strong>${statusLabel}</strong> by ${params.changedBy}.
+        The assessment for <strong>${esc(params.assessmentName)}</strong> has been moved from
+        <strong>${esc(params.oldStatus.replace(/_/g, " "))}</strong> to
+        <strong>${esc(statusLabel)}</strong> by ${esc(params.changedBy)}.
       </p>
       ${button(params.assessmentUrl, "View Assessment")}
     `),
@@ -177,11 +194,11 @@ export function mfaEnabledEmail(params: {
     html: baseLayout(`
       <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#111827;">MFA Enabled</h2>
       <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
-        Hi ${params.recipientName},
+        Hi ${esc(params.recipientName)},
       </p>
       <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
         Two-factor authentication has been successfully enabled on your account
-        (<strong>${params.email}</strong>). You'll need your authenticator app to sign in.
+        (<strong>${esc(params.email)}</strong>). You'll need your authenticator app to sign in.
       </p>
       <p style="margin:0;font-size:13px;color:#9ca3af;">
         If you didn't enable this, please contact your administrator immediately.
@@ -207,22 +224,22 @@ export function gapResolutionEmail(params: {
     html: baseLayout(`
       <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#111827;">Gap Resolution Update</h2>
       <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
-        Hi ${params.recipientName},
+        Hi ${esc(params.recipientName)},
       </p>
       <p style="margin:0 0 8px;font-size:14px;color:#6b7280;line-height:1.6;">
-        A gap in <strong>${params.scopeItemName}</strong> has been resolved:
+        A gap in <strong>${esc(params.scopeItemName)}</strong> has been resolved:
       </p>
       <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;width:100%;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
         <tr>
           <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;">Gap</td>
-          <td style="padding:12px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${params.gapTitle}</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${esc(params.gapTitle)}</td>
         </tr>
         <tr>
           <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;">Resolution</td>
-          <td style="padding:12px 16px;font-size:14px;color:#111827;">${params.resolution}</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;">${esc(params.resolution)}</td>
         </tr>
       </table>
-      <p style="margin:0 0 16px;font-size:13px;color:#9ca3af;">Resolved by ${params.resolvedBy}</p>
+      <p style="margin:0 0 16px;font-size:13px;color:#9ca3af;">Resolved by ${esc(params.resolvedBy)}</p>
       ${button(params.assessmentUrl, "View Assessment")}
     `),
     text: `Hi ${params.recipientName},\n\nA gap in ${params.scopeItemName} has been resolved.\n\nGap: ${params.gapTitle}\nResolution: ${params.resolution}\nResolved by: ${params.resolvedBy}\n\nView: ${params.assessmentUrl}`,
@@ -245,27 +262,27 @@ export function newLoginEmail(params: {
     html: baseLayout(`
       <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#111827;">New sign-in to your account</h2>
       <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
-        Hi ${params.recipientName},
+        Hi ${esc(params.recipientName)},
       </p>
       <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
-        Your account (<strong>${params.email}</strong>) was just signed into from a new device or location.
+        Your account (<strong>${esc(params.email)}</strong>) was just signed into from a new device or location.
       </p>
       <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;width:100%;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
         <tr>
           <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;">Login method</td>
-          <td style="padding:12px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${params.loginMethod}</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${esc(params.loginMethod)}</td>
         </tr>
         <tr>
           <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;">IP address</td>
-          <td style="padding:12px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${params.ipAddress}</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${esc(params.ipAddress)}</td>
         </tr>
         <tr>
           <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;">Device</td>
-          <td style="padding:12px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${params.device}</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${esc(params.device)}</td>
         </tr>
         <tr>
           <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;">Time</td>
-          <td style="padding:12px 16px;font-size:14px;color:#111827;">${params.time}</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;">${esc(params.time)}</td>
         </tr>
       </table>
       ${button(params.reviewUrl, "Review account security")}
@@ -292,19 +309,19 @@ export function sessionDisplacedEmail(params: {
     html: baseLayout(`
       <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#111827;">Your session was ended</h2>
       <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
-        Hi ${params.recipientName},
+        Hi ${esc(params.recipientName)},
       </p>
       <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
-        You were signed out because your account (<strong>${params.email}</strong>) was accessed from another device.
+        You were signed out because your account (<strong>${esc(params.email)}</strong>) was accessed from another device.
       </p>
       <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;width:100%;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
         <tr>
           <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb;">New login IP</td>
-          <td style="padding:12px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${params.newIpAddress}</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;border-bottom:1px solid #e5e7eb;">${esc(params.newIpAddress)}</td>
         </tr>
         <tr>
           <td style="padding:12px 16px;background:#f9fafb;font-size:12px;color:#6b7280;font-weight:600;">New login device</td>
-          <td style="padding:12px 16px;font-size:14px;color:#111827;">${params.newDevice}</td>
+          <td style="padding:12px 16px;font-size:14px;color:#111827;">${esc(params.newDevice)}</td>
         </tr>
       </table>
       ${button(reviewUrl, "Review account security")}
@@ -331,8 +348,8 @@ export function orgInvitationEmail(params: {
     html: baseLayout(`
       <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#111827;">You're invited</h2>
       <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
-        <strong>${params.inviterName}</strong> has invited you to join
-        <strong>${params.organizationName}</strong> as a <strong>${roleName}</strong>.
+        <strong>${esc(params.inviterName)}</strong> has invited you to join
+        <strong>${esc(params.organizationName)}</strong> as a <strong>${esc(roleName)}</strong>.
       </p>
       <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
         Click the button below to accept the invitation and set up your account.
@@ -359,10 +376,10 @@ export function reportReadyEmail(params: {
     html: baseLayout(`
       <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#111827;">Report Ready</h2>
       <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
-        Hi ${params.recipientName},
+        Hi ${esc(params.recipientName)},
       </p>
       <p style="margin:0 0 16px;font-size:14px;color:#6b7280;line-height:1.6;">
-        Your <strong>${params.reportType}</strong> for <strong>${params.assessmentName}</strong>
+        Your <strong>${esc(params.reportType)}</strong> for <strong>${esc(params.assessmentName)}</strong>
         is ready for download.
       </p>
       ${button(params.downloadUrl, "Download Report")}

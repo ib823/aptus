@@ -9,7 +9,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
-import { canPerformPresalesAction } from '@/lib/presales/rbac';
+import { canPerformPresalesAction, lacksTenantScope } from '@/lib/presales/rbac';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
@@ -17,6 +17,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!canPerformPresalesAction(user.role, 'submit_change_request')) {
     return NextResponse.json({ error: { code: 'FORBIDDEN' } }, { status: 403 });
   }
+  if (lacksTenantScope(user)) return NextResponse.json({ error: { code: 'FORBIDDEN' } }, { status: 403 });
 
   const form = await req.formData();
   const bundleId = String(form.get('bundleId') ?? '');
