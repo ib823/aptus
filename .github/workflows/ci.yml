@@ -35,7 +35,7 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
 
@@ -101,7 +101,7 @@ jobs:
       DIRECT_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/fit_portal_test
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
 
@@ -169,7 +169,7 @@ jobs:
       options: --ipc=host
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
 
@@ -204,7 +204,7 @@ jobs:
       options: --ipc=host
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Determine baseline presence BEFORE setting up Node/pnpm caching: with no
       # baselines committed the job is a no-op, but actions/setup-node
