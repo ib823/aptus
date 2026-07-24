@@ -1625,8 +1625,6 @@ model Organization {
   trialEndsAt          DateTime?
   ssoMetadataUrl       String?
   ssoClientId          String?
-  ssoClientSecret      String?
-  scimBearerToken      String?
   maxActiveAssessments Int       @default(1)
   maxPartnerUsers      Int       @default(5)
   primaryColor         String?   @default("#1e40af")

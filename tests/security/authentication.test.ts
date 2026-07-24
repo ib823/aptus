@@ -406,7 +406,7 @@ describe("Authentication Security", () => {
   describe("T-SEC-010: SCIM endpoint without bearer token returns 401", () => {
     it("rejects SCIM request with no Authorization header", () => {
       const org = OrgFactory.createWithSSO();
-      const result = verifyScimAuth({}, org.scimBearerToken!);
+      const result = verifyScimAuth({}, OrgFactory.scimTokenFor(org.id));
       expect(result.authenticated).toBe(false);
       expect(result.status).toBe(401);
       expect(result.error).toBe("SCIM_NO_TOKEN");
@@ -416,7 +416,7 @@ describe("Authentication Security", () => {
       const org = OrgFactory.createWithSSO();
       const result = verifyScimAuth(
         { authorization: "" },
-        org.scimBearerToken!,
+        OrgFactory.scimTokenFor(org.id),
       );
       expect(result.authenticated).toBe(false);
       expect(result.status).toBe(401);
@@ -428,7 +428,7 @@ describe("Authentication Security", () => {
       const org = OrgFactory.createWithSSO();
       const result = verifyScimAuth(
         { authorization: "Bearer invalid-scim-token" },
-        org.scimBearerToken!,
+        OrgFactory.scimTokenFor(org.id),
       );
       expect(result.authenticated).toBe(false);
       expect(result.status).toBe(401);
@@ -438,8 +438,8 @@ describe("Authentication Security", () => {
     it("accepts SCIM request with the correct bearer token", () => {
       const org = OrgFactory.createWithSSO();
       const result = verifyScimAuth(
-        { authorization: `Bearer ${org.scimBearerToken}` },
-        org.scimBearerToken!,
+        { authorization: `Bearer ${OrgFactory.scimTokenFor(org.id)}` },
+        OrgFactory.scimTokenFor(org.id),
       );
       expect(result.authenticated).toBe(true);
       expect(result.status).toBe(200);
@@ -448,7 +448,7 @@ describe("Authentication Security", () => {
     it("SSO-enabled org has SCIM bearer token configured", () => {
       const org = OrgFactory.createWithSSO();
       expect(org.scimEnabled).toBe(true);
-      expect(org.scimBearerToken).toBeTruthy();
+      expect(OrgFactory.scimTokenFor(org.id)).toBeTruthy();
       expect(org.scimEndpoint).toBeTruthy();
     });
   });

@@ -3,6 +3,17 @@ import type { Organization } from "@prisma/client";
 let counter = 0;
 const nextId = () => `test-${++counter}`;
 
+/**
+ * Synthetic, deterministic SCIM bearer token for a given org, for the SCIM
+ * tenant-isolation security specs. The real `scimBearerToken` column was dropped
+ * (unused in production; SSO/SCIM login is not built) — the specs model the
+ * intended per-org token logic without depending on a DB column. Distinct per
+ * org id, stable for a given id, so cross-tenant vs same-tenant checks hold.
+ */
+export function scimTokenFor(orgId: string): string {
+  return `scim_token_${orgId}`;
+}
+
 type OrganizationOverrides = Partial<Organization>;
 
 function createBase(overrides: OrganizationOverrides = {}): Organization {
@@ -36,8 +47,6 @@ function createBase(overrides: OrganizationOverrides = {}): Organization {
     trialEndsAt: overrides.trialEndsAt ?? new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000),
     ssoMetadataUrl: overrides.ssoMetadataUrl ?? null,
     ssoClientId: overrides.ssoClientId ?? null,
-    ssoClientSecret: overrides.ssoClientSecret ?? null,
-    scimBearerToken: overrides.scimBearerToken ?? null,
     maxActiveAssessments: overrides.maxActiveAssessments ?? 1,
     maxPartnerUsers: overrides.maxPartnerUsers ?? 5,
     primaryColor: overrides.primaryColor ?? "#1e40af",
@@ -134,10 +143,8 @@ export function createWithSSO(overrides: OrganizationOverrides = {}): Organizati
     ssoDomain: domain,
     ssoMetadataUrl: `https://${domain}/.well-known/openid-configuration`,
     ssoClientId: `client_${nextId()}`,
-    ssoClientSecret: `secret_${nextId()}`,
     scimEnabled: true,
     scimEndpoint: `https://${domain}/scim/v2`,
-    scimBearerToken: `scim_token_${nextId()}`,
     mfaPolicy: "required",
     maxActiveAssessments: 100,
     maxPartnerUsers: 100,
