@@ -7,9 +7,11 @@
  *
  * TENANT RESOLUTION — the guardrail that matters: the tenant list is read from
  * the caller's OWN Organization (its active SapConnection rows) using the
- * organizationId on the session. It is never taken from the URL, a query string,
- * or a request body. The cookie below only remembers which of the caller's
- * already-authorized tenants they were last looking at; it grants nothing.
+ * organizationId on the session, falling back to the deployment's configured env
+ * tenant when the organization has no connections of its own. It is never taken
+ * from the URL, a query string, or a request body. The cookie below only remembers
+ * which of the caller's already-authorized tenants they were last looking at; it
+ * grants nothing.
  *
  * AffirmLearnProvider is mounted here because the reused SAP catalogue components
  * (SapCapabilityCatalogue, ContentTypeTiles, CapabilityDetail, …) consume that
@@ -26,8 +28,8 @@ import { RoleGatedEmptyState } from "@/components/studio/RoleGatedEmptyState";
 import { StudioShell } from "@/components/studio/StudioShell";
 import { STUDIO_TENANT_COOKIE, type StudioTenantOption } from "@/components/studio/StudioTopBar";
 import { getCurrentUser } from "@/lib/auth/session";
-import { prisma } from "@/lib/db/prisma";
 import { accessibleWorkspaces, canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
+import { pickActiveTenant, resolveStudioTenants } from "@/lib/studio/tenants";
 import { ROLE_LABELS } from "@/types/assessment";
 
 export const dynamic = "force-dynamic";
@@ -63,21 +65,20 @@ export default async function StudioLayout({ children }: { children: ReactNode }
     return <RoleGatedEmptyState roleLabel={roleLabel} />;
   }
 
-  // Authorized tenants = this organization's active SAP connections. Metadata
-  // only: `key`, `label` and `product` are non-secret columns. secretsCiphertext
-  // is never selected here (or anywhere reachable from the client).
-  const connections = user.organizationId
-    ? await prisma.sapConnection.findMany({
-        where: { organizationId: user.organizationId, isActive: true },
-        select: { key: true, label: true, product: true },
-        orderBy: { createdAt: "asc" },
-      })
-    : [];
+  // Authorized tenants: this organization's own connections when it has any,
+  // otherwise the deployment's configured env tenant — the same one the existing
+  // SAP Explorer runs on. Metadata only: `key`, `label` and `product` are
+  // non-secret columns, and secretsCiphertext is never selected here (or anywhere
+  // reachable from the client).
+  //
+  // An environment tenant is SHARED across the deployment, so it is labelled as
+  // such rather than presented as this client's SAP.
+  const resolved = await resolveStudioTenants(user.organizationId);
 
-  const tenants: StudioTenantOption[] = connections.map((c) => ({
-    key: c.key,
-    label: c.label,
-    product: c.product,
+  const tenants: StudioTenantOption[] = resolved.map((t) => ({
+    key: t.key,
+    label: t.source === "environment" ? `${t.label} (shared)` : t.label,
+    product: t.product,
   }));
 
   // The remembered selection is honoured ONLY if it is one of the caller's own
@@ -85,10 +86,7 @@ export default async function StudioLayout({ children }: { children: ReactNode }
   // therefore cannot select another organization's tenant.
   const cookieStore = await cookies();
   const remembered = cookieStore.get(STUDIO_TENANT_COOKIE)?.value ?? null;
-  const activeTenantKey =
-    remembered && tenants.some((t) => t.key === remembered)
-      ? remembered
-      : (tenants[0]?.key ?? null);
+  const activeTenantKey = pickActiveTenant(resolved, remembered);
 
   return (
     <AffirmLearnProvider>
