@@ -660,6 +660,95 @@ model ConfigAudit {
   @@index([organizationId, at])
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CoreEdge runtime (Phase D) — the northbound broker's spine.
+//
+// Design-time governance above decides WHAT a solution may consume. These tables
+// are about a solution actually CALLING for it: the identity it authenticates
+// with, the record of every call, and the recorded responses a developer can
+// replay offline.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The runtime identity the northbound broker authenticates.
+///
+/// The raw token is shown ONCE at issue and never stored — only its SHA-256 hash
+/// lives here, exactly as session tokens are handled. A database dump therefore
+/// yields no usable credential.
+model SolutionClient {
+  id             String @id @default(cuid())
+  organizationId String
+  /// One runtime identity per solution in v1.
+  solutionId     String @unique
+
+  label       String
+  /// SHA-256 of the issued token. The raw value is never persisted.
+  tokenHash   String @unique
+  /// SANDBOX | DEV | TEST | PROD — the trust level this client runs at.
+  environment String
+
+  /// Optional sealed extras (AES-256-GCM, bound to this row by AAD).
+  secretsCiphertext String? @db.Text
+
+  isActive   Boolean   @default(true)
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([tokenHash])
+}
+
+/// Per-call audit for the northbound broker. APPEND-ONLY: there is no update or
+/// delete path onto this table. An audit trail that can be edited is not one.
+model NorthboundAuditEvent {
+  id             String  @id @default(cuid())
+  organizationId String
+  solutionId     String
+  interfaceId    String?
+
+  /// READ | WRITE
+  operation   String
+  /// The catalogue service that was reached.
+  externalId  String
+  environment String
+
+  /// The HTTP status returned to the caller — what actually happened.
+  status   Int
+  rowCount Int?
+
+  correlationId String
+  /// Which SolutionClient was used, so a leaked token can be traced and revoked.
+  clientTokenId String
+
+  at DateTime @default(now())
+
+  @@index([organizationId, solutionId, at])
+  @@index([organizationId, clientTokenId, at])
+}
+
+/// A recorded response captured from a Test Console run, so a developer's own
+/// test suite can replay every honest state offline.
+model MockFixture {
+  id             String @id @default(cuid())
+  organizationId String
+  interfaceId    String
+
+  /// "data" | "empty" | "needs_setup" | "error" — the honest states.
+  scenario String
+  status   Int
+  body     Json
+
+  capturedAt DateTime @default(now())
+
+  @@index([organizationId, interfaceId, scenario])
+}
+
 enum SolutionKind {
   INTERNAL_ACCELERATOR
   PRESALES_DEMO
@@ -1893,6 +1982,9 @@ model Organization {
 
   // CoreEdge Developer Studio — governed solutions (tenant anchor)
   solutions Solution[]
+
+  // CoreEdge runtime — per-solution client identities
+  solutionClients SolutionClient[]
 
   @@index([slug])
   @@index([plan])
