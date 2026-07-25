@@ -482,7 +482,17 @@ model SapConnection {
   /// Optional health-probe path + timeout override (fall back to product defaults).
   apiPath           String?
   timeoutMs         Int?
-  isActive          Boolean @default(true)
+
+  /// Last time a read-only probe against THIS connection actually returned 200.
+  /// Only a real 200 moves it: a failed test leaves the previous timestamp
+  /// standing, so the column can never imply a health it did not observe.
+  lastValidatedAt      DateTime?
+  /// Outcome of the most recent probe — OK | UNAUTHORIZED | NOT_FOUND | TIMEOUT
+  /// | ERROR | NEVER_TESTED (null). Deliberately NOT a boolean: "not set up"
+  /// (401/403) and "unreachable" (5xx/timeout) are different problems with
+  /// different fixes, and collapsing them would hide which one you have.
+  lastValidationStatus String?
+  isActive             Boolean   @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

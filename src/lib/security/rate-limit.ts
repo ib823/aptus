@@ -186,7 +186,13 @@ export function isLiveSapTenantRoute(pathname: string): boolean {
     pathname === "/api/sap/tdd/operations" ||
     pathname === "/api/sap/tdd/preview" ||
     pathname === "/api/sap/tdd/entities" ||
-    pathname === "/api/sap/tdd/hub-content/probe-all"
+    pathname === "/api/sap/tdd/hub-content/probe-all" ||
+    // Studio's per-connection connectivity probe. It reaches a CLIENT's SAP
+    // system with that client's own credentials, so it amplifies onto a tenant
+    // exactly like the routes above and belongs in the same tight bucket — not
+    // the generous default API ceiling. Matched by shape because the id is
+    // dynamic; anchored at both ends so no other path can slip in.
+    /^\/api\/studio\/connections\/[^/]+\/test$/.test(pathname)
   );
 }
 
