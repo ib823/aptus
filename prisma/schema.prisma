@@ -494,6 +494,186 @@ model SapConnection {
   @@index([organizationId, isActive])
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CoreEdge Developer Studio — the governed design-time spine.
+//
+// Studio governs the INTEGRATION between an ABeam-built solution and a client's
+// SAP tenant. It is not an IDE: the solution's own application code lives in the
+// developer's own repo (`Solution.repoUrl`) and never in these tables. What is
+// modelled here is CONFIG + GOVERNANCE — which catalogue service a solution
+// consumes, who approved that access, and what was tested.
+//
+// Every table is anchored to an Organization (tenant) and is resolved from the
+// authenticated session, never from request input.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The "solution passport" — one registered solution and its governance state.
+model Solution {
+  id              String         @id @default(cuid())
+  organizationId  String
+  name            String
+  slug            String
+  classification  SolutionKind
+  businessProblem String
+  /// ACTIVE is gated on all three owners being set; an orphan drops to RESTRICTED.
+  status          SolutionStatus @default(DRAFT)
+  dataClass       String
+
+  technicalOwnerId String?
+  businessOwnerId  String?
+  supportOwnerId   String?
+
+  /// Operating tab — the solution's application code lives in its OWN repo.
+  repoUrl       String?
+  /// Commercial tab.
+  packagingNote String?
+  reuseIntent   String?
+
+  interfaces Interface[]
+  grants     ApiAccessGrant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+}
+
+/// Governed CONFIG referencing a catalogue service — never code.
+model Interface {
+  id             String @id @default(cuid())
+  solutionId     String
+  organizationId String
+
+  name    String
+  /// Bumped on every change.
+  version Int    @default(1)
+
+  /// "s4hana" | "successfactors" | "ariba"
+  sapProduct String
+  /// The catalogue apiId of the service being consumed.
+  externalId String
+  /// READ | CREATE | UPDATE
+  operation  String
+  entitySet  String?
+  /// READ | WRITE (WRITE implies a stronger review path).
+  mode       String
+
+  requestSchema  Json?
+  responseSchema Json?
+  /// ALWAYS null in v1 — the mapping engine is v2.
+  mappingVersion Int?
+
+  /// DRAFT | ACTIVE | DEPRECATED
+  status String @default("DRAFT")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  solution  Solution   @relation(fields: [solutionId], references: [id], onDelete: Cascade)
+  testCases TestCase[]
+
+  @@index([organizationId, externalId])
+  @@index([solutionId])
+}
+
+/// Scope request + decision — the governance ledger in v1. Runtime enforcement
+/// (the northbound broker) is a later phase; this table records the decision.
+model ApiAccessGrant {
+  id             String @id @default(cuid())
+  solutionId     String
+  organizationId String
+
+  externalId  String
+  /// READ | CREATE | UPDATE
+  operation   String
+  /// SANDBOX | DEV | TEST | PROD — progressive trust.
+  environment String
+
+  justification String
+  decision      GrantDecision @default(REQUESTED)
+  /// Segregation of duties: must differ from the requester.
+  requestedById String?
+  decidedById   String?
+  decidedAt     DateTime?
+  expiresAt     DateTime?
+
+  createdAt DateTime @default(now())
+
+  solution Solution @relation(fields: [solutionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, solutionId])
+}
+
+/// A saved Test Console run.
+model TestCase {
+  id             String @id @default(cuid())
+  interfaceId    String
+  organizationId String
+
+  name        String
+  request     Json
+  expectation Json?
+  lastRunAt   DateTime?
+  /// PASS | FAIL | NOT_RUN
+  lastOutcome String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  interface Interface @relation(fields: [interfaceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, interfaceId])
+}
+
+/// Config-change audit — written on EVERY governance mutation, from day one.
+/// Append-only: there is no update or delete path onto this table.
+model ConfigAudit {
+  id             String @id @default(cuid())
+  organizationId String
+  actorId        String
+
+  /// "Solution" | "Interface" | "ApiAccessGrant" | "TestCase" | "Connection"
+  entityType String
+  entityId   String
+  /// CREATE | UPDATE | PROMOTE | DECISION | TEST_CONNECT
+  action     String
+
+  before Json?
+  after  Json?
+
+  at DateTime @default(now())
+
+  @@index([organizationId, entityType, entityId])
+  @@index([organizationId, at])
+}
+
+enum SolutionKind {
+  INTERNAL_ACCELERATOR
+  PRESALES_DEMO
+  CLIENT_APP
+  REUSABLE
+  EXPERIMENT
+}
+
+enum SolutionStatus {
+  DRAFT
+  ACTIVE
+  RESTRICTED
+  RETIRED
+}
+
+enum GrantDecision {
+  REQUESTED
+  APPROVED
+  SANDBOX_ONLY
+  READ_ONLY
+  REJECTED
+  EXPIRED
+}
+
 model ScopeItem {
   // Phase 13.1 — AD-13.1: id is now a cuid; the bare SAP code lives in scopeCode.
   // Composite uniqueness on (scopeCode, catalogVersionId) lets J60 exist in
@@ -1700,6 +1880,9 @@ model Organization {
 
   // SAP Operations middleware — per-Organization SAP tenant connections
   sapConnections SapConnection[]
+
+  // CoreEdge Developer Studio — governed solutions (tenant anchor)
+  solutions Solution[]
 
   @@index([slug])
   @@index([plan])

@@ -48,6 +48,8 @@
   --color-status-expired-fg:  var(--status-expired-fg);
   --color-status-revoked-bg:  var(--status-revoked-bg);
   --color-status-revoked-fg:  var(--status-revoked-fg);
+  --color-status-nocheck-bg:  var(--status-nocheck-bg);
+  --color-status-nocheck-fg:  var(--status-nocheck-fg);
 
   --radius-input: 8px;
   --radius-card-warm: 12px;
@@ -144,6 +146,9 @@
   --status-signed-bg:   #DCEBE3;  --status-signed-fg:   #166534;
   --status-expired-bg:  #EAEAE6;  --status-expired-fg:  #6B6B6B;
   --status-revoked-bg:  #F4DEDB;  --status-revoked-fg:  #8E2A26;
+  /* CoreEdge honest-status NOT_CHECKED — "not yet probed". Distinct from
+     expired (grey) so "never probed" never reads as "probed and inactive". */
+  --status-nocheck-bg:  #EFEDE6;  --status-nocheck-fg:  #8A8A8A;
 
   --decision-standard:  #0F766E;
   --decision-configure: #1D4ED8;
@@ -322,6 +327,8 @@
   --status-expired-fg: oklch(0.7 0 0);
   --status-revoked-bg: oklch(0.3 0.06 25);
   --status-revoked-fg: oklch(0.85 0.12 25);
+  --status-nocheck-bg: oklch(0.26 0 0);
+  --status-nocheck-fg: oklch(0.65 0 0);
 
   --decision-standard: oklch(0.82 0.1 175);
   --decision-configure: oklch(0.82 0.12 255);
@@ -350,6 +357,31 @@
     outline: 2px solid var(--ring);
     outline-offset: 2px;
     border-radius: var(--radius-sm);
+  }
+
+  /* CoreEdge Developer Studio — WCAG 2.1 AA focus baseline.
+   *
+   * The approved Studio design strips focus outlines with `all: unset`; these
+   * rules guarantee a visible ABeam-navy ring on the Studio surface no matter
+   * what a component does locally. Scoped to [data-studio] so the rest of the
+   * app keeps its existing --ring token unchanged (additive only).
+   *
+   * Inside the navy rail a navy ring would be invisible against the background,
+   * so it inverts to paper — same 2px/2px geometry, AA contrast either way. */
+  [data-studio] a:focus-visible,
+  [data-studio] button:focus-visible,
+  [data-studio] select:focus-visible,
+  [data-studio] [role="button"]:focus-visible,
+  [data-studio] [tabindex]:focus-visible {
+    outline: 2px solid var(--brand-navy);
+    outline-offset: 2px;
+    border-radius: var(--radius-input, 8px);
+  }
+  [data-studio-rail] a:focus-visible,
+  [data-studio-rail] [role="button"]:focus-visible,
+  [data-studio-rail] [tabindex]:focus-visible {
+    outline: 2px solid var(--surface-paper);
+    outline-offset: 2px;
   }
 
   /* Restore pointer cursor on interactive elements.
