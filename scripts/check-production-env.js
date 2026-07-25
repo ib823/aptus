@@ -63,6 +63,18 @@ const TEST_LOGIN_FLAGS = [
   { key: "ALLOW_TEST_LOGIN", reason: "Enables test-login endpoint in production" },
   { key: "ENABLE_TEST_LOGIN_ENDPOINT", reason: "Enables the /api/auth/test-login + /dev-login backdoor" },
   { key: "ALLOW_TEST_LOGIN_IN_PROD", reason: "Overrides the production safety gate for test-login" },
+  {
+    key: "ALLOW_BACKDOOR_WITHOUT_IP_ALLOWLIST",
+    reason: "Removes the IP allow-list requirement, leaving the backdoors reachable from any network",
+    // The other flags OPEN a backdoor; this one removes its second lock. Without
+    // its own message the acknowledgement below would report an exposed
+    // /dev-login while staying silent about the IP restriction being off — a
+    // warning that is true but not the whole truth.
+    warn:
+      "ALLOW_BACKDOOR_WITHOUT_IP_ALLOWLIST=true — the backdoors on this deploy accept requests from ANY IP. " +
+      "Only E2E_TEST_SECRET stands between the internet and a platform_admin session. " +
+      "Set TEST_LOGIN_ALLOWED_IPS (exact IPs, no CIDR) to restrict it, or unset this var if no backdoor is enabled.",
+  },
 ];
 
 let exitCode = 0;
@@ -113,9 +125,11 @@ if (isProductionDeploy) {
   const enabledTestLoginFlags = TEST_LOGIN_FLAGS.filter(({ key }) => process.env[key]);
   if (enabledTestLoginFlags.length > 0) {
     if (internalTest) {
-      for (const { key } of enabledTestLoginFlags) {
+      for (const { key, warn } of enabledTestLoginFlags) {
         console.warn(
-          `[WARN] ${key} is enabled on this production deploy — permitted because INTERNAL_TEST_DEPLOYMENT=true. This deploy exposes the /dev-login backdoor; never set this on a customer-facing deployment.`,
+          warn
+            ? `[WARN] ${warn} Permitted because INTERNAL_TEST_DEPLOYMENT=true; never set this on a customer-facing deployment.`
+            : `[WARN] ${key} is enabled on this production deploy — permitted because INTERNAL_TEST_DEPLOYMENT=true. This deploy exposes the /dev-login backdoor; never set this on a customer-facing deployment.`,
         );
       }
       // A weak secret guarding a prod backdoor is a configuration mistake.
