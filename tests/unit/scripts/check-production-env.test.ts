@@ -39,11 +39,20 @@ function run(env: Record<string, string | undefined>): Result {
   // console.warn, and execFileSync's return value is stdout only — so a passing
   // deploy's warnings would be invisible and every "it warns" assertion would
   // fail against an empty string.
-  const r = spawnSync("node", [SCRIPT], {
-    // Bare env: inheriting the real one would let an ambient var flip a result.
-    env: { PATH: process.env.PATH ?? "", ...env } as NodeJS.ProcessEnv,
-    encoding: "utf8",
-  });
+  // Built rather than cast: this repo's ProcessEnv requires NODE_ENV, so
+  // `{...} as NodeJS.ProcessEnv` is an unsound assertion that --strict rejects.
+  // Seeded here and overridden by every caller.
+  const childEnv: NodeJS.ProcessEnv = {
+    // A bare env — inheriting the real one would let an ambient var flip a result.
+    PATH: process.env.PATH ?? "",
+    NODE_ENV: "production",
+  };
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) delete childEnv[key];
+    else childEnv[key] = value;
+  }
+
+  const r = spawnSync("node", [SCRIPT], { env: childEnv, encoding: "utf8" });
   return { code: r.status ?? 1, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
 }
 
