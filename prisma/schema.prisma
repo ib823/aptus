@@ -451,6 +451,49 @@ model SapHubContent {
   @@index([status])
 }
 
+/// SAP Operations middleware — the multi-tenant keystone.
+///
+/// One SAP tenant connection OWNED BY an Organization, so the middleware can be
+/// pointed at each client's own SAP system instead of the single shared
+/// `{PREFIX}_*` env tenant. Non-secret fields (baseUrl, authType, oauthTokenUrl)
+/// are plaintext; the SECRETS (password / bearer / clientSecret / writeSecret)
+/// live sealed in `secretsCiphertext` (AES-256-GCM via connection-crypto.ts) and
+/// are NEVER returned to a client. Stored probe status is keyed per (row,
+/// tenantKey) on SapHubContent.rawMetadataJson.probes — `key` here is that
+/// tenantKey, so one client's activations never surface for another.
+model SapConnection {
+  id                String  @id @default(cuid())
+  organizationId    String
+  /// "s4hana" | "successfactors" | "ariba" — mirrors the env product prefixes.
+  product           String
+  /// Sanitized tenant key; also the key stored probes are recorded under.
+  key               String
+  label             String
+  /// e.g. https://myXXXXXX-api.s4hana.cloud.sap — non-secret, kept server-side.
+  baseUrl           String
+  /// "basic" | "bearer" | "oauth-client-credentials".
+  authType          String
+  /// OAuth token endpoint — non-secret; null unless authType is oauth.
+  oauthTokenUrl     String?
+  /// AES-256-GCM sealed JSON bundle of the secret fields. Never logged/returned.
+  secretsCiphertext String  @db.Text
+  /// Gate for guarded writes on this connection (mirrors {PREFIX}_WRITE_ENABLED).
+  writeEnabled      Boolean @default(false)
+  /// Optional health-probe path + timeout override (fall back to product defaults).
+  apiPath           String?
+  timeoutMs         Int?
+  isActive          Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, product, key])
+  @@index([organizationId, product])
+  @@index([organizationId, isActive])
+}
+
 model ScopeItem {
   // Phase 13.1 — AD-13.1: id is now a cuid; the bare SAP code lives in scopeCode.
   // Composite uniqueness on (scopeCode, catalogVersionId) lets J60 exist in
@@ -1654,6 +1697,9 @@ model Organization {
 
   // ABeam Workbench — Presales (denormalized tenant scoping)
   presalesBundles PresalesBundle[]
+
+  // SAP Operations middleware — per-Organization SAP tenant connections
+  sapConnections SapConnection[]
 
   @@index([slug])
   @@index([plan])
