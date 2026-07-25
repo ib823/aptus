@@ -13,6 +13,7 @@ import { ConnectionsClient, type StudioConnection } from "@/components/studio/Co
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { canMutateStudio } from "@/lib/studio/rbac";
+import { resolveStudioTenants } from "@/lib/studio/tenants";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Connections" };
@@ -50,6 +51,14 @@ export default async function StudioConnectionsPage() {
     lastValidatedAt: r.lastValidatedAt ? r.lastValidatedAt.toISOString() : null,
   }));
 
+  // This organization has stored no connection of its own, yet the rest of Studio
+  // is happily reading SAP — because the deployment has an env tenant configured.
+  // Say so here rather than let an empty table imply nothing is wired up.
+  const fallback =
+    connections.length === 0
+      ? (await resolveStudioTenants(organizationId)).filter((t) => t.source === "environment")
+      : [];
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div>
@@ -79,6 +88,30 @@ export default async function StudioConnectionsPage() {
           an API response.
         </p>
       </section>
+
+      {fallback.length > 0 ? (
+        <section
+          style={{
+            background: "var(--surface-banner-info, var(--surface-subtle))",
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-card-warm, 12px)",
+            padding: 16,
+          }}
+        >
+          <h2 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 600 }}>
+            Running on the shared environment tenant
+          </h2>
+          <p style={{ margin: 0, fontSize: 13, lineHeight: "20px", color: "var(--ink-secondary)" }}>
+            This organization has no stored connection, so Studio is using the tenant
+            configured on the deployment itself
+            {" ("}
+            {fallback.map((t) => t.label).join(", ")}
+            {") — the same one SAP Explorer reads. It is shared by everyone on this "}
+            deployment and its credentials live in environment variables, not in the
+            sealed store above. Add a connection here to give this organization its own.
+          </p>
+        </section>
+      ) : null}
 
       <ConnectionsClient connections={connections} canTest={canMutateStudio(user.role)} />
     </div>
