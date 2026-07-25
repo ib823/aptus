@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0}
+  a{color:#002B5C;text-decoration:none}
+  a:hover{color:#001E40}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#e3dfd2;border-radius:8px}
+  ::-webkit-scrollbar-track{background:transparent}
+  @keyframes ce-shim{0%{background-position:-420px 0}100%{background-position:420px 0}}
+  @keyframes ce-sheet{from{transform:translateX(28px);opacity:0}to{transform:translateX(0);opacity:1}}
+  @keyframes ce-fade{from{opacity:0}to{opacity:1}}
+</style>
+</helmet>
+<div style="display:grid;grid-template-columns:220px 1fr;height:100vh;width:100%;font-family:'Geist','Inter',system-ui,-apple-system,'Segoe UI',sans-serif;color:#1A1A1A;background:#FAF9F5;overflow:hidden;font-size:14px">
+
+  <!-- ================= LEFT RAIL ================= -->
+  <aside style="background:#002B5C;color:#fff;display:flex;flex-direction:column;padding:14px 12px;overflow-y:auto">
+    <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px;padding:2px 8px 12px;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:4px">
+      <span style="display:inline-flex;width:20px;height:20px;align-items:center;justify-content:center;background:rgba(255,255,255,.14);border-radius:6px;font-size:11px">◆</span>
+      CoreEdge Console
+    </div>
+
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.5);margin:14px 8px 5px;font-weight:600">Workspace</div>
+    <sc-for list="{{ workspaces }}" as="w" hint-placeholder-count="3">
+      <button onClick="{{ w.onClick }}" style="all:unset;display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;font-size:12.5px;cursor:pointer;margin:1px 0;background:{{ w.bg }};color:{{ w.color }};font-weight:{{ w.weight }}">
+        <span style="width:16px;text-align:center;opacity:.85">{{ w.icon }}</span>
+        <span style="flex:1">{{ w.label }}</span>
+        <sc-if value="{{ w.locked }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px;opacity:.6">🔒</span></sc-if>
+      </button>
+    </sc-for>
+
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.5);margin:18px 8px 5px;font-weight:600">Developer Studio</div>
+    <sc-for list="{{ sections }}" as="n" hint-placeholder-count="7">
+      <button onClick="{{ n.onClick }}" style="all:unset;display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;font-size:12.5px;cursor:{{ n.cursor }};margin:1px 0;background:{{ n.bg }};color:{{ n.color }};font-weight:{{ n.weight }}">
+        <span style="width:16px;text-align:center;opacity:.85">{{ n.icon }}</span>
+        <span style="flex:1">{{ n.label }}</span>
+        <sc-if value="{{ n.soon }}" hint-placeholder-val="{{ false }}"><span style="font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;background:rgba(255,255,255,.12);padding:1px 6px;border-radius:20px">next</span></sc-if>
+      </button>
+    </sc-for>
+
+    <div style="margin-top:auto;padding:12px 8px 2px;border-top:1px solid rgba(255,255,255,.1);font-size:11px;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:7px">
+      <span style="width:7px;height:7px;border-radius:50%;background:#8fd0a8;box-shadow:0 0 0 3px rgba(143,208,168,.18)"></span>
+      Catalogue probed · 3h ago
+    </div>
+  </aside>
+
+  <!-- ================= MAIN COLUMN ================= -->
+  <div style="display:flex;flex-direction:column;min-width:0;height:100vh">
+
+    <!-- TOP BAR -->
+    <header style="height:56px;flex:none;background:#FFFFFE;border-bottom:1px solid #E5E1D6;display:flex;align-items:center;gap:12px;padding:0 20px;position:relative;z-index:40">
+      <div style="font-size:12.5px;color:#8A8A8A">Developer Studio&nbsp;&nbsp;/&nbsp;&nbsp;<b style="color:#1A1A1A">{{ crumb }}</b></div>
+      <div style="flex:1"></div>
+
+      <!-- tenant switcher (resolved from auth) -->
+      <div style="position:relative">
+        <button onClick="{{ toggleTenant }}" style="all:unset;display:inline-flex;align-items:center;gap:8px;border:1px solid #C4BFAE;border-radius:8px;padding:5px 10px;font-size:12.5px;font-weight:600;background:#FFFFFE;cursor:pointer;color:#1A1A1A">
+          <span style="color:#8A8A8A">◎</span> {{ tenantLabel }}
+          <span style="font-size:10px;background:{{ envBg }};color:{{ envFg }};padding:1px 6px;border-radius:5px;font-weight:700;letter-spacing:.02em">{{ envLabel }}</span>
+          <span style="color:#8A8A8A;font-size:10px">▾</span>
+        </button>
+        <sc-if value="{{ tenantOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;top:40px;right:0;width:280px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.08);padding:8px;animation:ce-fade .12s ease">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A;font-weight:700;padding:6px 8px 4px">Authorized tenants</div>
+            <sc-for list="{{ tenants }}" as="t" hint-placeholder-count="3">
+              <button onClick="{{ t.onClick }}" style="all:unset;display:flex;align-items:center;gap:10px;width:100%;padding:8px;border-radius:8px;cursor:pointer;background:{{ t.bg }}">
+                <span style="width:8px;height:8px;border-radius:50%;background:{{ t.dot }};flex:none"></span>
+                <span style="flex:1"><span style="font-size:13px;font-weight:600;display:block">{{ t.key }}</span><span style="font-size:11.5px;color:#8A8A8A">{{ t.product }}</span></span>
+                <sc-if value="{{ t.active }}" hint-placeholder-val="{{ false }}"><span style="color:#166534;font-size:12px">✓</span></sc-if>
+              </button>
+            </sc-for>
+            <div style="border-top:1px solid #E5E1D6;margin:6px 0 0;padding:8px 8px 4px;font-size:11px;color:#8A8A8A;line-height:1.45">Resolved from your access — never typed into a URL.</div>
+          </div>
+        </sc-if>
+      </div>
+
+      <span style="font-size:11px;font-weight:600;background:#E6EBF1;color:#002B5C;padding:3px 9px;border-radius:6px">{{ roleLabel }}</span>
+      <span style="width:30px;height:30px;border-radius:50%;background:#002B5C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">IB</span>
+    </header>
+
+    <!-- CONTENT SCROLL -->
+    <main style="flex:1;overflow-y:auto;padding:22px 24px" onClick="{{ onMainClick }}">
+
+      <!-- ===== RBAC RESTRICTED ===== -->
+      <sc-if value="{{ isRestricted }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:520px;margin:64px auto;text-align:center;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);padding:36px 32px">
+          <div style="width:46px;height:46px;border-radius:12px;background:#F4F2EB;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:20px;color:#8A8A8A">🔒</div>
+          <div style="font-family:'Source Serif 4',Georgia,serif;font-size:20px;font-weight:600;margin-bottom:6px">Developer Studio is role-gated</div>
+          <p style="color:#4A4A4A;font-size:13.5px;margin:0 auto 4px;max-width:400px">Your <b>{{ roleLabel }}</b> role does not include the Developer Studio workspace. RBAC gates each workspace — you only see the surfaces your role is accountable for.</p>
+          <p style="color:#8A8A8A;font-size:12.5px;margin:8px 0 0">Switch to your workspace in the left rail, or request access from a Platform Admin.</p>
+        </div>
+      </sc-if>
+
+      <!-- ===== HOME ===== -->
+      <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+        <div style="animation:ce-fade .18s ease">
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px">
+            <div>
+              <h1 style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;margin:0;letter-spacing:-.01em">{{ greeting }}</h1>
+              <p style="color:#4A4A4A;font-size:13.5px;margin:4px 0 0">{{ homeSub }}</p>
+            </div>
+            <button onClick="{{ newSolution }}" style="all:unset;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:8px;background:#002B5C;color:#fff;font-size:13px;font-weight:600;cursor:pointer">+ New solution</button>
+          </div>
+
+          <!-- FIRST-RUN EMPTY -->
+          <sc-if value="{{ homeEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:26px;background:#FFFFFE;border:1px dashed #C4BFAE;border-radius:12px;padding:44px 32px;text-align:center">
+              <div style="width:48px;height:48px;border-radius:12px;background:#E6EBF1;color:#002B5C;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:22px">▤</div>
+              <div style="font-family:'Source Serif 4',Georgia,serif;font-size:19px;font-weight:600">Register your first solution</div>
+              <p style="color:#4A4A4A;font-size:13.5px;max-width:440px;margin:8px auto 18px">A solution is a governed record — owners, scopes and interfaces — before it ever reaches production. Start by registering one, or explore what this tenant can do.</p>
+              <div style="display:flex;gap:10px;justify-content:center">
+                <button onClick="{{ newSolution }}" style="all:unset;display:inline-flex;align-items:center;height:38px;padding:0 16px;border-radius:8px;background:#002B5C;color:#fff;font-size:14px;font-weight:600;cursor:pointer">Register a solution</button>
+                <button onClick="{{ goDiscover }}" style="all:unset;display:inline-flex;align-items:center;height:38px;padding:0 16px;border-radius:8px;background:#FFFFFE;border:1px solid #C4BFAE;color:#1A1A1A;font-size:14px;font-weight:600;cursor:pointer">Explore APIs</button>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- POPULATED -->
+          <sc-if value="{{ homePopulated }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0 4px">
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:15px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A;font-weight:600">My solutions</div>
+                <div style="margin-top:11px;display:flex;flex-direction:column;gap:9px">
+                  <sc-for list="{{ mySolutions }}" as="m" hint-placeholder-count="3">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px">
+                      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.name }}</span>
+                      <span style="flex:none;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:9999px;font-size:10.5px;font-weight:600;background:{{ m.bg }};color:{{ m.fg }}"><span style="width:5px;height:5px;border-radius:50%;background:currentColor"></span>{{ m.label }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:15px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A;font-weight:600">Test status</div>
+                <div style="margin-top:11px;display:flex;flex-direction:column;gap:9px;font-size:13px">
+                  <div style="display:flex;justify-content:space-between;align-items:center"><span>Passed</span><b style="color:#166534">18</b></div>
+                  <div style="display:flex;justify-content:space-between;align-items:center"><span>Failed</span><b style="color:#991B1B">2</b></div>
+                  <div style="display:flex;justify-content:space-between;align-items:center"><span>Not run since edit</span><b style="color:#B45309">3</b></div>
+                </div>
+              </div>
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:15px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A;font-weight:600">Production attention</div>
+                <div style="margin-top:11px;display:flex;flex-direction:column;gap:9px;font-size:12.5px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Mapping validation issue</span><span style="flex:none;background:#FBE9D1;color:#8B5A00;padding:2px 8px;border-radius:6px;font-size:10.5px;font-weight:700">act</span></div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>API marked for review</span><span style="flex:none;background:#E0EBF4;color:#1A4D6F;padding:2px 8px;border-radius:6px;font-size:10.5px;font-weight:700">info</span></div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Deprecated dependency</span><span style="flex:none;background:#F4DEDB;color:#8E2A26;padding:2px 8px;border-radius:6px;font-size:10.5px;font-weight:700">risk</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div style="background:linear-gradient(90deg,#E6EBF1,#FFFFFE);border:1px solid #CFD7E0;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;margin:16px 0 18px">
+              <div style="width:36px;height:36px;border-radius:9px;background:#002B5C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex:none">▷</div>
+              <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">Continue where you stopped</div><div style="font-size:12px;color:#8A8A8A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Supplier Exception Monitor › Interface “Supplier sync” › mapping v3 · failed validation</div></div>
+              <button onClick="{{ resume }}" style="all:unset;display:inline-flex;align-items:center;height:34px;padding:0 14px;border-radius:8px;background:#FFFFFE;border:1px solid #C4BFAE;font-size:13px;font-weight:600;cursor:pointer;flex:none">Resume</button>
+            </div>
+          </sc-if>
+
+          <div style="font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A;font-weight:700;margin:18px 0 10px">Quick actions</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button onClick="{{ goDiscover }}" style="all:unset;display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 16px;border-radius:8px;background:#FFFFFE;border:1px solid #C4BFAE;font-size:14px;font-weight:600;cursor:pointer">⊞ Explore APIs</button>
+            <button onClick="{{ newSolution }}" style="all:unset;display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 16px;border-radius:8px;background:#FFFFFE;border:1px solid #C4BFAE;font-size:14px;font-weight:600;cursor:pointer">▤ Register solution</button>
+            <button onClick="{{ goTest }}" style="all:unset;display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 16px;border-radius:8px;background:#FFFFFE;border:1px solid #C4BFAE;font-size:14px;font-weight:600;cursor:pointer">▷ Test an interface</button>
+            <button onClick="{{ goAccess }}" style="all:unset;display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 16px;border-radius:8px;background:transparent;border:1px dashed #002B5C;color:#002B5C;font-size:14px;font-weight:600;cursor:pointer">⚿ Request access</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ===== DISCOVER ===== -->
+      <sc-if value="{{ isDiscover }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:ce-fade .18s ease">
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:16px">
+            <div>
+              <h1 style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;margin:0;letter-spacing:-.01em">Capability Explorer</h1>
+              <p style="color:#4A4A4A;font-size:13.5px;margin:4px 0 0">Everything tenant <b>{{ tenantLabel }}</b> can genuinely do — by business domain, with live honest status.</p>
+            </div>
+          </div>
+
+          <!-- toolbar -->
+          <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+            <div style="position:relative">
+              <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#8A8A8A;font-size:13px">⌕</span>
+              <input value="{{ query }}" onInput="{{ onQuery }}" placeholder="Search 16,245 capabilities…" style="height:36px;border:1px solid #C4BFAE;border-radius:8px;padding:0 12px 0 30px;font-family:inherit;font-size:13.5px;background:#FFFFFE;color:#1A1A1A;width:240px;outline:none">
+            </div>
+            <div style="display:inline-flex;border:1px solid #C4BFAE;border-radius:8px;overflow:hidden;flex:none">
+              <sc-for list="{{ sourceSegs }}" as="sg" hint-placeholder-count="3">
+                <button onClick="{{ sg.onClick }}" style="all:unset;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;border-right:1px solid #E5E1D6;white-space:nowrap;background:{{ sg.bg }};color:{{ sg.color }}">{{ sg.label }}</button>
+              </sc-for>
+            </div>
+            <div style="display:inline-flex;border:1px solid #C4BFAE;border-radius:8px;overflow:hidden;flex:none">
+              <sc-for list="{{ domainSegs }}" as="dg" hint-placeholder-count="4">
+                <button onClick="{{ dg.onClick }}" style="all:unset;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;border-right:1px solid #E5E1D6;white-space:nowrap;background:{{ dg.bg }};color:{{ dg.color }}">{{ dg.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- content-type tiles -->
+          <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:12px">
+            <sc-for list="{{ tiles }}" as="ti" hint-placeholder-count="6">
+              <button onClick="{{ ti.onClick }}" style="all:unset;background:{{ ti.bg }};border:1px solid {{ ti.border }};border-radius:10px;padding:11px 12px;text-align:left;cursor:pointer">
+                <div style="font-size:19px;font-weight:700;font-family:'Source Serif 4',Georgia,serif;color:{{ ti.numColor }}">{{ ti.n }}</div>
+                <div style="font-size:11px;color:#8A8A8A;margin-top:1px">{{ ti.label }}</div>
+              </button>
+            </sc-for>
+          </div>
+
+          <!-- honest-status readiness row -->
+          <div style="display:flex;gap:7px;flex-wrap:wrap;margin:12px 0 14px;align-items:center">
+            <span style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:700;margin-right:4px">Readiness</span>
+            <sc-for list="{{ statusCounts }}" as="sc" hint-placeholder-count="5">
+              <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:9999px;font-size:11.5px;font-weight:600;background:{{ sc.bg }};color:{{ sc.fg }}"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.9"></span>{{ sc.label }} {{ sc.n }}</span>
+            </sc-for>
+          </div>
+
+          <!-- catalogue error state -->
+          <sc-if value="{{ listError }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:flex-start;gap:11px;background:#F4DEDB;border:1px solid #e6c4c0;border-radius:10px;padding:13px 15px;color:#8E2A26">
+              <span style="font-size:15px;line-height:1.3">⚠</span>
+              <div style="flex:1"><div style="font-weight:700;font-size:13px">Couldn't probe the catalogue</div><div style="font-size:12.5px;color:#8E2A26;opacity:.85;margin-top:2px">The live-SAP route returned 502 from the tenant gateway. Status counts above are from the last successful probe (3h ago).</div></div>
+              <button onClick="{{ retry }}" style="all:unset;display:inline-flex;align-items:center;height:30px;padding:0 12px;border-radius:7px;background:#FFFFFE;border:1px solid #d8b6b2;color:#8E2A26;font-size:12.5px;font-weight:600;cursor:pointer">⟳ Retry</button>
+            </div>
+          </sc-if>
+
+          <!-- list -->
+          <sc-if value="{{ showList }}" hint-placeholder-val="{{ true }}">
+            <!-- loading skeleton -->
+            <sc-if value="{{ listLoading }}" hint-placeholder-val="{{ true }}">
+              <div style="border:1px solid #E5E1D6;border-radius:10px;overflow:hidden;background:#FFFFFE">
+                <div style="background:#F4F2EB;padding:8px 12px;display:grid;grid-template-columns:1fr 90px 130px 130px;gap:12px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#4A4A4A;font-weight:700;border-bottom:1px solid #E5E1D6"><span>Capability</span><span>Type</span><span>Status</span><span style="text-align:right">Action</span></div>
+                <sc-for list="{{ skRows }}" as="sk" hint-placeholder-count="6">
+                  <div style="display:grid;grid-template-columns:1fr 90px 130px 130px;gap:12px;padding:12px;border-bottom:1px solid #E5E1D6;align-items:center">
+                    <div><div style="height:12px;width:44%;border-radius:6px;background:linear-gradient(90deg,#efece3,#f7f5ef,#efece3);background-size:420px 100%;animation:ce-shim 1.2s infinite linear"></div><div style="height:9px;width:66%;margin-top:7px;border-radius:6px;background:linear-gradient(90deg,#efece3,#f7f5ef,#efece3);background-size:420px 100%;animation:ce-shim 1.2s infinite linear"></div></div>
+                    <div style="height:16px;width:46px;border-radius:6px;background:linear-gradient(90deg,#efece3,#f7f5ef,#efece3);background-size:420px 100%;animation:ce-shim 1.2s infinite linear"></div>
+                    <div style="height:18px;width:82px;border-radius:9999px;background:linear-gradient(90deg,#efece3,#f7f5ef,#efece3);background-size:420px 100%;animation:ce-shim 1.2s infinite linear"></div>
+                    <div style="height:22px;width:96px;margin-left:auto;border-radius:7px;background:linear-gradient(90deg,#efece3,#f7f5ef,#efece3);background-size:420px 100%;animation:ce-shim 1.2s infinite linear"></div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <!-- loaded: grouped by line-of-business -->
+            <sc-if value="{{ listReady }}" hint-placeholder-val="{{ false }}">
+              <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="border:1px solid #E5E1D6;border-radius:10px;background:#FFFFFE;padding:48px 24px;text-align:center">
+                  <div style="width:42px;height:42px;border-radius:12px;background:#F4F2EB;color:#8A8A8A;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:18px">∅</div>
+                  <div style="font-weight:600;font-size:15px">No records</div>
+                  <p style="color:#8A8A8A;font-size:13px;margin:6px auto 0;max-width:360px">{{ emptyReason }}</p>
+                </div>
+              </sc-if>
+              <sc-if value="{{ hasResults }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;flex-direction:column;gap:18px">
+                  <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+                    <div>
+                      <div style="display:flex;align-items:baseline;gap:8px;margin:0 2px 8px"><span style="font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:#002B5C;font-weight:700">{{ g.lob }}</span><span style="font-size:11.5px;color:#8A8A8A">{{ g.count }}</span></div>
+                      <div style="border:1px solid #E5E1D6;border-radius:10px;overflow:hidden;background:#FFFFFE">
+                        <div style="background:#F4F2EB;padding:8px 12px;display:grid;grid-template-columns:1fr 90px 130px 130px;gap:12px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#4A4A4A;font-weight:700;border-bottom:1px solid #E5E1D6"><span>Capability</span><span>Type</span><span>Status</span><span style="text-align:right">Action</span></div>
+                        <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="3">
+                          <div onClick="{{ it.onClick }}" style="display:grid;grid-template-columns:1fr 90px 130px 130px;gap:12px;padding:11px 12px;border-bottom:1px solid #E5E1D6;align-items:center;cursor:pointer;background:{{ it.rowBg }}">
+                            <div style="min-width:0"><div style="font-weight:600;font-size:13px;font-family:'Geist Mono','SF Mono',monospace">{{ it.name }}</div><div style="font-size:11.5px;color:#8A8A8A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ it.sub }}</div></div>
+                            <div><span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:10.5px;font-weight:700;background:{{ it.tyBg }};color:{{ it.tyFg }}">{{ it.type }}</span></div>
+                            <div><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:9999px;font-size:11px;font-weight:600;background:{{ it.stBg }};color:{{ it.stFg }}"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.9"></span>{{ it.stLabel }}</span></div>
+                            <div style="text-align:right"><button onClick="{{ it.onClick }}" style="all:unset;display:inline-flex;align-items:center;height:28px;padding:0 11px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;background:{{ it.btnBg }};border:1px solid {{ it.btnBorder }};color:{{ it.btnColor }}">{{ it.actionLabel }}</button></div>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </div>
+                  </sc-for>
+                  <div style="font-size:11.5px;color:#8A8A8A;margin:2px">Rows load only when you open a capability — never on list render. Status is evidence-based: shown Activated only where a live probe returned 200.</div>
+                </div>
+              </sc-if>
+            </sc-if>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ===== SOLUTIONS ===== -->
+      <sc-if value="{{ isSolutions }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:ce-fade .18s ease">
+          <!-- LIST -->
+          <sc-if value="{{ solListShow }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:16px">
+              <div><h1 style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;margin:0;letter-spacing:-.01em">Solutions</h1><p style="color:#4A4A4A;font-size:13.5px;margin:4px 0 0">A solution is a governed passport — owners, classification and interfaces — before it ever reaches production.</p></div>
+              <button onClick="{{ newSolution }}" style="all:unset;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:8px;background:#002B5C;color:#fff;font-size:13px;font-weight:600;cursor:pointer">+ New solution</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <sc-for list="{{ solList }}" as="x" hint-placeholder-count="3">
+                <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:16px 17px;box-shadow:0 1px 2px rgba(0,0,0,.04);display:flex;flex-direction:column;gap:10px">
+                  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+                    <div><div style="font-size:15px;font-weight:600">{{ x.name }}</div><div style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:#4A4A4A;margin-top:3px"><span style="width:8px;height:8px;border-radius:3px;background:{{ x.kindColor }}"></span>{{ x.kindLabel }}</div></div>
+                    <span style="flex:none;display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:9999px;font-size:11px;font-weight:600;background:{{ x.stBg }};color:{{ x.stFg }}"><span style="width:6px;height:6px;border-radius:50%;background:currentColor"></span>{{ x.stLabel }}</span>
+                  </div>
+                  <p style="margin:0;font-size:12.5px;color:#4A4A4A;line-height:1.5">{{ x.problem }}</p>
+                  <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:#8A8A8A"><span style="white-space:nowrap">◫ {{ x.interfaces }} interfaces</span><span style="white-space:nowrap">▤ {{ x.dataClass }}</span></div>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap">
+                    <span style="font-size:10.5px;padding:3px 8px;border-radius:6px;background:{{ x.techBg }};color:#4A4A4A">Tech · {{ x.techOwner }}</span>
+                    <span style="font-size:10.5px;padding:3px 8px;border-radius:6px;background:{{ x.bizBg }};color:#4A4A4A">Biz · {{ x.bizOwner }}</span>
+                    <span style="font-size:10.5px;padding:3px 8px;border-radius:6px;background:{{ x.supBg }};color:#4A4A4A">Sup · {{ x.supOwner }}</span>
+                  </div>
+                  <div style="display:flex;justify-content:flex-end;border-top:1px solid #F1EEE5;padding-top:10px"><button onClick="{{ x.onOpen }}" style="all:unset;display:inline-flex;align-items:center;height:30px;padding:0 12px;border-radius:7px;background:#FFFFFE;border:1px solid #C4BFAE;font-size:12.5px;font-weight:600;cursor:pointer">Open canvas →</button></div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <!-- CANVAS -->
+          <sc-if value="{{ solCanvasShow }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ backSolutions }}" style="all:unset;color:#002B5C;font-size:12.5px;font-weight:600;cursor:pointer;margin-bottom:12px;display:inline-flex;align-items:center;gap:6px">← All solutions</button>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px">
+              <div>
+                <div style="font-family:'Source Serif 4',Georgia,serif;font-size:23px;font-weight:600;letter-spacing:-.01em">{{ canvasTitle }}</div>
+                <div style="display:inline-flex;align-items:center;gap:10px;margin-top:6px"><span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:#4A4A4A"><span style="width:8px;height:8px;border-radius:3px;background:{{ canvasKindColor }}"></span>{{ canvasKindLabel }}</span><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:9999px;font-size:11px;font-weight:600;background:{{ canvasStBg }};color:{{ canvasStFg }}">{{ canvasStLabel }}</span></div>
+              </div>
+              <div style="display:flex;gap:9px">
+                <button onClick="{{ toast }}" style="all:unset;display:inline-flex;align-items:center;height:34px;padding:0 14px;border-radius:8px;background:#FFFFFE;border:1px solid #C4BFAE;font-size:13px;font-weight:600;cursor:pointer">Save draft</button>
+                <button onClick="{{ promote }}" style="all:unset;display:inline-flex;align-items:center;height:34px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:600;background:{{ promoteBg }};color:{{ promoteColor }};border:1px solid {{ promoteBorder }};cursor:{{ promoteCursor }}">Promote to Active</button>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;background:{{ gateBg }};border:1px solid {{ gateBorder }};border-radius:10px;padding:10px 14px;margin:14px 0 16px;font-size:12.5px;color:{{ gateColor }}"><span style="font-size:13px">{{ gateIcon }}</span><span>{{ gateText }}</span></div>
+            <div style="display:flex;gap:2px;border-bottom:1px solid #E5E1D6;margin-bottom:18px">
+              <sc-for list="{{ solTabs }}" as="tb" hint-placeholder-count="4"><button onClick="{{ tb.onClick }}" style="all:unset;padding:9px 15px;font-size:13px;font-weight:600;cursor:pointer;color:{{ tb.color }};border-bottom:2px solid {{ tb.underline }}">{{ tb.label }}</button></sc-for>
+            </div>
+            <div style="max-width:680px;display:flex;flex-direction:column;gap:16px">
+              <sc-if value="{{ tabBusiness }}" hint-placeholder-val="{{ true }}">
+                <div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:700;display:block;margin-bottom:6px">Business problem</label><textarea rows="3" defaultValue="{{ canvasProblem }}" placeholder="What business problem does this solution solve?" style="width:100%;border:1px solid #C4BFAE;border-radius:8px;padding:10px 12px;font-family:inherit;font-size:13.5px;background:#FFFFFE;color:#1A1A1A;resize:vertical;outline:none"></textarea></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                  <div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:700;display:block;margin-bottom:6px">Classification</label><select style="width:100%;height:38px;border:1px solid #C4BFAE;border-radius:8px;padding:0 10px;font-family:inherit;font-size:13.5px;background:#FFFFFE;color:#1A1A1A"><option>Internal accelerator</option><option>Client app</option><option>Presales demo</option><option>Reusable asset</option><option>Experiment</option></select></div>
+                  <div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:700;display:block;margin-bottom:6px">Data classification</label><select style="width:100%;height:38px;border:1px solid #C4BFAE;border-radius:8px;padding:0 10px;font-family:inherit;font-size:13.5px;background:#FFFFFE;color:#1A1A1A"><option>Internal</option><option>Confidential</option><option>Restricted</option></select></div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ tabFunctional }}" hint-placeholder-val="{{ false }}">
+                <sc-if value="{{ solHasInterfaces }}" hint-placeholder-val="{{ true }}">
+                  <div style="border:1px solid #E5E1D6;border-radius:10px;overflow:hidden;background:#FFFFFE">
+                    <div style="background:#F4F2EB;padding:8px 12px;display:grid;grid-template-columns:1fr 100px 90px 90px;gap:10px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#4A4A4A;font-weight:700"><span>Interface</span><span>Version</span><span>Mode</span><span style="text-align:right">Status</span></div>
+                    <sc-for list="{{ solInterfaces }}" as="i" hint-placeholder-count="2"><div onClick="{{ i.onOpen }}" style="display:grid;grid-template-columns:1fr 100px 90px 90px;gap:10px;padding:10px 12px;border-top:1px solid #F1EEE5;align-items:center;cursor:pointer;font-size:12.5px"><span style="font-weight:600">{{ i.name }}</span><span style="font-family:'Geist Mono',monospace;color:#8A8A8A">{{ i.verLabel }}</span><span style="font-family:'Geist Mono',monospace">{{ i.mode }}</span><span style="text-align:right"><span style="display:inline-block;padding:2px 8px;border-radius:9999px;font-size:10.5px;font-weight:600;background:{{ i.stBg }};color:{{ i.stFg }}">{{ i.stLabel }}</span></span></div></sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ solCreate }}" hint-placeholder-val="{{ false }}"><div style="border:1px dashed #C4BFAE;border-radius:10px;padding:24px;text-align:center;color:#8A8A8A;font-size:13px">Add interfaces from Discover ("Add to interface") once the passport is saved.</div></sc-if>
+              </sc-if>
+              <sc-if value="{{ tabOperating }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:10px">
+                  <div style="display:flex;align-items:center;gap:12px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:10px;padding:12px 14px"><span style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:700;width:130px">Technical owner</span><span style="flex:1;font-size:13px;color:{{ techMissingColor }}">{{ techOwnerC }}</span><button onClick="{{ assignOwner }}" style="all:unset;color:#002B5C;font-size:12.5px;font-weight:600;cursor:pointer">Assign</button></div>
+                  <div style="display:flex;align-items:center;gap:12px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:10px;padding:12px 14px"><span style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:700;width:130px">Business owner</span><span style="flex:1;font-size:13px;color:{{ bizMissingColor }}">{{ bizOwnerC }}</span><button onClick="{{ assignOwner }}" style="all:unset;color:#002B5C;font-size:12.5px;font-weight:600;cursor:pointer">Assign</button></div>
+                  <div style="display:flex;align-items:center;gap:12px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:10px;padding:12px 14px"><span style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:700;width:130px">Support owner</span><span style="flex:1;font-size:13px;color:{{ supMissingColor }}">{{ supOwnerC }}</span><button onClick="{{ assignOwner }}" style="all:unset;color:#002B5C;font-size:12.5px;font-weight:600;cursor:pointer">Assign</button></div>
+                  <p style="font-size:12px;color:#8A8A8A;margin:2px">Orphaned solutions (missing an owner) auto-drop to Restricted — ownership is a hard gate for Active.</p>
+                </div>
+              </sc-if>
+              <sc-if value="{{ tabCommercial }}" hint-placeholder-val="{{ false }}">
+                <div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:700;display:block;margin-bottom:6px">Application repository</label><input value="{{ canvasRepo }}" placeholder="github.com/abeam/…" style="width:100%;height:38px;border:1px solid #C4BFAE;border-radius:8px;padding:0 12px;font-family:'Geist Mono',monospace;font-size:12.5px;background:#FFFFFE;color:#1A1A1A;outline:none"></div>
+                <p style="font-size:12px;color:#8A8A8A;margin:0">The solution's application code lives in this repo and runs as a separate app consuming CoreEdge's northbound API — the Studio governs the integration, not the app code.</p>
+              </sc-if>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ===== CONNECTIONS ===== -->
+      <sc-if value="{{ isConnections }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:ce-fade .18s ease">
+          <h1 style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;margin:0;letter-spacing:-.01em">Connections</h1>
+          <p style="color:#4A4A4A;font-size:13.5px;margin:4px 0 14px">Tenant connections and health — enough metadata to work, never the secret.</p>
+          <div style="display:flex;align-items:flex-start;gap:10px;background:#E6EBF1;border:1px solid #CFD7E0;border-left:3px solid #002B5C;border-radius:0 10px 10px 0;padding:11px 15px;margin-bottom:16px;font-size:12.5px;color:#1A4D6F"><span style="font-size:14px">🔒</span><div><b>Metadata only.</b> Secrets are sealed server-side with AES-256-GCM and are never returned to the console — redaction is structural, not a UI choice.</div></div>
+          <div style="border:1px solid #E5E1D6;border-radius:10px;overflow-x:auto;background:#FFFFFE">
+            <div style="min-width:960px">
+              <div style="background:#F4F2EB;padding:9px 14px;display:grid;grid-template-columns:1.2fr .9fr 1fr 1.5fr 1.2fr .9fr .8fr .7fr 100px;gap:12px;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#4A4A4A;font-weight:700;border-bottom:1px solid #E5E1D6"><span>Alias</span><span>Tenant key</span><span>Product</span><span>Base URL</span><span>Auth type</span><span>Secret</span><span>Health</span><span>Write</span><span style="text-align:right">Action</span></div>
+              <sc-for list="{{ connections }}" as="c" hint-placeholder-count="4">
+                <div style="display:grid;grid-template-columns:1.2fr .9fr 1fr 1.5fr 1.2fr .9fr .8fr .7fr 100px;gap:12px;padding:11px 14px;border-bottom:1px solid #F1EEE5;align-items:center;font-size:12px">
+                  <span style="font-weight:600">{{ c.alias }} <span style="font-size:10px;color:{{ c.activeColor }}">● {{ c.activeLabel }}</span></span>
+                  <span style="font-family:'Geist Mono',monospace">{{ c.key }}</span>
+                  <span style="font-family:'Geist Mono',monospace;color:#4A4A4A">{{ c.product }}</span>
+                  <span style="font-family:'Geist Mono',monospace;font-size:11px;color:#8A8A8A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.baseUrl }}</span>
+                  <span style="font-family:'Geist Mono',monospace;font-size:11px;color:#4A4A4A">{{ c.authType }}</span>
+                  <span style="font-size:10.5px;color:#8A8A8A">🔒 Sealed</span>
+                  <span><span style="display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:9999px;font-size:10.5px;font-weight:600;background:{{ c.healthBg }};color:{{ c.healthFg }}"><span style="width:5px;height:5px;border-radius:50%;background:currentColor"></span>{{ c.healthName }}</span></span>
+                  <span><span style="display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;background:{{ c.writeBg }};color:{{ c.writeFg }}">{{ c.writeLabel }}</span></span>
+                  <span style="text-align:right"><button onClick="{{ c.onTest }}" style="all:unset;display:inline-flex;align-items:center;height:27px;padding:0 10px;border-radius:7px;background:#FFFFFE;border:1px solid #C4BFAE;font-size:11.5px;font-weight:600;cursor:pointer">Test</button></span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <p style="font-size:11.5px;color:#8A8A8A;margin:12px 2px">"Test connectivity" runs a read-only probe (<span style="font-family:'Geist Mono',monospace">/capabilities</span>) through the existing live-SAP throttle. Last-validated updates only on a real 200.</p>
+        </div>
+      </sc-if>
+
+      <!-- ===== API ACCESS ===== -->
+      <sc-if value="{{ isAccess }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:ce-fade .18s ease">
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:14px">
+            <div><h1 style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;margin:0;letter-spacing:-.01em">API Access</h1><p style="color:#4A4A4A;font-size:13.5px;margin:4px 0 0">Developers request only the operations a solution needs; admins decide. v1 is a governance ledger — runtime enforcement arrives with the broker.</p></div>
+            <button onClick="{{ openRequest }}" style="all:unset;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:8px;background:#002B5C;color:#fff;font-size:13px;font-weight:600;cursor:pointer">+ Request access</button>
+          </div>
+          <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:16px 18px;margin-bottom:16px">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:700;margin-bottom:12px">Progressive trust — access rises with evidence</div>
+            <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+              <sc-for list="{{ trustSteps }}" as="ts" hint-placeholder-count="6">
+                <div style="display:flex;align-items:center;gap:4px">
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:76px"><span style="width:12px;height:12px;border-radius:50%;background:{{ ts.dot }}"></span><span style="font-size:11.5px;font-weight:600;color:#1A1A1A">{{ ts.label }}</span><span style="font-size:10px;color:#8A8A8A">{{ ts.desc }}</span></div>
+                  <sc-if value="{{ ts.last }}" hint-placeholder-val="{{ false }}"><span></span></sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="border:1px solid #E5E1D6;border-radius:10px;overflow-x:auto;background:#FFFFFE">
+            <div style="min-width:820px">
+              <div style="background:#F4F2EB;padding:9px 14px;display:grid;grid-template-columns:1.4fr 1.2fr .7fr .9fr 1.1fr .9fr .8fr;gap:12px;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#4A4A4A;font-weight:700;border-bottom:1px solid #E5E1D6"><span>Solution</span><span>Capability</span><span>Op</span><span>Environment</span><span>Decision</span><span>Decided by</span><span>When</span></div>
+              <sc-for list="{{ grants }}" as="g" hint-placeholder-count="4">
+                <div style="display:grid;grid-template-columns:1.4fr 1.2fr .7fr .9fr 1.1fr .9fr .8fr;gap:12px;padding:11px 14px;border-bottom:1px solid #F1EEE5;align-items:center;font-size:12px">
+                  <span style="font-weight:600">{{ g.sol }}</span>
+                  <span style="font-family:'Geist Mono',monospace;font-size:11.5px">{{ g.ext }}</span>
+                  <span><span style="display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;background:{{ g.opBg }};color:{{ g.opFg }}">{{ g.op }}</span></span>
+                  <span style="font-family:'Geist Mono',monospace;font-size:11px;color:#4A4A4A">{{ g.env }}</span>
+                  <span><span style="display:inline-block;padding:2px 9px;border-radius:9999px;font-size:10.5px;font-weight:600;background:{{ g.decBg }};color:{{ g.decFg }}">{{ g.decLabel }}</span></span>
+                  <span style="color:#4A4A4A">{{ g.by }}</span>
+                  <span style="color:#8A8A8A">{{ g.when }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <p style="font-size:11.5px;color:#8A8A8A;margin:12px 2px">WRITE requests are flagged higher-risk and require the write checklist before an admin can approve.</p>
+        </div>
+      </sc-if>
+
+      <!-- ===== INTERFACES ===== -->
+      <sc-if value="{{ isInterfaces }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:ce-fade .18s ease">
+          <sc-if value="{{ ifListShow }}" hint-placeholder-val="{{ true }}">
+            <h1 style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;margin:0;letter-spacing:-.01em">Interfaces</h1>
+            <p style="color:#4A4A4A;font-size:13.5px;margin:4px 0 14px">A versioned governed contract between a solution and a catalogue service — configuration, never bespoke middleware code.</p>
+            <div style="border:1px solid #E5E1D6;border-radius:10px;overflow-x:auto;background:#FFFFFE">
+              <div style="min-width:800px">
+                <div style="background:#F4F2EB;padding:9px 14px;display:grid;grid-template-columns:1.1fr 1.3fr 1.2fr .7fr .7fr .8fr 90px;gap:12px;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#4A4A4A;font-weight:700;border-bottom:1px solid #E5E1D6"><span>Interface</span><span>Solution</span><span>Source (externalId)</span><span>Op</span><span>Ver</span><span>Status</span><span style="text-align:right"></span></div>
+                <sc-for list="{{ ifList }}" as="i" hint-placeholder-count="3">
+                  <div onClick="{{ i.onOpen }}" style="display:grid;grid-template-columns:1.1fr 1.3fr 1.2fr .7fr .7fr .8fr 90px;gap:12px;padding:11px 14px;border-bottom:1px solid #F1EEE5;align-items:center;cursor:pointer;font-size:12px">
+                    <span style="font-weight:600">{{ i.name }}</span>
+                    <span style="color:#4A4A4A">{{ i.sol }}</span>
+                    <span style="font-family:'Geist Mono',monospace;font-size:11.5px">{{ i.ext }}</span>
+                    <span style="font-family:'Geist Mono',monospace">{{ i.op }}</span>
+                    <span style="font-family:'Geist Mono',monospace;color:#8A8A8A">{{ i.verLabel }}</span>
+                    <span><span style="display:inline-block;padding:2px 8px;border-radius:9999px;font-size:10.5px;font-weight:600;background:{{ i.stBg }};color:{{ i.stFg }}">{{ i.stLabel }}</span></span>
+                    <span style="text-align:right;color:#002B5C;font-weight:600;font-size:11.5px">Open →</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ ifDetailShow }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ backInterfaces }}" style="all:unset;color:#002B5C;font-size:12.5px;font-weight:600;cursor:pointer;margin-bottom:12px;display:inline-flex;align-items:center;gap:6px">← All interfaces</button>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px">
+              <div><div style="font-family:'Source Serif 4',Georgia,serif;font-size:22px;font-weight:600">{{ ifName }} <span style="font-family:'Geist Mono',monospace;font-size:13px;color:#8A8A8A;font-weight:500">{{ ifVer }}</span></div><div style="font-size:12.5px;color:#8A8A8A;margin-top:3px">{{ ifSol }}</div></div>
+              <div style="display:flex;gap:9px;align-items:center">
+                <span style="display:inline-block;padding:4px 11px;border-radius:9999px;font-size:11px;font-weight:600;background:{{ ifStBg }};color:{{ ifStFg }}">{{ ifStLabel }}</span>
+                <button onClick="{{ saveInterface }}" style="all:unset;display:inline-flex;align-items:center;height:32px;padding:0 12px;border-radius:8px;background:#FFFFFE;border:1px solid #C4BFAE;font-size:12.5px;font-weight:600;cursor:pointer">Save</button>
+                <button onClick="{{ setActive }}" style="all:unset;display:inline-flex;align-items:center;height:32px;padding:0 12px;border-radius:8px;background:#002B5C;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer">Set Active</button>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:16px 17px">
+                <div style="font-size:12px;font-weight:700;color:#002B5C;margin-bottom:10px">Source</div>
+                <dl style="display:grid;grid-template-columns:120px 1fr;gap:7px 12px;font-size:12.5px;margin:0"><dt style="color:#8A8A8A">externalId</dt><dd style="margin:0;font-family:'Geist Mono',monospace">{{ ifExt }}</dd><dt style="color:#8A8A8A">Operation</dt><dd style="margin:0;font-family:'Geist Mono',monospace">{{ ifOp }}</dd><dt style="color:#8A8A8A">Entity set</dt><dd style="margin:0;font-family:'Geist Mono',monospace">{{ ifEntity }}</dd><dt style="color:#8A8A8A">Mode</dt><dd style="margin:0;font-family:'Geist Mono',monospace">{{ ifModeVal }}</dd></dl>
+              </div>
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:16px 17px">
+                <div style="font-size:12px;font-weight:700;color:#002B5C;margin-bottom:10px">Runtime</div>
+                <dl style="display:grid;grid-template-columns:120px 1fr;gap:7px 12px;font-size:12.5px;margin:0"><dt style="color:#8A8A8A">Timeout</dt><dd style="margin:0;font-family:'Geist Mono',monospace">30s</dd><dt style="color:#8A8A8A">Quota</dt><dd style="margin:0;font-family:'Geist Mono',monospace">600 / min</dd><dt style="color:#8A8A8A">Retry</dt><dd style="margin:0;font-family:'Geist Mono',monospace">2 · backoff</dd><dt style="color:#8A8A8A">Cache</dt><dd style="margin:0;font-family:'Geist Mono',monospace">30s TTL</dd></dl>
+              </div>
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:16px 17px">
+                <div style="font-size:12px;font-weight:700;color:#002B5C;margin-bottom:10px">Contract · request parameters</div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <sc-for list="{{ reqParams }}" as="rp" hint-placeholder-count="4"><div style="display:flex;justify-content:space-between;font-size:12px;font-family:'Geist Mono',monospace"><span>{{ rp.k }}</span><span style="color:#8A8A8A">{{ rp.t }}</span></div></sc-for>
+                </div>
+              </div>
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:16px 17px">
+                <div style="font-size:12px;font-weight:700;color:#002B5C;margin-bottom:10px">Contract · response schema</div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <sc-for list="{{ respSchema }}" as="rs" hint-placeholder-count="3"><div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;font-family:'Geist Mono',monospace"><span>{{ rs.field }}</span><span style="color:#8A8A8A">{{ rs.type }} · {{ rs.req }}</span></div></sc-for>
+                </div>
+              </div>
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:16px 17px">
+                <div style="font-size:12px;font-weight:700;color:#002B5C;margin-bottom:10px">Governance</div>
+                <dl style="display:grid;grid-template-columns:130px 1fr;gap:7px 12px;font-size:12.5px;margin:0"><dt style="color:#8A8A8A">Data class</dt><dd style="margin:0">Confidential</dd><dt style="color:#8A8A8A">Consumers</dt><dd style="margin:0">Supplier Exception Monitor</dd><dt style="color:#8A8A8A">Audit</dt><dd style="margin:0">Per-call (v2)</dd><dt style="color:#8A8A8A">Error envelope</dt><dd style="margin:0;font-family:'Geist Mono',monospace">{ code, message, correlationId }</dd></dl>
+              </div>
+              <div style="background:#F7F5EE;border:1px dashed #C4BFAE;border-radius:12px;padding:16px 17px;position:relative">
+                <div style="font-size:12px;font-weight:700;color:#8A8A8A;margin-bottom:10px">Mapping <span style="font-size:9px;letter-spacing:.06em;text-transform:uppercase;background:#EAEAE6;color:#6B6B6B;padding:1px 6px;border-radius:20px;margin-left:4px">disabled · v2</span></div>
+                <div style="display:flex;flex-direction:column;gap:8px;opacity:.55;pointer-events:none">
+                  <div style="display:flex;justify-content:space-between;font-size:12px;font-family:'Geist Mono',monospace"><span>PurchaseOrder</span><span>→ poNumber</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;font-family:'Geist Mono',monospace"><span>Supplier</span><span>→ vendorId</span></div>
+                </div>
+                <p style="font-size:11px;color:#8A8A8A;margin:10px 0 0">Field mapping is v2 — designed against a real pilot. In v1 <span style="font-family:'Geist Mono',monospace">mappingVersion = null</span>.</p>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ===== TEST CONSOLE ===== -->
+      <sc-if value="{{ isTest }}" hint-placeholder-val="{{ false }}">
+        <div style="animation:ce-fade .18s ease">
+          <h1 style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;margin:0;letter-spacing:-.01em">Test Console</h1>
+          <p style="color:#4A4A4A;font-size:13.5px;margin:4px 0 16px">Run a real, safe read against an authorized tenant; prove the service returns live data; save it as a reusable test case.</p>
+          <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:16px 18px;display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+            <div style="flex:1;min-width:280px"><label style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:700;display:block;margin-bottom:6px">Interface</label><select onChange="{{ onTestIf }}" style="width:100%;height:38px;border:1px solid #C4BFAE;border-radius:8px;padding:0 10px;font-family:inherit;font-size:13px;background:#FFFFFE;color:#1A1A1A"><sc-for list="{{ testOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o.value }}">{{ o.label }}</option></sc-for></select></div>
+            <button onClick="{{ runTest }}" style="all:unset;display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 16px;border-radius:8px;background:#002B5C;color:#fff;font-size:13.5px;font-weight:600;cursor:pointer">▷ Run read</button>
+            <button onClick="{{ toggleTestEmpty }}" style="all:unset;display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 12px;border-radius:8px;background:#FFFFFE;border:1px solid #C4BFAE;font-size:12.5px;font-weight:600;cursor:pointer;color:#4A4A4A">Simulate empty</button>
+          </div>
+
+          <div style="margin-top:16px">
+            <sc-if value="{{ testIdle }}" hint-placeholder-val="{{ true }}">
+              <div style="border:1px dashed #C4BFAE;border-radius:12px;padding:40px 24px;text-align:center;color:#8A8A8A"><div style="font-size:20px;margin-bottom:8px">▷</div><div style="font-size:13.5px;font-weight:600;color:#4A4A4A">Pick an interface and run a read</div><div style="font-size:12.5px;margin-top:3px">Rows load only when you run — never on mount. All live reads flow through the live-SAP throttle.</div></div>
+            </sc-if>
+            <sc-if value="{{ testRunning }}" hint-placeholder-val="{{ false }}">
+              <div style="border:1px solid #E5E1D6;border-radius:12px;background:#FFFFFE;padding:18px">
+                <div style="height:14px;width:180px;border-radius:6px;margin-bottom:14px;background:linear-gradient(90deg,#efece3,#f7f5ef,#efece3);background-size:420px 100%;animation:ce-shim 1.2s infinite linear"></div>
+                <sc-for list="{{ skRows }}" as="sk" hint-placeholder-count="4"><div style="height:12px;border-radius:6px;margin-bottom:9px;background:linear-gradient(90deg,#efece3,#f7f5ef,#efece3);background-size:420px 100%;animation:ce-shim 1.2s infinite linear"></div></sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ testDone }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid;grid-template-columns:1fr;gap:14px">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:13px;font-weight:600">{{ tName }} {{ tVer }}</span><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:#8A8A8A">{{ tExt }}</span><span style="display:inline-block;padding:3px 10px;border-radius:9999px;font-size:11px;font-weight:600;background:{{ dcBg }};color:{{ dcFg }}">{{ dcLabel }}</span><span style="font-family:'Geist Mono',monospace;font-size:11px;color:{{ testHttpColor }}">{{ testHttp }}</span></div>
+                <div style="display:grid;grid-template-columns:280px 1fr;gap:14px">
+                  <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:14px 16px">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:700;margin-bottom:10px">Schema</div>
+                    <div style="display:flex;flex-direction:column;gap:7px"><sc-for list="{{ tSchema }}" as="f" hint-placeholder-count="3"><div style="display:flex;justify-content:space-between;gap:8px;font-size:11.5px;font-family:'Geist Mono',monospace"><span>{{ f.field }}</span><span style="color:#8A8A8A">{{ f.type }}</span></div></sc-for></div>
+                  </div>
+                  <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+                    <div style="background:#F4F2EB;padding:8px 13px;font-size:11px;font-weight:700;color:#4A4A4A;display:flex;justify-content:space-between"><span>Live rows · $top=10</span><span style="font-family:'Geist Mono',monospace;font-size:10.5px;color:{{ testHttpColor }}">{{ testHttp }}</span></div>
+                    <sc-if value="{{ tData }}" hint-placeholder-val="{{ true }}">
+                      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px"><thead><tr><sc-for list="{{ tCols }}" as="c" hint-placeholder-count="3"><th style="text-align:left;padding:7px 13px;border-bottom:1px solid #E5E1D6;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#8A8A8A;font-weight:700">{{ c }}</th></sc-for></tr></thead><tbody><sc-for list="{{ tRows }}" as="r" hint-placeholder-count="3"><tr><sc-for list="{{ r }}" as="cell" hint-placeholder-count="3"><td style="padding:7px 13px;border-bottom:1px solid #F1EEE5;font-family:'Geist Mono',monospace">{{ cell }}</td></sc-for></tr></sc-for></tbody></table></div>
+                    </sc-if>
+                    <sc-if value="{{ tEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:28px 16px;text-align:center"><div style="font-weight:600;font-size:13px;color:#4A4A4A">No records</div><div style="font-size:12px;color:#8A8A8A;margin-top:3px">HTTP 200 with an empty collection — this service has no rows in this tenant. Distinct from an error.</div></div></sc-if>
+                    <sc-if value="{{ tNeeds }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 15px;background:#FBE9D1;color:#8B5A00;font-size:12.5px"><b>Needs setup · 401.</b> The communication arrangement is not set up in this tenant — this is a setup gap, not empty data.</div></sc-if>
+                  </div>
+                </div>
+                <div><button onClick="{{ saveCase }}" style="all:unset;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:8px;background:#FFFFFE;border:1px solid #C4BFAE;font-size:13px;font-weight:600;cursor:pointer">＋ Save as test case</button> <sc-if value="{{ hasSaved }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;color:#8A8A8A;margin-left:8px">{{ savedCount }} saved for this interface</span></sc-if></div>
+              </div>
+            </sc-if>
+          </div>
+
+          <!-- SCAFFOLD -->
+          <div style="margin-top:24px;border-top:1px solid #E5E1D6;padding-top:20px">
+            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:4px"><h2 style="font-family:'Source Serif 4',Georgia,serif;font-size:18px;font-weight:600;margin:0">Scaffold</h2><span style="font-size:12px;color:#8A8A8A">the "Build" — generated code you take to your own repo, not an editor</span></div>
+            <p style="font-size:12.5px;color:#4A4A4A;margin:6px 0 14px;max-width:640px">Download a typed contract, an SDK snippet, or a starter kit for the selected interface. The solution's application code lives in your own repo and IDE and runs as a separate app consuming CoreEdge's northbound API.</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:16px 17px;display:flex;flex-direction:column;gap:8px">
+                <div style="font-size:20px">◫</div><div style="font-size:14px;font-weight:600">Typed API contract</div><p style="font-size:12px;color:#8A8A8A;margin:0;flex:1">OpenAPI + generated TypeScript types for the request/response schema.</p><button onClick="{{ scaffoldContract }}" style="all:unset;display:inline-flex;align-items:center;justify-content:center;height:32px;border-radius:8px;background:#FFFFFE;border:1px solid #C4BFAE;font-size:12.5px;font-weight:600;cursor:pointer">↓ Download .zip</button>
+              </div>
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:16px 17px;display:flex;flex-direction:column;gap:8px">
+                <div style="font-size:20px">⌗</div><div style="font-size:14px;font-weight:600">SDK snippet</div><p style="font-size:12px;color:#8A8A8A;margin:0">Typed TypeScript call against the governed interface.</p>
+                <pre style="margin:0;background:#0e1530;color:#dfe6ff;border-radius:8px;padding:11px 12px;font-family:'Geist Mono',monospace;font-size:10.5px;line-height:1.5;overflow-x:auto">import { CoreEdge } from "@abeam/coreedge";
+const ce = new CoreEdge({ solution });
+const { data } = await ce
+  .supplierSync.read({ top: 10 });</pre>
+                <button onClick="{{ scaffoldSdk }}" style="all:unset;display:inline-flex;align-items:center;justify-content:center;height:32px;border-radius:8px;background:#FFFFFE;border:1px solid #C4BFAE;font-size:12.5px;font-weight:600;cursor:pointer">↓ Copy snippet</button>
+              </div>
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:16px 17px;display:flex;flex-direction:column;gap:8px">
+                <div style="font-size:20px">▤</div><div style="font-size:14px;font-weight:600">Starter kit</div><p style="font-size:12px;color:#8A8A8A;margin:0;flex:1">A runnable app scaffold wired to the northbound API, ready to open in your IDE.</p><button onClick="{{ scaffoldStarter }}" style="all:unset;display:inline-flex;align-items:center;justify-content:center;height:32px;border-radius:8px;background:#002B5C;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer">↓ Download starter</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+    </main>
+  </div>
+
+  <!-- ================= CAPABILITY DETAIL SHEET ================= -->
+  <sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:60;display:flex;justify-content:flex-end">
+      <div onClick="{{ closeSheet }}" style="position:absolute;inset:0;background:rgba(20,24,32,.28);animation:ce-fade .15s ease"></div>
+      <div style="position:relative;width:480px;max-width:92vw;height:100%;background:#FFFFFE;border-left:4px solid #002B5C;box-shadow:0 8px 24px rgba(0,0,0,.12);overflow-y:auto;animation:ce-sheet .2s cubic-bezier(.2,.7,.3,1)">
+        <button onClick="{{ closeSheet }}" style="all:unset;position:absolute;top:16px;right:18px;color:#8A8A8A;font-size:17px;cursor:pointer;line-height:1">✕</button>
+        <div style="padding:22px 22px 24px">
+          <div style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:10.5px;font-weight:700;background:{{ sel.tyBg }};color:{{ sel.tyFg }};margin-bottom:8px">{{ sel.type }}</div>
+          <div style="font-family:'Source Serif 4',Georgia,serif;font-size:20px;font-weight:600;letter-spacing:-.01em">{{ sel.name }}</div>
+          <div style="font-size:12.5px;color:#8A8A8A;margin-top:2px">{{ sel.sub }} · <span style="font-family:'Geist Mono','SF Mono',monospace">{{ sel.com }}</span></div>
+
+          <dl style="display:grid;grid-template-columns:104px 1fr;gap:8px 14px;font-size:12.5px;margin:16px 0 4px">
+            <dt style="color:#8A8A8A;font-weight:600">Status</dt>
+            <dd style="margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:9999px;font-size:11px;font-weight:600;background:{{ sel.stBg }};color:{{ sel.stFg }}"><span style="width:6px;height:6px;border-radius:50%;background:currentColor"></span>{{ sel.stLabel }}</span><span style="color:#8A8A8A;font-size:11.5px">{{ sel.probeNote }}</span></dd>
+            <dt style="color:#8A8A8A;font-weight:600">Operations</dt><dd style="margin:0;font-family:'Geist Mono','SF Mono',monospace;font-size:11.5px">{{ sel.ops }}</dd>
+            <dt style="color:#8A8A8A;font-weight:600">Entity set</dt><dd style="margin:0;font-family:'Geist Mono','SF Mono',monospace;font-size:11.5px">{{ sel.name }}</dd>
+          </dl>
+
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:700;margin:16px 0 8px">Live check</div>
+          <!-- outcome switcher (preview) -->
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+            <sc-for list="{{ outcomeChips }}" as="oc" hint-placeholder-count="4">
+              <button onClick="{{ oc.onClick }}" style="all:unset;padding:4px 10px;border-radius:9999px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid {{ oc.border }};background:{{ oc.bg }};color:{{ oc.color }}">{{ oc.label }}</button>
+            </sc-for>
+          </div>
+
+          <!-- rows box -->
+          <div style="border:1px solid #E5E1D6;border-radius:8px;overflow:hidden">
+            <div style="background:#F4F2EB;padding:7px 11px;font-size:11px;font-weight:700;color:#4A4A4A;display:flex;justify-content:space-between;align-items:center"><span>{{ rowsHeader }}</span><span style="font-family:'Geist Mono','SF Mono',monospace;font-size:10.5px;color:{{ rowsHttpColor }}">{{ rowsHttp }}</span></div>
+
+            <sc-if value="{{ sheetLoading }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:12px">
+                <sc-for list="{{ skRows }}" as="sk" hint-placeholder-count="3">
+                  <div style="height:12px;border-radius:6px;margin-bottom:9px;background:linear-gradient(90deg,#efece3,#f7f5ef,#efece3);background-size:420px 100%;animation:ce-shim 1.2s infinite linear"></div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ outData }}" hint-placeholder-val="{{ false }}">
+              <div style="overflow-x:auto">
+                <table style="width:100%;border-collapse:collapse;font-size:12px">
+                  <thead><tr>
+                    <sc-for list="{{ sel.cols }}" as="c" hint-placeholder-count="3"><th style="text-align:left;padding:7px 11px;background:#FFFFFE;border-bottom:1px solid #E5E1D6;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:#8A8A8A;font-weight:700">{{ c }}</th></sc-for>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ sel.rows }}" as="r" hint-placeholder-count="3">
+                      <tr>
+                        <sc-for list="{{ r }}" as="cell" hint-placeholder-count="3"><td style="padding:7px 11px;border-bottom:1px solid #F1EEE5;font-family:'Geist Mono','SF Mono',monospace;font-size:11.5px">{{ cell }}</td></sc-for>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ outEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:26px 16px;text-align:center"><div style="font-weight:600;font-size:13.5px;color:#4A4A4A">No records</div><div style="font-size:12px;color:#8A8A8A;margin-top:3px">The probe returned 200 with an empty collection — this service has no rows in tenant {{ tenantLabel }}.</div></div>
+            </sc-if>
+
+            <sc-if value="{{ outNeeds }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:14px 15px;background:#FBE9D1;color:#8B5A00;font-size:12.5px"><div style="font-weight:700;margin-bottom:2px">Needs setup · 401</div>The communication arrangement <span style="font-family:'Geist Mono','SF Mono',monospace">{{ sel.com }}</span> is not set up in this tenant, so it can't be probed.</div>
+            </sc-if>
+
+            <sc-if value="{{ outError }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:14px 15px;background:#F4DEDB;color:#8E2A26;font-size:12.5px"><div style="font-weight:700;margin-bottom:2px">Probe failed · 502</div>The tenant gateway did not respond. This is an error — not an empty result. Retry, or open in Test Console for the full response.</div>
+            </sc-if>
+
+            <sc-if value="{{ outInfo }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:14px 15px;background:#E0EBF4;color:#1A4D6F;font-size:12.5px"><div style="font-weight:700;margin-bottom:2px">{{ infoTitle }}</div>{{ infoBody }}</div>
+            </sc-if>
+          </div>
+
+          <div style="display:flex;gap:9px;margin-top:16px">
+            <button onClick="{{ addToInterface }}" style="all:unset;display:inline-flex;align-items:center;height:34px;padding:0 14px;border-radius:8px;background:#002B5C;color:#fff;font-size:13px;font-weight:600;cursor:pointer">+ Add to interface</button>
+            <button onClick="{{ goTest }}" style="all:unset;display:inline-flex;align-items:center;height:34px;padding:0 14px;border-radius:8px;background:#FFFFFE;border:1px solid #C4BFAE;font-size:13px;font-weight:600;cursor:pointer">▷ Open in Test Console</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ================= REQUEST ACCESS DIALOG ================= -->
+  <sc-if value="{{ dialogOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center">
+      <div onClick="{{ closeDialog }}" style="position:absolute;inset:0;background:rgba(20,24,32,.32);animation:ce-fade .15s ease"></div>
+      <div style="position:relative;width:520px;max-width:94vw;max-height:90vh;overflow-y:auto;background:#FFFFFE;border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,.12);padding:22px 24px;animation:ce-fade .16s ease">
+        <div style="font-family:'Source Serif 4',Georgia,serif;font-size:19px;font-weight:600">Request API access</div>
+        <p style="font-size:12.5px;color:#8A8A8A;margin:4px 0 16px">A developer requests only the operations a solution needs. An admin decides — progressive trust by environment.</p>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:700;display:block;margin-bottom:6px">Solution</label><select onChange="{{ onDSol }}" style="width:100%;height:38px;border:1px solid #C4BFAE;border-radius:8px;padding:0 10px;font-family:inherit;font-size:13px;background:#FFFFFE;color:#1A1A1A"><sc-for list="{{ solNames }}" as="n" hint-placeholder-count="3"><option value="{{ n }}">{{ n }}</option></sc-for></select></div>
+            <div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:700;display:block;margin-bottom:6px">Capability</label><select onChange="{{ onDExt }}" style="width:100%;height:38px;border:1px solid #C4BFAE;border-radius:8px;padding:0 10px;font-family:'Geist Mono',monospace;font-size:12px;background:#FFFFFE;color:#1A1A1A"><sc-for list="{{ extNames }}" as="e" hint-placeholder-count="5"><option value="{{ e }}">{{ e }}</option></sc-for></select></div>
+          </div>
+          <div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:700;display:block;margin-bottom:6px">Operation</label><div style="display:inline-flex;border:1px solid #C4BFAE;border-radius:8px;overflow:hidden"><sc-for list="{{ modeOpts }}" as="m" hint-placeholder-count="2"><button onClick="{{ m.onClick }}" style="all:unset;padding:8px 18px;font-size:12.5px;font-weight:600;cursor:pointer;border-right:1px solid #E5E1D6;background:{{ m.bg }};color:{{ m.color }}">{{ m.label }}</button></sc-for></div></div>
+          <div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:700;display:block;margin-bottom:6px">Environment · progressive trust</label><div style="display:inline-flex;border:1px solid #C4BFAE;border-radius:8px;overflow:hidden"><sc-for list="{{ envOpts }}" as="e" hint-placeholder-count="4"><button onClick="{{ e.onClick }}" style="all:unset;padding:8px 15px;font-size:12px;font-weight:600;cursor:pointer;border-right:1px solid #E5E1D6;background:{{ e.bg }};color:{{ e.color }}">{{ e.label }}</button></sc-for></div></div>
+          <div><label style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:700;display:block;margin-bottom:6px">Justification</label><textarea rows="2" placeholder="Why does this solution need this operation?" style="width:100%;border:1px solid #C4BFAE;border-radius:8px;padding:10px 12px;font-family:inherit;font-size:13px;background:#FFFFFE;color:#1A1A1A;resize:vertical;outline:none"></textarea></div>
+          <sc-if value="{{ isWrite }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FBE9D1;border:1px solid #efd9ad;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#8B5A00"><b>⚠ WRITE is higher-risk.</b> The write checklist (idempotency, duplicate-prevention, digital-access review) must pass before an admin can approve. WRITE never auto-approves.</div>
+          </sc-if>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:9px;margin-top:18px">
+          <button onClick="{{ closeDialog }}" style="all:unset;display:inline-flex;align-items:center;height:36px;padding:0 14px;border-radius:8px;background:#FFFFFE;border:1px solid #C4BFAE;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+          <button onClick="{{ submitRequest }}" style="all:unset;display:inline-flex;align-items:center;height:36px;padding:0 16px;border-radius:8px;background:#002B5C;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Submit request</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ================= TOAST ================= -->
+  <sc-if value="{{ toastOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;bottom:22px;right:22px;z-index:80;background:#1A1A1A;color:#fff;padding:11px 15px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);font-size:13px;font-weight:500;animation:ce-fade .15s ease;display:flex;align-items:center;gap:9px">
+      <span style="color:#8fd0a8">✓</span> {{ toastMsg }}
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:760},&quot;role&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Developer&quot;,&quot;Support&quot;,&quot;Platform Admin&quot;],&quot;default&quot;:&quot;Developer&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Session&quot;,&quot;unit&quot;:&quot;&quot;},&quot;environment&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;DEV&quot;,&quot;TEST&quot;,&quot;PROD&quot;],&quot;default&quot;:&quot;DEV&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Session&quot;},&quot;defaultScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Home&quot;,&quot;Discover&quot;],&quot;default&quot;:&quot;Home&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Session&quot;},&quot;homeState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Populated&quot;,&quot;First-run&quot;],&quot;default&quot;:&quot;Populated&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;States&quot;},&quot;discoverState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Live&quot;,&quot;Probe error&quot;],&quot;default&quot;:&quot;Live&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;States&quot;}}">
+class Component extends DCLogic {
+  state = {
+    screen: 'home', tenantOpen: false, tenantIdx: 0,
+    query: '', source: 'SAP', domain: 'All', typeFilter: 'All',
+    listLoading: true, selected: null, sheetLoading: false, outcome: 'data',
+    toastOpen: false, toastMsg: '',
+    solSel:null, solMode:'list', solTab:'business',
+    ifSel:null,
+    testIfId:'if1', testState:'idle', testEmpty:false, savedCount:0,
+    dialogOpen:false, dEnv:'SANDBOX', dMode:'READ', dSol:'Supplier Exception Monitor', dExt:'A_PurchaseOrder',
+    connOK:{}, grantsExtra:[]
+  };
+
+  CAPS = [
+    {id:'po', name:'A_PurchaseOrder', sub:'Purchase Orders · OData V4', lob:'Procurement', domain:'Procurement', type:'API', source:'SAP', status:'ACTIVATED', com:'SAP_COM_0053', ops:'READ · CREATE · UPDATE', cols:['PurchaseOrder','Supplier','Company'], rows:[['4500000099','RM13 Supplies','1010'],['4500000101','RM14 Materials','1010'],['4500000104','Sentosa Tooling','1010']]},
+    {id:'pr', name:'A_PurchaseRequisitionHeader', sub:'Purchase Requisitions', lob:'Procurement', domain:'Procurement', type:'API', source:'SAP', status:'NEEDS_SETUP', com:'SAP_COM_0102', ops:'READ'},
+    {id:'si', name:'A_SupplierInvoice', sub:'Supplier Invoices', lob:'Procurement', domain:'Procurement', type:'API', source:'SAP', status:'NEEDS_SETUP', com:'SAP_COM_0053', ops:'READ · CREATE'},
+    {id:'bpc', name:'BusinessPartner.Changed', sub:'Event · subscribe-only', lob:'Procurement', domain:'Procurement', type:'EVENT', source:'SAP', status:'AVAILABLE', com:'—', ops:'SUBSCRIBE'},
+    {id:'fa', name:'I_FixedAsset', sub:'Fixed Asset master', lob:'Finance', domain:'Finance', type:'CDS', source:'SAP', status:'ACTIVATED', com:'SAP_COM_0300', ops:'READ', cols:['FixedAsset','Description','Company'], rows:[['300000012','Forklift FL-2','1010'],['300000018','Server rack R7','1010'],['300000021','Delivery van','1010']]},
+    {id:'je', name:'A_JournalEntry', sub:'Journal Entries', lob:'Finance', domain:'Finance', type:'API', source:'SAP', status:'ACTIVATED', com:'SAP_COM_0308', ops:'READ · CREATE', cols:['AccountingDoc','GLAccount','Amount'], rows:[['0100004587','0000400000','12,400.00'],['0100004588','0000113100','−12,400.00'],['0100004591','0000476900','2,190.55']]},
+    {id:'gl', name:'I_GLAccountLineItem', sub:'GL line items', lob:'Finance', domain:'Finance', type:'CDS', source:'SAP', status:'NOT_PROBEABLE', com:'—', ops:'READ'},
+    {id:'ai1', name:'CashForecast.Predict', sub:'Cash forecast · AI', lob:'Finance', domain:'Finance', type:'AI', source:'AI', status:'REFERENCE', com:'—', ops:'DESIGN-TIME'},
+    {id:'so', name:'A_SalesOrder', sub:'Sales Orders', lob:'Sales', domain:'Sales', type:'API', source:'SAP', status:'ACTIVATED', com:'SAP_COM_0109', ops:'READ · CREATE · UPDATE', cols:['SalesOrder','SoldToParty','NetAmount'], rows:[['0000010455','0010100022','8,900.00'],['0000010456','0010100027','1,240.00'],['0000010459','0010100031','15,600.00']]},
+    {id:'cr', name:'I_CustomerReturns', sub:'Customer returns', lob:'Sales', domain:'Sales', type:'CDS', source:'SAP', status:'AVAILABLE', com:'—', ops:'READ'},
+    {id:'bd', name:'A_BillingDocument', sub:'Billing documents', lob:'Sales', domain:'Sales', type:'API', source:'SAP', status:'NOT_FOUND', com:'SAP_COM_0111', ops:'READ'}
+  ];
+  ST = {
+    ACTIVATED:{label:'Activated',bg:'#DCEBE3',fg:'#166534'},
+    NEEDS_SETUP:{label:'Needs setup',bg:'#FBE9D1',fg:'#8B5A00'},
+    AVAILABLE:{label:'Available',bg:'#E0EBF4',fg:'#1A4D6F'},
+    NOT_PROBEABLE:{label:'Not probeable',bg:'#EAEAE6',fg:'#6B6B6B'},
+    REFERENCE:{label:'Reference',bg:'#F4F2EB',fg:'#4A4A4A'},
+    NOT_CHECKED:{label:'Not checked',bg:'#EFEDE6',fg:'#8A8A8A'},
+    NOT_FOUND:{label:'Not found',bg:'#F4DEDB',fg:'#8E2A26'}
+  };
+  TY = { API:{bg:'#E6EBF1',fg:'#002B5C'}, CDS:{bg:'#DCEBE3',fg:'#166534'}, EVENT:{bg:'#E0EBF4',fg:'#1A4D6F'}, AI:{bg:'#FBE9D1',fg:'#8B5A00'}, BADI:{bg:'#F4F2EB',fg:'#4A4A4A'} };
+  TENANTS = [ {key:'X5M / 100', product:'S/4HANA · Sandbox+Dev', dot:'#166534'}, {key:'X5M / 200', product:'S/4HANA · QA', dot:'#B45309'}, {key:'A4H / 100', product:'S/4HANA · Demo', dot:'#1A4D6F'} ];
+  SOLUTIONS = [
+    {id:'sem',name:'Supplier Exception Monitor',slug:'supplier-exception-monitor',kind:'INTERNAL_ACCELERATOR',status:'ACTIVE',dataClass:'Confidential',problem:'Surface blocked supplier invoices and POs before they delay the payment run.',owners:{tech:'Ikmal B.',biz:'Farah L.',sup:'Support Pool A'},interfaces:3,repo:'github.com/abeam/supplier-exception-monitor'},
+    {id:'fcd',name:'Finance Control Dashboard',slug:'finance-control-dashboard',kind:'CLIENT_APP',status:'DRAFT',dataClass:'Restricted',problem:'Give the client controller a live view of GL exceptions and cash position.',owners:{tech:'Ikmal B.',biz:null,sup:null},interfaces:1,repo:null},
+    {id:'eim',name:'E-Invoice Monitor',slug:'e-invoice-monitor',kind:'PRESALES_DEMO',status:'RESTRICTED',dataClass:'Internal',problem:'Demo e-invoice compliance status for the MyInvois presales track.',owners:{tech:'Ikmal B.',biz:'Farah L.',sup:null},interfaces:2,repo:null}
+  ];
+  CONNECTIONS = [
+    {alias:'S/4 Sandbox',key:'X5M / 100',product:'s4hana',baseUrl:'x5m.s4hana.ondemand.com',authType:'oauth-client-credentials',health:'Healthy',lastVal:'2 min ago',writeEnabled:false,isActive:true},
+    {alias:'S/4 QA',key:'X5M / 200',product:'s4hana',baseUrl:'x5m-qa.s4hana.ondemand.com',authType:'basic',health:'Degraded',lastVal:'26 min ago',writeEnabled:true,isActive:true},
+    {alias:'SuccessFactors APJ',key:'SF / APJ',product:'successfactors',baseUrl:'api.successfactors.com',authType:'oauth-client-credentials',health:'Unchecked',lastVal:'—',writeEnabled:false,isActive:false},
+    {alias:'Ariba Buying',key:'ARB / 01',product:'ariba',baseUrl:'openapi.ariba.com',authType:'bearer',health:'Healthy',lastVal:'1 h ago',writeEnabled:false,isActive:true}
+  ];
+  GRANTS = [
+    {sol:'Supplier Exception Monitor',ext:'A_PurchaseOrder',op:'READ',env:'PROD',decision:'READ_ONLY',by:'F. Rahman',when:'2d ago'},
+    {sol:'Supplier Exception Monitor',ext:'A_SupplierInvoice',op:'READ',env:'TEST',decision:'APPROVED',by:'F. Rahman',when:'2d ago'},
+    {sol:'E-Invoice Monitor',ext:'A_SupplierInvoice',op:'CREATE',env:'SANDBOX',decision:'SANDBOX_ONLY',by:'F. Rahman',when:'5d ago'},
+    {sol:'Finance Control Dashboard',ext:'A_JournalEntry',op:'CREATE',env:'PROD',decision:'REJECTED',by:'F. Rahman',when:'1d ago'}
+  ];
+  INTERFACES = [
+    {id:'if1',name:'Supplier sync',sol:'Supplier Exception Monitor',version:3,product:'s4hana',ext:'A_PurchaseOrder',op:'READ',entitySet:'A_PurchaseOrder',mode:'READ',status:'ACTIVE'},
+    {id:'if2',name:'Invoice pull',sol:'Supplier Exception Monitor',version:1,product:'s4hana',ext:'A_SupplierInvoice',op:'READ',entitySet:'A_SupplierInvoice',mode:'READ',status:'DRAFT'},
+    {id:'if3',name:'Asset register feed',sol:'Finance Control Dashboard',version:2,product:'s4hana',ext:'I_FixedAsset',op:'READ',entitySet:'I_FixedAsset',mode:'READ',status:'DEPRECATED'}
+  ];
+  KIND = {INTERNAL_ACCELERATOR:{label:'Internal accelerator',c:'#0F766E'},CLIENT_APP:{label:'Client app',c:'#1D4ED8'},PRESALES_DEMO:{label:'Presales demo',c:'#B45309'},REUSABLE:{label:'Reusable asset',c:'#1E40AF'},EXPERIMENT:{label:'Experiment',c:'#8A8A8A'}};
+  SOLST = {ACTIVE:{label:'Active',bg:'#DCEBE3',fg:'#166534'},DRAFT:{label:'Draft',bg:'#F4F2EB',fg:'#4A4A4A'},RESTRICTED:{label:'Restricted',bg:'#FBE9D1',fg:'#8B5A00'},RETIRED:{label:'Retired',bg:'#EAEAE6',fg:'#6B6B6B'}};
+  HEALTH = {Healthy:{bg:'#DCEBE3',fg:'#166534'},Degraded:{bg:'#FBE9D1',fg:'#8B5A00'},Down:{bg:'#F4DEDB',fg:'#8E2A26'},Unchecked:{bg:'#EAEAE6',fg:'#6B6B6B'}};
+  DEC = {REQUESTED:{bg:'#FBE9D1',fg:'#8B5A00'},APPROVED:{bg:'#DCEBE3',fg:'#166534'},SANDBOX_ONLY:{bg:'#E0EBF4',fg:'#1A4D6F'},READ_ONLY:{bg:'#E6EBF1',fg:'#002B5C'},REJECTED:{bg:'#F4DEDB',fg:'#8E2A26'},EXPIRED:{bg:'#EAEAE6',fg:'#6B6B6B'}};
+  IFST = {ACTIVE:{label:'Active',bg:'#DCEBE3',fg:'#166534'},DRAFT:{label:'Draft',bg:'#F4F2EB',fg:'#4A4A4A'},DEPRECATED:{label:'Deprecated',bg:'#EAEAE6',fg:'#6B6B6B'}};
+
+  componentDidMount(){
+    const ds = (this.props.defaultScreen || 'Home');
+    if (ds === 'Discover') { this.setState({screen:'discover'}); this.loadList(); }
+    else { this.setState({listLoading:false}); }
+  }
+  loadList(){ this.setState({listLoading:true}); clearTimeout(this._lt); this._lt = setTimeout(()=>this.setState({listLoading:false}), 850); }
+
+  go(k){ this.setState({screen:k, selected:null, tenantOpen:false, solMode:'list', solSel:null, ifSel:null}); if(k==='discover') this.loadList(); }
+  toggleTenant(){ this.setState(s=>({tenantOpen:!s.tenantOpen})); }
+  pickTenant(i){ this.setState({tenantIdx:i, tenantOpen:false}); this.fireToast('Tenant switched — resolved from your access'); }
+  onQuery(e){ this.setState({query:e.target.value}); }
+  setSource(v){ this.setState({source:v}); }
+  setDomain(v){ this.setState({domain:v}); }
+  setType(v){ this.setState(s=>({typeFilter: s.typeFilter===v?'All':v})); }
+
+  defaultOutcome(status){ return ({ACTIVATED:'data',NEEDS_SETUP:'needssetup',AVAILABLE:'available',NOT_PROBEABLE:'noprobe',REFERENCE:'reference',NOT_FOUND:'notfound'})[status] || 'data'; }
+  openCap(id){ const c=this.CAPS.find(x=>x.id===id); this.setState({selected:id, outcome:this.defaultOutcome(c.status), sheetLoading:true}); clearTimeout(this._st); this._st=setTimeout(()=>this.setState({sheetLoading:false}), 700); }
+  closeSheet(){ this.setState({selected:null}); }
+  setOutcome(o){ this.setState({outcome:o, sheetLoading:true}); clearTimeout(this._st); this._st=setTimeout(()=>this.setState({sheetLoading:false}), 550); }
+
+  fireToast(msg){ this.setState({toastOpen:true, toastMsg:msg}); clearTimeout(this._tt); this._tt=setTimeout(()=>this.setState({toastOpen:false}), 2200); }
+
+  seg(label, key, activeVal, onClick){ const on = activeVal; return {label, bg:on?'#002B5C':'#FFFFFE', color:on?'#fff':'#4A4A4A', onClick}; }
+
+  newSolution(){ this.setState({screen:'solutions', solMode:'create', solSel:null, solTab:'business', tenantOpen:false}); }
+  openSolution(id){ this.setState({screen:'solutions', solMode:'detail', solSel:id, solTab:'business', ifSel:null, tenantOpen:false}); }
+  backSolutions(){ this.setState({solMode:'list', solSel:null}); }
+  setSolTab(t){ this.setState({solTab:t}); }
+  testConn(alias){ this.setState(st=>({connOK:{...st.connOK,[alias]:true}})); this.fireToast('Connectivity OK · HTTP 200 from '+alias); }
+  toggleConn(alias){ this.fireToast(alias+' toggled — config change audited'); }
+  openRequest(){ this.setState({dialogOpen:true}); }
+  closeDialog(){ this.setState({dialogOpen:false}); }
+  setD(k,v){ this.setState({[k]:v}); }
+  submitRequest(){ const st=this.state; const g={sol:st.dSol,ext:st.dExt,op:st.dMode,env:st.dEnv,decision:'REQUESTED',by:'—',when:'just now'}; this.setState(x=>({grantsExtra:[g,...x.grantsExtra],dialogOpen:false})); this.fireToast('Access requested — routed to a Platform Admin'); }
+  openInterface(id){ this.setState({screen:'interfaces', ifSel:id, tenantOpen:false}); }
+  backInterfaces(){ this.setState({ifSel:null}); }
+  setTestIf(e){ this.setState({testIfId:e.target.value, testState:'idle'}); }
+  runTest(){ this.setState({testState:'running'}); clearTimeout(this._rt); this._rt=setTimeout(()=>this.setState({testState:'done'}), 800); }
+  toggleTestEmpty(){ this.setState(st=>({testEmpty:!st.testEmpty})); }
+  saveCase(){ this.setState(st=>({savedCount:st.savedCount+1})); this.fireToast('Test case saved'); }
+  scaffold(k){ this.fireToast('Generating '+k+' — download starting'); }
+
+  screenData(){
+    const s=this.state, p=this.props;
+    const role=p.role||'Developer'; const dev=role==='Developer';
+    const tenant=this.TENANTS[s.tenantIdx]; const scr=s.screen;
+    const ft = n => /Amount/.test(n)?'Edm.Decimal': /Date/.test(n)?'Edm.DateTimeOffset':'Edm.String';
+    const cap = t => t[0].toUpperCase()+t.slice(1);
+
+    // ---- Solutions ----
+    const solList=this.SOLUTIONS.map(x=>{ const k=this.KIND[x.kind], st=this.SOLST[x.status], o=x.owners; const miss=[]; if(!o.tech)miss.push('technical'); if(!o.biz)miss.push('business'); if(!o.sup)miss.push('support');
+      return {...x, kindLabel:k.label, kindColor:k.c, stLabel:st.label, stBg:st.bg, stFg:st.fg, techOwner:o.tech||'Unassigned', bizOwner:o.biz||'Unassigned', supOwner:o.sup||'Unassigned', techBg:o.tech?'#F4F2EB':'#FBE9D1', bizBg:o.biz?'#F4F2EB':'#FBE9D1', supBg:o.sup?'#F4F2EB':'#FBE9D1', onOpen:()=>this.openSolution(x.id)}; });
+    const solObj = s.solSel? this.SOLUTIONS.find(x=>x.id===s.solSel):null;
+    const create = s.solMode==='create';
+    const canvasK=this.KIND[create?'INTERNAL_ACCELERATOR':(solObj?solObj.kind:'INTERNAL_ACCELERATOR')];
+    const canvasSt=this.SOLST[create?'DRAFT':(solObj?solObj.status:'DRAFT')];
+    const cOwn=create?{tech:null,biz:null,sup:null}:(solObj?solObj.owners:{tech:null,biz:null,sup:null});
+    const cMiss=[]; if(!cOwn.tech)cMiss.push('technical'); if(!cOwn.biz)cMiss.push('business'); if(!cOwn.sup)cMiss.push('support');
+    const canAct=cMiss.length===0 && !create;
+    const solTabs=['business','functional','operating','commercial'].map(t=>{ const on=s.solTab===t; return {label:cap(t), onClick:()=>this.setSolTab(t), color:on?'#002B5C':'#8A8A8A', underline:on?'#002B5C':'transparent'}; });
+    const solInterfaces=this.INTERFACES.filter(i=>solObj&&i.sol===solObj.name).map(i=>{ const st=this.IFST[i.status]; return {...i, verLabel:'v'+i.version, stLabel:st.label, stBg:st.bg, stFg:st.fg, onOpen:()=>this.openInterface(i.id)}; });
+
+    // ---- Connections ----
+    const connections=this.CONNECTIONS.map(c=>{ const hName=s.connOK[c.alias]?'Healthy':c.health; const h=this.HEALTH[hName];
+      return {...c, healthName:hName, healthBg:h.bg, healthFg:h.fg, lastValNow:s.connOK[c.alias]?'just now':c.lastVal, writeLabel:c.writeEnabled?'WRITE':'READ', writeBg:c.writeEnabled?'#F4DEDB':'#E6EBF1', writeFg:c.writeEnabled?'#8E2A26':'#002B5C', activeLabel:c.isActive?'Active':'Disabled', activeColor:c.isActive?'#166534':'#8A8A8A', onTest:()=>this.testConn(c.alias), onToggle:()=>this.toggleConn(c.alias)}; });
+
+    // ---- Access ----
+    const allGrants=[...s.grantsExtra, ...this.GRANTS].map(g=>{ const d=this.DEC[g.decision]||this.DEC.REQUESTED; const risk=g.op!=='READ';
+      return {...g, decLabel:g.decision.replace(/_/g,' '), decBg:d.bg, decFg:d.fg, risk, opBg:risk?'#F4DEDB':'#E6EBF1', opFg:risk?'#8E2A26':'#002B5C'}; });
+    const trustSteps=[{l:'Catalogue',d:'visibility'},{l:'Sandbox',d:'safe reads'},{l:'Dev',d:'dev tenant'},{l:'Test',d:'test tenant'},{l:'Prod read',d:'read-only'},{l:'Prod write',d:'restricted'}].map((x,i)=>({label:x.l, desc:x.d, dot:i>=4?'#B45309':'#0F766E', last:i===5}));
+    const envOpts=['SANDBOX','DEV','TEST','PROD'].map(e=>({label:e, onClick:()=>this.setD('dEnv',e), bg:s.dEnv===e?'#002B5C':'#FFFFFE', color:s.dEnv===e?'#fff':'#4A4A4A'}));
+    const modeOpts=['READ','WRITE'].map(m=>({label:m, onClick:()=>this.setD('dMode',m), bg:s.dMode===m?(m==='WRITE'?'#C8102E':'#002B5C'):'#FFFFFE', color:s.dMode===m?'#fff':'#4A4A4A'}));
+
+    // ---- Interfaces ----
+    const ifList=this.INTERFACES.map(i=>{ const st=this.IFST[i.status]; return {...i, verLabel:'v'+i.version, stLabel:st.label, stBg:st.bg, stFg:st.fg, onOpen:()=>this.openInterface(i.id)}; });
+    const ifObj=s.ifSel? this.INTERFACES.find(i=>i.id===s.ifSel):null;
+    let ifSt=null, respSchema=[], ifCap=null;
+    if(ifObj){ ifSt=this.IFST[ifObj.status]; ifCap=this.CAPS.find(c=>c.name===ifObj.ext); const cols=(ifCap&&ifCap.cols)?ifCap.cols:['NodeID','Description','Value']; respSchema=cols.map((c,idx)=>({field:c, type:ft(c), req: idx===0?'key':'optional'})); }
+    const reqParams=[{k:'$top',t:'Edm.Int32'},{k:'$skip',t:'Edm.Int32'},{k:'$filter',t:'String'},{k:'$select',t:'String'}];
+
+    // ---- Test ----
+    const testOpts=this.INTERFACES.map(i=>({value:i.id, label:i.name+' · v'+i.version+' — '+i.sol}));
+    const tif=this.INTERFACES.find(i=>i.id===s.testIfId)||this.INTERFACES[0];
+    const tcap=this.CAPS.find(c=>c.name===tif.ext);
+    let tOut; if(s.testEmpty) tOut='empty'; else if(tcap&&tcap.status==='ACTIVATED') tOut='data'; else if(tcap&&tcap.status==='NEEDS_SETUP') tOut='needssetup'; else tOut='empty';
+    const tCols=(tcap&&tcap.cols)?tcap.cols:[];
+    const tSchema=tCols.map((c,idx)=>({field:c, type:ft(c), nullable: idx===0?'false':'true'}));
+    const tRows=(tOut==='data'&&tcap&&tcap.rows)?tcap.rows:[];
+    const dc = tOut==='data'?{label:'Returns data · $top=1 confirmed',bg:'#DCEBE3',fg:'#166534'}:tOut==='empty'?{label:'Empty · 0 rows',bg:'#F4F2EB',fg:'#4A4A4A'}:{label:'Needs setup · 401',bg:'#FBE9D1',fg:'#8B5A00'};
+
+    return {
+      isSolutions:scr==='solutions'&&dev, solListShow:s.solMode==='list', solCanvasShow:s.solMode!=='list', solList, backSolutions:()=>this.backSolutions(),
+      canvasTitle:create?'New solution':(solObj?solObj.name:''), canvasKindLabel:canvasK.label, canvasKindColor:canvasK.c, canvasStLabel:canvasSt.label, canvasStBg:canvasSt.bg, canvasStFg:canvasSt.fg,
+      canvasProblem:create?'':(solObj?solObj.problem:''), canvasDataClass:create?'Internal':(solObj?solObj.dataClass:'Internal'), canvasRepo:create?'':(solObj&&solObj.repo?solObj.repo:''),
+      solTabs, tabBusiness:s.solTab==='business', tabFunctional:s.solTab==='functional', tabOperating:s.solTab==='operating', tabCommercial:s.solTab==='commercial',
+      solInterfaces, solHasInterfaces:solInterfaces.length>0, solCreate:create,
+      techOwnerC:cOwn.tech||'Unassigned', bizOwnerC:cOwn.biz||'Unassigned', supOwnerC:cOwn.sup||'Unassigned', techMissing:!cOwn.tech, bizMissing:!cOwn.biz, supMissing:!cOwn.sup,
+      techMissingColor:cOwn.tech?'#1A1A1A':'#8B5A00', bizMissingColor:cOwn.biz?'#1A1A1A':'#8B5A00', supMissingColor:cOwn.sup?'#1A1A1A':'#8B5A00',
+      gateText: canAct?'All three owners are assigned — this solution can be promoted to Active.':(create?'Save the passport, then assign a technical, business and support owner before it can go Active.':'Assign a '+cMiss.join(' + ')+' owner before this solution can reach Active.'),
+      gateBg:canAct?'#DCEBE3':'#FBE9D1', gateBorder:canAct?'#bfe0cc':'#efd9ad', gateColor:canAct?'#166534':'#8B5A00', gateIcon:canAct?'✓':'⚠',
+      promoteBg:canAct?'#002B5C':'#EAEAE6', promoteColor:canAct?'#fff':'#8A8A8A', promoteBorder:canAct?'#002B5C':'#E5E1D6', promoteCursor:canAct?'pointer':'not-allowed',
+      promote: canAct?()=>this.fireToast('Promoted to Active — config change audited'):()=>this.fireToast('Blocked — assign all owners first'), assignOwner:()=>this.fireToast('Owner picker — directory lookup'),
+
+      isConnections:scr==='connections'&&dev, connections,
+
+      isAccess:scr==='access'&&dev, grants:allGrants, trustSteps, openRequest:()=>this.openRequest(),
+      dialogOpen:s.dialogOpen, closeDialog:()=>this.closeDialog(), submitRequest:()=>this.submitRequest(),
+      envOpts, modeOpts, solNames:this.SOLUTIONS.map(x=>x.name), extNames:['A_PurchaseOrder','A_SupplierInvoice','A_JournalEntry','A_SalesOrder','I_FixedAsset'],
+      dSol:s.dSol, dExt:s.dExt, dMode:s.dMode, dEnv:s.dEnv, isWrite:s.dMode==='WRITE', onDSol:(e)=>this.setD('dSol',e.target.value), onDExt:(e)=>this.setD('dExt',e.target.value),
+
+      isInterfaces:scr==='interfaces'&&dev, ifListShow:!s.ifSel, ifDetailShow:!!s.ifSel, ifList, backInterfaces:()=>this.backInterfaces(),
+      ifName:ifObj?ifObj.name:'', ifVer:ifObj?('v'+ifObj.version):'', ifSol:ifObj?ifObj.sol:'', ifExt:ifObj?ifObj.ext:'', ifOp:ifObj?ifObj.op:'', ifEntity:ifObj?ifObj.entitySet:'', ifModeVal:ifObj?ifObj.mode:'',
+      ifStLabel:ifSt?ifSt.label:'', ifStBg:ifSt?ifSt.bg:'#F4F2EB', ifStFg:ifSt?ifSt.fg:'#4A4A4A', respSchema, reqParams,
+      setActive:()=>this.fireToast('Interface set ACTIVE — version bumped to v'+((ifObj?ifObj.version:0)+1)), deprecate:()=>this.fireToast('Interface marked DEPRECATED'), saveInterface:()=>this.fireToast('Saved — version bumped'),
+
+      isTest:scr==='test'&&dev, testOpts, testIfId:s.testIfId, onTestIf:(e)=>this.setTestIf(e),
+      testIdle:s.testState==='idle', testRunning:s.testState==='running', testDone:s.testState==='done', runTest:()=>this.runTest(),
+      tSchema, tRows, tCols, tData:tOut==='data', tEmpty:tOut==='empty', tNeeds:tOut==='needssetup',
+      dcLabel:dc.label, dcBg:dc.bg, dcFg:dc.fg, testEmpty:s.testEmpty, toggleTestEmpty:()=>this.toggleTestEmpty(),
+      saveCase:()=>this.saveCase(), savedCount:s.savedCount, hasSaved:s.savedCount>0,
+      scaffoldContract:()=>this.scaffold('typed API contract'), scaffoldSdk:()=>this.scaffold('TypeScript SDK'), scaffoldStarter:()=>this.scaffold('starter kit'),
+      testHttp: tOut==='needssetup'?'HTTP 401':'HTTP 200', testHttpColor: tOut==='needssetup'?'#8B5A00':'#166534', tName:tif.name, tVer:'v'+tif.version, tExt:tif.ext, tSol:tif.sol
+    };
+  }
+
+  renderVals(){
+    const s=this.state, p=this.props;
+    const role = p.role || 'Developer';
+    const env = (p.environment || 'DEV');
+    const homeEmpty = (p.homeState || 'Populated') === 'First-run';
+    const listError = (p.discoverState || 'Live') === 'Probe error';
+    const devAllowed = role === 'Developer';
+    const screen = s.screen;
+
+    // ---- workspaces (RBAC) ----
+    const unlocked = role==='Developer'?['studio']:role==='Support'?['ops']:['studio','ops','control'];
+    const wsDefs=[{k:'studio',label:'Developer Studio',icon:'◐'},{k:'ops',label:'Operations Center',icon:'◔'},{k:'control',label:'Control Tower',icon:'⬡'}];
+    const workspaces = wsDefs.map(w=>{ const on = w.k==='studio' && devAllowed; const locked=!unlocked.includes(w.k);
+      return {label:w.label, icon:w.icon, locked, onClick:()=>{ if(!locked && w.k==='studio') this.go('home'); },
+        bg: on?'rgba(255,255,255,.14)':'transparent', color: locked?'rgba(255,255,255,.4)':(on?'#fff':'rgba(255,255,255,.82)'), weight: on?'600':'500'}; });
+
+    // ---- sections ----
+    const secDefs=[{k:'home',label:'Home',icon:'⌂',en:true},{k:'discover',label:'Discover',icon:'⊞',en:true},{k:'solutions',label:'Solutions',icon:'▤',en:true},{k:'connections',label:'Connections',icon:'⇄',en:true},{k:'access',label:'API Access',icon:'⚿',en:true},{k:'interfaces',label:'Interfaces',icon:'◫',en:true},{k:'test',label:'Test Console',icon:'▷',en:true}];
+    const sections = secDefs.map(d=>{ const active = d.en && screen===d.k && devAllowed;
+      return {label:d.label, icon:d.icon, soon:!d.en, cursor:d.en?'pointer':'default', onClick: d.en?()=>this.go(d.k):()=>this.fireToast(d.label+' — building next, pending sign-off'),
+        bg: active?'rgba(255,255,255,.14)':'transparent', color: d.en?(active?'#fff':'rgba(255,255,255,.82)'):'rgba(255,255,255,.4)', weight: active?'600':'500'}; });
+
+    // ---- tenant / env ----
+    const tenant = this.TENANTS[s.tenantIdx];
+    const tenants = this.TENANTS.map((t,i)=>({key:t.key, product:t.product, dot:t.dot, active:i===s.tenantIdx, bg:i===s.tenantIdx?'#F4F2EB':'transparent', onClick:()=>this.pickTenant(i)}));
+
+    // ---- home ----
+    const mySolutions = [
+      {name:'Supplier Exception Monitor', ...this.ST.ACTIVATED, label:'Active'},
+      {name:'Finance Control Dashboard', ...this.ST.REFERENCE, label:'Draft'},
+      {name:'E-Invoice Monitor', ...this.ST.NEEDS_SETUP, label:'Review'}
+    ];
+
+    // ---- discover filtering ----
+    let items = this.CAPS.filter(c=>{
+      if(s.source==='SAP' && c.source!=='SAP') return false;
+      if(s.source==='Partner' && c.source!=='Partner') return false;
+      if(s.source==='AI' && c.type!=='AI') return false;
+      if(s.domain!=='All' && c.domain!==s.domain) return false;
+      if(s.typeFilter!=='All' && c.type!==s.typeFilter) return false;
+      const q=s.query.trim().toLowerCase();
+      if(q && !(c.name.toLowerCase().includes(q) || c.sub.toLowerCase().includes(q))) return false;
+      return true;
+    });
+    const actionFor = st => st==='ACTIVATED' ? {label:'Add to interface',kind:'secondary'} : st==='AVAILABLE' ? {label:'View schema',kind:'ghost'} : st==='NEEDS_SETUP' ? {label:'View reason',kind:'ghost'} : st==='NOT_PROBEABLE' ? {label:'View details',kind:'ghost'} : st==='NOT_FOUND' ? {label:'View reason',kind:'ghost'} : {label:'View reference',kind:'ghost'};
+    const deco = c => { const st=this.ST[c.status], ty=this.TY[c.type]||this.TY.BADI, a=actionFor(c.status);
+      return {...c, stLabel:st.label, stBg:st.bg, stFg:st.fg, tyBg:ty.bg, tyFg:ty.fg, actionLabel:a.label, rowBg:s.selected===c.id?'#F7F5EE':'transparent',
+        btnBg:a.kind==='secondary'?'#FFFFFE':'transparent', btnBorder:a.kind==='secondary'?'#C4BFAE':'transparent', btnColor:a.kind==='secondary'?'#1A1A1A':'#002B5C', onClick:()=>this.openCap(c.id)}; };
+    const order=['Procurement','Finance','Sales'];
+    const groups = order.map(lob=>{ const gi=items.filter(c=>c.lob===lob).map(deco); return {lob, count:gi.length+(gi.length===1?' capability':' capabilities'), items:gi}; }).filter(g=>g.items.length>0);
+    const isEmpty = items.length===0;
+    const emptyReason = s.source==='Partner' ? 'No partner capabilities are registered for tenant '+tenant.key+'. Partner content is added per engagement.' : 'No capabilities match your current filters. Try clearing the type or domain lens.';
+
+    const tiles = [
+      {label:'APIs', n:'969', k:'API'}, {label:'CDS Views', n:'9,704', k:'CDS'}, {label:'BAdIs', n:'1,715', k:'BADI'},
+      {label:'Events', n:'147', k:'EVENT'}, {label:'AI APIs', n:'26', k:'AI'}, {label:'All types', n:'16,245', k:'All'}
+    ].map(t=>{ const on = s.typeFilter===t.k || (t.k==='All' && s.typeFilter==='All'); return {label:t.label, n:t.n, onClick:()=>this.setType(t.k), bg:on?'#E6EBF1':'#FFFFFE', border:on?'#CFD7E0':'#E5E1D6', numColor:on?'#002B5C':'#1A1A1A'}; });
+
+    const statusCounts = [
+      {...this.ST.ACTIVATED, n:'139'}, {...this.ST.NEEDS_SETUP, n:'349'}, {...this.ST.NOT_PROBEABLE, n:'515'}, {...this.ST.AVAILABLE, n:'151'}, {...this.ST.REFERENCE, n:'819'}
+    ];
+
+    const sourceSegs = [ this.seg('SAP','SAP',s.source==='SAP',()=>this.setSource('SAP')), this.seg('+ Partner','Partner',s.source==='Partner',()=>this.setSource('Partner')), this.seg('AI · 26','AI',s.source==='AI',()=>this.setSource('AI')) ];
+    const domainSegs = ['All','Finance','Procurement','Sales'].map(d=> this.seg(d==='All'?'All domains':d, d, s.domain===d, ()=>this.setDomain(d)) );
+
+    // ---- sheet ----
+    const selRaw = s.selected ? this.CAPS.find(c=>c.id===s.selected) : null;
+    let sel = null, outData=false,outEmpty=false,outNeeds=false,outError=false,outInfo=false, infoTitle='',infoBody='', rowsHeader='',rowsHttp='',rowsHttpColor='#166534', probeNote='';
+    if(selRaw){
+      const st=this.ST[selRaw.status], ty=this.TY[selRaw.type]||this.TY.BADI;
+      probeNote = selRaw.status==='ACTIVATED' ? 'live probe 200 · 2 min ago' : selRaw.status==='NEEDS_SETUP' ? '401 · not probed' : selRaw.status==='AVAILABLE' ? 'event · not pulled' : selRaw.status==='NOT_FOUND' ? '404 · not in tenant' : selRaw.status==='NOT_PROBEABLE' ? 'no OData endpoint' : 'design-time';
+      sel = {...selRaw, stLabel:st.label, stBg:st.bg, stFg:st.fg, tyBg:ty.bg, tyFg:ty.fg, probeNote};
+      const o=s.outcome;
+      outData = o==='data'; outEmpty=o==='empty'; outNeeds=o==='needssetup'; outError=o==='error';
+      outInfo = o==='available'||o==='noprobe'||o==='reference'||o==='notfound';
+      if(o==='data'){ rowsHeader='Live rows · $top=10'; rowsHttp='HTTP 200'; rowsHttpColor='#166534'; }
+      else if(o==='empty'){ rowsHeader='Live rows · $top=10'; rowsHttp='HTTP 200'; rowsHttpColor='#166534'; }
+      else if(o==='needssetup'){ rowsHeader='Probe result'; rowsHttp='HTTP 401'; rowsHttpColor='#8B5A00'; }
+      else if(o==='error'){ rowsHeader='Probe result'; rowsHttp='HTTP 502'; rowsHttpColor='#8E2A26'; }
+      else if(o==='available'){ rowsHeader='Subscription'; rowsHttp='EVENT'; rowsHttpColor='#1A4D6F'; infoTitle='Subscribe-only'; infoBody='Events are pushed, not pulled — there are no rows to read. View the schema to model the payload your solution will receive.'; }
+      else if(o==='noprobe'){ rowsHeader='Probe result'; rowsHttp='N/A'; rowsHttpColor='#6B6B6B'; infoTitle='Not probeable'; infoBody='This is a CDS view with no exposed OData endpoint in this tenant, so it can\u2019t be live-probed. It remains available as design-time reference.'; }
+      else if(o==='reference'){ rowsHeader='Probe result'; rowsHttp='N/A'; rowsHttpColor='#6B6B6B'; infoTitle='Reference content'; infoBody='Design-time content — not a runnable endpoint. Use it to plan an interface; it will show a real status once a probeable service backs it.'; }
+      else if(o==='notfound'){ rowsHeader='Probe result'; rowsHttp='HTTP 404'; rowsHttpColor='#8E2A26'; infoTitle='Not found in this tenant'; infoBody='The service returned 404 — it is not deployed in tenant '+tenant.key+'. This is distinct from an empty result or a setup gap.'; }
+    }
+    const oc = (label,key)=>{ const on=s.outcome===key; return {label, onClick:()=>this.setOutcome(key), bg:on?'#002B5C':'#FFFFFE', color:on?'#fff':'#4A4A4A', border:on?'#002B5C':'#C4BFAE'}; };
+    const outcomeChips = [ oc('Returns data','data'), oc('Empty','empty'), oc('Needs setup','needssetup'), oc('Error','error') ];
+
+    return {
+      // shell
+      workspaces, sections, crumb: ({home:'Home',discover:'Discover',solutions:'Solutions',connections:'Connections',access:'API Access',interfaces:'Interfaces',test:'Test Console'})[screen]||'Home',
+      tenantLabel: tenant.key, tenantOpen: s.tenantOpen, tenants, toggleTenant:()=>this.toggleTenant(),
+      roleLabel: role, envLabel: env, envBg: env==='PROD'?'#F4DEDB':env==='TEST'?'#E0EBF4':'#FBE9D1', envFg: env==='PROD'?'#8E2A26':env==='TEST'?'#1A4D6F':'#8B5A00',
+      onMainClick: ()=>{ if(s.tenantOpen) this.setState({tenantOpen:false}); },
+      // screen flags
+      isRestricted: !devAllowed, isHome: screen==='home' && devAllowed, isDiscover: screen==='discover' && devAllowed,
+      ...this.screenData(),
+      // home
+      greeting:'Good afternoon, Ikmal', homeSub: homeEmpty ? 'Let\u2019s set up your first solution on this tenant' : '4 items need attention across your solutions',
+      homeEmpty, homePopulated: !homeEmpty, mySolutions,
+      newSolution:()=>this.newSolution(), goAccess:()=>this.go('access'), goTest:()=>this.go('test'),
+      goDiscover:()=>this.go('discover'), resume:()=>this.fireToast('Resuming Supplier sync · mapping v3'), toast:()=>this.fireToast('Opening…'),
+      // discover
+      query:s.query, onQuery:(e)=>this.onQuery(e), sourceSegs, domainSegs, tiles, statusCounts,
+      listError, showList: !listError, listLoading:s.listLoading, listReady:!s.listLoading,
+      isEmpty, hasResults:!isEmpty, emptyReason, groups, skRows:[{},{},{},{},{},{}],
+      retry:()=>this.fireToast('Re-probing catalogue…'),
+      // sheet
+      sheetOpen: !!selRaw, sel, closeSheet:()=>this.closeSheet(), sheetLoading:s.sheetLoading, outcomeChips,
+      probeNote, rowsHeader, rowsHttp, rowsHttpColor, outData, outEmpty, outNeeds, outError, outInfo, infoTitle, infoBody,
+      addToInterface:()=>{ this.fireToast('Added '+(sel?sel.name:'')+' to a new interface draft'); this.closeSheet(); },
+      // toast
+      toastOpen:s.toastOpen, toastMsg:s.toastMsg
+    };
+  }
+}
+</script>
+</body>
+</html>

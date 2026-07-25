@@ -54,6 +54,7 @@ prisma/dev.db
 *.html
 # Design contracts are source-of-truth, not generated reports
 !docs/neutral-discovery/design/*.html
+!docs/coreedge/*.html
 *.docx
 *.xlsx
 *.xlsm
