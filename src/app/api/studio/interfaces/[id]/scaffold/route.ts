@@ -39,6 +39,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       operation: true,
       entitySet: true,
       version: true,
+      responseSchema: true,
       solution: { select: { name: true } },
     },
   });
@@ -58,6 +59,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       entitySet: iface.entitySet,
       version: iface.version,
       solutionName: iface.solution.name,
+      // Present → the contract describes real fields. Absent → it says so.
+      responseSchema: iface.responseSchema,
     },
     baseUrl,
   );

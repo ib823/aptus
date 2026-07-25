@@ -15,6 +15,8 @@
  * Pure functions: no I/O, no framework, fully testable.
  */
 
+import { isCapturedSchema } from "@/lib/studio/schema-capture";
+
 export interface ScaffoldInterface {
   id: string;
   name: string;
@@ -24,6 +26,12 @@ export interface ScaffoldInterface {
   entitySet: string | null;
   version: number;
   solutionName: string;
+  /**
+   * A schema inferred from rows this tenant actually returned, when one has been
+   * captured. Absent → the document keeps the open shape and says why, rather
+   * than describing fields nobody has seen.
+   */
+  responseSchema?: unknown;
 }
 
 /** A conservative identifier for generated TypeScript. */
@@ -125,15 +133,11 @@ export function buildOpenApi(iface: ScaffoldInterface, baseUrl = "https://coreed
         },
       },
       schemas: {
-        // Left open on purpose: the field-level shape comes from the tenant's own
-        // $metadata, which v1 does not read at generation time. Claiming a precise
-        // shape we have not inspected would be a confident lie in a contract file.
-        [typeName]: {
-          type: "object",
-          description:
-            "Shape follows the SAP entity as this tenant exposes it. Run the interface in the Test Console to see live fields.",
-          additionalProperties: true,
-        },
+        // Precise WHEN WE HAVE SEEN THE DATA, open when we have not. A captured
+        // schema describes fields this tenant actually returned; without one the
+        // document says so rather than describing fields nobody has observed,
+        // because a confident lie inside a contract file is worse than a gap.
+        [typeName]: describeRecord(iface.responseSchema),
         Error: {
           type: "object",
           required: ["error"],
@@ -159,6 +163,75 @@ function errorContent() {
   return { "application/json": { schema: { $ref: "#/components/schemas/Error" } } };
 }
 
+/**
+ * The record schema: what this tenant actually returned, or an honest blank.
+ *
+ * A captured schema is emitted as-is (it already carries its own provenance in
+ * `x-captured`). Without one, the document keeps `additionalProperties: true`
+ * and states plainly that no run has happened — a reader can then tell the
+ * difference between "this entity has no fields" and "nobody has looked yet".
+ */
+function describeRecord(responseSchema: unknown): Record<string, unknown> {
+  if (isCapturedSchema(responseSchema)) {
+    return {
+      ...responseSchema,
+      description:
+        "Fields observed in a live response from this tenant. Additional fields may exist on records outside the sample.",
+    };
+  }
+  return {
+    type: "object",
+    description:
+      "No live response has been captured for this interface yet, so its fields are not described. Run it in the Test Console and regenerate to get a precise contract.",
+    additionalProperties: true,
+  };
+}
+
+/** Map a captured JSON-schema type to its TypeScript equivalent. */
+function tsTypeOf(prop: { type?: string; nullable?: boolean }): string {
+  const base =
+    prop.type === "integer" || prop.type === "number"
+      ? "number"
+      : prop.type === "boolean"
+        ? "boolean"
+        : prop.type === "array"
+          ? "unknown[]"
+          : prop.type === "object"
+            ? "Record<string, unknown>"
+            : prop.type === "string"
+              ? "string"
+              : // No consistent type was observed. `unknown` forces the consumer to
+                // narrow it themselves, which is correct — we genuinely do not know.
+                "unknown";
+  return prop.nullable ? `${base} | null` : base;
+}
+
+/**
+ * The record interface body.
+ *
+ * With a captured schema this emits the real fields, with optional markers for
+ * the ones that did not appear in every sampled row. The index signature stays
+ * either way: the sample is not a census, and a consumer meeting an unlisted
+ * field should get a value, not a type error.
+ */
+function buildRecordBody(responseSchema: unknown): string {
+  if (!isCapturedSchema(responseSchema)) {
+    return "  [field: string]: unknown;";
+  }
+  const required = new Set(responseSchema.required);
+  const lines = Object.entries(responseSchema.properties).map(([name, prop]) => {
+    const optional = required.has(name) ? "" : "?";
+    // Quote anything that is not a plain identifier (SAP emits names like
+    // `to_Partner` — fine — but also `@odata.x` on occasion).
+    const key = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : JSON.stringify(name);
+    return `  ${key}${optional}: ${tsTypeOf(prop)};`;
+  });
+  // Always keep the index signature — see the doc comment above.
+  lines.push("  /** Fields outside the captured sample. */");
+  lines.push("  [field: string]: unknown;");
+  return lines.join("\n");
+}
+
 /** TypeScript types + a tiny typed client. Any language can be generated from the OpenAPI. */
 export function buildTypeScriptClient(iface: ScaffoldInterface): string {
   const typeName = toTypeName(iface.entitySet ?? iface.name);
@@ -178,9 +251,9 @@ export function buildTypeScriptClient(iface: ScaffoldInterface): string {
  *   openapi-generator-cli generate -i openapi.json -g <your-language> -o ./client
  */
 
-/** A record as this tenant exposes it. Narrow this once you have seen live rows. */
+/** A record as this tenant exposes it. */
 export interface ${typeName} {
-  [field: string]: unknown;
+${buildRecordBody(iface.responseSchema)}
 }
 
 /** The error envelope every CoreEdge endpoint returns. */

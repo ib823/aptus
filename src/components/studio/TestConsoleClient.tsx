@@ -55,6 +55,7 @@ export function TestConsoleClient({
   const [limit, setLimit] = useState(10);
   const [run, setRun] = useState<RunState>({ phase: "idle" });
   const [saving, setSaving] = useState(false);
+  const [capturing, setCapturing] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const [files, setFiles] = useState<{ path: string; contents: string }[] | null>(null);
 
@@ -179,6 +180,38 @@ export function TestConsoleClient({
       setSaving(false);
     }
   }, [selected, run, entity, limit, tenantKey]);
+
+  /**
+   * Turn the rows we just saw into a described contract.
+   *
+   * Sends the sample so the server can infer a SHAPE; the rows themselves are
+   * not stored. Costs no extra SAP call — the read already happened.
+   */
+  const captureSchema = useCallback(async () => {
+    if (!selected || !run.rows || run.rows.length === 0) return;
+    setCapturing(true);
+    try {
+      const res = await fetch(`/api/studio/interfaces/${selected.id}/capture-schema`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows: run.rows.slice(0, 100) }),
+      });
+      const json = (await res.json()) as {
+        data?: { fields: number; required: number; sampleSize: number };
+        error?: { message?: string };
+      };
+      if (!res.ok || !json.data) throw new Error(json.error?.message ?? "Could not capture the schema.");
+      setSaved(
+        `Captured ${json.data.fields} field${json.data.fields === 1 ? "" : "s"} ` +
+          `(${json.data.required} always present) from ${json.data.sampleSize} rows. ` +
+          "Regenerate the scaffold for a precise contract.",
+      );
+    } catch (err) {
+      setSaved(err instanceof Error ? `Failed: ${err.message}` : "Failed to capture the schema.");
+    } finally {
+      setCapturing(false);
+    }
+  }, [selected, run]);
 
   const loadScaffold = useCallback(async () => {
     if (!selected) return;
@@ -311,6 +344,13 @@ export function TestConsoleClient({
               <button type="button" onClick={() => void saveCase()} disabled={saving} style={btnSmall}>
                 {saving ? "Saving…" : "Save as test case"}
               </button>
+              {/* Only offered when there are rows to learn from — capturing an
+                  empty result would teach the contract nothing. */}
+              {run.rows && run.rows.length > 0 && (
+                <button type="button" onClick={() => void captureSchema()} disabled={capturing} style={btnSmall}>
+                  {capturing ? "Capturing…" : "Capture schema"}
+                </button>
+              )}
               {saved && <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>{saved}</span>}
             </div>
           )}
