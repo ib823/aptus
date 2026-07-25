@@ -105,12 +105,7 @@ Being explicit here is cheaper than letting you discover it mid-sprint:
 
 - **No in-browser editing.** The scaffold produces downloads; there is no
   workspace, no terminal, no deploy button.
-- **No writes through the northbound API.** Reads only. The existing guarded
-  write path requires an authenticated human admin with MFA and a typed
-  confirmation phrase, and a machine credential cannot meaningfully satisfy
-  either. Machine writes also need idempotency — a retried request must not
-  create a duplicate record in a client's production system — and that does not
-  exist yet. Read-only is a deliberate decision, not an oversight.
+- **No field-level mapping or transformation** — see below.
 - **No field-level mapping or transformation.** An interface passes the
   service's own shape through unchanged. The Mapping card is visible and
   disabled so the intent is legible.
@@ -136,6 +131,70 @@ an integration lies to its users, and it is the reason this distinction is
 carried all the way from the probe to the generated client.
 
 ---
+
+## Writing to SAP
+
+Writes are supported, and deliberately harder to reach than reads. Five things
+must all be true, and every one of them can refuse you:
+
+1. The interface is **`mode: WRITE`** and **`status: ACTIVE`** — a draft has not
+   been reviewed, and a write from an unreviewed interface changes a client's
+   system on nobody's authority.
+2. An **approved WRITE grant** exists for that capability, **in your
+   environment**, and has not expired. A READ grant never authorises a write, and
+   a SANDBOX grant never authorises PROD.
+3. The client's SAP connection has **`writeEnabled`** — a per-tenant veto that
+   overrides any grant.
+4. You send a **separate write credential** (`X-CoreEdge-Write-Key`). Your bearer
+   token alone cannot write: read tokens travel further, get logged by proxies
+   and pasted into issues, so the ability to read never implies the ability to
+   change anything.
+5. You send an **`Idempotency-Key`**. This one is mandatory and there is no way
+   around it — see below.
+
+```bash
+curl -X POST "$COREEDGE_BASE_URL/interfaces/$IFACE/data/write" \
+  -H "Authorization: Bearer $COREEDGE_TOKEN" \
+  -H "X-CoreEdge-Write-Key: $COREEDGE_WRITE_KEY" \
+  -H "Idempotency-Key: order-4471-attempt-1" \
+  -H "Content-Type: application/json" \
+  -d '{"record": {"BusinessPartnerName": "Acme"}}'
+```
+
+### Idempotency is not optional
+
+A write into a production ERP must survive being retried. Networks drop
+responses *after* the server has committed; HTTP clients retry on timeout; load
+balancers replay. Without a key, one logical write becomes two records in a
+client's ledger.
+
+So: **reuse the same key when you retry.** The rules are:
+
+| Situation | What you get |
+|---|---|
+| First call with a key | The write happens |
+| Same key, same payload | The **recorded outcome**, replayed — SAP is not touched again |
+| Same key, **different** payload | `409` — that is a bug in your code, not a retry |
+| Same key, still in flight | `409` — one intent, one write |
+| Key older than 24h | Treated as a fresh request |
+
+Failures are recorded too. If a write was refused with a `403`, retrying the same
+key returns that same `403` rather than re-attempting something the tenant has
+already declined.
+
+**A timeout is the case this exists for.** If a write times out, you genuinely do
+not know whether the record was created. Retry with the **same** key: if it
+landed, you get the original result; if it did not, the write is attempted once.
+Either way you end up with exactly one record.
+
+### Where the human is
+
+There is **no per-call confirmation** — an unattended application cannot give
+one. Human oversight sits at **grant approval**: a second person (never the
+requester) approved the WRITE grant and worked through the write checklist.
+That approval is the single human checkpoint for every write your solution makes,
+which is why **grant expiry is enforced on every call** — "approved once" must
+not become "approved forever".
 
 ## Credentials
 
