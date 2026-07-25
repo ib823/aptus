@@ -19,7 +19,12 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import type { SapTenant } from "@/lib/sap-public/tdd-connector";
-import { openSecrets, sealSecrets, type SapConnectionSecrets } from "@/lib/sap-public/connection-crypto";
+import {
+  connectionAad,
+  openSecrets,
+  sealSecrets,
+  type SapConnectionSecrets,
+} from "@/lib/sap-public/connection-crypto";
 
 export type SapAuthType = "basic" | "bearer" | "oauth-client-credentials";
 
@@ -85,7 +90,9 @@ export async function resolveSapConnections(
     label: r.label,
     baseUrl: normalizeBaseUrl(r.baseUrl),
     authType: coerceAuthType(r.authType),
-    secrets: openSecrets(r.secretsCiphertext),
+    // Opened under this row's own AAD, so a ciphertext copied from another
+    // organization's connection cannot be decrypted here.
+    secrets: openSecrets(r.secretsCiphertext, connectionAad(r.organizationId, r.product, r.key)),
     oauthTokenUrl: r.oauthTokenUrl,
     writeEnabled: r.writeEnabled,
     apiPath: r.apiPath,
@@ -182,7 +189,12 @@ export interface UpsertSapConnectionInput {
  * at the route layer — this helper assumes authorization already happened.
  */
 export async function upsertSapConnection(input: UpsertSapConnectionInput): Promise<RedactedSapConnection> {
-  const secretsCiphertext = sealSecrets(input.secrets);
+  // Bind the sealed bundle to (org, product, key) so it is worthless on any
+  // other row — see connectionAad.
+  const secretsCiphertext = sealSecrets(
+    input.secrets,
+    connectionAad(input.organizationId, input.product, input.key),
+  );
   const row = await prisma.sapConnection.upsert({
     where: {
       organizationId_product_key: {
