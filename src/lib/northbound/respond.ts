@@ -21,6 +21,8 @@ export type NorthboundErrorCode =
   | "NOT_FOUND"
   | "VALIDATION_ERROR"
   | "RATE_LIMITED"
+  /** Idempotency: same key, different payload — or a request still in flight. */
+  | "CONFLICT"
   | "UPSTREAM_TIMEOUT"
   | "UPSTREAM_ERROR"
   | "INTERNAL";

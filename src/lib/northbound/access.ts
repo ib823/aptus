@@ -41,11 +41,121 @@ export type AccessRefusal =
   | "NOT_THIS_SOLUTION"
   | "NO_APPROVED_GRANT"
   | "GRANT_EXPIRED"
-  | "WRITE_NOT_SERVED";
+  | "WRITE_NOT_SERVED"
+  | "READ_ONLY_INTERFACE"
+  | "INTERFACE_NOT_ACTIVE";
 
 export type AccessResult =
   | { ok: true; iface: AccessibleInterface }
   | { ok: false; reason: AccessRefusal; message: string };
+
+/**
+ * May this client WRITE through this interface, right now?
+ *
+ * The same chain as a read, with the mode inverted and one addition: the grant
+ * must be for a write operation. A READ grant does not authorise a write, even
+ * for the same service in the same environment — that distinction is the entire
+ * reason `operation` is recorded on a grant.
+ *
+ * HUMAN OVERSIGHT SITS AT GRANT APPROVAL. There is no per-call confirmation by
+ * design (a machine cannot meaningfully type one), so the approval of the WRITE
+ * grant — which requires a second person and the write checklist — is the single
+ * human checkpoint for every write this solution ever makes. That makes grant
+ * expiry load-bearing, and it is evaluated here at CALL time: "approved once"
+ * must not become "approved forever".
+ */
+export async function resolveWritableInterface(
+  scope: TenantScope,
+  solutionId: string,
+  interfaceId: string,
+  environment: string,
+  now: Date = new Date(),
+): Promise<AccessResult> {
+  const iface = await prisma.interface.findFirst({
+    where: scopedById(scope, interfaceId),
+    select: {
+      id: true,
+      name: true,
+      externalId: true,
+      sapProduct: true,
+      entitySet: true,
+      operation: true,
+      mode: true,
+      version: true,
+      solutionId: true,
+      status: true,
+    },
+  });
+
+  if (!iface) {
+    return { ok: false, reason: "INTERFACE_NOT_FOUND", message: "No such interface." };
+  }
+  if (iface.solutionId !== solutionId) {
+    // Same message as absent — a client must not discover its neighbours.
+    return { ok: false, reason: "NOT_THIS_SOLUTION", message: "No such interface." };
+  }
+  if (iface.mode !== "WRITE") {
+    return {
+      ok: false,
+      reason: "READ_ONLY_INTERFACE",
+      message: "This interface is configured for reads. Writing through it is not permitted.",
+    };
+  }
+  if (iface.status !== "ACTIVE") {
+    // A DRAFT interface has not been through review. Reads from one are merely
+    // premature; writes from one are changes to a client's system authorised by
+    // nobody.
+    return {
+      ok: false,
+      reason: "INTERFACE_NOT_ACTIVE",
+      message: `This interface is ${iface.status}. Only an ACTIVE interface may write.`,
+    };
+  }
+
+  const grants = await prisma.apiAccessGrant.findMany({
+    where: scopedWhere(scope, {
+      solutionId,
+      externalId: iface.externalId,
+      operation: iface.operation,
+      environment,
+    }),
+    select: { decision: true, expiresAt: true, operation: true },
+  });
+
+  // A READ grant never authorises a write.
+  const writeGrants = grants.filter((g) => g.operation === "CREATE" || g.operation === "UPDATE");
+  const granting = writeGrants.filter((g) => isGranting(g.decision as GrantDecision));
+  if (granting.length === 0) {
+    return {
+      ok: false,
+      reason: "NO_APPROVED_GRANT",
+      message: `No approved WRITE grant for this capability in ${environment}.`,
+    };
+  }
+
+  const live = granting.filter((g) => g.expiresAt === null || g.expiresAt.getTime() > now.getTime());
+  if (live.length === 0) {
+    return {
+      ok: false,
+      reason: "GRANT_EXPIRED",
+      message: `The WRITE grant for this capability in ${environment} has expired.`,
+    };
+  }
+
+  return {
+    ok: true,
+    iface: {
+      id: iface.id,
+      name: iface.name,
+      externalId: iface.externalId,
+      sapProduct: iface.sapProduct,
+      entitySet: iface.entitySet,
+      operation: iface.operation,
+      mode: iface.mode,
+      version: iface.version,
+    },
+  };
+}
 
 export async function resolveReadableInterface(
   scope: TenantScope,

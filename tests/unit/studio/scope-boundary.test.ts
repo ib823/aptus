@@ -61,12 +61,31 @@ describe("the guide is straight about what is NOT built", () => {
     expect(GUIDE.toLowerCase()).toContain("no in-browser editing");
   });
 
-  it("states the write path is read-only BY DECISION, with the reason", () => {
-    // The distinction matters: a reader must be able to tell a deliberate
-    // boundary from an unfinished feature.
-    expect(GUIDE).toContain("No writes through the northbound API");
-    expect(GUIDE.toLowerCase()).toContain("idempotency");
-    expect(GUIDE.toLowerCase()).toContain("deliberate decision, not an oversight");
+  it("documents the write path's gates rather than leaving them to be discovered", () => {
+    // Writes are now supported (PR-D6). A developer must know the rules BEFORE
+    // calling, because four of the five gates return a 403 that looks identical
+    // from the outside.
+    expect(GUIDE).toContain("## Writing to SAP");
+    expect(GUIDE).toContain("X-CoreEdge-Write-Key");
+    expect(GUIDE.toLowerCase()).toContain("a read grant never authorises a write");
+  });
+
+  it("states that idempotency is mandatory, and why", () => {
+    // The one gate with no way around it, and the one that prevents duplicate
+    // records in a customer's ledger.
+    expect(GUIDE).toContain("Idempotency is not optional");
+    expect(GUIDE.toLowerCase()).toContain("reuse the same key when you retry");
+    expect(GUIDE.toLowerCase()).toContain("two records in a\nclient's ledger");
+  });
+
+  it("explains the timeout case, which is the one that actually bites", () => {
+    expect(GUIDE.toLowerCase()).toContain("a timeout is the case this exists for");
+    expect(GUIDE.toLowerCase()).toContain("exactly one record");
+  });
+
+  it("says where the human oversight sits, since there is none per call", () => {
+    expect(GUIDE.toLowerCase()).toContain("no per-call confirmation");
+    expect(GUIDE.toLowerCase()).toContain("approved once");
   });
 
   it("says mapping is present-but-disabled rather than missing", () => {
