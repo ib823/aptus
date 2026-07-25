@@ -1,0 +1,175 @@
+/**
+ * API access grants — the governance rules, as pure functions.
+ *
+ * v1 is a LEDGER: it records who asked for what, who decided, and why. It does
+ * not enforce anything at runtime, because in v1 nothing calls SAP on a
+ * solution's behalf. Saying that plainly matters — a developer who believes an
+ * APPROVED row is granting them live access has misunderstood what they are
+ * looking at, and the UI says so too.
+ *
+ * The rules live here, separated from the route, because they are the part worth
+ * testing exhaustively: a decision that skipped segregation of duties, or a WRITE
+ * that slipped through without its checklist, is a governance failure that would
+ * be invisible in a passing integration test.
+ */
+
+export type GrantDecision =
+  | "REQUESTED"
+  | "APPROVED"
+  | "SANDBOX_ONLY"
+  | "READ_ONLY"
+  | "REJECTED"
+  | "EXPIRED";
+
+export type GrantEnvironment = "SANDBOX" | "DEV" | "TEST" | "PROD";
+export type GrantOperation = "READ" | "CREATE" | "UPDATE";
+
+/** Ascending trust. Used to describe where a solution has got to, not to block. */
+export const ENVIRONMENT_ORDER: readonly GrantEnvironment[] = ["SANDBOX", "DEV", "TEST", "PROD"];
+
+/** Decisions that leave a grant open for a later decision. */
+const PENDING: ReadonlySet<GrantDecision> = new Set(["REQUESTED"]);
+
+/** Decisions that actually confer something (in the ledger's terms). */
+const GRANTING: ReadonlySet<GrantDecision> = new Set(["APPROVED", "SANDBOX_ONLY", "READ_ONLY"]);
+
+/** A decision an approver may set directly. EXPIRED is reached by time, not by hand. */
+export const DECIDABLE: readonly GrantDecision[] = [
+  "APPROVED",
+  "SANDBOX_ONLY",
+  "READ_ONLY",
+  "REJECTED",
+];
+
+export function isPending(decision: GrantDecision): boolean {
+  return PENDING.has(decision);
+}
+
+export function isGranting(decision: GrantDecision): boolean {
+  return GRANTING.has(decision);
+}
+
+/** CREATE and UPDATE are writes; writes carry the stronger review path. */
+export function isWriteOperation(operation: GrantOperation): boolean {
+  return operation === "CREATE" || operation === "UPDATE";
+}
+
+export interface DecisionRequest {
+  /** Current state of the grant being decided. */
+  current: GrantDecision;
+  operation: GrantOperation;
+  environment: GrantEnvironment;
+  /** Who raised the request. Null for legacy rows with no recorded requester. */
+  requestedById: string | null;
+  /** Who is deciding now. */
+  deciderId: string;
+  next: GrantDecision;
+  /** The approver has explicitly worked through the write checklist. */
+  writeChecklistAcknowledged: boolean;
+}
+
+export type DecisionRefusal =
+  | "NOT_PENDING"
+  | "NOT_DECIDABLE"
+  | "SELF_APPROVAL"
+  | "WRITE_CHECKLIST_REQUIRED";
+
+export type DecisionOutcome = { ok: true } | { ok: false; reason: DecisionRefusal; message: string };
+
+/**
+ * May this decision be recorded?
+ *
+ * Refusals, in the order they are checked:
+ *
+ *  - NOT_PENDING — a grant is decided once. Re-deciding a settled grant would
+ *    quietly rewrite history; the way to change your mind is a new request, which
+ *    leaves both rows in the ledger.
+ *  - NOT_DECIDABLE — EXPIRED is a consequence of time passing, not something an
+ *    approver may assert by hand.
+ *  - SELF_APPROVAL — segregation of duties. The person who asked cannot be the
+ *    person who agreed, no matter how senior. This is the single control that
+ *    makes the ledger worth keeping.
+ *  - WRITE_CHECKLIST_REQUIRED — a write into a client's SAP system is never
+ *    approved by reflex. The checklist must be worked through explicitly, and no
+ *    write is ever auto-approved.
+ */
+export function evaluateDecision(req: DecisionRequest): DecisionOutcome {
+  if (!isPending(req.current)) {
+    return {
+      ok: false,
+      reason: "NOT_PENDING",
+      message: "This request has already been decided. Raise a new request instead.",
+    };
+  }
+
+  if (!DECIDABLE.includes(req.next)) {
+    return {
+      ok: false,
+      reason: "NOT_DECIDABLE",
+      message: "That decision cannot be set by hand.",
+    };
+  }
+
+  if (req.requestedById !== null && req.requestedById === req.deciderId) {
+    return {
+      ok: false,
+      reason: "SELF_APPROVAL",
+      message: "You cannot decide your own request. Someone else must review it.",
+    };
+  }
+
+  if (isWriteOperation(req.operation) && isGranting(req.next) && !req.writeChecklistAcknowledged) {
+    return {
+      ok: false,
+      reason: "WRITE_CHECKLIST_REQUIRED",
+      message:
+        "This request writes into the client's SAP system. Work through the write checklist before approving.",
+    };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * How far a solution has actually got, for the progressive-trust display.
+ *
+ * NOTE this REPORTS state; it does not gate. v1 deliberately does not refuse a
+ * PROD request because TEST has not been approved yet — no document defines that
+ * policy, and inventing a rule that blocks legitimate work would be worse than
+ * showing an honest picture and letting a human decide. The stepper is therefore
+ * a description of reality, not decoration and not a gate.
+ */
+export function highestApprovedEnvironment(
+  grants: readonly { environment: string; decision: string }[],
+): GrantEnvironment | null {
+  let best: GrantEnvironment | null = null;
+  for (const g of grants) {
+    if (!isGranting(g.decision as GrantDecision)) continue;
+    const env = g.environment as GrantEnvironment;
+    const idx = ENVIRONMENT_ORDER.indexOf(env);
+    if (idx < 0) continue;
+    if (best === null || idx > ENVIRONMENT_ORDER.indexOf(best)) best = env;
+  }
+  return best;
+}
+
+/** Has this grant passed its expiry? Pure — the caller supplies "now". */
+export function isExpired(
+  grant: { decision: string; expiresAt: Date | null },
+  now: Date,
+): boolean {
+  if (!isGranting(grant.decision as GrantDecision)) return false;
+  return grant.expiresAt !== null && grant.expiresAt.getTime() <= now.getTime();
+}
+
+/**
+ * The decision as it should be DISPLAYED: a granting decision whose expiry has
+ * passed reads as EXPIRED, without needing a sweep job to have run first. The
+ * stored row is left alone; this is a view concern.
+ */
+export function effectiveDecision(
+  grant: { decision: string; expiresAt: Date | null },
+  now: Date,
+): GrantDecision {
+  return isExpired(grant, now) ? "EXPIRED" : (grant.decision as GrantDecision);
+}
