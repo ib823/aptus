@@ -142,6 +142,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // partner); "AI" = only AI-domain rows. Read-only JSON-path filters.
   const sourceFilter = params.get("source") === "sap" ? "sap" : null;
   const domainFilter = params.get("domain") ? params.get("domain")!.trim() : null;
+  // Line-of-business facet (Studio's business-domain lens). Filters `packageId`,
+  // where the resolved LoB actually lives.
+  const lobFilter = params.get("lob") ? params.get("lob")!.trim() : null;
   const page = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
   const limit = Math.min(200, Math.max(1, Number.parseInt(params.get("limit") ?? "50", 10) || 50));
 
@@ -158,6 +161,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         counts: {
           byType: Object.fromEntries(HUB_CONTENT_TYPES.map((t) => [t, 0])),
           byStatus: emptyByStatus(),
+          byLob: {},
         },
         catalogueImported: false,
         tenant: null,
@@ -247,6 +251,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (domainFilter) {
     and.push({ rawMetadataJson: { path: ["raw", "domain"], equals: domainFilter } });
   }
+  // Line-of-business facet. LoB is persisted on `packageId` (resolveLineOfBusiness
+  // at seed time) — NOT on rawMetadataJson.raw.domain, which carries SAP's own
+  // taxonomy ("AI"). They are different fields with different vocabularies; the
+  // grouped list you see is grouped by THIS one.
+  if (lobFilter) {
+    and.push({ packageId: lobFilter });
+  }
   if (q) {
     and.push({
       OR: [
@@ -332,13 +343,26 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     where: { appliesToPublic: true, contentType: { in: ["API", "CDS_VIEW"] }, apiType: { in: ["ODATAV2", "ODATAV4"] } },
   });
 
+  // Line-of-business counts, so a business-domain lens can offer the domains that
+  // ACTUALLY exist with their real sizes, instead of a hardcoded taxonomy that
+  // would silently show empty buckets (or hide real ones) as the catalogue moves.
+  const groupedByLob = await prisma.sapHubContent.groupBy({
+    by: ["packageId"],
+    where: { appliesToPublic: true },
+    _count: { _all: true },
+  });
+  const byLob: Record<string, number> = {};
+  for (const g of groupedByLob) {
+    if (g.packageId) byLob[g.packageId] = g._count._all;
+  }
+
   return NextResponse.json({
     data: {
       items,
       total,
       page,
       limit,
-      counts: { byType, byTypeItems, aiApis, byStatus, probeableRuntime, probed, lastProbedAt, dataConfirmed: dataConfirmed.size, dataProbe },
+      counts: { byType, byTypeItems, aiApis, byStatus, byLob, probeableRuntime, probed, lastProbedAt, dataConfirmed: dataConfirmed.size, dataProbe },
       catalogueImported: true,
       tenant: tenant?.label ?? null,
       tenantKey: tenantKey ?? null,
