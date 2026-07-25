@@ -9,6 +9,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
+import { ScopeNote } from "@/components/studio/ScopeNote";
 import { TestConsoleClient, type TestableInterface } from "@/components/studio/TestConsoleClient";
 import { STUDIO_TENANT_COOKIE } from "@/components/studio/StudioTopBar";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -80,6 +81,8 @@ export default async function StudioTestPage() {
         </p>
       </div>
 
+      {/* Said next to Scaffold, where someone might expect an editor. */}
+      <ScopeNote topic="no-editor" />
       <TestConsoleClient
         interfaces={interfaces}
         tenantKey={tenantKey}
