@@ -168,6 +168,18 @@ export const RATE_LIMITS = {
    * generous apiRead/apiMutation ceilings.
    */
   sapLive: { limit: 20, windowMs: 60 * 1000 },
+  /**
+   * The northbound broker's data read, keyed PER CLIENT TOKEN rather than per
+   * IP. A deployed application calls from a small set of server addresses, so an
+   * IP key would make one busy customer throttle another — and would let a
+   * leaked token hide behind a shared address. Keyed by token, a runaway or
+   * stolen credential throttles only itself, and the audit shows exactly which.
+   *
+   * Higher than sapLive because this is an application's normal traffic rather
+   * than a human clicking, but still bounded: it reaches a customer's production
+   * system on every call.
+   */
+  northbound: { limit: 60, windowMs: 60 * 1000 },
 } as const;
 
 /**
