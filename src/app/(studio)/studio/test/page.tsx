@@ -15,6 +15,7 @@ import { STUDIO_TENANT_COOKIE } from "@/components/studio/StudioTopBar";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { canMutateStudio } from "@/lib/studio/rbac";
+import { pickActiveTenant, resolveStudioTenants } from "@/lib/studio/tenants";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Test Console" };
@@ -25,7 +26,7 @@ export default async function StudioTestPage() {
 
   const organizationId = user.organizationId;
 
-  const [rows, connections] = await Promise.all([
+  const [rows, tenants] = await Promise.all([
     organizationId
       ? prisma.interface.findMany({
           where: { organizationId },
@@ -41,22 +42,13 @@ export default async function StudioTestPage() {
           orderBy: { updatedAt: "desc" },
         })
       : Promise.resolve([]),
-    organizationId
-      ? prisma.sapConnection.findMany({
-          where: { organizationId, isActive: true },
-          select: { key: true },
-          orderBy: { createdAt: "asc" },
-        })
-      : Promise.resolve([]),
+    resolveStudioTenants(organizationId),
   ]);
 
-  // Honour the remembered tenant only if it is one of this organization's own —
+  // Honour the remembered tenant only if it is one the caller may actually use —
   // the cookie is a view preference, never an authorization input.
   const remembered = (await cookies()).get(STUDIO_TENANT_COOKIE)?.value ?? null;
-  const tenantKey =
-    remembered && connections.some((c) => c.key === remembered)
-      ? remembered
-      : (connections[0]?.key ?? null);
+  const tenantKey = pickActiveTenant(tenants, remembered);
 
   const interfaces: TestableInterface[] = rows.map((r) => ({
     id: r.id,
