@@ -17,7 +17,9 @@
 
 import { SampleSandboxCard } from '@/components/affirm/learn/SampleSandboxCard';
 import { SapOperationsDashboard } from '@/components/sap/SapOperationsDashboard';
+import { getCurrentUser } from '@/lib/auth/session';
 import { getConfiguredSapTenants } from '@/lib/sap-public/tdd-connector';
+import { canAccessStudio } from '@/lib/studio/rbac';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -67,6 +69,22 @@ const SURFACES: readonly SurfaceCard[] = [
   },
 ];
 
+/** CoreEdge Console. RBAC-gated rather than feature-gated: the hub only
+ * advertises it to roles that canAccessStudio, so nobody is offered a door that
+ * opens onto the role-gated empty state. Until this card existed the Console had
+ * no entry point anywhere in the product — it had to be reached by typing the
+ * URL. */
+const STUDIO_SURFACE: SurfaceCard = {
+  href: '/studio',
+  eyebrow: 'CoreEdge Console',
+  title: 'Developer Studio',
+  body:
+    'Configure SAP tenant connections, discover what a tenant can actually do, ' +
+    'register solutions and interfaces, then test a live read and scaffold a ' +
+    'typed client for your own stack.',
+  cta: 'Open Studio',
+};
+
 /** Feature-gated third surface. Only rendered when NEUTRAL_DISCOVERY_ENABLED
  * is "true" (the same flag the /discovery routes and middleware allow-list
  * check), so the hub never advertises a surface the deployment can't reach. */
@@ -81,15 +99,17 @@ const DISCOVERY_SURFACE: SurfaceCard = {
   cta: 'Open discovery',
 };
 
-export default function WorkbenchHomePage() {
+export default async function WorkbenchHomePage() {
+  const user = await getCurrentUser();
   const sampleEnabled =
     process.env.INTERNAL_TEST_DEPLOYMENT === "true" ||
     process.env.WORKBENCH_ONLY === "true";
   const showSap = sapTddConfigured();
-  const surfaces =
-    process.env.NEUTRAL_DISCOVERY_ENABLED === "true"
-      ? [...SURFACES, DISCOVERY_SURFACE]
-      : SURFACES;
+  const surfaces = [
+    ...SURFACES,
+    ...(process.env.NEUTRAL_DISCOVERY_ENABLED === "true" ? [DISCOVERY_SURFACE] : []),
+    ...(canAccessStudio(user?.role) ? [STUDIO_SURFACE] : []),
+  ];
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-12">
