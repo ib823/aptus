@@ -38,7 +38,7 @@ export const STUDIO_SECTIONS: readonly StudioSection[] = [
   { key: "solutions", label: "Solutions", href: "/studio/solutions", available: true },
   { key: "connections", label: "Connections", href: "/studio/connections", available: true },
   { key: "access", label: "API Access", href: "/studio/access", available: true },
-  { key: "interfaces", label: "Interfaces", href: "/studio/interfaces", available: false },
+  { key: "interfaces", label: "Interfaces", href: "/studio/interfaces", available: true },
   { key: "test", label: "Test Console", href: "/studio/test", available: false },
 ] as const;
 
