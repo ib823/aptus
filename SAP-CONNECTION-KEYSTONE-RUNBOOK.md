@@ -98,3 +98,34 @@ held in memory on the resolved object. `redactConnection` strips secrets **and**
 Organization cascades its connections. Rotating `SAP_CONNECTION_ENCRYPTION_KEY`
 requires re-sealing existing rows (decrypt-with-old → `sealSecrets`-with-new);
 add a `migrate:reseal` script when rotation is needed.
+
+Ciphertexts are bound to their row by AAD — `connectionAad(org, product, key)`
+for connections, `solutionClientAad(org, solution)` for runtime clients. Without
+that binding a blob is a free-floating secret: anyone able to write to the table
+could copy tenant A's `secretsCiphertext` onto tenant B's row and the platform
+would decrypt it happily, then authenticate to A's SAP system as B. Rows sealed
+before AAD existed still open (a deliberate migration bridge) and are re-bound on
+their next write.
+
+### Before real client credentials — the KMS gap
+
+The current key is a raw env var. That is adequate for a POC and **is not the
+enterprise bar** for storing customers' production SAP credentials. Three things
+are missing, in priority order:
+
+1. **KMS/Vault-backed key.** `SAP_CONNECTION_ENCRYPTION_KEY` sits in the
+   environment, so it is visible to anything that can read the process
+   environment or a deployment config. A managed key never leaves the KMS, and
+   the application asks it to decrypt rather than holding the key at all.
+2. **Key versioning + rotation.** There is one key with no version marker, so
+   rotation is all-or-nothing and cannot be staged. Stamp a key id into the
+   sealed blob so old and new can coexist during a re-seal, and build the
+   `migrate:reseal` script noted above.
+3. **A documented recovery path.** Today, losing the key means losing every
+   stored connection secret with no way back. That consequence should be a
+   written, tested runbook rather than a discovery.
+
+None of this blocks the POC. All of it should land before a real client's
+production credentials are stored — the AAD binding above closes the
+swap-a-ciphertext attack, but it does not protect a key that is sitting in an
+environment variable.
