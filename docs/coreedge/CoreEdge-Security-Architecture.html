@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoreEdge — Security Architecture</title>
+<style>
+  :root{
+    --navy:#002B5C;--navy-2:#013e82;--taupe:#7D6E5A;--ink:#1A1A1A;--ink2:#4A4A4A;--muted:#8A8A8A;
+    --line:#E5E1D6;--line2:#C4BFAE;--page:#FAF9F5;--card:#FFFFFE;--tint:#F4F2EB;
+    --g:#166534;--g-bg:#DCEBE3;--a:#8B5A00;--a-bg:#FBE9D1;--b:#1A4D6F;--b-bg:#E0EBF4;
+    --r:#8E2A26;--r-bg:#F4DEDB;--gr:#6B6B6B;--gr-bg:#EAEAE6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Geist","Segoe UI",system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--page);line-height:1.55;font-size:14.5px}
+  .wrap{max-width:1140px;margin:0 auto;padding:0 22px}
+  header.hero{background:linear-gradient(135deg,var(--navy),var(--navy-2));color:#fff;padding:38px 0 30px}
+  .kick{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#a9c2e6;font-weight:600}
+  h1{font-family:"Source Serif 4",Georgia,serif;font-size:29px;margin:8px 0 8px;font-weight:600;letter-spacing:-.01em}
+  .sub{color:#d6e2f2;max-width:850px;font-size:15px}
+  .meta{margin-top:15px;display:flex;flex-wrap:wrap;gap:8px}
+  .pill{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#eaeefb;padding:4px 11px;border-radius:20px;font-size:11.5px;font-weight:500}
+  section{margin:28px 0}
+  h2{font-size:20px;color:var(--navy);margin:0 0 8px;font-weight:700;padding-top:8px;border-top:3px solid var(--navy);display:inline-block}
+  h2 .n{color:var(--taupe);margin-right:8px}
+  h3{font-size:15px;margin:18px 0 6px;color:var(--navy-2)}
+  p{margin:8px 0}.lede{font-size:15px;color:var(--ink2)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .callout{border-left:4px solid var(--taupe);background:#faf7f2;padding:12px 16px;border-radius:0 10px 10px 0;margin:12px 0}
+  .callout.navy{border-left-color:var(--navy);background:#eef2fa}
+  .callout.warn{border-left-color:var(--a);background:var(--a-bg)}
+  .callout.g{border-left-color:var(--g);background:var(--g-bg)}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  th{background:var(--tint);text-align:left;padding:9px 12px;font-weight:700;color:var(--navy-2);border-bottom:1px solid var(--line);font-size:12px}
+  td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  code{font-family:"Geist Mono","SF Mono",Consolas,monospace;background:var(--tint);padding:1.5px 6px;border-radius:5px;font-size:12px;color:#33302a}
+  .tag{display:inline-block;padding:2px 9px;border-radius:6px;font-size:10.5px;font-weight:700;white-space:nowrap;letter-spacing:.02em}
+  .t-built{background:var(--g-bg);color:var(--g)}
+  .t-key{background:var(--a-bg);color:var(--a)}
+  .t-gap{background:#E7ECF7;color:var(--navy)}
+  .t-base{background:var(--b-bg);color:var(--b)}
+  ul{margin:8px 0 8px 2px;padding-left:20px}li{margin:4px 0}
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:820px){.g2{grid-template-columns:1fr}}
+  /* boundary diagram */
+  .diagram{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin:14px 0}
+  .plane{border-radius:12px;padding:12px 14px;margin:10px 0;border:1.5px solid}
+  .plane.int{border-color:#c3cdf0;background:#eef2fa}.plane.core{border-color:#d9c9b8;background:#faf6f1}.plane.ext{border-color:#bfe3d4;background:var(--g-bg)}
+  .plane .lbl{font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;margin-bottom:8px}
+  .plane.int .lbl{color:var(--navy)}.plane.core .lbl{color:var(--taupe)}.plane.ext .lbl{color:var(--g)}
+  .rowb{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}@media(max-width:820px){.rowb{grid-template-columns:1fr}}
+  .box{background:#fff;border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+  .box h4{margin:0 0 3px;font-size:12.5px;color:var(--navy)}.box p{margin:0;font-size:11.5px;color:var(--muted)}
+  .bnd{display:flex;align-items:center;gap:8px;justify-content:center;font-family:"Geist Mono",monospace;font-size:11.5px;color:var(--navy);
+    background:#fff;border:1px dashed #b9c4e8;border-radius:8px;padding:6px 10px;margin:8px auto;max-width:720px}
+  .bnd b{background:var(--navy);color:#fff;border-radius:5px;padding:1px 7px;font-family:inherit;font-weight:700}
+  .foot{margin:30px 0 50px;padding-top:14px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin:6px 0 2px}
+  .snap{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:820px){.snap{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="hero"><div class="wrap">
+  <div class="kick">CoreEdge · Security Architecture</div>
+  <h1>Trust boundaries, controls, and an honest gap register</h1>
+  <p class="sub">How CoreEdge protects client SAP systems and data as a multi-tenant middleware. Written for an InfoSec review: every control is marked <b>built</b>, <b>keystone (built, pending merge)</b>, or <b>planned</b>, and each built control points to real code or a test. No overstatement — the gaps are named, not hidden.</p>
+  <div class="meta"><span class="pill">Boundary model</span><span class="pill">Built-vs-gap register</span><span class="pill">Threat / control matrix</span><span class="pill">Grounded in code &amp; tests</span></div>
+</div></header>
+
+<div class="wrap">
+
+<div class="callout navy"><b>Reviewer's summary.</b> The security <em>primitives</em> are mature and tested — phishing-resistant staff auth (passkeys + MFA), AES-256-GCM secret sealing, rate-limiting, input sanitization, redaction, session-token hashing, security headers, and dedicated authn/authz/data-protection/injection test suites. The <em>CoreEdge-specific spine</em> — the northbound API broker, tenant-isolation enforcement, and the per-call audit store — is designed but not yet built. This document states exactly which is which.</div>
+
+<!-- 1 -->
+<section>
+  <h2><span class="n">1</span>Posture at a glance</h2>
+  <div class="snap">
+    <div class="card">
+      <h3 style="margin-top:0;color:var(--g)">✔ Built &amp; tested today</h3>
+      <ul>
+        <li><b>Staff identity:</b> NextAuth + <b>WebAuthn passkeys</b> + MFA; per-host session isolation <span class="small muted">(<code>api/auth/webauthn/*</code>, <code>middleware.ts</code>)</span></li>
+        <li><b>Authorization:</b> RBAC guards + admin role tests <span class="muted">(<code>lib/auth/admin-guard.ts</code>, <code>tests/security/authorization.test.ts</code>)</span></li>
+        <li><b>Crypto:</b> AES-256-GCM sealing <span class="muted">(<code>ai-key-crypto.ts</code>; keystone <code>secretsCiphertext</code>)</span></li>
+        <li><b>Abuse/DoS:</b> rate-limit + tight live-SAP bucket <span class="muted">(<code>security/rate-limit.ts · isLiveSapTenantRoute</code>)</span></li>
+        <li><b>Input/replay:</b> sanitize, HMAC-nonce, safe filenames, session-token hashing <span class="muted">(<code>security/*</code>)</span></li>
+        <li><b>Data:</b> redaction + no-host-leak <span class="muted">(<code>presales/redaction.ts</code> + external-redaction e2e)</span></li>
+        <li><b>Supply chain:</b> Dependabot + resilient audit gate <span class="muted">(#124)</span></li>
+        <li><b>Assurance:</b> authn / authz / data-protection / injection test suites + security-headers test</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0;color:var(--navy)">◔ The spine still to build</h3>
+      <ul>
+        <li><b>Land the keystone</b> — per-tenant SAP secret sealing into production <span class="tag t-key">keystone</span></li>
+        <li><b>Northbound broker</b> — OAuth2 client-credentials, per-solution identity, tenant-bound scopes, quotas <span class="tag t-gap">planned</span></li>
+        <li><b>Tenant-isolation enforcement + tests</b> — prove A can't read B even by tampering <span class="tag t-gap">planned</span></li>
+        <li><b>Per-call audit store</b> — who/what/when/outcome (also the monitoring source) <span class="tag t-gap">planned</span></li>
+        <li><b>Write idempotency</b> + duplicate prevention <span class="tag t-gap">planned</span></li>
+        <li><b>Portal governance</b> — approval gates, progressive trust, config-change audit <span class="tag t-gap">planned</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 2 -->
+<section>
+  <h2><span class="n">2</span>The trust-boundary model</h2>
+  <p class="lede">Security is defined by the boundaries a request crosses. There are three planes and one privileged surface; the credential boundary between CoreEdge and SAP is the crown jewel.</p>
+  <div class="diagram">
+    <div class="plane int">
+      <div class="lbl">Internal plane · ABeam staff · SSO + passkey/MFA + RBAC</div>
+      <div class="rowb">
+        <div class="box"><h4>Developer Portal</h4><p>configure · test · scaffold</p></div>
+        <div class="box"><h4>Operations Center</h4><p>monitor · trace · recover</p></div>
+        <div class="box"><h4>Control Tower</h4><p>tenants · identities · policy</p></div>
+      </div>
+    </div>
+    <div class="bnd"><b>B1</b> staff → console · session + RBAC &nbsp;·&nbsp; <b>B-portal</b> privileged surface (secrets never shown)</div>
+    <div class="plane core">
+      <div class="lbl">CoreEdge backend</div>
+      <div class="rowb">
+        <div class="box"><h4>Northbound API + broker</h4><p>OAuth2 · scopes · quotas · validation</p></div>
+        <div class="box"><h4>Tenant resolver</h4><p>org from token · never request input</p></div>
+        <div class="box"><h4>Secrets vault</h4><p>AES-256-GCM · decrypt in-process</p></div>
+      </div>
+    </div>
+    <div class="bnd"><b>B3</b> southbound · two-hop credential isolation · CoreEdge authenticates to SAP separately</div>
+    <div class="plane ext">
+      <div class="lbl">External · client SAP tenants (B3) &nbsp;·&nbsp; client users → solution apps (B5)</div>
+      <div class="rowb">
+        <div class="box"><h4>Client SAP tenant</h4><p>published APIs · read + guarded write</p></div>
+        <div class="box"><h4>Solution app</h4><p>own identity · scoped · tenant-locked</p></div>
+        <div class="box"><h4>Client Service View</h4><p>read-only · sanitized · their tenant</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="legend"><b>B2</b> solution → CoreEdge (northbound) · <b>B4</b> tenant ↔ tenant isolation · <b>B6</b> write safety · <b>B7</b> audit &amp; data protection — detailed next.</div>
+</section>
+
+<!-- 3 -->
+<section>
+  <h2><span class="n">3</span>Controls by boundary</h2>
+  <table>
+    <tr><th style="width:15%">Boundary</th><th style="width:34%">Primary threat</th><th style="width:36%">Control</th><th style="width:15%">Status</th></tr>
+    <tr><td><b>B1</b> Staff → console</td><td>Account takeover; over-broad internal access</td><td>SSO + WebAuthn passkeys + MFA; RBAC gates each workspace; least privilege; separation of duties (dev requests, admin approves)</td><td><span class="tag t-built">built</span> auth/RBAC<br><span class="tag t-gap">planned</span> approval gates</td></tr>
+    <tr><td><b>B2</b> Solution → CoreEdge (northbound)</td><td>A solution over-reaching; calling APIs/tenants it shouldn't</td><td>OAuth2 client-credentials, short-lived JWT, per-solution identity, tenant-bound scopes, read/write separation, per-tenant API allow-list, quotas, request validation</td><td><span class="tag t-gap">planned</span> broker<br><span class="tag t-built">built</span> validation/sanitize</td></tr>
+    <tr><td><b>B3</b> CoreEdge → SAP (southbound) — <i>crown jewel</i></td><td>Theft/exposure of client SAP credentials</td><td>Secrets sealed AES-256-GCM, decrypted only in-process, <b>never returned to a solution or shown in the portal</b>; two-hop isolation — solution authenticates to CoreEdge, CoreEdge separately to SAP</td><td><span class="tag t-key">keystone</span> (built, land it)</td></tr>
+    <tr><td><b>B4</b> Tenant ↔ tenant</td><td>Tenant A reading Tenant B's data</td><td>Every record <code>organizationId</code>-scoped; tenant resolved from the authenticated token, <b>never from request input</b>; tenant-keyed probes &amp; cache; explicit isolation tests</td><td><span class="tag t-key">keystone</span> connection<br><span class="tag t-gap">planned</span> enforcement + tests</td></tr>
+    <tr><td><b>B5</b> Client → solution</td><td>Client seeing middleware internals / other tenants / raw payloads</td><td>Token/account-gated, tenant-locked, normalized + redacted responses only; no SAP host leak; UA-fingerprint anti-abuse on external surface</td><td><span class="tag t-built">built</span> pattern (<code>(external)</code> + redaction)</td></tr>
+    <tr><td><b>B6</b> Write safety</td><td>Duplicate/inconsistent SAP writes</td><td><code>writeEnabled</code> gate per connection; idempotency keys; duplicate-prevention; stronger review; SAP digital-access/licensing check</td><td><span class="tag t-built">built</span> gate<br><span class="tag t-gap">planned</span> idempotency</td></tr>
+    <tr><td><b>B7</b> Audit &amp; data</td><td>Untraceable actions; log/PII leakage</td><td>Per-call audit (who/what/when/outcome) + correlation IDs; no sensitive payloads logged; redaction; session-token hashing; data classification &amp; retention</td><td><span class="tag t-built">built</span> redaction/hashing<br><span class="tag t-gap">planned</span> audit store</td></tr>
+    <tr><td><b>B-portal</b> The portal itself</td><td>Privileged tool abused to reach live tenants/secrets</td><td>Secrets never shown (metadata only); progressive trust (sandbox→dev→prod, access rises with evidence); no cross-tenant search; time-limited elevation; every config change audited</td><td><span class="tag t-gap">planned</span> (portal is new)</td></tr>
+  </table>
+</section>
+
+<!-- 4 -->
+<section>
+  <h2><span class="n">4</span>Built-vs-gap register</h2>
+  <p class="lede">The engineering-honest view: control area, status, the evidence today, and what closes it.</p>
+  <div class="legend">
+    <span class="tag t-built">built</span> in code + tested &nbsp; <span class="tag t-key">keystone</span> built, pending merge &nbsp; <span class="tag t-base">baseline</span> in place, hardening planned &nbsp; <span class="tag t-gap">planned</span> designed, not built
+  </div>
+  <table>
+    <tr><th>Control area</th><th>Status</th><th>Evidence / to close</th></tr>
+    <tr><td>Staff authentication (passkeys + MFA)</td><td><span class="tag t-built">built</span></td><td><code>api/auth/webauthn/*</code>, <code>VerifyMfaForm</code>, <code>tests/security/authentication.test.ts</code></td></tr>
+    <tr><td>Authorization / RBAC</td><td><span class="tag t-built">built</span></td><td><code>lib/auth/*-guard.ts</code>, <code>RolesPermissionsClient</code>, <code>authorization.test.ts</code>, e2e role tests</td></tr>
+    <tr><td>Secret encryption at rest (AES-256-GCM)</td><td><span class="tag t-built">built</span></td><td><code>intelligence/ai-key-crypto.ts</code> — pattern mirrored by keystone</td></tr>
+    <tr><td>SAP credential sealing (per tenant)</td><td><span class="tag t-key">keystone</span></td><td><code>SapConnection.secretsCiphertext</code> on branch → <b>merge to prod</b></td></tr>
+    <tr><td>Rate limiting + live-SAP throttle</td><td><span class="tag t-built">built</span></td><td><code>security/rate-limit.ts</code>, <code>isLiveSapTenantRoute</code>, <code>live-sap-route-throttle.test.ts</code></td></tr>
+    <tr><td>Input sanitization / injection</td><td><span class="tag t-built">built</span></td><td><code>security/sanitize.ts</code>, Prisma parameterization, <code>tests/security/injection.test.ts</code></td></tr>
+    <tr><td>Replay / integrity (HMAC nonce, session hashing)</td><td><span class="tag t-built">built</span></td><td><code>security/hmac-nonce.ts</code>, <code>session-token-hashing.test.ts</code></td></tr>
+    <tr><td>Security headers</td><td><span class="tag t-built">built</span></td><td><code>tests/unit/security-headers.test.ts</code></td></tr>
+    <tr><td>Output redaction / no host leak</td><td><span class="tag t-built">built</span></td><td><code>presales/redaction.ts</code>, external-redaction e2e</td></tr>
+    <tr><td>Supply-chain / CVE gating</td><td><span class="tag t-built">built</span></td><td>Dependabot + auto-merge + resilient audit gate (#124)</td></tr>
+    <tr><td>Transport encryption (TLS)</td><td><span class="tag t-base">baseline</span></td><td>HTTPS throughout · hardening: mTLS / sender-constrained tokens, private connectivity to SAP</td></tr>
+    <tr><td>Northbound broker (identity + scopes + quotas)</td><td><span class="tag t-gap">planned</span></td><td>Build the governed entry point + <code>SolutionClient</code> identity</td></tr>
+    <tr><td>Tenant-isolation enforcement + tests</td><td><span class="tag t-gap">planned</span></td><td>Wire tenant-from-token everywhere + isolation test suite</td></tr>
+    <tr><td>Per-call audit store</td><td><span class="tag t-gap">planned</span></td><td>Immutable audit + correlation IDs (also feeds monitoring)</td></tr>
+    <tr><td>Write idempotency</td><td><span class="tag t-gap">planned</span></td><td>Idempotency keys + duplicate prevention on writes</td></tr>
+    <tr><td>Portal governance controls</td><td><span class="tag t-gap">planned</span></td><td>Approval gates, progressive trust, time-limited elevation, config audit</td></tr>
+  </table>
+</section>
+
+<!-- 5 -->
+<section>
+  <h2><span class="n">5</span>Threat / control matrix</h2>
+  <p class="lede">The InfoSec-facing view — the attacks that matter for a middleware touching client SAP, and the control that answers each.</p>
+  <table>
+    <tr><th style="width:26%">Threat</th><th style="width:52%">Control</th><th style="width:22%">Status</th></tr>
+    <tr><td>Stolen SAP credentials</td><td>AES-256-GCM sealing; decrypt in-process only; never returned/shown; two-hop isolation</td><td><span class="tag t-key">keystone</span></td></tr>
+    <tr><td>Cross-tenant data access</td><td><code>organizationId</code> scoping; tenant from token not request; tenant-keyed cache; isolation tests</td><td><span class="tag t-key">keystone</span> + <span class="tag t-gap">tests planned</span></td></tr>
+    <tr><td>Solution over-reach (excess scope)</td><td>Per-solution identity; tenant-bound scopes; read/write separation; API allow-list; quotas</td><td><span class="tag t-gap">planned</span> (broker)</td></tr>
+    <tr><td>Token theft / replay</td><td>Short-lived JWTs; HMAC nonce; session-token hashing; TLS</td><td><span class="tag t-built">built</span> + <span class="tag t-gap">short-lived NB JWT planned</span></td></tr>
+    <tr><td>Injection (SQLi / XSS / path)</td><td>Prisma parameterization; <code>sanitize.ts</code>; safe-filename guard; injection test suite</td><td><span class="tag t-built">built</span></td></tr>
+    <tr><td>Tenant spoofing via request tampering</td><td>Tenant resolved server-side from auth; request-supplied tenant rejected</td><td><span class="tag t-gap">planned</span> enforcement</td></tr>
+    <tr><td>Secret exposure through the portal</td><td>Metadata-only projection; secrets never returned; watermarked sensitive views; time-limited elevation</td><td><span class="tag t-gap">planned</span></td></tr>
+    <tr><td>Internal privilege abuse</td><td>RBAC; least privilege; separation of duties; config-change audit; admin e2e tests</td><td><span class="tag t-built">built</span> RBAC + <span class="tag t-gap">config audit planned</span></td></tr>
+    <tr><td>Duplicate / bad SAP write</td><td><code>writeEnabled</code> gate; idempotency keys; duplicate prevention; stronger review</td><td><span class="tag t-built">gate</span> + <span class="tag t-gap">idempotency planned</span></td></tr>
+    <tr><td>Log / PII leakage</td><td>Redaction; no raw payloads logged; no SAP host leak; data-protection test</td><td><span class="tag t-built">built</span> + <span class="tag t-gap">audit governance planned</span></td></tr>
+    <tr><td>DoS / tenant amplification</td><td>Rate-limit + tight live-SAP bucket; bounded concurrency; per-solution quotas</td><td><span class="tag t-built">built</span> + <span class="tag t-gap">quotas planned</span></td></tr>
+    <tr><td>Account takeover (staff phishing)</td><td>WebAuthn passkeys (phishing-resistant) + MFA</td><td><span class="tag t-built">built</span></td></tr>
+    <tr><td>Vulnerable dependency</td><td>Dependabot + auto-merge + resilient audit gate; fails on fixable HIGH/CRITICAL</td><td><span class="tag t-built">built</span></td></tr>
+    <tr><td>Man-in-the-middle</td><td>TLS everywhere; hardening: mTLS / sender-constrained tokens, private connectivity to SAP</td><td><span class="tag t-base">baseline</span></td></tr>
+  </table>
+</section>
+
+<!-- 6 -->
+<section>
+  <h2><span class="n">6</span>Data protection &amp; tenancy</h2>
+  <div class="g2">
+    <div class="card"><h3 style="margin-top:0">What CoreEdge stores</h3><ul>
+      <li><b>Connection metadata</b> — tenant key, product, non-secret baseUrl, auth type, health</li>
+      <li><b>Sealed secrets</b> — AES-256-GCM ciphertext only; keys never at rest in plaintext</li>
+      <li><b>Catalogue + stored probe status</b> — tenant-keyed; design-time, not business data</li>
+      <li><b>Audit metadata</b> — who/what/when/outcome (planned); <b>not</b> raw payloads</li>
+      <li><b>Short-lived cached reads</b> — 30s TTL, tenant-scoped, not durable</li>
+    </ul></div>
+    <div class="card"><h3 style="margin-top:0">Principles</h3><ul>
+      <li>Business data is <b>read-through</b>, not warehoused — CoreEdge brokers, it does not become a second copy of client data</li>
+      <li>Responses <b>normalized + redacted</b>; sensitive fields masked by default</li>
+      <li>Every store is <b>tenant-scoped</b>; isolation is structural, not conventional</li>
+      <li>Diagnostic payloads (if ever retained) are tightly scoped, redacted, and access-logged</li>
+      <li>Retention &amp; residency configurable per tenant (dedicated-deployment option for stricter needs)</li>
+    </ul></div>
+  </div>
+  <div class="callout warn"><b>Deliberate design choice:</b> the audit/log store must not quietly become a second uncontrolled repository of client data. Audit metadata, operational metrics, and (rare, redacted) diagnostic payloads are separated — so logging strengthens governance instead of widening the blast radius.</div>
+</section>
+
+<!-- 7 -->
+<section>
+  <h2><span class="n">7</span>Answers a client InfoSec review will ask</h2>
+  <table>
+    <tr><th style="width:32%">Question</th><th>CoreEdge answer</th></tr>
+    <tr><td>Encryption at rest?</td><td>AES-256-GCM for secrets; DB-level encryption via the managed Postgres provider. <span class="tag t-built">built</span> (secret sealing) / <span class="tag t-key">keystone</span> for SAP creds.</td></tr>
+    <tr><td>Encryption in transit?</td><td>TLS everywhere; mTLS / private connectivity available as hardening for regulated clients.</td></tr>
+    <tr><td>Authentication?</td><td>Staff: SSO + WebAuthn passkeys + MFA. Machine (solutions): OAuth2 client-credentials + short-lived JWT (broker, planned).</td></tr>
+    <tr><td>Authorization / least privilege?</td><td>RBAC per workspace; per-solution tenant-bound scopes; read/write separation; separation of duties.</td></tr>
+    <tr><td>Multi-tenant isolation?</td><td>Tenant resolved from auth, never request input; <code>organizationId</code>-scoped storage; pooled-by-default with an optional dedicated deployment.</td></tr>
+    <tr><td>Secrets management?</td><td>Sealed vault; secrets never returned to consumers or shown in the portal; rotation + revocation supported.</td></tr>
+    <tr><td>Audit trail?</td><td>Per-call audit (who/what/when/outcome) with correlation IDs — planned as the monitoring source; config-change audit for the portal.</td></tr>
+    <tr><td>Vulnerability management?</td><td>Automated dependency updates + CI audit gate failing on fixable HIGH/CRITICAL. <span class="tag t-built">built</span>.</td></tr>
+    <tr><td>Data residency / retention?</td><td>Read-through (not warehoused); configurable retention; dedicated deployment for residency constraints.</td></tr>
+    <tr><td>Pen-test / assurance?</td><td>authn/authz/data-protection/injection suites in CI today; external pen test recommended before first regulated client.</td></tr>
+  </table>
+</section>
+
+<!-- 8 -->
+<section>
+  <h2><span class="n">8</span>Roadmap to "defensible"</h2>
+  <p class="lede">Four builds turn a strong posture into one that passes a client's security review. In dependency order:</p>
+  <div class="card">
+    <p><b>1 · Land the keystone</b> — per-tenant SAP secret sealing in production. Closes the crown-jewel boundary (B3). <span class="tag t-key">built, merge it</span></p>
+    <p><b>2 · Northbound broker</b> — OAuth2 client-credentials, per-solution identity, tenant-bound scopes, quotas. Closes B2 and enforces least privilege for solutions. <span class="tag t-gap">planned</span></p>
+    <p><b>3 · Tenant-isolation enforcement + test suite</b> — tenant-from-token everywhere; prove A can't reach B under tampering. Closes B4. <span class="tag t-gap">planned</span></p>
+    <p><b>4 · Per-call audit store</b> — immutable who/what/when/outcome with correlation IDs. Closes B7 and feeds the monitoring dashboard. <span class="tag t-gap">planned</span></p>
+  </div>
+  <div class="callout g"><b>Bottom line for InfoSec:</b> CoreEdge is built on mature, tested security primitives, with a clearly-scoped set of platform controls remaining. Nothing here is hand-waved — every claim is code-backed or explicitly marked as planned. The four builds above are the path to a defensible, review-ready platform.</div>
+</section>
+
+<div class="foot">
+  CoreEdge · Security Architecture · for InfoSec review. "Built" controls reference real files/tests in <code>ib823/aptus</code> (verified <code>origin/main</code> #132); "keystone" = built on an unmerged branch; "planned" = designed, not yet built. This is an architecture document, not a certification; an independent penetration test is recommended before onboarding the first regulated client. No client or SAP data appears here.
+</div>
+
+</div>
+</body>
+</html>

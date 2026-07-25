@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoreEdge Developer Studio — Design Book</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<style>
+  /* ============ REAL ABEAM TOKENS (extracted from aptus globals.css) ============ */
+  :root{
+    --navy:#002B5C; --navy-hover:#001E40; --navy-soft:#E6EBF1; --navy-border:#CFD7E0;
+    --cta:#C8102E; --cta-hover:#A30D26; --cta-focus:#FBE9EC;
+    --cream:#FAF9F5; --paper:#FFFFFE; --ink-tint:#F4F2EB; --banner-warn:#FDF7E6;
+    --ink:#1A1A1A; --ink-2:#4A4A4A; --ink-muted:#8A8A8A; --ink-disabled:#C4C4C4; --on-navy:#FFFFFF;
+    --bd:#E5E1D6; --bd-strong:#C4BFAE;
+    --success:#166534; --warning:#B45309; --danger:#991B1B; --info:#1E40AF;
+    --d-standard:#0F766E; --d-configure:#1D4ED8; --d-custom:#B45309; --d-open:#8A8A8A;
+    /* status token pairs */
+    --st-draft-bg:#F4F2EB; --st-draft-fg:#4A4A4A;
+    --st-sent-bg:#E0EBF4;  --st-sent-fg:#1A4D6F;
+    --st-await-bg:#FBE9D1; --st-await-fg:#8B5A00;
+    --st-signed-bg:#DCEBE3;--st-signed-fg:#166534;
+    --st-expired-bg:#EAEAE6;--st-expired-fg:#6B6B6B;
+    --st-revoked-bg:#F4DEDB;--st-revoked-fg:#8E2A26;
+    /* radius + elevation */
+    --r-input:8px; --r-step:10px; --r-card:12px; --r-pill:9999px;
+    --sh-sm:0 1px 2px rgba(0,0,0,.04); --sh-md:0 2px 6px rgba(0,0,0,.06);
+    --sh-lg:0 8px 24px rgba(0,0,0,.08); --sh-xl:0 16px 40px rgba(0,0,0,.12);
+    --sans:"Geist","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono:"Geist Mono","SF Mono",Consolas,monospace;
+    --serif:"Source Serif 4","Tiempos Headline",Georgia,serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:var(--sans);color:var(--ink);background:var(--cream);font-size:14px;line-height:1.5}
+  a{color:var(--navy);text-decoration:none}
+  /* ============ DOC LAYOUT ============ */
+  .app{display:grid;grid-template-columns:236px 1fr;min-height:100vh}
+  aside.nav{position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--navy);color:var(--on-navy);padding:20px 14px}
+  aside.nav .brand{font-weight:700;font-size:15px;letter-spacing:-.01em;padding:4px 10px 14px;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:10px}
+  aside.nav .brand small{display:block;font-weight:500;font-size:11px;color:rgba(255,255,255,.62);letter-spacing:.06em;text-transform:uppercase;margin-top:3px}
+  aside.nav .grp{font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.5);margin:16px 10px 4px;font-weight:600}
+  aside.nav a{display:block;color:rgba(255,255,255,.82);padding:7px 10px;border-radius:8px;font-size:13px;font-weight:500;margin:1px 0}
+  aside.nav a:hover{background:rgba(255,255,255,.08);color:#fff}
+  aside.nav a.soon{color:rgba(255,255,255,.4);pointer-events:none}
+  aside.nav a.soon::after{content:"next";float:right;font-size:9px;background:rgba(255,255,255,.12);padding:1px 6px;border-radius:20px;letter-spacing:.06em;text-transform:uppercase}
+  main.doc{padding:0 0 80px}
+  .band{background:linear-gradient(135deg,var(--navy),#013e82);color:#fff;padding:34px 44px 30px}
+  .band .k{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#a9c2e6;font-weight:600}
+  .band h1{font-family:var(--serif);font-size:30px;margin:8px 0 8px;font-weight:600;letter-spacing:-.01em}
+  .band p{color:#d6e2f2;max-width:760px;margin:0;font-size:14.5px}
+  .band .pills{margin-top:16px;display:flex;gap:8px;flex-wrap:wrap}
+  .band .pills span{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);padding:4px 11px;border-radius:20px;font-size:11.5px;font-weight:500}
+  .sec{padding:34px 44px;border-bottom:1px solid var(--bd)}
+  .sec>h2{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--navy);font-weight:700;margin:0 0 4px}
+  .sec>.t{font-family:var(--serif);font-size:23px;font-weight:600;margin:0 0 6px;letter-spacing:-.01em}
+  .sec>.d{color:var(--ink-2);max-width:760px;margin:0 0 20px;font-size:14px}
+  h3.sub{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted);font-weight:700;margin:26px 0 12px;border-top:1px solid var(--bd);padding-top:18px}
+  code{font-family:var(--mono);font-size:12px;background:var(--ink-tint);padding:1.5px 6px;border-radius:5px;color:#33302a}
+  .muted{color:var(--ink-muted)} .small{font-size:12.5px}
+  /* swatches */
+  .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  .sw{border:1px solid var(--bd);border-radius:10px;overflow:hidden;background:var(--paper)}
+  .sw .chip{height:52px} .sw .m{padding:7px 9px}
+  .sw .m b{font-size:12px;font-weight:600} .sw .m .hex{font-family:var(--mono);font-size:11px;color:var(--ink-muted);display:block;margin-top:1px}
+  .sw .m .tok{font-family:var(--mono);font-size:10px;color:var(--ink-2);display:block}
+  /* type scale */
+  .typ{border:1px solid var(--bd);border-radius:12px;overflow:hidden}
+  .typ .r{display:grid;grid-template-columns:150px 1fr;gap:16px;padding:12px 16px;border-bottom:1px solid var(--bd);align-items:baseline}
+  .typ .r:last-child{border:none}
+  .typ .meta{font-family:var(--mono);font-size:11px;color:var(--ink-muted);line-height:1.7}
+  /* spacing */
+  .sps{display:flex;flex-direction:column;gap:7px}
+  .spr{display:flex;align-items:center;gap:12px;font-family:var(--mono);font-size:11.5px;color:var(--ink-2)}
+  .spr .bar{background:var(--navy);height:14px;border-radius:3px}
+  .spr .nm{width:120px;color:var(--ink)}
+  /* generic grid */
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media(max-width:1100px){.g3,.g4{grid-template-columns:1fr 1fr}}
+  .note{border-left:3px solid var(--d-standard);background:#f0f7f6;padding:10px 14px;border-radius:0 8px 8px 0;font-size:13px;margin:14px 0}
+  .note.warn{border-left-color:var(--warning);background:var(--banner-warn)}
+  .note.navy{border-left-color:var(--navy);background:var(--navy-soft)}
+  /* ============ REAL COMPONENTS (built from tokens) ============ */
+  .btn{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 16px;border-radius:var(--r-input);
+    font-family:var(--sans);font-size:14px;font-weight:600;border:1px solid transparent;cursor:pointer;white-space:nowrap}
+  .btn.sm{height:34px;font-size:13px;padding:0 12px} .btn.xs{height:28px;font-size:12px;padding:0 10px;border-radius:7px}
+  .btn-primary{background:var(--navy);color:#fff} .btn-primary:hover{background:var(--navy-hover)}
+  .btn-cta{background:var(--cta);color:#fff} .btn-cta:hover{background:var(--cta-hover)}
+  .btn-secondary{background:var(--paper);color:var(--ink);border-color:var(--bd-strong)}
+  .btn-ghost{background:transparent;color:var(--navy)} .btn-ghost:hover{background:var(--navy-soft)}
+  .btn-gated{background:transparent;color:var(--navy);border-color:var(--navy);border-style:dashed}
+  .inp{height:40px;border:1px solid var(--bd-strong);border-radius:var(--r-input);padding:0 12px;font-family:var(--sans);
+    font-size:14px;background:var(--paper);color:var(--ink);width:100%}
+  .inp:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px var(--navy-soft)}
+  .card{background:var(--paper);border:1px solid var(--bd);border-radius:var(--r-card);box-shadow:var(--sh-sm)}
+  .pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:var(--r-pill);font-size:11.5px;font-weight:600;line-height:1.4}
+  .pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.9}
+  /* honest-status chips → mapped to real status tokens */
+  .s-act{background:var(--st-signed-bg);color:var(--st-signed-fg)}
+  .s-need{background:var(--st-await-bg);color:var(--st-await-fg)}
+  .s-avail{background:var(--st-sent-bg);color:var(--st-sent-fg)}
+  .s-noprobe{background:var(--st-expired-bg);color:var(--st-expired-fg)}
+  .s-ref{background:var(--st-draft-bg);color:var(--st-draft-fg)}
+  .s-nocheck{background:#EFEDE6;color:var(--ink-muted)}
+  .s-nofound{background:var(--st-revoked-bg);color:var(--st-revoked-fg)}
+  .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
+  .dchip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600}
+  .dchip .sq{width:9px;height:9px;border-radius:3px}
+  /* ============ SCREEN MOCK FRAME ============ */
+  .frame{border:1px solid var(--bd-strong);border-radius:14px;overflow:hidden;box-shadow:var(--sh-lg);background:var(--cream);margin-top:6px}
+  .frame .chrome{display:flex;align-items:center;gap:8px;background:#EDE9DF;padding:8px 12px;border-bottom:1px solid var(--bd)}
+  .frame .chrome .dots{display:flex;gap:5px} .frame .chrome .dots i{width:10px;height:10px;border-radius:50%;background:#CFC9BA;display:block}
+  .frame .chrome .url{font-family:var(--mono);font-size:11px;color:var(--ink-muted);background:var(--paper);border:1px solid var(--bd);border-radius:6px;padding:3px 10px;flex:1}
+  .shell{display:grid;grid-template-columns:220px 1fr}
+  .shell .rail{background:var(--navy);color:#fff;padding:12px 10px;min-height:520px}
+  .shell .rail .ws{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.5);margin:12px 8px 5px;font-weight:600}
+  .shell .rail a{display:flex;align-items:center;gap:9px;color:rgba(255,255,255,.82);padding:7px 9px;border-radius:8px;font-size:12.5px;font-weight:500;margin:1px 0}
+  .shell .rail a.on{background:rgba(255,255,255,.14);color:#fff;font-weight:600}
+  .shell .rail a .ic{width:15px;text-align:center;opacity:.8}
+  .shell .main{background:var(--cream)}
+  .topbar{height:56px;background:var(--paper);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:12px;padding:0 18px}
+  .topbar .crumb{font-size:12.5px;color:var(--ink-muted)} .topbar .crumb b{color:var(--ink)}
+  .topbar .sp{flex:1}
+  .tenant{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--bd-strong);border-radius:8px;padding:5px 10px;font-size:12.5px;font-weight:600;background:var(--paper)}
+  .tenant .env{font-size:10px;background:var(--st-await-bg);color:var(--st-await-fg);padding:1px 6px;border-radius:5px;font-weight:700}
+  .avatar{width:30px;height:30px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+  .canvas{padding:22px 24px}
+  .h-hello{font-family:var(--serif);font-size:22px;font-weight:600;margin:0} .h-sub{color:var(--ink-2);font-size:13px;margin:3px 0 0}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0}
+  .kpi{background:var(--paper);border:1px solid var(--bd);border-radius:12px;padding:15px 16px;box-shadow:var(--sh-sm)}
+  .kpi .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted);font-weight:600}
+  .kpi .rows{margin-top:9px;display:flex;flex-direction:column;gap:7px;font-size:12.5px}
+  .kpi .rows .li{display:flex;justify-content:space-between;align-items:center}
+  .continue{background:linear-gradient(90deg,var(--navy-soft),var(--paper));border:1px solid var(--navy-border);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;margin:4px 0 18px}
+  .continue .ic{width:36px;height:36px;border-radius:9px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;flex:none}
+  .sectitle{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted);font-weight:700;margin:18px 0 10px}
+  .qa{display:flex;gap:10px;flex-wrap:wrap}
+  table.dt{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--paper);border:1px solid var(--bd);border-radius:10px;overflow:hidden}
+  table.dt th{background:var(--ink-tint);text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-2);font-weight:700;border-bottom:1px solid var(--bd)}
+  table.dt td{padding:9px 12px;border-bottom:1px solid var(--bd);vertical-align:middle} table.dt tr:last-child td{border:none}
+  .tiles{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+  @media(max-width:1100px){.tiles{grid-template-columns:repeat(3,1fr)}}
+  .tile{background:var(--paper);border:1px solid var(--bd);border-radius:10px;padding:11px 12px;text-align:left}
+  .tile .n{font-size:19px;font-weight:700;font-family:var(--serif)} .tile .l{font-size:11px;color:var(--ink-muted);margin-top:1px}
+  .toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+  .seg{display:inline-flex;border:1px solid var(--bd-strong);border-radius:8px;overflow:hidden}
+  .seg button{border:none;background:var(--paper);padding:7px 12px;font-size:12px;font-weight:600;color:var(--ink-2);cursor:pointer;border-right:1px solid var(--bd)}
+  .seg button:last-child{border-right:none} .seg button.on{background:var(--navy);color:#fff}
+  .statusrow{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0}
+  .drawer{position:relative;background:var(--paper);border:1px solid var(--bd-strong);border-left:4px solid var(--navy);border-radius:10px;box-shadow:var(--sh-lg);padding:16px 18px;margin-top:12px}
+  .drawer .x{position:absolute;top:12px;right:14px;color:var(--ink-muted);font-size:16px}
+  .kvs{display:grid;grid-template-columns:120px 1fr;gap:5px 14px;font-size:12.5px;margin:8px 0}
+  .kvs dt{color:var(--ink-muted);font-weight:600} .kvs dd{margin:0}
+  .rowsbox{border:1px solid var(--bd);border-radius:8px;overflow:hidden;margin-top:10px}
+  .rowsbox .hd{background:var(--ink-tint);padding:6px 11px;font-size:11px;font-weight:700;color:var(--ink-2);display:flex;justify-content:space-between}
+  .foot{padding:22px 44px;color:var(--ink-muted);font-size:12px}
+  .legendline{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-muted);margin:2px 0 0}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ============ NAV ============ -->
+<aside class="nav">
+  <div class="brand">CoreEdge · Studio<small>Design Book v0.1</small></div>
+  <div class="grp">Foundations</div>
+  <a href="#color">Color &amp; tokens</a>
+  <a href="#type">Type scale</a>
+  <a href="#space">Spacing &amp; radius</a>
+  <a href="#elev">Elevation</a>
+  <a href="#comp">Components</a>
+  <a href="#status">Status system</a>
+  <div class="grp">Frame</div>
+  <a href="#shell">App shell &amp; nav</a>
+  <div class="grp">Screens</div>
+  <a href="#home">1 · Home</a>
+  <a href="#discover">2 · Discover</a>
+  <a class="soon" href="#">3 · Solutions</a>
+  <a class="soon" href="#">4 · Connections</a>
+  <a class="soon" href="#">5 · API Access</a>
+  <a class="soon" href="#">6 · Interfaces</a>
+  <a class="soon" href="#">7 · Test Console</a>
+</aside>
+
+<main class="doc">
+  <div class="band">
+    <div class="k">CoreEdge Developer Studio</div>
+    <h1>Design Book — measured, tokenized, page by page</h1>
+    <p>Every value on these pages is a real token pulled from <code style="background:rgba(255,255,255,.14);color:#dce7f6">aptus/globals.css</code> — the brand navy <b>#002B5C</b>, warm cream surfaces, Geist type, and your existing status/decision palette. This is the visual contract: what you approve here is what CCC builds, 1:1 with your shadcn components.</p>
+    <div class="pills"><span>Real ABeam tokens</span><span>8-pt measurement system</span><span>All states designed</span><span>Maps 1:1 to shadcn/ui</span></div>
+  </div>
+
+  <!-- ============ COLOR ============ -->
+  <section class="sec" id="color">
+    <h2>Foundations</h2><div class="t">Color &amp; tokens</div>
+    <div class="d">Two-tier, exactly as it ships: primitive values (below) aliased to semantic tokens. Nothing here is invented — these are the hex values in your codebase today.</div>
+
+    <h3 class="sub">Brand</h3>
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:#002B5C"></div><div class="m"><b>Navy</b><span class="hex">#002B5C</span><span class="tok">--brand-navy</span></div></div>
+      <div class="sw"><div class="chip" style="background:#001E40"></div><div class="m"><b>Navy hover</b><span class="hex">#001E40</span><span class="tok">--brand-navy-hover</span></div></div>
+      <div class="sw"><div class="chip" style="background:#E6EBF1"></div><div class="m"><b>Navy soft</b><span class="hex">#E6EBF1</span><span class="tok">--brand-navy-soft</span></div></div>
+      <div class="sw"><div class="chip" style="background:#C8102E"></div><div class="m"><b>CTA red</b><span class="hex">#C8102E</span><span class="tok">--cta-red</span></div></div>
+      <div class="sw"><div class="chip" style="background:#A30D26"></div><div class="m"><b>CTA hover</b><span class="hex">#A30D26</span><span class="tok">--cta-red-hover</span></div></div>
+    </div>
+
+    <h3 class="sub">Surfaces &amp; ink</h3>
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:#FAF9F5;border-bottom:1px solid var(--bd)"></div><div class="m"><b>Cream</b><span class="hex">#FAF9F5</span><span class="tok">--surface-cream · app bg</span></div></div>
+      <div class="sw"><div class="chip" style="background:#FFFFFE;border-bottom:1px solid var(--bd)"></div><div class="m"><b>Paper</b><span class="hex">#FFFFFE</span><span class="tok">--surface-paper · cards</span></div></div>
+      <div class="sw"><div class="chip" style="background:#F4F2EB"></div><div class="m"><b>Ink tint</b><span class="hex">#F4F2EB</span><span class="tok">--surface-ink-tint</span></div></div>
+      <div class="sw"><div class="chip" style="background:#1A1A1A"></div><div class="m"><b>Ink primary</b><span class="hex">#1A1A1A</span><span class="tok">--ink-primary</span></div></div>
+      <div class="sw"><div class="chip" style="background:#4A4A4A"></div><div class="m"><b>Ink secondary</b><span class="hex">#4A4A4A</span><span class="tok">--ink-secondary</span></div></div>
+      <div class="sw"><div class="chip" style="background:#8A8A8A"></div><div class="m"><b>Ink muted</b><span class="hex">#8A8A8A</span><span class="tok">--ink-muted</span></div></div>
+      <div class="sw"><div class="chip" style="background:#E5E1D6"></div><div class="m"><b>Border</b><span class="hex">#E5E1D6</span><span class="tok">--border-default</span></div></div>
+      <div class="sw"><div class="chip" style="background:#C4BFAE"></div><div class="m"><b>Border strong</b><span class="hex">#C4BFAE</span><span class="tok">--border-strong</span></div></div>
+    </div>
+
+    <h3 class="sub">Decision palette <span class="muted small" style="text-transform:none;letter-spacing:0">— your classification model (standard / configure / custom / open)</span></h3>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:4px">
+      <span class="dchip"><span class="sq" style="background:#0F766E"></span>Standard <code>#0F766E</code></span>
+      <span class="dchip"><span class="sq" style="background:#1D4ED8"></span>Configure <code>#1D4ED8</code></span>
+      <span class="dchip"><span class="sq" style="background:#B45309"></span>Custom <code>#B45309</code></span>
+      <span class="dchip"><span class="sq" style="background:#8A8A8A"></span>Open <code>#8A8A8A</code></span>
+    </div>
+    <div class="note navy"><b>Design decision:</b> Studio reuses these existing tokens rather than introducing new brand colors. New surfaces (environments, honest-status) are mapped onto the status palette below — so the whole product stays one visual system with zero token drift.</div>
+  </section>
+
+  <!-- ============ TYPE ============ -->
+  <section class="sec" id="type">
+    <h2>Foundations</h2><div class="t">Type scale — Geist</div>
+    <div class="d">Geist Sans for UI, Geist Mono for identifiers/code, Source Serif for section &amp; hero headlines (the warm, considered voice on landing surfaces). One scale, applied everywhere.</div>
+    <div class="typ">
+      <div class="r"><div class="meta">Display · 32/40<br>700 · -0.02em<br>Serif</div><div style="font-family:var(--serif);font-size:32px;line-height:40px;font-weight:600;letter-spacing:-.01em">Discover what this tenant can do</div></div>
+      <div class="r"><div class="meta">H1 · 24/32<br>700 · -0.01em</div><div style="font-size:24px;line-height:32px;font-weight:700;letter-spacing:-.01em">Developer Studio</div></div>
+      <div class="r"><div class="meta">H2 · 20/28 · 600</div><div style="font-size:20px;line-height:28px;font-weight:600">Capability Explorer</div></div>
+      <div class="r"><div class="meta">H3 · 16/24 · 600</div><div style="font-size:16px;line-height:24px;font-weight:600">Supplier Exception Monitor</div></div>
+      <div class="r"><div class="meta">Body · 14/22 · 400</div><div style="font-size:14px;line-height:22px">A solution is a governed record — owners, scopes and interfaces — before it ever reaches production.</div></div>
+      <div class="r"><div class="meta">Small · 13/20 · 400</div><div style="font-size:13px;line-height:20px;color:var(--ink-2)">Live probe succeeded 2 min ago · tenant X5M/100</div></div>
+      <div class="r"><div class="meta">Caption · 12/16<br>500 · 0.01em</div><div style="font-size:12px;line-height:16px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-muted)">Activated · 139</div></div>
+      <div class="r"><div class="meta">Mono · 13<br>identifiers</div><div style="font-family:var(--mono);font-size:13px">A_PurchaseOrder · SAP_COM_0053</div></div>
+    </div>
+  </section>
+
+  <!-- ============ SPACE + RADIUS ============ -->
+  <section class="sec" id="space">
+    <h2>Foundations</h2><div class="t">Spacing &amp; radius</div>
+    <div class="d">An 8-pt rhythm (4-pt for fine adjustments). Every gap, pad and margin snaps to this — the difference between “professional” and “almost right.”</div>
+    <div class="g2">
+      <div>
+        <h3 class="sub" style="margin-top:0;border:none;padding:0">Spacing scale</h3>
+        <div class="sps">
+          <div class="spr"><span class="nm">space-1 · 4px</span><span class="bar" style="width:4px"></span></div>
+          <div class="spr"><span class="nm">space-2 · 8px</span><span class="bar" style="width:8px"></span></div>
+          <div class="spr"><span class="nm">space-3 · 12px</span><span class="bar" style="width:12px"></span></div>
+          <div class="spr"><span class="nm">space-4 · 16px</span><span class="bar" style="width:16px"></span></div>
+          <div class="spr"><span class="nm">space-5 · 20px</span><span class="bar" style="width:20px"></span></div>
+          <div class="spr"><span class="nm">space-6 · 24px</span><span class="bar" style="width:24px"></span></div>
+          <div class="spr"><span class="nm">space-8 · 32px</span><span class="bar" style="width:32px"></span></div>
+          <div class="spr"><span class="nm">space-10 · 40px</span><span class="bar" style="width:40px"></span></div>
+          <div class="spr"><span class="nm">space-12 · 48px</span><span class="bar" style="width:48px"></span></div>
+          <div class="spr"><span class="nm">space-16 · 64px</span><span class="bar" style="width:64px"></span></div>
+        </div>
+      </div>
+      <div>
+        <h3 class="sub" style="margin-top:0;border:none;padding:0">Radius <span class="muted small" style="text-transform:none;letter-spacing:0">(real tokens)</span></h3>
+        <div class="g2" style="gap:12px">
+          <div class="card" style="padding:14px;border-radius:8px;text-align:center"><div style="font-weight:700">8px</div><div class="small muted">--radius-input<br>inputs · buttons</div></div>
+          <div class="card" style="padding:14px;border-radius:10px;text-align:center"><div style="font-weight:700">10px</div><div class="small muted">--radius / step<br>base</div></div>
+          <div class="card" style="padding:14px;border-radius:12px;text-align:center"><div style="font-weight:700">12px</div><div class="small muted">--radius-card<br>cards · sheets</div></div>
+          <div class="card" style="padding:14px;border-radius:9999px;text-align:center"><div style="font-weight:700">pill</div><div class="small muted">--radius-pill<br>chips</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ELEVATION ============ -->
+  <section class="sec" id="elev">
+    <h2>Foundations</h2><div class="t">Elevation</div>
+    <div class="d">Four soft levels (real <code>--shadow-color</code> alphas 0.04 → 0.12). Warm and restrained — depth by shadow, never by heavy borders.</div>
+    <div class="g4">
+      <div class="card" style="padding:16px;box-shadow:var(--sh-sm)"><b>sm</b><div class="small muted">cards at rest · 0.04</div></div>
+      <div class="card" style="padding:16px;box-shadow:var(--sh-md)"><b>md</b><div class="small muted">hover · popover · 0.06</div></div>
+      <div class="card" style="padding:16px;box-shadow:var(--sh-lg)"><b>lg</b><div class="small muted">drawers · menus · 0.08</div></div>
+      <div class="card" style="padding:16px;box-shadow:var(--sh-xl)"><b>xl</b><div class="small muted">dialogs · 0.12</div></div>
+    </div>
+  </section>
+
+  <!-- ============ COMPONENTS ============ -->
+  <section class="sec" id="comp">
+    <h2>Foundations</h2><div class="t">Components — measured</div>
+    <div class="d">Each maps directly to a shadcn primitive you already ship (<code>button</code>, <code>input</code>, <code>card</code>, <code>badge</code>, <code>table</code>, <code>sheet</code>, <code>dialog</code>). Heights and paddings below are the build spec.</div>
+
+    <h3 class="sub">Buttons <span class="muted small" style="text-transform:none;letter-spacing:0">— h40 default / h34 sm / h28 xs · radius 8 · pad-x 16</span></h3>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-primary">Primary action</button>
+      <button class="btn btn-cta">Critical / commit</button>
+      <button class="btn btn-secondary">Secondary</button>
+      <button class="btn btn-ghost">Ghost</button>
+      <button class="btn btn-gated">Gated ▸ request access</button>
+      <button class="btn btn-primary sm">Small</button>
+      <button class="btn btn-secondary xs">xs</button>
+    </div>
+    <div class="legendline" style="margin-top:8px">Primary = navy · Critical/irreversible = CTA red (only for commit/publish/delete) · Gated = dashed navy for actions needing approval</div>
+
+    <h3 class="sub">Inputs · badges · chips</h3>
+    <div class="g2">
+      <div><input class="inp" placeholder="Search capabilities…" style="max-width:320px"><div class="small muted" style="margin-top:6px">h40 · radius 8 · focus = navy border + soft ring</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span class="badge" style="background:var(--navy-soft);color:var(--navy)">API</span>
+        <span class="badge" style="background:var(--st-signed-bg);color:var(--st-signed-fg)">READ</span>
+        <span class="badge" style="background:var(--st-revoked-bg);color:var(--st-revoked-fg)">WRITE</span>
+        <span class="pill s-act"><span class="dot"></span>Returns data</span>
+        <span class="pill s-ref"><span class="dot"></span>Empty (0 rows)</span>
+      </div>
+    </div>
+
+    <h3 class="sub">Interaction primitives <span class="muted small" style="text-transform:none;letter-spacing:0">— canonical patterns, so the whole product feels like one thing</span></h3>
+    <table class="dt">
+      <tr><th>Pattern</th><th>Component</th><th>Used for</th></tr>
+      <tr><td>Side drawer</td><td><code>sheet</code> (w 480)</td><td>Capability detail · view rows · interface preview — context without leaving the list</td></tr>
+      <tr><td>Modal dialog</td><td><code>dialog</code> (w 520)</td><td>Create solution · confirm irreversible action</td></tr>
+      <tr><td>Toast</td><td><code>sonner</code></td><td>Async result (“Test saved”, “Access requested”)</td></tr>
+      <tr><td>Inline banner</td><td><code>inline-error-banner</code></td><td>Blocking/needs-setup state on a surface</td></tr>
+      <tr><td>Skeleton</td><td><code>skeleton</code></td><td>Loading — never a spinner on data tables</td></tr>
+      <tr><td>Command palette</td><td><code>command</code></td><td>Jump to any capability / solution / screen (⌘K)</td></tr>
+    </table>
+  </section>
+
+  <!-- ============ STATUS SYSTEM ============ -->
+  <section class="sec" id="status">
+    <h2>Foundations</h2><div class="t">Status system — the honest-status contract</div>
+    <div class="d">The 7 live statuses from <code>hub-content.ts</code>, each mapped onto an existing status token (no new colors). This is the single most-used visual signal in the product — it must be unmistakable and consistent everywhere.</div>
+    <div class="statusrow">
+      <span class="pill s-act"><span class="dot"></span>Activated</span>
+      <span class="pill s-need"><span class="dot"></span>Needs setup</span>
+      <span class="pill s-avail"><span class="dot"></span>Available</span>
+      <span class="pill s-noprobe"><span class="dot"></span>Not probeable</span>
+      <span class="pill s-ref"><span class="dot"></span>Reference</span>
+      <span class="pill s-nocheck"><span class="dot"></span>Not checked</span>
+      <span class="pill s-nofound"><span class="dot"></span>Not found</span>
+    </div>
+    <table class="dt" style="margin-top:10px">
+      <tr><th>Honest status</th><th>Means</th><th>Mapped token</th></tr>
+      <tr><td><span class="pill s-act">Activated</span></td><td>Live probe returned 200 — proven</td><td><code>status-signed</code> (green)</td></tr>
+      <tr><td><span class="pill s-need">Needs setup</span></td><td>401/403 — comm arrangement not set up</td><td><code>status-awaiting</code> (amber)</td></tr>
+      <tr><td><span class="pill s-avail">Available</span></td><td>Event / subscribe-only — not pulled</td><td><code>status-sent</code> (blue)</td></tr>
+      <tr><td><span class="pill s-noprobe">Not probeable</span></td><td>No OData endpoint to probe</td><td><code>status-expired</code> (grey)</td></tr>
+      <tr><td><span class="pill s-ref">Reference</span></td><td>Design-time content</td><td><code>status-draft</code> (neutral)</td></tr>
+      <tr><td><span class="pill s-nofound">Not found</span></td><td>404 — not in this tenant</td><td><code>status-revoked</code> (red)</td></tr>
+    </table>
+    <div class="note"><b>Rule carried into the design:</b> a capability is shown Activated <i>only</i> where a live probe proved it; empty results render as “No records”, distinct from Needs-setup and from error. The colors never lie.</div>
+  </section>
+
+  <!-- ============ SHELL ============ -->
+  <section class="sec" id="shell">
+    <h2>Frame</h2><div class="t">App shell &amp; navigation</div>
+    <div class="d">One internal console, three role-gated workspaces. Persistent chrome: a <b>56px top bar</b> (product · breadcrumb · tenant switcher · environment · role · user) and a <b>220px left rail</b> (workspace switcher + the active workspace’s sections). Everything else is content.</div>
+    <div class="frame">
+      <div class="chrome"><div class="dots"><i></i><i></i><i></i></div><div class="url">console.coreedge.abeam.com/studio/discover</div></div>
+      <div class="shell">
+        <div class="rail">
+          <div style="font-weight:700;font-size:13px;padding:4px 9px 10px;border-bottom:1px solid rgba(255,255,255,.12)">◆ CoreEdge Console</div>
+          <div class="ws">Workspace</div>
+          <a class="on"><span class="ic">◐</span> Developer Studio</a>
+          <a><span class="ic">◔</span> Operations Center</a>
+          <a><span class="ic">⬡</span> Control Tower</a>
+          <div class="ws">Developer Studio</div>
+          <a><span class="ic">⌂</span> Home</a>
+          <a class="on"><span class="ic">⊞</span> Discover</a>
+          <a><span class="ic">▤</span> Solutions</a>
+          <a><span class="ic">⇄</span> Connections</a>
+          <a><span class="ic">⚿</span> API Access</a>
+          <a><span class="ic">◫</span> Interfaces</a>
+          <a><span class="ic">▷</span> Test Console</a>
+        </div>
+        <div class="main">
+          <div class="topbar">
+            <div class="crumb">Developer Studio&nbsp; / &nbsp;<b>Discover</b></div>
+            <div class="sp"></div>
+            <span class="tenant">◎ X5M / 100 <span class="env">DEV</span> ▾</span>
+            <span class="badge" style="background:var(--navy-soft);color:var(--navy)">Developer</span>
+            <span class="avatar">IB</span>
+          </div>
+          <div class="canvas" style="min-height:120px">
+            <div class="muted small">↑ the persistent frame — tenant + environment are always visible, resolved from auth, never typed into a URL. Each workspace swaps only the rail sections and the canvas.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note navy"><b>RBAC:</b> the three workspace links render by role — a developer may not see Control Tower at all. Same backend, same design system, different accountable surface.</div>
+  </section>
+
+  <!-- ============ HOME ============ -->
+  <section class="sec" id="home">
+    <h2>Screen 1</h2><div class="t">Home · Mission Control</div>
+    <div class="d">The role-aware landing: what you own, what needs attention, and one click back into unfinished work. Answers “what should I do next?” in under two seconds.</div>
+    <div class="frame">
+      <div class="chrome"><div class="dots"><i></i><i></i><i></i></div><div class="url">console.coreedge.abeam.com/studio</div></div>
+      <div class="shell">
+        <div class="rail">
+          <div style="font-weight:700;font-size:13px;padding:4px 9px 10px;border-bottom:1px solid rgba(255,255,255,.12)">◆ CoreEdge Console</div>
+          <div class="ws">Workspace</div>
+          <a class="on"><span class="ic">◐</span> Developer Studio</a>
+          <a><span class="ic">◔</span> Operations Center</a>
+          <a><span class="ic">⬡</span> Control Tower</a>
+          <div class="ws">Developer Studio</div>
+          <a class="on"><span class="ic">⌂</span> Home</a>
+          <a><span class="ic">⊞</span> Discover</a>
+          <a><span class="ic">▤</span> Solutions</a>
+          <a><span class="ic">⇄</span> Connections</a>
+          <a><span class="ic">⚿</span> API Access</a>
+          <a><span class="ic">◫</span> Interfaces</a>
+          <a><span class="ic">▷</span> Test Console</a>
+        </div>
+        <div class="main">
+          <div class="topbar">
+            <div class="crumb"><b>Home</b></div><div class="sp"></div>
+            <span class="tenant">◎ X5M / 100 <span class="env">DEV</span> ▾</span>
+            <span class="badge" style="background:var(--navy-soft);color:var(--navy)">Developer</span>
+            <span class="avatar">IB</span>
+          </div>
+          <div class="canvas">
+            <div style="display:flex;justify-content:space-between;align-items:flex-end">
+              <div><div class="h-hello">Good afternoon, Ikmal</div><div class="h-sub">4 items need attention across your solutions</div></div>
+              <button class="btn btn-primary sm">+ New solution</button>
+            </div>
+            <div class="kpis">
+              <div class="kpi"><div class="lbl">My solutions</div>
+                <div class="rows">
+                  <div class="li"><span>Supplier Exception Monitor</span><span class="pill s-act" style="font-size:10px">Active</span></div>
+                  <div class="li"><span>Finance Control Dashboard</span><span class="pill s-ref" style="font-size:10px">Draft</span></div>
+                  <div class="li"><span>E-Invoice Monitor</span><span class="pill s-need" style="font-size:10px">Review</span></div>
+                </div>
+              </div>
+              <div class="kpi"><div class="lbl">Test status</div>
+                <div class="rows">
+                  <div class="li"><span>Passed</span><b style="color:var(--success)">18</b></div>
+                  <div class="li"><span>Failed</span><b style="color:var(--danger)">2</b></div>
+                  <div class="li"><span>Not run since edit</span><b style="color:var(--warning)">3</b></div>
+                </div>
+              </div>
+              <div class="kpi"><div class="lbl">Production attention</div>
+                <div class="rows">
+                  <div class="li"><span>Mapping validation issue</span><span class="badge" style="background:var(--st-await-bg);color:var(--st-await-fg)">act</span></div>
+                  <div class="li"><span>API marked for review</span><span class="badge" style="background:var(--st-sent-bg);color:var(--st-sent-fg)">info</span></div>
+                  <div class="li"><span>Deprecated dependency</span><span class="badge" style="background:var(--st-revoked-bg);color:var(--st-revoked-fg)">risk</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="continue">
+              <div class="ic">▷</div>
+              <div style="flex:1"><div style="font-weight:600;font-size:13px">Continue where you stopped</div><div class="small muted">Supplier Exception Monitor › Interface “Supplier sync” › mapping v3 · failed validation</div></div>
+              <button class="btn btn-secondary sm">Resume</button>
+            </div>
+            <div class="sectitle">Quick actions</div>
+            <div class="qa">
+              <button class="btn btn-secondary">⊞ Explore APIs</button>
+              <button class="btn btn-secondary">▤ Register solution</button>
+              <button class="btn btn-secondary">▷ Test an interface</button>
+              <button class="btn btn-gated">⚿ Request access</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="legendline">States designed: empty (“Register your first solution”), attention badges (stale tests / expiring grants / degraded connections), zero-attention (“All clear”).</div>
+  </section>
+
+  <!-- ============ DISCOVER ============ -->
+  <section class="sec" id="discover">
+    <h2>Screen 2</h2><div class="t">Discover · Capability Explorer</div>
+    <div class="d">Browse what the selected tenant can <i>genuinely</i> do, by business domain, with live honest status. ~90% reuses the catalogue you already ship — Studio adds the domain lens and one action: <b>Add to interface</b>.</div>
+    <div class="frame">
+      <div class="chrome"><div class="dots"><i></i><i></i><i></i></div><div class="url">console.coreedge.abeam.com/studio/discover</div></div>
+      <div class="shell">
+        <div class="rail">
+          <div style="font-weight:700;font-size:13px;padding:4px 9px 10px;border-bottom:1px solid rgba(255,255,255,.12)">◆ CoreEdge Console</div>
+          <div class="ws">Developer Studio</div>
+          <a><span class="ic">⌂</span> Home</a>
+          <a class="on"><span class="ic">⊞</span> Discover</a>
+          <a><span class="ic">▤</span> Solutions</a>
+          <a><span class="ic">⇄</span> Connections</a>
+          <a><span class="ic">⚿</span> API Access</a>
+          <a><span class="ic">◫</span> Interfaces</a>
+          <a><span class="ic">▷</span> Test Console</a>
+        </div>
+        <div class="main">
+          <div class="topbar">
+            <div class="crumb">Discover&nbsp;/&nbsp;<b>Capability Explorer</b></div><div class="sp"></div>
+            <span class="tenant">◎ X5M / 100 <span class="env">DEV</span> ▾</span>
+            <span class="avatar">IB</span>
+          </div>
+          <div class="canvas">
+            <div class="toolbar">
+              <input class="inp" placeholder="Search 16,245 capabilities…" style="max-width:280px;height:36px">
+              <div class="seg"><button class="on">SAP</button><button>+ Partner</button><button>AI · 26</button></div>
+              <div class="seg"><button class="on">All domains</button><button>Finance</button><button>Procurement</button><button>Sales</button></div>
+            </div>
+            <div class="tiles">
+              <div class="tile"><div class="n">969</div><div class="l">APIs</div></div>
+              <div class="tile"><div class="n">9,704</div><div class="l">CDS Views</div></div>
+              <div class="tile"><div class="n">1,715</div><div class="l">BAdIs</div></div>
+              <div class="tile"><div class="n">147</div><div class="l">Events</div></div>
+              <div class="tile"><div class="n">26</div><div class="l">AI APIs</div></div>
+              <div class="tile"><div class="n">16,245</div><div class="l">All types</div></div>
+            </div>
+            <div class="statusrow">
+              <span class="pill s-act"><span class="dot"></span>Activated 139</span>
+              <span class="pill s-need"><span class="dot"></span>Needs setup 349</span>
+              <span class="pill s-noprobe"><span class="dot"></span>Not probeable 515</span>
+              <span class="pill s-avail"><span class="dot"></span>Available 151</span>
+              <span class="pill s-ref"><span class="dot"></span>Reference 819</span>
+            </div>
+            <table class="dt">
+              <tr><th>Capability</th><th>Type</th><th>Status</th><th style="text-align:right">Action</th></tr>
+              <tr><td><b>A_PurchaseOrder</b><div class="small muted">Purchase Orders · Procurement</div></td><td><span class="badge" style="background:var(--navy-soft);color:var(--navy)">API</span></td><td><span class="pill s-act"><span class="dot"></span>Activated</span></td><td style="text-align:right"><button class="btn btn-secondary xs">Add to interface</button></td></tr>
+              <tr><td><b>A_SupplierInvoice</b><div class="small muted">Supplier Invoices · Finance</div></td><td><span class="badge" style="background:var(--navy-soft);color:var(--navy)">API</span></td><td><span class="pill s-need"><span class="dot"></span>Needs setup</span></td><td style="text-align:right"><button class="btn btn-ghost xs">View reason</button></td></tr>
+              <tr><td><b>BusinessPartner.Changed</b><div class="small muted">Event · subscribe-only</div></td><td><span class="badge" style="background:var(--st-sent-bg);color:var(--st-sent-fg)">EVENT</span></td><td><span class="pill s-avail"><span class="dot"></span>Available</span></td><td style="text-align:right"><button class="btn btn-ghost xs">View schema</button></td></tr>
+              <tr><td><b>I_FixedAsset</b><div class="small muted">Fixed Asset master · Finance</div></td><td><span class="badge" style="background:var(--st-signed-bg);color:var(--st-signed-fg)">CDS</span></td><td><span class="pill s-act"><span class="dot"></span>Activated</span></td><td style="text-align:right"><button class="btn btn-secondary xs">Add to interface</button></td></tr>
+            </table>
+            <!-- detail drawer -->
+            <div class="drawer">
+              <span class="x">✕</span>
+              <div style="font-family:var(--serif);font-size:17px;font-weight:600">A_PurchaseOrder</div>
+              <div class="small muted">Purchase Orders · OData V4 · <span style="font-family:var(--mono)">SAP_COM_0053</span></div>
+              <dl class="kvs">
+                <dt>Status</dt><dd><span class="pill s-act"><span class="dot"></span>Activated</span> <span class="small muted">live probe 200 · 2 min ago</span></dd>
+                <dt>Operations</dt><dd>READ · CREATE · UPDATE</dd>
+                <dt>Returns data</dt><dd><span class="pill s-act">✓ Returns data</span> <span class="small muted">$top=1 confirmed</span></dd>
+              </dl>
+              <div class="rowsbox">
+                <div class="hd"><span>Live rows · $top=10</span><span>HTTP 200</span></div>
+                <table class="dt" style="border:none;border-radius:0"><tr><th>PurchaseOrder</th><th>Supplier</th><th>Company</th></tr>
+                  <tr><td style="font-family:var(--mono)">4500000099</td><td>RM13 Supplies</td><td>1010</td></tr>
+                  <tr><td style="font-family:var(--mono)">4500000101</td><td>RM14 Materials</td><td>1010</td></tr>
+                </table>
+              </div>
+              <div style="display:flex;gap:9px;margin-top:12px">
+                <button class="btn btn-primary sm">+ Add to interface</button>
+                <button class="btn btn-secondary sm">▷ Open in Test Console</button>
+              </div>
+            </div>
+            <div class="legendline" style="margin-top:12px">States designed: honest empties (“No records in this tenant”), Needs-setup reason (401/403 + SAP_COM code), loading skeleton rows, error banner. Rows load only on open — never on list render.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot">
+    CoreEdge Developer Studio · Design Book v0.1 — Foundations + Shell + Home + Discover. All tokens/measurements extracted from <code>ib823/aptus</code> <code>globals.css</code> (verified <code>origin/main</code> #132); screens compose your existing shadcn primitives. Next pages: Solutions + Canvas · Connections · API Access · Interfaces/Builder · Test Console. No SAP or client data is real — illustrative rows only.
+  </div>
+</main>
+</div>
+</body>
+</html>
