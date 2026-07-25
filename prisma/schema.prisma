@@ -732,6 +732,41 @@ model NorthboundAuditEvent {
   @@index([organizationId, clientTokenId, at])
 }
 
+/// Idempotency for northbound writes.
+///
+/// A write into a client's production SAP must survive being retried. Networks
+/// drop responses, clients retry, load balancers replay — and without this a
+/// single logical write becomes two records in a customer's ledger, which is the
+/// classic way an integration quietly corrupts financial data.
+///
+/// The key is supplied by the CALLER (they know when two requests are the same
+/// intent). `requestHash` fingerprints the payload so that reusing a key with a
+/// DIFFERENT body is reported as a conflict rather than silently replaying the
+/// old result — that combination is a client bug, and hiding it would let a
+/// second, different write vanish.
+model NorthboundIdempotencyKey {
+  id             String @id @default(cuid())
+  organizationId String
+  solutionId     String
+  interfaceId    String
+
+  /// Caller-supplied Idempotency-Key.
+  key         String
+  /// SHA-256 of the canonicalised request, to detect key reuse with a new body.
+  requestHash String
+
+  /// null while the write is in flight; set once a terminal outcome is known.
+  status       Int?
+  responseBody Json?
+
+  createdAt DateTime @default(now())
+  /// Retention horizon. A key is only useful for as long as a client might retry.
+  expiresAt DateTime
+
+  @@unique([organizationId, solutionId, key])
+  @@index([expiresAt])
+}
+
 /// A recorded response captured from a Test Console run, so a developer's own
 /// test suite can replay every honest state offline.
 model MockFixture {
