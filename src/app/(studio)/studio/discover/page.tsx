@@ -11,6 +11,7 @@
 import type { Metadata } from "next";
 
 import { DiscoverClient } from "@/components/studio/DiscoverClient";
+import { ScopeNote } from "@/components/studio/ScopeNote";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { canMutateStudio } from "@/lib/studio/rbac";
@@ -43,6 +44,9 @@ export default async function StudioDiscoverPage() {
           an error are three different things, and this page keeps them apart.
         </p>
       </div>
+      {/* The likeliest place to assume CoreEdge builds ABAP: right where an
+          ABAP-exposed OData service shows up alongside standard SAP APIs. */}
+      <ScopeNote topic="abap" />
       <DiscoverClient solutions={solutions} canAuthor={canMutateStudio(user.role)} />
     </div>
   );
