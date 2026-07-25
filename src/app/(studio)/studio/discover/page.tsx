@@ -1,0 +1,49 @@
+/**
+ * Discover / Capability Explorer — /studio/discover
+ *
+ * Server half: resolves the caller's own solutions (for the "Add to interface"
+ * picker) and whether they may author at all. The catalogue itself is fetched by
+ * the reused client component, through the existing rate-limited SAP routes, so
+ * no live SAP call happens while this page renders — rows load only when a row is
+ * opened, and only through the throttle.
+ */
+
+import type { Metadata } from "next";
+
+import { DiscoverClient } from "@/components/studio/DiscoverClient";
+import { getCurrentUser } from "@/lib/auth/session";
+import { prisma } from "@/lib/db/prisma";
+import { canMutateStudio } from "@/lib/studio/rbac";
+
+export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Discover" };
+
+export default async function StudioDiscoverPage() {
+  const user = await getCurrentUser();
+  if (!user) return null;
+
+  const organizationId = user.organizationId;
+  const solutions = organizationId
+    ? await prisma.solution.findMany({
+        where: { organizationId },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      })
+    : [];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div>
+        <h1 style={{ margin: 0, fontSize: 24, lineHeight: "32px", fontWeight: 700, letterSpacing: "-0.01em" }}>
+          Discover
+        </h1>
+        <p style={{ margin: "4px 0 0", fontSize: 14, lineHeight: "22px", color: "var(--ink-secondary)", maxWidth: 760 }}>
+          What this tenant actually exposes. A capability is shown as Activated only where a
+          live probe returned 200 — an empty result, a missing communication arrangement and
+          an error are three different things, and this page keeps them apart.
+        </p>
+      </div>
+      <DiscoverClient solutions={solutions} canAuthor={canMutateStudio(user.role)} />
+    </div>
+  );
+}
