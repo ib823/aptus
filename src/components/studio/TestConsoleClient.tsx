@@ -213,6 +213,39 @@ export function TestConsoleClient({
     }
   }, [selected, run]);
 
+  /**
+   * Record this outcome so it can be replayed offline.
+   *
+   * Works for failures too: "not set up" and "upstream failed" are the states
+   * that actually break integrations, so they are the ones worth being able to
+   * test against.
+   */
+  const captureFixture = useCallback(async () => {
+    if (!selected || run.phase !== "done" || !run.status) return;
+    setCapturing(true);
+    try {
+      const res = await fetch(`/api/studio/interfaces/${selected.id}/capture-fixture`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ honestStatus: run.status, rows: run.rows ?? [] }),
+      });
+      const json = (await res.json()) as {
+        data?: { scenario: string; rows: number; replaced: boolean };
+        error?: { message?: string };
+      };
+      if (!res.ok || !json.data) throw new Error(json.error?.message ?? "Could not capture the fixture.");
+      setSaved(
+        `${json.data.replaced ? "Replaced" : "Captured"} the "${json.data.scenario}" fixture` +
+          `${json.data.rows > 0 ? ` (${json.data.rows} rows)` : ""}. ` +
+          "Regenerate the scaffold to ship it with the offline mock.",
+      );
+    } catch (err) {
+      setSaved(err instanceof Error ? `Failed: ${err.message}` : "Failed to capture the fixture.");
+    } finally {
+      setCapturing(false);
+    }
+  }, [selected, run]);
+
   const loadScaffold = useCallback(async () => {
     if (!selected) return;
     setFiles(null);
@@ -351,6 +384,12 @@ export function TestConsoleClient({
                   {capturing ? "Capturing…" : "Capture schema"}
                 </button>
               )}
+              {/* Offered for EVERY honest outcome, including the failures — a
+                  mock that can only serve the happy path lets a test suite prove
+                  the easy half. */}
+              <button type="button" onClick={() => void captureFixture()} disabled={capturing} style={btnSmall}>
+                {capturing ? "Capturing…" : "Capture fixture"}
+              </button>
               {saved && <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>{saved}</span>}
             </div>
           )}
