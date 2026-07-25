@@ -3,6 +3,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { checkRateLimit, getClientIp, isLiveSapTenantRoute, RATE_LIMITS } from "@/lib/security/rate-limit";
 import { getCspWithNonce } from "@/lib/pwa/security-headers";
+// The Workbench route allow-list lives in lib so it can be tested. Anything
+// missing from it is redirected away before auth or RBAC ever run.
+import { isWorkbenchPath } from "@/lib/routing/workbench-paths";
 
 /** Per-request CSP nonce: 16 random bytes, base64. Edge-runtime safe. */
 function generateNonce(): string {
@@ -73,33 +76,6 @@ const PORTAL_HOST = process.env.PORTAL_HOST ?? null;
  * should present only the Workbench. */
 const WORKBENCH_ONLY = process.env.WORKBENCH_ONLY === 'true';
 
-/** Path prefixes that the Workbench owns on WORKBENCH_HOST. Anything
- * outside this set on WORKBENCH_HOST redirects to /presales. */
-const WORKBENCH_PATHS = [
-  '/workbench',         // Workbench home / hub (auth-gated under (workbench))
-  '/sap-explorer',      // SAP Operations — live S/4HANA Cloud TDD explorer
-  '/presales',          // consultant surface (auth-gated under (workbench))
-  '/affirm',            // value-stream affirm-set workbench
-  '/discovery',         // neutral (APQC) process-discovery workbench — feature-gated by NEUTRAL_DISCOVERY_ENABLED
-  '/c/',                // presales guest token surface (under (external))
-  '/a/',                // affirm external executive guest surface (under (external))
-  '/api/auth/',         // NextAuth callbacks must work on WORKBENCH_HOST
-  '/api/presales/',     // presales REST API
-  '/api/affirm/',       // affirm-set REST API
-  '/api/discovery/',    // neutral-discovery REST API
-  '/api/health',        // probes
-  '/_next/',            // build assets
-  '/icons/',            // brand assets
-  '/favicon',           // favicon variants
-  '/manifest.json',
-  '/sw.js',
-] as const;
-
-function isWorkbenchPath(pathname: string): boolean {
-  if (pathname === '/presales' || pathname === '/presales/login') return true;
-  if (pathname === '/affirm') return true;
-  return WORKBENCH_PATHS.some((p) => pathname.startsWith(p));
-}
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   // Per-request CSP nonce. Placed on the REQUEST headers so Next.js auto-nonces
