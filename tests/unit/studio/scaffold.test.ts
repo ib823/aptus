@@ -174,9 +174,21 @@ describe("env example", () => {
 });
 
 describe("the bundle", () => {
-  it("is the four files a developer needs, and nothing else", () => {
+  it("is exactly what a developer needs to build AND to test offline", () => {
+    // The contract half (openapi/client), the runnable half (demo/mock/fixtures/
+    // package.json), and the two files that set expectations (README/.env).
+    // Anything more would be us having opinions about their project layout.
     const files = buildScaffold(IFACE);
-    expect(files.map((f) => f.path).sort()).toEqual([".env.example", "README.md", "client.ts", "openapi.json"]);
+    expect(files.map((f) => f.path).sort()).toEqual([
+      ".env.example",
+      "README.md",
+      "client.ts",
+      "demo.mjs",
+      "fixtures.json",
+      "mock.mjs",
+      "openapi.json",
+      "package.json",
+    ]);
   });
 
   it("produces non-empty contents for every file", () => {

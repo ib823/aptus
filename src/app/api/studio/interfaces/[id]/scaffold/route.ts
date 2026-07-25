@@ -49,6 +49,15 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   // artifact works against whatever host the developer is actually using.
   const baseUrl = `${request.nextUrl.origin}/api/northbound`;
 
+  // Recorded responses, so the kit runs offline. Absent → it still ships, and
+  // the README says which scenarios are missing rather than pretending the mock
+  // is complete.
+  const fixtureRows = await prisma.mockFixture.findMany({
+    where: { organizationId, interfaceId: iface.id },
+    select: { scenario: true, status: true, body: true },
+    orderBy: { scenario: "asc" },
+  });
+
   const files = buildScaffold(
     {
       id: iface.id,
@@ -63,6 +72,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       responseSchema: iface.responseSchema,
     },
     baseUrl,
+    fixtureRows.map((f) => ({ scenario: f.scenario, status: f.status, body: f.body })),
   );
 
   return studioOk({ files });
