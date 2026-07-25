@@ -1,0 +1,661 @@
+diff --git a/.env.example b/.env.example
+index d372a53..0abe563 100644
+--- a/.env.example
++++ b/.env.example
+@@ -112,6 +112,12 @@ PORTAL_HOST=""
+ # Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+ BYOAI_ENCRYPTION_KEY=""
+ 
++# SAP connection secrets encryption (required to store per-Organization SAP
++# connections — the SapConnection keystone). Seals password/bearer/clientSecret
++# at rest with AES-256-GCM. 64-char hex = 32 bytes. Generate with:
++#   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
++SAP_CONNECTION_ENCRYPTION_KEY=""
++
+ # AI provider keys — used by /lib/intelligence/* when BYOAI is not configured per-org.
+ # DEFAULT_AI_PROVIDER selects between "anthropic" and "openai" (default: anthropic).
+ # OPENAI_MODEL overrides the OpenAI model id (default depends on provider code).
+diff --git a/SAP-CONNECTION-KEYSTONE-RUNBOOK.md b/SAP-CONNECTION-KEYSTONE-RUNBOOK.md
+new file mode 100644
+index 0000000..5db5bbd
+--- /dev/null
++++ b/SAP-CONNECTION-KEYSTONE-RUNBOOK.md
+@@ -0,0 +1,100 @@
++# SAP Connection Keystone — Slice 1 (data model + sealed secrets + resolver)
++
++Branch: `feat/sap-connection-keystone`
++
++## Why
++
++Today every SAP call uses ONE shared tenant baked into `S4_TDD_*` env vars. That
++is right for the ABeam TDD demo and wrong for the team's ask — *"deploy into each
++client's own SAP environment."* This slice adds a **per-Organization SAP
++connection**, stored in the DB with **secrets sealed at rest**, plus a resolver
++that is **additive and non-breaking**: no stored connection → the existing env
++path runs unchanged.
++
++It composes with work already on `main`: the stored probe is **already
++tenant-keyed** (`SapHubContent.rawMetadataJson.probes[tenantKey]`,
++`readStoredProbe` / `mergeStoredProbe`) and the catalogue read is already
++`force-dynamic` + `no-store`. This slice supplies the missing half — the
++**per-client connection** those tenant keys point at.
++
++## What slice 1 delivers (this branch)
++
++| File | Role |
++|---|---|
++| `prisma/schema.prisma` → `model SapConnection` (+ `Organization.sapConnections`) | One SAP tenant connection owned by an Organization; secrets as ciphertext only |
++| `prisma/migrations/20260725120000_sap_connection_keystone/migration.sql` | Non-destructive `CREATE TABLE` + FK to Organization |
++| `src/lib/sap-public/connection-crypto.ts` | AES-256-GCM seal/open of the secret bundle (mirrors `ai-key-crypto.ts`) |
++| `src/lib/sap-public/connection-resolver.ts` | `resolveSapConnections` / `resolveSapConnection` / `buildAuthHeaderFromConnection` / `toSapTenant` / `upsertSapConnection` / `redactConnection` |
++| `tests/unit/sap-public/connection-crypto.test.ts` | Round-trip, empty-pruning, no-plaintext-leak, GCM tamper, wrong-key |
++| `.env.example` → `SAP_CONNECTION_ENCRYPTION_KEY` | The sealing key |
++
++**Verified here:** `prisma validate` → *schema valid*; the GCM algorithm proven
++by a standalone round-trip/tamper/wrong-key run (6/6). **Not run here** (needs
++your DB + full deps — run in CI): `prisma migrate`, `prisma generate`,
++`typecheck:strict`, `vitest`, `lint:strict`.
++
++## Setup
++
++```bash
++# 1. Sealing key (store in Vercel env, NOT in git)
++node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # → SAP_CONNECTION_ENCRYPTION_KEY
++
++# 2. Apply the migration + regenerate the client
++pnpm prisma migrate deploy         # or: pnpm prisma migrate dev --name sap_connection_keystone
++pnpm db:generate
++
++# 3. Gates
++pnpm typecheck:strict
++pnpm vitest run tests/unit/sap-public/connection-crypto.test.ts
++pnpm lint:strict
++```
++
++## Add a client connection (the write path)
++
++```ts
++import { upsertSapConnection } from "@/lib/sap-public/connection-resolver";
++
++await upsertSapConnection({
++  organizationId: org.id,          // the client Organization
++  product: "s4hana",
++  key: "prod",                     // becomes the tenant key stored probes are recorded under
++  label: "Acme S/4 Public (PROD)",
++  baseUrl: "https://my123456-api.s4hana.cloud.sap",
++  authType: "oauth-client-credentials",
++  oauthTokenUrl: "https://my123456.authentication.sap.hana.ondemand.com/oauth/token",
++  secrets: { clientId: "sb-...", clientSecret: "..." },  // sealed at rest, never returned
++  writeEnabled: false,
++});
++```
++
++## Next slice — wire the routes (each is ~4 lines, non-breaking)
++
++The connector is still env-driven via `getConfiguredSapTenants(prefix)` /
++`getSapTenant(prefix,key)` / `buildAuthHeader(prefix)`. Wire each SAP route to
++**prefer a resolved connection, fall back to env**:
++
++```ts
++const user = await getCurrentUser();
++const conns = user ? await resolveSapConnections(user.organizationId, product.key) : [];
++const tenants = conns.length ? conns.map(toSapTenant) : getConfiguredSapTenants(product.envPrefix);
++// auth: conns.length ? buildAuthHeaderFromConnection(conn) : buildAuthHeader(product.envPrefix)
++```
++
++Integration points (call sites to update):
++`src/app/api/sap/tdd/{hub-content,hub-content/probe-all,operations,entities,preview,write,capabilities}/route.ts`.
++Because probe storage is already keyed by the tenant `key`, using each
++connection's `key` makes per-client status isolation work end-to-end with no
++further storage change.
++
++Deferred beyond wiring: admin UI to manage connections; connector auth-header
++refactor to take a config object (so env + DB share one code path); key rotation
++tooling.
++
++## Security notes
++
++Secrets are sealed with AES-256-GCM (auth-tag tamper detection) and only ever
++held in memory on the resolved object. `redactConnection` strips secrets **and**
++`baseUrl`/host before anything crosses the client boundary. Deleting an
++Organization cascades its connections. Rotating `SAP_CONNECTION_ENCRYPTION_KEY`
++requires re-sealing existing rows (decrypt-with-old → `sealSecrets`-with-new);
++add a `migrate:reseal` script when rotation is needed.
+diff --git a/prisma/migrations/20260725120000_sap_connection_keystone/migration.sql b/prisma/migrations/20260725120000_sap_connection_keystone/migration.sql
+new file mode 100644
+index 0000000..d690f89
+--- /dev/null
++++ b/prisma/migrations/20260725120000_sap_connection_keystone/migration.sql
+@@ -0,0 +1,40 @@
++-- SAP Operations middleware — per-Organization SAP connection keystone.
++-- Adds the SapConnection table so the middleware can point at each client's own
++-- SAP tenant instead of the single shared {PREFIX}_* env connection. Secrets are
++-- sealed application-side (AES-256-GCM); only ciphertext is stored here.
++--
++-- Non-destructive: creates one new table + FK to Organization. No existing table
++-- is altered. Equivalent to `prisma migrate dev --name sap_connection_keystone`.
++
++-- CreateTable
++CREATE TABLE "SapConnection" (
++    "id" TEXT NOT NULL,
++    "organizationId" TEXT NOT NULL,
++    "product" TEXT NOT NULL,
++    "key" TEXT NOT NULL,
++    "label" TEXT NOT NULL,
++    "baseUrl" TEXT NOT NULL,
++    "authType" TEXT NOT NULL,
++    "oauthTokenUrl" TEXT,
++    "secretsCiphertext" TEXT NOT NULL,
++    "writeEnabled" BOOLEAN NOT NULL DEFAULT false,
++    "apiPath" TEXT,
++    "timeoutMs" INTEGER,
++    "isActive" BOOLEAN NOT NULL DEFAULT true,
++    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    "updatedAt" TIMESTAMP(3) NOT NULL,
++
++    CONSTRAINT "SapConnection_pkey" PRIMARY KEY ("id")
++);
++
++-- CreateIndex
++CREATE INDEX "SapConnection_organizationId_product_idx" ON "SapConnection"("organizationId", "product");
++
++-- CreateIndex
++CREATE INDEX "SapConnection_organizationId_isActive_idx" ON "SapConnection"("organizationId", "isActive");
++
++-- CreateIndex
++CREATE UNIQUE INDEX "SapConnection_organizationId_product_key_key" ON "SapConnection"("organizationId", "product", "key");
++
++-- AddForeignKey
++ALTER TABLE "SapConnection" ADD CONSTRAINT "SapConnection_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma
+index a742144..94d92d1 100644
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -451,6 +451,49 @@ model SapHubContent {
+   @@index([status])
+ }
+ 
++/// SAP Operations middleware — the multi-tenant keystone.
++///
++/// One SAP tenant connection OWNED BY an Organization, so the middleware can be
++/// pointed at each client's own SAP system instead of the single shared
++/// `{PREFIX}_*` env tenant. Non-secret fields (baseUrl, authType, oauthTokenUrl)
++/// are plaintext; the SECRETS (password / bearer / clientSecret / writeSecret)
++/// live sealed in `secretsCiphertext` (AES-256-GCM via connection-crypto.ts) and
++/// are NEVER returned to a client. Stored probe status is keyed per (row,
++/// tenantKey) on SapHubContent.rawMetadataJson.probes — `key` here is that
++/// tenantKey, so one client's activations never surface for another.
++model SapConnection {
++  id                String  @id @default(cuid())
++  organizationId    String
++  /// "s4hana" | "successfactors" | "ariba" — mirrors the env product prefixes.
++  product           String
++  /// Sanitized tenant key; also the key stored probes are recorded under.
++  key               String
++  label             String
++  /// e.g. https://myXXXXXX-api.s4hana.cloud.sap — non-secret, kept server-side.
++  baseUrl           String
++  /// "basic" | "bearer" | "oauth-client-credentials".
++  authType          String
++  /// OAuth token endpoint — non-secret; null unless authType is oauth.
++  oauthTokenUrl     String?
++  /// AES-256-GCM sealed JSON bundle of the secret fields. Never logged/returned.
++  secretsCiphertext String  @db.Text
++  /// Gate for guarded writes on this connection (mirrors {PREFIX}_WRITE_ENABLED).
++  writeEnabled      Boolean @default(false)
++  /// Optional health-probe path + timeout override (fall back to product defaults).
++  apiPath           String?
++  timeoutMs         Int?
++  isActive          Boolean @default(true)
++
++  createdAt DateTime @default(now())
++  updatedAt DateTime @updatedAt
++
++  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
++
++  @@unique([organizationId, product, key])
++  @@index([organizationId, product])
++  @@index([organizationId, isActive])
++}
++
+ model ScopeItem {
+   // Phase 13.1 — AD-13.1: id is now a cuid; the bare SAP code lives in scopeCode.
+   // Composite uniqueness on (scopeCode, catalogVersionId) lets J60 exist in
+@@ -1655,6 +1698,9 @@ model Organization {
+   // ABeam Workbench — Presales (denormalized tenant scoping)
+   presalesBundles PresalesBundle[]
+ 
++  // SAP Operations middleware — per-Organization SAP tenant connections
++  sapConnections SapConnection[]
++
+   @@index([slug])
+   @@index([plan])
+   @@index([subscriptionStatus])
+diff --git a/src/lib/sap-public/connection-crypto.ts b/src/lib/sap-public/connection-crypto.ts
+new file mode 100644
+index 0000000..ea467d3
+--- /dev/null
++++ b/src/lib/sap-public/connection-crypto.ts
+@@ -0,0 +1,91 @@
++/**
++ * AES-256-GCM encryption for per-Organization SAP connection secrets.
++ *
++ * A SapConnection stores its non-secret fields (baseUrl, authType, label) in
++ * plaintext columns and its SECRETS (password / bearer token / client secret)
++ * as a single encrypted JSON bundle. This module is the ONLY sanctioned path
++ * to seal/open that bundle.
++ *
++ * Mirrors src/lib/intelligence/ai-key-crypto.ts (the established BYOAI key
++ * pattern) so the crypto convention is uniform across the codebase: IV(12) +
++ * ciphertext + authTag(16), base64-encoded, AES-256-GCM.
++ *
++ * Requires SAP_CONNECTION_ENCRYPTION_KEY — a 32-byte key as 64 hex chars.
++ * Generate one with:  openssl rand -hex 32
++ */
++import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
++
++const ALGORITHM = "aes-256-gcm";
++const IV_LENGTH = 12;
++const AUTH_TAG_LENGTH = 16;
++
++/** The secret half of a connection — never stored or logged in plaintext. */
++export interface SapConnectionSecrets {
++  /** basic auth */
++  username?: string;
++  password?: string;
++  /** static bearer */
++  bearerToken?: string;
++  /** oauth client-credentials */
++  clientId?: string;
++  clientSecret?: string;
++  /** guarded-write secret (mirrors {PREFIX}_WRITE_SECRET) */
++  writeSecret?: string;
++}
++
++function getEncryptionKey(): Buffer {
++  const hex = process.env.SAP_CONNECTION_ENCRYPTION_KEY;
++  if (!hex || hex.length !== 64) {
++    throw new Error(
++      "SAP_CONNECTION_ENCRYPTION_KEY must be a 64-character hex string (32 bytes). Generate with `openssl rand -hex 32`.",
++    );
++  }
++  return Buffer.from(hex, "hex");
++}
++
++/** Encrypt a UTF-8 string → base64(IV + ciphertext + authTag). */
++export function encryptSecret(plaintext: string): string {
++  const key = getEncryptionKey();
++  const iv = randomBytes(IV_LENGTH);
++  const cipher = createCipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
++  const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
++  const authTag = cipher.getAuthTag();
++  return Buffer.concat([iv, encrypted, authTag]).toString("base64");
++}
++
++/** Decrypt a base64(IV + ciphertext + authTag) blob → UTF-8 string. Throws on tamper. */
++export function decryptSecret(encryptedBase64: string): string {
++  const key = getEncryptionKey();
++  const buf = Buffer.from(encryptedBase64, "base64");
++  if (buf.length < IV_LENGTH + 1 + AUTH_TAG_LENGTH) {
++    throw new Error("SapConnection secret blob is too short to be valid ciphertext.");
++  }
++  const iv = buf.subarray(0, IV_LENGTH);
++  const authTag = buf.subarray(buf.length - AUTH_TAG_LENGTH);
++  const ciphertext = buf.subarray(IV_LENGTH, buf.length - AUTH_TAG_LENGTH);
++  const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH });
++  decipher.setAuthTag(authTag);
++  return decipher.update(ciphertext, undefined, "utf8") + decipher.final("utf8");
++}
++
++/** Seal a secrets object into a single storable blob (only defined fields are kept). */
++export function sealSecrets(secrets: SapConnectionSecrets): string {
++  const trimmed: SapConnectionSecrets = {};
++  for (const [k, v] of Object.entries(secrets)) {
++    if (typeof v === "string" && v.length > 0) trimmed[k as keyof SapConnectionSecrets] = v;
++  }
++  return encryptSecret(JSON.stringify(trimmed));
++}
++
++/** Open a sealed blob back into a secrets object. Returns {} for an empty/absent blob. */
++export function openSecrets(blob: string | null | undefined): SapConnectionSecrets {
++  if (!blob) return {};
++  const parsed = JSON.parse(decryptSecret(blob)) as unknown;
++  if (!parsed || typeof parsed !== "object") return {};
++  const src = parsed as Record<string, unknown>;
++  const out: SapConnectionSecrets = {};
++  for (const key of ["username", "password", "bearerToken", "clientId", "clientSecret", "writeSecret"] as const) {
++    if (typeof src[key] === "string") out[key] = src[key] as string;
++  }
++  return out;
++}
+diff --git a/src/lib/sap-public/connection-resolver.ts b/src/lib/sap-public/connection-resolver.ts
+new file mode 100644
+index 0000000..5d7c73c
+--- /dev/null
++++ b/src/lib/sap-public/connection-resolver.ts
+@@ -0,0 +1,244 @@
++/**
++ * Per-Organization SAP connection resolution — the multi-tenant keystone.
++ *
++ * TODAY (env-only): every request talks to the SAP tenant baked into the
++ * `{PREFIX}_*` env vars (e.g. S4_TDD_*). That is a single shared connection —
++ * fine for the ABeam TDD demo, wrong for "deploy into each client's own SAP".
++ *
++ * THIS MODULE adds a DB-backed, per-Organization connection that is resolved
++ * from the caller's org, with secrets sealed at rest (connection-crypto). It is
++ * ADDITIVE and NON-BREAKING: when an Organization has no stored connection,
++ * `resolveSapConnections` returns [] and callers fall back to the existing env
++ * path unchanged. Wiring the routes to prefer a resolved connection over env is
++ * the next slice — the integration points are named in the keystone runbook.
++ *
++ * A ResolvedSapConnection is the connector's currency, decoupled from env:
++ * baseUrl + authType + decrypted secrets, everything buildAuthHeader needs.
++ * Secrets live only in memory on the resolved object — never logged, never
++ * returned to a client (use `redactConnection` for anything client-facing).
++ */
++import { prisma } from "@/lib/db/prisma";
++import type { SapTenant } from "@/lib/sap-public/tdd-connector";
++import { openSecrets, sealSecrets, type SapConnectionSecrets } from "@/lib/sap-public/connection-crypto";
++
++export type SapAuthType = "basic" | "bearer" | "oauth-client-credentials";
++
++/** A fully-resolved connection with decrypted secrets — server-side only. */
++export interface ResolvedSapConnection {
++  source: "db";
++  id: string;
++  organizationId: string;
++  product: string;
++  /** tenant key (sanitized) — the key stored probes are keyed by. */
++  key: string;
++  label: string;
++  baseUrl: string;
++  authType: SapAuthType;
++  secrets: SapConnectionSecrets;
++  /** non-secret oauth token endpoint (null unless authType is oauth). */
++  oauthTokenUrl: string | null;
++  writeEnabled: boolean;
++  apiPath: string | null;
++  timeoutMs: number | null;
++}
++
++/** Client-safe projection — NO secrets, NO baseHost. Safe to serialize to a UI. */
++export interface RedactedSapConnection {
++  id: string;
++  product: string;
++  key: string;
++  label: string;
++  authType: SapAuthType;
++  writeEnabled: boolean;
++  isActive: boolean;
++  hasSecrets: boolean;
++}
++
++function normalizeBaseUrl(raw: string): string {
++  return raw.replace(/\/+$/, "");
++}
++
++function coerceAuthType(raw: string): SapAuthType {
++  if (raw === "basic" || raw === "bearer" || raw === "oauth-client-credentials") return raw;
++  throw new Error(`SapConnection.authType must be basic | bearer | oauth-client-credentials (got "${raw}")`);
++}
++
++/**
++ * All active connections an Organization has for a product, decrypted and
++ * normalized. Returns [] when the org has none — the signal to fall back to env.
++ */
++export async function resolveSapConnections(
++  organizationId: string,
++  product: string,
++): Promise<ResolvedSapConnection[]> {
++  if (!organizationId) return [];
++  const rows = await prisma.sapConnection.findMany({
++    where: { organizationId, product, isActive: true },
++    orderBy: { createdAt: "asc" },
++  });
++  return rows.map((r) => ({
++    source: "db" as const,
++    id: r.id,
++    organizationId: r.organizationId,
++    product: r.product,
++    key: r.key,
++    label: r.label,
++    baseUrl: normalizeBaseUrl(r.baseUrl),
++    authType: coerceAuthType(r.authType),
++    secrets: openSecrets(r.secretsCiphertext),
++    oauthTokenUrl: r.oauthTokenUrl,
++    writeEnabled: r.writeEnabled,
++    apiPath: r.apiPath,
++    timeoutMs: r.timeoutMs,
++  }));
++}
++
++/**
++ * One connection for an org+product: the one whose key matches, else the first
++ * active one, else null (→ caller uses env). Never falls back to ANOTHER org.
++ */
++export async function resolveSapConnection(
++  organizationId: string,
++  product: string,
++  key?: string | null,
++): Promise<ResolvedSapConnection | null> {
++  const all = await resolveSapConnections(organizationId, product);
++  if (all.length === 0) return null;
++  if (key) return all.find((c) => c.key === key) ?? null;
++  return all[0] ?? null;
++}
++
++/** Project a resolved connection to the SapTenant shape the catalogue code uses. */
++export function toSapTenant(conn: ResolvedSapConnection): SapTenant {
++  return { key: conn.key, label: conn.label, baseUrl: conn.baseUrl };
++}
++
++/**
++ * Build the Authorization header from a resolved connection — the DB-backed
++ * sibling of the connector's env-based buildAuthHeader(prefix). Same three
++ * shapes: basic, static bearer, oauth client-credentials.
++ */
++export async function buildAuthHeaderFromConnection(conn: ResolvedSapConnection): Promise<string> {
++  const s = conn.secrets;
++  if (conn.authType === "basic") {
++    if (!s.username || !s.password) throw new Error(`Connection ${conn.key} is basic auth but missing username/password`);
++    return `Basic ${Buffer.from(`${s.username}:${s.password}`).toString("base64")}`;
++  }
++  if (conn.authType === "bearer") {
++    if (!s.bearerToken) throw new Error(`Connection ${conn.key} is bearer auth but missing bearerToken`);
++    return `Bearer ${s.bearerToken}`;
++  }
++  // oauth-client-credentials
++  return `Bearer ${await fetchOAuthTokenFromConnection(conn)}`;
++}
++
++interface OAuthTokenResponse {
++  access_token?: string;
++}
++
++async function fetchOAuthTokenFromConnection(conn: ResolvedSapConnection): Promise<string> {
++  const { clientId, clientSecret } = conn.secrets;
++  // OAuth token URL is a NON-secret field stored plaintext on the row, not in
++  // the sealed bundle — so a UI can display/edit it without decrypting secrets.
++  const url = conn.oauthTokenUrl;
++  if (!url || !clientId || !clientSecret) {
++    throw new Error(`Connection ${conn.key} is oauth but missing oauthTokenUrl/clientId/clientSecret`);
++  }
++  const res = await fetch(url, {
++    method: "POST",
++    headers: {
++      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
++      "Content-Type": "application/x-www-form-urlencoded",
++      Accept: "application/json",
++    },
++    body: new URLSearchParams({ grant_type: "client_credentials" }),
++  });
++  const json = (await res.json()) as OAuthTokenResponse;
++  if (!res.ok || typeof json.access_token !== "string") {
++    throw new Error(`OAuth token request failed for ${conn.key}: HTTP ${res.status}`);
++  }
++  return json.access_token;
++}
++
++export interface UpsertSapConnectionInput {
++  organizationId: string;
++  product: string;
++  key: string;
++  label: string;
++  baseUrl: string;
++  authType: SapAuthType;
++  secrets: SapConnectionSecrets;
++  /** non-secret; stored plaintext on the row for oauth */
++  oauthTokenUrl?: string | null;
++  writeEnabled?: boolean;
++  apiPath?: string | null;
++  timeoutMs?: number | null;
++  isActive?: boolean;
++}
++
++/**
++ * Create or update an Organization's SAP connection, sealing secrets at rest.
++ * The write path that a self-service "add a connection" UI calls. Admin-gated
++ * at the route layer — this helper assumes authorization already happened.
++ */
++export async function upsertSapConnection(input: UpsertSapConnectionInput): Promise<RedactedSapConnection> {
++  const secretsCiphertext = sealSecrets(input.secrets);
++  const row = await prisma.sapConnection.upsert({
++    where: {
++      organizationId_product_key: {
++        organizationId: input.organizationId,
++        product: input.product,
++        key: input.key,
++      },
++    },
++    create: {
++      organizationId: input.organizationId,
++      product: input.product,
++      key: input.key,
++      label: input.label,
++      baseUrl: input.baseUrl,
++      authType: input.authType,
++      oauthTokenUrl: input.oauthTokenUrl ?? null,
++      secretsCiphertext,
++      writeEnabled: input.writeEnabled ?? false,
++      apiPath: input.apiPath ?? null,
++      timeoutMs: input.timeoutMs ?? null,
++      isActive: input.isActive ?? true,
++    },
++    update: {
++      label: input.label,
++      baseUrl: input.baseUrl,
++      authType: input.authType,
++      oauthTokenUrl: input.oauthTokenUrl ?? null,
++      secretsCiphertext,
++      writeEnabled: input.writeEnabled ?? false,
++      apiPath: input.apiPath ?? null,
++      timeoutMs: input.timeoutMs ?? null,
++      isActive: input.isActive ?? true,
++    },
++  });
++  return redactConnection(row);
++}
++
++/** Strip secrets + host for anything that crosses the client boundary. */
++export function redactConnection(row: {
++  id: string;
++  product: string;
++  key: string;
++  label: string;
++  authType: string;
++  writeEnabled: boolean;
++  isActive: boolean;
++  secretsCiphertext: string | null;
++}): RedactedSapConnection {
++  return {
++    id: row.id,
++    product: row.product,
++    key: row.key,
++    label: row.label,
++    authType: coerceAuthType(row.authType),
++    writeEnabled: row.writeEnabled,
++    isActive: row.isActive,
++    hasSecrets: Boolean(row.secretsCiphertext),
++  };
++}
+diff --git a/tests/unit/sap-public/connection-crypto.test.ts b/tests/unit/sap-public/connection-crypto.test.ts
+new file mode 100644
+index 0000000..e5619ea
+--- /dev/null
++++ b/tests/unit/sap-public/connection-crypto.test.ts
+@@ -0,0 +1,75 @@
++/**
++ * SAP connection secret sealing — the security-critical half of the keystone.
++ *
++ * These tests are what stop a per-Organization SAP credential from ever being
++ * stored or leaked in plaintext: round-trip fidelity, empty-field pruning,
++ * no-plaintext-in-ciphertext, GCM tamper rejection, and wrong-key rejection.
++ */
++import { randomBytes } from "crypto";
++import { afterAll, beforeAll, describe, expect, it } from "vitest";
++
++import {
++  decryptSecret,
++  encryptSecret,
++  openSecrets,
++  sealSecrets,
++  type SapConnectionSecrets,
++} from "@/lib/sap-public/connection-crypto";
++
++const KEY = "SAP_CONNECTION_ENCRYPTION_KEY";
++let original: string | undefined;
++
++beforeAll(() => {
++  original = process.env[KEY];
++  process.env[KEY] = randomBytes(32).toString("hex");
++});
++
++afterAll(() => {
++  if (original === undefined) delete process.env[KEY];
++  else process.env[KEY] = original;
++});
++
++describe("connection-crypto", () => {
++  it("round-trips a secrets bundle and prunes empty fields", () => {
++    const secrets: SapConnectionSecrets = {
++      username: "comm_user",
++      password: "S3cr3t!pw",
++      clientSecret: "cs-123",
++      bearerToken: "",
++    };
++    const opened = openSecrets(sealSecrets(secrets));
++    expect(opened.username).toBe("comm_user");
++    expect(opened.password).toBe("S3cr3t!pw");
++    expect(opened.clientSecret).toBe("cs-123");
++    expect("bearerToken" in opened).toBe(false); // empty string dropped
++  });
++
++  it("never leaks plaintext into the ciphertext", () => {
++    const blob = sealSecrets({ password: "TopSecretValue" });
++    expect(blob).not.toContain("TopSecretValue");
++  });
++
++  it("rejects tampered ciphertext (GCM auth tag)", () => {
++    const blob = encryptSecret("hello world");
++    const buf = Buffer.from(blob, "base64");
++    buf[13] = (buf[13] ?? 0) ^ 0xff; // flip a ciphertext byte
++    expect(() => decryptSecret(buf.toString("base64"))).toThrow();
++  });
++
++  it("cannot decrypt with a different key", () => {
++    const blob = encryptSecret("hello world");
++    process.env[KEY] = randomBytes(32).toString("hex");
++    expect(() => decryptSecret(blob)).toThrow();
++  });
++
++  it("treats an empty/absent blob as no secrets", () => {
++    expect(openSecrets(null)).toEqual({});
++    expect(openSecrets(undefined)).toEqual({});
++    expect(openSecrets("")).toEqual({});
++  });
++
++  it("requires a 64-char hex key", () => {
++    process.env[KEY] = "too-short";
++    expect(() => encryptSecret("x")).toThrow(/64-character hex/);
++  });
++});
