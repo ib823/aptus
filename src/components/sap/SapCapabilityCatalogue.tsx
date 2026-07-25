@@ -45,7 +45,7 @@ interface HubData {
   total: number;
   page: number;
   limit: number;
-  counts: { byType: Record<string, number>; byTypeItems?: Record<string, number>; aiApis?: number; byStatus: Record<HubStatus, number>; probeableRuntime: number; probed: number; lastProbedAt?: string | null; dataConfirmed?: number; dataProbe?: boolean };
+  counts: { byType: Record<string, number>; byTypeItems?: Record<string, number>; aiApis?: number; byStatus: Record<HubStatus, number>; byLob?: Record<string, number>; probeableRuntime: number; probed: number; lastProbedAt?: string | null; dataConfirmed?: number; dataProbe?: boolean };
   catalogueImported: boolean;
   tenant: string | null;
   isAdmin?: boolean;
@@ -115,7 +115,41 @@ function groupByLoB(items: HubItem[]): Array<[string, HubItem[]]> {
   return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 }
 
-export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: string }) {
+/** The subset of a catalogue row a caller needs to seed governance from it. */
+export interface CatalogueSelection {
+  id: string;
+  externalId: string;
+  title: string;
+  contentType: HubContentType;
+  apiType: string | null;
+  product: string;
+}
+
+export function SapCapabilityCatalogue({
+  product = "s4hana",
+  /**
+   * Business-domain lens (CoreEdge Developer Studio). When true, a line-of-business
+   * filter row renders, built from the LoB counts the catalogue endpoint reports —
+   * so it offers the domains that ACTUALLY exist, with their real sizes, rather
+   * than a hardcoded taxonomy that would drift into empty buckets.
+   *
+   * NOTE it filters `lob` (persisted on packageId, and what the grouped list below
+   * is grouped by) and NOT the `domain` facet, which carries SAP's own vocabulary
+   * ("AI"). Different fields, different vocabularies.
+   *
+   * Omitted → the control does not exist and behaviour is unchanged.
+   */
+  domainLens = false,
+  /**
+   * When provided, each row gains an "Add to interface" action. Omitted → no
+   * action renders, so the existing SAP Operations surface is untouched.
+   */
+  onAddToInterface,
+}: {
+  product?: string;
+  domainLens?: boolean;
+  onAddToInterface?: (selection: CatalogueSelection) => void;
+}) {
   const [data, setData] = useState<HubData | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -127,6 +161,8 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
   // Source/domain facets: SAP-only (hide partner) and AI-only (domain=AI).
   const [sapOnly, setSapOnly] = useState(false);
   const [aiOnly, setAiOnly] = useState(false);
+  // Business-domain lens (Studio). Null = "All domains". Filters `lob`.
+  const [lob, setLob] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
@@ -150,7 +186,7 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
     const t = setTimeout(() => setQ(search.trim()), 300);
     return () => clearTimeout(t);
   }, [search]);
-  useEffect(() => setPage(1), [contentType, status, q]);
+  useEffect(() => setPage(1), [contentType, status, q, lob]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -164,6 +200,7 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
       if (dataProbe) sp.set("dataProbe", "1");
       if (sapOnly) sp.set("source", "sap");
       if (aiOnly) sp.set("domain", "AI");
+      if (lob) sp.set("lob", lob);
       const res = await fetch(`/api/sap/tdd/hub-content?${sp.toString()}`);
       const json = (await res.json()) as { data?: HubData; error?: { message?: string } };
       if (!res.ok || !json.data) throw new Error(json.error?.message ?? "Failed to load the catalogue");
@@ -175,7 +212,7 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
     } finally {
       setLoading(false);
     }
-  }, [product, page, contentType, status, q, dataProbe, sapOnly, aiOnly]);
+  }, [product, page, contentType, status, q, dataProbe, sapOnly, aiOnly, lob]);
 
   useEffect(() => {
     void load();
@@ -223,6 +260,12 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
 
   const byType = data?.counts.byType ?? {};
   const byTypeItems = data?.counts.byTypeItems ?? {};
+  // Lens options come from the catalogue's own LoB counts — biggest domains
+  // first, so the lens reflects what is actually there rather than a fixed list.
+  const byLob = data?.counts.byLob ?? {};
+  const lobOptions = Object.keys(byLob).sort(
+    (a, b) => (byLob[b] ?? 0) - (byLob[a] ?? 0) || a.localeCompare(b),
+  );
   const totalItems = Object.values(byTypeItems).reduce((n, c) => n + c, 0);
   const aiApis = data?.counts.aiApis ?? 0;
   const byStatus: Record<HubStatus, number> = data?.counts.byStatus ?? {
@@ -392,6 +435,38 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
             </button>
           </div>
 
+          {/* Business-domain lens (Studio only — rendered when a taxonomy is passed).
+              Narrows the same server-side `domain` facet; it is a VIEW over the
+              catalogue, never a claim about the tenant. */}
+          {domainLens && lobOptions.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Business domain filter">
+              <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--ink-muted)" }}>
+                Business domain
+              </span>
+              {[null, ...lobOptions].map((d) => {
+                const selected = lob === d;
+                const count = d ? (byLob[d] ?? 0) : null;
+                return (
+                  <button
+                    key={d ?? "__all"}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => setLob(d)}
+                    className="rounded-[var(--radius-pill)] px-2.5 py-1 text-xs font-medium transition"
+                    style={{
+                      background: selected ? "var(--brand-navy)" : "var(--surface-paper)",
+                      color: selected ? "var(--surface-paper)" : "var(--ink-secondary)",
+                      border: `1px solid ${selected ? "var(--brand-navy)" : "var(--border-default)"}`,
+                    }}
+                  >
+                    {d ?? "All domains"}
+                    {count != null ? ` · ${count}` : ""}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* status filter + search */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Status filter" data-tour="sap-filters">
@@ -544,16 +619,46 @@ export function SapCapabilityCatalogue({ product = "s4hana" }: { product?: strin
                               )}
                             </div>
                           </button>
-                          {/* Tap the badge → plain-language definition of this status. */}
-                          <button
-                            type="button"
-                            onClick={() => openGlossary(glossaryIdForStatus(effStatus))}
-                            title="What does this status mean?"
-                            aria-label={`What does "${effStatus}" mean?`}
-                            className="shrink-0 cursor-help rounded-[var(--radius-pill)]"
-                          >
-                            <StatusBadge status={effStatus} subscribe={item.availabilityNote === "subscribe"} />
-                          </button>
+                          <div className="flex shrink-0 items-center gap-2">
+                            {/* Studio: seed a governed Interface draft from this
+                                service. Renders only when a handler is passed, so
+                                the SAP Operations surface is unchanged. */}
+                            {onAddToInterface && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onAddToInterface({
+                                    id: item.id,
+                                    externalId: item.externalId,
+                                    title: item.title,
+                                    contentType: item.contentType,
+                                    apiType: item.apiType,
+                                    product,
+                                  })
+                                }
+                                title={`Add ${item.externalId} to an interface`}
+                                aria-label={`Add ${item.title} to an interface`}
+                                className="rounded-[var(--radius-input)] px-2.5 py-1 text-xs font-semibold transition"
+                                style={{
+                                  background: "var(--surface-paper)",
+                                  color: "var(--brand-navy)",
+                                  border: "1px solid var(--brand-navy)",
+                                }}
+                              >
+                                Add to interface
+                              </button>
+                            )}
+                            {/* Tap the badge → plain-language definition of this status. */}
+                            <button
+                              type="button"
+                              onClick={() => openGlossary(glossaryIdForStatus(effStatus))}
+                              title="What does this status mean?"
+                              aria-label={`What does "${effStatus}" mean?`}
+                              className="cursor-help rounded-[var(--radius-pill)]"
+                            >
+                              <StatusBadge status={effStatus} subscribe={item.availabilityNote === "subscribe"} />
+                            </button>
+                          </div>
                         </div>
                         {expanded && (
                           <div className="px-4 pb-4">
