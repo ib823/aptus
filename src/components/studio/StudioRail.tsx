@@ -39,7 +39,7 @@ export const STUDIO_SECTIONS: readonly StudioSection[] = [
   { key: "connections", label: "Connections", href: "/studio/connections", available: true },
   { key: "access", label: "API Access", href: "/studio/access", available: true },
   { key: "interfaces", label: "Interfaces", href: "/studio/interfaces", available: true },
-  { key: "test", label: "Test Console", href: "/studio/test", available: false },
+  { key: "test", label: "Test Console", href: "/studio/test", available: true },
 ] as const;
 
 const RAIL_WIDTH = 220;
