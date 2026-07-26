@@ -222,7 +222,9 @@ export function StudioTopBar({
                   lineHeight: 1.45,
                 }}
               >
-                Resolved from your access — never typed into a URL.
+                Resolved from your access — never typed into a URL. Applies to
+                Discover and Test Console; Solutions, Interfaces and API Access
+                are scoped to your organization, not to one tenant.
               </div>
             </div>
           )}
