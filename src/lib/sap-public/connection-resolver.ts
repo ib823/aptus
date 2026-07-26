@@ -247,6 +247,13 @@ export interface UpsertSapConnectionInput {
   apiPath?: string | null;
   timeoutMs?: number | null;
   isActive?: boolean;
+  /**
+   * Which SAP environment this points at — "DEV" | "TEST" | "PROD", or the
+   * landscape's own name. Omitted stays NULL, and NULL renders no chip in the
+   * console: an undeclared environment must never be guessed at on the control
+   * that guards production writes.
+   */
+  environment?: string | null;
 }
 
 /**
@@ -254,6 +261,13 @@ export interface UpsertSapConnectionInput {
  * The write path that a self-service "add a connection" UI calls. Admin-gated
  * at the route layer — this helper assumes authorization already happened.
  */
+/** Blank is not an environment. Upper-cased so the chip reads consistently. */
+function normalizeEnvironment(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.toUpperCase() : null;
+}
+
 export async function upsertSapConnection(input: UpsertSapConnectionInput): Promise<RedactedSapConnection> {
   // Bind the sealed bundle to (org, product, key) so it is worthless on any
   // other row — see connectionAad.
@@ -282,6 +296,7 @@ export async function upsertSapConnection(input: UpsertSapConnectionInput): Prom
       apiPath: input.apiPath ?? null,
       timeoutMs: input.timeoutMs ?? null,
       isActive: input.isActive ?? true,
+      environment: normalizeEnvironment(input.environment),
     },
     update: {
       label: input.label,
@@ -293,6 +308,7 @@ export async function upsertSapConnection(input: UpsertSapConnectionInput): Prom
       apiPath: input.apiPath ?? null,
       timeoutMs: input.timeoutMs ?? null,
       isActive: input.isActive ?? true,
+      environment: normalizeEnvironment(input.environment),
     },
   });
   return redactConnection(row);

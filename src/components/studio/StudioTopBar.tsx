@@ -12,16 +12,22 @@
  * that trusted this cookie for access control would reintroduce the exact
  * tenant-tampering hole the guardrails forbid.
  *
- * NO ENVIRONMENT BADGE. The design puts a DEV/TEST/PROD chip inside this control,
- * describing the SAP tenant you are pointed at. We shipped it wired to VERCEL_ENV
- * — the console's own deployment environment — which reads, inches from a tenant
- * switcher, as "you are connected to production SAP". That is the most dangerous
- * available misreading, so the badge is gone until there is a per-tenant
- * environment field to back it honestly. No badge beats a wrong one.
+ * THE ENVIRONMENT CHIP sits inside this control, describing the SAP tenant you
+ * are pointed at — never the console's own deployment. It was once wired to
+ * VERCEL_ENV, which read, inches from a tenant switcher, as "you are connected to
+ * production SAP"; that is the most dangerous available misreading, and it is why
+ * this now renders SapConnection.environment (or the tenant's declared
+ * environment in {PREFIX}_TENANTS_JSON) and nothing else.
  *
- * THE DOT encodes what we actually know: whether this is the organization's own
- * connection or the deployment's shared tenant. The design's dot encodes SAP
- * environment, which we cannot yet source.
+ * A tenant with no declared environment gets NO CHIP. Defaulting to "DEV" would
+ * put a guess on the one control whose job is to stop an accidental write to
+ * production. PROD is styled as a warning because that is the case where being
+ * noticed matters.
+ *
+ * THE DOT encodes something the design's dot does not: whether this is the
+ * organization's own sealed connection or the deployment's shared tenant. The
+ * environment lives in the chip beside it, so the two facts stay separable —
+ * "someone else's DEV" and "your own DEV" are different situations.
  *
  * When the organization has no tenant anywhere we say so plainly rather than
  * inventing a default — an honest empty, consistent with honest status elsewhere.
@@ -38,6 +44,8 @@ export interface StudioTenantOption {
   product: string;
   /** "connection" = this organization's own; "environment" = shared deployment. */
   source: "connection" | "environment";
+  /** "DEV" | "TEST" | "PROD" | any landscape's own name; null = unknown. */
+  environment: string | null;
 }
 
 export const STUDIO_TENANT_COOKIE = "studio-tenant";
@@ -153,6 +161,7 @@ export function StudioTopBar({
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {active.label}
             </span>
+            <EnvChip environment={active.environment} />
             <span aria-hidden style={{ color: "var(--ink-muted)", fontSize: 10 }}>▾</span>
           </button>
 
@@ -205,6 +214,7 @@ export function StudioTopBar({
                       {t.source === "environment" ? " · shared environment tenant" : ""}
                     </span>
                   </span>
+                  <EnvChip environment={t.environment} />
                   {t.key === active.key && (
                     <span aria-hidden style={{ color: "var(--status-ok, #166534)", fontSize: 12 }}>
                       ✓
@@ -312,6 +322,38 @@ export function StudioTopBar({
         )}
       </div>
     </header>
+  );
+}
+
+/**
+ * The SAP environment this tenant is, when it has said so.
+ *
+ * Renders NOTHING when unknown. The alternative — defaulting to "DEV" — would put
+ * a guess on the control that exists to stop an accidental write to production,
+ * and a wrong "DEV" is far more dangerous than no chip at all.
+ *
+ * PROD is the only one styled as a warning: the others are informational, that
+ * one is the reason the chip exists.
+ */
+function EnvChip({ environment }: { environment: string | null }) {
+  if (!environment) return null;
+  const isProd = environment.toUpperCase() === "PROD";
+  return (
+    <span
+      title={`SAP environment: ${environment} (not the console's own environment)`}
+      style={{
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: "0.02em",
+        padding: "1px 6px",
+        borderRadius: 5,
+        flex: "none",
+        background: isProd ? "var(--surface-banner-warn, #FBE9D1)" : "var(--surface-ink-tint)",
+        color: isProd ? "var(--status-warn, #8B5A00)" : "var(--ink-secondary)",
+      }}
+    >
+      {environment}
+    </span>
   );
 }
 
