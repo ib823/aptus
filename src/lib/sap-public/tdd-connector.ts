@@ -436,7 +436,13 @@ function normalizeBaseUrl(raw: string): string {
   return url.toString().replace(/\/+$/, "");
 }
 
-function sanitizeTenantKey(raw: string): string {
+/**
+ * Normalize a tenant key. Exported because a DB-backed connection's key must be
+ * normalized the SAME way an env tenant's is: the key is what stored probes are
+ * recorded under, so "X5M/100" and "x5m-100" resolving differently would split
+ * one tenant's probe history in two.
+ */
+export function sanitizeTenantKey(raw: string): string {
   return raw
     .trim()
     .toLowerCase()
