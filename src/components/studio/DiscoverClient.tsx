@@ -112,7 +112,14 @@ export function DiscoverClient({
             {solutions.length === 0 ? (
               <p style={{ margin: "0 0 16px", fontSize: 13, lineHeight: "20px", color: "var(--ink-secondary)" }}>
                 You have no solutions yet. An interface belongs to a solution, so register one
-                first — a solution records what you are building and who owns it.
+                first — a solution records what you are building and who owns it.{" "}
+                {/* Naming the next step without offering it is how this dialog
+                    became a dead end: it said "register one first" and there was
+                    nowhere to do that. */}
+                <a href="/studio/solutions" style={{ color: "var(--brand-navy)", fontWeight: 600 }}>
+                  Register a solution
+                </a>
+                .
               </p>
             ) : state.kind === "done" ? (
               <p style={{ margin: "0 0 16px", fontSize: 13, lineHeight: "20px", color: "var(--status-signed-fg)" }}>
