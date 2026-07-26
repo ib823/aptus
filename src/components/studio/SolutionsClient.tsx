@@ -68,6 +68,7 @@ export function SolutionsClient({
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(solutions[0]?.id ?? null);
   const [tab, setTab] = useState<Tab>("Business");
+  const [registering, setRegistering] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: "error" | "info"; text: string } | null>(null);
 
@@ -113,7 +114,9 @@ export function SolutionsClient({
           solves, who is accountable for it, and which SAP capabilities it may consume.
           Nothing is governed until a solution exists.
         </p>
-        {!canAuthor && (
+        {canAuthor ? (
+          <RegisterSolutionForm />
+        ) : (
           <p style={{ ...muted, marginTop: 12 }}>
             Your role can view Studio; registering a solution is a builder action.
           </p>
@@ -126,6 +129,18 @@ export function SolutionsClient({
     <div style={{ display: "grid", gap: 16, gridTemplateColumns: "minmax(260px, 340px) 1fr", alignItems: "start" }}>
       {/* passport cards */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {canAuthor && (
+          <>
+            <button type="button" style={btnSmall} onClick={() => setRegistering((r) => !r)}>
+              {registering ? "Cancel" : "+ Register a solution"}
+            </button>
+            {registering && (
+              <section style={{ ...card, padding: 16 }}>
+                <RegisterSolutionForm />
+              </section>
+            )}
+          </>
+        )}
         {solutions.map((s) => {
           const active = s.id === selectedId;
           const missing = missingOwners(s);
@@ -354,6 +369,185 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
+
+/**
+ * Register a solution.
+ *
+ * This form did not exist. The console told you "register one first" — from the
+ * Solutions empty state AND from Discover's "Add to interface" dialog — while
+ * offering no way to do it, so the only route in was a hand-rolled POST. A
+ * product that names the next step and then withholds it is worse than one that
+ * never mentioned it.
+ *
+ * The constraints below mirror the server's zod schema exactly (name 2–120,
+ * businessProblem 10–2000, dataClass 1–80). Mirrored, not trusted: the server
+ * validates independently. The point is to fail in the field rather than after a
+ * round trip.
+ */
+function RegisterSolutionForm() {
+  const [name, setName] = useState("");
+  const [classification, setClassification] = useState<string>("CLIENT_APP");
+  const [businessProblem, setBusinessProblem] = useState("");
+  const [dataClass, setDataClass] = useState("");
+  const [repoUrl, setRepoUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Mirrors the server. Reported as you type so the disabled button is never a
+  // mystery — a form that refuses to submit without saying why is its own bug.
+  const problems: string[] = [];
+  if (name.trim().length < 2) problems.push("a name of at least 2 characters");
+  if (businessProblem.trim().length < 10) problems.push("a business problem of at least 10 characters");
+  if (dataClass.trim().length < 1) problems.push("a data class");
+
+  const submit = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/studio/solutions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          classification,
+          businessProblem: businessProblem.trim(),
+          dataClass: dataClass.trim(),
+          // Omitted rather than sent empty: the server validates repoUrl as a
+          // URL, and "" is not one.
+          ...(repoUrl.trim() ? { repoUrl: repoUrl.trim() } : {}),
+        }),
+      });
+      const json = (await res.json()) as { error?: { message?: string } };
+      if (!res.ok) throw new Error(json.error?.message ?? "The solution could not be registered.");
+      window.location.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The solution could not be registered.");
+      setBusy(false);
+    }
+  }, [name, classification, businessProblem, dataClass, repoUrl]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 16 }}>
+      <label style={fieldLabel}>
+        Name
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={120}
+          placeholder="Delivery tracker"
+          style={input}
+        />
+      </label>
+
+      <label style={fieldLabel}>
+        Classification
+        <select
+          value={classification}
+          onChange={(e) => setClassification(e.target.value)}
+          style={input}
+        >
+          {SOLUTION_KINDS.map((k) => (
+            <option key={k.value} value={k.value}>
+              {k.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label style={fieldLabel}>
+        Business problem
+        <textarea
+          value={businessProblem}
+          onChange={(e) => setBusinessProblem(e.target.value)}
+          maxLength={2000}
+          rows={3}
+          placeholder="Ops has no live view of outbound deliveries running late."
+          style={{ ...input, height: "auto", padding: 8, resize: "vertical" }}
+        />
+      </label>
+
+      <label style={fieldLabel}>
+        Data class
+        <input
+          value={dataClass}
+          onChange={(e) => setDataClass(e.target.value)}
+          maxLength={80}
+          placeholder="client-operational"
+          style={input}
+        />
+        <span style={muted}>
+          What kind of data this handles — it travels with the solution into every access
+          decision made about it.
+        </span>
+      </label>
+
+      <label style={fieldLabel}>
+        Repository URL <span style={muted}>(optional)</span>
+        <input
+          value={repoUrl}
+          onChange={(e) => setRepoUrl(e.target.value)}
+          maxLength={500}
+          placeholder="https://github.com/..."
+          style={input}
+        />
+      </label>
+
+      {error && (
+        <p style={{ ...body, color: "var(--status-error, #8E2A26)" }} role="alert">
+          {error}
+        </p>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={busy || problems.length > 0}
+          style={{ ...btnPrimary, opacity: busy || problems.length > 0 ? 0.5 : 1 }}
+        >
+          {busy ? "Registering…" : "Register solution"}
+        </button>
+        {problems.length > 0 && <span style={muted}>Still needs {problems.join(", ")}.</span>}
+      </div>
+
+      <p style={muted}>
+        Registers as <strong>DRAFT</strong>. It records what you are building — it grants no
+        access to anything. Access is requested and decided separately.
+      </p>
+    </div>
+  );
+}
+
+/** Mirrors the server's KINDS enum, with the labels a human would use. */
+const SOLUTION_KINDS = [
+  { value: "CLIENT_APP", label: "Client app — built for a specific client" },
+  { value: "INTERNAL_ACCELERATOR", label: "Internal accelerator — reused across engagements" },
+  { value: "PRESALES_DEMO", label: "Presales demo — used to win work" },
+  { value: "REUSABLE", label: "Reusable component — a building block" },
+  { value: "EXPERIMENT", label: "Experiment — exploratory, may be discarded" },
+] as const;
+
+const fieldLabel: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+  fontSize: 13,
+  fontWeight: 600,
+  color: "var(--ink-primary)",
+};
+
+const input: React.CSSProperties = {
+  height: 34,
+  padding: "0 8px",
+  borderRadius: "var(--radius-input, 8px)",
+  border: "1px solid var(--border-strong)",
+  background: "var(--surface-paper)",
+  color: "var(--ink-primary)",
+  fontSize: 13,
+  fontWeight: 400,
+  width: "100%",
+  boxSizing: "border-box",
+};
 
 const card: React.CSSProperties = {
   background: "var(--surface-paper)",
