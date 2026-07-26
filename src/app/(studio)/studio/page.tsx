@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { canMutateStudio } from "@/lib/studio/rbac";
+import { resolveStudioTenants } from "@/lib/studio/tenants";
 
 export const dynamic = "force-dynamic";
 
@@ -44,10 +45,17 @@ export default async function StudioHomePage() {
     );
   }
 
-  const [solutionCount, connectionCount] = await Promise.all([
+  // Counting SapConnection rows here is what made this page announce "No SAP
+  // tenant connected" directly beneath a switcher listing two working tenants:
+  // the deployment's env tenants are reachable, and are what every SAP TDD route
+  // already reads. Resolve them the same way the rest of Studio does.
+  const [solutionCount, tenants] = await Promise.all([
     prisma.solution.count({ where: { organizationId: orgId } }),
-    prisma.sapConnection.count({ where: { organizationId: orgId, isActive: true } }),
+    resolveStudioTenants(orgId),
   ]);
+
+  const ownConnections = tenants.filter((t) => t.source === "connection").length;
+  const sharedTenants = tenants.filter((t) => t.source === "environment").length;
 
   const canBuild = canMutateStudio(user.role);
 
@@ -68,30 +76,56 @@ export default async function StudioHomePage() {
             problem it solves, who owns it, and which SAP capabilities it is allowed to
             consume. Nothing is governed until a solution exists.
           </p>
-          {canBuild ? (
-            <p style={{ ...muted, marginTop: 12, marginBottom: 0 }}>
-              Solution registration ships with the Solutions section.
+          <p style={{ ...muted, marginTop: 12, marginBottom: 0 }}>
+            {canBuild
+              ? "Solution registration ships with the Solutions section."
+              : "Your role can view Studio; registering a solution is a builder action."}
+          </p>
+          {/*
+            The design's first-run card offers a second door — "or explore what
+            this tenant can do" — because Discover is the one surface that works
+            before anything is registered. Without it this card dead-ends.
+          */}
+          {tenants.length > 0 ? (
+            <p style={{ ...body, marginTop: 12, marginBottom: 0 }}>
+              Or{" "}
+              <a href="/studio/discover" style={{ color: "var(--brand-navy)", fontWeight: 600 }}>
+                explore what this tenant can do
+              </a>{" "}
+              — Discover works before anything is registered.
             </p>
-          ) : (
-            <p style={{ ...muted, marginTop: 12, marginBottom: 0 }}>
-              Your role can view Studio; registering a solution is a builder action.
-            </p>
-          )}
+          ) : null}
         </Card>
       ) : (
         <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
           <Stat label="My solutions" value={solutionCount} />
-          <Stat label="Connected SAP tenants" value={connectionCount} />
+          <Stat
+            label={ownConnections > 0 ? "Connected SAP tenants" : "Shared SAP tenants"}
+            value={ownConnections > 0 ? ownConnections : sharedTenants}
+          />
         </div>
       )}
 
-      {solutionCount === 0 && connectionCount === 0 ? (
+      {tenants.length === 0 ? (
         <Card>
           <h2 style={h2}>No SAP tenant connected</h2>
           <p style={body}>
             Studio shows a capability as <strong>Activated</strong> only where a live
             probe against a connected tenant returned 200. Until this organization has a
-            SAP connection, there is nothing to probe — so nothing is claimed.
+            SAP connection — or the deployment has one configured — there is nothing to
+            probe, so nothing is claimed.
+          </p>
+        </Card>
+      ) : ownConnections === 0 ? (
+        <Card>
+          <h2 style={h2}>Running on the shared environment tenant</h2>
+          <p style={body}>
+            This organization has no stored connection, so Studio is using the{" "}
+            {sharedTenants === 1 ? "tenant" : `${sharedTenants} tenants`} configured on
+            the deployment itself — the same one SAP Explorer reads. It is shared by
+            everyone on this deployment, and its credentials live in environment
+            variables rather than the sealed store. Add a connection to give this
+            organization its own.
           </p>
         </Card>
       ) : null}

@@ -2,9 +2,9 @@
  * StudioShell — the CoreEdge Console chrome: 220px navy rail + 56px paper top bar
  * over a cream content area, per the approved design and the design tokens.
  *
- * Server component: every input (tenant list, role, environment) is resolved on
- * the server from the authenticated session. The interactive pieces (active-path
- * highlighting, tenant selection) are the two client children.
+ * Server component: every input (tenant list, role, user) is resolved on the
+ * server from the authenticated session. The interactive pieces (active-path
+ * highlighting, tenant selection, account menu) are the two client children.
  */
 
 import type { ReactNode } from "react";
@@ -16,7 +16,6 @@ export function StudioShell({
   accessibleWorkspaces,
   tenants,
   activeTenantKey,
-  environment,
   roleLabel,
   userEmail,
   children,
@@ -24,7 +23,6 @@ export function StudioShell({
   accessibleWorkspaces: readonly StudioWorkspace[];
   tenants: readonly StudioTenantOption[];
   activeTenantKey: string | null;
-  environment: string;
   roleLabel: string;
   userEmail: string;
   children: ReactNode;
@@ -48,7 +46,6 @@ export function StudioShell({
         <StudioTopBar
           tenants={tenants}
           activeTenantKey={activeTenantKey}
-          environment={environment}
           roleLabel={roleLabel}
           userEmail={userEmail}
         />
