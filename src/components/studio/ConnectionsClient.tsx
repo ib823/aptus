@@ -61,13 +61,36 @@ function healthToStatus(status: string | null): HonestStatus {
 
 export function ConnectionsClient({
   connections,
-  canTest,
+  canManage,
 }: {
   connections: readonly StudioConnection[];
-  canTest: boolean;
+  /** Builder rights: test, add, replace, activate. Was named canTest when
+   *  testing was the only thing this screen could do. */
+  canManage: boolean;
 }) {
   const [outcomes, setOutcomes] = useState<Record<string, TestOutcome | { error: string }>>({});
   const [testing, setTesting] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
+  const [toggleError, setToggleError] = useState<string | null>(null);
+
+  const setActive = useCallback(async (id: string, isActive: boolean) => {
+    setToggling(id);
+    setToggleError(null);
+    try {
+      const res = await fetch("/api/studio/connections", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, isActive }),
+      });
+      const json = (await res.json()) as { error?: { message?: string } };
+      if (!res.ok) throw new Error(json.error?.message ?? "The change could not be saved.");
+      window.location.reload();
+    } catch (err) {
+      setToggleError(err instanceof Error ? err.message : "The change could not be saved.");
+      setToggling(null);
+    }
+  }, []);
 
   const test = useCallback(async (id: string) => {
     setTesting(id);
@@ -94,15 +117,39 @@ export function ConnectionsClient({
         <h2 style={h2}>No SAP tenant connected</h2>
         <p style={body}>
           This organization has no SAP connection yet, so there is nothing to probe — and
-          nothing anywhere in Studio will claim a capability is activated. A connection is
-          added by a platform administrator.
+          nothing anywhere in Studio will claim a capability is activated.
         </p>
+        {canManage ? (
+          <ConnectionForm />
+        ) : (
+          <p style={{ ...body, marginTop: 12 }}>
+            Your role can view connections; adding one is a builder action.
+          </p>
+        )}
       </section>
     );
   }
 
   return (
-    <div style={{ overflowX: "auto" }}>
+    <div>
+      {canManage && (
+        <div style={{ marginBottom: 12 }}>
+          <button type="button" style={btnSmall} onClick={() => setAdding((a) => !a)}>
+            {adding ? "Cancel" : "+ Add a connection"}
+          </button>
+          {adding && (
+            <section style={{ ...card, marginTop: 12 }}>
+              <ConnectionForm />
+            </section>
+          )}
+        </div>
+      )}
+      {toggleError && (
+        <p style={{ ...body, color: "var(--status-error, #8E2A26)", marginBottom: 8 }} role="alert">
+          {toggleError}
+        </p>
+      )}
+      <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
         <thead>
           <tr style={{ background: "var(--surface-ink-tint)", textAlign: "left" }}>
@@ -115,7 +162,8 @@ export function ConnectionsClient({
             <Th>Health</Th>
             <Th>Write</Th>
             <Th>Active</Th>
-            {canTest && <Th>Test</Th>}
+            {canManage && <Th>Test</Th>}
+            {canManage && <Th>Actions</Th>}
           </tr>
         </thead>
         <tbody>
@@ -145,7 +193,7 @@ export function ConnectionsClient({
                 </Td>
                 <Td>{c.writeEnabled ? "enabled" : "disabled"}</Td>
                 <Td>{c.isActive ? "yes" : "no"}</Td>
-                {canTest && (
+                {canManage && (
                   <Td>
                     <button
                       type="button"
@@ -176,14 +224,237 @@ export function ConnectionsClient({
                     )}
                   </Td>
                 )}
+                {canManage && (
+                  <Td>
+                    {/* Deactivate rather than delete. A connection is referenced by
+                        stored probes and audit rows; removing it would orphan the
+                        record of what was done through it. */}
+                    <button
+                      type="button"
+                      onClick={() => void setActive(c.id, !c.isActive)}
+                      disabled={toggling === c.id}
+                      style={testBtn}
+                    >
+                      {toggling === c.id ? "Saving…" : c.isActive ? "Deactivate" : "Activate"}
+                    </button>
+                  </Td>
+                )}
               </tr>
             );
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
+
+/**
+ * Add or replace a connection.
+ *
+ * SECRETS ARE ALWAYS RE-ENTERED. The server reseals the whole bundle on every
+ * write, so there is no "edit the label only" path here — saving replaces the
+ * credential set. That is stated on the form rather than discovered later, when
+ * a connection that used to work stops at its next SAP call.
+ *
+ * Nothing here ever displays an existing secret, because nothing can: the read
+ * path does not select the sealed column, so there is no value to prefill.
+ */
+function ConnectionForm() {
+  const [product, setProduct] = useState("s4hana");
+  const [key, setKey] = useState("");
+  const [label, setLabel] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [environment, setEnvironment] = useState("");
+  const [authType, setAuthType] = useState<"basic" | "bearer" | "oauth-client-credentials">("basic");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [bearerToken, setBearerToken] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [oauthTokenUrl, setOauthTokenUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Mirrors the server's superRefine. Reported as you type so the disabled
+  // button is never a mystery.
+  const missing: string[] = [];
+  if (key.trim().length < 1) missing.push("a tenant key");
+  if (label.trim().length < 2) missing.push("a label");
+  if (!baseUrl.startsWith("https://")) missing.push("an https base URL");
+  if (authType === "basic" && (!username.trim() || !password)) missing.push("a username and password");
+  if (authType === "bearer" && !bearerToken) missing.push("a bearer token");
+  if (authType === "oauth-client-credentials" && (!clientId.trim() || !clientSecret || !oauthTokenUrl.startsWith("https://")))
+    missing.push("a client id, secret and https token URL");
+
+  const submit = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/studio/connections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          product,
+          key: key.trim(),
+          label: label.trim(),
+          baseUrl: baseUrl.trim(),
+          authType,
+          ...(environment.trim() ? { environment: environment.trim() } : {}),
+          ...(authType === "basic" ? { username: username.trim(), password } : {}),
+          ...(authType === "bearer" ? { bearerToken } : {}),
+          ...(authType === "oauth-client-credentials"
+            ? { clientId: clientId.trim(), clientSecret, oauthTokenUrl: oauthTokenUrl.trim() }
+            : {}),
+        }),
+      });
+      const json = (await res.json()) as { error?: { message?: string } };
+      if (!res.ok) throw new Error(json.error?.message ?? "The connection could not be saved.");
+      window.location.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The connection could not be saved.");
+      setBusy(false);
+    }
+  }, [product, key, label, baseUrl, environment, authType, username, password, bearerToken, clientId, clientSecret, oauthTokenUrl]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+        <Label text="Product">
+          <select value={product} onChange={(e) => setProduct(e.target.value)} style={input}>
+            {PRODUCT_OPTIONS.map((p) => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+        </Label>
+        <Label text="Tenant key" hint="Normalized — probes are stored under it.">
+          <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="x5m-100" style={input} />
+        </Label>
+        <Label text="Label">
+          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Customizing X5M/100" style={input} />
+        </Label>
+        <Label text="Environment" hint="Optional. Blank shows no chip rather than a guess.">
+          <input value={environment} onChange={(e) => setEnvironment(e.target.value)} placeholder="DEV" style={input} />
+        </Label>
+      </div>
+
+      <Label text="Base URL" hint="https only — these carry credentials on every call.">
+        <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://my123456-api.s4hana.cloud.sap" style={input} />
+      </Label>
+
+      <Label text="Auth type">
+        <select value={authType} onChange={(e) => setAuthType(e.target.value as typeof authType)} style={input}>
+          <option value="basic">Basic — communication user</option>
+          <option value="bearer">Bearer token</option>
+          <option value="oauth-client-credentials">OAuth client credentials</option>
+        </select>
+      </Label>
+
+      {authType === "basic" && (
+        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
+          <Label text="Username">
+            <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" style={input} />
+          </Label>
+          <Label text="Password">
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" style={input} />
+          </Label>
+        </div>
+      )}
+      {authType === "bearer" && (
+        <Label text="Bearer token">
+          <input type="password" value={bearerToken} onChange={(e) => setBearerToken(e.target.value)} autoComplete="new-password" style={input} />
+        </Label>
+      )}
+      {authType === "oauth-client-credentials" && (
+        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+          <Label text="Client ID">
+            <input value={clientId} onChange={(e) => setClientId(e.target.value)} autoComplete="off" style={input} />
+          </Label>
+          <Label text="Client secret">
+            <input type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} autoComplete="new-password" style={input} />
+          </Label>
+          <Label text="Token URL">
+            <input value={oauthTokenUrl} onChange={(e) => setOauthTokenUrl(e.target.value)} placeholder="https://…/oauth/token" style={input} />
+          </Label>
+        </div>
+      )}
+
+      {error && (
+        <p style={{ ...body, color: "var(--status-error, #8E2A26)" }} role="alert">{error}</p>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={busy || missing.length > 0}
+          style={{ ...saveBtn, opacity: busy || missing.length > 0 ? 0.5 : 1 }}
+        >
+          {busy ? "Saving…" : "Save connection"}
+        </button>
+        {missing.length > 0 && (
+          <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>Still needs {missing.join(", ")}.</span>
+        )}
+      </div>
+
+      <p style={{ fontSize: 12, color: "var(--ink-muted)", margin: 0 }}>
+        Saving an existing product + key <strong>replaces</strong> it, including its
+        credentials — secrets are resealed on every save, so they must be entered each
+        time. They are never readable afterwards, not even here.
+      </p>
+    </div>
+  );
+}
+
+function Label({ text, hint, children }: { text: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+      {text}
+      {children}
+      {hint && <span style={{ fontSize: 11, fontWeight: 400, color: "var(--ink-muted)" }}>{hint}</span>}
+    </label>
+  );
+}
+
+/** Mirrors SAP_ODATA_PRODUCTS on the server, which the route validates against. */
+const PRODUCT_OPTIONS = ["s4hana", "successfactors", "ariba"] as const;
+
+const input: React.CSSProperties = {
+  height: 34,
+  padding: "0 8px",
+  borderRadius: "var(--radius-input, 8px)",
+  border: "1px solid var(--border-strong)",
+  background: "var(--surface-paper)",
+  color: "var(--ink-primary)",
+  fontSize: 13,
+  fontWeight: 400,
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+const btnSmall: React.CSSProperties = {
+  height: 30,
+  padding: "0 12px",
+  borderRadius: "var(--radius-input, 8px)",
+  background: "var(--surface-paper)",
+  color: "var(--brand-navy)",
+  border: "1px solid var(--border-strong)",
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const saveBtn: React.CSSProperties = {
+  height: 36,
+  padding: "0 14px",
+  borderRadius: "var(--radius-input, 8px)",
+  background: "var(--brand-navy)",
+  color: "var(--surface-paper)",
+  border: "1px solid var(--brand-navy)",
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+};
 
 /* ── presentation ─────────────────────────────────────────────────────────── */
 
