@@ -27,6 +27,7 @@ import {
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
+import { missingOwners } from "@/lib/studio/solutions";
 import { scopedById, tenantScopeFor, type TenantScope } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
@@ -98,7 +99,30 @@ export async function POST(request: NextRequest) {
   });
   if (!solution) return studioError("NOT_FOUND", "Solution not found.");
 
-  // Segregation of duties — see the file header.
+  // OWNERSHIP FIRST, then segregation of duties — and in that order for a
+  // reason. The SoD rule below is "the owner cannot mint the token". On a
+  // solution with no owners that is VACUOUSLY TRUE: [null, null, null] contains
+  // nobody, the check passes, and the person who registered the solution issues
+  // themselves a credential to a client's live SAP with no second pair of eyes.
+  //
+  // Unowned is the DEFAULT state of every newly registered solution, so the way
+  // to bypass the control was to skip a step nothing forced you to complete. A
+  // governance gate that is disabled by inaction is not a gate.
+  //
+  // This also matches the rule the product already states elsewhere: a solution
+  // cannot be ACTIVE without all three owners. A credential is a stronger thing
+  // than ACTIVE status, so it cannot ask for less.
+  const missing = missingOwners(solution);
+  if (missing.length > 0) {
+    return studioError(
+      "FORBIDDEN",
+      `This solution has no ${missing.join(", ")}. Assign owners before issuing a runtime credential — ` +
+        "the accountability record is what makes issuing it reviewable.",
+    );
+  }
+
+  // Segregation of duties — see the file header. Meaningful only because the
+  // check above guarantees there IS an owner to be distinct from.
   const isOwner = [
     solution.technicalOwnerId,
     solution.businessOwnerId,
@@ -187,10 +211,28 @@ export async function PATCH(request: NextRequest) {
     where: scopedById(scope, existing.solutionId),
     select: { technicalOwnerId: true, businessOwnerId: true, supportOwnerId: true },
   });
+
+  // Fail closed on a missing solution. The optional chaining below used to make
+  // this pass: [undefined, undefined, undefined] contains nobody, so a
+  // credential whose solution could not be resolved rotated freely.
+  if (!solution) return studioError("NOT_FOUND", "Solution not found.");
+
+  // Rotating mints a NEW token, so it is an issuance and carries the same two
+  // gates. Without the ownership check the SoD rule below is vacuous on an
+  // unowned solution — and an owner blocked from issuing could simply rotate
+  // instead, which is the same act under a different verb.
+  const missingForRotate = missingOwners(solution);
+  if (missingForRotate.length > 0) {
+    return studioError(
+      "FORBIDDEN",
+      `This solution has no ${missingForRotate.join(", ")}. Assign owners before rotating its runtime credential.`,
+    );
+  }
+
   const isOwner = [
-    solution?.technicalOwnerId,
-    solution?.businessOwnerId,
-    solution?.supportOwnerId,
+    solution.technicalOwnerId,
+    solution.businessOwnerId,
+    solution.supportOwnerId,
   ].includes(user.id);
   if (isOwner) {
     return studioError(
