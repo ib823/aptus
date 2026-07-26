@@ -113,7 +113,7 @@ export default async function StudioConnectionsPage() {
         </section>
       ) : null}
 
-      <ConnectionsClient connections={connections} canTest={canMutateStudio(user.role)} />
+      <ConnectionsClient connections={connections} canManage={canMutateStudio(user.role)} />
     </div>
   );
 }

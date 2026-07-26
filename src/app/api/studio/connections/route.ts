@@ -1,5 +1,21 @@
 /**
- * GET /api/studio/connections — the Connections screen's data.
+ * /api/studio/connections — the Connections screen.
+ *
+ *   GET    metadata projection (never a secret)
+ *   POST   create or replace a connection, sealing its secrets
+ *   PATCH  toggle isActive / writeEnabled — NEVER touches secrets
+ *
+ * WHY POST REPLACES RATHER THAN MERGES. `upsertSapConnection` reseals the secret
+ * bundle on every write, so a "just rename the label" call that omitted secrets
+ * would store an EMPTY bundle and silently break a working connection — the
+ * failure appearing later, at the next SAP call, far from the edit that caused
+ * it. So POST demands the full credential set and says so, and metadata-only
+ * changes go through PATCH, which cannot reach the secret column at all.
+ *
+ * SECRETS ARE WRITE-ONLY, ALWAYS. They enter here, are sealed with AES-256-GCM
+ * bound to (org, product, key), and no route ever reads them back out. Nothing
+ * in this file returns, logs, or audits a secret value — the audit records THAT
+ * a connection changed and which fields, never what they became.
  *
  * A METADATA PROJECTION over SapConnection, and structurally incapable of
  * leaking a secret: the `select` below is an explicit allow-list that does not
@@ -12,12 +28,99 @@
  * shown to a member of that same organization.
  */
 
+import type { NextRequest } from "next/server";
+import { z } from "zod";
+
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { upsertSapConnection } from "@/lib/sap-public/connection-resolver";
+import { sanitizeTenantKey, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
-import { canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
+import { writeConfigAudit } from "@/lib/studio/audit";
+import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 
 export const dynamic = "force-dynamic";
+
+const PRODUCT_KEYS = SAP_ODATA_PRODUCTS.map((p) => p.key) as [string, ...string[]];
+
+/**
+ * An https base URL. Rejecting http is not pedantry: these carry a client's SAP
+ * credentials on every call, and a plaintext scheme would put them on the wire.
+ */
+const httpsUrl = z
+  .string()
+  .url()
+  .max(500)
+  .refine((u) => u.startsWith("https://"), { message: "must be https" });
+
+const upsertSchema = z
+  .object({
+    product: z.enum(PRODUCT_KEYS),
+    key: z.string().min(1).max(60),
+    label: z.string().min(2).max(120),
+    baseUrl: httpsUrl,
+    authType: z.enum(["basic", "bearer", "oauth-client-credentials"]),
+    environment: z.string().max(40).optional(),
+    username: z.string().max(200).optional(),
+    password: z.string().max(500).optional(),
+    bearerToken: z.string().max(2000).optional(),
+    clientId: z.string().max(200).optional(),
+    clientSecret: z.string().max(500).optional(),
+    oauthTokenUrl: httpsUrl.optional(),
+    writeSecret: z.string().max(500).optional(),
+    writeEnabled: z.boolean().optional(),
+    apiPath: z.string().max(200).optional(),
+    timeoutMs: z.number().int().min(1000).max(120000).optional(),
+  })
+  .superRefine((v, ctx) => {
+    // Each auth type needs its own fields. Accepting a "basic" connection with no
+    // password would store a credential that cannot authenticate and only fails
+    // at the first real SAP call.
+    const need = (field: keyof typeof v, why: string) => {
+      if (!v[field]) ctx.addIssue({ code: "custom", path: [field], message: why });
+    };
+    if (v.authType === "basic") {
+      need("username", "username is required for basic auth");
+      need("password", "password is required for basic auth");
+    }
+    if (v.authType === "bearer") need("bearerToken", "bearerToken is required for bearer auth");
+    if (v.authType === "oauth-client-credentials") {
+      need("clientId", "clientId is required for OAuth");
+      need("clientSecret", "clientSecret is required for OAuth");
+      need("oauthTokenUrl", "oauthTokenUrl is required for OAuth");
+    }
+    // writeEnabled without a write secret is a switch wired to nothing.
+    if (v.writeEnabled && !v.writeSecret) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["writeSecret"],
+        message: "writeSecret is required when writes are enabled",
+      });
+    }
+  });
+
+const patchSchema = z.object({
+  id: z.string().min(1),
+  isActive: z.boolean().optional(),
+  writeEnabled: z.boolean().optional(),
+});
+
+type Actor = { userId: string; organizationId: string };
+
+async function requireBuilder(): Promise<{ error: ReturnType<typeof studioError> } | Actor> {
+  const user = await getCurrentUser();
+  if (!user) return { error: studioError("UNAUTHENTICATED", "Sign in required.") };
+  if (!canAccessStudio(user.role)) {
+    return { error: studioError("FORBIDDEN", "Developer Studio is role-gated.") };
+  }
+  if (!canMutateStudio(user.role)) {
+    return { error: studioError("FORBIDDEN", "Your role can view connections but not change them.") };
+  }
+  if (lacksStudioTenantScope(user) || !user.organizationId) {
+    return { error: studioError("FORBIDDEN", "No organization scope.") };
+  }
+  return { userId: user.id, organizationId: user.organizationId };
+}
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -56,4 +159,146 @@ export async function GET() {
   });
 
   return studioOk({ connections });
+}
+
+/**
+ * POST — create or replace a connection.
+ *
+ * Replace, not merge: see the file header. The caller supplies the full
+ * credential set every time, because the alternative is a partial write that
+ * quietly empties the sealed bundle.
+ */
+export async function POST(request: NextRequest) {
+  const auth = await requireBuilder();
+  if ("error" in auth) return auth.error;
+  const { userId, organizationId } = auth;
+
+  const parsed = upsertSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    // Field-level messages, because "invalid payload" on a nine-field form with
+    // conditional requirements is a guessing game.
+    const first = parsed.error.issues[0];
+    return studioError(
+      "VALIDATION_ERROR",
+      first ? `${first.path.join(".") || "payload"}: ${first.message}` : "Invalid connection payload.",
+    );
+  }
+  const input = parsed.data;
+
+  // Normalized the same way env tenant keys are — the key is what stored probes
+  // are recorded under, so two spellings of one tenant must not split its history.
+  const key = sanitizeTenantKey(input.key);
+  if (!key) return studioError("VALIDATION_ERROR", "key: has no usable value once normalized.");
+
+  const existing = await prisma.sapConnection.findFirst({
+    where: { organizationId, product: input.product, key },
+    select: { id: true },
+  });
+
+  const saved = await upsertSapConnection({
+    organizationId,
+    product: input.product,
+    key,
+    label: input.label,
+    baseUrl: input.baseUrl,
+    authType: input.authType,
+    secrets: {
+      ...(input.username ? { username: input.username } : {}),
+      ...(input.password ? { password: input.password } : {}),
+      ...(input.bearerToken ? { bearerToken: input.bearerToken } : {}),
+      ...(input.clientId ? { clientId: input.clientId } : {}),
+      ...(input.clientSecret ? { clientSecret: input.clientSecret } : {}),
+      ...(input.writeSecret ? { writeSecret: input.writeSecret } : {}),
+    },
+    oauthTokenUrl: input.oauthTokenUrl ?? null,
+    environment: input.environment ?? null,
+    writeEnabled: input.writeEnabled ?? false,
+    apiPath: input.apiPath ?? null,
+    timeoutMs: input.timeoutMs ?? null,
+  });
+
+  // Records THAT the credential set was written, never what it is. The whole
+  // point of sealing secrets is undone by an audit trail that quotes them.
+  await writeConfigAudit({
+    organizationId,
+    actorId: userId,
+    entityType: "Connection",
+    entityId: saved.id,
+    action: existing ? "UPDATE" : "CREATE",
+    after: {
+      event: existing ? "connection_replaced" : "connection_created",
+      product: input.product,
+      key,
+      authType: input.authType,
+      environment: input.environment ?? null,
+      writeEnabled: input.writeEnabled ?? false,
+      secretsRotated: true,
+    },
+  });
+
+  return studioOk({ connection: saved, replaced: Boolean(existing) });
+}
+
+/**
+ * PATCH — toggle isActive / writeEnabled.
+ *
+ * Deliberately cannot reach `secretsCiphertext`: this is the path for the edits
+ * that should NOT require re-entering a client's password, so it is built so
+ * that it could not touch one even by mistake.
+ */
+export async function PATCH(request: NextRequest) {
+  const auth = await requireBuilder();
+  if ("error" in auth) return auth.error;
+  const { userId, organizationId } = auth;
+
+  const parsed = patchSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return studioError("VALIDATION_ERROR", "Invalid request.");
+  const { id, isActive, writeEnabled } = parsed.data;
+
+  if (isActive === undefined && writeEnabled === undefined) {
+    return studioError("VALIDATION_ERROR", "Nothing to change.");
+  }
+
+  // Scoped find before update: a bare update by id would let one organization
+  // toggle another's connection.
+  const existing = await prisma.sapConnection.findFirst({
+    where: { id, organizationId },
+    select: { id: true, writeEnabled: true, isActive: true },
+  });
+  if (!existing) return studioError("NOT_FOUND", "Connection not found.");
+
+  // Enabling writes needs a write secret, which lives sealed and unreadable from
+  // here. Flipping the switch on a connection that never had one would produce a
+  // connection that claims to allow writes and fails at the first attempt, so the
+  // caller is sent to POST — where the secret can actually be supplied.
+  if (writeEnabled === true && !existing.writeEnabled) {
+    return studioError(
+      "VALIDATION_ERROR",
+      "Enabling writes requires the write secret. Re-save the connection with it instead.",
+    );
+  }
+
+  const updated = await prisma.sapConnection.update({
+    where: { id: existing.id },
+    data: {
+      ...(isActive === undefined ? {} : { isActive }),
+      ...(writeEnabled === undefined ? {} : { writeEnabled }),
+    },
+    select: { id: true, isActive: true, writeEnabled: true },
+  });
+
+  await writeConfigAudit({
+    organizationId,
+    actorId: userId,
+    entityType: "Connection",
+    entityId: updated.id,
+    action: "UPDATE",
+    after: {
+      event: "connection_toggled",
+      isActive: updated.isActive,
+      writeEnabled: updated.writeEnabled,
+    },
+  });
+
+  return studioOk({ connection: updated });
 }
