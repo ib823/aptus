@@ -35,9 +35,15 @@ type SubmitState = { kind: "idle" } | { kind: "saving" } | { kind: "error"; mess
 export function DiscoverClient({
   solutions,
   canAuthor,
+  tenant,
+  product,
 }: {
   solutions: readonly DiscoverSolutionOption[];
   canAuthor: boolean;
+  /** The tenant the switcher selected. Null when none is configured anywhere. */
+  tenant: string | null;
+  /** That tenant's product. Was hardcoded to "s4hana" regardless of selection. */
+  product: string;
 }) {
   const [selection, setSelection] = useState<CatalogueSelection | null>(null);
   const [solutionId, setSolutionId] = useState<string>(solutions[0]?.id ?? "");
@@ -77,8 +83,9 @@ export function DiscoverClient({
   return (
     <>
       <SapCapabilityCatalogue
-        product="s4hana"
+        product={product}
         domainLens
+        {...(tenant ? { tenant } : {})}
         {...(canAuthor ? { onAddToInterface: (s: CatalogueSelection) => setSelection(s) } : {})}
       />
 
