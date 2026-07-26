@@ -43,15 +43,6 @@ export const metadata: Metadata = {
   description: "Configure, govern, test and scaffold SAP integrations",
 };
 
-/** The deployment environment badge — reported, never guessed. */
-function resolveEnvironment(): string {
-  const vercelEnv = process.env.VERCEL_ENV;
-  if (vercelEnv === "production") return "PROD";
-  if (vercelEnv === "preview") return "PREVIEW";
-  if (vercelEnv === "development") return "DEV";
-  return process.env.NODE_ENV === "production" ? "PROD" : "DEV";
-}
-
 export default async function StudioLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
   if (!user) redirect("/presales/login");
@@ -75,10 +66,14 @@ export default async function StudioLayout({ children }: { children: ReactNode }
   // such rather than presented as this client's SAP.
   const resolved = await resolveStudioTenants(user.organizationId);
 
+  // Passed through with `source` intact: the switcher shows "shared environment
+  // tenant" on its own sub-line, which is where the design puts that detail —
+  // rather than smuggling it into the label as a "(shared)" suffix.
   const tenants: StudioTenantOption[] = resolved.map((t) => ({
     key: t.key,
-    label: t.source === "environment" ? `${t.label} (shared)` : t.label,
+    label: t.label,
     product: t.product,
+    source: t.source,
   }));
 
   // The remembered selection is honoured ONLY if it is one of the caller's own
@@ -94,7 +89,6 @@ export default async function StudioLayout({ children }: { children: ReactNode }
         accessibleWorkspaces={accessibleWorkspaces(user.role)}
         tenants={tenants}
         activeTenantKey={activeTenantKey}
-        environment={resolveEnvironment()}
         roleLabel={roleLabel}
         userEmail={user.email}
       >
