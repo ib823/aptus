@@ -76,11 +76,18 @@ export default async function StudioHomePage() {
             problem it solves, who owns it, and which SAP capabilities it is allowed to
             consume. Nothing is governed until a solution exists.
           </p>
-          <p style={{ ...muted, marginTop: 12, marginBottom: 0 }}>
-            {canBuild
-              ? "Solution registration ships with the Solutions section."
-              : "Your role can view Studio; registering a solution is a builder action."}
-          </p>
+          {canBuild ? (
+            <p style={{ ...body, marginTop: 12, marginBottom: 0 }}>
+              <a href="/studio/solutions" style={{ color: "var(--brand-navy)", fontWeight: 600 }}>
+                Register a solution
+              </a>{" "}
+              to get started.
+            </p>
+          ) : (
+            <p style={{ ...muted, marginTop: 12, marginBottom: 0 }}>
+              Your role can view Studio; registering a solution is a builder action.
+            </p>
+          )}
           {/*
             The design's first-run card offers a second door — "or explore what
             this tenant can do" — because Discover is the one surface that works
