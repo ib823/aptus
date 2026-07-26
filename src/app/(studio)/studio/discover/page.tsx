@@ -9,12 +9,15 @@
  */
 
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 
 import { DiscoverClient } from "@/components/studio/DiscoverClient";
 import { ScopeNote } from "@/components/studio/ScopeNote";
+import { STUDIO_TENANT_COOKIE } from "@/components/studio/StudioTopBar";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { canMutateStudio } from "@/lib/studio/rbac";
+import { pickActiveTenant, resolveStudioTenants } from "@/lib/studio/tenants";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Discover" };
@@ -24,13 +27,24 @@ export default async function StudioDiscoverPage() {
   if (!user) return null;
 
   const organizationId = user.organizationId;
-  const solutions = organizationId
-    ? await prisma.solution.findMany({
-        where: { organizationId },
-        select: { id: true, name: true },
-        orderBy: { name: "asc" },
-      })
-    : [];
+  const [solutions, tenants] = await Promise.all([
+    organizationId
+      ? prisma.solution.findMany({
+          where: { organizationId },
+          select: { id: true, name: true },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([]),
+    resolveStudioTenants(organizationId),
+  ]);
+
+  // This page is genuinely tenant-specific — its heading claims to show what THIS
+  // tenant exposes, and probe results are stored per tenant key. It previously
+  // hardcoded product="s4hana" and sent no tenant at all, so it reported the
+  // deployment's first configured tenant under whatever name the switcher showed.
+  const remembered = (await cookies()).get(STUDIO_TENANT_COOKIE)?.value ?? null;
+  const tenantKey = pickActiveTenant(tenants, remembered);
+  const activeTenant = tenants.find((t) => t.key === tenantKey) ?? null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -47,7 +61,12 @@ export default async function StudioDiscoverPage() {
       {/* The likeliest place to assume CoreEdge builds ABAP: right where an
           ABAP-exposed OData service shows up alongside standard SAP APIs. */}
       <ScopeNote topic="abap" />
-      <DiscoverClient solutions={solutions} canAuthor={canMutateStudio(user.role)} />
+      <DiscoverClient
+        solutions={solutions}
+        canAuthor={canMutateStudio(user.role)}
+        tenant={tenantKey}
+        product={activeTenant?.product ?? "s4hana"}
+      />
     </div>
   );
 }

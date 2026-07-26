@@ -145,10 +145,22 @@ export function SapCapabilityCatalogue({
    * action renders, so the existing SAP Operations surface is untouched.
    */
   onAddToInterface,
+  /**
+   * Which tenant this catalogue is about. Omitted → the routes fall back to the
+   * first configured tenant, which is what /sap-explorer has always done and
+   * still does.
+   *
+   * Studio passes the tenant the switcher selected. Without it, Discover claimed
+   * "what THIS tenant exposes" while silently reporting the default one — and
+   * probe results are stored per tenant key, so the page could show one tenant's
+   * status under another tenant's name.
+   */
+  tenant,
 }: {
   product?: string;
   domainLens?: boolean;
   onAddToInterface?: (selection: CatalogueSelection) => void;
+  tenant?: string | undefined;
 }) {
   const [data, setData] = useState<HubData | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -194,6 +206,7 @@ export function SapCapabilityCatalogue({
     setNote(null);
     try {
       const sp = new URLSearchParams({ product, page: String(page), limit: String(limit) });
+      if (tenant) sp.set("tenant", tenant);
       if (contentType !== "ALL") sp.set("contentType", contentType);
       if (status !== "ALL") sp.set("status", status);
       if (q) sp.set("q", q);
@@ -212,7 +225,7 @@ export function SapCapabilityCatalogue({
     } finally {
       setLoading(false);
     }
-  }, [product, page, contentType, status, q, dataProbe, sapOnly, aiOnly, lob]);
+  }, [product, tenant, page, contentType, status, q, dataProbe, sapOnly, aiOnly, lob]);
 
   useEffect(() => {
     void load();
@@ -246,7 +259,10 @@ export function SapCapabilityCatalogue({
       const res = await fetch("/api/sap/tdd/hub-content/probe-all", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmation: "PROBE ALL SAP SERVICES" }),
+        // Probe the tenant on screen. Results are stored under this tenant's key,
+        // so omitting it would write the default tenant's results while the page
+        // is captioned with another.
+        body: JSON.stringify({ confirmation: "PROBE ALL SAP SERVICES", product, ...(tenant ? { tenant } : {}) }),
       });
       const json = (await res.json()) as { data?: { probed: number }; error?: { message?: string } };
       if (!res.ok) throw new Error(json.error?.message ?? "Probe-all failed (admin only)");
@@ -256,7 +272,7 @@ export function SapCapabilityCatalogue({
     } finally {
       setProbing(false);
     }
-  }, [load]);
+  }, [load, product, tenant]);
 
   const byType = data?.counts.byType ?? {};
   const byTypeItems = data?.counts.byTypeItems ?? {};
