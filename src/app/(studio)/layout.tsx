@@ -74,6 +74,7 @@ export default async function StudioLayout({ children }: { children: ReactNode }
     label: t.label,
     product: t.product,
     source: t.source,
+    environment: t.environment,
   }));
 
   // The remembered selection is honoured ONLY if it is one of the caller's own

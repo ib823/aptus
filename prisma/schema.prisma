@@ -473,6 +473,12 @@ model SapConnection {
   baseUrl           String
   /// "basic" | "bearer" | "oauth-client-credentials".
   authType          String
+  /// Which SAP environment this points at — "DEV" | "TEST" | "PROD", free text
+  /// so a landscape with other names is not forced to lie. NULL means unknown,
+  /// and unknown renders no environment chip: a guess printed as a fact on the
+  /// control that exists to stop an accidental write to production would be
+  /// worse than saying nothing.
+  environment       String?
   /// OAuth token endpoint — non-secret; null unless authType is oauth.
   oauthTokenUrl     String?
   /// AES-256-GCM sealed JSON bundle of the secret fields. Never logged/returned.

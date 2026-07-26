@@ -32,6 +32,13 @@ export interface StudioTenant {
   product: string;
   /** "connection" = this organization's own row; "environment" = shared. */
   source: "connection" | "environment";
+  /**
+   * Which SAP environment this tenant is — "DEV" | "TEST" | "PROD", or whatever
+   * the landscape calls it. NULL means unknown, and unknown must render as no
+   * chip rather than a guess: this is the control that stops someone writing to
+   * production by mistake, so a fabricated label here is worse than silence.
+   */
+  environment: string | null;
 }
 
 /**
@@ -48,7 +55,7 @@ export async function resolveStudioTenants(
   if (organizationId) {
     const rows = await prisma.sapConnection.findMany({
       where: { organizationId, isActive: true, ...(product ? { product } : {}) },
-      select: { key: true, label: true, product: true },
+      select: { key: true, label: true, product: true, environment: true },
       orderBy: { createdAt: "asc" },
     });
     if (rows.length > 0) {
@@ -57,6 +64,7 @@ export async function resolveStudioTenants(
         label: r.label,
         product: r.product,
         source: "connection" as const,
+        environment: r.environment,
       }));
     }
   }
@@ -83,6 +91,7 @@ export async function resolveStudioTenants(
       label: t.label,
       product: p.key,
       source: "environment" as const,
+      environment: t.environment ?? null,
     }));
   });
 }

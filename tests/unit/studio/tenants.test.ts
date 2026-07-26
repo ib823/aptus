@@ -66,7 +66,7 @@ describe("resolveStudioTenants", () => {
     const tenants = await resolveStudioTenants("org_a");
 
     expect(tenants).toEqual([
-      { key: "default", label: "Sandbox", product: "s4hana", source: "environment" },
+      { key: "default", label: "Sandbox", product: "s4hana", source: "environment", environment: null },
     ]);
   });
 
@@ -97,7 +97,7 @@ describe("resolveStudioTenants", () => {
 
     expect(findMany).not.toHaveBeenCalled();
     expect(tenants).toEqual([
-      { key: "default", label: "Sandbox", product: "s4hana", source: "environment" },
+      { key: "default", label: "Sandbox", product: "s4hana", source: "environment", environment: null },
     ]);
   });
 
@@ -113,9 +113,41 @@ describe("resolveStudioTenants", () => {
   });
 
   it("never selects the sealed secret column", async () => {
+    // An explicit allow-list, asserted exactly: adding a column here is a
+    // deliberate act, and secretsCiphertext can never arrive by accident.
     await resolveStudioTenants("org_a");
     const select = findMany.mock.calls[0]?.[0]?.select ?? {};
-    expect(Object.keys(select).sort()).toEqual(["key", "label", "product"]);
+    expect(Object.keys(select).sort()).toEqual(["environment", "key", "label", "product"]);
+    expect(Object.keys(select)).not.toContain("secretsCiphertext");
+  });
+
+  it("carries a stored connection's environment through", async () => {
+    findMany.mockResolvedValue([
+      { key: "prod", label: "Acme PROD", product: "s4hana", environment: "PROD" },
+    ]);
+    const tenants = await resolveStudioTenants("org_a");
+    expect(tenants[0]?.environment).toBe("PROD");
+  });
+
+  it("reports an undeclared environment as null, never as a guess", async () => {
+    // The whole point of the field being nullable: the UI renders no chip for
+    // null, and a fabricated "DEV" on a control that guards production writes
+    // would be worse than silence.
+    findMany.mockResolvedValue([
+      { key: "x", label: "X", product: "s4hana", environment: null },
+    ]);
+    const tenants = await resolveStudioTenants("org_a");
+    expect(tenants[0]?.environment).toBeNull();
+  });
+
+  it("carries an env tenant's declared environment through", async () => {
+    getConfiguredSapTenants.mockImplementation((prefix: string) =>
+      prefix === "S4_TDD"
+        ? [{ key: "d", label: "D", baseUrl: "https://d", environment: "TEST" }]
+        : [],
+    );
+    const tenants = await resolveStudioTenants("org_a");
+    expect(tenants[0]?.environment).toBe("TEST");
   });
 
   it("ignores inactive connections", async () => {
@@ -145,15 +177,15 @@ describe("resolveStudioTenants", () => {
     const tenants = await resolveStudioTenants("org_a");
 
     expect(tenants).toEqual([
-      { key: "sf", label: "SF", product: "successfactors", source: "environment" },
+      { key: "sf", label: "SF", product: "successfactors", source: "environment", environment: null },
     ]);
   });
 });
 
 describe("pickActiveTenant", () => {
   const tenants: StudioTenant[] = [
-    { key: "a", label: "A", product: "s4hana", source: "connection" },
-    { key: "b", label: "B", product: "s4hana", source: "connection" },
+    { key: "a", label: "A", product: "s4hana", source: "connection", environment: null },
+    { key: "b", label: "B", product: "s4hana", source: "connection", environment: null },
   ];
 
   it("honours a remembered tenant the caller can actually use", () => {
@@ -177,8 +209,8 @@ describe("pickActiveTenant", () => {
 
 describe("isSharedEnvironmentTenant", () => {
   const mixed: StudioTenant[] = [
-    { key: "own", label: "Own", product: "s4hana", source: "connection" },
-    { key: "shared", label: "Shared", product: "s4hana", source: "environment" },
+    { key: "own", label: "Own", product: "s4hana", source: "connection", environment: "DEV" },
+    { key: "shared", label: "Shared", product: "s4hana", source: "environment", environment: null },
   ];
 
   it("is true only for the env-sourced tenant", () => {

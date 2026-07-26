@@ -1,0 +1,21 @@
+-- Which SAP environment a connection points at.
+--
+-- The design shows a colour-coded DEV/TEST/PROD chip inside the tenant switcher,
+-- so a developer can see what they are about to touch before they touch it. The
+-- console shipped that chip wired to VERCEL_ENV — the CONSOLE's own deployment
+-- environment — which, sitting beside a tenant switcher, read as "you are
+-- connected to production SAP". The badge was removed rather than relabelled,
+-- because there was nothing here to render it from.
+--
+-- This is that missing field.
+--
+-- NULLABLE ON PURPOSE, and it stays that way. Existing connections genuinely do
+-- not know their environment, and a default of 'DEV' would be a guess printed as
+-- a fact on the one control whose job is to stop someone writing to production by
+-- mistake. Unknown renders no chip at all — the same rule the rest of the console
+-- follows: a capability is Activated only where a probe returned 200.
+--
+-- Non-destructive: one nullable column on an existing table.
+
+-- AlterTable
+ALTER TABLE "SapConnection" ADD COLUMN     "environment" TEXT;

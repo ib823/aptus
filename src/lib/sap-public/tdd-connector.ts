@@ -4,6 +4,12 @@ export interface SapTenant {
   key: string;
   label: string;
   baseUrl: string;
+  /**
+   * Which SAP environment this tenant is — "DEV" | "TEST" | "PROD", or any name
+   * the landscape actually uses. Optional in {PREFIX}_TENANTS_JSON; absent means
+   * unknown, and unknown is rendered as no chip rather than a guess.
+   */
+  environment?: string;
 }
 
 export interface SapServiceDefinition {
@@ -460,17 +466,30 @@ export function getConfiguredSapTenants(prefix: string = "S4_TDD"): SapTenant[] 
       if (!baseUrl) {
         throw new Error(`Tenant ${label} is missing baseUrl`);
       }
-      return { key, label, baseUrl: normalizeBaseUrl(baseUrl) };
+      // Optional: a landscape that has not declared environments keeps working,
+      // and its tenants simply carry no environment claim.
+      const environment =
+        typeof record.environment === "string" && record.environment.trim()
+          ? record.environment.trim().toUpperCase()
+          : undefined;
+      return {
+        key,
+        label,
+        baseUrl: normalizeBaseUrl(baseUrl),
+        ...(environment ? { environment } : {}),
+      };
     });
   }
 
   const baseUrl = env(prefix, "BASE_URL");
   if (!baseUrl) return [];
+  const singleEnv = env(prefix, "TENANT_ENVIRONMENT");
   return [
     {
       key: "default",
       label: env(prefix, "TENANT_LABEL") ?? "Configured Tenant",
       baseUrl: normalizeBaseUrl(baseUrl),
+      ...(singleEnv ? { environment: singleEnv.trim().toUpperCase() } : {}),
     },
   ];
 }
