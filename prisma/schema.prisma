@@ -706,6 +706,15 @@ model SolutionClient {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  /// Addressable by (organization, solution) as well as by solution alone.
+  ///
+  /// `solutionId` above is already globally unique, so this constraint adds no
+  /// new restriction on the data. It exists to give `issueClientToken` a unique
+  /// key that CONTAINS the organization: upserting on `{ solutionId }` alone
+  /// means the update branch — which rotates the token hash and revives a
+  /// revoked credential — carries no tenant in its `where`, and the boundary
+  /// lives in whichever caller looked the solution up first.
+  @@unique([organizationId, solutionId])
   @@index([organizationId])
   @@index([tokenHash])
 }

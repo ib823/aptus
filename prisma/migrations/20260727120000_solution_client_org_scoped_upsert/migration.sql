@@ -1,0 +1,32 @@
+-- A unique key on SolutionClient that contains the organization.
+--
+-- WHY. `issueClientToken` upserts on `where: { solutionId }`. The create branch
+-- stamps organizationId; the UPDATE branch does not filter by it -- and that
+-- branch rotates tokenHash, resets environment and expiresAt, and revives a
+-- revoked credential (isActive: true, revokedAt: null). So the tenant boundary
+-- for the most sensitive write in the northbound module lived in whichever
+-- caller happened to scope the solution lookup one line above it.
+--
+-- That is the exact pattern PR #169 was written to remove from eleven update
+-- calls. This is the twelfth, and it was invisible to the static scan that
+-- replaced the runtime guard, because the scan did not match `upsert`.
+--
+-- WHAT THIS CHANGES ABOUT THE DATA: nothing. `solutionId` is already globally
+-- unique, so (organizationId, solutionId) is unique for free on every existing
+-- row and the index cannot fail to build. It is a addressability change, not a
+-- constraint change: it gives the upsert a compound key whose components
+-- include the tenant, the same shape SapConnection already uses
+-- (organizationId_product_key).
+--
+-- A CONSEQUENCE WORTH NAMING. With the compound key, an upsert for a solution
+-- that belongs to ANOTHER organization no longer silently updates that row --
+-- it fails to match, attempts a create, and violates the global solutionId
+-- unique constraint. A loud error rather than a silent cross-tenant credential
+-- rotation. Unreachable through the only caller (POST /api/studio/clients
+-- re-scopes the solution and 404s first), which is why this was a latent
+-- structural defect rather than a live one.
+--
+-- Non-destructive: one additive unique index.
+
+-- CreateIndex
+CREATE UNIQUE INDEX "SolutionClient_organizationId_solutionId_key" ON "SolutionClient"("organizationId", "solutionId");

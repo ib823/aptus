@@ -1,20 +1,18 @@
 /**
  * Authentication mock helpers for testing.
- * Provides mock session objects for each of the 11 platform roles.
+ *
+ * THESE USE THE REAL `UserRole`. They used to declare their own `PlatformRole`
+ * union, which had drifted badly: it carried `executive`, `functional_head` and
+ * `change_manager` — none of which exist in the product — and lacked
+ * `data_migration_lead`'s successors and `support`. A fixture vocabulary that
+ * disagrees with production is a fixture that can prove a role safe which the
+ * application has never heard of.
  */
 
-export type PlatformRole =
-  | "platform_admin"
-  | "partner_lead"
-  | "consultant"
-  | "project_manager"
-  | "executive"
-  | "functional_head"
-  | "process_owner"
-  | "it_lead"
-  | "data_migration_lead"
-  | "change_manager"
-  | "viewer";
+import { ROLE_CAPABILITIES } from "@/lib/auth/role-permissions";
+import { ALL_USER_ROLES, type UserRole } from "@/types/assessment";
+
+export type PlatformRole = UserRole;
 
 export interface MockUser {
   id: string;
@@ -68,15 +66,15 @@ export function createMockSession(
   };
 }
 
-/** Create mock sessions for ALL 11 platform roles */
+/**
+ * Mock sessions for every role, derived from `ALL_USER_ROLES`.
+ *
+ * The previous version hand-listed eleven names, four of which were not roles.
+ * It had no callers, so nothing noticed.
+ */
 export function createAllRoleSessions(orgId = DEFAULT_ORG_ID): Record<PlatformRole, MockSession> {
-  const roles: PlatformRole[] = [
-    "platform_admin", "partner_lead", "consultant", "project_manager",
-    "executive", "functional_head", "process_owner", "it_lead",
-    "data_migration_lead", "change_manager", "viewer",
-  ];
   return Object.fromEntries(
-    roles.map((role) => [
+    ALL_USER_ROLES.map((role) => [
       role,
       createMockSession(role, { user: createMockUser(role, { organizationId: orgId }) }),
     ])
@@ -108,22 +106,30 @@ export function createCrossTenantUser(
   return createMockUser(role, { organizationId: foreignOrgId });
 }
 
-/** All platform roles as array */
-export const ALL_ROLES: PlatformRole[] = [
-  "platform_admin", "partner_lead", "consultant", "project_manager",
-  "executive", "functional_head", "process_owner", "it_lead",
-  "data_migration_lead", "change_manager", "viewer",
-];
+/**
+ * All platform roles.
+ *
+ * DERIVED. The hand-written version listed `executive`, `functional_head` and
+ * `change_manager` — none of which are roles — and omitted `solution_architect`,
+ * `client_admin`, `executive_sponsor` and `support`, which are. The security
+ * suite imports this list to assert that non-sign-off roles cannot sign off, so
+ * for four real roles that assertion was never made, and for three imaginary
+ * ones it was made about nothing.
+ */
+export const ALL_ROLES: PlatformRole[] = [...ALL_USER_ROLES];
 
-/** Roles that can write (non-viewer) */
-export const WRITE_ROLES: PlatformRole[] = ALL_ROLES.filter((r) => r !== "viewer");
+/**
+ * Roles that may edit assessment content, and roles that may sign off.
+ *
+ * Taken from the production capability map rather than restated. The previous
+ * `WRITE_ROLES` was "everything except viewer", which is wrong in the direction
+ * that matters — it asserted write access for six roles that do not have it,
+ * `support` among them.
+ */
+export const WRITE_ROLES: PlatformRole[] = ALL_ROLES.filter(
+  (r) => ROLE_CAPABILITIES[r].canEditStepResponses,
+);
 
-/** Roles that can classify steps */
-export const CLASSIFY_ROLES: PlatformRole[] = [
-  "consultant", "process_owner", "functional_head",
-];
-
-/** Roles that can sign off */
-export const SIGNOFF_ROLES: PlatformRole[] = [
-  "executive", "partner_lead",
-];
+export const SIGNOFF_ROLES: PlatformRole[] = ALL_ROLES.filter(
+  (r) => ROLE_CAPABILITIES[r].canSignOff,
+);
