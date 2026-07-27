@@ -42,6 +42,32 @@ export const STUDIO_SECTIONS: readonly StudioSection[] = [
   { key: "test", label: "Test Console", href: "/studio/test", available: true },
 ] as const;
 
+/**
+ * Operations Center sections. `available` is flipped on as each screen's PR
+ * lands, exactly like Studio's — the rail never links somewhere that does not
+ * exist yet, it says "not yet" instead.
+ */
+export const OPERATIONS_SECTIONS: readonly StudioSection[] = [
+  { key: "home", label: "Home", href: "/operations", available: true },
+  { key: "traffic", label: "Broker traffic", href: "/operations/traffic", available: false },
+  { key: "writes", label: "Write ledger", href: "/operations/writes", available: false },
+  { key: "connections", label: "Connections", href: "/operations/connections", available: false },
+  { key: "freshness", label: "Catalogue freshness", href: "/operations/freshness", available: false },
+  { key: "throttle", label: "Throttle", href: "/operations/throttle", available: false },
+  { key: "tokens", label: "Tokens", href: "/operations/tokens", available: false },
+  { key: "incidents", label: "Incidents", href: "/operations/incidents", available: false },
+] as const;
+
+/** Control Tower sections, same discipline. */
+export const CONTROL_TOWER_SECTIONS: readonly StudioSection[] = [
+  { key: "home", label: "Home", href: "/control-tower", available: true },
+  { key: "portfolio", label: "Solution portfolio", href: "/control-tower/portfolio", available: false },
+  { key: "grants", label: "Access governance", href: "/control-tower/grants", available: false },
+  { key: "audit", label: "Governance audit", href: "/control-tower/audit", available: false },
+  { key: "connections", label: "Connection register", href: "/control-tower/connections", available: false },
+  { key: "tokens", label: "Credential register", href: "/control-tower/tokens", available: false },
+] as const;
+
 const RAIL_WIDTH = 220;
 
 function itemStyle(active: boolean, enabled: boolean): React.CSSProperties {
