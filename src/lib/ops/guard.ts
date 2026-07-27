@@ -1,0 +1,94 @@
+/**
+ * The shared preamble for every /api/ops/* read.
+ *
+ * WHAT IT GUARANTEES, in this order, before any query can run:
+ *
+ *   1. Authenticated.
+ *   2. Entitled to the Operations Center (`support`, or an admin for oversight).
+ *   3. Carrying a tenant — or an admin, who may legitimately have none.
+ *
+ * WHY A HELPER RATHER THAN A CONVENTION. Every endpoint behind it reads a feed
+ * of live customer SAP activity. Repeating three checks across seven routes is
+ * how the fourth one ends up with two, and the omission is invisible in review
+ * because the route still works — it just works for the wrong people.
+ *
+ * THE ADMIN BRANCH IS EXPLICIT, NOT A FALLTHROUGH. A platform_admin may hold a
+ * null organization, and the honest reading of "show me the traffic" for such a
+ * caller is "all of it". That is a real capability and it is returned as its own
+ * shape (`scope: null`), so a route has to handle it deliberately. The failure
+ * this avoids: a helper that returns an empty filter for an admin and is then
+ * spread into a `where`, making an unscoped read look identical to a scoped one
+ * at the call site.
+ */
+
+import { getCurrentUser } from "@/lib/auth/session";
+import { studioError } from "@/lib/studio/api";
+import { canAccessOperations } from "@/lib/studio/rbac";
+import { tenantScopeFor, type TenantScope } from "@/lib/studio/tenant-scope";
+
+export type OpsActor =
+  /** A tenant-bound caller. Every query MUST go through this scope. */
+  | { kind: "scoped"; scope: TenantScope; organizationId: string; userId: string }
+  /** A global admin with no organization. Reads across tenants, deliberately. */
+  | { kind: "global"; scope: null; organizationId: null; userId: string };
+
+export type OpsGuardResult =
+  | { ok: true; actor: OpsActor }
+  | { ok: false; response: ReturnType<typeof studioError> };
+
+export async function requireOperations(): Promise<OpsGuardResult> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { ok: false, response: studioError("UNAUTHENTICATED", "Sign in required.") };
+  }
+  if (!canAccessOperations(user.role)) {
+    return { ok: false, response: studioError("FORBIDDEN", "Operations Center is role-gated.") };
+  }
+
+  const scoped = tenantScopeFor(user);
+  if (scoped.ok) {
+    return {
+      ok: true,
+      actor: {
+        kind: "scoped",
+        scope: scoped.scope,
+        organizationId: scoped.scope.organizationId,
+        userId: user.id,
+      },
+    };
+  }
+
+  // Only an admin may read without a tenant. Everyone else is refused here,
+  // BEFORE a query runs — never allowed to fall through to an unscoped read.
+  if (scoped.reason === "ADMIN_WITHOUT_ORGANIZATION") {
+    return { ok: true, actor: { kind: "global", scope: null, organizationId: null, userId: user.id } };
+  }
+
+  return { ok: false, response: studioError("FORBIDDEN", "No organization scope.") };
+}
+
+/**
+ * The organization filter for a query, as an object to spread into a `where`.
+ *
+ * `{}` for a global admin is correct and is the ONLY place that widening is
+ * expressible — which is why it lives here, next to the type that forced the
+ * caller to acknowledge the two cases, rather than being reachable by
+ * forgetting a field.
+ */
+export function opsOrgFilter(actor: OpsActor): { organizationId?: string } {
+  return actor.kind === "scoped" ? { organizationId: actor.organizationId } : {};
+}
+
+/** Clamp a caller-supplied window to something a dashboard can actually plot. */
+export function opsWindowHours(raw: string | null, fallback = 24): number {
+  const n = Number.parseInt(raw ?? "", 10);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(n, 24 * 30);
+}
+
+/** Clamp a caller-supplied row limit. Silent truncation is never acceptable. */
+export function opsLimit(raw: string | null, fallback = 100, max = 500): number {
+  const n = Number.parseInt(raw ?? "", 10);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(n, max);
+}
