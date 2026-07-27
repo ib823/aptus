@@ -34,7 +34,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     return unauthenticated(correlationId);
   }
   const client = auth.client;
-  void touchClientLastUsed(client.clientId);
+  void touchClientLastUsed(client.clientId, client.organizationId);
 
   const { id } = await ctx.params;
 

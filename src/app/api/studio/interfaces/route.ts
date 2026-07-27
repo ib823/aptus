@@ -211,7 +211,7 @@ export async function PATCH(request: NextRequest) {
     (input.entitySet !== undefined && nextEntitySet !== current.entitySet);
 
   const updated = await prisma.interface.update({
-    where: { id: current.id },
+    where: { id: current.id, organizationId },
     data: {
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),

@@ -149,3 +149,55 @@ describe("the guarded model list", () => {
     }
   });
 });
+
+/* ── the one deliberate hole, and how narrow it is ───────────────────────────
+ *
+ * `authenticateClientToken` looks a client up BY TOKEN HASH. It cannot carry an
+ * organization, because the organization is the OUTPUT of that lookup — it is
+ * how a bearer token becomes a tenant at all. Requiring a scope there would be
+ * circular, so the guard exempts exactly that one query shape.
+ *
+ * These tests exist to stop the exemption widening. It is safe only because
+ * `SolutionClient.tokenHash` is @unique: the query can return one row, the row
+ * whose hash the caller already presented. Anything looser is a scan.
+ */
+describe("the tokenHash exemption", () => {
+  const guard = tenantScopeGuard();
+
+  async function run(model: string, operation: string, args: unknown) {
+    const q = guard.query.$allModels.$allOperations;
+    return q({ model, operation, args, query: async (a: unknown) => a });
+  }
+
+  it("permits the token lookup that cannot be scoped", async () => {
+    await expect(
+      run("SolutionClient", "findUnique", { where: { tokenHash: "abc" } }),
+    ).resolves.toBeTruthy();
+  });
+
+  it("does NOT extend to findFirst, which could be widened into a scan", async () => {
+    await expect(
+      run("SolutionClient", "findFirst", { where: { tokenHash: "abc" } }),
+    ).rejects.toBeInstanceOf(MissingTenantScopeError);
+  });
+
+  it("does NOT extend to a where that merely mentions tokenHash", async () => {
+    // Anything beyond the single unique field can select more than one row.
+    await expect(
+      run("SolutionClient", "findUnique", { where: { tokenHash: "abc", isActive: true } }),
+    ).rejects.toBeInstanceOf(MissingTenantScopeError);
+  });
+
+  it("does NOT extend to other models", async () => {
+    await expect(
+      run("Solution", "findUnique", { where: { tokenHash: "abc" } }),
+    ).rejects.toBeInstanceOf(MissingTenantScopeError);
+  });
+
+  it("does NOT let an update by token hash through", async () => {
+    // Reading by a presented secret is defensible; mutating by one is not.
+    await expect(
+      run("SolutionClient", "update", { where: { tokenHash: "abc" } }),
+    ).rejects.toBeInstanceOf(MissingTenantScopeError);
+  });
+});

@@ -182,6 +182,33 @@ function whereHasOrganization(args: unknown): boolean {
   return JSON.stringify(where).includes("organizationId");
 }
 
+/**
+ * The ONE query that cannot carry a tenant, and why.
+ *
+ * `authenticateClientToken` looks a client up BY ITS TOKEN HASH. There is no
+ * organization to scope it to, because the organization is the OUTPUT of this
+ * lookup — it is how an unauthenticated bearer token becomes a tenant at all.
+ * Requiring a scope here would be circular.
+ *
+ * It is safe for exactly one reason: `SolutionClient.tokenHash` is `@unique`, so
+ * this can only ever return the single row whose hash was presented. It is not a
+ * scan, and it cannot be widened into one — a caller who does not already hold
+ * the token learns nothing.
+ *
+ * Deliberately narrow: model, operation AND the exact shape of the where-clause
+ * must all match. A `findUnique` on SolutionClient by anything else, or a
+ * `findFirst` that happens to mention tokenHash, is not exempt. Greppable on
+ * purpose — this is the only hole in the guard and it should stay findable.
+ */
+function isUnscopedByDesign(model: string, operation: string, args: unknown): boolean {
+  if (model !== "SolutionClient" || operation !== "findUnique") return false;
+  if (!args || typeof args !== "object") return false;
+  const where = (args as { where?: unknown }).where;
+  if (!where || typeof where !== "object") return false;
+  const keys = Object.keys(where as Record<string, unknown>);
+  return keys.length === 1 && keys[0] === "tokenHash";
+}
+
 export class MissingTenantScopeError extends Error {
   constructor(model: string, operation: string) {
     super(
@@ -215,7 +242,8 @@ export function tenantScopeGuard() {
             model &&
             (TENANT_ANCHORED_MODELS as readonly string[]).includes(model) &&
             SCOPED_OPERATIONS.has(operation) &&
-            !whereHasOrganization(args)
+            !whereHasOrganization(args) &&
+            !isUnscopedByDesign(model, operation, args)
           ) {
             throw new MissingTenantScopeError(model, operation);
           }
