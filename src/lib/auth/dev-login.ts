@@ -58,6 +58,25 @@ export const TEST_USERS: readonly TestUser[] = [
     description: "Day-to-day workshop driver. The most common role to test.",
   },
   {
+    email: "consultant-two@abeam.test",
+    name: "Consultant (second)",
+    role: "consultant",
+    // TWO CONSULTANTS, BECAUSE THE DEVELOPER LOOP GENUINELY NEEDS TWO PEOPLE.
+    //
+    // Segregation of duties is enforced twice, and both gates are correct:
+    // `POST /api/studio/clients` refuses to issue a credential to someone who
+    // owns the solution, and `evaluateDecision` refuses to let a requester
+    // approve their own grant. Only `consultant` can reach either route.
+    //
+    // With one consultant fixture the two gates were jointly unsatisfiable, so
+    // the loop could not be walked end to end without editing the database —
+    // which reads as "the product is broken" rather than "the product is
+    // governed". This is a FIXTURE gap, not a design one: nothing here weakens
+    // either refusal, and the demo is more convincing with them intact.
+    description:
+      "Second builder. Needed to walk the full loop: one consultant owns the solution and requests access, the other issues the credential and approves the grant.",
+  },
+  {
     email: "project-manager@abeam.test",
     name: "Project Manager",
     role: "project_manager",

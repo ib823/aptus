@@ -55,6 +55,8 @@ function groupsBy(config: Record<string, unknown[]>) {
 
 import { GET as brokerTraffic } from "@/app/api/ops/broker-traffic/route";
 import { GET as connectionsHealth } from "@/app/api/ops/connections-health/route";
+import { GET as incidents } from "@/app/api/ops/incidents/route";
+import { GET as throttle } from "@/app/api/ops/throttle/route";
 import { GET as tokens } from "@/app/api/ops/tokens/route";
 import { GET as writeLedger } from "@/app/api/ops/write-ledger/route";
 
@@ -67,11 +69,18 @@ function req(url = "https://x.test/api/ops/broker-traffic") {
   return new NextRequest(url);
 }
 
+/**
+ * Every Ops route, so the gate and scoping assertions below iterate rather than
+ * being written per route. A new endpoint that is not added here is not covered
+ * — which is the point: adding it is one line, and forgetting it is visible.
+ */
 const ROUTES = [
   ["broker-traffic", () => brokerTraffic(req())],
   ["write-ledger", () => writeLedger(req("https://x.test/api/ops/write-ledger"))],
   ["connections-health", () => connectionsHealth()],
   ["tokens", () => tokens(req("https://x.test/api/ops/tokens"))],
+  ["throttle", () => throttle(req("https://x.test/api/ops/throttle"))],
+  ["incidents", () => incidents(req("https://x.test/api/ops/incidents"))],
 ] as const;
 
 beforeEach(() => {

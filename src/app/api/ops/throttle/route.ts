@@ -1,0 +1,169 @@
+/**
+ * GET /api/ops/throttle — how much of each rate-limit budget is left.
+ *
+ * THIS ENDPOINT READS THE BUDGET WITHOUT SPENDING IT. The obvious way to build
+ * a throttle gauge is `checkRateLimit`, and it would be wrong: that function
+ * CONSUMES a token. A dashboard polling it would eat the budget it displays,
+ * and on the northbound bucket — 60 per minute, per credential — a console left
+ * open would manufacture the 429s it exists to warn about. `peekRateLimit` uses
+ * Upstash's `getRemaining` and, on the in-memory path, counts the window without
+ * pushing to it.
+ *
+ * TWO KINDS OF BUCKET, AND THEY ARE NOT INTERCHANGEABLE.
+ *
+ *   PER CREDENTIAL — `northbound:{clientId}` and `northbound-write:{clientId}`.
+ *   Keyed by the client token, so a runaway or leaked credential throttles only
+ *   itself. These are observable: we know every credential in the tenant, so we
+ *   can ask for each one's headroom, and a 429 on these paths reaches the route
+ *   and is written to the audit trail.
+ *
+ *   PER CLIENT IP — the middleware's `api:{METHOD}:{ip}` buckets. These fire
+ *   BEFORE the route runs, so nothing is persisted and no audit row exists. They
+ *   are also keyed by an address we cannot enumerate. So they are reported as
+ *   CONFIGURATION ONLY, with `observable: false` — never as a per-tenant figure.
+ *   Calling an IP-keyed limit "this customer's throttle" would be a fabrication,
+ *   and a particularly convincing one.
+ *
+ * WHAT A NULL MEANS. `peekRateLimit` returns null when the shared backend is
+ * unreachable. That is rendered as unknown, never as zero: zero would read as
+ * "this credential is throttled right now", which is a claim about a customer's
+ * traffic that we would be making up during our own outage.
+ */
+
+import type { NextRequest } from "next/server";
+
+import { prisma } from "@/lib/db/prisma";
+import { opsWhere, opsWindowHours, requireOperations } from "@/lib/ops/guard";
+import { peekRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
+import { studioOk } from "@/lib/studio/api";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * The buckets a northbound call actually passes, in the order it meets them.
+ *
+ * Named here rather than described in prose so the response cannot drift from
+ * the configuration: every limit below is read from RATE_LIMITS, not restated.
+ */
+export const THROTTLE_BUCKETS = [
+  {
+    id: "edge-read",
+    key: "api:GET:{clientIp}",
+    keyedBy: "client IP" as const,
+    config: RATE_LIMITS.apiRead,
+    observable: false,
+    note: "Middleware bucket, applied before the route runs. A 429 here never reaches the broker and is never audited.",
+  },
+  {
+    id: "edge-write",
+    key: "api:POST:{clientIp}",
+    keyedBy: "client IP" as const,
+    config: RATE_LIMITS.apiMutation,
+    observable: false,
+    note: "Middleware bucket, applied before the route runs. A 429 here never reaches the broker and is never audited.",
+  },
+  {
+    id: "northbound-read",
+    key: "northbound:{clientId}",
+    keyedBy: "credential" as const,
+    config: RATE_LIMITS.northbound,
+    observable: true,
+    note: "Per credential. A 429 here is written to the audit trail.",
+  },
+  {
+    id: "northbound-write",
+    key: "northbound-write:{clientId}",
+    keyedBy: "credential" as const,
+    config: RATE_LIMITS.northbound,
+    observable: true,
+    note: "Per credential. A 429 here is written to the audit trail.",
+  },
+] as const;
+
+export async function GET(request: NextRequest) {
+  const guard = await requireOperations();
+  if (!guard.ok) return guard.response;
+
+  const hours = opsWindowHours(request.nextUrl.searchParams.get("hours"));
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+  // Only live credentials: a revoked one has no budget worth reporting, and
+  // listing it would imply it could still be called.
+  const credentials = await prisma.solutionClient.findMany({
+    where: opsWhere(guard.actor, { isActive: true, revokedAt: null }),
+    select: { id: true, solutionId: true, label: true, environment: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const [throttled429, headroom] = await Promise.all([
+    prisma.northboundAuditEvent.groupBy({
+      by: ["clientTokenId", "operation"],
+      where: opsWhere(guard.actor, { status: 429, at: { gte: since } }),
+      _count: { _all: true },
+    }),
+    Promise.all(
+      credentials.map(async (c) => ({
+        clientId: c.id,
+        read: await peekRateLimit(`northbound:${c.id}`, RATE_LIMITS.northbound),
+        write: await peekRateLimit(`northbound-write:${c.id}`, RATE_LIMITS.northbound),
+      })),
+    ),
+  ]);
+
+  const headroomById = new Map(headroom.map((h) => [h.clientId, h]));
+  const throttledById = new Map<string, number>();
+  for (const g of throttled429) {
+    throttledById.set(g.clientTokenId, (throttledById.get(g.clientTokenId) ?? 0) + g._count._all);
+  }
+
+  /** null remaining → unknown. Never rendered as a number. */
+  function budget(peek: { remaining: number; limit: number } | null) {
+    if (peek === null) {
+      return { known: false as const, remaining: null, limit: RATE_LIMITS.northbound.limit };
+    }
+    return { known: true as const, remaining: peek.remaining, limit: peek.limit };
+  }
+
+  const anyUnknown = headroom.some((h) => h.read === null || h.write === null);
+
+  return studioOk({
+    windowHours: hours,
+    since: since.toISOString(),
+    scope: guard.actor.kind,
+    buckets: THROTTLE_BUCKETS.map((b) => ({
+      id: b.id,
+      key: b.key,
+      keyedBy: b.keyedBy,
+      limit: b.config.limit,
+      windowMs: b.config.windowMs,
+      observable: b.observable,
+      note: b.note,
+    })),
+    credentials: credentials.map((c) => {
+      const h = headroomById.get(c.id);
+      return {
+        clientId: c.id,
+        solutionId: c.solutionId,
+        label: c.label,
+        environment: c.environment,
+        read: budget(h?.read ?? null),
+        write: budget(h?.write ?? null),
+        /** Real 429s on this credential in the window, from the audit trail. */
+        throttledInWindow: throttledById.get(c.id) ?? 0,
+      };
+    }),
+    provenance: {
+      nonConsumingRead: true,
+      why: "Headroom is read with getRemaining, which does not spend a token. A gauge built on the consuming check would eat the budget it displays and could create the 429s it warns about.",
+      edgeBucketsAreNotObservable:
+        "The two IP-keyed middleware buckets fire before the route and persist nothing, and their key is an address we cannot enumerate. Their limits are reported as configuration; no per-tenant usage figure for them exists or can be inferred.",
+      unknownRatherThanZero: anyUnknown
+        ? "The shared rate-limit backend did not answer for at least one credential. Those are reported as unknown, not as zero — a zero would read as 'throttled right now'."
+        : null,
+      inMemoryFallback:
+        "With no shared backend configured, limits are per serverless instance, so headroom reflects one instance rather than the deployment.",
+      throttleCountsAreAFloor:
+        "throttledInWindow counts audited 429s only. A call refused by an edge bucket never reached the broker and is not in this number.",
+    },
+  });
+}
