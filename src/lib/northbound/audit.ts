@@ -44,6 +44,14 @@ export interface NorthboundAuditInput {
    */
   connectionId?: string | null;
   connectionEnvironment?: string | null;
+  /**
+   * Wall-clock milliseconds the UPSTREAM call took.
+   *
+   * Null when no upstream call was made — refused at auth, throttle, the grant
+   * gate or the connection binding. That is the honest value: there is no
+   * duration for a request that never left. A zero would claim the opposite.
+   */
+  durationMs?: number | null;
 }
 
 export async function recordNorthboundCall(input: NorthboundAuditInput): Promise<void> {
@@ -62,6 +70,7 @@ export async function recordNorthboundCall(input: NorthboundAuditInput): Promise
         clientTokenId: input.clientTokenId,
         connectionId: input.connectionId ?? null,
         connectionEnvironment: input.connectionEnvironment ?? null,
+        durationMs: input.durationMs ?? null,
       },
     });
   } catch (err) {

@@ -79,6 +79,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     // refusal that happens before that point, which is itself the truth: no
     // connection was involved.
     conn?: { id: string; environment: string | null },
+    durationMs?: number,
   ) =>
     recordNorthboundCall({
       organizationId: client.organizationId,
@@ -93,6 +94,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       clientTokenId: client.clientId,
       connectionId: conn?.id ?? null,
       connectionEnvironment: conn?.environment ?? null,
+      durationMs: durationMs ?? null,
     });
 
   // 2 — the WRITE credential. A separate secret from the bearer token, so a
@@ -237,13 +239,15 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     );
   }
 
-  // 8 — write.
+  // 8 — write. Timed around the upstream call only — see the read route.
+  const startedAt = Date.now();
   const result = await writeEntitySet({
     connection,
     servicePath: service.path,
     entitySet,
     payload: parsed.data.record,
   });
+  const durationMs = Date.now() - startedAt;
   const status = writeHttpStatusFor(result.status);
 
   const responseBody =
@@ -254,7 +258,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   // Record the outcome — including failures, so a retry replays the same refusal
   // rather than attempting the write again.
   await completeIdempotencyKey(reservation.recordId, status, responseBody);
-  await audit(status, iface.id, iface.externalId, connection);
+  await audit(status, iface.id, iface.externalId, connection, durationMs);
 
   if (status >= 400) {
     const code =
