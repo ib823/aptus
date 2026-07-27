@@ -158,15 +158,17 @@ describe("what does authenticate", () => {
 });
 
 describe("lastUsedAt", () => {
-  it("records usage", async () => {
-    await touchClientLastUsed("client_1");
+  it("records usage, scoped to the organization as well as the id", async () => {
+    // The id alone would be a bare-id update on a tenant-anchored model: the
+    // update now re-asserts the tenant rather than trusting whoever passed the id.
+    await touchClientLastUsed("client_1", "org_a");
     expect(mocks.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: "client_1" } }),
+      expect.objectContaining({ where: { id: "client_1", organizationId: "org_a" } }),
     );
   });
 
   it("never throws — a bookkeeping failure must not fail a read", async () => {
     mocks.update.mockRejectedValue(new Error("db down"));
-    await expect(touchClientLastUsed("client_1")).resolves.toBeUndefined();
+    await expect(touchClientLastUsed("client_1", "org_a")).resolves.toBeUndefined();
   });
 });

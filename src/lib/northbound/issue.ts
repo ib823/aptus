@@ -111,7 +111,7 @@ export async function rotateClientToken(
 
   const rawToken = generateClientToken();
   const row = await prisma.solutionClient.update({
-    where: { id: existing.id },
+    where: { id: existing.id, organizationId: scope.organizationId },
     data: {
       tokenHash: hashClientToken(rawToken),
       // Rotating an inactive or revoked credential brings it back — that is what
@@ -143,7 +143,7 @@ export async function revokeClientToken(
   if (!existing) return null;
 
   return prisma.solutionClient.update({
-    where: { id: existing.id },
+    where: { id: existing.id, organizationId: scope.organizationId },
     data: { isActive: false, revokedAt: new Date() },
     select: {
       id: true,

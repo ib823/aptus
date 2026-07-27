@@ -198,7 +198,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   const updated = await prisma.apiAccessGrant.update({
-    where: { id: grant.id },
+    where: { id: grant.id, organizationId },
     data: {
       decision: input.decision,
       decidedById: user.id,

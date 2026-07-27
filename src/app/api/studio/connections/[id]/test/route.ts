@@ -63,7 +63,7 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
   const result = await probeConnection(resolved);
 
   await prisma.sapConnection.update({
-    where: { id: row.id },
+    where: { id: row.id, organizationId },
     data: {
       lastValidationStatus: result.status,
       // Only a real 200 updates the timestamp (see rule 1).
