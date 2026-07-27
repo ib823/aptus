@@ -13,6 +13,9 @@ import { describe, expect, it } from "vitest";
 import {
   WORKSPACES,
   accessibleWorkspaces,
+  canAccessControlTower,
+  canAccessOperations,
+  canMutateControlTower,
   canAccessStudio,
   canMutateStudio,
   isStudioBuilder,
@@ -120,5 +123,78 @@ describe("lacksStudioTenantScope", () => {
 
   it("exempts platform_admin, which may legitimately carry a null organization", () => {
     expect(lacksStudioTenantScope({ organizationId: null, role: "platform_admin" })).toBe(false);
+  });
+});
+
+/* ── the three-workspace matrix ──────────────────────────────────────────────
+ *
+ * The Console is one app with three RBAC-gated workspaces. These pin who opens
+ * which, because the failure mode is silent: a helper that quietly widens gives
+ * a persona a workspace nobody decided it should have, and every screen inside
+ * then looks like it was meant for them.
+ */
+describe("the support persona", () => {
+  it("opens the Operations Center and NOTHING else", () => {
+    expect(canAccessOperations("support")).toBe(true);
+    expect(canAccessStudio("support")).toBe(false);
+    expect(canAccessControlTower("support")).toBe(false);
+    expect(accessibleWorkspaces("support")).toEqual(["operations-center"]);
+  });
+
+  it("cannot mutate anywhere — it watches the running system, it does not change it", () => {
+    expect(canMutateStudio("support")).toBe(false);
+    expect(canMutateControlTower("support")).toBe(false);
+  });
+});
+
+describe("Control Tower entitlement", () => {
+  it("admits platform_admin as owner", () => {
+    expect(canAccessControlTower("platform_admin")).toBe(true);
+    expect(canMutateControlTower("platform_admin")).toBe(true);
+  });
+
+  it("admits the read-only viewers, and lets none of them mutate", () => {
+    for (const role of ["partner_lead", "executive_sponsor", "project_manager"]) {
+      expect(canAccessControlTower(role), `${role} must read Control Tower`).toBe(true);
+      expect(canMutateControlTower(role), `${role} must not mutate`).toBe(false);
+    }
+  });
+
+  it("locks everyone else out", () => {
+    for (const role of ["consultant", "support", "solution_architect", "process_owner", "it_lead", "viewer", "client_admin"]) {
+      expect(canAccessControlTower(role), `${role} must not reach Control Tower`).toBe(false);
+    }
+  });
+
+  it("does NOT widen canMutateStudio — the admin decision path is a new capability", () => {
+    // Control Tower's grant decision is admin-only and lives on its own helper.
+    // Studio's mutations stay the builder's; conflating them would hand an admin
+    // every Studio mutation as a side effect of gaining Control Tower.
+    expect(canMutateControlTower("platform_admin")).toBe(true);
+    expect(canMutateStudio("platform_admin")).toBe(false);
+  });
+});
+
+describe("no role can widen its own access", () => {
+  it("rejects unknown, empty and tampered role strings everywhere", () => {
+    // "SUPPORT" and "platform_admin " (trailing space) matter most: role checks
+    // are exact-match, and a near-miss must fail closed rather than normalise
+    // itself into an entitlement. Unknown strings resolve to `viewer`.
+    for (const role of ["", "superuser", "SUPPORT", "platform_admin ", "support ", null, undefined]) {
+      expect(canAccessOperations(role as string), `${String(role)}`).toBe(false);
+      expect(canAccessControlTower(role as string), `${String(role)}`).toBe(false);
+      expect(canMutateControlTower(role as string), `${String(role)}`).toBe(false);
+      expect(accessibleWorkspaces(role as string), `${String(role)}`).toEqual([]);
+    }
+  });
+
+  it("still honours the documented legacy alias, and only that one", () => {
+    // `admin` is a real legacy value mapped to platform_admin in LEGACY_ROLE_MAP,
+    // not a tampered string — so it legitimately carries admin entitlement. This
+    // is pinned rather than left implicit, because "why does 'admin' work?" is
+    // otherwise answered by reading three files.
+    expect(canAccessOperations("admin")).toBe(true);
+    expect(canAccessControlTower("admin")).toBe(true);
+    expect(canMutateControlTower("admin")).toBe(true);
   });
 });

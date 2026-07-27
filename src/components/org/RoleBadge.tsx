@@ -16,6 +16,7 @@ const ROLE_COLORS: Record<UserRole, string> = {
   executive_sponsor: "bg-rose-50 text-rose-700",
   viewer: "bg-slate-50 text-slate-700",
   client_admin: "bg-pink-50 text-pink-700",
+  support: "bg-stone-50 text-stone-700",
 };
 
 interface RoleBadgeProps {
