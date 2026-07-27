@@ -11,7 +11,23 @@
 
 import { PrismaClient } from "@prisma/client";
 
+import { ALL_USER_ROLES } from "../src/types/assessment";
+
 const prisma = new PrismaClient();
+
+/**
+ * Every current role, derived — never re-listed here.
+ *
+ * This file carried two hand-written copies of the role names, and both stopped
+ * at eleven when `support` was added as the twelfth. The consequence was not
+ * cosmetic: `alreadyMigrated` under-counted, and every support user in the
+ * database was printed as `⚠ Unrecognized role` and skipped. A migration script
+ * that reports a real role as unrecognised invites someone to "fix" it.
+ *
+ * `ALL_USER_ROLES` is `Object.keys` of a `Record<UserRole, …>`, so the compiler
+ * refuses the next role until the union declares it.
+ */
+const CURRENT_ROLES: string[] = [...ALL_USER_ROLES];
 
 const LEGACY_ROLE_MAP: Record<string, string> = {
   admin: "platform_admin",
@@ -102,24 +118,12 @@ async function main() {
 
   // 3. Check for users with roles that are already new-system
   const alreadyMigrated = await prisma.user.count({
-    where: {
-      role: {
-        in: [
-          "platform_admin", "partner_lead", "consultant", "project_manager",
-          "solution_architect", "process_owner", "it_lead", "data_migration_lead",
-          "executive_sponsor", "viewer", "client_admin",
-        ],
-      },
-    },
+    where: { role: { in: CURRENT_ROLES } },
   });
 
   // Check for unrecognized roles
   const allUsers = await prisma.user.findMany({ select: { role: true } });
-  const validRoles = new Set([
-    "platform_admin", "partner_lead", "consultant", "project_manager",
-    "solution_architect", "process_owner", "it_lead", "data_migration_lead",
-    "executive_sponsor", "viewer", "client_admin",
-  ]);
+  const validRoles = new Set(CURRENT_ROLES);
   for (const u of allUsers) {
     if (!validRoles.has(u.role)) {
       console.warn(`  ⚠ Unrecognized role: "${u.role}"`);

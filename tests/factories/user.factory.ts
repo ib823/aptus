@@ -1,5 +1,7 @@
 import type { User } from "@prisma/client";
 
+import { ALL_USER_ROLES } from "@/types/assessment";
+
 let counter = 0;
 const nextId = () => `test-${++counter}`;
 
@@ -62,17 +64,11 @@ export function createAllRoles(
   orgId: string,
   overrides: UserOverrides = {},
 ): Record<string, User> {
-  const roles = [
-    "platform_admin",
-    "partner_admin",
-    "partner_manager",
-    "consultant",
-    "client_admin",
-    "client_sponsor",
-    "process_owner",
-    "it_lead",
-    "viewer",
-  ];
+  // Derived, not listed. The hand-written version carried `partner_admin`,
+  // `partner_manager` and `client_sponsor` — none of which are `UserRole`
+  // values — and omitted five that are, including `support`. A factory that
+  // manufactures roles the application cannot produce tests nothing.
+  const roles: readonly string[] = ALL_USER_ROLES;
   const result: Record<string, User> = {};
   for (const role of roles) {
     result[role] = createForRole(role, orgId, overrides);

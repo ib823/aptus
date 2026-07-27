@@ -90,6 +90,22 @@ npx tsc --noEmit -p .                 # ~30s — strict type-check
 
 If `next build` fails locally, **fix it before pushing**. Vercel runs the same command — if it fails locally it'll fail there, and you'll have polluted the deployment history.
 
+### Never pipe a command whose exit code you are relying on
+
+Run verification commands bare. `pnpm typecheck:strict`, not `pnpm typecheck:strict | grep "error TS"`.
+
+A pipeline reports the exit status of its **last** command, so `grep` finding nothing looks exactly like `tsc` finding nothing. That is not a hypothetical: `tsc --noEmit --strict` on this repo exhausted the default Node heap and aborted with `FATAL ERROR: Ineffective mark-compacts near heap limit` and exit 134 — and because the habitual invocation piped through `grep`, a crashed run and a clean run printed the same nothing. For an unknown period the local type check was **not running at all** while appearing to pass. It was found by planting `const x: number = "string"` in a file and watching the checker report zero errors.
+
+The heap limit is fixed (`NODE_OPTIONS=--max-old-space-size=4096` is in the script now, matching `build`). The habit is what recurs, so:
+
+```bash
+pnpm typecheck:strict                 # exit code is the answer
+pnpm typecheck:strict; echo "EXIT=$?" # if you want it stated
+pnpm typecheck:strict > tsc.log 2>&1; echo "EXIT=$?"   # redirect, don't pipe
+```
+
+CI was never affected — `.github/workflows/ci.yml` runs the script unpiped, so exit 134 fails the job. This is about local runs being trusted as evidence.
+
 ## Commit style
 
 - Imperative present tense: `feat(report): add Findings PDF` (not `added`)

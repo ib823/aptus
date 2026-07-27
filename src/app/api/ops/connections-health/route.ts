@@ -27,7 +27,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
-import { opsOrgFilter, requireOperations } from "@/lib/ops/guard";
+import { opsWhere, requireOperations } from "@/lib/ops/guard";
 import { studioOk } from "@/lib/studio/api";
 
 export const dynamic = "force-dynamic";
@@ -40,22 +40,29 @@ export async function GET() {
   const guard = await requireOperations();
   if (!guard.ok) return guard.response;
 
-  const rows = await prisma.sapConnection.findMany({
-    where: { ...opsOrgFilter(guard.actor), isActive: true },
-    select: {
-      id: true,
-      organizationId: true,
-      product: true,
-      key: true,
-      label: true,
-      environment: true,
-      writeEnabled: true,
-      lastValidationStatus: true,
-      lastValidatedAt: true,
-      createdAt: true,
-    },
-    orderBy: [{ product: "asc" }, { createdAt: "asc" }],
-  });
+  // Deactivated connections are excluded from the list AND counted, so the
+  // exclusion is visible on the response rather than being a filter a reader has
+  // to find in the source. Every other omission in this module is declared in a
+  // provenance block; this one was not.
+  const [rows, inactive] = await Promise.all([
+    prisma.sapConnection.findMany({
+      where: opsWhere(guard.actor, { isActive: true }),
+      select: {
+        id: true,
+        organizationId: true,
+        product: true,
+        key: true,
+        label: true,
+        environment: true,
+        writeEnabled: true,
+        lastValidationStatus: true,
+        lastValidatedAt: true,
+        createdAt: true,
+      },
+      orderBy: [{ product: "asc" }, { createdAt: "asc" }],
+    }),
+    prisma.sapConnection.count({ where: opsWhere(guard.actor, { isActive: false }) }),
+  ]);
 
   const byStatus: Record<string, number> = {};
   let healthy = 0;
@@ -92,6 +99,14 @@ export async function GET() {
       unknown,
       neverTested,
       byStatus,
+    },
+    provenance: {
+      // Named because a deactivated connection still exists and can be
+      // reactivated, so "we have 3 connections" and "3 are listed here" are
+      // different claims.
+      activeOnly: true,
+      excludedInactive: inactive,
+      why: "A deactivated connection serves no traffic, so its probe status would be a stale claim about a system nothing is calling.",
     },
     bindingBacklog: {
       // Presented as work with a route to remediation, not a status. A count

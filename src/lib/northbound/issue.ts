@@ -70,7 +70,18 @@ export async function issueClientToken(
   const tokenHash = hashClientToken(rawToken);
 
   const row = await prisma.solutionClient.upsert({
-    where: { solutionId: input.solutionId },
+    // Keyed by (organization, solution), never by solution alone. The update
+    // branch below rotates the token hash and revives a revoked credential —
+    // if the organization is not in this `where`, the only thing keeping that
+    // write inside the tenant is whichever caller scoped the solution lookup
+    // above it. Same reasoning, and the same shape, as
+    // `upsertSapConnection`'s organizationId_product_key.
+    where: {
+      organizationId_solutionId: {
+        organizationId: scope.organizationId,
+        solutionId: input.solutionId,
+      },
+    },
     create: {
       organizationId: scope.organizationId,
       solutionId: input.solutionId,

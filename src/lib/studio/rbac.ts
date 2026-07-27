@@ -1,24 +1,34 @@
 /**
  * CoreEdge Console — workspace RBAC.
  *
- * The Console is one app with three RBAC-gated workspaces. v1 builds only
- * Developer Studio; Operations Center and Control Tower are declared here so the
- * rail can render them locked (matching the approved design) without pretending
- * they exist.
+ * The Console is one app with three RBAC-gated workspaces: Developer Studio,
+ * Operations Center and Control Tower. All three have shipped route groups and
+ * layouts; the rail renders a workspace locked when the signed-in role cannot
+ * open it, rather than hiding it, so the shape of the product stays legible to
+ * everyone.
  *
- * ROLE MAPPING (resolved, do not invent new roles): the design names its personas
- * "Developer" / "Support" / "Platform Admin", but this codebase's real `UserRole`
- * union has no `developer` or `support` value. v1 therefore maps:
+ * ROLE MAPPING (resolved, do not invent new roles). The design names its
+ * personas "Developer" / "Support" / "Platform Admin". Two of those map onto
+ * existing roles and one is a real role of its own:
  *
  *   Developer      → `consultant`      (the existing builder persona)
  *   Platform Admin → `platform_admin`
- *   Support        → v2 (Operations Center is not built in v1)
+ *   Support        → `support`
+ *
+ * `support` was added to the `UserRole` union in PR #170. This header used to
+ * say the union had no such value and that Support was deferred to v2 — forty
+ * lines above `isSupport()`, which tests for exactly that value. It was written
+ * when it was true and left standing when it stopped being.
  *
  * `platform_admin` may OPEN Developer Studio in an oversight capacity — this
  * resolves the approved design's internal contradiction, where the rail unlocked
  * Studio for an admin but the content walled it. Admin access is read-oriented:
  * governance mutations remain the builder's action. Every other role lands on the
  * role-gated empty state.
+ *
+ * `CONTROL_TOWER_READERS` deliberately omits `support`: the operations persona
+ * watches whether the running system is healthy, which is not the same question
+ * as whether the portfolio is governed.
  */
 
 import { isAdminRole } from "@/lib/auth/permissions";

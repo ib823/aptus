@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ROLE_METADATA, getRolesForOrgType } from "@/lib/auth/role-metadata";
 import { normalizeOrgType } from "@/lib/utils/org-type";
+import { mapLegacyRole } from "@/lib/auth/role-migration";
 import type { UserRole } from "@/types/assessment";
 
 interface OrgUser {
@@ -28,7 +29,13 @@ interface UserManagementTableProps {
   onRefresh: () => void;
 }
 
-const ROLE_COLORS: Record<string, string> = {
+/**
+ * `Record<UserRole, …>` so a role added to the union fails the compiler here.
+ * As `Record<string, …>` a missing role rendered an unstyled badge — legible,
+ * but it is the admin screen for assigning roles, and a role that looks
+ * unfinished there is a role people hesitate to grant.
+ */
+const ROLE_COLORS: Record<UserRole, string> = {
   platform_admin: "bg-red-100 text-red-800",
   partner_lead: "bg-purple-100 text-purple-800",
   consultant: "bg-blue-100 text-blue-800",
@@ -40,7 +47,20 @@ const ROLE_COLORS: Record<string, string> = {
   executive_sponsor: "bg-amber-100 text-amber-800",
   viewer: "bg-slate-50 text-slate-500",
   client_admin: "bg-pink-100 text-pink-800",
+  // Neutral rather than another engagement colour: this persona watches the
+  // platform, it does not hold a seat on an engagement.
+  support: "bg-zinc-200 text-zinc-700",
 };
+
+/**
+ * Badge styling for a role slug straight out of the database.
+ *
+ * Normalised through `mapLegacyRole` first, so a legacy `admin` row is styled
+ * as the platform admin it is rather than falling through to the muted default.
+ */
+function roleBadgeClass(role: string): string {
+  return ROLE_COLORS[mapLegacyRole(role)];
+}
 
 export function UserManagementTable({
   organizationId,
@@ -139,7 +159,7 @@ export function UserManagementTable({
                   <div className="text-xs text-muted-foreground">{user.email}</div>
                 </td>
                 <td className="px-4 py-3">
-                  <Badge className={ROLE_COLORS[user.role] ?? "bg-slate-50 text-slate-500"}>
+                  <Badge className={roleBadgeClass(user.role)}>
                     {getRoleLabel(user.role)}
                   </Badge>
                 </td>
@@ -200,11 +220,11 @@ export function UserManagementTable({
           <div className="space-y-4 mt-2">
             <p className="text-sm">
               Change role from{" "}
-              <Badge className={ROLE_COLORS[roleChangeDialog?.currentRole ?? ""] ?? ""}>
+              <Badge className={roleBadgeClass(roleChangeDialog?.currentRole ?? "")}>
                 {getRoleLabel(roleChangeDialog?.currentRole ?? "")}
               </Badge>
               {" to "}
-              <Badge className={ROLE_COLORS[roleChangeDialog?.newRole ?? ""] ?? ""}>
+              <Badge className={roleBadgeClass(roleChangeDialog?.newRole ?? "")}>
                 {getRoleLabel(roleChangeDialog?.newRole ?? "")}
               </Badge>?
             </p>

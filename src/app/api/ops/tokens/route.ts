@@ -20,7 +20,7 @@
 import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/db/prisma";
-import { opsOrgFilter, requireOperations } from "@/lib/ops/guard";
+import { opsWhere, requireOperations } from "@/lib/ops/guard";
 import { studioOk } from "@/lib/studio/api";
 
 export const dynamic = "force-dynamic";
@@ -36,35 +36,52 @@ export async function GET(request: NextRequest) {
   const soon = new Date(now.getTime() + EXPIRING_SOON_DAYS * 24 * 60 * 60 * 1000);
   const includeRevoked = request.nextUrl.searchParams.get("includeRevoked") === "1";
 
-  // Counted, never selected. `secretsCiphertext` holds the write credential, so
-  // a separate count answers "does one exist" without loading the value into
-  // memory — and it becomes a real number the moment issuance ships, rather than
-  // a hardcoded zero someone has to remember to update.
-  const withWriteCredentialPromise = prisma.solutionClient.count({
-    where: { ...opsOrgFilter(guard.actor), secretsCiphertext: { not: null } },
-  });
+  const [rows, withWriteCredential, revoked] = await Promise.all([
+    prisma.solutionClient.findMany({
+      where: opsWhere(guard.actor, includeRevoked ? {} : { isActive: true }),
+      select: {
+        id: true,
+        organizationId: true,
+        solutionId: true,
+        label: true,
+        environment: true,
+        isActive: true,
+        lastUsedAt: true,
+        expiresAt: true,
+        revokedAt: true,
+        createdAt: true,
+        // secretsCiphertext holds the write credential; tokenHash holds the read
+        // one. Neither is selected, here or anywhere reachable from a client.
+      },
+      orderBy: { createdAt: "desc" },
+    }),
 
-  const rows = await prisma.solutionClient.findMany({
-    where: {
-      ...opsOrgFilter(guard.actor),
-      ...(includeRevoked ? {} : { isActive: true }),
-    },
-    select: {
-      id: true,
-      organizationId: true,
-      solutionId: true,
-      label: true,
-      environment: true,
-      isActive: true,
-      lastUsedAt: true,
-      expiresAt: true,
-      revokedAt: true,
-      createdAt: true,
-      // secretsCiphertext holds the write credential; tokenHash holds the read
-      // one. Neither is selected, here or anywhere reachable from a client.
-    },
-    orderBy: { createdAt: "desc" },
-  });
+    // Counted, never selected. `secretsCiphertext` holds the write credential,
+    // so a count answers "does one exist" without loading the value into memory
+    // — and it becomes a real number the moment issuance ships, rather than a
+    // hardcoded zero someone has to remember to update.
+    //
+    // In `Promise.all` rather than started early and awaited later: the previous
+    // shape kicked this off and attached its handler two `await`s further down,
+    // so a rejection in the gap was an unhandled rejection rather than a 500.
+    prisma.solutionClient.count({
+      where: opsWhere(guard.actor, { secretsCiphertext: { not: null } }),
+    }),
+
+    // REVOKED IS COUNTED SEPARATELY, AND THAT IS THE WHOLE POINT.
+    //
+    // The list above filters `isActive: true` unless `includeRevoked=1`, while
+    // `revokeClientToken` sets BOTH `isActive: false` and `revokedAt`. So the
+    // revoked branch of the loop below could only ever fire for a row that was
+    // revoked and still active — which no code path produces. The default view
+    // rendered `revoked: 0` and implied nothing had ever been revoked, on the
+    // one screen an operator would consult to find out.
+    prisma.solutionClient.count({
+      where: opsWhere(guard.actor, {
+        OR: [{ isActive: false }, { revokedAt: { not: null } }],
+      }),
+    }),
+  ]);
 
   // Solution names are fetched separately: SolutionClient carries `solutionId`
   // but has no relation to Solution (its only relation is Organization), so a
@@ -72,24 +89,23 @@ export async function GET(request: NextRequest) {
   // an unscoped lookup here would leak names across tenants even though the
   // credential rows themselves were correctly scoped.
   const solutions = await prisma.solution.findMany({
-    where: {
-      ...opsOrgFilter(guard.actor),
+    where: opsWhere(guard.actor, {
       id: { in: [...new Set(rows.map((r) => r.solutionId))] },
-    },
+    }),
     select: { id: true, name: true, status: true },
   });
   const solutionById = new Map(solutions.map((s) => [s.id, s]));
 
   let active = 0;
-  let revoked = 0;
   let expired = 0;
   let expiringSoon = 0;
   let neverUsed = 0;
-  const withWriteCredential = await withWriteCredentialPromise;
 
   for (const r of rows) {
-    if (r.revokedAt !== null || !r.isActive) revoked++;
-    else if (r.expiresAt !== null && r.expiresAt.getTime() <= now.getTime()) expired++;
+    // A revoked row only appears here with `includeRevoked=1`; it is counted by
+    // its own query either way, so it is skipped rather than double-counted.
+    if (r.revokedAt !== null || !r.isActive) continue;
+    if (r.expiresAt !== null && r.expiresAt.getTime() <= now.getTime()) expired++;
     else {
       active++;
       if (r.expiresAt !== null && r.expiresAt.getTime() <= soon.getTime()) expiringSoon++;
@@ -100,8 +116,10 @@ export async function GET(request: NextRequest) {
   return studioOk({
     scope: guard.actor.kind,
     counts: {
-      total: rows.length,
+      /** How many rows `credentials` below actually holds. */
+      listed: rows.length,
       active,
+      /** Over every credential, revoked or not — see the note on the query. */
       revoked,
       expired,
       expiringSoon,
@@ -110,6 +128,8 @@ export async function GET(request: NextRequest) {
     },
     provenance: {
       lastUsedUnderReports: true,
+      countBasis:
+        "`revoked` is counted over every credential in scope. The other counts are over the rows listed below, which exclude revoked credentials unless includeRevoked=1 — so they will not sum to `revoked + listed` in the default view.",
       why: "lastUsedAt is written fire-and-forget and a serverless instance can freeze before it lands. It is last OBSERVED use, and is not on its own sufficient to conclude a credential is dormant.",
       oneCredentialPerSolution:
         "Issuance upserts on solutionId — re-issuing replaces the previous token and its environment rather than adding one.",

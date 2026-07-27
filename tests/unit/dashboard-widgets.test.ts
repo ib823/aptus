@@ -2,22 +2,13 @@ import { describe, it, expect } from "vitest";
 import { getDefaultWidgets, getHeatmapColor } from "@/lib/dashboard/widgets";
 import { computeAttentionItems, priorityComparator } from "@/lib/dashboard/attention-engine";
 import { calculateKpiMetrics } from "@/lib/dashboard/kpi-calculator";
-import type { UserRole } from "@/types/assessment";
+import { ALL_USER_ROLES, type UserRole } from "@/types/assessment";
 import type { AttentionItem } from "@/types/dashboard";
 
-const ALL_ROLES: UserRole[] = [
-  "platform_admin",
-  "partner_lead",
-  "consultant",
-  "project_manager",
-  "solution_architect",
-  "process_owner",
-  "it_lead",
-  "data_migration_lead",
-  "executive_sponsor",
-  "viewer",
-  "client_admin",
-];
+// Imported, not re-listed. A local copy of the role list is how `support`
+// stayed untested: the loop below iterated eleven names and passed, while the
+// twelfth role was never exercised at all.
+const ALL_ROLES: readonly UserRole[] = ALL_USER_ROLES;
 
 describe("getDefaultWidgets (Phase 23)", () => {
   it.each(ALL_ROLES)("returns widgets for role: %s", (role) => {
