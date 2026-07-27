@@ -96,19 +96,34 @@ describe("accessibleWorkspaces", () => {
 });
 
 describe("WORKSPACES", () => {
-  it("declares all three console workspaces, with only Developer Studio built in v1", () => {
+  it("declares all three console workspaces, each with a route that exists", () => {
     expect(WORKSPACES.map((w) => w.key)).toEqual([
       "developer-studio",
       "operations-center",
       "control-tower",
     ]);
-    const built = WORKSPACES.filter((w) => w.availableInV1);
-    expect(built).toHaveLength(1);
-    expect(built[0]?.href).toBe("/studio");
-    // An unbuilt workspace must not carry a route — the rail renders it locked.
-    for (const w of WORKSPACES.filter((x) => !x.availableInV1)) {
-      expect(w.href).toBeNull();
+  });
+
+  it("keeps availability and route in step — the rail must never link to a 404", () => {
+    // This assertion previously read "only Developer Studio built in v1", which
+    // was true until the other two route groups shipped. The INVARIANT it was
+    // really protecting is the one below, and it survives every flip: available
+    // implies a route, unavailable implies none. A workspace marked available
+    // with a null href renders an unclickable entry that claims to be ready; one
+    // marked unavailable with an href invites a link to a page that is not there.
+    for (const w of WORKSPACES) {
+      if (w.availableInV1) {
+        expect(w.href, `${w.key} is available and must carry a route`).toBeTruthy();
+      } else {
+        expect(w.href, `${w.key} is not available and must not carry a route`).toBeNull();
+      }
     }
+  });
+
+  it("routes each workspace at its own path", () => {
+    expect(WORKSPACES.find((w) => w.key === "developer-studio")?.href).toBe("/studio");
+    expect(WORKSPACES.find((w) => w.key === "operations-center")?.href).toBe("/operations");
+    expect(WORKSPACES.find((w) => w.key === "control-tower")?.href).toBe("/control-tower");
   });
 });
 
