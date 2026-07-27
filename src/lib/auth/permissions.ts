@@ -53,10 +53,19 @@ export async function canEditStepResponse(
     return { allowed: true };
   }
 
-  // Roles that cannot edit step responses at all
+  // Roles that cannot edit step responses at all.
+  //
+  // ⚠️ THIS ARRAY IS TYPED BUT NOT EXHAUSTIVE. `UserRole[]` looks safe and is
+  // not: adding a role to the union never forces it in here. The function's
+  // terminal `Unknown role` deny is what actually protects an omitted role — so
+  // a new role is safe by the shape of the function, not by this list. Name
+  // roles here anyway, so the intent is stated rather than inferred from a
+  // fallthrough three screens below.
   const readOnlyRoles: UserRole[] = [
     "executive_sponsor", "viewer", "data_migration_lead",
     "client_admin", "project_manager", "partner_lead",
+    // Operations persona: watches the running system, never edits assessments.
+    "support",
   ];
   if (readOnlyRoles.includes(role)) {
     return {
@@ -152,10 +161,13 @@ export async function canEditScopeSelection(
     return { allowed: true };
   }
 
-  // Roles that cannot edit scope
+  // Roles that cannot edit scope. Same caveat as `readOnlyRoles` above: typed,
+  // not exhaustive, and an omitted role is caught by the terminal deny rather
+  // than by this list.
   const noScopeEdit: UserRole[] = [
     "executive_sponsor", "it_lead", "viewer", "data_migration_lead",
     "client_admin", "project_manager", "partner_lead", "solution_architect",
+    "support",
   ];
   if (noScopeEdit.includes(role)) {
     return {
