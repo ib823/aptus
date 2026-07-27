@@ -304,7 +304,14 @@ function OwnershipEditor({
 
   return (
     <div style={{ marginTop: 8 }}>
-      <h3 style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600 }}>Accountability</h3>
+      <h3 style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 600 }}>Accountability</h3>
+      {/* Say the rule, don't just enforce it. A consultant who expects to assign
+          a colleague and finds no picker will assume the feature is missing;
+          told why, they know to ask that colleague to claim it. */}
+      <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--ink-secondary)", lineHeight: 1.5 }}>
+        Each owner claims their own slot — you cannot assign someone else. Anyone can clear a slot
+        that is no longer correct, which leaves the solution unowned until it is claimed again.
+      </p>
       {(
         [
           ["technicalOwnerId", "Technical owner", solution.technicalOwnerId],
