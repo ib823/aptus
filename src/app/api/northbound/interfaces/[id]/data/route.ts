@@ -183,12 +183,19 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   }
 
   // 4 — read, and report exactly what came back.
+  //
+  // Timed around the UPSTREAM call only. Measuring from the top of the handler
+  // would fold our own auth, grant and binding work into a number the operations
+  // console labels "how slow is this tenant", which would be a quietly wrong
+  // answer to the question actually being asked.
+  const startedAt = Date.now();
   const result = await readEntitySet({
     connection,
     servicePath: service.path,
     entitySet,
     limit,
   });
+  const durationMs = Date.now() - startedAt;
   const status = httpStatusFor(result.status);
 
   await recordNorthboundCall({
@@ -202,6 +209,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     rowCount: result.records.length,
     correlationId,
     clientTokenId: client.clientId,
+    durationMs,
     connectionId: connection.id,
     // Null here on a served read is the honest record of a permitted-but-
     // unverified binding: the connection never declared its landscape.
