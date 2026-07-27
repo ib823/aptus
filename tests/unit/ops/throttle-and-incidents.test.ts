@@ -222,6 +222,22 @@ describe("the throttle endpoint is honest about which buckets it can see", () =>
     expect(mocks.clientFindMany.mock.calls[0]?.[0]?.where?.organizationId).toBe("org_a");
   });
 
+  it("says which backend is enforcing the limits, rather than hedging", async () => {
+    // Found by reading a live production response: the in-memory caveat was
+    // printed unconditionally. On a deployment WITH a shared backend that tells
+    // an operator their headroom is per-instance when it is deployment-wide;
+    // on one without, it buries a real configuration fault among routine notes.
+    // The code knows which it is, so it reports it.
+    const data = await body();
+    expect(["shared", "in-memory"]).toContain(data.provenance.backend);
+    expect(data.provenance.headroomIsPerInstance).toBe(data.provenance.backend === "in-memory");
+    expect(data.provenance.backendNote).toBeTruthy();
+    // No `UPSTASH_*` in the test environment, so this run is the unconfigured
+    // case — and it must say so in terms an operator would act on.
+    expect(data.provenance.backend).toBe("in-memory");
+    expect(data.provenance.backendNote).toContain("NO SHARED RATE-LIMIT BACKEND");
+  });
+
   it("reaches for the non-consuming primitive, and never the consuming one", async () => {
     // The behavioural test above proves `peekRateLimit` does not consume. This
     // proves the ROUTE uses it — the two are separate claims, and the second is

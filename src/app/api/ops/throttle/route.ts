@@ -35,7 +35,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { opsWhere, opsWindowHours, requireOperations } from "@/lib/ops/guard";
 import { THROTTLE_BUCKETS } from "@/lib/ops/throttle";
-import { peekRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
+import { peekRateLimit, rateLimitBackend, RATE_LIMITS } from "@/lib/security/rate-limit";
 import { studioOk } from "@/lib/studio/api";
 
 export const dynamic = "force-dynamic";
@@ -85,6 +85,7 @@ export async function GET(request: NextRequest) {
   }
 
   const anyUnknown = headroom.some((h) => h.read === null || h.write === null);
+  const backend = rateLimitBackend();
 
   return studioOk({
     windowHours: hours,
@@ -120,8 +121,22 @@ export async function GET(request: NextRequest) {
       unknownRatherThanZero: anyUnknown
         ? "The shared rate-limit backend did not answer for at least one credential. Those are reported as unknown, not as zero — a zero would read as 'throttled right now'."
         : null,
-      inMemoryFallback:
-        "With no shared backend configured, limits are per serverless instance, so headroom reflects one instance rather than the deployment.",
+      /**
+       * WHICH BACKEND, ASKED RATHER THAN ASSUMED.
+       *
+       * This used to print the in-memory caveat unconditionally. That is wrong
+       * in both directions — on a deployment with Upstash it tells an operator
+       * their headroom is per-instance when it is deployment-wide, and on one
+       * without it buries a real warning among routine notes. Hedging about
+       * data you can actually check is the same failure as over-claiming about
+       * data you cannot.
+       */
+      backend,
+      headroomIsPerInstance: backend === "in-memory",
+      backendNote:
+        backend === "shared"
+          ? "Limits are enforced against a shared backend, so headroom is deployment-wide and the figures below are the real remaining budget."
+          : "NO SHARED RATE-LIMIT BACKEND IS CONFIGURED. Each serverless instance keeps its own counter, so the effective limit is the configured one multiplied by however many instances are warm — a number nobody can see. Headroom below reflects one instance. In production this is a configuration fault, not a display caveat.",
       throttleCountsAreAFloor:
         "throttledInWindow counts audited 429s only. A call refused by an edge bucket never reached the broker and is not in this number.",
     },
