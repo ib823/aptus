@@ -6,8 +6,8 @@ import { ROLE_HIERARCHY } from "@/types/assessment";
 
 describe("Role Permissions (Phase 17)", () => {
   describe("ROLE_CAPABILITIES matrix", () => {
-    it("should have capabilities for all 11 roles", () => {
-      expect(Object.keys(ROLE_CAPABILITIES)).toHaveLength(11);
+    it("should have capabilities for all 12 roles", () => {
+      expect(Object.keys(ROLE_CAPABILITIES)).toHaveLength(12);
       for (const role of ALL_ROLES) {
         expect(ROLE_CAPABILITIES[role]).toBeDefined();
       }
@@ -214,8 +214,8 @@ describe("Role Permissions (Phase 17)", () => {
   });
 
   describe("ALL_ROLES", () => {
-    it("should contain exactly 11 roles", () => {
-      expect(ALL_ROLES).toHaveLength(11);
+    it("should contain exactly 12 roles", () => {
+      expect(ALL_ROLES).toHaveLength(12);
     });
 
     it("should contain all expected roles", () => {
@@ -228,5 +228,43 @@ describe("Role Permissions (Phase 17)", () => {
         expect(ALL_ROLES).toContain(role);
       }
     });
+  });
+});
+
+/* ── the silent-downgrade guard ──────────────────────────────────────────────
+ *
+ * `mapLegacyRole` validates against VALID_ROLES, a plain `Set<string>` that the
+ * compiler cannot check. A role missing from it does not fail to build — it
+ * resolves to `viewer`, and since mapLegacyRole feeds isAdminRole,
+ * getCapabilities, hasPermission and canAssignRole, the role would look correct
+ * everywhere it is displayed and hold viewer's permissions everywhere it is
+ * enforced.
+ *
+ * That happened when `support` was added: every exhaustive Record<UserRole, …>
+ * failed the compiler loudly, and this one did not fail at all. The only symptom
+ * was canAssignRole("viewer", "support") returning true, because support had
+ * collapsed to viewer and a role may assign its own level.
+ *
+ * This asserts the round-trip for every role, so the next one cannot slip.
+ */
+describe("every role survives mapLegacyRole unchanged", () => {
+  it("maps each known role to itself, never silently to viewer", () => {
+    for (const role of ALL_ROLES) {
+      expect(mapLegacyRole(role), `${role} must not be downgraded`).toBe(role);
+    }
+  });
+
+  it("still downgrades genuinely unknown roles to viewer", () => {
+    // The fallback is correct behaviour for garbage input — it is only wrong
+    // when a REAL role falls through to it.
+    expect(mapLegacyRole("not_a_role")).toBe("viewer");
+    expect(mapLegacyRole("")).toBe("viewer");
+  });
+
+  it("keeps a lower role from assigning a higher one", () => {
+    // The assertion that actually caught the bug.
+    expect(canAssignRole("viewer", "support")).toBe(false);
+    expect(canAssignRole("support", "platform_admin")).toBe(false);
+    expect(canAssignRole("platform_admin", "support")).toBe(true);
   });
 });

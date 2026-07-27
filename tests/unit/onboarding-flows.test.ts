@@ -57,7 +57,7 @@ describe("getOnboardingFlow (Phase 24)", () => {
 });
 
 describe("ONBOARDING_FLOWS constant (Phase 24)", () => {
-  it("has entries for all 11 roles", () => {
+  it("has entries for all 12 roles", () => {
     for (const role of ALL_ROLES) {
       expect(ONBOARDING_FLOWS[role]).toBeDefined();
     }
