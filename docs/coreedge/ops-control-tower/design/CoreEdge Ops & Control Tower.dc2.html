@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0}
+a{color:#002B5C;text-decoration:none}
+a:hover{color:#001E40}
+button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px solid #002B5C;outline-offset:2px}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#e3dfd2;border-radius:8px}
+::-webkit-scrollbar-track{background:transparent}
+@keyframes ce-shim{0%{background-position:-420px 0}100%{background-position:420px 0}}
+@keyframes ce-sheet{from{transform:translateX(28px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes ce-fade{from{opacity:0}to{opacity:1}}
+</style>
+</helmet>
+<div style="display:grid;grid-template-columns:220px 1fr;height:100vh;width:100%;font-family:'Geist','Inter',system-ui,-apple-system,'Segoe UI',sans-serif;color:#1A1A1A;background:#FAF9F5;overflow:hidden;font-size:14px">
+
+  <aside style="background:#002B5C;color:#fff;display:flex;flex-direction:column;padding:14px 12px;overflow-y:auto">
+    <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px;padding:2px 8px 12px;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:4px">
+      <span style="display:inline-flex;width:20px;height:20px;align-items:center;justify-content:center;background:rgba(255,255,255,.14);border-radius:6px;font-size:11px">◆</span>
+      CoreEdge Console
+    </div>
+
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.5);margin:14px 8px 5px;font-weight:600">Workspace</div>
+    <sc-for list="{{ workspaces }}" as="w" hint-placeholder-count="3">
+      <button onClick="{{ w.onClick }}" style="all:unset;display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;font-size:12.5px;cursor:pointer;margin:1px 0;background:{{ w.bg }};color:{{ w.color }};font-weight:{{ w.weight }}">
+        <span style="width:16px;text-align:center;opacity:.85">{{ w.icon }}</span>
+        <span style="flex:1">{{ w.label }}</span>
+        <sc-if value="{{ w.locked }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px;opacity:.6">🔒</span></sc-if>
+      </button>
+    </sc-for>
+
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.5);margin:18px 8px 5px;font-weight:600">{{ wsName }}</div>
+    <sc-for list="{{ sections }}" as="n" hint-placeholder-count="10">
+      <button onClick="{{ n.onClick }}" style="all:unset;display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;font-size:12.5px;cursor:pointer;margin:1px 0;background:{{ n.bg }};color:{{ n.color }};font-weight:{{ n.weight }}">
+        <span style="width:16px;text-align:center;opacity:.85">{{ n.icon }}</span>
+        <span style="flex:1">{{ n.label }}</span>
+        <sc-if value="{{ n.locked }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px;opacity:.6">🔒</span></sc-if>
+        <sc-if value="{{ n.prm }}" hint-placeholder-val="{{ false }}"><span style="font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;background:rgba(255,255,255,.12);padding:1px 6px;border-radius:20px">soon</span></sc-if>
+      </button>
+    </sc-for>
+
+    <div style="margin-top:auto;padding:12px 8px 2px;border-top:1px solid rgba(255,255,255,.1);font-size:11px;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:7px">
+      <span style="width:7px;height:7px;border-radius:50%;background:{{ railDot }};flex:none"></span>
+      {{ railFoot }}
+    </div>
+  </aside>
+
+  <div style="display:flex;flex-direction:column;min-width:0;height:100vh">
+
+    <header style="height:56px;flex:none;background:#FFFFFE;border-bottom:1px solid #E5E1D6;display:flex;align-items:center;gap:12px;padding:0 20px;position:relative;z-index:40">
+      <div style="font-size:12.5px;color:#8A8A8A">{{ wsName }}&nbsp;&nbsp;/&nbsp;&nbsp;<b style="color:#1A1A1A">{{ crumb }}</b></div>
+      <div style="flex:1"></div>
+
+      <div style="position:relative">
+        <button onClick="{{ toggleTenant }}" style="all:unset;display:inline-flex;align-items:center;gap:8px;border:1px solid #C4BFAE;border-radius:8px;padding:5px 10px;font-size:12.5px;font-weight:600;background:#FFFFFE;cursor:pointer;color:#1A1A1A">
+          <span style="width:8px;height:8px;border-radius:50%;background:{{ originDot }};flex:none"></span> {{ tenantLabel }}
+          <sc-if value="{{ envKnown }}" hint-placeholder-val="{{ true }}">
+            <span style="font-size:10px;padding:1px 6px;border-radius:5px;font-weight:700;letter-spacing:.02em;background:{{ envBg }};color:{{ envFg }}">{{ envLabel }}</span>
+          </sc-if>
+          <span style="color:#8A8A8A;font-size:10px">▾</span>
+        </button>
+        <sc-if value="{{ tenantOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;top:40px;right:0;width:300px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.08);padding:8px;animation:ce-fade .12s ease">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A;font-weight:700;padding:6px 8px 4px">Tenants resolved from your access</div>
+            <sc-for list="{{ tenants }}" as="t" hint-placeholder-count="4">
+              <button onClick="{{ t.onClick }}" style="all:unset;display:flex;align-items:center;gap:10px;width:100%;padding:8px;border-radius:8px;cursor:pointer;background:{{ t.bg }}">
+                <span style="width:8px;height:8px;border-radius:50%;flex:none;background:{{ t.dot }}"></span>
+                <span style="flex:1"><span style="font-size:13px;font-weight:600;display:block">{{ t.key }}</span><span style="font-size:11.5px;color:#8A8A8A">{{ t.alias }}</span></span>
+                <sc-if value="{{ t.envKnown }}" hint-placeholder-val="{{ true }}"><span style="font-size:9.5px;padding:1px 6px;border-radius:5px;font-weight:700;background:{{ t.envBg }};color:{{ t.envFg }}">{{ t.env }}</span></sc-if>
+                <sc-if value="{{ t.active }}" hint-placeholder-val="{{ false }}"><span style="color:#166534;font-size:12px">✓</span></sc-if>
+              </button>
+            </sc-for>
+            <sc-if value="{{ noTenant }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:14px 8px;text-align:center;font-size:12.5px;color:#8A8A8A">No SAP tenant connected.<br><span style="color:#4A4A4A">A consultant adds connections in Developer Studio.</span></div>
+            </sc-if>
+            <div style="border-top:1px solid #E5E1D6;margin:6px 0 0;padding:8px 8px 4px;font-size:11px;color:#8A8A8A;line-height:1.45">Resolved from your access — never typed into a URL. A view preference only.</div>
+          </div>
+        </sc-if>
+      </div>
+
+      <span style="font-size:11px;font-weight:600;background:#E6EBF1;color:#002B5C;padding:3px 9px;border-radius:6px">{{ roleLabel }}</span>
+      <span style="width:30px;height:30px;border-radius:50%;background:#002B5C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">{{ initials }}</span>
+    </header>
+
+    <main style="flex:1;overflow-y:auto;padding:22px 24px" onClick="{{ onMainClick }}">
+
+      <sc-if value="{{ isLocked }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:540px;margin:64px auto;text-align:center;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);padding:36px 32px">
+          <div style="width:46px;height:46px;border-radius:12px;background:#F4F2EB;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:20px;color:#8A8A8A">🔒</div>
+          <div style="font-family:'Source Serif 4',Georgia,serif;font-size:20px;font-weight:600;margin-bottom:6px">{{ lockTitle }}</div>
+          <p style="color:#4A4A4A;font-size:13.5px;margin:0 auto 4px;max-width:420px">{{ lockBody }}</p>
+          <p style="color:#8A8A8A;font-size:12.5px;margin:10px 0 0">Locked workspaces stay visible in the rail — nothing is hidden from you, it is simply not yours to operate.</p>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isOpen }}" hint-placeholder-val="{{ true }}">
+        <div style="animation:ce-fade .18s ease">
+
+          <sc-if value="{{ readOnly }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:10px;background:#E6EBF1;border:1px solid #CFD7E0;border-radius:10px;padding:9px 14px;margin-bottom:16px;font-size:12.5px;color:#002B5C">
+              <span style="font-weight:700">Read-only</span>
+              <span style="color:#4A4A4A">{{ readOnlyNote }}</span>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ tenantPointed }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;align-items:center;gap:12px;background:{{ stripBg }};border:1px solid {{ stripBorder }};border-radius:10px;padding:9px 14px;margin-bottom:16px;font-size:12.5px">
+              <span style="width:8px;height:8px;border-radius:50%;flex:none;background:{{ originDot }}"></span>
+              <span style="color:#4A4A4A">{{ stripLead }}</span>
+              <b>{{ stripTenant }}</b>
+              <sc-if value="{{ envKnown }}" hint-placeholder-val="{{ true }}">
+                <span style="font-size:10px;padding:2px 7px;border-radius:5px;font-weight:700;background:{{ envBg }};color:{{ envFg }}">{{ envLabel }}</span>
+              </sc-if>
+              <span style="color:#8A8A8A">{{ stripNote }}</span>
+            </div>
+          </sc-if>
+
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:4px">
+            <div>
+              <h1 style="font-family:'Source Serif 4',Georgia,serif;font-size:24px;font-weight:600;margin:0;letter-spacing:-.01em">{{ title }}</h1>
+              <p style="color:#4A4A4A;font-size:13.5px;margin:5px 0 0;max-width:640px;text-wrap:pretty">{{ subtitle }}</p>
+            </div>
+            <span style="flex:none;font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:4px 9px;border-radius:6px;background:{{ buildBg }};color:{{ buildFg }}">{{ buildLabel }}</span>
+          </div>
+          <div style="font-size:11.5px;color:#8A8A8A;font-family:'Geist Mono','SF Mono',Consolas,monospace;margin:6px 0 18px">{{ sourceNote }}</div>
+
+          <sc-if value="{{ showBody }}" hint-placeholder-val="{{ true }}">
+            <sc-if value="{{ isOpsHome }}" hint-placeholder-val="{{ true }}">
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+                <sc-for list="{{ fleetCards }}" as="f" hint-placeholder-count="4">
+                  <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:15px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A;font-weight:600">{{ f.label }}</div>
+                    <div style="font-size:26px;font-weight:600;margin:8px 0 2px;color:{{ f.color }}">{{ f.v }}</div>
+                    <div style="font-size:12px;color:#8A8A8A;line-height:1.4">{{ f.note }}</div>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1.35fr 1fr;gap:14px;margin-top:14px">
+                <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);overflow:hidden">
+                  <div style="padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between">
+                    <b style="font-size:13px">Needs attention</b>
+                    <button onClick="{{ goIncidents }}" style="all:unset;cursor:pointer;font-size:12.5px;font-weight:600;color:#002B5C">All incidents →</button>
+                  </div>
+                  <sc-for list="{{ attnFeed }}" as="a" hint-placeholder-count="4">
+                    <button onClick="{{ a.onOpen }}" style="all:unset;display:flex;gap:11px;align-items:flex-start;width:100%;padding:11px 16px;border-top:1px solid #E5E1D6;cursor:pointer">
+                      <span style="flex:none;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:6px;background:{{ a.bg }};color:{{ a.fg }}">{{ a.sev }}</span>
+                      <span style="flex:1;min-width:0"><span style="display:block;font-size:13px;font-weight:600">{{ a.title }}</span><span style="display:block;font-size:12px;color:#8A8A8A;font-family:'Geist Mono','SF Mono',Consolas,monospace">{{ a.src }}</span></span>
+                      <span style="flex:none;font-size:12px;color:#8A8A8A">{{ a.when }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+
+                <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);padding:15px 16px">
+                  <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A;font-weight:600">Connection fleet</div>
+                  <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+                    <sc-for list="{{ connMini }}" as="c" hint-placeholder-count="6">
+                      <div style="display:flex;align-items:center;gap:9px;font-size:13px">
+                        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.alias }}</span>
+                        <sc-if value="{{ c.envKnown }}" hint-placeholder-val="{{ true }}"><span style="flex:none;font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:5px;background:{{ c.envBg }};color:{{ c.envFg }}">{{ c.env }}</span></sc-if>
+                        <span style="flex:none;display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:9999px;font-size:10.5px;font-weight:600;background:{{ c.bg }};color:{{ c.fg }}"><span style="width:5px;height:5px;border-radius:50%;background:currentColor"></span>{{ c.status }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <p style="font-size:12px;color:#8A8A8A;margin:14px 0 0;text-wrap:pretty">Status words are the connection's own <b>lastValidationStatus</b> — never a guessed “healthy”. NEVER_TESTED means unknown.</p>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isOpsIncidents }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <sc-for list="{{ incidents }}" as="i" hint-placeholder-count="5">
+                  <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-left:4px solid {{ i.rail }};border-radius:12px;padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+                    <div style="display:flex;align-items:center;gap:10px">
+                      <span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:6px;background:{{ i.bg }};color:{{ i.fg }}">{{ i.sev }}</span>
+                      <b style="font-size:14px;flex:1">{{ i.title }}</b>
+                      <span style="font-size:12px;color:#8A8A8A">{{ i.when }}</span>
+                    </div>
+                    <p style="font-size:13px;color:#4A4A4A;margin:8px 0 0;max-width:720px;text-wrap:pretty">{{ i.body }}</p>
+                    <div style="font-size:11.5px;color:#8A8A8A;font-family:'Geist Mono','SF Mono',Consolas,monospace;margin-top:9px">{{ i.src }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isOpsBroker }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px">
+                <sc-for list="{{ brokerStats }}" as="b" hint-placeholder-count="3">
+                  <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:15px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A;font-weight:600">{{ b.label }}</div>
+                    <div style="font-size:22px;font-weight:600;margin-top:7px">{{ b.v }}</div>
+                    <div style="font-size:12px;color:#8A8A8A">{{ b.note }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);overflow:hidden">
+                <table style="width:100%;border-collapse:collapse">
+                  <thead><tr>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Time</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Solution</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Call</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Outcome</th>
+                    <th style="text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Latency</th>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ calls }}" as="c" hint-placeholder-count="7">
+                      <tr onClick="{{ c.onOpen }}" style="cursor:pointer">
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:12.5px;font-family:'Geist Mono','SF Mono',Consolas,monospace;color:#4A4A4A">{{ c.time }}</td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:13px">{{ c.sol }}<div style="font-size:11.5px;color:#8A8A8A;font-family:'Geist Mono','SF Mono',Consolas,monospace">{{ c.token }}</div></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:12.5px;font-family:'Geist Mono','SF Mono',Consolas,monospace"><b style="color:{{ c.methodColor }}">{{ c.method }}</b> {{ c.path }}</td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6"><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:9999px;font-size:11.5px;font-weight:600;background:{{ c.bg }};color:{{ c.fg }}"><span style="width:5px;height:5px;border-radius:50%;background:currentColor"></span>{{ c.label }}</span></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:12.5px;text-align:right;font-family:'Geist Mono','SF Mono',Consolas,monospace;color:{{ c.msColor }}">{{ c.ms }}</td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+                <div style="padding:11px 14px;font-size:12px;color:#8A8A8A">A 200 with zero rows is shown as <b>empty</b>, not as a failure — and a 401 is a setup gap, not an outage.</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isOpsWrites }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px">
+                <sc-for list="{{ writeStats }}" as="w" hint-placeholder-count="5">
+                  <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:13px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+                    <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:#8A8A8A;font-weight:600">{{ w.label }}</div>
+                    <div style="font-size:22px;font-weight:600;margin-top:6px;color:{{ w.color }}">{{ w.v }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);overflow:hidden">
+                <table style="width:100%;border-collapse:collapse">
+                  <thead><tr>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Idempotency key</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Solution · entity</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Target</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">State</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Document</th>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ writes }}" as="w" hint-placeholder-count="5">
+                      <tr>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:12.5px;font-family:'Geist Mono','SF Mono',Consolas,monospace">{{ w.key }}</td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:13px">{{ w.sol }}<div style="font-size:11.5px;color:#8A8A8A;font-family:'Geist Mono','SF Mono',Consolas,monospace">{{ w.entity }}</div></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:12.5px"><span style="font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:5px;background:{{ w.envBg }};color:{{ w.envFg }}">{{ w.env }}</span> <span style="color:#8A8A8A">{{ w.when }}</span></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6"><span style="padding:3px 9px;border-radius:9999px;font-size:11.5px;font-weight:600;background:{{ w.bg }};color:{{ w.fg }}">{{ w.state }}</span></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:12.5px;font-family:'Geist Mono','SF Mono',Consolas,monospace;color:#4A4A4A">{{ w.doc }}</td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+                <div style="padding:11px 14px;font-size:12px;color:#8A8A8A">A replay is a key reuse that returned the original document — not a second write. A conflict means the key was reused with a different payload. <b>Blocked</b> rows come from the audit event, not the idempotency table: a write refused at the credential/grant gate returns 403 before any key is reserved.</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isOpsConn }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);overflow:hidden">
+                <table style="width:100%;border-collapse:collapse">
+                  <thead><tr>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Connection</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">SAP environment</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">lastValidationStatus</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Validated</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Writes</th>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ conns }}" as="c" hint-placeholder-count="6">
+                      <tr onClick="{{ c.onOpen }}" style="cursor:pointer">
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:13px"><span style="display:inline-flex;align-items:center;gap:7px"><span style="width:7px;height:7px;border-radius:50%;background:{{ c.dot }}"></span>{{ c.alias }}</span><div style="font-size:11.5px;color:#8A8A8A;font-family:'Geist Mono','SF Mono',Consolas,monospace">{{ c.key }}</div></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6">
+                          <sc-if value="{{ c.envKnown }}" hint-placeholder-val="{{ true }}"><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;background:{{ c.envBg }};color:{{ c.envFg }}">{{ c.env }}</span></sc-if>
+                          <sc-if value="{{ c.envUnknown }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;color:#8A8A8A">not recorded</span></sc-if>
+                        </td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6"><span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:9999px;font-size:11.5px;font-weight:600;background:{{ c.bg }};color:{{ c.fg }}"><span style="width:5px;height:5px;border-radius:50%;background:currentColor"></span>{{ c.status }}</span></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:12.5px;color:#4A4A4A">{{ c.lastVal }}</td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6"><span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:6px;background:{{ c.wBg }};color:{{ c.wFg }}">{{ c.wLabel }}</span></td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+                <div style="padding:11px 14px;font-size:12px;color:#8A8A8A">Environment describes the <b>SAP tenant</b>, not this console's deployment. Where SAP did not tell us, we show “not recorded” rather than assuming DEV.</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isOpsFresh }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">
+                <sc-for list="{{ fresh }}" as="f" hint-placeholder-count="5">
+                  <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.04);display:flex;align-items:center;gap:14px">
+                    <span style="width:38px;height:38px;flex:none;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;background:{{ f.bg }};color:{{ f.fg }}">⟳</span>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:13.5px;font-weight:600">{{ f.comp }}</div>
+                      <div style="font-size:12px;color:#8A8A8A">{{ f.n }} · last probe {{ f.probe }}</div>
+                    </div>
+                    <span style="flex:none;padding:3px 9px;border-radius:9999px;font-size:11.5px;font-weight:600;background:{{ f.bg }};color:{{ f.fg }}">{{ f.label }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <p style="font-size:12.5px;color:#8A8A8A;margin:14px 0 0">“Never probed” is its own answer — it is neither fresh nor stale.</p>
+            </sc-if>
+
+            <sc-if value="{{ isOpsThrottle }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">
+                <sc-for list="{{ buckets }}" as="b" hint-placeholder-count="2">
+                  <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:18px 20px;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+                    <div style="display:flex;align-items:baseline;gap:9px">
+                      <b style="font-size:14px">{{ b.name }}</b>
+                      <span style="font-size:12px;color:#8A8A8A;font-family:'Geist Mono','SF Mono',Consolas,monospace">{{ b.limit }}</span>
+                      <span style="flex:1"></span>
+                      <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;background:{{ b.bg }};color:{{ b.fg }}">{{ b.label }}</span>
+                    </div>
+                    <div style="height:10px;border-radius:9999px;background:#F4F2EB;margin:14px 0 8px;overflow:hidden">
+                      <div style="height:100%;border-radius:9999px;width:{{ b.pct }};background:{{ b.fill }}"></div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:12.5px;color:#4A4A4A"><span>{{ b.used }}</span><span>{{ b.throttled }}</span></div>
+                    <p style="font-size:12px;color:#8A8A8A;margin:12px 0 0">{{ b.note }}</p>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isOpsTokens }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);overflow:hidden">
+                <table style="width:100%;border-collapse:collapse">
+                  <thead><tr>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Credential</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Solution</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Kind</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Last used</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Lifecycle</th>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ tokens }}" as="t" hint-placeholder-count="5">
+                      <tr>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:13px">{{ t.name }}</td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:13px;color:#4A4A4A">{{ t.sol }}</td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6"><span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:6px;background:{{ t.kBg }};color:{{ t.kFg }}">{{ t.type }}</span></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:12.5px;color:{{ t.usedColor }}">{{ t.used }}</td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6"><span style="padding:3px 9px;border-radius:9999px;font-size:11.5px;font-weight:600;background:{{ t.bg }};color:{{ t.fg }}">{{ t.state }}</span> <span style="font-size:12px;color:#8A8A8A">{{ t.exp }}</span></td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+                <div style="padding:11px 14px;font-size:12px;color:#8A8A8A">Monitoring only. Issuing, rotating and revoking are governed in the Control Tower — a support role watches, it does not grant.</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isOpsSpot }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);padding:18px 20px">
+                <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+                  <label style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:280px">
+                    <span style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600">Interface to spot-check</span>
+                    <select onChange="{{ onSpotPick }}" style="height:40px;border-radius:8px;border:1px solid #C4BFAE;background:#FFFFFE;font-size:13.5px;padding:0 10px;font-family:inherit;color:#1A1A1A">
+                      <sc-for list="{{ spotOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+                    </select>
+                  </label>
+                  <button onClick="{{ runSpot }}" style="all:unset;display:inline-flex;align-items:center;height:40px;padding:0 18px;border-radius:8px;background:#002B5C;color:#fff;font-size:14px;font-weight:600;cursor:pointer">Run read</button>
+                  <span style="font-size:12px;color:#8A8A8A;max-width:280px">Read-only. This screen has no write path at all.</span>
+                </div>
+              </div>
+
+              <sc-if value="{{ spotIdle }}" hint-placeholder-val="{{ true }}">
+                <div style="margin-top:14px;background:#FFFFFE;border:1px dashed #C4BFAE;border-radius:12px;padding:38px;text-align:center;color:#8A8A8A;font-size:13px">No probe has been run in this session. Nothing is claimed about this service yet.</div>
+              </sc-if>
+              <sc-if value="{{ spotRunning }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:14px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+                  <div style="height:34px;background:#F4F2EB;border-bottom:1px solid #E5E1D6"></div>
+                  <sc-for list="{{ skRows }}" as="r" hint-placeholder-count="4">
+                    <div style="padding:12px 14px;border-bottom:1px solid #E5E1D6"><div style="height:11px;width:60%;border-radius:6px;background:linear-gradient(90deg,#F1EEE5 25%,#E9E5D9 37%,#F1EEE5 63%);background-size:420px 100%;animation:ce-shim 1.2s linear infinite"></div></div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ spotDone }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:14px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);overflow:hidden">
+                  <div style="padding:13px 16px;border-bottom:1px solid #E5E1D6;display:flex;align-items:center;gap:10px">
+                    <b style="font-size:13px">{{ spotName }}</b>
+                    <span style="padding:3px 9px;border-radius:9999px;font-size:11.5px;font-weight:600;background:{{ spotBg }};color:{{ spotFg }}">{{ spotLabel }}</span>
+                    <span style="flex:1"></span>
+                    <span style="font-size:12.5px;font-family:'Geist Mono','SF Mono',Consolas,monospace;color:{{ spotFg }}">{{ spotHttp }}</span>
+                  </div>
+                  <sc-if value="{{ spotHasRows }}" hint-placeholder-val="{{ true }}">
+                    <table style="width:100%;border-collapse:collapse">
+                      <thead><tr><sc-for list="{{ spotCols }}" as="h" hint-placeholder-count="3"><th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">{{ h.c }}</th></sc-for></tr></thead>
+                      <tbody><sc-for list="{{ spotRows }}" as="r" hint-placeholder-count="3"><tr><sc-for list="{{ r.cells }}" as="cell" hint-placeholder-count="3"><td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:12.5px;font-family:'Geist Mono','SF Mono',Consolas,monospace">{{ cell.v }}</td></sc-for></tr></sc-for></tbody>
+                    </table>
+                  </sc-if>
+                  <sc-if value="{{ spotNoRows }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding:30px;text-align:center;font-size:13px;color:#4A4A4A">{{ spotNote }}</div>
+                  </sc-if>
+                </div>
+              </sc-if>
+            </sc-if>
+
+            <sc-if value="{{ isCtOverview }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+                <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="6">
+                  <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A;font-weight:600">{{ k.label }}</div>
+                    <div style="font-family:'Source Serif 4',Georgia,serif;font-size:30px;font-weight:600;margin:8px 0 4px">{{ k.v }}</div>
+                    <div style="font-size:12.5px;color:#8A8A8A;line-height:1.45">{{ k.note }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="margin-top:14px;background:#E6EBF1;border:1px solid #CFD7E0;border-radius:12px;padding:16px 18px;display:flex;gap:14px;align-items:center">
+                <span style="width:36px;height:36px;flex:none;border-radius:9px;background:#002B5C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px">⚖</span>
+                <div style="flex:1"><b style="font-size:13.5px">Governance debt is the headline, not the volume</b><div style="font-size:12.5px;color:#4A4A4A">Three solutions are missing an owner and one grant has waited four hours. Those two numbers decide whether the portfolio is governed.</div></div>
+                <button onClick="{{ goPortfolio }}" style="all:unset;display:inline-flex;align-items:center;height:34px;padding:0 14px;border-radius:8px;background:#FFFFFE;border:1px solid #C4BFAE;font-size:13px;font-weight:600;cursor:pointer;flex:none">Open portfolio</button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isCtPortfolio }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);overflow:hidden">
+                <table style="width:100%;border-collapse:collapse">
+                  <thead><tr>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Solution</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Status</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Classification</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Data class</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Ownership gate</th>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ sols }}" as="s" hint-placeholder-count="5">
+                      <tr onClick="{{ s.onOpen }}" style="cursor:pointer">
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:13px">{{ s.name }}<div style="font-size:11.5px;color:#8A8A8A">{{ s.kind }}</div></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6"><span style="padding:3px 9px;border-radius:9999px;font-size:11.5px;font-weight:600;background:{{ s.bg }};color:{{ s.fg }}">{{ s.status }}</span></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:12.5px;color:{{ s.clsColor }};font-weight:600">{{ s.cls }}</td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:12.5px;color:#4A4A4A">{{ s.data }}</td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6"><span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:{{ s.gateColor }}">{{ s.gateIcon }} {{ s.gate }}</span></td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+                <div style="padding:11px 14px;font-size:12px;color:#8A8A8A">Technical, business and support owner must all be assigned before a solution can reach ACTIVE. The gate is the governance, not a label.</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isCtGrants }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;margin-bottom:14px">
+                <div style="flex:1;min-width:420px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+                  <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A;font-weight:600;margin-bottom:14px">Progressive trust ladder</div>
+                  <div style="display:flex;align-items:center;gap:0">
+                    <sc-for list="{{ trust }}" as="t" hint-placeholder-count="6">
+                      <div style="flex:1;text-align:center">
+                        <div style="height:6px;border-radius:9999px;background:{{ t.dot }};margin:0 2px"></div>
+                        <div style="font-size:11.5px;font-weight:600;margin-top:8px">{{ t.label }}</div>
+                        <div style="font-size:11px;color:#8A8A8A">{{ t.desc }}</div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </div>
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);overflow:hidden">
+                <table style="width:100%;border-collapse:collapse">
+                  <thead><tr>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Solution · entity</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Operation</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Requested by → decided by</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Decision</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Separation of duties</th>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ grants }}" as="g" hint-placeholder-count="5">
+                      <tr>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:13px">{{ g.sol }}<div style="font-size:11.5px;color:#8A8A8A;font-family:'Geist Mono','SF Mono',Consolas,monospace">{{ g.ext }}</div></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6"><span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:6px;background:{{ g.opBg }};color:{{ g.opFg }}">{{ g.op }}</span> <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;background:{{ g.envBg }};color:{{ g.envFg }}">{{ g.env }}</span></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:12.5px;color:#4A4A4A">{{ g.req }} → {{ g.app }}</td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6"><span style="padding:3px 9px;border-radius:9999px;font-size:11.5px;font-weight:600;background:{{ g.bg }};color:{{ g.fg }}">{{ g.dec }}</span></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:12.5px;font-weight:600;color:{{ g.sodColor }}">{{ g.sod }}</td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+                <div style="padding:11px 14px;font-size:12px;color:#8A8A8A">Requester must not be approver. Where they were the same person the grant was refused — the ledger keeps the refusal rather than hiding it.</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isCtConnReg }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);overflow:hidden">
+                <table style="width:100%;border-collapse:collapse">
+                  <thead><tr>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Connection</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Environment</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Validation</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Owner</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Secrets</th>
+                    <th style="text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Write enablement</th>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ conns }}" as="c" hint-placeholder-count="6">
+                      <tr>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:13px">{{ c.alias }}<div style="font-size:11.5px;color:#8A8A8A;font-family:'Geist Mono','SF Mono',Consolas,monospace">{{ c.key }}</div></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6">
+                          <sc-if value="{{ c.envKnown }}" hint-placeholder-val="{{ true }}"><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;background:{{ c.envBg }};color:{{ c.envFg }}">{{ c.env }}</span></sc-if>
+                          <sc-if value="{{ c.envUnknown }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;color:#8A8A8A">not recorded</span></sc-if>
+                        </td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6"><span style="padding:3px 9px;border-radius:9999px;font-size:11.5px;font-weight:600;background:{{ c.bg }};color:{{ c.fg }}">{{ c.status }}</span></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:12.5px;color:{{ c.ownerColor }}">{{ c.owner }}</td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:12.5px;color:{{ c.sealColor }}">{{ c.seal }}</td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;text-align:right">
+                          <button onClick="{{ c.onGovern }}" style="all:unset;display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:{{ c.gCursor }};background:{{ c.gBg }};color:{{ c.gFg }};border:1px solid {{ c.gBorder }}">{{ c.gLabel }}</button>
+                        </td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+                <div style="padding:11px 14px;font-size:12px;color:#8A8A8A">Connections are created and sealed in Developer Studio. What the Control Tower governs is who owns them and whether they may write.</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isCtTokenReg }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#FDF7E6;border:1px solid #efd9ad;border-radius:12px;padding:14px 16px;margin-bottom:14px;font-size:13px;color:#4A4A4A">
+                <b style="color:#8B5A00">Separation of duties in force.</b> A consultant cannot issue a credential on a solution they do not own — the attempt is recorded, refused, and appears in the audit trail rather than silently failing.
+              </div>
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);overflow:hidden">
+                <table style="width:100%;border-collapse:collapse">
+                  <thead><tr>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Credential</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Solution</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Kind</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Lifecycle</th>
+                    <th style="text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Governance</th>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ tokens }}" as="t" hint-placeholder-count="5">
+                      <tr>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:13px">{{ t.name }}</td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:13px;color:#4A4A4A">{{ t.sol }}</td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6"><span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:6px;background:{{ t.kBg }};color:{{ t.kFg }}">{{ t.type }}</span></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6"><span style="padding:3px 9px;border-radius:9999px;font-size:11.5px;font-weight:600;background:{{ t.bg }};color:{{ t.fg }}">{{ t.state }}</span> <span style="font-size:12px;color:#8A8A8A">{{ t.exp }}</span></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;text-align:right">
+                          <button onClick="{{ t.onRotate }}" style="all:unset;display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:{{ t.cursor }};background:#FFFFFE;border:1px solid #C4BFAE;color:{{ t.actColor }};margin-right:6px">Rotate</button>
+                          <button onClick="{{ t.onRevoke }}" style="all:unset;display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:{{ t.cursor }};background:{{ t.revBg }};color:{{ t.revFg }};border:1px solid {{ t.revBorder }}">Revoke</button>
+                        </td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isCtAudit }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);overflow:hidden">
+                <sc-for list="{{ audit }}" as="a" hint-placeholder-count="5">
+                  <button onClick="{{ a.onOpen }}" style="all:unset;display:flex;gap:14px;align-items:flex-start;width:100%;padding:13px 16px;border-bottom:1px solid #E5E1D6;cursor:pointer">
+                    <span style="width:30px;height:30px;flex:none;border-radius:50%;background:#E6EBF1;color:#002B5C;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">{{ a.ini }}</span>
+                    <span style="flex:1;min-width:0">
+                      <span style="display:block;font-size:13px"><b>{{ a.actor }}</b> <span style="color:#8A8A8A">({{ a.role }})</span> · <span style="font-family:'Geist Mono','SF Mono',Consolas,monospace;font-size:12px;color:#002B5C">{{ a.act }}</span></span>
+                      <span style="display:block;font-size:12.5px;color:#4A4A4A;margin-top:2px">{{ a.obj }}</span>
+                      <span style="display:block;font-size:12px;color:#8A8A8A;margin-top:3px;font-family:'Geist Mono','SF Mono',Consolas,monospace">{{ a.from }} → {{ a.to }}</span>
+                    </span>
+                    <span style="flex:none;font-size:12px;color:#8A8A8A;white-space:nowrap">{{ a.when }}</span>
+                  </button>
+                </sc-for>
+                <div style="padding:11px 14px;font-size:12px;color:#8A8A8A">Every row is a ConfigAudit record. Blocked attempts are kept alongside successful changes.</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isCtAnalytics }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+                <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="6">
+                  <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:16px 18px;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A;font-weight:600">{{ k.label }}</div>
+                    <div style="font-family:'Source Serif 4',Georgia,serif;font-size:30px;font-weight:600;margin:8px 0 4px">{{ k.v }}</div>
+                    <div style="font-size:12.5px;color:#8A8A8A;line-height:1.45">{{ k.note }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="margin-top:14px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:18px 20px;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A;font-weight:600;margin-bottom:16px">Reuse by solution type</div>
+                <div style="display:flex;flex-direction:column;gap:12px">
+                  <sc-for list="{{ bars }}" as="b" hint-placeholder-count="4">
+                    <div style="display:flex;align-items:center;gap:14px">
+                      <span style="width:190px;flex:none;font-size:13px">{{ b.label }}</span>
+                      <span style="flex:1;height:12px;border-radius:9999px;background:#F4F2EB;overflow:hidden;display:block"><span style="display:block;height:100%;border-radius:9999px;width:{{ b.pct }};background:{{ b.color }}"></span></span>
+                      <span style="width:56px;flex:none;text-align:right;font-size:12.5px;font-family:'Geist Mono','SF Mono',Consolas,monospace">{{ b.v }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isCtUsers }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);overflow:hidden">
+                <table style="width:100%;border-collapse:collapse">
+                  <thead><tr>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Person</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Role</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Organization</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Workspace entitlement</th>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ users }}" as="u" hint-placeholder-count="6">
+                      <tr>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:13px">{{ u.name }}<div style="font-size:11.5px;color:#8A8A8A;font-family:'Geist Mono','SF Mono',Consolas,monospace">{{ u.mail }}</div></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6"><span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:6px;background:{{ u.rBg }};color:{{ u.rFg }};font-family:'Geist Mono','SF Mono',Consolas,monospace">{{ u.role }}</span></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:13px;color:#4A4A4A">{{ u.org }}</td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:12.5px;color:#4A4A4A">{{ u.ws }}</td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+                <div style="padding:11px 14px;font-size:12px;color:#8A8A8A">The <b>support</b> account exists here only once PR-Rbac adds role #12 — until then the persona is designed but not assignable.</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isCtOrgs }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+                <sc-for list="{{ orgs }}" as="o" hint-placeholder-count="3">
+                  <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:18px 20px;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+                    <div style="font-family:'Source Serif 4',Georgia,serif;font-size:18px;font-weight:600">{{ o.name }}</div>
+                    <div style="font-size:12px;color:#8A8A8A;margin-top:2px">{{ o.type }}</div>
+                    <div style="display:flex;gap:18px;margin-top:16px">
+                      <div><div style="font-size:20px;font-weight:600">{{ o.users }}</div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600">People</div></div>
+                      <div><div style="font-size:20px;font-weight:600">{{ o.sols }}</div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600">Solutions</div></div>
+                      <div><div style="font-size:20px;font-weight:600;color:{{ o.connColor }}">{{ o.conns }}</div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600">Connections</div></div>
+                    </div>
+                    <p style="font-size:12.5px;color:#8A8A8A;margin:14px 0 0">{{ o.note }}</p>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isCtRoles }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);overflow:hidden">
+                <table style="width:100%;border-collapse:collapse">
+                  <thead><tr>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Role</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Developer Studio</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Operations Center</th>
+                    <th style="text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#8A8A8A;font-weight:600;padding:9px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6">Control Tower</th>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ roles }}" as="r" hint-placeholder-count="6">
+                      <tr>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6;font-size:12.5px;font-family:'Geist Mono','SF Mono',Consolas,monospace">{{ r.role }} <span style="font-size:11px;color:#8A8A8A;font-family:'Geist','Inter',system-ui,sans-serif">{{ r.note }}</span></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6"><span style="padding:3px 9px;border-radius:9999px;font-size:11.5px;font-weight:600;background:{{ r.sBg }};color:{{ r.sFg }}">{{ r.sL }}</span></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6"><span style="padding:3px 9px;border-radius:9999px;font-size:11.5px;font-weight:600;background:{{ r.oBg }};color:{{ r.oFg }}">{{ r.oL }}</span></td>
+                        <td style="padding:9px 12px;border-bottom:1px solid #E5E1D6"><span style="padding:3px 9px;border-radius:9999px;font-size:11.5px;font-weight:600;background:{{ r.cBg }};color:{{ r.cFg }}">{{ r.cL }}</span></td>
+                      </tr>
+                    </sc-for>
+                    <tr>
+                      <td colspan="4" style="padding:12px;border-bottom:1px solid #E5E1D6;font-size:12.5px;color:#8A8A8A;background:#FAF9F5">The remaining roles in the model are resolved from <span style="font-family:'Geist Mono','SF Mono',Consolas,monospace">role-metadata.ts</span> at runtime and all render 🔒 for these three workspaces. They are not restated here so this screen cannot drift from the code.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isCtPartner }}" hint-placeholder-val="{{ false }}">
+              <div style="max-width:640px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);padding:20px 22px">
+                <sc-for list="{{ partner }}" as="p" hint-placeholder-count="5">
+                  <div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #F1EEE5">
+                    <span style="flex:1"><span style="display:block;font-size:13.5px;font-weight:600">{{ p.label }}</span><span style="display:block;font-size:12px;color:#8A8A8A">{{ p.note }}</span></span>
+                    <span style="flex:none;font-size:13px;font-family:'Geist Mono','SF Mono',Consolas,monospace;color:#4A4A4A">{{ p.v }}</span>
+                  </div>
+                </sc-for>
+                <div style="display:flex;gap:10px;margin-top:18px">
+                  <button onClick="{{ savePartner }}" style="all:unset;display:inline-flex;align-items:center;height:38px;padding:0 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:{{ mutCursor }};background:{{ mutBg }};color:{{ mutFg }}">Save settings</button>
+                  <span style="font-size:12.5px;color:#8A8A8A;align-self:center">{{ mutNote }}</span>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isPrm }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#FDF7E6;border:1px solid #efd9ad;border-radius:12px;padding:20px 22px;margin-bottom:16px">
+                <div style="display:flex;align-items:center;gap:9px;font-weight:700;color:#8B5A00;font-size:14px">⚠ Designed, not yet live</div>
+                <p style="font-size:13.5px;color:#4A4A4A;margin:8px 0 0;max-width:660px;text-wrap:pretty">{{ prmBody }}</p>
+                <div style="font-family:'Geist Mono','SF Mono',Consolas,monospace;font-size:12.5px;color:#8B5A00;margin-top:10px">source: Digital Access Meter — not built (PR-M)</div>
+              </div>
+              <div style="position:relative">
+                <div style="filter:grayscale(1);opacity:.42;pointer-events:none">
+                  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+                    <sc-for list="{{ prmCards }}" as="c" hint-placeholder-count="3">
+                      <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;padding:15px 16px">
+                        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A;font-weight:600">{{ c.label }}</div>
+                        <div style="font-size:26px;font-weight:600;margin:8px 0 2px;color:#C4C4C4">—</div>
+                        <div style="font-size:12px;color:#8A8A8A">{{ c.note }}</div>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <div style="margin-top:14px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+                    <div style="height:38px;background:#F4F2EB;border-bottom:1px solid #E5E1D6"></div>
+                    <sc-for list="{{ prmRows }}" as="r" hint-placeholder-count="4">
+                      <div style="display:flex;justify-content:space-between;padding:11px 14px;border-bottom:1px solid #E5E1D6;font-size:13px"><span>{{ r.k }}</span><span style="color:#C4C4C4">—</span></div>
+                    </sc-for>
+                  </div>
+                </div>
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+                  <span style="background:#FFFFFE;border:1px solid #C4BFAE;border-radius:9999px;padding:7px 16px;font-size:12.5px;font-weight:600;box-shadow:0 2px 6px rgba(0,0,0,.06)">No numbers until the meter is real</span>
+                </div>
+              </div>
+            </sc-if>
+          </sc-if>
+
+          <sc-if value="{{ stLoading }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);overflow:hidden">
+              <div style="height:38px;background:#F4F2EB;border-bottom:1px solid #E5E1D6"></div>
+              <sc-for list="{{ skRows }}" as="r" hint-placeholder-count="6">
+                <div style="display:flex;gap:18px;padding:12px 14px;border-bottom:1px solid #E5E1D6;align-items:center">
+                  <div style="height:11px;width:34%;border-radius:6px;background:linear-gradient(90deg,#F1EEE5 25%,#E9E5D9 37%,#F1EEE5 63%);background-size:420px 100%;animation:ce-shim 1.2s linear infinite"></div>
+                  <div style="height:11px;width:18%;border-radius:6px;background:linear-gradient(90deg,#F1EEE5 25%,#E9E5D9 37%,#F1EEE5 63%);background-size:420px 100%;animation:ce-shim 1.2s linear infinite"></div>
+                  <div style="height:11px;width:12%;border-radius:6px;background:linear-gradient(90deg,#F1EEE5 25%,#E9E5D9 37%,#F1EEE5 63%);background-size:420px 100%;animation:ce-shim 1.2s linear infinite"></div>
+                  <div style="height:11px;flex:1;border-radius:6px;background:linear-gradient(90deg,#F1EEE5 25%,#E9E5D9 37%,#F1EEE5 63%);background-size:420px 100%;animation:ce-shim 1.2s linear infinite"></div>
+                </div>
+              </sc-for>
+              <div style="padding:10px 14px;font-size:12px;color:#8A8A8A">Reading {{ sourceShort }} — no counts shown until the query returns.</div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ stEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FFFFFE;border:1px dashed #C4BFAE;border-radius:12px;padding:44px 32px;text-align:center">
+              <div style="width:46px;height:46px;border-radius:12px;background:#F4F2EB;color:#8A8A8A;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:20px">○</div>
+              <div style="font-family:'Source Serif 4',Georgia,serif;font-size:19px;font-weight:600">{{ emptyTitle }}</div>
+              <p style="color:#4A4A4A;font-size:13.5px;max-width:470px;margin:8px auto 0;text-wrap:pretty">{{ emptyBody }}</p>
+              <p style="color:#8A8A8A;font-size:12px;margin:12px auto 0">Empty is not an error and not a setup gap — the query succeeded and returned nothing.</p>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ stSetup }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FDF7E6;border:1px solid #efd9ad;border-radius:12px;padding:26px 28px">
+              <div style="display:flex;align-items:center;gap:9px;font-weight:700;color:#8B5A00;font-size:14px">⚠ {{ setupTitle }}</div>
+              <p style="color:#4A4A4A;font-size:13.5px;margin:8px 0 0;max-width:600px;text-wrap:pretty">{{ setupBody }}</p>
+              <div style="font-family:'Geist Mono','SF Mono',Consolas,monospace;font-size:12.5px;color:#8B5A00;margin-top:12px">{{ setupCode }}</div>
+              <div style="display:flex;gap:10px;margin-top:16px">
+                <button onClick="{{ recheck }}" style="all:unset;display:inline-flex;align-items:center;height:34px;padding:0 14px;border-radius:8px;background:#FFFFFE;border:1px solid #C4BFAE;font-size:13px;font-weight:600;cursor:pointer">Re-validate connection</button>
+                <button onClick="{{ openRunbook }}" style="all:unset;display:inline-flex;align-items:center;height:34px;padding:0 14px;border-radius:8px;background:transparent;border:1px dashed #002B5C;color:#002B5C;font-size:13px;font-weight:600;cursor:pointer">Open setup runbook</button>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ stError }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-left:4px solid #991B1B;border-radius:12px;padding:26px 28px;box-shadow:0 1px 2px rgba(0,0,0,.04)">
+              <div style="display:flex;align-items:center;gap:9px;font-weight:700;color:#8E2A26;font-size:14px">✕ {{ errorTitle }}</div>
+              <p style="color:#4A4A4A;font-size:13.5px;margin:8px 0 0;max-width:600px;text-wrap:pretty">{{ errorBody }}</p>
+              <div style="font-family:'Geist Mono','SF Mono',Consolas,monospace;font-size:12.5px;color:#8E2A26;margin-top:12px">{{ errorCode }}</div>
+              <button onClick="{{ recheck }}" style="all:unset;display:inline-flex;align-items:center;height:34px;padding:0 14px;border-radius:8px;background:#FFFFFE;border:1px solid #C4BFAE;font-size:13px;font-weight:600;cursor:pointer;margin-top:16px">Retry</button>
+            </div>
+          </sc-if>
+
+        </div>
+      </sc-if>
+    </main>
+  </div>
+
+  <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;inset:0;z-index:60">
+      <div onClick="{{ closeDrawer }}" style="position:absolute;inset:0;background:rgba(26,26,26,.18)"></div>
+      <aside style="position:absolute;top:0;right:0;bottom:0;width:480px;background:#FFFFFE;border-left:4px solid #002B5C;box-shadow:0 8px 24px rgba(0,0,0,.08);animation:ce-sheet .18s ease;display:flex;flex-direction:column">
+        <div style="padding:18px 22px 14px;border-bottom:1px solid #E5E1D6;display:flex;align-items:flex-start;gap:12px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8A8A8A;font-weight:600">{{ drawerKicker }}</div>
+            <div style="font-family:'Source Serif 4',Georgia,serif;font-size:19px;font-weight:600;margin-top:3px">{{ drawerTitle }}</div>
+          </div>
+          <button onClick="{{ closeDrawer }}" style="all:unset;cursor:pointer;color:#8A8A8A;font-size:16px;padding:2px 6px">✕</button>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:18px 22px">
+          <sc-for list="{{ drawerRows }}" as="d" hint-placeholder-count="6">
+            <div style="display:flex;gap:14px;padding:8px 0;border-bottom:1px solid #F1EEE5;font-size:13px">
+              <span style="width:150px;flex:none;color:#8A8A8A">{{ d.k }}</span>
+              <span style="flex:1;font-family:{{ d.font }};color:{{ d.color }}">{{ d.v }}</span>
+            </div>
+          </sc-for>
+          <p style="font-size:12.5px;color:#8A8A8A;margin:16px 0 0;text-wrap:pretty">{{ drawerNote }}</p>
+        </div>
+      </aside>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ toastOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;bottom:22px;right:22px;z-index:80;background:#1A1A1A;color:#fff;font-size:13px;padding:11px 16px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.08);animation:ce-fade .14s ease">{{ toastMsg }}</div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:780},&quot;role&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;support&quot;,&quot;platform_admin&quot;,&quot;partner_lead&quot;,&quot;project_manager&quot;,&quot;executive_sponsor&quot;,&quot;consultant&quot;],&quot;default&quot;:&quot;support&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Session&quot;},&quot;environment&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;DEV&quot;,&quot;TEST&quot;,&quot;PROD&quot;],&quot;default&quot;:&quot;DEV&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Session&quot;},&quot;tenantConnected&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Session&quot;},&quot;dataState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Live&quot;,&quot;Loading&quot;,&quot;Empty&quot;,&quot;Needs setup&quot;,&quot;Error&quot;],&quot;default&quot;:&quot;Live&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;States&quot;}}">
+class Component extends DCLogic {
+  state = { ws:'ops', screen:'ops-home', tenantIdx:0, tenantOpen:false, drawer:null, toastOpen:false, toastMsg:'', spot:'idle', replayed:{} };
+
+  TENANTS = [
+    {key:'X5M / 100', alias:'S/4HANA sandbox — own sealed connection', env:'DEV', own:true},
+    {key:'X5M / 200', alias:'S/4HANA QA — own sealed connection', env:'TEST', own:true},
+    {key:'PRD / 400', alias:'S/4HANA production — own sealed connection', env:'PROD', own:true},
+    {key:'SF / APJ', alias:'SuccessFactors APJ — environment not recorded', env:null, own:true},
+    {key:'Shared DEV', alias:'Deployment tenant — shared, not yours', env:'DEV', own:false}
+  ];
+
+  ENVC = {DEV:{bg:'#FBE9D1',fg:'#8B5A00'}, TEST:{bg:'#E0EBF4',fg:'#1A4D6F'}, PROD:{bg:'#F4DEDB',fg:'#8E2A26'}};
+
+  BUILD = {
+    built:{label:'Built · wired', bg:'#DCEBE3', fg:'#166534'},
+    captured:{label:'Data captured · view net-new', bg:'#E0EBF4', fg:'#1A4D6F'},
+    netnew:{label:'Net-new rollup', bg:'#E6EBF1', fg:'#002B5C'},
+    compose:{label:'Built · composed here', bg:'#DCEBE3', fg:'#166534'},
+    prm:{label:'Forthcoming · Digital Access Meter', bg:'#FBE9D1', fg:'#8B5A00'}
+  };
+
+  OPS = [
+    {k:'ops-home', label:'Health overview', icon:'⌂'},
+    {k:'ops-incidents', label:'Incidents & attention', icon:'⚠'},
+    {k:'ops-broker', label:'Broker traffic', icon:'⇉'},
+    {k:'ops-writes', label:'Write ledger', icon:'✎'},
+    {k:'ops-conn', label:'Connections health', icon:'⇄'},
+    {k:'ops-fresh', label:'Catalogue freshness', icon:'⟳'},
+    {k:'ops-throttle', label:'Throttle & limits', icon:'◴'},
+    {k:'ops-tokens', label:'Tokens & credentials', icon:'⚿'},
+    {k:'ops-spot', label:'Live spot-check', icon:'▷'},
+    {k:'ops-da', label:'Digital Access use', icon:'◈', prm:true}
+  ];
+
+  CT = [
+    {k:'ct-overview', label:'Platform overview', icon:'⌂'},
+    {k:'ct-portfolio', label:'Solution portfolio', icon:'▤'},
+    {k:'ct-grants', label:'Access governance', icon:'⚖'},
+    {k:'ct-connreg', label:'Connection register', icon:'⇄'},
+    {k:'ct-tokenreg', label:'Token register', icon:'⚿'},
+    {k:'ct-audit', label:'Governance audit trail', icon:'❐'},
+    {k:'ct-cost', label:'Digital Access cost', icon:'◈', prm:true},
+    {k:'ct-analytics', label:'Portfolio analytics', icon:'◑'},
+    {k:'ct-users', label:'Users & entitlements', icon:'☰'},
+    {k:'ct-orgs', label:'Organizations', icon:'⬢'},
+    {k:'ct-roles', label:'Roles & permissions', icon:'⊞'},
+    {k:'ct-partner', label:'Partner settings', icon:'⚙'}
+  ];
+
+  META = {
+    'ops-home':{t:'Is the live integration healthy right now?', s:'Fleet status across this org, plus everything asking for attention. Rolled up from the broker audit trail, connection validation and the catalogue probe.', b:'netnew', src:'NorthboundAuditEvent · SapConnection · lib/studio/connection-health.ts', tenant:true},
+    'ops-incidents':{t:'Incidents & attention', s:'Derived from the live feeds: failing interfaces, 401 setup gaps, repeated 5xx, connections down and any PROD write attempt.', b:'netnew', src:'derived · NorthboundAuditEvent + SapConnection + NorthboundIdempotencyKey', tenant:false},
+    'ops-broker':{t:'Broker traffic', s:'Live northbound calls with honest status, latency and volume per solution and per token. Empty, unauthorised and error responses are distinct rows, never merged.', b:'captured', src:'NorthboundAuditEvent via lib/northbound/audit.ts · latency needs additive durationMs (PR-CT2)', tenant:true},
+    'ops-writes':{t:'Write ledger', s:'Every gated write, keyed by idempotency record: in-flight, completed, replayed on key reuse, or conflicted — plus writes refused at the gate, which never reach a key.', b:'captured', src:'NorthboundIdempotencyKey · blocked rows from NorthboundAuditEvent (WRITE + 4xx)', tenant:true},
+    'ops-conn':{t:'Connections health', s:'Per-connection validation status in the real vocabulary, with the SAP environment it points at and whether writes are enabled.', b:'built', src:'SapConnection.lastValidationStatus · environment · writeEnabled', tenant:true},
+    'ops-fresh':{t:'Catalogue freshness', s:'When each SAP component catalogue was last probed, and whether what the console shows is fresh or stale.', b:'netnew', src:'WS3 freshness in SAP components', tenant:true},
+    'ops-throttle':{t:'Throttle & rate-limit status', s:'The two real buckets and how close this tenant is to them, plus 429s served in the window.', b:'netnew', src:'RATE_LIMITS.sapLive (20/min) · RATE_LIMITS.northbound (60/min) · middleware.ts', tenant:true},
+    'ops-tokens':{t:'Tokens & credentials monitor', s:'Active read tokens and write credentials with last use, rotation due dates and revocations. Org-scoped, not tenant-scoped.', b:'netnew', src:'SolutionClient · lib/northbound/write-credential.ts', tenant:false},
+    'ops-spot':{t:'Live spot-check', s:'Confirm a service really returns rows right now. Read-only reuse of the Test Console path — no write is ever issued from here.', b:'built', src:'Test Console read path · /entities + /preview', tenant:true},
+    'ops-da':{t:'Live Digital Access consumption', s:'Documents created now, per solution, with spike detection. Designed and reviewed — it cannot be shown live until the meter exists.', b:'prm', src:'Digital Access Meter — not built (PR-M)', tenant:true},
+    'ct-overview':{t:'Platform overview', s:'The whole deployment at a glance: orgs, people, solutions and governance debt.', b:'compose', src:'api/admin/overview', tenant:false},
+    'ct-portfolio':{t:'Solution portfolio', s:'Every registered solution with lifecycle status, classification, data class and the three-owner completeness gate that governs promotion to Active.', b:'netnew', src:'Solution', tenant:false},
+    'ct-grants':{t:'Access-grant governance', s:'The decision ledger across solutions, with separation of duties (requester must not be approver) and the progressive-trust ladder each grant sits on.', b:'netnew', src:'ApiAccessGrant', tenant:false},
+    'ct-connreg':{t:'Connection & write register', s:'Governance posture per connection: environment, validation status, write-enablement and ownership. Connections are created in Studio; write enablement is governed here.', b:'netnew', src:'SapConnection', tenant:false},
+    'ct-tokenreg':{t:'Token & credential register', s:'Issued, rotated and revoked read tokens and write credentials — including the separation of duties that stops self-issuance on an unowned solution.', b:'netnew', src:'SolutionClient', tenant:false},
+    'ct-audit':{t:'Governance audit trail', s:'Who changed what, when: solutions, interfaces, grants, connections, tokens, promotions and decisions.', b:'captured', src:'ConfigAudit', tenant:false},
+    'ct-cost':{t:'Digital Access cost & licensing', s:'Documents by solution and period, collated for licensing. Designed now, populated when the meter lands.', b:'prm', src:'Digital Access Meter — not built (PR-M)', tenant:false},
+    'ct-analytics':{t:'Portfolio analytics & KPIs', s:'Adoption, reuse and benchmark KPIs across the portfolio.', b:'compose', src:'api/analytics · api/dashboard/kpi', tenant:false},
+    'ct-users':{t:'Users & entitlements', s:'Directory, role assignment and workspace entitlement.', b:'compose', src:'api/admin/users', tenant:false},
+    'ct-orgs':{t:'Organizations & tenancy', s:'Every organization, its people, its solutions and its own SAP connections.', b:'compose', src:'api/admin/organizations · api/organizations/[orgId]', tenant:false},
+    'ct-roles':{t:'Roles & permissions', s:'The role model and its permission matrix, resolved from code — not restated here.', b:'compose', src:'api/roles · role-metadata.ts · permission-matrix.ts', tenant:false},
+    'ct-partner':{t:'Partner settings', s:'Partner-level configuration for this deployment.', b:'compose', src:'api/partner/settings', tenant:false}
+  };
+
+  EMPTY = {
+    'ops-home':['Nothing is asking for attention','No failing interfaces, no setup gaps and no connection down for this org on the selected tenant. The feeds returned successfully with nothing in them.'],
+    'ops-incidents':['No open incidents','Every derived signal is clear for this org right now.'],
+    'ops-broker':['No northbound calls in this window','The broker audit trail returned zero events for the selected window and tenant. No traffic is not the same as no access.'],
+    'ops-writes':['No gated writes recorded','No idempotency records exist for this org and tenant. Writes are off by default.'],
+    'ops-conn':['No SAP connection for this org','A consultant adds and seals connections in Developer Studio. Until then there is nothing to validate — and no environment to show.'],
+    'ops-fresh':['No catalogue probe recorded','The catalogue has never been probed for this tenant, so there is nothing to call fresh or stale.'],
+    'ops-throttle':['No requests in the current window','Both buckets are idle. Limits are still enforced.'],
+    'ops-tokens':['No tokens issued','This org has no read tokens or write credentials. Solutions can be built without them.'],
+    'ops-spot':['No probeable service selected','Pick a solution interface with a read path to spot-check it.'],
+    'ct-overview':['Nothing deployed yet','No organizations carry solutions in this deployment.'],
+    'ct-portfolio':['No solutions registered','Nothing has been registered for governance yet.'],
+    'ct-grants':['No access decisions yet','No grant has been requested, approved or rejected for this org.'],
+    'ct-connreg':['No connections to govern','Nothing has been connected, so there is no write posture or ownership to govern.'],
+    'ct-tokenreg':['No credentials issued','Nothing to rotate or revoke.'],
+    'ct-audit':['No configuration changes recorded','ConfigAudit is empty for this scope — nothing has been changed.'],
+    'ct-analytics':['Not enough history for KPIs','Adoption and reuse need at least one completed period.'],
+    'ct-users':['No users in scope','This org has no members yet.'],
+    'ct-orgs':['No organizations','The deployment has no organizations.'],
+    'ct-roles':['Role model unavailable','The permission matrix could not be resolved from code.'],
+    'ct-partner':['No partner settings','This deployment has no partner configuration.']
+  };
+
+  CONNS = [
+    {alias:'S/4 Sandbox', key:'X5M / 100', env:'DEV', status:'OK', lastVal:'2 min ago', write:false, owner:'F. Rahman', sealed:true},
+    {alias:'S/4 QA', key:'X5M / 200', env:'TEST', status:'TIMEOUT', lastVal:'26 min ago', write:true, owner:'F. Rahman', sealed:true},
+    {alias:'S/4 Production', key:'PRD / 400', env:'PROD', status:'OK', lastVal:'8 min ago', write:true, owner:'A. Tan', sealed:true},
+    {alias:'SuccessFactors APJ', key:'SF / APJ', env:null, status:'UNAUTHORIZED', lastVal:'1 h ago', write:false, owner:'F. Rahman', sealed:true},
+    {alias:'Ariba Buying', key:'ARB / 01', env:'DEV', status:'NEVER_TESTED', lastVal:'—', write:false, owner:'Unassigned', sealed:false},
+    {alias:'S/4 Legacy pilot', key:'X4M / 100', env:'DEV', status:'NOT_FOUND', lastVal:'3 d ago', write:false, owner:'A. Tan', sealed:true}
+  ];
+
+  VS = {
+    OK:{bg:'#DCEBE3',fg:'#166534',note:'live probe returned 200'},
+    UNAUTHORIZED:{bg:'#FBE9D1',fg:'#8B5A00',note:'401/403 — communication arrangement not set up'},
+    NOT_FOUND:{bg:'#F4DEDB',fg:'#8E2A26',note:'404 — service not deployed in this tenant'},
+    TIMEOUT:{bg:'#FBE9D1',fg:'#8B5A00',note:'no response inside the probe window'},
+    ERROR:{bg:'#F4DEDB',fg:'#8E2A26',note:'probe failed with a server error'},
+    NEVER_TESTED:{bg:'#EFEDE6',fg:'#8A8A8A',note:'never validated — status unknown, not healthy'}
+  };
+
+  CALLS = [
+    {id:'c1', time:'14:32:07', sol:'Supplier Exception Monitor', token:'sec_live_9f…21', method:'GET', path:'/northbound/v1/purchase-orders', code:200, rows:24, ms:412},
+    {id:'c2', time:'14:31:44', sol:'Supplier Exception Monitor', token:'sec_live_9f…21', method:'GET', path:'/northbound/v1/supplier-invoices', code:200, rows:0, ms:388},
+    {id:'c3', time:'14:30:12', sol:'E-Invoice Monitor', token:'sec_live_3b…07', method:'GET', path:'/northbound/v1/supplier-invoices', code:401, rows:null, ms:96},
+    {id:'c4', time:'14:29:58', sol:'Finance Control Dashboard', token:'sec_live_c4…88', method:'GET', path:'/northbound/v1/journal-entries', code:429, rows:null, ms:12},
+    {id:'c5', time:'14:28:31', sol:'Finance Control Dashboard', token:'sec_live_c4…88', method:'GET', path:'/northbound/v1/fixed-assets', code:500, rows:null, ms:1841},
+    {id:'c6', time:'14:27:03', sol:'E-Invoice Monitor', token:'sec_write_1a…54', method:'POST', path:'/northbound/v1/supplier-invoices', code:403, rows:null, ms:74},
+    {id:'c7', time:'14:26:15', sol:'Supplier Exception Monitor', token:'sec_live_9f…21', method:'GET', path:'/northbound/v1/purchase-orders', code:200, rows:24, ms:437}
+  ];
+
+  WRITES = [
+    {key:'idem_7c2f91a4', sol:'E-Invoice Monitor', entity:'A_SupplierInvoice', state:'completed', env:'TEST', when:'14:22', doc:'5105600012'},
+    {key:'idem_bb10c7de', sol:'E-Invoice Monitor', entity:'A_SupplierInvoice', state:'in-flight', env:'TEST', when:'14:33', doc:'—'},
+    {key:'idem_7c2f91a4', sol:'E-Invoice Monitor', entity:'A_SupplierInvoice', state:'replayed', env:'TEST', when:'14:24', doc:'5105600012'},
+    {key:'idem_44a9e0b1', sol:'Finance Control Dashboard', entity:'A_JournalEntry', state:'conflicted', env:'TEST', when:'13:58', doc:'—'},
+    {key:'idem_91fd2c30', sol:'E-Invoice Monitor', entity:'A_SupplierInvoice', state:'blocked', env:'PROD', when:'13:41', doc:'—'}
+  ];
+
+  WST = {
+    'completed':{bg:'#DCEBE3',fg:'#166534'}, 'in-flight':{bg:'#E0EBF4',fg:'#1A4D6F'},
+    'replayed':{bg:'#E6EBF1',fg:'#002B5C'}, 'conflicted':{bg:'#FBE9D1',fg:'#8B5A00'}, 'blocked':{bg:'#F4DEDB',fg:'#8E2A26'}
+  };
+
+  FRESH = [
+    {comp:'S/4HANA API catalogue', n:'969 services', probe:'3 h ago', fresh:true},
+    {comp:'S/4HANA CDS views', n:'9,704 views', probe:'3 h ago', fresh:true},
+    {comp:'SuccessFactors APIs', n:'—', probe:'never', fresh:null},
+    {comp:'Ariba APIs', n:'214 services', probe:'6 d ago', fresh:false},
+    {comp:'Business events', n:'147 events', probe:'3 h ago', fresh:true}
+  ];
+
+  TOKENS = [
+    {name:'Supplier monitor · read', sol:'Supplier Exception Monitor', type:'read', used:'2 min ago', exp:'in 84 days', state:'active'},
+    {name:'E-invoice · read', sol:'E-Invoice Monitor', type:'read', used:'4 min ago', exp:'in 9 days', state:'expiring'},
+    {name:'E-invoice · write', sol:'E-Invoice Monitor', type:'write', used:'14:27 today', exp:'in 21 days', state:'active'},
+    {name:'Finance dashboard · read', sol:'Finance Control Dashboard', type:'read', used:'never', exp:'in 120 days', state:'active'},
+    {name:'Legacy pilot · read', sol:'Legacy pilot', type:'read', used:'31 d ago', exp:'revoked 2 d ago', state:'revoked'}
+  ];
+
+  TST = {active:{bg:'#DCEBE3',fg:'#166534'}, expiring:{bg:'#FBE9D1',fg:'#8B5A00'}, revoked:{bg:'#F4DEDB',fg:'#8E2A26'}};
+
+  INCID = [
+    {sev:'risk', title:'PROD write attempted and blocked', body:'A write credential on E-Invoice Monitor issued a POST against PRD / 400. The grant is SANDBOX_ONLY, so the broker refused it with 403.', src:'NorthboundAuditEvent + ApiAccessGrant', when:'14:27'},
+    {sev:'risk', title:'Repeated 5xx from fixed-asset service', body:'Three consecutive 500s on /fixed-assets in the last 10 minutes, latency above 1.8 s.', src:'NorthboundAuditEvent', when:'14:28'},
+    {sev:'act', title:'Connection S/4 QA timing out', body:'Validation returned TIMEOUT 26 minutes ago. Write is enabled on this connection, so this is treated as urgent.', src:'SapConnection.lastValidationStatus', when:'14:06'},
+    {sev:'act', title:'SuccessFactors APJ unauthorised', body:'401 on validation — the communication arrangement is not set up. Environment is not recorded for this connection, so no environment is shown.', src:'SapConnection.lastValidationStatus', when:'13:31'},
+    {sev:'info', title:'Ariba catalogue stale', body:'Last probed 6 days ago. Catalogue content shown for Ariba may be out of date.', src:'WS3 freshness', when:'today'}
+  ];
+
+  SEV = {risk:{bg:'#F4DEDB',fg:'#8E2A26',label:'risk'}, act:{bg:'#FBE9D1',fg:'#8B5A00',label:'act'}, info:{bg:'#E0EBF4',fg:'#1A4D6F',label:'info'}};
+
+  SOLS = [
+    {name:'Supplier Exception Monitor', status:'ACTIVE', kind:'Internal accelerator', cls:'Configure', data:'Internal', tech:'F. Rahman', biz:'L. Chandran', sup:'Ops desk'},
+    {name:'E-Invoice Monitor', status:'RESTRICTED', kind:'Client app', cls:'Custom', data:'Confidential', tech:'A. Tan', biz:'L. Chandran', sup:null},
+    {name:'Finance Control Dashboard', status:'DRAFT', kind:'Internal accelerator', cls:'Standard', data:'Internal', tech:'A. Tan', biz:null, sup:null},
+    {name:'Procurement Insight Demo', status:'ACTIVE', kind:'Presales demo', cls:'Standard', data:'Public', tech:'F. Rahman', biz:'S. Devi', sup:'Ops desk'},
+    {name:'Legacy pilot', status:'RETIRED', kind:'Experiment', cls:'Open', data:'Internal', tech:'—', biz:'—', sup:'—'}
+  ];
+
+  SOLST = {ACTIVE:{bg:'#DCEBE3',fg:'#166534'}, DRAFT:{bg:'#F4F2EB',fg:'#4A4A4A'}, RESTRICTED:{bg:'#FBE9D1',fg:'#8B5A00'}, RETIRED:{bg:'#EAEAE6',fg:'#6B6B6B'}};
+
+  CTGRANTS = [
+    {sol:'Supplier Exception Monitor', ext:'A_PurchaseOrder', op:'READ', env:'PROD', req:'F. Rahman', app:'N. Yusof', dec:'READ_ONLY', sod:true, trust:'Prod read'},
+    {sol:'Supplier Exception Monitor', ext:'A_SupplierInvoice', op:'READ', env:'TEST', req:'F. Rahman', app:'N. Yusof', dec:'APPROVED', sod:true, trust:'Test'},
+    {sol:'E-Invoice Monitor', ext:'A_SupplierInvoice', op:'CREATE', env:'SANDBOX', req:'A. Tan', app:'N. Yusof', dec:'SANDBOX_ONLY', sod:true, trust:'Sandbox'},
+    {sol:'Finance Control Dashboard', ext:'A_JournalEntry', op:'CREATE', env:'PROD', req:'A. Tan', app:'A. Tan', dec:'REJECTED', sod:false, trust:'Dev'},
+    {sol:'Procurement Insight Demo', ext:'A_PurchaseOrder', op:'READ', env:'DEV', req:'S. Devi', app:'—', dec:'REQUESTED', sod:null, trust:'Catalogue'}
+  ];
+
+  DEC = {REQUESTED:{bg:'#FBE9D1',fg:'#8B5A00'}, APPROVED:{bg:'#DCEBE3',fg:'#166534'}, SANDBOX_ONLY:{bg:'#E0EBF4',fg:'#1A4D6F'}, READ_ONLY:{bg:'#E6EBF1',fg:'#002B5C'}, REJECTED:{bg:'#F4DEDB',fg:'#8E2A26'}, EXPIRED:{bg:'#EAEAE6',fg:'#6B6B6B'}};
+
+  AUDIT = [
+    {actor:'N. Yusof', role:'platform_admin', act:'GRANT_DECIDED', obj:'ApiAccessGrant · E-Invoice Monitor / A_SupplierInvoice', from:'REQUESTED', to:'SANDBOX_ONLY', when:'today 13:12'},
+    {actor:'F. Rahman', role:'consultant', act:'CONNECTION_CREATED', obj:'SapConnection · X5M / 200', from:'—', to:'TEST · write enabled', when:'today 11:04'},
+    {actor:'N. Yusof', role:'platform_admin', act:'SOLUTION_PROMOTED', obj:'Solution · Supplier Exception Monitor', from:'DRAFT', to:'ACTIVE', when:'yesterday 16:41'},
+    {actor:'A. Tan', role:'consultant', act:'TOKEN_ISSUE_BLOCKED', obj:'SolutionClient · Procurement Insight Demo', from:'—', to:'blocked — not an owner', when:'yesterday 15:20'},
+    {actor:'F. Rahman', role:'consultant', act:'INTERFACE_VERSIONED', obj:'Interface · Supplier sync', from:'v2', to:'v3', when:'2 d ago'}
+  ];
+
+  USERS = [
+    {name:'Nadia Yusof', mail:'nadia@abeam.test', role:'platform_admin', org:'ABeam MY', ws:'Studio · Ops · Control Tower'},
+    {name:'Farid Rahman', mail:'farid@abeam.test', role:'consultant', org:'ABeam MY', ws:'Studio'},
+    {name:'Aaron Tan', mail:'aaron@abeam.test', role:'consultant', org:'ABeam MY', ws:'Studio'},
+    {name:'Support desk', mail:'support@abeam.test', role:'support', org:'ABeam MY', ws:'Operations Center'},
+    {name:'Lim Chandran', mail:'lim@client.test', role:'partner_lead', org:'Northwind Foods', ws:'Ops (read) · Control Tower (read)'},
+    {name:'Serena Devi', mail:'serena@client.test', role:'executive_sponsor', org:'Northwind Foods', ws:'Control Tower (KPIs)'}
+  ];
+
+  ORGS = [
+    {name:'ABeam MY', type:'Partner (deployment owner)', users:'12', sols:'5', conns:'6'},
+    {name:'Northwind Foods', type:'Client org', users:'4', sols:'2', conns:'2'},
+    {name:'Harbour Logistics', type:'Client org', users:'3', sols:'0', conns:'0'}
+  ];
+
+  ROLES = [
+    {role:'consultant', studio:'owner', ops:'lock', ct:'lock'},
+    {role:'support', studio:'lock', ops:'owner', ct:'lock'},
+    {role:'platform_admin', studio:'read', ops:'read', ct:'owner'},
+    {role:'partner_lead', studio:'lock', ops:'read', ct:'read'},
+    {role:'project_manager', studio:'lock', ops:'read', ct:'read'},
+    {role:'executive_sponsor', studio:'lock', ops:'lock', ct:'read'}
+  ];
+
+  RCELL = {owner:{label:'owner',bg:'#DCEBE3',fg:'#166534'}, read:{label:'read',bg:'#E6EBF1',fg:'#002B5C'}, lock:{label:'🔒',bg:'#EFEDE6',fg:'#8A8A8A'}};
+
+  KPIS = [
+    {label:'Solutions registered', v:'5', note:'2 Active · 1 Restricted · 1 Draft · 1 Retired'},
+    {label:'Interfaces in production', v:'3', note:'1 deprecated, pending removal'},
+    {label:'Reuse rate', v:'40%', note:'2 of 5 solutions reuse a registered interface'},
+    {label:'Ownership completeness', v:'2 of 5', note:'3 solutions miss at least one owner'},
+    {label:'Grants awaiting decision', v:'1', note:'oldest 4 h'},
+    {label:'Write-enabled connections', v:'2 of 6', note:'1 of them points at PROD'}
+  ];
+
+  componentDidMount(){ this.ensureScreen(); }
+  componentDidUpdate(prev){ if(prev.role !== this.props.role) this.ensureScreen(); }
+  ensureScreen(){
+    const role = this.props.role || 'support';
+    let ws = this.state.ws;
+    if(this.roleGrant(ws, role)==='lock'){
+      const other = ws==='ops' ? 'ct' : 'ops';
+      if(this.roleGrant(other, role)!=='lock'){ ws = other; }
+    }
+    const defs = ws==='ops' ? this.OPS : this.CT;
+    let screen = this.state.screen;
+    const inWs = defs.some(d=>d.k===screen);
+    if(!inWs || !this.sectionAllowed(screen, role)){
+      const first = defs.find(d=>this.sectionAllowed(d.k, role));
+      screen = first ? first.k : defs[0].k;
+    }
+    if(ws!==this.state.ws || screen!==this.state.screen) this.setState({ws, screen});
+  }
+  toggleTenant(){ this.setState(s=>({tenantOpen:!s.tenantOpen})); }
+  pickTenant(i){ this.setState({tenantIdx:i, tenantOpen:false}); this.fireToast('Tenant view switched — a cookie preference, not an authorization'); }
+  go(k){ this.setState({screen:k, tenantOpen:false, drawer:null, spot:'idle'}); }
+  goWs(ws){ this.setState({ws, screen: ws==='ops'?'ops-home':'ct-overview', tenantOpen:false, drawer:null}); }
+  fireToast(msg){ this.setState({toastOpen:true, toastMsg:msg}); clearTimeout(this._t); this._t=setTimeout(()=>this.setState({toastOpen:false}), 2400); }
+  openDrawer(d){ this.setState({drawer:d}); }
+  closeDrawer(){ this.setState({drawer:null}); }
+  runSpot(){ this.setState({spot:'running'}); clearTimeout(this._s); this._s=setTimeout(()=>this.setState({spot:'done'}), 850); }
+
+  roleGrant(ws, role){
+    const m = {
+      consultant:{studio:'owner', ops:'lock', ct:'lock'},
+      support:{studio:'lock', ops:'owner', ct:'lock'},
+      platform_admin:{studio:'read', ops:'read', ct:'owner'},
+      partner_lead:{studio:'lock', ops:'read', ct:'read'},
+      project_manager:{studio:'lock', ops:'read', ct:'read'},
+      executive_sponsor:{studio:'lock', ops:'lock', ct:'read'}
+    };
+    return (m[role]||m.consultant)[ws];
+  }
+
+  sectionAllowed(k, role){
+    if(role==='platform_admin' || role==='support' || role==='project_manager') return true;
+    if(role==='partner_lead') return !(k==='ct-users'||k==='ct-orgs'||k==='ct-roles'||k==='ct-partner'||k==='ct-overview'||k==='ct-tokenreg'||k==='ct-connreg');
+    if(role==='executive_sponsor') return k==='ct-analytics'||k==='ct-cost'||k==='ct-portfolio';
+    return false;
+  }
+
+  SPOT = [
+    {id:'sp1', label:'Supplier sync · v3 — Supplier Exception Monitor', out:'data', cols:['PurchaseOrder','Supplier','NetAmount','DocumentDate'],
+      rows:[['4500001234','Northwind Foods','12,480.00','2026-07-21'],['4500001235','Harbour Logistics','3,905.50','2026-07-22'],['4500001236','Northwind Foods','780.00','2026-07-24']]},
+    {id:'sp2', label:'Invoice pull · v1 — Supplier Exception Monitor', out:'empty', cols:[], rows:[]},
+    {id:'sp3', label:'Journal feed · v1 — Finance Control Dashboard', out:'needssetup', cols:[], rows:[]}
+  ];
+
+  screenData(role, readOnly, connected){
+    const s = this.state, scr = s.screen;
+    const tenant = this.TENANTS[s.tenantIdx];
+    const envc = e => e ? this.ENVC[e] : null;
+    const gate = ()=> readOnly ? ()=>this.fireToast('Read-only — your role cannot change this') : null;
+    const mut = (msg)=> readOnly ? ()=>this.fireToast('Read-only — your role cannot change this') : ()=>this.fireToast(msg);
+
+    const codeChip = c => {
+      if(c.code===200 && c.rows>0) return {label:'200 · '+c.rows+' rows', bg:'#DCEBE3', fg:'#166534'};
+      if(c.code===200) return {label:'200 · empty', bg:'#F4F2EB', fg:'#4A4A4A'};
+      if(c.code===401) return {label:'401 · needs setup', bg:'#FBE9D1', fg:'#8B5A00'};
+      if(c.code===403) return {label:'403 · refused', bg:'#F4DEDB', fg:'#8E2A26'};
+      if(c.code===429) return {label:'429 · throttled', bg:'#FBE9D1', fg:'#8B5A00'};
+      return {label:c.code+' · server error', bg:'#F4DEDB', fg:'#8E2A26'};
+    };
+
+    const calls = this.CALLS.map(c=>{ const ch=codeChip(c);
+      return {...c, ...ch, ms:c.ms+' ms', msColor: c.ms>1000?'#8E2A26':'#4A4A4A', methodColor: c.method==='POST'?'#8E2A26':'#002B5C',
+        onOpen:()=>this.openDrawer({kicker:'Northbound call · NorthboundAuditEvent', title:c.method+' '+c.path,
+          rows:[{k:'Time',v:c.time,font:"'Geist Mono',monospace",color:'#1A1A1A'},{k:'Solution',v:c.sol,font:'inherit',color:'#1A1A1A'},
+            {k:'Token',v:c.token,font:"'Geist Mono',monospace",color:'#1A1A1A'},{k:'Outcome',v:ch.label,font:'inherit',color:ch.fg},
+            {k:'Latency',v:c.ms+' ms',font:"'Geist Mono',monospace",color:'#1A1A1A'},{k:'Tenant',v:tenant.key,font:'inherit',color:'#1A1A1A'},
+            {k:'SAP environment',v:tenant.env||'not recorded',font:'inherit',color:tenant.env==='PROD'?'#8E2A26':'#1A1A1A'}],
+          note: c.code===200 ? 'A 200 with zero rows is recorded as an empty result, not a failure.' : c.code===403 ? 'The grant did not permit this operation in this environment, so the broker refused before SAP was called.' : 'Recorded exactly as SAP answered — nothing is normalised away.'})};
+    });
+
+    const okN = this.CONNS.filter(c=>c.status==='OK').length;
+    const attN = this.CONNS.filter(c=>c.status==='UNAUTHORIZED'||c.status==='TIMEOUT'||c.status==='ERROR'||c.status==='NOT_FOUND').length;
+    const unkN = this.CONNS.filter(c=>c.status==='NEVER_TESTED').length;
+    const errCalls = this.CALLS.filter(c=>c.code>=500).length;
+
+    const conns = this.CONNS.map(c=>{ const v=this.VS[c.status], e=envc(c.env);
+      return {alias:c.alias, key:c.key, status:c.status, lastVal:c.lastVal, owner:c.owner,
+        bg:v.bg, fg:v.fg, dot:v.fg, envKnown:!!e, envUnknown:!e, env:c.env||'', envBg:e?e.bg:'#EFEDE6', envFg:e?e.fg:'#8A8A8A',
+        wLabel:c.write?'WRITE ENABLED':'READ ONLY', wBg:c.write?'#F4DEDB':'#E6EBF1', wFg:c.write?'#8E2A26':'#002B5C',
+        ownerColor:c.owner==='Unassigned'?'#8B5A00':'#4A4A4A', seal:c.sealed?'Sealed':'Not sealed', sealColor:c.sealed?'#166534':'#8B5A00',
+        gLabel:c.write?'Revoke write':'Enable write', gCursor:readOnly?'not-allowed':'pointer',
+        gBg:readOnly?'#EAEAE6':(c.write?'#FFFFFE':'#FFFFFE'), gFg:readOnly?'#8A8A8A':(c.write?'#8E2A26':'#002B5C'), gBorder:readOnly?'#E5E1D6':'#C4BFAE',
+        onGovern: mut((c.write?'Write revoked on ':'Write enabled on ')+c.alias+' — change audited'),
+        onOpen:()=>this.openDrawer({kicker:'SapConnection', title:c.alias,
+          rows:[{k:'Tenant key',v:c.key,font:"'Geist Mono',monospace",color:'#1A1A1A'},
+            {k:'SAP environment',v:c.env||'not recorded',font:'inherit',color:c.env==='PROD'?'#8E2A26':'#1A1A1A'},
+            {k:'lastValidationStatus',v:c.status,font:"'Geist Mono',monospace",color:v.fg},
+            {k:'What that means',v:this.VS[c.status].note,font:'inherit',color:'#4A4A4A'},
+            {k:'Last validated',v:c.lastVal,font:'inherit',color:'#1A1A1A'},
+            {k:'Writes',v:c.write?'enabled':'not enabled',font:'inherit',color:c.write?'#8E2A26':'#1A1A1A'},
+            {k:'Owner',v:c.owner,font:'inherit',color:c.owner==='Unassigned'?'#8B5A00':'#1A1A1A'},
+            {k:'Secrets',v:c.sealed?'sealed server-side':'not sealed',font:'inherit',color:c.sealed?'#166534':'#8B5A00'}],
+          note:'Operations watches this status. Enabling writes and assigning ownership happen in the Control Tower; the connection itself is created in Developer Studio.'})};
+    });
+
+    const incidents = this.INCID.map(i=>{ const sv=this.SEV[i.sev];
+      return {...i, sev:sv.label, bg:sv.bg, fg:sv.fg, rail:sv.fg}; });
+    const attnFeed = this.INCID.slice(0,4).map(i=>{ const sv=this.SEV[i.sev];
+      return {sev:sv.label, bg:sv.bg, fg:sv.fg, title:i.title, src:i.src, when:i.when,
+        onOpen:()=>this.openDrawer({kicker:'Attention · derived signal', title:i.title,
+          rows:[{k:'Severity',v:sv.label,font:'inherit',color:sv.fg},{k:'First seen',v:i.when,font:'inherit',color:'#1A1A1A'},{k:'Derived from',v:i.src,font:"'Geist Mono',monospace",color:'#4A4A4A'}],
+          note:i.body})}; });
+
+    const writes = this.WRITES.map(w=>{ const st=this.WST[w.state], e=envc(w.env);
+      return {...w, key: w.state==='blocked' ? 'no key reserved' : w.key, bg:st.bg, fg:st.fg, envBg:e?e.bg:'#EFEDE6', envFg:e?e.fg:'#8A8A8A'}; });
+    const wc = k => this.WRITES.filter(w=>w.state===k).length;
+
+    const tokens = this.TOKENS.map(t=>{ const st=this.TST[t.state];
+      return {...t, bg:st.bg, fg:st.fg, kBg:t.type==='write'?'#F4DEDB':'#E6EBF1', kFg:t.type==='write'?'#8E2A26':'#002B5C',
+        usedColor:t.used==='never'?'#8A8A8A':'#4A4A4A', cursor:readOnly?'not-allowed':'pointer',
+        actColor:readOnly?'#8A8A8A':'#1A1A1A', revBg:'#FFFFFE', revFg:readOnly?'#8A8A8A':'#8E2A26', revBorder:readOnly?'#E5E1D6':'#C4BFAE',
+        onRotate: mut('Rotation scheduled for '+t.name+' — audited'), onRevoke: mut(t.name+' revoked — audited')}; });
+
+    const fresh = this.FRESH.map(f=>{ const t = f.fresh===true?{label:'Fresh',bg:'#DCEBE3',fg:'#166534'} : f.fresh===false?{label:'Stale',bg:'#FBE9D1',fg:'#8B5A00'} : {label:'Never probed',bg:'#EFEDE6',fg:'#8A8A8A'};
+      return {...f, ...t}; });
+
+    const sp = this.SPOT.find(x=>x.id===(s.spotId||'sp1')) || this.SPOT[0];
+    const spOut = sp.out;
+    const spChip = spOut==='data' ? {label:'Returns rows',bg:'#DCEBE3',fg:'#166534',http:'HTTP 200'} : spOut==='empty' ? {label:'Empty · 0 rows',bg:'#F4F2EB',fg:'#4A4A4A',http:'HTTP 200'} : {label:'Needs setup',bg:'#FBE9D1',fg:'#8B5A00',http:'HTTP 401'};
+
+    const sols = this.SOLS.map(x=>{ const st=this.SOLST[x.status]; const miss=[]; if(!x.tech)miss.push('technical'); if(!x.biz)miss.push('business'); if(!x.sup)miss.push('support');
+      const complete = miss.length===0;
+      const clsC = {Standard:'#0F766E',Configure:'#1D4ED8',Custom:'#B45309',Open:'#8A8A8A'}[x.cls]||'#8A8A8A';
+      return {name:x.name, kind:x.kind, status:x.status, bg:st.bg, fg:st.fg, cls:x.cls, clsColor:clsC, data:x.data,
+        gate: complete?'All three owners assigned':('Missing '+miss.join(' + ')), gateIcon: complete?'✓':'⚠', gateColor: complete?'#166534':'#8B5A00',
+        onOpen:()=>this.openDrawer({kicker:'Solution · governance record', title:x.name,
+          rows:[{k:'Lifecycle status',v:x.status,font:'inherit',color:st.fg},{k:'Classification',v:x.cls,font:'inherit',color:clsC},{k:'Data class',v:x.data,font:'inherit',color:'#1A1A1A'},
+            {k:'Technical owner',v:x.tech||'Unassigned',font:'inherit',color:x.tech?'#1A1A1A':'#8B5A00'},
+            {k:'Business owner',v:x.biz||'Unassigned',font:'inherit',color:x.biz?'#1A1A1A':'#8B5A00'},
+            {k:'Support owner',v:x.sup||'Unassigned',font:'inherit',color:x.sup?'#1A1A1A':'#8B5A00'}],
+          note: complete ? 'The ownership gate is satisfied — this solution may be promoted to ACTIVE.' : 'Promotion to ACTIVE is blocked until a '+miss.join(' and ')+' owner is assigned.'})};
+    });
+
+    const grants = this.CTGRANTS.map(g=>{ const d=this.DEC[g.dec], e=envc(g.env)|| {bg:'#EFEDE6',fg:'#8A8A8A'};
+      const sod = g.sod===null?'Awaiting approver':(g.sod?'Satisfied':'Violated — refused');
+      return {...g, dec:g.dec.replace(/_/g,' '), bg:d.bg, fg:d.fg, opBg:g.op==='READ'?'#E6EBF1':'#F4DEDB', opFg:g.op==='READ'?'#002B5C':'#8E2A26',
+        envBg:e.bg, envFg:e.fg, sod, sodColor: g.sod===null?'#8A8A8A':(g.sod?'#166534':'#8E2A26')}; });
+
+    const trust = [{l:'Catalogue',d:'visibility'},{l:'Sandbox',d:'safe reads'},{l:'Dev',d:'dev tenant'},{l:'Test',d:'test tenant'},{l:'Prod read',d:'read-only'},{l:'Prod write',d:'restricted'}]
+      .map((x,i)=>({label:x.l, desc:x.d, dot: i>=4?'#B45309':'#0F766E'}));
+
+    const audit = this.AUDIT.map(a=>({...a, ini:a.actor.split(' ').map(w=>w[0]).join(''),
+      onOpen:()=>this.openDrawer({kicker:'ConfigAudit record', title:a.act,
+        rows:[{k:'Actor',v:a.actor+' ('+a.role+')',font:'inherit',color:'#1A1A1A'},{k:'Object',v:a.obj,font:'inherit',color:'#1A1A1A'},
+          {k:'Before',v:a.from,font:"'Geist Mono',monospace",color:'#4A4A4A'},{k:'After',v:a.to,font:"'Geist Mono',monospace",color:'#1A1A1A'},{k:'When',v:a.when,font:'inherit',color:'#1A1A1A'}],
+        note:'Audit records are append-only. Blocked attempts are recorded with the same weight as successful changes.'})}));
+
+    const users = this.USERS.map(u=>({...u, rBg: u.role==='platform_admin'?'#E6EBF1':u.role==='support'?'#DCEBE3':'#F4F2EB', rFg: u.role==='platform_admin'?'#002B5C':u.role==='support'?'#166534':'#4A4A4A'}));
+    const orgs = this.ORGS.map(o=>({...o, connColor: o.conns==='0'?'#8B5A00':'#1A1A1A',
+      note: o.conns==='0' ? 'No SAP tenant connected — live views show the honest empty state for this org.' : 'Live views are tenant-selectable for this org.'}));
+
+    const roles = this.ROLES.map(r=>{ const c=k=>this.RCELL[k];
+      return {role:r.role, note: r.role==='support'?'· new, PR-Rbac':'',
+        sL:c(r.studio).label, sBg:c(r.studio).bg, sFg:c(r.studio).fg,
+        oL:c(r.ops).label, oBg:c(r.ops).bg, oFg:c(r.ops).fg,
+        cL:c(r.ct).label, cBg:c(r.ct).bg, cFg:c(r.ct).fg}; });
+
+    const bars = [
+      {label:'Internal accelerators', pct:'72%', v:'72%', color:'#0F766E'},
+      {label:'Client apps', pct:'34%', v:'34%', color:'#1D4ED8'},
+      {label:'Presales demos', pct:'58%', v:'58%', color:'#B45309'},
+      {label:'Experiments', pct:'12%', v:'12%', color:'#8A8A8A'}
+    ];
+
+    const partner = [
+      {label:'Partner organization', note:'Owns this deployment', v:'ABeam MY'},
+      {label:'Default data residency', note:'Applies to new client orgs', v:'ap-southeast-1'},
+      {label:'Client self-registration', note:'Whether clients may invite themselves', v:'off'},
+      {label:'Write enablement policy', note:'Who may enable a writing connection', v:'platform_admin only'},
+      {label:'Grant approval routing', note:'Where access requests land', v:'platform_admin queue'}
+    ];
+
+    return {
+      isOpsHome: scr==='ops-home', isOpsIncidents: scr==='ops-incidents', isOpsBroker: scr==='ops-broker', isOpsWrites: scr==='ops-writes',
+      isOpsConn: scr==='ops-conn', isOpsFresh: scr==='ops-fresh', isOpsThrottle: scr==='ops-throttle', isOpsTokens: scr==='ops-tokens', isOpsSpot: scr==='ops-spot',
+      isCtOverview: scr==='ct-overview', isCtPortfolio: scr==='ct-portfolio', isCtGrants: scr==='ct-grants', isCtConnReg: scr==='ct-connreg',
+      isCtTokenReg: scr==='ct-tokenreg', isCtAudit: scr==='ct-audit', isCtAnalytics: scr==='ct-analytics', isCtUsers: scr==='ct-users',
+      isCtOrgs: scr==='ct-orgs', isCtRoles: scr==='ct-roles', isCtPartner: scr==='ct-partner',
+
+      fleetCards:[
+        {label:'Connections validated OK', v:String(okN)+' of '+this.CONNS.length, note:'from lastValidationStatus, not inferred', color:'#166534'},
+        {label:'Needing attention', v:String(attN), note:'401 · timeout · 404 · error', color:'#8B5A00'},
+        {label:'Never validated', v:String(unkN), note:'unknown — not the same as healthy', color:'#8A8A8A'},
+        {label:'Server errors in 10 min', v:String(errCalls), note:'5xx on the northbound broker', color: errCalls>0?'#8E2A26':'#166534'}
+      ],
+      attnFeed, connMini: conns.slice(0,6), goIncidents:()=>this.go('ops-incidents'), goPortfolio:()=>this.go('ct-portfolio'),
+      incidents, calls,
+      brokerStats:[
+        {label:'Calls in last 10 min', v:String(this.CALLS.length), note:'across 3 solutions, 4 tokens'},
+        {label:'Median latency', v:'412 ms', note:'needs additive durationMs on the audit event (PR-CT2) — omit this card rather than estimate it'},
+        {label:'Non-200 responses', v:'4', note:'1 · 401, 1 · 403, 1 · 429, 1 · 500'}
+      ],
+      writes, writeStats:[
+        {label:'In-flight', v:String(wc('in-flight')), color:'#1A4D6F'},
+        {label:'Completed', v:String(wc('completed')), color:'#166534'},
+        {label:'Replayed', v:String(wc('replayed')), color:'#002B5C'},
+        {label:'Conflicted', v:String(wc('conflicted')), color:'#8B5A00'},
+        {label:'Blocked (PROD)', v:String(wc('blocked')), color:'#8E2A26'}
+      ],
+      conns, fresh, tokens,
+      buckets:[
+        {name:'SAP live reads', limit:'RATE_LIMITS.sapLive · 20/min', pct:'85%', fill:'#B45309', used:'3 of 20 remaining this minute', throttled:'live gauge · no 429 history', label:'Near limit', bg:'#FBE9D1', fg:'#8B5A00', note:'Edge-throttled in middleware before any audit row is written, so this bucket is a live remaining/limit reading from checkRateLimit — never a count of past 429s. Discover, Test Console and spot-checks share it per tenant.'},
+        {name:'Northbound broker', limit:'RATE_LIMITS.northbound · 60/min', pct:'38%', fill:'#0F766E', used:'23 of 60 used this minute', throttled:'1 × 429 in the last hour', label:'Headroom', bg:'#DCEBE3', fg:'#166534', note:'Throttled in-route after auth, keyed northbound:<clientId> — the 429 is audited, so its history is real and appears in broker traffic.'}
+      ],
+      spotOpts: this.SPOT.map(x=>({value:x.id, label:x.label})),
+      onSpotPick:(e)=>this.setState({spotId:e.target.value, spot:'idle'}), runSpot:()=>this.runSpot(),
+      spotIdle: s.spot==='idle', spotRunning: s.spot==='running', spotDone: s.spot==='done',
+      spotName: sp.label, spotLabel: spChip.label, spotBg: spChip.bg, spotFg: spChip.fg, spotHttp: spChip.http,
+      spotHasRows: spOut==='data', spotNoRows: spOut!=='data',
+      spotCols: sp.cols.map(c=>({c})), spotRows: sp.rows.map(r=>({cells:r.map(v=>({v}))})),
+      spotNote: spOut==='empty' ? 'The service answered 200 and returned no rows. It is reachable and authorised — there is simply nothing to read for this tenant right now.' : 'The service answered 401. The communication arrangement is not set up in this tenant, so nothing can be read yet. Nothing is broken.',
+
+      kpis: this.KPIS, sols, grants, trust, audit, users, orgs, roles, bars, partner,
+      savePartner: mut('Partner settings saved — change audited'),
+      mutBg: readOnly?'#EAEAE6':'#002B5C', mutFg: readOnly?'#8A8A8A':'#fff', mutCursor: readOnly?'not-allowed':'pointer',
+      mutNote: readOnly?'Your role can read these settings but not change them.':'Every change is written to ConfigAudit.',
+
+      prmBody: scr==='ops-da' ? 'Live Digital Access consumption needs the Digital Access Meter, which does not exist yet. The screen is designed and reviewed so it can ship the day the meter lands — but it will never show an invented number.' : 'Digital Access cost and licensing collation needs the Digital Access Meter. The layout is agreed; the figures stay blank until real documents are metered.',
+      prmCards: scr==='ops-da'
+        ? [{label:'Documents created today',note:'per solution, live'},{label:'Spike detection',note:'vs. 7-day baseline'},{label:'Peak hour',note:'documents per hour'}]
+        : [{label:'Documents this period',note:'by solution'},{label:'Licensable share',note:'per SAP contract line'},{label:'Trend vs last period',note:'quarter on quarter'}],
+      prmRows: scr==='ops-da'
+        ? [{k:'Supplier Exception Monitor'},{k:'E-Invoice Monitor'},{k:'Finance Control Dashboard'},{k:'Procurement Insight Demo'}]
+        : [{k:'Q1 · by solution'},{k:'Q2 · by solution'},{k:'Export for licensing review'},{k:'Contract line reconciliation'}]
+    };
+  }
+
+  renderVals(){
+    const s=this.state, p=this.props;
+    const role = p.role || 'support';
+    const ds = p.dataState || 'Live';
+    const connected = (p.tenantConnected==null) ? true : !!p.tenantConnected;
+    const envPref = p.environment || 'DEV';
+    const ws = s.ws;
+    const scr = s.screen;
+    const meta = this.META[scr] || this.META['ops-home'];
+    const grant = this.roleGrant(ws, role);
+    const sectionOk = this.sectionAllowed(scr, role);
+    const isLocked = grant==='lock' || !sectionOk;
+    const readOnly = grant==='read';
+    const wsLocked = grant==='lock';
+
+    const wsDefs=[{k:'studio',label:'Developer Studio',icon:'◐'},{k:'ops',label:'Operations Center',icon:'◔'},{k:'control',label:'Control Tower',icon:'⬡'}];
+    const workspaces = wsDefs.map(w=>{
+      const key = w.k==='control'?'ct':w.k;
+      const g = this.roleGrant(key==='ct'?'ct':key, role);
+      const locked = g==='lock';
+      const on = (w.k==='ops'&&ws==='ops') || (w.k==='control'&&ws==='ct');
+      return {label:w.label, icon:w.icon, locked,
+        onClick:()=>{ if(w.k==='studio'){ this.fireToast('Developer Studio — the built consultant workspace'); return; } this.goWs(w.k==='control'?'ct':'ops'); },
+        bg:on?'rgba(255,255,255,.14)':'transparent', color:locked?'rgba(255,255,255,.4)':(on?'#fff':'rgba(255,255,255,.82)'), weight:on?'600':'500'};
+    });
+
+    const defs = ws==='ops' ? this.OPS : this.CT;
+    const sections = defs.map(d=>{
+      const allowed = !isLocked && this.sectionAllowed(d.k, role);
+      const active = scr===d.k && allowed;
+      return {label:d.label, icon:d.icon, prm:!!d.prm, locked:!allowed,
+        onClick: allowed?()=>this.go(d.k):()=>this.fireToast(d.label+' — locked for the '+role+' role'),
+        bg:active?'rgba(255,255,255,.14)':'transparent', color:allowed?(active?'#fff':'rgba(255,255,255,.82)'):'rgba(255,255,255,.4)', weight:active?'600':'500'};
+    });
+
+    const tenant = this.TENANTS[s.tenantIdx];
+    const envName = connected ? (tenant.env || null) : null;
+    const envc = envName ? this.ENVC[envName] : null;
+    const tenants = this.TENANTS.map((t,i)=>({key:t.key, alias:t.alias, env:t.env||'', envKnown:!!t.env,
+      envBg:t.env?this.ENVC[t.env].bg:'#EFEDE6', envFg:t.env?this.ENVC[t.env].fg:'#8A8A8A',
+      dot:t.own?'#002B5C':'#C4C4C4', active:i===s.tenantIdx, bg:i===s.tenantIdx?'#F4F2EB':'transparent', onClick:()=>this.pickTenant(i)}));
+
+    const tenantPointed = !isLocked && !!meta.tenant;
+    const prod = envName==='PROD';
+    const build = this.BUILD[meta.b];
+    const isPrm = meta.b==='prm';
+
+    let st = ds;
+    if(!connected && meta.tenant) st = 'Empty';
+    if(isPrm) st = 'Forthcoming';
+    const emptyPair = this.EMPTY[scr] || ['No data','The query returned nothing.'];
+
+    const drawer = s.drawer;
+
+    return {
+      ...this.screenData(role, readOnly, connected),
+      isPrm: isPrm && !isLocked,
+      workspaces, sections,
+      wsName: ws==='ops'?'Operations Center':'Control Tower',
+      crumb: (this.META[scr]||{}).t || '',
+      railDot: ws==='ops'?'#8fd0a8':'#cfd7e0',
+      railFoot: ws==='ops'?'Feeds live · broker audit 4 s ago':'Governance scope: all organizations',
+      tenantLabel: connected ? tenant.key : 'No SAP tenant connected',
+      tenantOpen: s.tenantOpen, tenants, toggleTenant:()=>this.toggleTenant(), noTenant: !connected,
+      envKnown: !!envc, envLabel: envName||'', envBg: envc?envc.bg:'#EFEDE6', envFg: envc?envc.fg:'#8A8A8A',
+      originDot: connected ? (tenant.own?'#002B5C':'#C4C4C4') : '#C4C4C4',
+      roleLabel: role, initials: role==='support'?'SD':role==='platform_admin'?'NY':'LC',
+      onMainClick: ()=>{ if(s.tenantOpen) this.setState({tenantOpen:false}); },
+
+      isLocked, isOpen: !isLocked, readOnly,
+      readOnlyNote: role==='platform_admin' ? 'Platform Admin has oversight here — governance mutations for this workspace belong to its owner role.' : 'Your role can view this workspace for your organization but cannot change anything in it.',
+      lockTitle: wsLocked ? ((ws==='ops'?'Operations Center':'Control Tower')+' is role-gated') : (meta.t+' is role-gated'),
+      lockBody: wsLocked
+        ? ('The '+role+' role does not include this workspace. The Operations Center belongs to support, the Control Tower to platform_admin; every other role sees it locked.')
+        : ('The '+role+' role can enter this workspace, but not this section. Pick an unlocked section in the rail — the ones your role is accountable for are the ones without a padlock.'),
+
+      tenantPointed, stripBg: prod?'#FDF7E6':'#FFFFFE', stripBorder: prod?'#efd9ad':'#E5E1D6',
+      stripLead: connected ? 'Live view pointed at' : 'No SAP tenant connected —',
+      stripTenant: connected ? tenant.key : '',
+      stripNote: !connected ? 'no SAP tenant is connected for this org. A consultant adds a connection in Developer Studio.' : (prod ? '— production landscape. Every action here touches real business data.' : (envc ? '' : '— environment not recorded for this connection, so no environment is claimed.')),
+
+      title: meta.t, subtitle: meta.s, sourceNote: meta.src,
+      buildLabel: build.label, buildBg: build.bg, buildFg: build.fg,
+
+      showBody: st==='Live' || st==='Forthcoming',
+      stLoading: st==='Loading', stEmpty: st==='Empty', stSetup: st==='Needs setup', stError: st==='Error',
+      skRows:[{},{},{},{},{},{}], sourceShort: meta.src.split(' · ')[0],
+      emptyTitle: emptyPair[0], emptyBody: emptyPair[1],
+      setupTitle:'Not set up in this tenant', setupCode:'HTTP 401 · communication arrangement missing',
+      setupBody:'The connection authenticated but the SAP side has no communication arrangement for this scenario, so the console cannot read it. This is distinct from an error and from an empty result — nothing is broken, something is unconfigured.',
+      errorTitle:'The read failed', errorCode:'HTTP 502 · upstream gateway',
+      errorBody:'The console could not complete this read. No counts, no health and no status are shown, because the truthful answer right now is that we do not know.',
+      recheck:()=>this.fireToast('Re-validating — status will update from the real probe'),
+      openRunbook:()=>this.fireToast('Setup runbook — SAP communication arrangement'),
+
+      drawerOpen: !!drawer, closeDrawer:()=>this.closeDrawer(),
+      drawerKicker: drawer?drawer.kicker:'', drawerTitle: drawer?drawer.title:'', drawerRows: drawer?drawer.rows:[], drawerNote: drawer?drawer.note:'',
+
+      toastOpen: s.toastOpen, toastMsg: s.toastMsg
+    };
+  }
+}
+</script>
+</body>
+</html>
