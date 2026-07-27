@@ -1,7 +1,7 @@
 /** Phase 17: Role capability matrix — defines what each role can do */
 
 import type { UserRole } from "@/types/assessment";
-import { ROLE_HIERARCHY } from "@/types/assessment";
+import { ALL_USER_ROLES, ROLE_HIERARCHY } from "@/types/assessment";
 import { mapLegacyRole } from "@/lib/auth/role-migration";
 
 // Re-export fine-grained permission system from permission-matrix
@@ -252,18 +252,10 @@ export function canAssignRole(managerRole: string, targetRole: string): boolean 
 
 /**
  * Get all valid UserRole values.
+ *
+ * Re-exported from the single derived source rather than re-listed. This array
+ * used to be hand-written, and it is what the role round-trip guard iterates —
+ * so a role missing from both here and `VALID_ROLES` left that guard passing
+ * over a role neither list knew about. See `ALL_USER_ROLES`.
  */
-export const ALL_ROLES: UserRole[] = [
-  "platform_admin",
-  "partner_lead",
-  "consultant",
-  "project_manager",
-  "solution_architect",
-  "process_owner",
-  "it_lead",
-  "data_migration_lead",
-  "executive_sponsor",
-  "viewer",
-  "client_admin",
-  "support",
-];
+export const ALL_ROLES: UserRole[] = [...ALL_USER_ROLES];

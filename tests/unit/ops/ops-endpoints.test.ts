@@ -16,8 +16,12 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   auditFindMany: vi.fn(),
+  auditCount: vi.fn(),
+  auditGroupBy: vi.fn(),
   keyFindMany: vi.fn(),
+  keyCount: vi.fn(),
   connectionFindMany: vi.fn(),
+  connectionCount: vi.fn(),
   clientFindMany: vi.fn(),
   clientCount: vi.fn(),
   solutionFindMany: vi.fn(),
@@ -26,16 +30,33 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    northboundAuditEvent: { findMany: mocks.auditFindMany },
-    northboundIdempotencyKey: { findMany: mocks.keyFindMany },
-    sapConnection: { findMany: mocks.connectionFindMany },
+    northboundAuditEvent: {
+      findMany: mocks.auditFindMany,
+      count: mocks.auditCount,
+      groupBy: mocks.auditGroupBy,
+    },
+    northboundIdempotencyKey: { findMany: mocks.keyFindMany, count: mocks.keyCount },
+    sapConnection: { findMany: mocks.connectionFindMany, count: mocks.connectionCount },
     solution: { findMany: mocks.solutionFindMany },
     solutionClient: { findMany: mocks.clientFindMany, count: mocks.clientCount },
   },
 }));
 
+/**
+ * `groupBy` is called several times per request with different `by` arrays.
+ * Routing on `by` keeps each test's intent readable — a test about environment
+ * bindings sets the binding groups and nothing else.
+ */
+function groupsBy(config: Record<string, unknown[]>) {
+  mocks.auditGroupBy.mockImplementation((args: { by: string[] }) =>
+    Promise.resolve(config[args.by.join(",")] ?? []),
+  );
+}
+
 import { GET as brokerTraffic } from "@/app/api/ops/broker-traffic/route";
 import { GET as connectionsHealth } from "@/app/api/ops/connections-health/route";
+import { GET as incidents } from "@/app/api/ops/incidents/route";
+import { GET as throttle } from "@/app/api/ops/throttle/route";
 import { GET as tokens } from "@/app/api/ops/tokens/route";
 import { GET as writeLedger } from "@/app/api/ops/write-ledger/route";
 
@@ -48,18 +69,29 @@ function req(url = "https://x.test/api/ops/broker-traffic") {
   return new NextRequest(url);
 }
 
+/**
+ * Every Ops route, so the gate and scoping assertions below iterate rather than
+ * being written per route. A new endpoint that is not added here is not covered
+ * — which is the point: adding it is one line, and forgetting it is visible.
+ */
 const ROUTES = [
   ["broker-traffic", () => brokerTraffic(req())],
   ["write-ledger", () => writeLedger(req("https://x.test/api/ops/write-ledger"))],
   ["connections-health", () => connectionsHealth()],
   ["tokens", () => tokens(req("https://x.test/api/ops/tokens"))],
+  ["throttle", () => throttle(req("https://x.test/api/ops/throttle"))],
+  ["incidents", () => incidents(req("https://x.test/api/ops/incidents"))],
 ] as const;
 
 beforeEach(() => {
   for (const m of Object.values(mocks)) m.mockReset();
   mocks.auditFindMany.mockResolvedValue([]);
+  mocks.auditCount.mockResolvedValue(0);
+  mocks.auditGroupBy.mockResolvedValue([]);
   mocks.keyFindMany.mockResolvedValue([]);
+  mocks.keyCount.mockResolvedValue(0);
   mocks.connectionFindMany.mockResolvedValue([]);
+  mocks.connectionCount.mockResolvedValue(0);
   mocks.clientFindMany.mockResolvedValue([]);
   mocks.clientCount.mockResolvedValue(0);
   mocks.solutionFindMany.mockResolvedValue([]);
@@ -154,14 +186,20 @@ describe("secret-safety is a property of the query, not of remembering to redact
 describe("broker traffic is honest about what it cannot see", () => {
   it("keeps empty distinct from every failure, and from ok", async () => {
     mocks.getCurrentUser.mockResolvedValue(SUPPORT);
-    mocks.auditFindMany.mockResolvedValue([
-      row({ status: 200, rowCount: 3 }),
-      row({ status: 200, rowCount: 0 }),
-      row({ status: 403 }),
-      row({ status: 429 }),
-      row({ status: 502 }),
-      row({ status: 404 }),
-    ]);
+    // Counted by the database over the window, not by looping the page. Two
+    // 2xx rows, one of which read zero records.
+    groupsBy({
+      status: [
+        { status: 200, _count: { _all: 2 } },
+        { status: 403, _count: { _all: 1 } },
+        { status: 429, _count: { _all: 1 } },
+        { status: 502, _count: { _all: 1 } },
+        { status: 404, _count: { _all: 1 } },
+      ],
+    });
+    mocks.auditCount.mockImplementation((args: { where: { rowCount?: number } }) =>
+      Promise.resolve(args.where?.rowCount === 0 ? 1 : 0),
+    );
 
     const body = await (await brokerTraffic(req())).json();
     expect(body.data.counts.byStatus).toEqual({
@@ -172,6 +210,30 @@ describe("broker traffic is honest about what it cannot see", () => {
       error: 1,
       not_found: 1,
     });
+  });
+
+  it("counts over the WINDOW, not over the page it returns", async () => {
+    // The defect: every count was derived from `rows`, which is capped by
+    // `limit`. A window holding 5,000 calls reported `total: 100`, and
+    // `opsLimit`'s own comment says silent truncation is never acceptable.
+    mocks.getCurrentUser.mockResolvedValue(SUPPORT);
+    mocks.auditFindMany.mockResolvedValue(Array.from({ length: 100 }, () => row({ status: 200 })));
+    // The window total, and no empty reads / no refused-before-connection rows.
+    mocks.auditCount.mockImplementation((args: { where: Record<string, unknown> }) =>
+      Promise.resolve("rowCount" in args.where || "connectionId" in args.where ? 0 : 5000),
+    );
+    groupsBy({ status: [{ status: 200, _count: { _all: 5000 } }] });
+
+    const body = await (await brokerTraffic(req())).json();
+    expect(body.data.counts.total).toBe(5000);
+    expect(body.data.counts.byStatus.ok).toBe(5000);
+    expect(body.data.events).toHaveLength(100);
+    expect(body.data.truncated).toBe(true);
+    // And the page-ness is stated, not left to be inferred from `truncated`.
+    expect(body.data.provenance.eventsAreAPage).toEqual({ returned: 100, limit: 100, of: 5000 });
+    // Latency is the one number that is NOT window-wide, and says so.
+    expect(body.data.latency.basis).toBe("returnedPage");
+    expect(body.data.latency.sampleSize).toBe(100);
   });
 
   it("declares itself a floor rather than a census", async () => {
@@ -191,13 +253,109 @@ describe("broker traffic is honest about what it cannot see", () => {
 
   it("separates an unverified environment binding from a mismatched one", async () => {
     mocks.getCurrentUser.mockResolvedValue(SUPPORT);
-    mocks.auditFindMany.mockResolvedValue([
-      row({ environment: "SANDBOX", connectionId: "c1", connectionEnvironment: "SANDBOX" }),
-      row({ environment: "SANDBOX", connectionId: "c2", connectionEnvironment: null }),
-      row({ environment: "SANDBOX", connectionId: "c3", connectionEnvironment: "PROD" }),
-    ]);
+    groupsBy({
+      "environment,connectionEnvironment": [
+        { environment: "SANDBOX", connectionEnvironment: "SANDBOX", _count: { _all: 1 } },
+        { environment: "SANDBOX", connectionEnvironment: null, _count: { _all: 1 } },
+        { environment: "SANDBOX", connectionEnvironment: "PROD", _count: { _all: 1 } },
+      ],
+    });
     const body = await (await brokerTraffic(req())).json();
-    expect(body.data.environmentBinding).toEqual({ agreed: 1, unverified: 1, mismatch: 1 });
+    expect(body.data.environmentBinding).toEqual({
+      agreed: 1,
+      unverified: 1,
+      mismatch: 1,
+      notApplicable: 0,
+    });
+  });
+
+  it("case-folds the comparison rather than calling PROD and prod a mismatch", async () => {
+    mocks.getCurrentUser.mockResolvedValue(SUPPORT);
+    groupsBy({
+      "environment,connectionEnvironment": [
+        { environment: "PROD", connectionEnvironment: "prod", _count: { _all: 4 } },
+      ],
+    });
+    const body = await (await brokerTraffic(req())).json();
+    expect(body.data.environmentBinding.agreed).toBe(4);
+    expect(body.data.environmentBinding.mismatch).toBe(0);
+  });
+
+  it("does NOT count a call that never reached a connection as an agreed binding", async () => {
+    // The defect, and it was wrong in the operator's favour. `agreed` was
+    // `total - unverified - mismatch`, so every row with connectionId null —
+    // refused at auth, at the throttle, or at the grant gate — landed in
+    // `agreed`. A window of nothing but 401s, 403s and 429s reported a wall of
+    // agreed environment bindings when zero bindings had occurred at all.
+    mocks.getCurrentUser.mockResolvedValue(SUPPORT);
+    // Twelve real refusals in the window AND on the page. The page matters:
+    // the old formula was `rows.length - unverified - mismatch`, so an empty
+    // page would give 0 and this test would pass against the defect.
+    mocks.auditFindMany.mockResolvedValue(
+      Array.from({ length: 12 }, () => row({ status: 403, connectionId: null, connectionEnvironment: null })),
+    );
+    mocks.auditCount.mockImplementation((args: { where: Record<string, unknown> }) =>
+      Promise.resolve("rowCount" in args.where ? 0 : 12),
+    );
+    // No pairs: the grouped query excludes connectionId null, so it returns
+    // nothing when every call was refused before a connection was reached.
+    groupsBy({ "environment,connectionEnvironment": [] });
+
+    const body = await (await brokerTraffic(req())).json();
+    expect(body.data.environmentBinding).toEqual({
+      agreed: 0,
+      unverified: 0,
+      mismatch: 0,
+      notApplicable: 12,
+    });
+  });
+});
+
+describe("caller-supplied window and limit are clamped", () => {
+  beforeEach(() => mocks.getCurrentUser.mockResolvedValue(SUPPORT));
+
+  const windowOf = async (qs: string) =>
+    (await (await brokerTraffic(req(`https://x.test/api/ops/broker-traffic?${qs}`))).json()).data
+      .windowHours;
+
+  const takeOf = () => mocks.auditFindMany.mock.calls[0]?.[0]?.take as number;
+
+  it("falls back to 24 hours for absent, zero, negative and non-numeric input", async () => {
+    expect(await windowOf("")).toBe(24);
+    expect(await windowOf("hours=0")).toBe(24);
+    expect(await windowOf("hours=-1")).toBe(24);
+    expect(await windowOf("hours=banana")).toBe(24);
+  });
+
+  it("ceilings the window at 30 days rather than accepting any number", async () => {
+    expect(await windowOf("hours=99999")).toBe(24 * 30);
+  });
+
+  it("ceilings the row limit at 500 and floors nonsense to the default", async () => {
+    await brokerTraffic(req("https://x.test/api/ops/broker-traffic?limit=99999"));
+    expect(takeOf()).toBe(500);
+
+    mocks.auditFindMany.mockClear();
+    await brokerTraffic(req("https://x.test/api/ops/broker-traffic?limit=-4"));
+    expect(takeOf()).toBe(100);
+  });
+
+  it("passes solutionId and environment through to the query, scoped", async () => {
+    await brokerTraffic(
+      req("https://x.test/api/ops/broker-traffic?solutionId=sol_9&environment=PROD"),
+    );
+    const where = mocks.auditFindMany.mock.calls[0]?.[0]?.where as Record<string, unknown>;
+    expect(where.solutionId).toBe("sol_9");
+    expect(where.environment).toBe("PROD");
+    // The filters narrow within the tenant; they never replace it.
+    expect(where.organizationId).toBe("org_a");
+  });
+
+  it("omits the filters entirely when they are absent, rather than matching on empty", async () => {
+    await brokerTraffic(req());
+    const where = mocks.auditFindMany.mock.calls[0]?.[0]?.where as Record<string, unknown>;
+    expect("solutionId" in where).toBe(false);
+    expect("environment" in where).toBe(false);
   });
 });
 
@@ -261,10 +419,21 @@ describe("the write ledger explains why its two sources disagree", () => {
       { id: "k2", solutionId: "s", interfaceId: "i", status: null, createdAt: past, expiresAt: past },
       { id: "k3", solutionId: "s", interfaceId: "i", status: 201, createdAt: past, expiresAt: future },
     ]);
+    // The four reservation states are counted by the database now, so each has
+    // its own predicate rather than being tallied from the page.
+    mocks.keyCount.mockImplementation((args: { where: Record<string, unknown> }) => {
+      const w = args.where as { status?: unknown; expiresAt?: { lte?: Date; gt?: Date } };
+      if (w.status === null && w.expiresAt?.lte) return Promise.resolve(1); // stale
+      if (w.status === null && w.expiresAt?.gt) return Promise.resolve(1); // in flight
+      if (typeof w.status === "object" && w.status !== null && "lt" in w.status) return Promise.resolve(1);
+      if (typeof w.status === "object" && w.status !== null && "gte" in w.status) return Promise.resolve(0);
+      return Promise.resolve(3); // total
+    });
     const body = await (await writeLedger(req("https://x.test/api/ops/write-ledger"))).json();
     expect(body.data.reservations.inFlight).toBe(1);
     expect(body.data.reservations.staleReservation).toBe(1);
     expect(body.data.reservations.completed).toBe(1);
+    expect(body.data.reservations.total).toBe(3);
   });
 });
 
@@ -289,6 +458,44 @@ function row(over: Record<string, unknown> = {}) {
     ...over,
   };
 }
+
+describe("the credential fleet reports revocation it can actually see", () => {
+  it("counts revoked credentials even though the default view excludes them", async () => {
+    // THE DEFECT: the list filters `isActive: true` unless includeRevoked=1,
+    // while revokeClientToken sets BOTH isActive:false AND revokedAt. So the
+    // revoked branch could only fire for a row that was revoked and still
+    // active, which nothing produces. The tile rendered 0 and implied nothing
+    // had ever been revoked — on the screen an operator consults to find out.
+    mocks.getCurrentUser.mockResolvedValue(SUPPORT);
+    mocks.clientFindMany.mockResolvedValue([]); // the default view: no revoked rows come back
+    mocks.clientCount.mockImplementation((args: { where: Record<string, unknown> }) =>
+      Promise.resolve("OR" in args.where ? 7 : 0),
+    );
+
+    const body = await (await tokens(req("https://x.test/api/ops/tokens"))).json();
+    expect(body.data.counts.revoked).toBe(7);
+    expect(body.data.counts.listed).toBe(0);
+    // And the response says why those two do not reconcile.
+    expect(body.data.provenance.countBasis).toContain("includeRevoked");
+  });
+
+  it("counts the write-credential fleet by presence, never by reading it", async () => {
+    mocks.getCurrentUser.mockResolvedValue(SUPPORT);
+    mocks.clientCount.mockImplementation((args: { where: Record<string, unknown> }) =>
+      Promise.resolve("secretsCiphertext" in args.where ? 3 : 0),
+    );
+    const body = await (await tokens(req("https://x.test/api/ops/tokens"))).json();
+    expect(body.data.counts.withWriteCredential).toBe(3);
+
+    // The filter names the column; no select ever does.
+    const filters = mocks.clientCount.mock.calls.map((c) => c[0]?.where ?? {});
+    expect(filters.some((w) => "secretsCiphertext" in w)).toBe(true);
+    for (const call of mocks.clientFindMany.mock.calls) {
+      expect(call[0]?.select?.secretsCiphertext).toBeUndefined();
+      expect(call[0]?.select?.tokenHash).toBeUndefined();
+    }
+  });
+});
 
 function conn(over: Record<string, unknown> = {}) {
   return {

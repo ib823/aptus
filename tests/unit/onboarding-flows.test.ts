@@ -6,21 +6,12 @@ import {
   getNextStep,
 } from "@/lib/onboarding/flow-engine";
 import { ONBOARDING_FLOWS } from "@/types/onboarding";
-import type { UserRole } from "@/types/assessment";
+import { ALL_USER_ROLES, type UserRole } from "@/types/assessment";
 
-const ALL_ROLES: UserRole[] = [
-  "platform_admin",
-  "partner_lead",
-  "consultant",
-  "project_manager",
-  "solution_architect",
-  "process_owner",
-  "it_lead",
-  "data_migration_lead",
-  "executive_sponsor",
-  "viewer",
-  "client_admin",
-];
+// Imported, not re-listed. A local copy of the role list is how `support`
+// stayed untested: the loop below iterated eleven names and passed, while the
+// twelfth role was never exercised at all.
+const ALL_ROLES: readonly UserRole[] = ALL_USER_ROLES;
 
 describe("getOnboardingFlow (Phase 24)", () => {
   it.each(ALL_ROLES)("returns a valid flow for role: %s", (role) => {

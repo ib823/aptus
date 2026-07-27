@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ROLE_LABELS } from "@/types/assessment";
+import { mapLegacyRole } from "@/lib/auth/role-migration";
 
 interface Invitation {
   id: string;
@@ -19,19 +21,9 @@ interface PendingInvitationsTableProps {
   refreshKey: number;
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  platform_admin: "Platform Admin",
-  partner_lead: "Partner Lead",
-  consultant: "Consultant",
-  project_manager: "Project Manager",
-  solution_architect: "Solution Architect",
-  process_owner: "Process Owner",
-  it_lead: "IT Lead",
-  data_migration_lead: "Data Migration Lead",
-  executive_sponsor: "Executive Sponsor",
-  viewer: "Viewer",
-  client_admin: "Client Admin",
-};
+// Imported, not re-listed. This file carried a byte-identical copy of the
+// shared map minus `support`, so an invitation to the operations persona
+// rendered the raw slug. A second copy of a list is a second thing to forget.
 
 export function PendingInvitationsTable({ organizationId, refreshKey }: PendingInvitationsTableProps) {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -102,7 +94,10 @@ export function PendingInvitationsTable({ organizationId, refreshKey }: PendingI
                 <tr key={inv.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 font-medium">{inv.email}</td>
                   <td className="px-4 py-3">
-                    <Badge variant="outline">{ROLE_LABELS[inv.role] ?? inv.role}</Badge>
+                    {/* Normalised first: an invitation row can still carry a
+                        legacy slug, and `admin` should read "Platform Admin"
+                        rather than fall through to the raw value. */}
+                    <Badge variant="outline">{ROLE_LABELS[mapLegacyRole(inv.role)]}</Badge>
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">
                     {new Date(inv.createdAt).toLocaleDateString()}

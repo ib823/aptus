@@ -28,6 +28,19 @@ export interface TourDefinition {
   steps: TourStep[];
 }
 
+/**
+ * NO TOUR NAMES `support`, AND THAT IS THE POSITION, NOT AN OVERSIGHT.
+ *
+ * A review flagged the absence while sweeping `support` through the role
+ * registries. `roles` above is `UserRole[]`, so this list is compiler-checked
+ * already — nothing here can hold a role that does not exist, and nothing was
+ * silently missing. Every tour below walks an assessment, admin or portal
+ * surface. The operations persona's workspace is the Operations Center, which
+ * none of these tours covers, so adding `support` to one would guide it around
+ * a screen it has no reason to open.
+ *
+ * When the Operations Center gets a tour, it gets its own entry here.
+ */
 export const TOURS: TourDefinition[] = [
   // ─── Portal Overview (all roles, first visit to assessments) ───
   {

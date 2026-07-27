@@ -11,6 +11,7 @@ import {
   Activity,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import type { UserRole } from "@/types/assessment";
 
 interface ActivityEntryProps {
   actorName: string;
@@ -38,8 +39,18 @@ const ACTION_ICONS: Record<string, typeof Activity> = {
   phase_updated: ArrowRight,
 };
 
-/** Map raw role slugs to human-readable labels */
-const ROLE_LABELS: Record<string, string> = {
+/**
+ * Map role slugs to the short labels this feed uses.
+ *
+ * `Record<UserRole, …>` so the next role added to the union fails the compiler
+ * here rather than falling through to `humanizeLabel`'s slug-prettifier. That
+ * fallback is decent — it rendered `support` as "Support" — but it is a
+ * coincidence, not a decision, and it produces "It Lead" for `it_lead`.
+ *
+ * The legacy `admin` entry is gone: `humanizeLabel` renders that slug as "Admin"
+ * unaided, which is what the entry said.
+ */
+const ROLE_LABELS: Record<UserRole, string> = {
   platform_admin: "Admin",
   partner_lead: "Partner Lead",
   consultant: "Consultant",
@@ -51,7 +62,7 @@ const ROLE_LABELS: Record<string, string> = {
   executive_sponsor: "Executive Sponsor",
   viewer: "Viewer",
   client_admin: "Client Admin",
-  admin: "Admin",
+  support: "Support",
 };
 
 /** Map raw entity types to human-readable labels */

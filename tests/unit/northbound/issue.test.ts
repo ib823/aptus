@@ -110,8 +110,18 @@ describe("issuing", () => {
     expect(call.create.organizationId).toBe("org_a");
   });
 
-  it("upserts on solutionId, so a solution never accumulates credentials", async () => {
-    // Four live tokens is four things to leak and four to remember to revoke.
+  it("upserts on (organization, solution), so it neither accumulates nor leaves the tenant", async () => {
+    // Two properties, and the second was missing until the compound key landed.
+    //
+    // Keyed by solution: four live tokens is four things to leak and four to
+    // remember to revoke, so re-issuing must rotate rather than add.
+    //
+    // Keyed by ORGANIZATION too: the update branch of this upsert rotates the
+    // token hash and revives a revoked credential. Keyed on `{ solutionId }`
+    // alone, nothing in the write itself keeps it inside the tenant — the only
+    // thing that did was the caller scoping the solution lookup one line above,
+    // which is precisely the arrangement PR #169 removed from eleven other
+    // mutations. This asserts the tenant is in the key, not in the context.
     await issueClientToken(SCOPE, {
       solutionId: "sol_1",
       label: "x",
@@ -119,7 +129,9 @@ describe("issuing", () => {
       createdById: "u",
     });
     const call = mocks.upsert.mock.calls[0]?.[0] as { where: Record<string, unknown> };
-    expect(call.where).toEqual({ solutionId: "sol_1" });
+    expect(call.where).toEqual({
+      organizationId_solutionId: { organizationId: "org_a", solutionId: "sol_1" },
+    });
   });
 
   it("re-issuing revives a revoked credential — that is what the request means", async () => {

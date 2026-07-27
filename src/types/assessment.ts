@@ -91,6 +91,29 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   support: "Support",
 };
 
+/**
+ * Every UserRole, at runtime — DERIVED, never hand-written.
+ *
+ * THE ONLY LIST THAT CANNOT GO STALE. `ROLE_LABELS` above is
+ * `Record<UserRole, string>`, so adding a member to the union fails the
+ * compiler right there until it is filled in. Anything that needs the roles as
+ * values takes them from here and inherits that guarantee.
+ *
+ * WHY THIS EXISTS. There were two hand-written copies — `ALL_ROLES` in
+ * role-permissions and `VALID_ROLES` in role-migration — and `support` was
+ * added to the union without either. `VALID_ROLES` is a `Set<string>`, so a
+ * missing role compiles and then resolves to `viewer` inside `mapLegacyRole`,
+ * which feeds `isAdminRole`, `getCapabilities`, `hasPermission` and
+ * `canAssignRole`. The role appeared to work everywhere it was displayed and
+ * silently held viewer's permissions everywhere it was enforced. Worse, the one
+ * regression guard iterated `ALL_ROLES` — the other stale copy — so missing
+ * both left the guard passing.
+ *
+ * Nothing downstream should re-list these. If you find yourself typing role
+ * names into an array, use this instead.
+ */
+export const ALL_USER_ROLES: readonly UserRole[] = Object.keys(ROLE_LABELS) as UserRole[];
+
 /** Phase 17: Role hierarchy -- higher number = higher authority */
 export const ROLE_HIERARCHY: Record<UserRole, number> = {
   platform_admin: 100,
