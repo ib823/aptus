@@ -259,3 +259,21 @@ export function isLiveSapTenantRoute(pathname: string): boolean {
 // Trusted client-IP extraction lives in ./client-ip and is re-exported here so
 // existing importers (middleware, webauthn routes) keep their import path.
 export { getClientIp } from "./client-ip";
+
+/**
+ * Which backend is actually enforcing the limits right now.
+ *
+ * EXPORTED SO A SCREEN CANNOT GUESS. The throttle endpoint printed a caveat
+ * about in-memory limits unconditionally, which is wrong in both directions: on
+ * a deployment WITH Upstash it told an operator their headroom was per-instance
+ * when it was deployment-wide, and on one WITHOUT it buried a real warning among
+ * routine provenance notes. The difference is knowable here, so it is reported
+ * rather than hedged.
+ *
+ * It matters: with no shared backend, every serverless instance keeps its own
+ * counter, so the effective limit is the configured one MULTIPLIED by however
+ * many instances happen to be warm — which is not a number anyone can see.
+ */
+export function rateLimitBackend(): "shared" | "in-memory" {
+  return hasSharedBackend ? "shared" : "in-memory";
+}
