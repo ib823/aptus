@@ -45,8 +45,51 @@ export function isPending(decision: GrantDecision): boolean {
   return PENDING.has(decision);
 }
 
+/**
+ * "Confers something, in the LEDGER's terms" — for display only.
+ *
+ * DO NOT USE THIS ON A RUNTIME PATH. It answers "did this decision give the
+ * solution anything at all", which is the right question for the progressive-
+ * trust ladder and the wrong one for an access check: it cannot distinguish a
+ * READ_ONLY decision from an APPROVED one, so using it to authorise a write let
+ * "read only" grant a write. `grantsRead` / `grantsWrite` below are the runtime
+ * predicates.
+ */
 export function isGranting(decision: GrantDecision): boolean {
   return GRANTING.has(decision);
+}
+
+/**
+ * RUNTIME: does this decision authorise a READ in this environment?
+ *
+ * All three granting decisions permit reading — READ_ONLY exists precisely to
+ * permit it — except that SANDBOX_ONLY means what it says (see below).
+ */
+export function grantsRead(decision: GrantDecision, environment: GrantEnvironment): boolean {
+  if (!GRANTING.has(decision)) return false;
+  if (decision === "SANDBOX_ONLY") return environment === "SANDBOX";
+  return true;
+}
+
+/**
+ * RUNTIME: does this decision authorise a WRITE in this environment?
+ *
+ * WHAT THIS FIXES. Both restricting decisions were previously accepted as write
+ * authorisation, because the broker asked only "is this granting?".
+ *
+ *  - READ_ONLY never authorises a write. It was the obvious gesture for "you may
+ *    read this, not write it", and it granted the write anyway — while
+ *    `evaluateDecision` demanded the write checklist for that very combination,
+ *    lending the whole thing an air of having been reviewed.
+ *  - SANDBOX_ONLY authorises only in SANDBOX. It was matched against the grant
+ *    row's own environment and then ignored, so a PROD grant decided
+ *    SANDBOX_ONLY authorised PROD. A decision that downgrades must downgrade
+ *    something.
+ */
+export function grantsWrite(decision: GrantDecision, environment: GrantEnvironment): boolean {
+  if (decision === "READ_ONLY") return false;
+  if (decision === "SANDBOX_ONLY") return environment === "SANDBOX";
+  return decision === "APPROVED";
 }
 
 /** CREATE and UPDATE are writes; writes carry the stronger review path. */
@@ -66,13 +109,19 @@ export interface DecisionRequest {
   next: GrantDecision;
   /** The approver has explicitly worked through the write checklist. */
   writeChecklistAcknowledged: boolean;
+  /**
+   * When this grant lapses. Null means never — which a write may not be.
+   * See WRITE_GRANT_REQUIRES_EXPIRY.
+   */
+  expiresAt: Date | null;
 }
 
 export type DecisionRefusal =
   | "NOT_PENDING"
   | "NOT_DECIDABLE"
   | "SELF_APPROVAL"
-  | "WRITE_CHECKLIST_REQUIRED";
+  | "WRITE_CHECKLIST_REQUIRED"
+  | "WRITE_GRANT_REQUIRES_EXPIRY";
 
 export type DecisionOutcome = { ok: true } | { ok: false; reason: DecisionRefusal; message: string };
 
@@ -118,12 +167,38 @@ export function evaluateDecision(req: DecisionRequest): DecisionOutcome {
     };
   }
 
-  if (isWriteOperation(req.operation) && isGranting(req.next) && !req.writeChecklistAcknowledged) {
+  // Only a decision that ACTUALLY authorises a write carries the write gates.
+  // Previously this asked `isGranting`, so a READ_ONLY decision on a CREATE
+  // request demanded the write checklist — and then let the write through.
+  const authorisesWrite =
+    isWriteOperation(req.operation) && grantsWrite(req.next, req.environment);
+
+  if (authorisesWrite && !req.writeChecklistAcknowledged) {
     return {
       ok: false,
       reason: "WRITE_CHECKLIST_REQUIRED",
       message:
         "This request writes into the client's SAP system. Work through the write checklist before approving.",
+    };
+  }
+
+  // A write grant must be bounded in time.
+  //
+  // This is the compensating control for the deliberate absence of revocation:
+  // a settled grant cannot be re-decided (NOT_PENDING above) and there is no
+  // withdrawal path, so an APPROVED write with no expiry is permanent — reachable
+  // by simply not filling in a field. Expiry is already evaluated on every call,
+  // which makes a bounded grant the one form of "ending" the runtime honours
+  // today, with no new state and no invariant broken.
+  // `== null` deliberately, not `=== null`: a caller that omits the field
+  // entirely must be refused exactly like one that passes null. This is a
+  // security control, and "the property was missing" is not a permission.
+  if (authorisesWrite && req.expiresAt == null) {
+    return {
+      ok: false,
+      reason: "WRITE_GRANT_REQUIRES_EXPIRY",
+      message:
+        "A write grant must have an expiry date. There is no way to revoke it afterwards, so it has to end on its own.",
     };
   }
 

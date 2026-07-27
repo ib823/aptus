@@ -27,6 +27,7 @@ function conn(overrides: Partial<ResolvedSapConnection> = {}): ResolvedSapConnec
     writeEnabled: false,
     apiPath: null,
     timeoutMs: null,
+    environment: null,
     ...overrides,
   };
 }

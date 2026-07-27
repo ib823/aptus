@@ -45,6 +45,13 @@ export interface ResolvedSapConnection {
   writeEnabled: boolean;
   apiPath: string | null;
   timeoutMs: number | null;
+  /**
+   * Which SAP landscape this row points at — "DEV" | "TEST" | "PROD", or a
+   * landscape's own name. NULL means UNDECLARED, and undeclared is a state in
+   * its own right, never a default: see `resolveSapConnectionForEnvironment`,
+   * where it permits a read (marked unverified) and refuses a write outright.
+   */
+  environment: string | null;
 }
 
 /** Client-safe projection — NO secrets, NO baseHost. Safe to serialize to a UI. */
@@ -97,6 +104,7 @@ export async function resolveSapConnections(
     writeEnabled: r.writeEnabled,
     apiPath: r.apiPath,
     timeoutMs: r.timeoutMs,
+    environment: r.environment,
   }));
 }
 
@@ -113,6 +121,119 @@ export async function resolveSapConnection(
   if (all.length === 0) return null;
   if (key) return all.find((c) => c.key === key) ?? null;
   return all[0] ?? null;
+}
+
+/**
+ * Resolve the connection for a CALLER'S DECLARED ENVIRONMENT — the binding the
+ * broker must use, and the reason `resolveSapConnection` above is not safe on a
+ * runtime path.
+ *
+ * THE DEFECT THIS CLOSES. `resolveSapConnection` ends at `all[0]` — the OLDEST
+ * active connection for an org+product. The grant check matches an environment,
+ * but it matches it against the TOKEN's environment and then stops; nothing ever
+ * compared it to the connection actually called. An organization holding a PROD
+ * connection created before its SANDBOX one served every call — reads AND writes
+ * — from PROD, while the audit row sincerely recorded "SANDBOX". The environment
+ * ladder was enforced on paper and not on the wire.
+ *
+ * THE RULE, and why it is split by operation. `SapConnection.environment` shipped
+ * one day before this fix, so an undeclared environment is an UNBACKFILLED estate,
+ * not a legacy one. Refusing every undeclared connection would break every
+ * deployment on day one over a column nobody has had the chance to fill, and would
+ * push operators to type a guessed value purely to clear the error — manufacturing
+ * exactly the fabricated environments the console's chip exists to prevent. So:
+ *
+ *   - A declared connection matching the caller's environment  → use it.
+ *   - Two or more matches                                      → refuse. Ambiguity
+ *     must never be resolved by creation order; that is the original bug.
+ *   - Undeclared, and it is the org's ONLY connection:
+ *       READ  → allow, flagged `bindingUnverified` so the audit row and the
+ *               operations console can both say the binding was not proven.
+ *       WRITE → REFUSE, always. `writeEnabled` is no substitute: it is a
+ *               per-connection yes/no that says nothing about WHICH landscape it
+ *               enables writes on. A read against an undeclared landscape is a
+ *               disclosure risk that already exists; a write is a record created
+ *               in a customer's ledger with nobody having declared it production,
+ *               and it cannot be taken back.
+ *   - Anything else                                            → refuse.
+ *
+ * The permissive read is a BACKLOG, not a home: `bindingUnverified` is counted in
+ * the operations console and is expected to trend to zero as environments are
+ * declared.
+ */
+export type ConnectionBindingFailure =
+  /** The organization has no active connection at all for this product. */
+  | "NO_CONNECTION"
+  /** It has connections, but none declares this environment. */
+  | "NO_MATCH_FOR_ENVIRONMENT"
+  /** Several candidates and no way to choose — refuse rather than guess. */
+  | "AMBIGUOUS"
+  /** A write against a connection that has not declared its landscape. */
+  | "UNDECLARED_ENVIRONMENT_WRITE";
+
+export type ConnectionBinding =
+  | { ok: true; connection: ResolvedSapConnection; bindingUnverified: boolean }
+  | { ok: false; reason: ConnectionBindingFailure };
+
+function normalizedEnvironmentOf(conn: ResolvedSapConnection): string | null {
+  const raw = conn.environment?.trim();
+  return raw ? raw.toUpperCase() : null;
+}
+
+export async function resolveSapConnectionForEnvironment(
+  organizationId: string,
+  product: string,
+  environment: string,
+  operation: "READ" | "WRITE",
+): Promise<ConnectionBinding> {
+  const all = await resolveSapConnections(organizationId, product);
+  if (all.length === 0) return { ok: false, reason: "NO_CONNECTION" };
+
+  const target = environment.trim().toUpperCase();
+  const matches = all.filter((c) => normalizedEnvironmentOf(c) === target);
+
+  if (matches.length === 1) {
+    return { ok: true, connection: matches[0]!, bindingUnverified: false };
+  }
+  if (matches.length > 1) return { ok: false, reason: "AMBIGUOUS" };
+
+  const undeclared = all.filter((c) => normalizedEnvironmentOf(c) === null);
+  if (undeclared.length === 0) return { ok: false, reason: "NO_MATCH_FOR_ENVIRONMENT" };
+
+  // Undeclared candidates exist. A write never proceeds on one.
+  if (operation === "WRITE") return { ok: false, reason: "UNDECLARED_ENVIRONMENT_WRITE" };
+
+  // A read proceeds ONLY when there is nothing to confuse it with. With a
+  // declared PROD row beside an undeclared one we must not assume the undeclared
+  // row is the sandbox the caller asked for.
+  if (all.length === 1) {
+    return { ok: true, connection: all[0]!, bindingUnverified: true };
+  }
+  return { ok: false, reason: "AMBIGUOUS" };
+}
+
+/**
+ * A safe, actionable sentence for each binding refusal.
+ *
+ * Lives beside the enum so adding a reason forces you to say what it means to
+ * the developer whose call just failed. Never names a host, a URL, or another
+ * organization's data — the caller learns what THEY must fix, nothing about the
+ * estate's shape.
+ */
+export function connectionRefusalMessage(
+  reason: ConnectionBindingFailure,
+  environment: string,
+): string {
+  switch (reason) {
+    case "NO_CONNECTION":
+      return "No SAP connection is configured for this organization and product.";
+    case "NO_MATCH_FOR_ENVIRONMENT":
+      return `No SAP connection is configured for the ${environment} environment. This credential is bound to ${environment} and will not fall back to another landscape.`;
+    case "AMBIGUOUS":
+      return `More than one SAP connection could serve the ${environment} environment, so none was chosen. Declare a distinct environment on each connection in Studio.`;
+    case "UNDECLARED_ENVIRONMENT_WRITE":
+      return "This organization's SAP connection has not declared which environment it is, so a write cannot be authorised against it. Set the environment on the connection in Studio.";
+  }
 }
 
 /** Project a resolved connection to the SapTenant shape the catalogue code uses. */

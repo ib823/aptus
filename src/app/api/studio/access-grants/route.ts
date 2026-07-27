@@ -170,6 +170,7 @@ export async function PATCH(request: NextRequest) {
       requestedById: true,
       externalId: true,
       solutionId: true,
+      expiresAt: true,
     },
   });
   if (!grant) return studioError("NOT_FOUND", "Request not found.");
@@ -182,6 +183,11 @@ export async function PATCH(request: NextRequest) {
     deciderId: user.id,
     next: input.decision as GrantDecision,
     writeChecklistAcknowledged: input.writeChecklistAcknowledged,
+    // Taken from the REQUEST, not from the decision: an approver may not invent
+    // the boundary on a write they are approving. A write request that arrived
+    // without an expiry is rejected and re-raised, which leaves both rows in the
+    // ledger — the same shape as re-deciding a settled grant.
+    expiresAt: grant.expiresAt,
   });
 
   if (!verdict.ok) {

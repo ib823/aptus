@@ -732,6 +732,15 @@ model NorthboundAuditEvent {
   /// Which SolutionClient was used, so a leaked token can be traced and revoked.
   clientTokenId String
 
+  /// Which SapConnection actually served the call, and the landscape THAT ROW
+  /// declared. `environment` above is the CREDENTIAL's declared environment;
+  /// these two are the connection's. The pair is deliberate: it is the only way
+  /// to show that a call's claimed environment and its real target agreed.
+  /// NULL connectionEnvironment on a served read means the binding was permitted
+  /// but not proven — the connection had not declared its landscape.
+  connectionId          String?
+  connectionEnvironment String?
+
   at DateTime @default(now())
 
   @@index([organizationId, solutionId, at])

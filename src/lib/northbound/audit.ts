@@ -29,6 +29,21 @@ export interface NorthboundAuditInput {
   rowCount: number | null;
   correlationId: string;
   clientTokenId: string;
+  /**
+   * Which SapConnection served the call, and the landscape that row declared.
+   *
+   * `environment` above is the CREDENTIAL's declared environment; these are the
+   * CONNECTION's. Both are recorded because only the pair can show they agreed —
+   * before the binding fix the broker could serve a PROD connection while the
+   * audit row sincerely said "SANDBOX", and nothing in the trail could reveal it.
+   *
+   * Null on calls that never reached a connection (refused at auth, throttle, or
+   * the grant gate). `connectionEnvironment` null on a SERVED read means the
+   * binding was permitted but unverified — the connection had declared no
+   * landscape.
+   */
+  connectionId?: string | null;
+  connectionEnvironment?: string | null;
 }
 
 export async function recordNorthboundCall(input: NorthboundAuditInput): Promise<void> {
@@ -45,6 +60,8 @@ export async function recordNorthboundCall(input: NorthboundAuditInput): Promise
         rowCount: input.rowCount,
         correlationId: input.correlationId,
         clientTokenId: input.clientTokenId,
+        connectionId: input.connectionId ?? null,
+        connectionEnvironment: input.connectionEnvironment ?? null,
       },
     });
   } catch (err) {

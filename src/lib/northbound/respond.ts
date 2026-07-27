@@ -21,6 +21,20 @@ export type NorthboundErrorCode =
   | "NOT_FOUND"
   | "VALIDATION_ERROR"
   | "RATE_LIMITED"
+  /**
+   * The customer's SAP connection cannot be bound for this call — none is
+   * configured for the product, none declares the credential's environment, or
+   * the candidates are ambiguous.
+   *
+   * It exists so a developer's application can tell "our customer has not
+   * finished connecting their SAP yet" from "our credentials were rejected"
+   * (FORBIDDEN) — both were previously one 403 separated only by prose, which is
+   * the same dishonesty the empty ≠ needs-setup ≠ error rule forbids on the
+   * success axis, merely moved to the failure axis. The HTTP status stays 403:
+   * what was indistinguishable was the CODE, and that is what a client branches
+   * on.
+   */
+  | "CONNECTION_NOT_CONFIGURED"
   /** Idempotency: same key, different payload — or a request still in flight. */
   | "CONFLICT"
   | "UPSTREAM_TIMEOUT"
