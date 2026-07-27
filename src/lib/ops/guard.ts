@@ -8,8 +8,8 @@
  *   3. Carrying a tenant — or an admin, who may legitimately have none.
  *
  * WHY A HELPER RATHER THAN A CONVENTION. Every endpoint behind it reads a feed
- * of live customer SAP activity. Repeating three checks across seven routes is
- * how the fourth one ends up with two, and the omission is invisible in review
+ * of live customer SAP activity. Repeating three checks across every route is
+ * how one of them ends up with two, and the omission is invisible in review
  * because the route still works — it just works for the wrong people.
  *
  * THE ADMIN BRANCH IS EXPLICIT, NOT A FALLTHROUGH. A platform_admin may hold a
@@ -24,7 +24,7 @@
 import { getCurrentUser } from "@/lib/auth/session";
 import { studioError } from "@/lib/studio/api";
 import { canAccessOperations } from "@/lib/studio/rbac";
-import { tenantScopeFor, type TenantScope } from "@/lib/studio/tenant-scope";
+import { scopedWhere, tenantScopeFor, type TenantScope } from "@/lib/studio/tenant-scope";
 
 export type OpsActor =
   /** A tenant-bound caller. Every query MUST go through this scope. */
@@ -68,15 +68,30 @@ export async function requireOperations(): Promise<OpsGuardResult> {
 }
 
 /**
- * The organization filter for a query, as an object to spread into a `where`.
+ * Build the `where` for an Operations Center query.
  *
- * `{}` for a global admin is correct and is the ONLY place that widening is
- * expressible — which is why it lives here, next to the type that forced the
- * caller to acknowledge the two cases, rather than being reachable by
- * forgetting a field.
+ * THE ONLY PLACE WIDENING IS EXPRESSIBLE — that was already the argument for
+ * the previous `opsOrgFilter`, and it is a good one. What it did not give was
+ * the second half: a caller had to remember to spread it. `where: { at: {...} }`
+ * with the spread omitted compiles, runs, and reads across every tenant, and it
+ * looks exactly like the scoped version at the call site.
+ *
+ * `opsWhere` cannot be called without an actor, and on the scoped branch it goes
+ * through `scopedWhere`, which places `organizationId` LAST so a caller-supplied
+ * one cannot win. The global branch stays explicit and separate: an admin with
+ * no organization reading across tenants is a real capability, and it should
+ * take a visible branch to get there rather than an absent field.
+ *
+ * The guard computed a branded `TenantScope` and no route used it; this is what
+ * uses it.
  */
-export function opsOrgFilter(actor: OpsActor): { organizationId?: string } {
-  return actor.kind === "scoped" ? { organizationId: actor.organizationId } : {};
+export function opsWhere<T extends Record<string, unknown>>(
+  actor: OpsActor,
+  where?: T,
+): T & { organizationId?: string } {
+  if (actor.kind === "scoped") return scopedWhere(actor.scope, where);
+  // Deliberate cross-tenant read. Named, not implied.
+  return (where ?? ({} as T)) as T & { organizationId?: string };
 }
 
 /** Clamp a caller-supplied window to something a dashboard can actually plot. */

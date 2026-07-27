@@ -37,7 +37,7 @@
 import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/db/prisma";
-import { opsLimit, opsOrgFilter, opsWindowHours, requireOperations } from "@/lib/ops/guard";
+import { opsLimit, opsWhere, opsWindowHours, requireOperations } from "@/lib/ops/guard";
 import { studioOk } from "@/lib/studio/api";
 
 export const dynamic = "force-dynamic";
@@ -52,73 +52,88 @@ export async function GET(request: NextRequest) {
   const since = new Date(Date.now() - hours * 60 * 60 * 1000);
   const now = new Date();
 
-  const [keys, writeEvents] = await Promise.all([
-    prisma.northboundIdempotencyKey.findMany({
-      where: { ...opsOrgFilter(guard.actor), createdAt: { gte: since } },
-      // responseBody is DELIBERATELY not selected: it holds the record created
-      // in a customer's SAP system. An operations console needs to know a write
-      // happened, never what was in it.
-      select: {
-        id: true,
-        solutionId: true,
-        interfaceId: true,
-        status: true,
-        createdAt: true,
-        expiresAt: true,
-      },
-      orderBy: { createdAt: "desc" },
-      take: limit,
-    }),
-    prisma.northboundAuditEvent.findMany({
-      where: {
-        ...opsOrgFilter(guard.actor),
-        operation: "WRITE",
-        at: { gte: since },
-        status: { gte: 400 },
-      },
-      select: {
-        id: true,
-        at: true,
-        solutionId: true,
-        interfaceId: true,
-        externalId: true,
-        status: true,
-        correlationId: true,
-        clientTokenId: true,
-      },
-      orderBy: { at: "desc" },
-      take: limit,
-    }),
-  ]);
+  // Shared `where`s, so the counts below and the row pages cannot diverge.
+  const keyWhere = opsWhere(guard.actor, { createdAt: { gte: since } });
+  const failedWriteWhere = opsWhere(guard.actor, {
+    operation: "WRITE",
+    at: { gte: since },
+    status: { gte: 400 },
+  });
 
-  let inFlight = 0;
-  let completed = 0;
-  let failed = 0;
-  let staleReservation = 0;
+  const [keys, writeEvents, keyTotal, staleCount, inFlightCount, completedCount, failedCount, conflicts, blocked] =
+    await Promise.all([
+      prisma.northboundIdempotencyKey.findMany({
+        where: keyWhere,
+        // responseBody is DELIBERATELY not selected: it holds the record created
+        // in a customer's SAP system. An operations console needs to know a write
+        // happened, never what was in it.
+        select: {
+          id: true,
+          solutionId: true,
+          interfaceId: true,
+          status: true,
+          createdAt: true,
+          expiresAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+      }),
+      prisma.northboundAuditEvent.findMany({
+        where: failedWriteWhere,
+        select: {
+          id: true,
+          at: true,
+          solutionId: true,
+          interfaceId: true,
+          externalId: true,
+          status: true,
+          correlationId: true,
+          clientTokenId: true,
+        },
+        orderBy: { at: "desc" },
+        take: limit,
+      }),
 
-  for (const k of keys) {
-    if (k.status === null) {
-      // Past its TTL with no outcome: the request died between reserving and
-      // completing. Surfaced separately because it is the one state an operator
-      // may need to act on — a client retrying that key gets 409 until it lapses.
-      if (k.expiresAt.getTime() <= now.getTime()) staleReservation++;
-      else inFlight++;
-    } else if (k.status < 400) completed++;
-    else failed++;
-  }
+      // COUNTED OVER THE WINDOW, NOT OVER THE PAGE.
+      //
+      // These four were tallied by looping the `keys` page, so a window with
+      // 5,000 reservations reported at most `limit` of them and the four
+      // buckets summed to the page size. `staleReservation` is the number an
+      // operator may actually need to act on, which makes undercounting it the
+      // worst of the four.
+      prisma.northboundIdempotencyKey.count({ where: keyWhere }),
+      // Reserved, no outcome, past its TTL: the request died between reserving
+      // and completing. A client retrying that key gets 409 until it lapses.
+      prisma.northboundIdempotencyKey.count({
+        where: { ...keyWhere, status: null, expiresAt: { lte: now } },
+      }),
+      prisma.northboundIdempotencyKey.count({
+        where: { ...keyWhere, status: null, expiresAt: { gt: now } },
+      }),
+      prisma.northboundIdempotencyKey.count({ where: { ...keyWhere, status: { lt: 400 } } }),
+      prisma.northboundIdempotencyKey.count({ where: { ...keyWhere, status: { gte: 400 } } }),
 
-  const conflicts = writeEvents.filter((e) => e.status === 409).length;
-  const blocked = writeEvents.filter((e) => e.status !== 409).length;
+      prisma.northboundAuditEvent.count({ where: { ...failedWriteWhere, status: 409 } }),
+      prisma.northboundAuditEvent.count({
+        where: { ...failedWriteWhere, status: { not: 409 } },
+      }),
+    ]);
 
   return studioOk({
     windowHours: hours,
     since: since.toISOString(),
     scope: guard.actor.kind,
-    // From the key table — these are real row states.
-    reservations: { inFlight, completed, failed, staleReservation, total: keys.length },
+    // From the key table — these are real row states, over the whole window.
+    reservations: {
+      inFlight: inFlightCount,
+      completed: completedCount,
+      failed: failedCount,
+      staleReservation: staleCount,
+      total: keyTotal,
+    },
     // From the audit feed — these are events, not states.
     fromAudit: { blocked, conflicts },
-    truncated: keys.length === limit || writeEvents.length === limit,
+    truncated: keyTotal > keys.length || conflicts + blocked > writeEvents.length,
     provenance: {
       // Rendered on the screen, not buried: the two panels above count different
       // things and will not add up.
@@ -129,9 +144,15 @@ export async function GET(request: NextRequest) {
         "replayed and conflicted are computed at request time and never stored as row state — they are reported from the audit feed as events",
       ],
       emptyByDesign:
-        keys.length === 0
+        keyTotal === 0
           ? "No write credential can be issued yet, so every write is refused at the credential gate before a key is reserved."
           : null,
+      // The counts above are window-wide; these two arrays are pages of it.
+      rowsAreAPage: {
+        reservationRows: { returned: keys.length, of: keyTotal },
+        auditRows: { returned: writeEvents.length, of: conflicts + blocked },
+        limit,
+      },
     },
     reservationRows: keys.map((k) => ({
       id: k.id,
