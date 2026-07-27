@@ -25,7 +25,7 @@
     "start": "next start -p 3003",
     "lint": "eslint",
     "lint:strict": "eslint . --max-warnings 0",
-    "typecheck:strict": "tsc --noEmit --strict",
+    "typecheck:strict": "NODE_OPTIONS=--max-old-space-size=4096 tsc --noEmit --strict",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",
