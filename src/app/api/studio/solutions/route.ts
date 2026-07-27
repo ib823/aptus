@@ -21,6 +21,8 @@ import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/
 import {
   evaluatePromotion,
   isOrphaningAnActiveSolution,
+  ownerAssignmentRefusal,
+  rejectedOwnerAssignments,
   resolveStatusOnSave,
   slugify,
   type SolutionStatus,
@@ -120,6 +122,15 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return studioError("VALIDATION_ERROR", "Invalid solution payload.");
   const input = parsed.data;
 
+  // Ownership is claimed, never assigned — on registration too. Without this a
+  // caller could name three colleagues at create time and then issue the
+  // credential alone, which is the whole bypass the segregation rule exists to
+  // stop. See `rejectedOwnerAssignments`.
+  const assignedToOthers = rejectedOwnerAssignments(input, user.id);
+  if (assignedToOthers.length > 0) {
+    return studioError("FORBIDDEN", ownerAssignmentRefusal(assignedToOthers));
+  }
+
   const baseSlug = slugify(input.name);
   if (!baseSlug) return studioError("VALIDATION_ERROR", "That name has no usable slug.");
 
@@ -177,6 +188,18 @@ export async function PATCH(request: NextRequest) {
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return studioError("VALIDATION_ERROR", "Invalid solution payload.");
   const input = parsed.data;
+
+  // OWNERSHIP IS CLAIMED, NEVER ASSIGNED. Checked before the solution is even
+  // looked up, so the refusal cannot depend on anything about the target row.
+  //
+  // The UI only ever offers claim (set to self) and clear (set to null), so it
+  // already behaved this way — but the route accepted an arbitrary id, and a
+  // control that lives only in a client is not a control. See
+  // `rejectedOwnerAssignments` for what the bypass actually buys an attacker.
+  const assignedToOthers = rejectedOwnerAssignments(input, user.id);
+  if (assignedToOthers.length > 0) {
+    return studioError("FORBIDDEN", ownerAssignmentRefusal(assignedToOthers));
+  }
 
   // Re-scope the caller-supplied id. Another tenant's solution is
   // indistinguishable from one that does not exist.

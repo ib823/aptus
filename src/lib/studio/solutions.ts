@@ -41,6 +41,65 @@ export function missingOwners(o: Ownership): string[] {
   return missing;
 }
 
+/** The three accountability slots, in the order the UI shows them. */
+export const OWNER_FIELDS = ["technicalOwnerId", "businessOwnerId", "supportOwnerId"] as const;
+export type OwnerField = (typeof OWNER_FIELDS)[number];
+
+/**
+ * OWNERSHIP IS CLAIMED, NEVER ASSIGNED — and this is a security control, not a
+ * UI convention.
+ *
+ * WHAT BREAKS WITHOUT IT. Issuing a runtime credential requires all three
+ * owners set AND refuses anyone who is themselves an owner
+ * (`clients/route.ts`). That pair is a two-human rule: somebody accepts
+ * accountability, somebody else issues.
+ *
+ * If a consultant may write an arbitrary id into an owner slot, they name three
+ * colleagues who did nothing and know nothing, are not themselves an owner, and
+ * issue the credential alone. The two-human rule becomes a one-human rule with
+ * three unwitting names attached — and the audit record now reads as though
+ * three people accepted accountability, which is worse than having no owner
+ * field at all. The route's own comment says the record "is what makes issuing
+ * it reviewable"; a record you can populate unilaterally is not reviewable.
+ *
+ * WHAT IS STILL ALLOWED, DELIBERATELY:
+ *
+ *   - Claiming a slot for yourself.
+ *   - CLEARING any slot, including someone else's. That is how a departed
+ *     owner's slot is recovered: a colleague clears it, someone else claims it,
+ *     and accountability lands on a person who accepted it. Clearing is safe
+ *     because it never makes anyone accountable — it makes the solution
+ *     visibly unowned, which auto-drops an ACTIVE solution to RESTRICTED and is
+ *     written to the config audit.
+ *
+ * So the rule is exactly: an owner id may be your own, or null. Nothing else.
+ */
+export function rejectedOwnerAssignments(
+  requested: Partial<Record<OwnerField, string | null | undefined>>,
+  callerId: string,
+): OwnerField[] {
+  return OWNER_FIELDS.filter((field) => {
+    const value = requested[field];
+    // undefined = not mentioned in this request; null = released.
+    if (value === undefined || value === null) return false;
+    return value !== callerId;
+  });
+}
+
+/** The refusal a caller sees, naming the remedy rather than just the rule. */
+export function ownerAssignmentRefusal(fields: readonly OwnerField[]): string {
+  const labels: Record<OwnerField, string> = {
+    technicalOwnerId: "technical owner",
+    businessOwnerId: "business owner",
+    supportOwnerId: "support owner",
+  };
+  const named = fields.map((f) => labels[f]).join(", ");
+  return (
+    `You cannot assign someone else as ${named}. Accountability is claimed, not delegated — ` +
+    "ask them to claim the slot themselves. You can clear a slot that is no longer correct."
+  );
+}
+
 export type StatusResolution =
   | { status: SolutionStatus; autoDropped: false }
   | { status: "RESTRICTED"; autoDropped: true; reason: string };

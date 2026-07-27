@@ -203,3 +203,74 @@ describe("cross-tenant", () => {
     expect(mocks.updateSolution).not.toHaveBeenCalled();
   });
 });
+
+describe("ownership is claimed on the write path, not just in the form", () => {
+  // The form only ever offered claim (set to self) and clear (set to null), so
+  // the product behaved correctly while the route accepted any id. That gap is
+  // exactly what this file's header exists to catch — a control that lives in
+  // the client is one API call away from not existing.
+
+  it("refuses a PATCH that names someone else as an owner", async () => {
+    mocks.findFirstSolution.mockResolvedValue(ACTIVE_COMPLETE);
+    const res = await PATCH(req({ id: "sol_1", technicalOwnerId: "u_someone_else" }, "PATCH"));
+    expect(res.status).toBe(403);
+    expect(mocks.updateSolution).not.toHaveBeenCalled();
+  });
+
+  it("refuses the bypass — three colleagues named, caller left a non-owner", async () => {
+    // With this accepted, the caller is not an owner, so POST /api/studio/clients
+    // would let them issue the credential alone. The two-human rule becomes one
+    // human plus three unwitting names on the audit record.
+    mocks.findFirstSolution.mockResolvedValue(ACTIVE_COMPLETE);
+    const res = await PATCH(
+      req(
+        { id: "sol_1", technicalOwnerId: "u_a", businessOwnerId: "u_b", supportOwnerId: "u_c" },
+        "PATCH",
+      ),
+    );
+    expect(res.status).toBe(403);
+    expect(mocks.updateSolution).not.toHaveBeenCalled();
+  });
+
+  it("refuses BEFORE looking the solution up, so the refusal leaks nothing", async () => {
+    // A 403 that depended on the row would tell a caller whether a solution id
+    // exists in another tenant.
+    mocks.findFirstSolution.mockClear();
+    const res = await PATCH(req({ id: "sol_unknown", supportOwnerId: "u_x" }, "PATCH"));
+    expect(res.status).toBe(403);
+    expect(mocks.findFirstSolution).not.toHaveBeenCalled();
+  });
+
+  it("allows claiming a slot for yourself", async () => {
+    mocks.findFirstSolution.mockResolvedValue({ ...ACTIVE_COMPLETE, technicalOwnerId: null, status: "DRAFT" });
+    const res = await PATCH(req({ id: "sol_1", technicalOwnerId: "u1" }, "PATCH"));
+    expect(res.status).toBe(200);
+    const data = mocks.updateSolution.mock.calls[0]?.[0]?.data as Record<string, unknown>;
+    expect(data.technicalOwnerId).toBe("u1");
+  });
+
+  it("allows clearing someone else's slot — the orphan recovery path", async () => {
+    // Clearing never makes anyone accountable, so it cannot manufacture the
+    // record the bypass needs. It leaves the solution visibly unowned.
+    mocks.findFirstSolution.mockResolvedValue(ACTIVE_COMPLETE);
+    const res = await PATCH(req({ id: "sol_1", technicalOwnerId: null }, "PATCH"));
+    expect(res.status).toBe(200);
+    const data = mocks.updateSolution.mock.calls[0]?.[0]?.data as Record<string, unknown>;
+    expect(data.technicalOwnerId).toBeNull();
+    // …and the solution drops out of ACTIVE rather than sitting there unowned.
+    expect(data.status).toBe("RESTRICTED");
+  });
+
+  it("applies the same rule at registration", async () => {
+    // Otherwise the bypass just moves to create time.
+    const res = await POST(req({ ...VALID_CREATE, businessOwnerId: "u_someone_else" }));
+    expect(res.status).toBe(403);
+    expect(mocks.createSolution).not.toHaveBeenCalled();
+  });
+
+  it("allows registering with slots claimed for yourself", async () => {
+    mocks.createSolution.mockResolvedValue({ id: "sol_new", name: "x", slug: "x", status: "DRAFT", classification: "INTERNAL_ACCELERATOR" });
+    const res = await POST(req({ ...VALID_CREATE, technicalOwnerId: "u1" }));
+    expect(res.status).toBe(201);
+  });
+});
