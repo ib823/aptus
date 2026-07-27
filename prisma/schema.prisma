@@ -741,6 +741,11 @@ model NorthboundAuditEvent {
   connectionId          String?
   connectionEnvironment String?
 
+  /// Wall-clock milliseconds the UPSTREAM call took, stamped by the broker.
+  /// Nullable because rows written before this column genuinely do not know —
+  /// and a zero would read as "instant" rather than "unmeasured".
+  durationMs Int?
+
   at DateTime @default(now())
 
   @@index([organizationId, solutionId, at])
@@ -780,6 +785,10 @@ model NorthboundIdempotencyKey {
 
   @@unique([organizationId, solutionId, key])
   @@index([expiresAt])
+  /// The write ledger reads this table per organization, newest first. Nothing
+  /// served that scan before: the unique constraint leads with organizationId
+  /// but continues into solutionId + key, and expiresAt is unordered by tenant.
+  @@index([organizationId, createdAt])
 }
 
 /// A recorded response captured from a Test Console run, so a developer's own

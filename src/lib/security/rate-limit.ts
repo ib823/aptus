@@ -150,6 +150,54 @@ export async function checkRateLimit(
   return checkRateLimitInMemory(key, config);
 }
 
+/**
+ * Read a bucket's remaining budget WITHOUT spending any of it.
+ *
+ * WHY THIS HAD TO EXIST. The operations console shows a live throttle gauge, and
+ * the obvious implementation is to call `checkRateLimit` and render its
+ * `remaining`. That call is CONSUMING: the in-memory path pushes a timestamp and
+ * the Upstash path spends a token. A dashboard polling it would eat the very
+ * budget it reports -- and, on the tight per-credential northbound bucket, could
+ * manufacture the 429s it is supposed to be warning about. A gauge that changes
+ * the thing it measures is worse than no gauge.
+ *
+ * Upstash exposes `getRemaining` for exactly this. The in-memory path filters the
+ * window and counts without pushing.
+ *
+ * FAILURE BEHAVIOUR IS THE OPPOSITE OF `checkRateLimit`, deliberately. That
+ * function fails CLOSED because denying a request during an outage is safer than
+ * admitting it. This one is a read for a display, and denying nothing: on a
+ * backend error it returns null, so the caller renders "unknown" rather than a
+ * fabricated headroom figure. Nothing is gated on the answer.
+ */
+export async function peekRateLimit(
+  key: string,
+  config: RateLimitConfig,
+): Promise<{ remaining: number; limit: number } | null> {
+  const limiter = getLimiter(config);
+  if (limiter) {
+    try {
+      const remaining = await limiter.getRemaining(key);
+      const value = typeof remaining === "number" ? remaining : remaining.remaining;
+      return { remaining: Math.max(value, 0), limit: config.limit };
+    } catch (error) {
+      if (!warnedAboutBackendFailure) {
+        warnedAboutBackendFailure = true;
+        console.error("[RATE LIMIT] Shared backend failed", error);
+      }
+      // Unknown, not zero. Zero would read as "this credential is throttled".
+      return null;
+    }
+  }
+
+  // In-memory: count what is inside the window without adding to it.
+  const now = Date.now();
+  const entry = store.get(key);
+  if (!entry) return { remaining: config.limit, limit: config.limit };
+  const live = entry.timestamps.filter((t) => now - t < config.windowMs).length;
+  return { remaining: Math.max(config.limit - live, 0), limit: config.limit };
+}
+
 /** Pre-configured rate limits */
 export const RATE_LIMITS = {
   /** Auth mutations (signin, callback, signout): 30 per minute */
