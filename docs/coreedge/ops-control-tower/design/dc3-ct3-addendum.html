@@ -1,0 +1,555 @@
+<title>dc3 · Operations Center addendum</title>
+<style>
+  :root {
+    --page-bg: #F7F6F2;
+    --page-fg: #21201C;
+    --page-fg-soft: #56534C;
+    --page-rule: #DEDACE;
+    --page-panel: #FFFFFE;
+    --page-accent: #002B5C;
+    --page-code-bg: #EFEDE5;
+
+    /* CoreEdge production tokens — used verbatim inside every specimen. */
+    --brand-navy: #002B5C;
+    --surface-cream: #FAF9F5;
+    --surface-paper: #FFFFFE;
+    --surface-ink-tint: #F4F2EB;
+    --ink-primary: #1A1A1A;
+    --ink-secondary: #4A4A4A;
+    --ink-muted: #8A8A8A;
+    --border-default: #E5E1D6;
+    --border-strong: #C4BFAE;
+    --success: #166534;
+    --warning: #B45309;
+    --danger: #991B1B;
+
+    --sans: "Geist", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "Geist Mono", "SF Mono", Consolas, monospace;
+    --serif: "Source Serif 4", "Tiempos Headline", Georgia, serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page-bg: #14140F;
+      --page-fg: #EDEAE0;
+      --page-fg-soft: #A8A296;
+      --page-rule: #33322A;
+      --page-panel: #1C1B16;
+      --page-accent: #8FB3DD;
+      --page-code-bg: #22211A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --page-bg: #14140F; --page-fg: #EDEAE0; --page-fg-soft: #A8A296;
+    --page-rule: #33322A; --page-panel: #1C1B16; --page-accent: #8FB3DD; --page-code-bg: #22211A;
+  }
+  :root[data-theme="light"] {
+    --page-bg: #F7F6F2; --page-fg: #21201C; --page-fg-soft: #56534C;
+    --page-rule: #DEDACE; --page-panel: #FFFFFE; --page-accent: #002B5C; --page-code-bg: #EFEDE5;
+  }
+
+  body { margin: 0; }
+  .doc {
+    background: var(--page-bg); color: var(--page-fg);
+    font-family: var(--sans); font-size: 15px; line-height: 1.6;
+    padding: 48px 24px 96px; min-height: 100vh;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+
+  .masthead { display: flex; flex-direction: column; gap: 10px; padding-bottom: 28px; border-bottom: 2px solid var(--page-fg); }
+  .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .14em; font-weight: 600; color: var(--page-fg-soft); }
+  h1 { font-family: var(--serif); font-size: 34px; line-height: 1.15; font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+  .standfirst { font-size: 16px; color: var(--page-fg-soft); max-width: 62ch; margin: 0; }
+
+  section { display: flex; flex-direction: column; gap: 18px; }
+  h2 { font-family: var(--serif); font-size: 24px; font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+  h3 { font-size: 15px; font-weight: 650; margin: 0; }
+  p  { margin: 0; max-width: 66ch; }
+  .lede { color: var(--page-fg-soft); }
+  ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; max-width: 66ch; }
+
+  .sect-no {
+    font-family: var(--mono); font-size: 12px; font-weight: 500;
+    color: var(--page-accent); letter-spacing: .04em;
+  }
+  code, .f { font-family: var(--mono); font-size: .88em; background: var(--page-code-bg); padding: 1px 5px; border-radius: 4px; }
+
+  /* A specimen is the real product surface, so it keeps product colours in both themes. */
+  .specimen {
+    background: var(--surface-cream); border: 1px solid var(--page-rule); border-radius: 4px;
+    padding: 22px; overflow-x: auto; color: var(--ink-primary); font-family: var(--sans);
+  }
+  .specimen-label {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .12em; font-weight: 600;
+    color: var(--page-fg-soft); margin-bottom: -8px;
+  }
+  .note {
+    border-left: 2px solid var(--page-accent); padding-left: 14px;
+    font-size: 14px; color: var(--page-fg-soft); max-width: 64ch;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .note b { color: var(--page-fg); font-weight: 650; }
+
+  table.spec { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.spec th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--page-fg-soft); font-weight: 600; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--page-rule); }
+  table.spec td { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--page-rule); vertical-align: top; }
+  table.spec td:first-child { white-space: nowrap; }
+
+  /* ---- CoreEdge component language, reproduced exactly ---- */
+  .ce-card { background: var(--surface-paper); border: 1px solid var(--border-default); border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04); overflow: hidden; }
+  .ce-card-pad { padding: 15px 16px; }
+  .ce-cap { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-muted); font-weight: 600; }
+  .ce-num { font-size: 26px; font-weight: 600; margin: 8px 0 2px; color: var(--ink-primary); font-variant-numeric: tabular-nums; }
+  .ce-sub { font-size: 12px; color: var(--ink-muted); line-height: 1.4; }
+  .ce-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 9999px; font-size: 11.5px; font-weight: 600; }
+  .ce-chip .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  .ce-absent {
+    display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 9999px;
+    font-size: 11.5px; font-weight: 600; background: transparent;
+    border: 1px dashed var(--border-strong); color: var(--ink-muted);
+  }
+  .ce-table { width: 100%; border-collapse: collapse; }
+  .ce-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-muted); font-weight: 600; padding: 9px 12px; background: var(--surface-ink-tint); border-bottom: 1px solid var(--border-default); }
+  .ce-table td { padding: 9px 12px; border-bottom: 1px solid var(--border-default); font-size: 13px; }
+  .ce-mono { font-family: var(--mono); font-size: 12.5px; color: var(--ink-secondary); }
+
+  /* ---- D1: the provenance strip ---- */
+  .ce-prov {
+    background: var(--surface-ink-tint); border-top: 1px solid var(--border-default);
+    padding: 11px 16px 13px; display: flex; flex-direction: column; gap: 5px;
+  }
+  .ce-prov-claim { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; font-weight: 600; color: var(--ink-secondary); }
+  .ce-prov-body { font-size: 12px; line-height: 1.5; color: var(--ink-secondary); margin: 0; }
+  .ce-prov-list { margin: 0; padding-left: 15px; font-size: 12px; line-height: 1.5; color: var(--ink-secondary); display: flex; flex-direction: column; gap: 2px; }
+  .ce-basis { font-family: var(--mono); font-size: 11.5px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+  .ce-unobs { font-size: 26px; font-weight: 600; margin: 8px 0 2px; color: var(--ink-disabled, #C4C4C4); }
+
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; }
+  @media (max-width: 720px) { .grid2, .grid4 { grid-template-columns: 1fr; } }
+
+  .swatches { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+</style>
+
+<div class="doc">
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">CoreEdge Console · design addendum to dc2</div>
+    <h1>Four things the Operations Center needs that dc2 does not contain</h1>
+    <p class="standfirst">
+      Everything here is dc2's component language and the production tokens, verbatim. Nothing is
+      redesigned. Each specimen names the payload field it renders, because the endpoints already
+      decide what is true — the design's only job is to not overstate it.
+    </p>
+  </header>
+
+  <section>
+    <div class="sect-no">D1</div>
+    <h2>The provenance treatment</h2>
+    <p class="lede">
+      Six screens carry a permanent statement that a number is incomplete and why. This is the
+      highest-leverage decision in the set: it is where honest status becomes design language or
+      degrades into fine print.
+    </p>
+
+    <div class="note">
+      <p><b>It is furniture, not an alarm.</b> These notes are permanent properties of the data,
+      seen on every visit. Rendered in amber they would read as unresolved warnings and be mentally
+      dismissed within a week. So the strip uses <code>--surface-ink-tint</code> — the same fill as a
+      table header. It belongs to the component rather than interrupting it.</p>
+      <p><b>The claim is the headline.</b> Each strip opens with its assertion in caption type, not
+      the word "note" or an icon. <i>Floor, not census</i> is scannable, specific, and cannot be
+      mistaken for decoration. The explanation follows at 12px.</p>
+      <p><b>It sits inside the card, below the content, above nothing.</b> A page-level banner gets
+      scrolled past; a strip attached to the thing it qualifies cannot be read separately from it.</p>
+    </div>
+
+    <div class="specimen-label">Specimen · broker traffic</div>
+    <div class="specimen">
+      <div class="ce-card">
+        <div class="ce-card-pad" style="display:flex;gap:34px;align-items:flex-start">
+          <div>
+            <div class="ce-cap">Calls</div>
+            <div class="ce-num">4,182</div>
+            <div class="ce-sub">last 24 hours</div>
+          </div>
+          <div>
+            <div class="ce-cap">Median latency</div>
+            <div class="ce-num">412 <span style="font-size:15px;font-weight:500;color:#8A8A8A">ms</span></div>
+            <div class="ce-basis">over 100 of 4,182 · 0 unmeasured</div>
+          </div>
+        </div>
+        <table class="ce-table">
+          <thead><tr><th>Time</th><th>Solution</th><th>Outcome</th></tr></thead>
+          <tbody>
+            <tr><td class="ce-mono">14:02:11</td><td>Finance accelerator</td>
+              <td><span class="ce-chip" style="background:#DCEBE3;color:#166534"><span class="dot"></span>ok</span></td></tr>
+            <tr><td class="ce-mono">14:01:47</td><td>Finance accelerator</td>
+              <td><span class="ce-chip" style="background:#F4F2EB;color:#4A4A4A"><span class="dot"></span>empty</span></td></tr>
+          </tbody>
+        </table>
+        <div class="ce-prov">
+          <div class="ce-prov-claim">Floor, not census</div>
+          <ul class="ce-prov-list">
+            <li>Calls throttled at the edge leave no record.</li>
+            <li>Calls that time out before an audit write leave no record.</li>
+            <li>The audit writer swallows its own failures, so the feed thins exactly when the database is struggling.</li>
+          </ul>
+          <p class="ce-prov-body">Showing 100 of 4,182 calls. Counts above are for the full window.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <p><b>A number with a stated basis never appears alone.</b> <span class="f">latency.medianMs</span>
+      carries <span class="f">basis</span> and <span class="f">sampleSize</span>; the line beneath the
+      figure is not optional and does not disappear when the sample is complete — it reads
+      <i>over 4,182 of 4,182</i>. A median over 100 rows and a median over 4,182 must never render
+      identically, and the difference has to survive someone screenshotting the number.</p>
+    </div>
+
+    <div class="specimen-label">Specimen · a number that cannot exist, beside one that can</div>
+    <div class="specimen">
+      <div class="grid2">
+        <div class="ce-card ce-card-pad">
+          <div class="ce-cap">Northbound read · per credential</div>
+          <div class="ce-num">58 <span style="font-size:14px;font-weight:500;color:#8A8A8A">of 60</span></div>
+          <div class="ce-basis">remaining this minute</div>
+        </div>
+        <div class="ce-card ce-card-pad">
+          <div class="ce-cap">Edge read · per client IP</div>
+          <div class="ce-unobs">—</div>
+          <div class="ce-basis" style="color:#4A4A4A">Not observable · limit 300/min</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <p><b>The em-dash holds the slot at full number size.</b> A greyed zero would read as
+      "throttled"; a spinner would read as "loading"; an empty box would read as broken. An em-dash at
+      26px says the slot is real and the value is not, permanently. <span class="f">observable:
+      false</span> is the only input.</p>
+      <p>Two of the four throttle buckets are keyed by an IP address we cannot enumerate and fire
+      before the route runs. Their <i>limit</i> is knowable; their <i>usage</i> is not, ever.</p>
+    </div>
+
+    <div class="specimen-label">The six instances · claim line and source field</div>
+    <div class="specimen" style="background:var(--surface-paper)">
+      <table class="ce-table">
+        <thead><tr><th>Screen</th><th>Claim line</th><th>From</th></tr></thead>
+        <tbody>
+          <tr><td>Broker traffic</td><td>Floor, not census</td><td class="ce-mono">provenance.missing · eventsAreAPage</td></tr>
+          <tr><td>Write ledger</td><td>Two sources, and they do not reconcile</td><td class="ce-mono">provenance.why · rowsAreAPage</td></tr>
+          <tr><td>Connections health</td><td>Active connections only</td><td class="ce-mono">provenance.excludedInactive</td></tr>
+          <tr><td>Credentials</td><td>Last use is under-reported</td><td class="ce-mono">lastUsedUnderReports · countBasis</td></tr>
+          <tr><td>Throttle</td><td>Two buckets are not observable</td><td class="ce-mono">edgeBucketsAreNotObservable</td></tr>
+          <tr><td>Incidents</td><td>Empty is not healthy</td><td class="ce-mono">provenance.emptyIsNotHealthy</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="specimen-label">Specimen · incidents, empty</div>
+    <div class="specimen">
+      <div class="ce-card">
+        <div class="ce-card-pad" style="text-align:center;padding:34px 20px 30px">
+          <div style="font-size:15px;font-weight:600;color:#1A1A1A">Nothing crossed a threshold</div>
+          <div style="font-size:13px;color:#4A4A4A;margin-top:6px;max-width:44ch;margin-left:auto;margin-right:auto;line-height:1.5">
+            Six rules are being watched. None fired in the last 24 hours.
+          </div>
+        </div>
+        <div class="ce-prov">
+          <div class="ce-prov-claim">Empty is not healthy</div>
+          <p class="ce-prov-body">
+            This says nothing crossed a threshold in what the audit feed recorded — not that
+            everything is well. Calls throttled at the edge, calls that timed out before an audit
+            write, and calls whose audit write failed leave no row, and the feed thins exactly when
+            the database is struggling.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <p><b>The empty state does not say "All clear" or show a green tick.</b> That is the single
+      most consequential piece of copy in the Operations Center: it is the screen most likely to be
+      glanced at, and the glance most likely to be wrong. "Nothing crossed a threshold" is what the
+      data supports.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sect-no">D2</div>
+    <h2>Binding unverified, and the four-way agreement</h2>
+    <p class="lede">
+      A connection whose SAP environment was never declared is neither healthy-and-known nor broken.
+      Reads through it are served but cannot be attributed to a landscape; writes are refused outright.
+    </p>
+
+    <div class="note">
+      <p><b>Absence gets a dashed outline, and nothing else does.</b> The product's existing rule is
+      that an unknown environment renders no chip at all, never a guessed one — correct, and it leaves
+      a blank cell that reads as a rendering fault. A dashed pill with no fill is visibly a
+      <i>deliberate gap</i>: it occupies the chip's position, states what is missing, and cannot be
+      confused with a filled status. No new colour is introduced, which is the point — an absence is
+      not a state.</p>
+      <p>The same device carries <span class="f">NEVER_TESTED</span> in D4. One idea, two uses.</p>
+    </div>
+
+    <div class="specimen-label">Specimen · connections, one declared and one not</div>
+    <div class="specimen">
+      <div class="ce-card">
+        <table class="ce-table">
+          <thead><tr><th>Connection</th><th>Environment</th><th>Health</th><th>Last succeeded</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Acme S/4 <div class="ce-mono" style="font-size:11.5px;color:#8A8A8A">s4hana · prod</div></td>
+              <td><span class="ce-chip" style="background:#FBE9D1;color:#8B5A00">PROD</span></td>
+              <td><span class="ce-chip" style="background:#DCEBE3;color:#166534"><span class="dot"></span>OK</span></td>
+              <td class="ce-mono">2 minutes ago</td>
+            </tr>
+            <tr>
+              <td>Acme sandbox <div class="ce-mono" style="font-size:11.5px;color:#8A8A8A">s4hana · sbx</div></td>
+              <td><span class="ce-absent">environment not declared</span></td>
+              <td><span class="ce-chip" style="background:#DCEBE3;color:#166534"><span class="dot"></span>OK</span></td>
+              <td class="ce-mono">6 minutes ago</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="ce-prov">
+          <div class="ce-prov-claim">Active connections only</div>
+          <p class="ce-prov-body">2 deactivated connections are not listed. A deactivated connection
+          serves no traffic, so its probe status would be a stale claim about a system nothing is calling.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <p><b>Health and binding are independent, and the specimen proves it.</b> The undeclared
+      connection is <i>healthy</i> — its probe returned 200. It is the binding that is unverified.
+      Collapsing the two would tell an operator to fix a connection that is working.</p>
+    </div>
+
+    <div class="specimen-label">Specimen · the backlog, shaped to reach zero</div>
+    <div class="specimen">
+      <div class="ce-card ce-card-pad" style="max-width:420px">
+        <div class="ce-cap">Binding backlog</div>
+        <div class="ce-num" style="color:#B45309">3 <span style="font-size:15px;font-weight:500;color:#8A8A8A">to clear</span></div>
+        <div style="height:6px;border-radius:9999px;background:#EAEAE6;overflow:hidden;margin:10px 0 8px">
+          <div style="width:75%;height:100%;background:#166534"></div>
+        </div>
+        <div class="ce-basis">9 of 12 connections have declared an environment · target 0</div>
+        <p style="font-size:12px;color:#4A4A4A;line-height:1.5;margin:10px 0 0">
+          Reads through an undeclared connection are served but marked unverified. Writes through one
+          are refused outright.
+        </p>
+        <a href="#" style="font-size:12.5px;font-weight:600;color:#002B5C;display:inline-block;margin-top:9px">Declare environments in Studio →</a>
+      </div>
+    </div>
+
+    <div class="note">
+      <p><b>A progress bar, not a badge — and the target is printed.</b> The brief's requirement is
+      that this reads as work trending to zero rather than a number that could sit constant forever
+      without anyone noticing. A bar with <i>9 of 12</i> beside it makes a stalled backlog visible
+      the way a bare count does not. The remediation link is part of the component, not a separate
+      action: a backlog you cannot act on from where you see it does not get cleared.</p>
+    </div>
+
+    <div class="specimen-label">Specimen · environment agreement, four outcomes</div>
+    <div class="specimen">
+      <div class="ce-card ce-card-pad">
+        <div class="ce-cap" style="margin-bottom:11px">Environment binding · 4,182 calls</div>
+        <div class="swatches">
+          <span class="ce-chip" style="background:#DCEBE3;color:#166534"><span class="dot"></span>agreed · 3,910</span>
+          <span class="ce-absent">unverified · 4</span>
+          <span class="ce-chip" style="background:#F4DEDB;color:#8E2A26"><span class="dot"></span>mismatch · 2</span>
+          <span class="ce-chip" style="background:#EAEAE6;color:#6B6B6B"><span class="dot"></span>no connection reached · 266</span>
+        </div>
+        <p style="font-size:12px;color:#4A4A4A;line-height:1.5;margin:12px 0 0;max-width:60ch">
+          <b style="color:#8E2A26">Mismatch</b> means a call was served from a landscape other than
+          the one its credential declared. <b>No connection reached</b> means the call was refused at
+          authentication, the throttle, or the grant gate — there was no binding to agree or disagree.
+        </p>
+      </div>
+    </div>
+
+    <div class="note">
+      <p><b>Four, not three — and the fourth is the one that was silently wrong.</b>
+      <span class="f">notApplicable</span> exists because refused calls used to be counted as
+      <i>agreed</i>, so a window of nothing but 401s and 429s reported a wall of agreement. It renders
+      in the neutral grey used for expired, not in a failure colour: those calls were correctly
+      refused, and colouring them red would invent an incident.</p>
+      <p><b>Every chip carries its label.</b> Status is never conveyed by colour alone — the three
+      states most at risk of colour-only encoding are exactly these.</p>
+    </div>
+
+    <div class="specimen-label">Specimen · a write refused for an undeclared environment</div>
+    <div class="specimen">
+      <div class="ce-card ce-card-pad" style="max-width:520px">
+        <div style="display:flex;gap:11px;align-items:flex-start">
+          <span class="ce-absent" style="margin-top:2px">write refused</span>
+          <div>
+            <div style="font-size:14px;font-weight:600">This connection has not declared its environment</div>
+            <p style="font-size:13px;color:#4A4A4A;line-height:1.55;margin:6px 0 0">
+              A write cannot be authorised against a landscape nobody has named. This is not an outage
+              and not a permissions problem — reads through this connection continue, marked unverified.
+            </p>
+            <a href="#" style="font-size:12.5px;font-weight:600;color:#002B5C;display:inline-block;margin-top:10px">Set the environment on this connection →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sect-no">D3</div>
+    <h2>Thin, not empty</h2>
+    <p class="lede">
+      These screens will hold one credential and two connections before they hold a hundred. One row
+      must look intentional, not like a table that failed to load.
+    </p>
+
+    <div class="specimen-label">Specimen · a table with exactly one row</div>
+    <div class="specimen">
+      <div class="ce-card">
+        <table class="ce-table">
+          <thead><tr><th>Credential</th><th>Environment</th><th>State</th><th>Last observed use</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Finance accelerator · DEV<div class="ce-mono" style="font-size:11.5px;color:#8A8A8A">issued 26 Jul</div></td>
+              <td><span class="ce-chip" style="background:#E0EBF4;color:#1A4D6F">DEV</span></td>
+              <td><span class="ce-chip" style="background:#DCEBE3;color:#166534"><span class="dot"></span>active</span></td>
+              <td><span class="ce-absent">never observed</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="ce-prov">
+          <div class="ce-prov-claim">Showing all 1 credential</div>
+          <p class="ce-prov-body">
+            One credential per solution — re-issuing replaces the previous token rather than adding
+            one. <b>Last observed use</b> is written best-effort and under-reports; it is not on its
+            own sufficient to conclude a credential is dormant.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <p><b>The strip does the work.</b> A single row above a provenance strip reading
+      <i>showing all 1 credential</i> is unambiguously complete. The same table with blank space below
+      it is ambiguous, and ambiguity in a monitoring tool gets resolved as "broken".</p>
+      <p><b>Never pad with skeleton rows.</b> Skeletons mean "loading". Using them to fill a sparse
+      table tells an operator more data is coming when it is not — a small lie, on the screen whose
+      entire premise is not telling them.</p>
+      <p><b>Never pad with sample rows.</b> Same reasoning, larger consequence.</p>
+      <p>Tables keep their header and provenance strip at all densities, so a one-row table and a
+      hundred-row table are recognisably the same component.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sect-no">D4</div>
+    <h2>The connection-health vocabulary</h2>
+    <p class="lede">
+      The probe returns exactly six values. dc2 shows a seventh that is not a probe result at all.
+    </p>
+
+    <div class="specimen-label">Specimen · the full scale</div>
+    <div class="specimen">
+      <div class="swatches" style="gap:12px">
+        <span class="ce-chip" style="background:#DCEBE3;color:#166534"><span class="dot"></span>OK</span>
+        <span class="ce-chip" style="background:#FBE9D1;color:#8B5A00"><span class="dot"></span>UNAUTHORIZED</span>
+        <span class="ce-chip" style="background:#F4DEDB;color:#8E2A26"><span class="dot"></span>NOT_FOUND</span>
+        <span class="ce-chip" style="background:#FBE9D1;color:#8B5A00"><span class="dot"></span>TIMEOUT</span>
+        <span class="ce-chip" style="background:#F4DEDB;color:#8E2A26"><span class="dot"></span>ERROR</span>
+        <span class="ce-chip" style="background:#EAEAE6;color:#6B6B6B"><span class="dot"></span>NO_PROBE_PATH</span>
+        <span class="ce-absent">never tested</span>
+      </div>
+    </div>
+
+    <table class="spec">
+      <thead><tr><th>Value</th><th>Rolls up as</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td><code>OK</code></td><td>Healthy</td><td>A real 200 was observed.</td></tr>
+        <tr><td><code>UNAUTHORIZED</code></td><td>Needs attention</td><td>Credentials or the communication arrangement. Actionable by the customer.</td></tr>
+        <tr><td><code>NOT_FOUND</code></td><td>Needs attention</td><td>The service is not in this tenant.</td></tr>
+        <tr><td><code>TIMEOUT</code></td><td>Needs attention</td><td>Reached, did not answer in time.</td></tr>
+        <tr><td><code>ERROR</code></td><td>Needs attention</td><td>The tenant returned a failure.</td></tr>
+        <tr><td><code>NO_PROBE_PATH</code></td><td><b>Unknown</b></td><td>We have no path to probe and refused to guess one. Our gap, not theirs.</td></tr>
+        <tr><td><i>null</i></td><td><b>Outside the scale</b></td><td>No probe has run. The absence of a result, not a result.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <p><b><span class="f">NO_PROBE_PATH</span> counts as unknown, never as needs-attention.</b> It
+      means we could not construct a probe path — the customer has nothing to fix. Rolling it into
+      needs-attention would nag an operator about a gap on our side, and a screen that nags about
+      things you cannot action is a screen people stop opening. The copy says
+      <i>no probe path configured</i>, never <i>failed</i>.</p>
+      <p><b><span class="f">NEVER_TESTED</span> keeps its label and leaves the scale.</b> It is the
+      schema's name for a null column, not something the probe returns. It takes the dashed
+      absence pill from D2 — same device, same meaning: a deliberate gap rather than an outcome.</p>
+    </div>
+
+    <div class="specimen-label">Specimen · a failing connection that last worked three weeks ago</div>
+    <div class="specimen">
+      <div class="ce-card">
+        <table class="ce-table">
+          <thead><tr><th>Connection</th><th>Health</th><th>Last succeeded</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Acme S/4 <div class="ce-mono" style="font-size:11.5px;color:#8A8A8A">s4hana · prod</div></td>
+              <td><span class="ce-chip" style="background:#FBE9D1;color:#8B5A00"><span class="dot"></span>TIMEOUT</span></td>
+              <td class="ce-mono">6 Jul · 3 weeks ago</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="note">
+      <p><b>The column is "last succeeded", not "last validated".</b> The timestamp moves only on a
+      real 200, so a failing status beside an old date is the truth — it last worked three weeks ago
+      and it is failing now. Naming the column for what the field means stops the pairing looking
+      like a bug, and stops someone "fixing" it later by touching the timestamp on failure. That
+      would destroy the only record of when the connection last actually worked.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Change log</h2>
+    <table class="spec">
+      <thead><tr><th>Item</th><th>What</th><th>Screens</th></tr></thead>
+      <tbody>
+        <tr><td>D1</td><td>Provenance strip, basis line, unobservable slot</td><td>All six</td></tr>
+        <tr><td>D2</td><td>Dashed absence pill; backlog card; four-way binding; write-refused state</td><td>Connections health, broker traffic</td></tr>
+        <tr><td>D3</td><td>Sparse-table treatment via the strip; no skeletons, no samples</td><td>Credentials, connections, traffic, write ledger</td></tr>
+        <tr><td>D4</td><td>Six-value scale; NO_PROBE_PATH as unknown; NEVER_TESTED outside the scale; "last succeeded"</td><td>Connections health</td></tr>
+      </tbody>
+    </table>
+    <p class="lede" style="font-size:14px">
+      <b>Marked out of scope in dc2:</b> the catalogue-freshness screen (the endpoint is not being
+      built — the underlying table has no tenant column); grant-expiry states and the revoke controls
+      on the token and connection registries (Control Tower, second tranche); workspace chrome and
+      breadcrumbs (already shipped).
+    </p>
+  </section>
+
+  <section>
+    <h2>Open questions</h2>
+    <p class="lede">Not resolved here, because each is a product decision rather than a visual one.</p>
+    <ul>
+      <li><b>Does a mismatch deserve to interrupt?</b> It is rated critical by the incident rules and
+      rendered as a chip here. Whether it also warrants a persistent page-level banner until
+      acknowledged is a decision about how loud the product is willing to be — and there is no
+      acknowledgement state in the data to hang it on.</li>
+      <li><b>What is the backlog denominator when there are no connections at all?</b> The bar shows
+      <i>9 of 12</i>. At zero connections the honest reading is "nothing to declare yet", which is not
+      the same as a cleared backlog, and the two must not render alike.</li>
+      <li><b>Should the latency basis line be suppressed when the sample is complete?</b> It is kept
+      always-on here on the argument that an inconsistent caveat is one people stop looking for. That
+      trades a little noise for reliability, and it is a product call.</li>
+    </ul>
+  </section>
+
+</div>
+</div>

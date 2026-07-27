@@ -52,9 +52,19 @@ prisma/dev.db
 *.gz
 *.png
 *.html
-# Design contracts are source-of-truth, not generated reports
+# Design contracts are source-of-truth, not generated reports.
+#
+# `*.html` above exists to keep generated reports out. It also silently swallowed
+# the CoreEdge design contracts when they were committed into a nested folder:
+# the negation below was one level deep, the pack lives two, and `git add` on the
+# directory reported success while dropping every .html in it. The visual
+# contract the Build Bible's §0 gate refers to was absent from the repository
+# while appearing to have been committed.
+#
+# `**` so a design contract cannot go missing again by being filed one folder
+# deeper than the rule anticipated.
 !docs/neutral-discovery/design/*.html
-!docs/coreedge/*.html
+!docs/coreedge/**/*.html
 *.docx
 *.xlsx
 *.xlsm
