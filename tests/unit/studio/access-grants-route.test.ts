@@ -164,13 +164,33 @@ describe("recording a decision", () => {
     expect(mocks.updateGrant).not.toHaveBeenCalled();
   });
 
-  it("allows the WRITE once the checklist is acknowledged", async () => {
+  it("allows the WRITE once the checklist is acknowledged and it is time-bounded", async () => {
+    mocks.getCurrentUser.mockResolvedValue(APPROVER);
+    mocks.findFirstGrant.mockResolvedValue({
+      ...PENDING_READ,
+      operation: "CREATE",
+      expiresAt: new Date("2026-12-31T00:00:00.000Z"),
+    });
+    const res = await PATCH(
+      req({ grantId: "g_1", decision: "APPROVED", writeChecklistAcknowledged: true }, "PATCH"),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("403s an unbounded WRITE grant even with the checklist acknowledged", async () => {
+    // The grant row carries no expiry, so approving would create a permanent
+    // write authorisation — and there is deliberately no revocation to undo it.
+    //
+    // This case previously PASSED against a `=== null` check, because the mocked
+    // grant omits `expiresAt` entirely and `undefined !== null`. A missing field
+    // is not a permission; the production check is `== null` for exactly this.
     mocks.getCurrentUser.mockResolvedValue(APPROVER);
     mocks.findFirstGrant.mockResolvedValue({ ...PENDING_READ, operation: "CREATE" });
     const res = await PATCH(
       req({ grantId: "g_1", decision: "APPROVED", writeChecklistAcknowledged: true }, "PATCH"),
     );
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
+    expect(mocks.updateGrant).not.toHaveBeenCalled();
   });
 
   it("409s re-deciding a settled grant", async () => {

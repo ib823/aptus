@@ -17,6 +17,8 @@ import {
   highestApprovedEnvironment,
   isExpired,
   isGranting,
+  grantsRead,
+  grantsWrite,
   isWriteOperation,
   type DecisionRequest,
   type GrantDecision,
@@ -31,6 +33,7 @@ function base(overrides: Partial<DecisionRequest> = {}): DecisionRequest {
     deciderId: "u_approver",
     next: "APPROVED",
     writeChecklistAcknowledged: false,
+    expiresAt: null,
     ...overrides,
   };
 }
@@ -71,13 +74,29 @@ describe("the write gate", () => {
     }
   });
 
-  it("refuses for every GRANTING decision, not just full approval", () => {
-    // SANDBOX_ONLY and READ_ONLY still confer something; a write must not slip
-    // through on a narrower-sounding decision.
-    for (const next of ["APPROVED", "SANDBOX_ONLY", "READ_ONLY"] as const) {
-      const r = evaluateDecision(base({ operation: "CREATE", next, writeChecklistAcknowledged: false }));
-      expect(r.ok, `${next} for a write must require the checklist`).toBe(false);
-    }
+  it("refuses for every decision that ACTUALLY authorises the write", () => {
+    // Previously this looped over all three granting decisions, which encoded the
+    // defect: it assumed READ_ONLY and SANDBOX_ONLY authorised a write and merely
+    // needed ceremony first. They do not authorise one at all now, so there is
+    // nothing for the checklist to gate — see the refusals below.
+    const r = evaluateDecision(
+      base({ operation: "CREATE", next: "APPROVED", writeChecklistAcknowledged: false }),
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("WRITE_CHECKLIST_REQUIRED");
+  });
+
+  it("a SANDBOX_ONLY write is allowed in SANDBOX, with the checklist and an expiry", () => {
+    const r = evaluateDecision(
+      base({
+        operation: "CREATE",
+        environment: "SANDBOX",
+        next: "SANDBOX_ONLY",
+        writeChecklistAcknowledged: true,
+        expiresAt: new Date("2026-12-31T00:00:00.000Z"),
+      }),
+    );
+    expect(r.ok).toBe(true);
   });
 
   it("allows a write to be REJECTED without the checklist", () => {
@@ -88,10 +107,40 @@ describe("the write gate", () => {
     ).toBe(true);
   });
 
-  it("allows a write once the checklist is acknowledged", () => {
+  it("allows a write once the checklist is acknowledged AND it is time-bounded", () => {
     expect(
-      evaluateDecision(base({ operation: "UPDATE", writeChecklistAcknowledged: true })).ok,
+      evaluateDecision(
+        base({
+          operation: "UPDATE",
+          writeChecklistAcknowledged: true,
+          expiresAt: new Date("2026-12-31T00:00:00.000Z"),
+        }),
+      ).ok,
     ).toBe(true);
+  });
+
+  it("refuses a write grant with no expiry — there is no revocation to fall back on", () => {
+    const r = evaluateDecision(
+      base({ operation: "UPDATE", writeChecklistAcknowledged: true, expiresAt: null }),
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("WRITE_GRANT_REQUIRES_EXPIRY");
+  });
+
+  it("refuses a write grant whose expiry field was omitted entirely", () => {
+    // A missing property is not a permission. The check is `== null` precisely so
+    // an omitted field cannot slip past a control that a null would have caught.
+    const req = base({ operation: "UPDATE", writeChecklistAcknowledged: true });
+    delete (req as { expiresAt?: unknown }).expiresAt;
+    const r = evaluateDecision(req);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("WRITE_GRANT_REQUIRES_EXPIRY");
+  });
+
+  it("does not demand an expiry for a READ grant", () => {
+    // Reads are revocable in practice by the credential, and an unbounded read
+    // grant was never the risk the expiry rule exists to close.
+    expect(evaluateDecision(base({ operation: "READ", expiresAt: null })).ok).toBe(true);
   });
 
   it("never requires the checklist for a plain read", () => {
@@ -204,5 +253,57 @@ describe("expiry", () => {
     // task has caught up yet.
     expect(effectiveDecision({ decision: "APPROVED", expiresAt: past }, now)).toBe("EXPIRED");
     expect(effectiveDecision({ decision: "APPROVED", expiresAt: future }, now)).toBe("APPROVED");
+  });
+});
+
+/* ── runtime predicates: what a decision actually authorises ─────────────────
+ *
+ * These are the split that closed the hole. The broker previously asked only
+ * `isGranting`, which cannot tell READ_ONLY from APPROVED — so "read only"
+ * authorised a write, and a PROD grant decided SANDBOX_ONLY authorised PROD.
+ * `isGranting` survives for the progressive-trust display and must never be
+ * used on an access path again.
+ */
+describe("grantsWrite", () => {
+  it("REFUSES a write on READ_ONLY, in every environment", () => {
+    for (const env of ["SANDBOX", "DEV", "TEST", "PROD"] as const) {
+      expect(grantsWrite("READ_ONLY", env), `READ_ONLY must not write in ${env}`).toBe(false);
+    }
+  });
+
+  it("allows SANDBOX_ONLY only in SANDBOX", () => {
+    expect(grantsWrite("SANDBOX_ONLY", "SANDBOX")).toBe(true);
+    for (const env of ["DEV", "TEST", "PROD"] as const) {
+      expect(grantsWrite("SANDBOX_ONLY", env), `SANDBOX_ONLY must not write in ${env}`).toBe(false);
+    }
+  });
+
+  it("allows APPROVED everywhere — unchanged behaviour", () => {
+    for (const env of ["SANDBOX", "DEV", "TEST", "PROD"] as const) {
+      expect(grantsWrite("APPROVED", env)).toBe(true);
+    }
+  });
+
+  it("refuses every non-granting decision", () => {
+    for (const d of ["REQUESTED", "REJECTED", "EXPIRED"] as const) {
+      expect(grantsWrite(d, "PROD")).toBe(false);
+    }
+  });
+});
+
+describe("grantsRead", () => {
+  it("allows READ_ONLY — that is the decision's entire purpose", () => {
+    expect(grantsRead("READ_ONLY", "PROD")).toBe(true);
+  });
+
+  it("allows SANDBOX_ONLY only in SANDBOX, on the read path too", () => {
+    expect(grantsRead("SANDBOX_ONLY", "SANDBOX")).toBe(true);
+    expect(grantsRead("SANDBOX_ONLY", "PROD")).toBe(false);
+  });
+
+  it("refuses every non-granting decision", () => {
+    for (const d of ["REQUESTED", "REJECTED", "EXPIRED"] as const) {
+      expect(grantsRead(d, "DEV")).toBe(false);
+    }
   });
 });

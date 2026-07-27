@@ -108,12 +108,27 @@ describe("the grant requirement", () => {
     }
   });
 
-  it("accepts the narrower granting decisions too", async () => {
-    for (const decision of ["APPROVED", "SANDBOX_ONLY", "READ_ONLY"]) {
+  it("accepts APPROVED and READ_ONLY for a read — reading is what READ_ONLY is for", async () => {
+    for (const decision of ["APPROVED", "READ_ONLY"]) {
       mocks.findManyGrants.mockResolvedValue([{ decision, expiresAt: null }]);
       const r = await resolveReadableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW);
       expect(r.ok, decision).toBe(true);
     }
+  });
+
+  it("refuses SANDBOX_ONLY outside SANDBOX, on the read path too", async () => {
+    // This assertion used to read "accepts the narrower granting decisions too"
+    // and lumped SANDBOX_ONLY in with the rest at PROD. That encoded the defect:
+    // the decision was matched against the grant row's own environment and then
+    // ignored, so a decision that says "sandbox only" authorised production.
+    mocks.findManyGrants.mockResolvedValue([{ decision: "SANDBOX_ONLY", expiresAt: null }]);
+    const refused = await resolveReadableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW);
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) expect(refused.reason).toBe("NO_APPROVED_GRANT");
+
+    mocks.findManyGrants.mockResolvedValue([{ decision: "SANDBOX_ONLY", expiresAt: null }]);
+    const allowed = await resolveReadableInterface(SCOPE, "sol_1", "if_1", "SANDBOX", NOW);
+    expect(allowed.ok).toBe(true);
   });
 
   it("queries grants for THIS client's environment", async () => {

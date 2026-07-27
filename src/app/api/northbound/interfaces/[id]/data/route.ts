@@ -36,7 +36,10 @@ import {
   unauthenticated,
 } from "@/lib/northbound/respond";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
-import { resolveSapConnection } from "@/lib/sap-public/connection-resolver";
+import {
+  connectionRefusalMessage,
+  resolveSapConnectionForEnvironment,
+} from "@/lib/sap-public/connection-resolver";
 import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 
@@ -114,13 +117,20 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   }
   const iface = access.iface;
 
-  // 3 — resolve the client's OWN SAP connection. Never the shared env tenant.
+  // 3 — resolve the client's OWN SAP connection, BOUND TO THIS CREDENTIAL'S
+  // ENVIRONMENT. Never the shared env tenant, and never simply the oldest row:
+  // picking by creation order is how a sandbox credential reached production.
   const product = getSapProduct(iface.sapProduct);
-  const connection = product
-    ? await resolveSapConnection(client.organizationId, iface.sapProduct)
-    : null;
+  const binding = product
+    ? await resolveSapConnectionForEnvironment(
+        client.organizationId,
+        iface.sapProduct,
+        client.environment,
+        "READ",
+      )
+    : ({ ok: false, reason: "NO_CONNECTION" } as const);
 
-  if (!product || !connection) {
+  if (!binding.ok) {
     await recordNorthboundCall({
       organizationId: client.organizationId,
       solutionId: client.solutionId,
@@ -134,14 +144,18 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       clientTokenId: client.clientId,
     });
     return northboundError(
-      "FORBIDDEN",
-      "No SAP connection is configured for this organization and product.",
+      "CONNECTION_NOT_CONFIGURED",
+      connectionRefusalMessage(binding.reason, client.environment),
       403,
       correlationId,
     );
   }
 
-  const service = await resolveHubService(product, iface.externalId);
+  const connection = binding.connection;
+
+  // `product!` is sound: a null product forces the binding to fail above, so we
+  // cannot reach here without one. Same idiom as the write route.
+  const service = await resolveHubService(product!, iface.externalId);
   const entitySet = iface.entitySet ?? request.nextUrl.searchParams.get("entity");
   if (!service || !entitySet) {
     await recordNorthboundCall({
@@ -155,6 +169,8 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       rowCount: null,
       correlationId,
       clientTokenId: client.clientId,
+      connectionId: connection.id,
+      connectionEnvironment: connection.environment,
     });
     return northboundError(
       "VALIDATION_ERROR",
@@ -186,6 +202,10 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     rowCount: result.records.length,
     correlationId,
     clientTokenId: client.clientId,
+    connectionId: connection.id,
+    // Null here on a served read is the honest record of a permitted-but-
+    // unverified binding: the connection never declared its landscape.
+    connectionEnvironment: connection.environment,
   });
 
   if (status >= 400) {
