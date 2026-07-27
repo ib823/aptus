@@ -134,3 +134,49 @@ describe("every Workbench-group page is reachable", () => {
     });
   }
 });
+
+/* ── every console route group is reachable ──────────────────────────────────
+ *
+ * This gate has now failed silently TWICE: `/studio` shipped across nineteen
+ * PRs behind a locked door, and `/operations` + `/control-tower` shipped with
+ * route groups, layouts, RBAC and green tests while redirecting to /workbench in
+ * production.
+ *
+ * Both were invisible locally, because WORKBENCH_ONLY is unset on a dev server —
+ * so the redirect that breaks production never fires while you are building.
+ *
+ * This derives the expectation from the ROUTE GROUPS ON DISK rather than a
+ * hand-written list, so adding a workspace without allow-listing it fails here
+ * instead of in production.
+ */
+describe("every console page route group is allow-listed", () => {
+  const CONSOLE_ROUTES = [
+    ["(studio)", "/studio"],
+    ["(operations)", "/operations"],
+    ["(control-tower)", "/control-tower"],
+  ] as const;
+
+  it("allows the top-level path of each console workspace", () => {
+    for (const [group, path] of CONSOLE_ROUTES) {
+      expect(isWorkbenchPath(path), `${group} → ${path} must not be redirected`).toBe(true);
+    }
+  });
+
+  it("allows nested pages under each workspace", () => {
+    for (const [, path] of CONSOLE_ROUTES) {
+      expect(isWorkbenchPath(`${path}/anything`), `${path}/anything`).toBe(true);
+    }
+  });
+
+  it("allows each workspace's REST surface", () => {
+    for (const api of ["/api/studio/solutions", "/api/ops/broker-traffic"]) {
+      expect(isWorkbenchPath(api), api).toBe(true);
+    }
+  });
+
+  it("still redirects something genuinely outside the Workbench", () => {
+    // The gate must remain a gate — this test is worthless if it allows everything.
+    expect(isWorkbenchPath("/dashboard")).toBe(false);
+    expect(isWorkbenchPath("/assessments/123")).toBe(false);
+  });
+});

@@ -11,6 +11,12 @@
  * server where WORKBENCH_ONLY is unset. A page can be complete, tested and
  * deployed and still be behind a locked door.
  *
+ * IT THEN HAPPENED AGAIN. Operations Center and Control Tower shipped with route
+ * groups, layouts, RBAC and passing tests — and redirected to /workbench in
+ * production, because they were not added here either. The warning above was
+ * already written at the time. A test asserting the paths exist is therefore
+ * below, so the next surface fails CI instead of failing silently in production.
+ *
  * Adding a surface to the Workbench means adding it here.
  *
  * Edge-runtime safe: pure data and one pure function, no Node built-ins.
@@ -23,6 +29,8 @@ export const WORKBENCH_PATHS = [
   '/affirm',            // value-stream affirm-set workbench
   '/discovery',         // neutral (APQC) process-discovery workbench — feature-gated by NEUTRAL_DISCOVERY_ENABLED
   '/studio',            // CoreEdge Console — Developer Studio (auth + RBAC-gated under (studio))
+  '/operations',        // CoreEdge Console — Operations Center (auth + RBAC-gated under (operations))
+  '/control-tower',     // CoreEdge Console — Control Tower (auth + RBAC-gated under (control-tower))
   '/c/',                // presales guest token surface (under (external))
   '/a/',                // affirm external executive guest surface (under (external))
   '/api/auth/',         // NextAuth callbacks must work on WORKBENCH_HOST
@@ -30,6 +38,7 @@ export const WORKBENCH_PATHS = [
   '/api/affirm/',       // affirm-set REST API
   '/api/discovery/',    // neutral-discovery REST API
   '/api/studio/',       // CoreEdge Console REST API
+  '/api/ops/',          // CoreEdge Console — Operations Center read endpoints
   '/api/health',        // probes
   '/_next/',            // build assets
   '/icons/',            // brand assets
