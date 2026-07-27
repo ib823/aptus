@@ -34,51 +34,11 @@ import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/db/prisma";
 import { opsWhere, opsWindowHours, requireOperations } from "@/lib/ops/guard";
+import { THROTTLE_BUCKETS } from "@/lib/ops/throttle";
 import { peekRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 import { studioOk } from "@/lib/studio/api";
 
 export const dynamic = "force-dynamic";
-
-/**
- * The buckets a northbound call actually passes, in the order it meets them.
- *
- * Named here rather than described in prose so the response cannot drift from
- * the configuration: every limit below is read from RATE_LIMITS, not restated.
- */
-export const THROTTLE_BUCKETS = [
-  {
-    id: "edge-read",
-    key: "api:GET:{clientIp}",
-    keyedBy: "client IP" as const,
-    config: RATE_LIMITS.apiRead,
-    observable: false,
-    note: "Middleware bucket, applied before the route runs. A 429 here never reaches the broker and is never audited.",
-  },
-  {
-    id: "edge-write",
-    key: "api:POST:{clientIp}",
-    keyedBy: "client IP" as const,
-    config: RATE_LIMITS.apiMutation,
-    observable: false,
-    note: "Middleware bucket, applied before the route runs. A 429 here never reaches the broker and is never audited.",
-  },
-  {
-    id: "northbound-read",
-    key: "northbound:{clientId}",
-    keyedBy: "credential" as const,
-    config: RATE_LIMITS.northbound,
-    observable: true,
-    note: "Per credential. A 429 here is written to the audit trail.",
-  },
-  {
-    id: "northbound-write",
-    key: "northbound-write:{clientId}",
-    keyedBy: "credential" as const,
-    config: RATE_LIMITS.northbound,
-    observable: true,
-    note: "Per credential. A 429 here is written to the audit trail.",
-  },
-] as const;
 
 export async function GET(request: NextRequest) {
   const guard = await requireOperations();
