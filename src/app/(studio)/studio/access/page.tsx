@@ -9,7 +9,11 @@
 
 import type { Metadata } from "next";
 
-import { AccessGrantsClient, type LedgerGrant } from "@/components/studio/AccessGrantsClient";
+import {
+  AccessGrantsClient,
+  type LedgerGrant,
+  type RequestableInterface,
+} from "@/components/studio/AccessGrantsClient";
 import {
   ClientCredentials,
   type CredentialSolution,
@@ -74,7 +78,7 @@ export default async function StudioAccessPage() {
 
   // Runtime credentials. Metadata only — tokenHash is never selected, so there
   // is no value here that could become a credential.
-  const [clientRows, solutionRows] = await Promise.all([
+  const [clientRows, solutionRows, interfaceRows] = await Promise.all([
     organizationId
       ? prisma.solutionClient.findMany({
           where: { organizationId },
@@ -103,9 +107,36 @@ export default async function StudioAccessPage() {
           orderBy: { name: "asc" },
         })
       : Promise.resolve([]),
+    // Interfaces a request may be raised against. The dialog derives externalId
+    // and operation from the chosen row rather than accepting them as text: the
+    // runtime matches a grant on both, exactly, so a typo would produce a grant
+    // that is approved and authorises nothing.
+    organizationId
+      ? prisma.interface.findMany({
+          where: { organizationId },
+          select: {
+            id: true,
+            name: true,
+            solutionId: true,
+            externalId: true,
+            operation: true,
+            solution: { select: { name: true } },
+          },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([]),
   ]);
 
   const solutionNames = new Map(solutionRows.map((s) => [s.id, s.name]));
+
+  const requestableInterfaces: RequestableInterface[] = interfaceRows.map((i) => ({
+    id: i.id,
+    name: i.name,
+    solutionId: i.solutionId,
+    solutionName: i.solution.name,
+    externalId: i.externalId,
+    operation: i.operation as RequestableInterface["operation"],
+  }));
 
   const credentials: CredentialSummary[] = clientRows.map((c) => ({
     id: c.id,
@@ -133,9 +164,9 @@ export default async function StudioAccessPage() {
           API Access
         </h1>
         <p style={{ margin: "4px 0 0", fontSize: 14, lineHeight: "22px", color: "var(--ink-secondary)", maxWidth: 760 }}>
-          Which capabilities each solution is allowed to consume, and who agreed. In this
-          version the ledger records decisions — it does not enforce them at runtime, because
-          nothing calls SAP on a solution&apos;s behalf yet.
+          Which capabilities each solution is allowed to consume, and who agreed. These
+          decisions are enforced: the runtime checks a live, unexpired grant for this
+          capability, operation and environment on every call a solution makes.
         </p>
       </div>
 
@@ -144,6 +175,8 @@ export default async function StudioAccessPage() {
         currentUserId={user.id}
         highestApproved={highest}
         canDecide={canMutateStudio(user.role)}
+        canRequest={canMutateStudio(user.role)}
+        requestableInterfaces={requestableInterfaces}
       />
 
       <ClientCredentials

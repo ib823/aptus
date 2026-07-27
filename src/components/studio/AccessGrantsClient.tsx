@@ -19,6 +19,25 @@ import { useCallback, useState } from "react";
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
 import { ENVIRONMENT_ORDER, isWriteOperation, type GrantEnvironment } from "@/lib/studio/grants";
 
+/**
+ * An interface a request may be raised against.
+ *
+ * A request is ALWAYS raised against one of these, never typed by hand. At
+ * runtime the broker matches a grant on solutionId + externalId + operation +
+ * environment, all four exact — so a grant whose externalId differs from an
+ * interface's by a character is approved, listed in the ledger, counted in the
+ * portfolio, and authorises nothing, with no diagnostic anywhere. Deriving both
+ * fields from a real row is what makes that mistake unavailable.
+ */
+export interface RequestableInterface {
+  id: string;
+  name: string;
+  solutionId: string;
+  solutionName: string;
+  externalId: string;
+  operation: "READ" | "CREATE" | "UPDATE";
+}
+
 export interface LedgerGrant {
   id: string;
   solutionName: string;
@@ -65,11 +84,16 @@ export function AccessGrantsClient({
   currentUserId,
   highestApproved,
   canDecide,
+  canRequest,
+  requestableInterfaces,
 }: {
   grants: readonly LedgerGrant[];
   currentUserId: string;
   highestApproved: GrantEnvironment | null;
   canDecide: boolean;
+  /** Raising a request is a builder action, same gate as deciding one. */
+  canRequest: boolean;
+  requestableInterfaces: readonly RequestableInterface[];
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -107,6 +131,8 @@ export function AccessGrantsClient({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <ProgressiveTrust highest={highestApproved} />
+
+      {canRequest && <RequestAccess interfaces={requestableInterfaces} />}
 
       {grants.length === 0 ? (
         <section style={card}>
@@ -283,6 +309,209 @@ function Td({ children, mono }: { children: React.ReactNode; mono?: boolean }) {
     </td>
   );
 }
+
+/**
+ * Raise an access request.
+ *
+ * THE CAPABILITY IS PICKED, NOT TYPED. `externalId` and `operation` come from a
+ * real Interface row and are shown as consequences of that pick. The runtime
+ * matches a grant on solutionId + externalId + operation + environment, all four
+ * exact, so a hand-typed capability produces a grant that is approved, displayed,
+ * counted — and authorises nothing, silently. One catalogue service can also back
+ * several interfaces at different operations, which is why the pair travels
+ * together: a READ grant raised against a CREATE interface would pass approval
+ * and then be refused at the first call, long after anyone was looking.
+ */
+function RequestAccess({ interfaces }: { interfaces: readonly RequestableInterface[] }) {
+  const [open, setOpen] = useState(false);
+  const [interfaceId, setInterfaceId] = useState("");
+  const [environment, setEnvironment] = useState<GrantEnvironment>("SANDBOX");
+  const [justification, setJustification] = useState("");
+  const [expiresAt, setExpiresAt] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const selected = interfaces.find((i) => i.id === interfaceId) ?? null;
+  const isWrite = selected ? isWriteOperation(selected.operation) : false;
+
+  // Mirrors the server bound (10-2000). Mirrored, never trusted: the route
+  // validates independently.
+  const justificationTooShort = justification.trim().length < 10;
+  // A write grant cannot be APPROVED without an expiry, so a write request that
+  // arrives without one strands the approver -- they can neither approve it nor
+  // supply the date themselves. Requiring it here keeps them unblocked. It is a
+  // convenience, NOT the control: evaluateDecision is the control, and a caller
+  // hitting the API directly is still refused there.
+  const missingWriteExpiry = isWrite && expiresAt.trim().length === 0;
+  const cannotSubmit = !selected || justificationTooShort || missingWriteExpiry || busy;
+
+  const submit = useCallback(async () => {
+    if (!selected) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/studio/access-grants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          solutionId: selected.solutionId,
+          externalId: selected.externalId,
+          operation: selected.operation,
+          environment,
+          justification: justification.trim(),
+          ...(expiresAt ? { expiresAt: new Date(expiresAt).toISOString() } : {}),
+        }),
+      });
+      const json = (await res.json()) as { error?: { message?: string } };
+      if (!res.ok) throw new Error(json.error?.message ?? "The request could not be raised.");
+      window.location.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The request could not be raised.");
+    } finally {
+      setBusy(false);
+    }
+  }, [selected, environment, justification, expiresAt]);
+
+  if (interfaces.length === 0) {
+    return (
+      <section style={card}>
+        <h2 style={h2}>Nothing to request access for yet</h2>
+        <p style={body}>
+          A request is always raised against an interface, so that what is approved matches
+          exactly what the runtime will look for. Add one from <strong>Discover</strong> first.
+        </p>
+      </section>
+    );
+  }
+
+  if (!open) {
+    return (
+      <section style={card}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+          <div>
+            <h2 style={h2}>Request access</h2>
+            <p style={body}>
+              Ask for a capability on behalf of a solution. A second person decides — you
+              cannot approve your own request.
+            </p>
+          </div>
+          <button type="button" style={btnSmall} onClick={() => setOpen(true)}>
+            Request access
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section style={card}>
+      <h2 style={h2}>Request access</h2>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 620 }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={fieldLabel}>Capability</span>
+          <select
+            value={interfaceId}
+            onChange={(e) => setInterfaceId(e.target.value)}
+            style={field}
+          >
+            <option value="">Choose an interface…</option>
+            {interfaces.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.solutionName} — {i.name} ({i.operation})
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {selected && (
+          <p style={muted}>
+            Requesting <strong>{selected.operation}</strong> on{" "}
+            <code>{selected.externalId}</code> for <strong>{selected.solutionName}</strong>.
+            The capability and operation come from the interface, so what is approved is
+            exactly what the runtime will match.
+          </p>
+        )}
+
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={fieldLabel}>Environment</span>
+          <select
+            value={environment}
+            onChange={(e) => setEnvironment(e.target.value as GrantEnvironment)}
+            style={field}
+          >
+            {ENVIRONMENT_ORDER.map((env) => (
+              <option key={env} value={env}>
+                {env}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={fieldLabel}>
+            Expires {isWrite ? <strong>(required for a write)</strong> : "(optional)"}
+          </span>
+          <input
+            type="date"
+            value={expiresAt}
+            onChange={(e) => setExpiresAt(e.target.value)}
+            style={field}
+          />
+          {isWrite && (
+            <span style={muted}>
+              A write grant cannot be approved without an expiry — there is no way to revoke
+              one afterwards, so it has to end on its own.
+            </span>
+          )}
+        </label>
+
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={fieldLabel}>Why this solution needs it</span>
+          <textarea
+            value={justification}
+            onChange={(e) => setJustification(e.target.value)}
+            rows={4}
+            style={{ ...field, height: "auto", resize: "vertical" }}
+            placeholder="What the solution does with this capability, and why this environment."
+          />
+          <span style={muted}>
+            {justificationTooShort
+              ? "At least 10 characters — the approver reads this."
+              : `${justification.trim().length} characters.`}
+          </span>
+        </label>
+
+        {error && <span style={{ fontSize: 12, color: "var(--cta-red)" }}>{error}</span>}
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" style={btnSmall} disabled={cannotSubmit} onClick={submit}>
+            {busy ? "Raising…" : "Raise request"}
+          </button>
+          <button type="button" style={btnSmall} disabled={busy} onClick={() => setOpen(false)}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const fieldLabel: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "var(--ink-secondary)",
+};
+
+const field: React.CSSProperties = {
+  height: 34,
+  padding: "0 10px",
+  borderRadius: "var(--radius-input, 8px)",
+  border: "1px solid var(--border-strong)",
+  background: "var(--surface-paper)",
+  color: "var(--ink-primary)",
+  fontSize: 13,
+  fontFamily: "inherit",
+};
 
 const card: React.CSSProperties = {
   background: "var(--surface-paper)",
