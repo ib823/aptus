@@ -149,6 +149,20 @@ export const ROLE_METADATA: Record<UserRole, RoleMetadata> = {
     canCreateAssessments: false,
     canManageUsers: true,
   },
+  support: {
+    id: "support",
+    label: "Support",
+    description: "CoreEdge operations — monitors live integrations, holds no governance mutation",
+    category: "platform",
+    hierarchyLevel: 8,
+    validOrgTypes: ["PLATFORM", "PARTNER"],
+    // Reaches live customer-integration telemetry, so it is treated like the
+    // other platform roles rather than like a read-only viewer.
+    mfaDefault: "required",
+    maxConcurrentSessions: 2,
+    canCreateAssessments: false,
+    canManageUsers: false,
+  },
 };
 
 /**

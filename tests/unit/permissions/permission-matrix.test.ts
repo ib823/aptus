@@ -478,7 +478,12 @@ const ALL_OPERATIONS = Object.keys(PERMISSION_MATRIX[ALL_ROLES[0]!]!) as Operati
 // ---------------------------------------------------------------------------
 
 describe("Permission Matrix — Structural Integrity", () => {
-  it("should contain exactly 11 roles", () => {
+  // 11, not 12: this file declares its OWN spec table above and checks that
+  // table's shape. It deliberately covers the eleven ASSESSMENT-facing roles —
+  // `support` is a CoreEdge operations persona with no assessment permissions at
+  // all, so it has no meaningful row here. The production matrix (which does
+  // include it, exhaustively type-checked) is asserted in role-permissions.test.
+  it("should contain exactly 11 assessment-facing roles", () => {
     expect(ALL_ROLES).toHaveLength(11);
   });
 

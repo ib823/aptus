@@ -69,4 +69,10 @@ export const TEST_USERS: readonly TestUser[] = [
     role: "executive_sponsor",
     description: "Approves sign-offs; sees executive summary views only.",
   },
+  {
+    email: "support@abeam.test",
+    name: "Support",
+    role: "support",
+    description: "CoreEdge operations. Opens the Operations Center only; every other workspace is locked.",
+  },
 ];

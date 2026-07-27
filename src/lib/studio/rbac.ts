@@ -64,12 +64,62 @@ export function canMutateStudio(role: string | null | undefined): boolean {
   return isStudioBuilder(role);
 }
 
+/** The operations persona. Watches the running system; changes nothing about it. */
+export function isSupport(role: string | null | undefined): boolean {
+  return role === "support";
+}
+
+/**
+ * May this role open the Operations Center? Its owner, plus admins for oversight.
+ */
+export function canAccessOperations(role: string | null | undefined): boolean {
+  if (!role) return false;
+  return isSupport(role) || isAdminRole(role);
+}
+
+/**
+ * May this role open Control Tower?
+ *
+ * `isAdminRole` is `platform_admin` ONLY (see lib/auth/permissions), so the
+ * read-only viewers are listed explicitly rather than inferred — a reader that
+ * quietly widened to "any elevated role" is exactly the drift this file exists
+ * to make visible.
+ */
+const CONTROL_TOWER_READERS: ReadonlySet<string> = new Set([
+  "partner_lead",
+  "executive_sponsor",
+  "project_manager",
+]);
+
+export function canAccessControlTower(role: string | null | undefined): boolean {
+  if (!role) return false;
+  return isAdminRole(role) || CONTROL_TOWER_READERS.has(role);
+}
+
+/**
+ * May this role act in Control Tower? Admin only.
+ *
+ * The one governance mutation there is the grant decision. Note this is a NEW
+ * capability rather than a re-use: `canMutateStudio("platform_admin")` is
+ * deliberately false, and stays false — Studio's mutations remain the builder's.
+ */
+export function canMutateControlTower(role: string | null | undefined): boolean {
+  if (!role) return false;
+  return isAdminRole(role);
+}
+
 /** Which workspaces this role may open. Others render locked in the rail. */
 export function accessibleWorkspaces(role: string | null | undefined): StudioWorkspace[] {
   if (!role) return [];
+  // DERIVED from WORKSPACES, never hand-listed: a fourth workspace must widen
+  // admin access automatically, and a test pins this as an exact equality.
   if (isAdminRole(role)) return WORKSPACES.map((w) => w.key);
-  if (isStudioBuilder(role)) return ["developer-studio"];
-  return [];
+
+  const open: StudioWorkspace[] = [];
+  if (canAccessStudio(role)) open.push("developer-studio");
+  if (canAccessOperations(role)) open.push("operations-center");
+  if (canAccessControlTower(role)) open.push("control-tower");
+  return open;
 }
 
 /**

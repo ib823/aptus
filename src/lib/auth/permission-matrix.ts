@@ -160,6 +160,14 @@ export const PERMISSION_MATRIX: Record<UserRole, Set<PermissionAction>> = {
     "user.invite", "user.deactivate",
     "report.view",
   ]),
+
+  // Read-oriented operations. Deliberately NO governance mutation of any kind:
+  // this persona watches the running system, it does not change what the system
+  // is permitted to do.
+  support: new Set([
+    "assessment.view",
+    "report.view",
+  ]),
 };
 
 /**

@@ -55,7 +55,14 @@ export type UserRole =
   | "data_migration_lead"
   | "executive_sponsor"
   | "viewer"
-  | "client_admin";
+  | "client_admin"
+  /**
+   * CoreEdge operations. Monitors live integrations in the Operations Center:
+   * broker traffic, connection health, incidents. Read-oriented by design -- it
+   * has no governance mutation anywhere, which is what distinguishes "watches
+   * the running system" from "changes what the system may do".
+   */
+  | "support";
 
 /**
  * Legacy role type -- for backward compatibility references.
@@ -81,6 +88,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   executive_sponsor: "Executive Sponsor",
   viewer: "Viewer",
   client_admin: "Client Admin",
+  support: "Support",
 };
 
 /** Phase 17: Role hierarchy -- higher number = higher authority */
@@ -95,6 +103,9 @@ export const ROLE_HIERARCHY: Record<UserRole, number> = {
   it_lead: 55,
   data_migration_lead: 50,
   executive_sponsor: 45,
+  // Between it_lead and data_migration_lead: operational reach across the
+  // platform, no authority over assessment content or people.
+  support: 52,
   viewer: 10,
 };
 

@@ -174,6 +174,15 @@ export const ONBOARDING_FLOWS: Record<UserRole, OnboardingFlow> = {
       { index: 3, title: "Deadlines", description: "Set up important deadlines and milestones.", isRequired: false, action: { type: "navigate", url: "/dashboard" } },
     ],
   },
+  support: {
+    role: "support",
+    title: "Support Onboarding",
+    description: "Monitor live SAP integrations in the Operations Center.",
+    steps: [
+      { index: 0, title: "Welcome", description: "Welcome to CoreEdge operations.", isRequired: true, action: { type: "none" } },
+      { index: 1, title: "Operations Center", description: "Watch broker traffic, connection health and incidents for the integrations you support.", isRequired: true, action: { type: "navigate", url: "/operations" } },
+    ],
+  },
 };
 
 /** Registry of all contextual tooltips */

@@ -207,6 +207,25 @@ export const ROLE_CAPABILITIES = {
     canViewAllAssessments: false,
     isAreaLocked: false,
   },
+  // Operations, not assessment work. Every capability here is false by design:
+  // the persona's reach is the Operations Center, and nothing in this matrix
+  // grants any part of that -- so the honest answer to each is "no".
+  support: {
+    canCreateAssessment: false,
+    canEditAssessment: false,
+    canDeleteAssessment: false,
+    canManageStakeholders: false,
+    canManageOrganization: false,
+    canInviteUsers: false,
+    canTransitionStatus: false,
+    canEditStepResponses: false,
+    canEditGapResolutions: false,
+    canEditRegisters: false,
+    canApproveGaps: false,
+    canSignOff: false,
+    canViewAllAssessments: false,
+    isAreaLocked: false,
+  },
 } as const satisfies Record<UserRole, RoleCapabilities>;
 
 /**
@@ -246,4 +265,5 @@ export const ALL_ROLES: UserRole[] = [
   "executive_sponsor",
   "viewer",
   "client_admin",
+  "support",
 ];
