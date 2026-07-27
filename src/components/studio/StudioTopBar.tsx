@@ -35,7 +35,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { STUDIO_SECTIONS } from "./StudioRail";
+import type { StudioSection } from "./StudioRail";
 
 export interface StudioTenantOption {
   /** SapConnection.key, or the env tenant key — probes are recorded under it. */
@@ -70,11 +70,16 @@ function useDismiss(open: boolean, close: () => void, ref: React.RefObject<HTMLD
 }
 
 export function StudioTopBar({
+  sections,
+  workspaceLabel,
   tenants,
   activeTenantKey,
   roleLabel,
   userEmail,
 }: {
+  /** The ACTIVE workspace's sections — see the breadcrumb note below. */
+  sections: readonly StudioSection[];
+  workspaceLabel: string;
   tenants: readonly StudioTenantOption[];
   activeTenantKey: string | null;
   roleLabel: string;
@@ -92,12 +97,15 @@ export function StudioTopBar({
   useDismiss(tenantOpen, () => setTenantOpen(false), tenantRef);
   useDismiss(userOpen, () => setUserOpen(false), userRef);
 
-  // Derived from the real path, so the crumb can never drift from where you are.
-  const section = STUDIO_SECTIONS.find((s) => s.href === pathname);
+  // Derived from the real path AND the active workspace's own sections.
+  //
+  // This was `STUDIO_SECTIONS` with a literal "Developer Studio", which was not
+  // merely untidy: `find` returns undefined for every /operations/* and
+  // /control-tower/* path, so it fell through to the bare literal and the shared
+  // top bar announced "Developer Studio" on every page of both other workspaces.
+  const section = sections.find((s) => s.href === pathname);
   const breadcrumb =
-    section && section.key !== "home"
-      ? `Developer Studio · ${section.label}`
-      : "Developer Studio";
+    section && section.key !== "home" ? `${workspaceLabel} · ${section.label}` : workspaceLabel;
 
   function selectTenant(key: string) {
     // A view preference, not an authorization input (see file header).

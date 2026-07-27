@@ -8,12 +8,14 @@
  */
 
 import type { ReactNode } from "react";
-import { StudioRail, STUDIO_SECTIONS } from "./StudioRail";
+import { StudioRail, type StudioSection } from "./StudioRail";
 import { StudioTopBar, type StudioTenantOption } from "./StudioTopBar";
 import { WORKSPACES, type StudioWorkspace } from "@/lib/studio/rbac";
 
 export function StudioShell({
   accessibleWorkspaces,
+  sections,
+  workspaceLabel,
   tenants,
   activeTenantKey,
   roleLabel,
@@ -21,6 +23,10 @@ export function StudioShell({
   children,
 }: {
   accessibleWorkspaces: readonly StudioWorkspace[];
+  /** The ACTIVE workspace's sections. The shell is shared by all three. */
+  sections: readonly StudioSection[];
+  /** Names the active workspace in the breadcrumb. */
+  workspaceLabel: string;
   tenants: readonly StudioTenantOption[];
   activeTenantKey: string | null;
   roleLabel: string;
@@ -40,10 +46,12 @@ export function StudioShell({
       <StudioRail
         workspaces={WORKSPACES}
         accessible={accessibleWorkspaces}
-        sections={STUDIO_SECTIONS}
+        sections={sections}
       />
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         <StudioTopBar
+          sections={sections}
+          workspaceLabel={workspaceLabel}
           tenants={tenants}
           activeTenantKey={activeTenantKey}
           roleLabel={roleLabel}

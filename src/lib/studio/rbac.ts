@@ -36,8 +36,8 @@ export interface WorkspaceDescriptor {
 
 export const WORKSPACES: readonly WorkspaceDescriptor[] = [
   { key: "developer-studio", label: "Developer Studio", href: "/studio", availableInV1: true },
-  { key: "operations-center", label: "Operations Center", href: null, availableInV1: false },
-  { key: "control-tower", label: "Control Tower", href: null, availableInV1: false },
+  { key: "operations-center", label: "Operations Center", href: "/operations", availableInV1: true },
+  { key: "control-tower", label: "Control Tower", href: "/control-tower", availableInV1: true },
 ] as const;
 
 /** The builder persona. The design calls this role "Developer". */

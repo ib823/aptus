@@ -26,6 +26,7 @@ import type { ReactNode } from "react";
 import { AffirmLearnProvider } from "@/components/affirm/learn/AffirmLearnProvider";
 import { RoleGatedEmptyState } from "@/components/studio/RoleGatedEmptyState";
 import { StudioShell } from "@/components/studio/StudioShell";
+import { STUDIO_SECTIONS } from "@/components/studio/StudioRail";
 import { STUDIO_TENANT_COOKIE, type StudioTenantOption } from "@/components/studio/StudioTopBar";
 import { getCurrentUser } from "@/lib/auth/session";
 import { accessibleWorkspaces, canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
@@ -88,6 +89,8 @@ export default async function StudioLayout({ children }: { children: ReactNode }
     <AffirmLearnProvider>
       <StudioShell
         accessibleWorkspaces={accessibleWorkspaces(user.role)}
+        sections={STUDIO_SECTIONS}
+        workspaceLabel="Developer Studio"
         tenants={tenants}
         activeTenantKey={activeTenantKey}
         roleLabel={roleLabel}
