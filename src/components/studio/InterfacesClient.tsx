@@ -141,7 +141,18 @@ export function InterfacesClient({
           <DetailCard title="Source">
             <Row label="Catalogue service" mono>{selected.externalId}</Row>
             <Row label="Product">{selected.sapProduct}</Row>
-            <Row label="Entity set" mono>{selected.entitySet ?? "not set"}</Row>
+            <Row label="Entity set" mono>
+              {canAuthor ? (
+                <EntitySetEditor
+                  key={selected.id}
+                  value={selected.entitySet}
+                  busy={busy}
+                  onSave={(next) => patch({ id: selected.id, entitySet: next })}
+                />
+              ) : (
+                (selected.entitySet ?? "not set")
+              )}
+            </Row>
             <Row label="Solution">{selected.solutionName}</Row>
           </DetailCard>
 
@@ -257,6 +268,96 @@ function Th({ children }: { children: React.ReactNode }) {
 function Td({ children }: { children: React.ReactNode }) {
   return <td style={{ padding: "9px 12px", verticalAlign: "top", color: "var(--ink-primary)" }}>{children}</td>;
 }
+
+/**
+ * The entity set, editable in place.
+ *
+ * WHY THIS EXISTS. `Interface.entitySet` was accepted by the PATCH route from the
+ * day it was added, and no UI ever sent it. Discover creates every interface
+ * without one, so every interface read "not set" — and the broker refuses a read
+ * with 400 "This interface has no entity set configured. Set one in Studio",
+ * advice that could not be followed anywhere in the product.
+ *
+ * CLEARING IS SUPPORTED, deliberately. The schema accepts null, and an entity set
+ * entered wrongly has to be removable rather than only overwritable — otherwise
+ * the fix for a typo is worse than the typo.
+ *
+ * EXPECT THE VERSION TO INCREMENT. Changing this changes the contract, so the
+ * route bumps `version`. A DRAFT created without one therefore reaches v2 the
+ * moment it is set. That is correct — an interface that 400s and one that returns
+ * rows are not the same contract — and it is not a bug to be tidied away.
+ */
+function EntitySetEditor({
+  value,
+  busy,
+  onSave,
+}: {
+  value: string | null;
+  busy: boolean;
+  onSave: (next: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value ?? "");
+
+  if (!editing) {
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <span>{value ?? "not set"}</span>
+        <button type="button" style={linkBtn} onClick={() => setEditing(true)}>
+          {value ? "Change" : "Set"}
+        </button>
+      </span>
+    );
+  }
+
+  const trimmed = draft.trim();
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder="A_BusinessPartner"
+        aria-label="Entity set"
+        style={{
+          height: 28,
+          padding: "0 8px",
+          borderRadius: "var(--radius-input, 8px)",
+          border: "1px solid var(--border-strong)",
+          background: "var(--surface-paper)",
+          color: "var(--ink-primary)",
+          fontSize: 12.5,
+          fontFamily: "var(--font-mono, ui-monospace), monospace",
+          minWidth: 200,
+        }}
+      />
+      <button
+        type="button"
+        style={linkBtn}
+        disabled={busy || trimmed === (value ?? "")}
+        onClick={() => onSave(trimmed.length > 0 ? trimmed : null)}
+      >
+        Save
+      </button>
+      <button type="button" style={linkBtn} disabled={busy} onClick={() => { setDraft(value ?? ""); setEditing(false); }}>
+        Cancel
+      </button>
+      {trimmed.length === 0 && value !== null && (
+        <span style={{ fontSize: 11, color: "var(--ink-muted)" }}>Saving empty clears it.</span>
+      )}
+    </span>
+  );
+}
+
+const linkBtn: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  padding: 0,
+  fontSize: 12,
+  fontWeight: 600,
+  color: "var(--brand-navy)",
+  cursor: "pointer",
+  textDecoration: "underline",
+};
 
 const card: React.CSSProperties = {
   background: "var(--surface-paper)",
