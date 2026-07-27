@@ -79,7 +79,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
 
   const saved = existing
     ? await prisma.mockFixture.update({
-        where: { id: existing.id },
+        where: { id: existing.id, organizationId: scope.organizationId },
         data: { status, body: body as never, capturedAt: new Date() },
         select: { id: true, scenario: true, status: true, capturedAt: true },
       })

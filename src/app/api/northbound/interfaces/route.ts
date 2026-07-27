@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     return unauthenticated(correlationId);
   }
   const client = auth.client;
-  void touchClientLastUsed(client.clientId);
+  void touchClientLastUsed(client.clientId, client.organizationId);
 
   const [interfaces, grants] = await Promise.all([
     prisma.interface.findMany({

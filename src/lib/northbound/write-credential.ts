@@ -50,7 +50,7 @@ export async function setWriteCredential(
   if (!client) return false;
 
   await prisma.solutionClient.update({
-    where: { id: client.id },
+    where: { id: client.id, organizationId: scope.organizationId },
     data: {
       secretsCiphertext: sealSecrets(
         { writeSecret: rawKey },

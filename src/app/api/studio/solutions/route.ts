@@ -231,7 +231,7 @@ export async function PATCH(request: NextRequest) {
     : { status: requestedStatus, autoDropped: false as const };
 
   const updated = await prisma.solution.update({
-    where: { id: current.id },
+    where: { id: current.id, organizationId },
     data: {
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.classification !== undefined ? { classification: input.classification } : {}),

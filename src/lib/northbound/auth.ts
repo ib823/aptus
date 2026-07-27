@@ -111,10 +111,15 @@ export async function authenticateClientToken(
  * fail a caller's read. It exists so an unused credential can be spotted and
  * retired, and so a leaked one shows activity.
  */
-export async function touchClientLastUsed(clientId: string): Promise<void> {
+export async function touchClientLastUsed(
+  clientId: string,
+  organizationId: string,
+): Promise<void> {
   try {
     await prisma.solutionClient.update({
-      where: { id: clientId },
+      // Both, not just the id: the update re-asserts the tenant rather than
+      // trusting that whoever passed the id had already established it.
+      where: { id: clientId, organizationId },
       data: { lastUsedAt: new Date() },
     });
   } catch (err) {

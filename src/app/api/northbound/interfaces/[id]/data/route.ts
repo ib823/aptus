@@ -55,7 +55,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     return unauthenticated(correlationId);
   }
   const client = auth.client;
-  void touchClientLastUsed(client.clientId);
+  void touchClientLastUsed(client.clientId, client.organizationId);
 
   // 1b — throttle THIS credential. Checked after auth so the key is the client,
   // not an address a dozen customers might share.

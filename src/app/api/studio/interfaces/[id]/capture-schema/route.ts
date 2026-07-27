@@ -63,7 +63,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   }
 
   await prisma.interface.update({
-    where: { id: iface.id },
+    where: { id: iface.id, organizationId: scope.organizationId },
     // Only the shape. The rows themselves are never persisted.
     data: { responseSchema: schema as never },
   });

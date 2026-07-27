@@ -279,7 +279,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   const updated = await prisma.sapConnection.update({
-    where: { id: existing.id },
+    where: { id: existing.id, organizationId },
     data: {
       ...(isActive === undefined ? {} : { isActive }),
       ...(writeEnabled === undefined ? {} : { writeEnabled }),
