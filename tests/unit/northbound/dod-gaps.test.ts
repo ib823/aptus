@@ -56,6 +56,7 @@ function oauthConn(id = "c1"): ResolvedSapConnection {
     writeEnabled: false,
     apiPath: null,
     timeoutMs: null,
+    environment: null,
   };
 }
 

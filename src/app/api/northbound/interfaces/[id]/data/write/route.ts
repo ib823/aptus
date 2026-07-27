@@ -42,7 +42,10 @@ import {
 } from "@/lib/northbound/respond";
 import { verifyWriteCredential } from "@/lib/northbound/write-credential";
 import { writeEntitySet, writeHttpStatusFor } from "@/lib/northbound/write";
-import { resolveSapConnection } from "@/lib/sap-public/connection-resolver";
+import {
+  connectionRefusalMessage,
+  resolveSapConnectionForEnvironment,
+} from "@/lib/sap-public/connection-resolver";
 import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
 import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
@@ -68,7 +71,15 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
 
   const { id } = await ctx.params;
 
-  const audit = (status: number, interfaceId: string | null, externalId: string) =>
+  const audit = (
+    status: number,
+    interfaceId: string | null,
+    externalId: string,
+    // Supplied once a connection has actually been bound. Absent on every
+    // refusal that happens before that point, which is itself the truth: no
+    // connection was involved.
+    conn?: { id: string; environment: string | null },
+  ) =>
     recordNorthboundCall({
       organizationId: client.organizationId,
       solutionId: client.solutionId,
@@ -80,6 +91,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       rowCount: null,
       correlationId,
       clientTokenId: client.clientId,
+      connectionId: conn?.id ?? null,
+      connectionEnvironment: conn?.environment ?? null,
     });
 
   // 2 — the WRITE credential. A separate secret from the bearer token, so a
@@ -171,17 +184,36 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   // 7 — resolve the client's OWN connection, and check ITS write flag. A
   // connection with writeEnabled=false is a deliberate per-tenant veto that
   // overrides any grant.
+  // The environment binding is STRICTER here than on the read path: a connection
+  // that has not declared its landscape is refused outright, however few
+  // connections the organization has. `writeEnabled` is not a substitute — it is
+  // a per-connection yes/no that says nothing about WHICH landscape it enables
+  // writes on, so it cannot stand in for knowing you are not in production.
   const product = getSapProduct(iface.sapProduct);
-  const connection = product ? await resolveSapConnection(client.organizationId, iface.sapProduct) : null;
+  const binding = product
+    ? await resolveSapConnectionForEnvironment(
+        client.organizationId,
+        iface.sapProduct,
+        client.environment,
+        "WRITE",
+      )
+    : ({ ok: false, reason: "NO_CONNECTION" } as const);
 
-  if (!connection) {
+  if (!binding.ok) {
     await releaseIdempotencyKey(reservation.recordId);
     await audit(403, iface.id, iface.externalId);
-    return northboundError("FORBIDDEN", "No SAP connection is configured for this product.", 403, correlationId);
+    return northboundError(
+      "CONNECTION_NOT_CONFIGURED",
+      connectionRefusalMessage(binding.reason, client.environment),
+      403,
+      correlationId,
+    );
   }
+  const connection = binding.connection;
+
   if (!connection.writeEnabled) {
     await releaseIdempotencyKey(reservation.recordId);
-    await audit(403, iface.id, iface.externalId);
+    await audit(403, iface.id, iface.externalId, connection);
     return northboundError(
       "FORBIDDEN",
       "Writes are not enabled on this SAP connection.",
@@ -196,7 +228,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     // Released, so a client that supplies the missing entity can retry with the
     // same key rather than being told it is forever in flight.
     await releaseIdempotencyKey(reservation.recordId);
-    await audit(400, iface.id, iface.externalId);
+    await audit(400, iface.id, iface.externalId, connection);
     return northboundError(
       "VALIDATION_ERROR",
       service ? "No entity set configured for this interface." : "The catalogue service could not be resolved.",
@@ -222,7 +254,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   // Record the outcome — including failures, so a retry replays the same refusal
   // rather than attempting the write again.
   await completeIdempotencyKey(reservation.recordId, status, responseBody);
-  await audit(status, iface.id, iface.externalId);
+  await audit(status, iface.id, iface.externalId, connection);
 
   if (status >= 400) {
     const code =

@@ -22,7 +22,12 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
-import { isGranting, type GrantDecision } from "@/lib/studio/grants";
+import {
+  grantsRead,
+  grantsWrite,
+  type GrantDecision,
+  type GrantEnvironment,
+} from "@/lib/studio/grants";
 import { scopedById, scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
 
 export interface AccessibleInterface {
@@ -124,7 +129,9 @@ export async function resolveWritableInterface(
 
   // A READ grant never authorises a write.
   const writeGrants = grants.filter((g) => g.operation === "CREATE" || g.operation === "UPDATE");
-  const granting = writeGrants.filter((g) => isGranting(g.decision as GrantDecision));
+  const granting = writeGrants.filter((g) =>
+    grantsWrite(g.decision as GrantDecision, environment as GrantEnvironment),
+  );
   if (granting.length === 0) {
     return {
       ok: false,
@@ -217,7 +224,9 @@ export async function resolveReadableInterface(
     select: { decision: true, expiresAt: true },
   });
 
-  const granting = grants.filter((g) => isGranting(g.decision as GrantDecision));
+  const granting = grants.filter((g) =>
+    grantsRead(g.decision as GrantDecision, environment as GrantEnvironment),
+  );
   if (granting.length === 0) {
     return {
       ok: false,

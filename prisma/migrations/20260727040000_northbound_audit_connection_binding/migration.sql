@@ -1,0 +1,34 @@
+-- Which connection actually served a northbound call, and what landscape it declared.
+--
+-- WHY THIS EXISTS. `NorthboundAuditEvent.environment` records the CREDENTIAL's
+-- declared environment. Nothing recorded the CONNECTION's. That gap was not
+-- cosmetic: the broker resolved a connection by taking the oldest active row for
+-- an org+product, so an organization holding a PROD connection created before its
+-- SANDBOX one served every call from PROD — while the audit row sincerely said
+-- "SANDBOX". The trail could not reveal its own error, because it only ever had
+-- one side of the comparison.
+--
+-- These two columns are the other side. Recording the pair is what lets an
+-- operator see that a call's claimed environment and its real target agreed —
+-- and it is the evidence that the binding fix landing alongside this migration
+-- actually works. A control nobody can observe is a claim, not a control.
+--
+-- BOTH NULLABLE, and both stay that way:
+--   * Rows written before this migration genuinely do not know which connection
+--     served them. Backfilling a guess would be worse than the gap.
+--   * `connectionId` is null on any call refused before a connection was bound
+--     (auth, throttle, the grant gate) — which is the truth: none was involved.
+--   * `connectionEnvironment` null on a SERVED read means the binding was
+--     permitted but NOT PROVEN: the connection had declared no landscape. That
+--     state is deliberate and is surfaced as a backlog to be cleared, never as a
+--     silent success.
+--
+-- No foreign key on connectionId on purpose: the audit trail must outlive the
+-- connection it describes. A cascade here would erase the history of exactly the
+-- connection someone deleted, which is the moment the history matters most.
+--
+-- Non-destructive: two nullable columns on an existing table.
+
+-- AlterTable
+ALTER TABLE "NorthboundAuditEvent" ADD COLUMN     "connectionId" TEXT,
+ADD COLUMN     "connectionEnvironment" TEXT;

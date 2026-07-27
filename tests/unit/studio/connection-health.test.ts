@@ -27,6 +27,7 @@ function conn(overrides: Partial<ResolvedSapConnection> = {}): ResolvedSapConnec
     writeEnabled: false,
     apiPath: "/sap/opu/odata/sap/API_TEST_SRV",
     timeoutMs: null,
+    environment: null,
     ...overrides,
   };
 }
