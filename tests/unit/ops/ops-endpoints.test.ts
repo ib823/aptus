@@ -25,9 +25,13 @@ const mocks = vi.hoisted(() => ({
   clientFindMany: vi.fn(),
   clientCount: vi.fn(),
   solutionFindMany: vi.fn(),
+  fallbackTenants: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
+vi.mock("@/lib/studio/tenants", () => ({
+  deploymentFallbackTenants: mocks.fallbackTenants,
+}));
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     northboundAuditEvent: {
@@ -95,6 +99,7 @@ beforeEach(() => {
   mocks.clientFindMany.mockResolvedValue([]);
   mocks.clientCount.mockResolvedValue(0);
   mocks.solutionFindMany.mockResolvedValue([]);
+  mocks.fallbackTenants.mockReturnValue([]);
 });
 
 describe("every ops feed is gated the same way", () => {
@@ -512,3 +517,49 @@ function conn(over: Record<string, unknown> = {}) {
     ...over,
   };
 }
+
+
+describe("connection health knows the deployment falls back to an env tenant", () => {
+  /**
+   * THE ENDPOINT HALF of the fallback fix, and it was missing.
+   *
+   * The screen tests feed a payload straight in, so they prove the component
+   * renders a fallback it is given — and pass unchanged if the endpoint stops
+   * resolving one. Reverting the route to rows-only was caught by nothing until
+   * this block existed. A component test is not an endpoint test.
+   */
+  beforeEach(() => mocks.getCurrentUser.mockResolvedValue(SUPPORT));
+
+  const TDD = { key: "s4_tdd", label: "ABeam S/4 TDD", product: "s4hana", source: "environment", environment: null };
+
+  it("reports the fallback as in use when the organization has no stored row", async () => {
+    mocks.connectionFindMany.mockResolvedValue([]);
+    mocks.fallbackTenants.mockReturnValue([TDD]);
+
+    const body = await (await connectionsHealth()).json();
+    expect(body.data.deploymentFallback.inUse).toBe(true);
+    expect(body.data.deploymentFallback.tenants[0].key).toBe("s4_tdd");
+    expect(body.data.provenance.fallbackIsShared).toContain("shared by every organization");
+  });
+
+  it("does NOT resolve a fallback when the organization has its own connection", async () => {
+    // The broker prefers a stored row, so listing the shared tenant beside one
+    // would show something that is not serving anything.
+    mocks.connectionFindMany.mockResolvedValue([conn()]);
+    mocks.fallbackTenants.mockReturnValue([TDD]);
+
+    const body = await (await connectionsHealth()).json();
+    expect(body.data.deploymentFallback.inUse).toBe(false);
+    expect(mocks.fallbackTenants).not.toHaveBeenCalled();
+    expect(body.data.provenance.fallbackIsShared).toBeNull();
+  });
+
+  it("says nothing falls back when the deployment has no env tenant either", async () => {
+    mocks.connectionFindMany.mockResolvedValue([]);
+    mocks.fallbackTenants.mockReturnValue([]);
+
+    const body = await (await connectionsHealth()).json();
+    expect(body.data.deploymentFallback.inUse).toBe(false);
+    expect(body.data.provenance.noHealthForFallback).toBeNull();
+  });
+});

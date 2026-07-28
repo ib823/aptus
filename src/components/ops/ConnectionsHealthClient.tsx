@@ -48,6 +48,13 @@ interface Connection {
   neverTested: boolean;
 }
 
+interface FallbackTenant {
+  key: string;
+  label: string;
+  product: string;
+  environment: string | null;
+}
+
 interface ConnectionsPayload {
   counts: {
     total: number;
@@ -56,7 +63,14 @@ interface ConnectionsPayload {
     unknown: number;
     neverTested: number;
   };
-  provenance: { activeOnly: boolean; excludedInactive: number; why: string };
+  deploymentFallback: { inUse: boolean; tenants: FallbackTenant[] };
+  provenance: {
+    activeOnly: boolean;
+    excludedInactive: number;
+    why: string;
+    fallbackIsShared: string | null;
+    noHealthForFallback: string | null;
+  };
   bindingBacklog: { undeclaredEnvironment: number; remediation: string; consequence: string };
   prodConnections: number;
   connections: Connection[];
@@ -131,13 +145,30 @@ function ConnectionsBody({ data }: { data: ConnectionsPayload }) {
         />
       ) : null}
 
+      {/* WHAT IS ACTUALLY SERVING TRAFFIC. This panel exists because the screen
+          previously said "No active SAP connection" on a deployment that was
+          reaching SAP perfectly well through its env tenant — true about the
+          table, false about the world. */}
+      {data.deploymentFallback.inUse ? (
+        <DeploymentFallback
+          tenants={data.deploymentFallback.tenants}
+          shared={data.provenance.fallbackIsShared}
+          noHealth={data.provenance.noHealthForFallback}
+        />
+      ) : null}
+
       <OpsCard>
         {counts.total === 0 ? (
           <OpsPlaceholder
             kind="empty"
-            title="No active SAP connection"
-            // Distinct from "we could not read them" and from "they are unhealthy".
-            detail="Nothing is configured for this organization yet. Add a connection in Developer Studio; until then the broker has nothing to reach."
+            // Precise: this organization has stored none. Whether anything is
+            // reaching SAP is answered by the panel above, not here.
+            title="This organization has no stored SAP connection"
+            detail={
+              data.deploymentFallback.inUse
+                ? "Traffic falls back to the deployment's shared tenant, listed above. Add a connection in Developer Studio to give this organization its own."
+                : "Nothing is configured for this organization, and the deployment has no fallback tenant either — so the broker has nothing to reach."
+            }
           />
         ) : (
           <OpsTable head={["Connection", "Environment", "Health", "Last succeeded"]}>
@@ -292,6 +323,77 @@ function BindingBacklog({
           {remediation}
         </p>
       </div>
+    </OpsCard>
+  );
+}
+
+/**
+ * The deployment's shared tenant, when it is the thing actually serving traffic.
+ *
+ * SHOWN AS ITS OWN PANEL, never merged into the connections table. A row in that
+ * table implies a stored connection with an owner, a write flag, a sealed secret
+ * and a probe history — a fallback tenant has none of those, and borrowing the
+ * table's shape would imply all four.
+ *
+ * NO HEALTH IS CLAIMED. Probe outcomes are recorded per stored connection; a
+ * fallback tenant has no row to record one against. That is an absence, not a
+ * pass and not a failure, so it renders as an absence.
+ */
+function DeploymentFallback({
+  tenants,
+  shared,
+  noHealth,
+}: {
+  tenants: FallbackTenant[];
+  shared: string | null;
+  noHealth: string | null;
+}) {
+  return (
+    <OpsCard>
+      <div style={{ padding: "13px 16px 4px", display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+        <span style={{ fontSize: 13, fontWeight: 600 }}>Serving through the deployment&apos;s tenant</span>
+        <OpsChip
+          tone="info"
+          label="shared"
+          meaning="configured for the whole deployment, not for this organization"
+        />
+      </div>
+      <OpsTable head={["Tenant", "Product", "Environment", "Health"]}>
+        {tenants.map((t) => (
+          <tr key={`${t.product}:${t.key}`}>
+            <td style={opsCellStyle}>
+              {t.label}
+              <div style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 11.5, color: "var(--ink-muted)" }}>
+                {t.key}
+              </div>
+            </td>
+            <td style={opsCellStyle}>{t.product}</td>
+            <td style={opsCellStyle}>
+              {t.environment ? (
+                <OpsChip
+                  tone={t.environment.toUpperCase() === "PROD" ? "attention" : "info"}
+                  label={t.environment}
+                />
+              ) : (
+                <AbsencePill
+                  label="environment not declared"
+                  meaning="this tenant has not declared its landscape in the deployment's configuration"
+                />
+              )}
+            </td>
+            <td style={opsCellStyle}>
+              <AbsencePill
+                label="no health record"
+                meaning="probe outcomes are stored per connection; a fallback tenant has no row to record one against"
+              />
+            </td>
+          </tr>
+        ))}
+      </OpsTable>
+      <ProvenanceStrip claim="Shared across the deployment">
+        {shared}
+        {noHealth ? <div style={{ marginTop: 6 }}>{noHealth}</div> : null}
+      </ProvenanceStrip>
     </OpsCard>
   );
 }
