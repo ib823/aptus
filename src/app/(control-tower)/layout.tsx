@@ -48,7 +48,7 @@ export default async function ControlTowerLayout({ children }: { children: React
   // Role gate AND tenant-scope gate, in that order and before any query — a
   // non-admin with no organization has nothing to scope the feeds to.
   if (!canAccessControlTower(user.role) || lacksStudioTenantScope(user)) {
-    return <RoleGatedEmptyState roleLabel={roleLabel} />;
+    return <RoleGatedEmptyState roleLabel={roleLabel} activeWorkspace="control-tower" />;
   }
 
   const resolved = await resolveStudioTenants(user.organizationId);
@@ -68,7 +68,7 @@ export default async function ControlTowerLayout({ children }: { children: React
     <StudioShell
       accessibleWorkspaces={accessibleWorkspaces(user.role)}
       sections={CONTROL_TOWER_SECTIONS}
-      workspaceLabel="Control Tower"
+      activeWorkspace="control-tower"
       tenants={tenants}
       activeTenantKey={activeTenantKey}
       roleLabel={roleLabel}

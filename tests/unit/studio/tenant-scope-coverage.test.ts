@@ -53,6 +53,7 @@ import path from "path";
 import { describe, expect, it } from "vitest";
 
 import { TENANT_ANCHORED_MODELS } from "@/lib/studio/tenant-scope";
+import { stripSource } from "../../helpers/source";
 
 const ROOT = path.resolve(__dirname, "../../..");
 
@@ -74,54 +75,19 @@ function walk(dir: string): string[] {
 }
 
 /**
- * Blank out comments and string/template literals, preserving length and line
- * breaks so offsets still line up.
+ * Comments and string literals removed, so the parser reads code.
  *
  * Necessary, not decorative: this codebase comments its security reasoning
  * heavily, and the fixed `issueClientToken` has a comment containing the word
  * `where` between the call and the real clause. Without this, the parser read
  * the prose, found no colon after it, and reported the correctly-scoped upsert
  * as unverifiable. A scanner that fails on a comment gets switched off.
+ *
+ * Shared with the workspace-chrome guard, which was broken by the OPPOSITE
+ * mistake — see tests/helpers/source.ts.
  */
 function stripNonCode(src: string): string {
-  const out = src.split("");
-  const blank = (from: number, to: number) => {
-    for (let k = from; k < to && k < out.length; k++) if (out[k] !== "\n") out[k] = " ";
-  };
-  let i = 0;
-  while (i < src.length) {
-    const ch = src[i];
-    const next = src[i + 1];
-    if (ch === "/" && next === "/") {
-      const nl = src.indexOf("\n", i);
-      const stop = nl === -1 ? src.length : nl;
-      blank(i, stop);
-      i = stop;
-    } else if (ch === "/" && next === "*") {
-      const close = src.indexOf("*/", i + 2);
-      const stop = close === -1 ? src.length : close + 2;
-      blank(i, stop);
-      i = stop;
-    } else if (ch === '"' || ch === "'" || ch === "`") {
-      let j = i + 1;
-      while (j < src.length) {
-        if (src[j] === "\\") {
-          j += 2;
-          continue;
-        }
-        if (src[j] === ch) {
-          j++;
-          break;
-        }
-        j++;
-      }
-      blank(i, j);
-      i = j;
-    } else {
-      i++;
-    }
-  }
-  return out.join("");
+  return stripSource(src, "comments-and-strings");
 }
 
 /** The `{...}` starting at `open`, brace-balanced. Null if it never closes. */
