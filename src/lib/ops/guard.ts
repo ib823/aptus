@@ -23,7 +23,7 @@
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { studioError } from "@/lib/studio/api";
-import { canAccessOperations } from "@/lib/studio/rbac";
+import { canAccessControlTower, canAccessOperations } from "@/lib/studio/rbac";
 import { scopedWhere, tenantScopeFor, type TenantScope } from "@/lib/studio/tenant-scope";
 
 export type OpsActor =
@@ -36,13 +36,25 @@ export type OpsGuardResult =
   | { ok: true; actor: OpsActor }
   | { ok: false; response: ReturnType<typeof studioError> };
 
-export async function requireOperations(): Promise<OpsGuardResult> {
+/**
+ * The three checks, once.
+ *
+ * Control Tower needs the same preamble as the Operations Center with a
+ * different entitlement predicate — and copying it would reproduce the exact
+ * failure this file's header warns about, one workspace at a time. So the
+ * sequence lives here and each workspace supplies only what differs: who may
+ * enter, and what to say when they may not.
+ */
+async function requireWorkspace(
+  isEntitled: (role: string | null | undefined) => boolean,
+  refusal: string,
+): Promise<OpsGuardResult> {
   const user = await getCurrentUser();
   if (!user) {
     return { ok: false, response: studioError("UNAUTHENTICATED", "Sign in required.") };
   }
-  if (!canAccessOperations(user.role)) {
-    return { ok: false, response: studioError("FORBIDDEN", "Operations Center is role-gated.") };
+  if (!isEntitled(user.role)) {
+    return { ok: false, response: studioError("FORBIDDEN", refusal) };
   }
 
   const scoped = tenantScopeFor(user);
@@ -65,6 +77,27 @@ export async function requireOperations(): Promise<OpsGuardResult> {
   }
 
   return { ok: false, response: studioError("FORBIDDEN", "No organization scope.") };
+}
+
+export async function requireOperations(): Promise<OpsGuardResult> {
+  return requireWorkspace(canAccessOperations, "Operations Center is role-gated.");
+}
+
+/**
+ * Control Tower's preamble.
+ *
+ * A DIFFERENT AUDIENCE, NOT A WIDER ONE. `canAccessControlTower` admits
+ * partner_lead, executive_sponsor and project_manager alongside admin — and
+ * deliberately NOT `support`. The operations persona watches whether the running
+ * system is healthy; that is not the same question as whether the portfolio is
+ * governed, and the two workspaces answer to different people.
+ *
+ * Entitlement to READ is not entitlement to ACT. Every mutation in Control Tower
+ * is admin-only via `canMutateControlTower`, checked separately at the route
+ * that performs it — this guard opens the door and nothing more.
+ */
+export async function requireControlTower(): Promise<OpsGuardResult> {
+  return requireWorkspace(canAccessControlTower, "Control Tower is role-gated.");
 }
 
 /**
