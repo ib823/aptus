@@ -41,10 +41,25 @@ const BUILT = [
   },
 ] as const;
 
-const NOT_YET = [
-  { title: "Write ledger", detail: "reservations and refused writes, from two sources that do not reconcile" },
-  { title: "Throttle", detail: "remaining budget per credential, read without spending it" },
-  { title: "Tokens", detail: "the runtime credential fleet, and what last-observed use does not tell you" },
+const BUILT_TOO = [
+  {
+    href: "/operations/writes",
+    title: "Write ledger",
+    detail:
+      "Reservations and refused writes, from two sources that count different things and will not add up.",
+  },
+  {
+    href: "/operations/throttle",
+    title: "Throttle",
+    detail:
+      "Remaining budget per credential, queried without spending it — and the two buckets whose usage can never be known.",
+  },
+  {
+    href: "/operations/tokens",
+    title: "Tokens",
+    detail:
+      "The runtime credential fleet, and why last-observed use is not enough to call a credential dormant.",
+  },
 ] as const;
 
 const card: React.CSSProperties = {
@@ -86,7 +101,7 @@ export default function OperationsHomePage() {
       </div>
 
       <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {BUILT.map((s) => (
+        {[...BUILT, ...BUILT_TOO].map((s) => (
           <Link key={s.href} href={s.href} style={{ ...card, color: "inherit" }}>
             <div style={{ fontSize: 15, fontWeight: 600, color: "var(--brand-navy)" }}>
               {s.title}
@@ -115,29 +130,22 @@ export default function OperationsHomePage() {
             color: "var(--ink-secondary)",
           }}
         >
-          Not built yet
+          What this workspace will not show you
         </div>
         <p
           style={{
-            margin: "6px 0 10px",
+            margin: "6px 0 0",
             fontSize: 12.5,
             lineHeight: "19px",
             color: "var(--ink-secondary)",
           }}
         >
-          Their read endpoints are live and tested; the screens are not. They stay in the rail as
-          unavailable rather than hidden, so the shape of the workspace remains legible.
+          No secrets, tokens, hashes or SAP hostnames appear anywhere here — a sealed secret&apos;s
+          presence may be shown as a yes or no, never its value. There is no catalogue-freshness
+          view: the underlying table has no tenant column, so an organization-scoped version would
+          return nothing for every organization while appearing to work. It returns if a
+          deployment-scoped one is built.
         </p>
-        <ul style={{ margin: 0, paddingLeft: 17, display: "flex", flexDirection: "column", gap: 4 }}>
-          {NOT_YET.map((s) => (
-            <li
-              key={s.title}
-              style={{ fontSize: 12.5, lineHeight: "19px", color: "var(--ink-secondary)" }}
-            >
-              <b style={{ fontWeight: 600 }}>{s.title}</b> — {s.detail}
-            </li>
-          ))}
-        </ul>
       </section>
     </div>
   );
