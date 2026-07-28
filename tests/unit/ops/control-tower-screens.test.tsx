@@ -324,6 +324,7 @@ describe("registers — a control that belongs to somebody else", () => {
 
   it("the connection register includes deactivated connections and says so", async () => {
     serve({
+      deploymentFallback: { inUse: false, tenants: [] },
       counts: { total: 2, active: 1, inactive: 1, writeEnabled: 0, prod: 0, undeclaredEnvironment: 1 },
       delegatedActions: [
         {
@@ -335,6 +336,7 @@ describe("registers — a control that belongs to somebody else", () => {
         },
       ],
       provenance: {
+        fallbackIsShared: null,
         includesInactive: "Deactivated connections ARE listed here, unlike the Operations health view.",
         everyConnectionIsSealed: "secretsCiphertext is a required column.",
         secretsAreNeverRead: "The ciphertext is not selected by this query.",

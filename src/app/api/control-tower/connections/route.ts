@@ -21,6 +21,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { opsWhere, requireControlTower } from "@/lib/ops/guard";
 import { studioOk } from "@/lib/studio/api";
+import { deploymentFallbackTenants } from "@/lib/studio/tenants";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,12 @@ export async function GET(_request: NextRequest) {
       },
       orderBy: [{ isActive: "desc" }, { product: "asc" }, { key: "asc" }],
   });
+
+  // The deployment's shared tenants are in use exactly when this organization
+  // has stored none — the broker's own fallback rule. A governance register that
+  // said "no connection in the estate" while the deployment was reaching SAP
+  // would be recording a fiction about the thing it exists to record.
+  const fallback = rows.filter((r) => r.isActive).length === 0 ? deploymentFallbackTenants() : [];
 
   const active = rows.filter((r) => r.isActive);
   const writeEnabled = active.filter((r) => r.writeEnabled);
@@ -88,7 +95,21 @@ export async function GET(_request: NextRequest) {
         why: "Write-enablement is a builder's action on their own solution's connection. Control Tower observes it; it does not perform it.",
       },
     ],
+    deploymentFallback: {
+      inUse: fallback.length > 0,
+      tenants: fallback.map((t2) => ({
+        key: t2.key,
+        label: t2.label,
+        product: t2.product,
+        environment: t2.environment,
+        source: t2.source,
+      })),
+    },
     provenance: {
+      fallbackIsShared:
+        fallback.length > 0
+          ? "This organization has stored no SAP connection, so traffic falls back to the deployment's configured tenant. That tenant is shared by every organization on this deployment — it is governed at the deployment level, not here, and it has no per-connection owner, write flag or sealed secret."
+          : null,
       includesInactive:
         "Unlike the Operations Center's health view, deactivated connections ARE listed here. They serve no traffic, so they have no health worth reporting — but they remain part of the estate someone is accountable for.",
       everyConnectionIsSealed:

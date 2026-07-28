@@ -169,7 +169,16 @@ describe("incidents — an empty list is not a claim of health", () => {
 describe("connections — health and binding are separate questions", () => {
   const HEALTHY_BUT_UNDECLARED = {
     counts: { total: 1, healthy: 1, needsAttention: 0, unknown: 0, neverTested: 0 },
-    provenance: { activeOnly: true, excludedInactive: 2, why: "A deactivated connection serves no traffic." },
+    // Mirrors the real payload: this organization has its own connection, so
+    // the deployment fallback is not in use.
+    deploymentFallback: { inUse: false, tenants: [] },
+    provenance: {
+      activeOnly: true,
+      excludedInactive: 2,
+      why: "A deactivated connection serves no traffic.",
+      fallbackIsShared: null,
+      noHealthForFallback: null,
+    },
     bindingBacklog: {
       undeclaredEnvironment: 1,
       remediation: "Declare the environment on each connection in Studio.",
@@ -268,7 +277,7 @@ describe("connections — health and binding are separate questions", () => {
     });
     render(<ConnectionsHealthClient />);
 
-    await screen.findByText("No active SAP connection");
+    await screen.findByText("This organization has no stored SAP connection");
     expect(document.body.textContent).not.toMatch(/could not be read/i);
   });
 });

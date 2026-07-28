@@ -219,7 +219,15 @@ interface RegisterConnection {
   lastValidatedAt: string | null;
 }
 
+interface FallbackTenant {
+  key: string;
+  label: string;
+  product: string;
+  environment: string | null;
+}
+
 interface ConnectionsPayload {
+  deploymentFallback: { inUse: boolean; tenants: FallbackTenant[] };
   counts: {
     total: number;
     active: number;
@@ -230,6 +238,7 @@ interface ConnectionsPayload {
   };
   delegatedActions: DelegatedActionSpec[];
   provenance: {
+    fallbackIsShared: string | null;
     includesInactive: string;
     everyConnectionIsSealed: string;
     secretsAreNeverRead: string;
@@ -290,11 +299,57 @@ function ConnectionsBody({ data }: { data: ConnectionsPayload }) {
         />
       </div>
 
+      {data.deploymentFallback.inUse ? (
+        <div
+          style={{
+            padding: "12px 16px",
+            borderBottom: "1px solid var(--border-default)",
+            display: "flex",
+            gap: 10,
+            alignItems: "flex-start",
+          }}
+        >
+          <span style={{ flex: "none", paddingTop: 1 }}>
+            <OpsChip
+              tone="info"
+              label="deployment tenant in use"
+              meaning="this organization has stored no connection, so traffic falls back to a shared tenant"
+            />
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-secondary)" }}>
+              {data.provenance.fallbackIsShared}
+            </p>
+            <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {data.deploymentFallback.tenants.map((t) => (
+                <span
+                  key={`${t.product}:${t.key}`}
+                  style={{
+                    fontFamily: "var(--font-mono, monospace)",
+                    fontSize: 11.5,
+                    color: "var(--ink-muted)",
+                  }}
+                >
+                  {t.product} · {t.key}
+                  {t.environment ? ` · ${t.environment}` : ""}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {connections.length === 0 ? (
         <OpsPlaceholder
           kind="empty"
-          title="No SAP connection in the estate"
-          detail="Nothing has been configured for this organization. Connections are added in Developer Studio."
+          // Precise about WHOSE estate is empty. Whether anything reaches SAP is
+          // answered by the fallback note above, not by this sentence.
+          title="This organization has registered no SAP connection"
+          detail={
+            data.deploymentFallback.inUse
+              ? "Its traffic runs on the deployment's shared tenant, which is governed at the deployment level rather than here. Connections are registered in Developer Studio."
+              : "Nothing is registered, and the deployment has no fallback tenant either. Connections are added in Developer Studio."
+          }
         />
       ) : (
         <OpsTable head={["Connection", "Environment", "Write", "Last succeeded", "Action"]}>
