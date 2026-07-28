@@ -10,6 +10,9 @@
  * in production, on the component that is hardest to change safely.
  */
 
+import { existsSync, readdirSync, statSync } from "fs";
+import path from "path";
+
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
@@ -94,13 +97,41 @@ describe("the section lists stay honest about what exists", () => {
     }
   });
 
-  it("keeps unbuilt sections marked unavailable rather than linking to a 404", () => {
-    // Same discipline as Studio's: `available` flips on as each screen's PR
-    // lands. A rail entry that 404s is worse than one that says "not yet".
-    for (const s of [...OPERATIONS_SECTIONS, ...CONTROL_TOWER_SECTIONS]) {
-      if (s.key !== "home") {
-        expect(s.available, `${s.href} has no screen yet`).toBe(false);
-      }
+  it("marks a section available if and only if its screen exists on disk", () => {
+    // WHAT THIS USED TO ASSERT, AND WHY IT CHANGED. It required every non-home
+    // section to be `available: false` — a correct statement of the world on the
+    // day it was written, and a hard-coded one. When the first three Operations
+    // screens landed it failed on the feature rather than on a defect, which is
+    // a test asserting a moment rather than a rule.
+    //
+    // The rule it was reaching for is this: the rail must never link to a 404,
+    // and must never hide a screen that exists. Both directions matter — an
+    // entry stuck at `available: false` after its page ships is a screen nobody
+    // can find, which is exactly how CoreEdge Console spent nineteen PRs
+    // unreachable.
+    //
+    // Derived from the filesystem, so it stays true without being maintained.
+    const appDir = path.resolve(__dirname, "../../../src/app");
+
+    /** Every route group, so a section's href resolves wherever it lives. */
+    function pageExists(href: string): boolean {
+      const segments = href.replace(/^\//, "");
+      return readdirSync(appDir)
+        .filter((d) => d.startsWith("(") && statSync(path.join(appDir, d)).isDirectory())
+        .some((group) =>
+          ["page.tsx", "page.ts"].some((f) =>
+            existsSync(path.join(appDir, group, segments, f)),
+          ),
+        );
+    }
+
+    for (const s of [...STUDIO_SECTIONS, ...OPERATIONS_SECTIONS, ...CONTROL_TOWER_SECTIONS]) {
+      expect(
+        s.available,
+        s.available
+          ? `${s.href} is marked available but has no page — the rail links to a 404`
+          : `${s.href} has a page but is marked unavailable — the screen is unreachable from the rail`,
+      ).toBe(pageExists(s.href));
     }
   });
 });
