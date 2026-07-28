@@ -159,7 +159,15 @@ export function StudioRail({
 
       <section aria-label="Workspaces">
         <h2 style={groupHeadingStyle}>Workspace</h2>
-        <RailHighlight activeKey={workspaces.some((w) => w.key === activeWorkspace) ? activeWorkspace : null}>
+        <RailHighlight
+          activeKey={workspaces.some((w) => w.key === activeWorkspace) ? activeWorkspace : null}
+          // Each workspace is its own route group with its own layout, so this
+          // rail unmounts when you move between them. Without a key to remember
+          // the last position, the bar would just appear at the new workspace —
+          // which is exactly why the switcher did not animate while the section
+          // list, which stays mounted inside one layout, did.
+          persistAs="workspace"
+        >
         <ul style={listStyle}>
           {workspaces.map((w) => {
             const enabled = w.availableInV1 && w.href !== null && accessible.includes(w.key);
