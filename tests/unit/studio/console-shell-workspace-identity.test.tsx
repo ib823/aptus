@@ -30,7 +30,7 @@
 import { readFileSync } from "fs";
 import path from "path";
 
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 
 import { RoleGatedEmptyState } from "@/components/studio/RoleGatedEmptyState";
@@ -271,5 +271,69 @@ describe("the selection indicator is one bar, and it tracks the active item", ()
     cleanup();
     expect(() => mount("operations-center", OPERATIONS_SECTIONS[0]!.href)).not.toThrow();
     expect(screen.getByLabelText("Operations Center sections")).toBeTruthy();
+  });
+});
+
+describe("the workspace bar remembers where it was across a layout swap", () => {
+  /**
+   * Each workspace is its own route group with its own layout, so moving
+   * between them unmounts the rail. The section list stays mounted inside one
+   * layout and therefore animated; the workspace switcher did not, because a
+   * remounted bar has no idea where it was.
+   *
+   * These assert the REMEMBERING, not the animation. Whether a transition
+   * visually plays is a browser concern; whether the component knows its
+   * previous position is testable and is the part that was missing.
+   */
+  beforeEach(() => window.sessionStorage.clear());
+
+  it("records the workspace it is showing", () => {
+    cleanup();
+    mount("control-tower", CONTROL_TOWER_SECTIONS[0]!.href);
+    expect(window.sessionStorage.getItem("ce-rail:workspace")).toBe("control-tower");
+  });
+
+  it("updates the memory when the workspace changes", () => {
+    cleanup();
+    mount("developer-studio", STUDIO_SECTIONS[0]!.href);
+    expect(window.sessionStorage.getItem("ce-rail:workspace")).toBe("developer-studio");
+
+    // A layout swap: unmount, then mount the next workspace's shell.
+    cleanup();
+    mount("operations-center", OPERATIONS_SECTIONS[0]!.href);
+    expect(window.sessionStorage.getItem("ce-rail:workspace")).toBe("operations-center");
+  });
+
+  it("does NOT remember section positions across workspaces", () => {
+    // A Control Tower section has no meaningful previous position in Developer
+    // Studio's list; animating between them would invent a relationship. Only
+    // the workspace group opts in.
+    cleanup();
+    mount("control-tower", CONTROL_TOWER_SECTIONS[1]!.href);
+
+    const keys = Object.keys(window.sessionStorage).filter((k) => k.startsWith("ce-rail:"));
+    expect(keys).toEqual(["ce-rail:workspace"]);
+  });
+
+  it("renders when sessionStorage throws — a decorative bar must not break the rail", () => {
+    // Storage is unavailable in some privacy modes. Losing the animation is
+    // acceptable; losing the navigation rail is not.
+    cleanup();
+    const original = window.sessionStorage.getItem;
+    Object.defineProperty(window.sessionStorage, "getItem", {
+      configurable: true,
+      value: () => {
+        throw new Error("storage disabled");
+      },
+    });
+    try {
+      expect(() => mount("control-tower", CONTROL_TOWER_SECTIONS[0]!.href)).not.toThrow();
+      expect(screen.getByLabelText("Control Tower sections")).toBeTruthy();
+    } finally {
+      Object.defineProperty(window.sessionStorage, "getItem", {
+        configurable: true,
+        value: original,
+      });
+    }
   });
 });
