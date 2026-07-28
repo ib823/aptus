@@ -52,9 +52,9 @@ export const OPERATIONS_SECTIONS: readonly StudioSection[] = [
   { key: "traffic", label: "Broker traffic", href: "/operations/traffic", available: true },
   { key: "connections", label: "Connections", href: "/operations/connections", available: true },
   { key: "incidents", label: "Incidents", href: "/operations/incidents", available: true },
-  { key: "writes", label: "Write ledger", href: "/operations/writes", available: false },
-  { key: "throttle", label: "Throttle", href: "/operations/throttle", available: false },
-  { key: "tokens", label: "Tokens", href: "/operations/tokens", available: false },
+  { key: "writes", label: "Write ledger", href: "/operations/writes", available: true },
+  { key: "throttle", label: "Throttle", href: "/operations/throttle", available: true },
+  { key: "tokens", label: "Tokens", href: "/operations/tokens", available: true },
   // Catalogue freshness is deliberately absent, not merely unavailable.
   //
   // It was specified and is not being built: `SapHubContent` has no
