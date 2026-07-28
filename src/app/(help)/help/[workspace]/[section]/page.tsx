@@ -4,21 +4,18 @@ import { notFound } from "next/navigation";
 
 import { MANUAL, manualScreen } from "@/lib/help/manual";
 
-export const dynamic = "force-static";
-
 /**
  * One screen's manual page.
  *
- * Statically generated from `MANUAL`, which is itself assembled from the rail's
+ * The valid slugs are `MANUAL`'s, which is itself assembled from the rail's
  * section lists — so the set of manual pages and the set of screens are the same
- * set by construction, not by anyone remembering.
+ * set by construction, not by anyone remembering. Anything else is `notFound()`.
+ *
+ * NOT PRERENDERED. It was, until the group gained a session gate: a layout that
+ * reads the session cannot sit above a statically generated child. The trade is
+ * worth naming — prerendering bought nothing here, because every page renders
+ * from constants with no I/O, and it cost the gate.
  */
-export function generateStaticParams() {
-  return MANUAL.map((m) => {
-    const [workspace, section] = m.slug.split("/");
-    return { workspace: workspace!, section: section! };
-  });
-}
 
 interface Params {
   params: Promise<{ workspace: string; section: string }>;
