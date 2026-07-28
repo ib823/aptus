@@ -49,13 +49,23 @@ export const STUDIO_SECTIONS: readonly StudioSection[] = [
  */
 export const OPERATIONS_SECTIONS: readonly StudioSection[] = [
   { key: "home", label: "Home", href: "/operations", available: true },
-  { key: "traffic", label: "Broker traffic", href: "/operations/traffic", available: false },
+  { key: "traffic", label: "Broker traffic", href: "/operations/traffic", available: true },
+  { key: "connections", label: "Connections", href: "/operations/connections", available: true },
+  { key: "incidents", label: "Incidents", href: "/operations/incidents", available: true },
   { key: "writes", label: "Write ledger", href: "/operations/writes", available: false },
-  { key: "connections", label: "Connections", href: "/operations/connections", available: false },
-  { key: "freshness", label: "Catalogue freshness", href: "/operations/freshness", available: false },
   { key: "throttle", label: "Throttle", href: "/operations/throttle", available: false },
   { key: "tokens", label: "Tokens", href: "/operations/tokens", available: false },
-  { key: "incidents", label: "Incidents", href: "/operations/incidents", available: false },
+  // Catalogue freshness is deliberately absent, not merely unavailable.
+  //
+  // It was specified and is not being built: `SapHubContent` has no
+  // organizationId, probes are keyed by env tenant, so an organization-scoped
+  // freshness view would return empty for every organization while looking like
+  // it worked. A rail entry that can never unlock is a promise the product has
+  // decided not to keep, and a rail with a permanent dead item teaches people
+  // the rail is decorative.
+  //
+  // It returns if the deployment-scoped respecification is built — see
+  // docs/coreedge/ops-control-tower/FRESHNESS-RESPEC.md.
 ] as const;
 
 /** Control Tower sections, same discipline. */
