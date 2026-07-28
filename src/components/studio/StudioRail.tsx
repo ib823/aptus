@@ -17,6 +17,7 @@
  */
 
 import Link from "next/link";
+import { RailHighlight } from "./RailHighlight";
 import { usePathname } from "next/navigation";
 import type { StudioWorkspace, WorkspaceDescriptor } from "@/lib/studio/rbac";
 
@@ -94,7 +95,11 @@ function itemStyle(active: boolean, enabled: boolean): React.CSSProperties {
     lineHeight: "20px",
     textDecoration: "none",
     color: enabled ? "#FFFFFE" : "rgba(255,255,254,0.45)",
-    background: active ? "rgba(255,255,254,0.14)" : "transparent",
+    // NO background here. The selection is drawn once, by RailHighlight, so it
+    // can travel between items — two items painting their own would both look
+    // selected mid-transition.
+    background: "transparent",
+    position: "relative",
     cursor: enabled ? "pointer" : "default",
   };
 }
@@ -154,6 +159,7 @@ export function StudioRail({
 
       <section aria-label="Workspaces">
         <h2 style={groupHeadingStyle}>Workspace</h2>
+        <RailHighlight activeKey={workspaces.some((w) => w.key === activeWorkspace) ? activeWorkspace : null}>
         <ul style={listStyle}>
           {workspaces.map((w) => {
             const enabled = w.availableInV1 && w.href !== null && accessible.includes(w.key);
@@ -161,7 +167,7 @@ export function StudioRail({
             // what highlighted Developer Studio from inside Control Tower.
             const active = w.key === activeWorkspace;
             return (
-              <li key={w.key}>
+              <li key={w.key} data-rail-item={w.key}>
                 {enabled && w.href ? (
                   <Link
                     href={w.href}
@@ -192,15 +198,17 @@ export function StudioRail({
             );
           })}
         </ul>
+        </RailHighlight>
       </section>
 
       <section aria-label={`${workspaceLabel} sections`}>
         <h2 style={groupHeadingStyle}>{workspaceLabel}</h2>
+        <RailHighlight activeKey={sections.find((s2) => s2.href === pathname)?.key ?? null}>
         <ul style={listStyle}>
           {sections.map((s) => {
             const active = pathname === s.href;
             return (
-              <li key={s.key}>
+              <li key={s.key} data-rail-item={s.key}>
                 {s.available ? (
                   <Link href={s.href} style={itemStyle(active, true)} aria-current={active ? "page" : undefined}>
                     {s.label}
@@ -214,6 +222,7 @@ export function StudioRail({
             );
           })}
         </ul>
+        </RailHighlight>
       </section>
     </nav>
   );
