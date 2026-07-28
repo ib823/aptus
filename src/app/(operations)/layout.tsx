@@ -48,7 +48,7 @@ export default async function OperationsLayout({ children }: { children: ReactNo
   // Role gate AND tenant-scope gate, in that order and before any query — a
   // non-admin with no organization has nothing to scope the feeds to.
   if (!canAccessOperations(user.role) || lacksStudioTenantScope(user)) {
-    return <RoleGatedEmptyState roleLabel={roleLabel} />;
+    return <RoleGatedEmptyState roleLabel={roleLabel} activeWorkspace="operations-center" />;
   }
 
   const resolved = await resolveStudioTenants(user.organizationId);
@@ -68,7 +68,7 @@ export default async function OperationsLayout({ children }: { children: ReactNo
     <StudioShell
       accessibleWorkspaces={accessibleWorkspaces(user.role)}
       sections={OPERATIONS_SECTIONS}
-      workspaceLabel="Operations Center"
+      activeWorkspace="operations-center"
       tenants={tenants}
       activeTenantKey={activeTenantKey}
       roleLabel={roleLabel}

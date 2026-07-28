@@ -42,12 +42,41 @@ export interface WorkspaceDescriptor {
   href: string | null;
   /** False → render locked (🔒) in the rail rather than hiding it. */
   availableInV1: boolean;
+  /**
+   * One sentence on what this workspace is for.
+   *
+   * Lives here, beside the label, because it is shown to someone who has just
+   * been REFUSED entry — and the refusal screen is shared by all three
+   * workspaces. It previously hardcoded Developer Studio's, so a support user
+   * turned away from Control Tower was told what Developer Studio is for.
+   */
+  purpose: string;
 }
 
 export const WORKSPACES: readonly WorkspaceDescriptor[] = [
-  { key: "developer-studio", label: "Developer Studio", href: "/studio", availableInV1: true },
-  { key: "operations-center", label: "Operations Center", href: "/operations", availableInV1: true },
-  { key: "control-tower", label: "Control Tower", href: "/control-tower", availableInV1: true },
+  {
+    key: "developer-studio",
+    label: "Developer Studio",
+    href: "/studio",
+    availableInV1: true,
+    purpose: "Developer Studio is where SAP integrations are configured, governed and tested.",
+  },
+  {
+    key: "operations-center",
+    label: "Operations Center",
+    href: "/operations",
+    availableInV1: true,
+    purpose:
+      "The Operations Center shows whether live integrations are healthy right now — broker traffic, connection health and incidents.",
+  },
+  {
+    key: "control-tower",
+    label: "Control Tower",
+    href: "/control-tower",
+    availableInV1: true,
+    purpose:
+      "Control Tower shows whether the portfolio is governed — solution ownership, access decisions and the audit trail.",
+  },
 ] as const;
 
 /** The builder persona. The design calls this role "Developer". */

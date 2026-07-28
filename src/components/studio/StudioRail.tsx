@@ -103,10 +103,30 @@ export function StudioRail({
   workspaces,
   accessible,
   sections,
+  activeWorkspace,
+  workspaceLabel,
 }: {
   workspaces: readonly WorkspaceDescriptor[];
   accessible: readonly StudioWorkspace[];
   sections: readonly StudioSection[];
+  /**
+   * Which workspace the caller is actually in.
+   *
+   * REQUIRED AND NON-DEFAULTED, so the compiler forces every mount to say. The
+   * switcher previously computed `active = w.href === "/studio"` — a literal —
+   * so Developer Studio was highlighted on every page of all three workspaces,
+   * and the section heading below said "Developer Studio" while listing Control
+   * Tower's sections.
+   *
+   * That is the same defect PR #173 fixed in the breadcrumb, in the component
+   * next door. #173 threaded `workspaceLabel` into the top bar and left the rail
+   * hardcoded, so half the shell learned which workspace it was in and half did
+   * not. Nobody saw it because both new workspaces were unreachable in
+   * production until #177, and nothing opened Control Tower until now.
+   */
+  activeWorkspace: StudioWorkspace;
+  /** Derived from `activeWorkspace` by the shell — never passed independently. */
+  workspaceLabel: string;
 }) {
   const pathname = usePathname();
 
@@ -137,11 +157,20 @@ export function StudioRail({
         <ul style={listStyle}>
           {workspaces.map((w) => {
             const enabled = w.availableInV1 && w.href !== null && accessible.includes(w.key);
-            const active = enabled && w.href === "/studio";
+            // By KEY, not by a hardcoded href. The literal `"/studio"` here is
+            // what highlighted Developer Studio from inside Control Tower.
+            const active = w.key === activeWorkspace;
             return (
               <li key={w.key}>
                 {enabled && w.href ? (
-                  <Link href={w.href} style={itemStyle(active, true)}>
+                  <Link
+                    href={w.href}
+                    style={itemStyle(active, true)}
+                    // The highlight is a background colour, which conveys
+                    // nothing to a screen reader and nothing to a test. This
+                    // states it.
+                    aria-current={active ? "page" : undefined}
+                  >
                     {w.label}
                   </Link>
                 ) : (
@@ -165,8 +194,8 @@ export function StudioRail({
         </ul>
       </section>
 
-      <section aria-label="Developer Studio sections">
-        <h2 style={groupHeadingStyle}>Developer Studio</h2>
+      <section aria-label={`${workspaceLabel} sections`}>
+        <h2 style={groupHeadingStyle}>{workspaceLabel}</h2>
         <ul style={listStyle}>
           {sections.map((s) => {
             const active = pathname === s.href;
