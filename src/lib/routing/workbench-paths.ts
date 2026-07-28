@@ -38,6 +38,7 @@ export const WORKBENCH_PATHS = [
   '/api/affirm/',       // affirm-set REST API
   '/api/discovery/',    // neutral-discovery REST API
   '/api/studio/',       // CoreEdge Console REST API
+  '/help',              // CoreEdge Console manual — not role-gated, see (help)/layout
   '/api/ops/',          // CoreEdge Console — Operations Center read endpoints
   '/api/health',        // probes
   '/_next/',            // build assets
