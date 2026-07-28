@@ -223,3 +223,53 @@ describe("no shared chrome component hardcodes a workspace name", () => {
     }
   });
 });
+
+describe("the selection indicator is one bar, and it tracks the active item", () => {
+  /**
+   * The rail previously painted a background on each active item. Two items can
+   * both look selected during a transition that way, and the indicator cannot
+   * travel — it can only blink from one place to another.
+   *
+   * There is now exactly one bar, positioned from the DOM. These assertions pin
+   * the properties that make that safe rather than the animation itself:
+   * animation is a visual detail, "exactly one thing looks selected" is not.
+   */
+  it("paints no per-item background, so two items cannot both look selected", () => {
+    cleanup();
+    mount("control-tower", CONTROL_TOWER_SECTIONS[0]!.href);
+
+    for (const link of screen.getAllByRole("link")) {
+      const bg = (link as HTMLElement).style.background;
+      expect(bg === "" || bg === "transparent", `${link.textContent} paints its own background`).toBe(
+        true,
+      );
+    }
+  });
+
+  it("marks every item so the bar can find the active one", () => {
+    // The bar locates its target by `data-rail-item`. An item without it is an
+    // item the indicator can never move to.
+    cleanup();
+    mount("control-tower", CONTROL_TOWER_SECTIONS[0]!.href);
+
+    for (const section of CONTROL_TOWER_SECTIONS) {
+      expect(
+        document.querySelector(`[data-rail-item="${section.key}"]`),
+        `${section.label} is not addressable by the indicator`,
+      ).not.toBeNull();
+    }
+    for (const w of WORKSPACES) {
+      expect(document.querySelector(`[data-rail-item="${w.key}"]`)).not.toBeNull();
+    }
+  });
+
+  it("renders without matchMedia — a decorative bar must not break the rail", () => {
+    // jsdom has no matchMedia, and neither do some embedded webviews. The
+    // navigation rail failing to render because an ornament asked about motion
+    // preferences would be a poor trade.
+    expect(typeof window.matchMedia).not.toBe("function");
+    cleanup();
+    expect(() => mount("operations-center", OPERATIONS_SECTIONS[0]!.href)).not.toThrow();
+    expect(screen.getByLabelText("Operations Center sections")).toBeTruthy();
+  });
+});
