@@ -23,7 +23,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { RoleGatedEmptyState } from "@/components/studio/RoleGatedEmptyState";
-import { OPERATIONS_SECTIONS } from "@/components/studio/StudioRail";
+import { OPERATIONS_SECTIONS } from "@/lib/studio/sections";
 import { StudioShell } from "@/components/studio/StudioShell";
 import { STUDIO_TENANT_COOKIE, type StudioTenantOption } from "@/components/studio/StudioTopBar";
 import { getCurrentUser } from "@/lib/auth/session";

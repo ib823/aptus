@@ -20,7 +20,7 @@ import {
   CONTROL_TOWER_SECTIONS,
   OPERATIONS_SECTIONS,
   STUDIO_SECTIONS,
-} from "@/components/studio/StudioRail";
+} from "@/lib/studio/sections";
 import { StudioTopBar } from "@/components/studio/StudioTopBar";
 
 const mockPath = vi.hoisted(() => ({ value: "/studio" }));

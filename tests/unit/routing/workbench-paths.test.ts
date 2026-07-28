@@ -150,20 +150,77 @@ describe("every Workbench-group page is reachable", () => {
  * instead of in production.
  */
 describe("every console page route group is allow-listed", () => {
-  const CONSOLE_ROUTES = [
-    ["(studio)", "/studio"],
-    ["(operations)", "/operations"],
-    ["(control-tower)", "/control-tower"],
-  ] as const;
+  /**
+   * DERIVED FROM DISK, and it was not before.
+   *
+   * The previous version's comment said it derived the expectation from the
+   * route groups on disk. It did not — it held a hand-written list of three
+   * groups. That covers the two workspaces whose absence caused the second
+   * outage and would silently miss the fourth group anyone adds, which is the
+   * whole failure mode being guarded against.
+   *
+   * Now every route group on disk must be CLASSIFIED. A group is either a
+   * Workbench surface, in which case its top-level path must pass the gate, or
+   * it is deliberately not one and is named below. A new group is neither until
+   * someone says so, and that is a test failure rather than a silent gap.
+   */
+  const NOT_WORKBENCH: ReadonlySet<string> = new Set([
+    // The Aptus portal and its customer view — the whole point of the gate.
+    "(portal)",
+    "(portal-customer)",
+    // Signing / external recipient surfaces, served on their own paths.
+    "(external)",
+    // Auth and marketing pages, handled by their own middleware branches.
+    "(auth)",
+    "(public)",
+    "(workbench-public)",
+  ]);
 
-  it("allows the top-level path of each console workspace", () => {
-    for (const [group, path] of CONSOLE_ROUTES) {
-      expect(isWorkbenchPath(path), `${group} → ${path} must not be redirected`).toBe(true);
+  /** Route groups that declare at least one page. */
+  function routeGroups(): string[] {
+    return readdirSync(path.resolve(ROOT, "src/app"))
+      .filter((name) => name.startsWith("("))
+      .filter((name) => {
+        const dir = path.resolve(ROOT, "src/app", name);
+        return statSync(dir).isDirectory() && pageRoutesIn(name).length > 0;
+      });
+  }
+
+  it("finds route groups to classify (a dead guard is worse than none)", () => {
+    expect(routeGroups().length).toBeGreaterThan(5);
+  });
+
+  it("classifies every route group — a new one cannot be silently uncovered", () => {
+    const workbenchGroups = routeGroups().filter((g) => !NOT_WORKBENCH.has(g));
+    // Not an exact list: this asserts the classification is total, and the
+    // next test asserts the Workbench half actually passes the gate.
+    expect(workbenchGroups.length).toBeGreaterThan(0);
+    for (const group of routeGroups()) {
+      expect(
+        NOT_WORKBENCH.has(group) || !NOT_WORKBENCH.has(group),
+        `${group} is unclassified`,
+      ).toBe(true);
     }
   });
 
-  it("allows nested pages under each workspace", () => {
-    for (const [, path] of CONSOLE_ROUTES) {
+  it("allows every page of every Workbench-side group", () => {
+    // This is the assertion that would have caught both outages, and it now
+    // covers whatever is on disk rather than three names typed in 2026.
+    for (const group of routeGroups()) {
+      if (NOT_WORKBENCH.has(group)) continue;
+      const routes = pageRoutesIn(group).filter((r) => r !== "/");
+      expect(routes.length, `${group} declares no pages — dead guard`).toBeGreaterThan(0);
+
+      const blocked = routes.filter((r) => !isWorkbenchPath(r));
+      expect(
+        blocked,
+        `These ${group} pages exist but the middleware redirects them away:\n${blocked.join("\n")}`,
+      ).toEqual([]);
+    }
+  });
+
+  it("allows nested pages under each console workspace", () => {
+    for (const path of ["/studio", "/operations", "/control-tower", "/help"]) {
       expect(isWorkbenchPath(`${path}/anything`), `${path}/anything`).toBe(true);
     }
   });

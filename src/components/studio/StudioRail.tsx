@@ -20,64 +20,13 @@ import Link from "next/link";
 import { RailHighlight } from "./RailHighlight";
 import { usePathname } from "next/navigation";
 import type { StudioWorkspace, WorkspaceDescriptor } from "@/lib/studio/rbac";
+import type { StudioSection } from "@/lib/studio/sections";
 
-export interface StudioSection {
-  key: string;
-  label: string;
-  href: string;
-  /** False → shipped in a later PR; render disabled instead of linking to a 404. */
-  available: boolean;
-}
-
-/**
- * The seven Developer Studio sections, in design order. `available` is flipped on
- * as each screen's PR lands, so the rail never links somewhere that does not exist.
- */
-export const STUDIO_SECTIONS: readonly StudioSection[] = [
-  { key: "home", label: "Home", href: "/studio", available: true },
-  { key: "discover", label: "Discover", href: "/studio/discover", available: true },
-  { key: "solutions", label: "Solutions", href: "/studio/solutions", available: true },
-  { key: "connections", label: "Connections", href: "/studio/connections", available: true },
-  { key: "access", label: "API Access", href: "/studio/access", available: true },
-  { key: "interfaces", label: "Interfaces", href: "/studio/interfaces", available: true },
-  { key: "test", label: "Test Console", href: "/studio/test", available: true },
-] as const;
-
-/**
- * Operations Center sections. `available` is flipped on as each screen's PR
- * lands, exactly like Studio's — the rail never links somewhere that does not
- * exist yet, it says "not yet" instead.
- */
-export const OPERATIONS_SECTIONS: readonly StudioSection[] = [
-  { key: "home", label: "Home", href: "/operations", available: true },
-  { key: "traffic", label: "Broker traffic", href: "/operations/traffic", available: true },
-  { key: "connections", label: "Connections", href: "/operations/connections", available: true },
-  { key: "incidents", label: "Incidents", href: "/operations/incidents", available: true },
-  { key: "writes", label: "Write ledger", href: "/operations/writes", available: true },
-  { key: "throttle", label: "Throttle", href: "/operations/throttle", available: true },
-  { key: "tokens", label: "Tokens", href: "/operations/tokens", available: true },
-  // Catalogue freshness is deliberately absent, not merely unavailable.
-  //
-  // It was specified and is not being built: `SapHubContent` has no
-  // organizationId, probes are keyed by env tenant, so an organization-scoped
-  // freshness view would return empty for every organization while looking like
-  // it worked. A rail entry that can never unlock is a promise the product has
-  // decided not to keep, and a rail with a permanent dead item teaches people
-  // the rail is decorative.
-  //
-  // It returns if the deployment-scoped respecification is built — see
-  // docs/coreedge/ops-control-tower/FRESHNESS-RESPEC.md.
-] as const;
-
-/** Control Tower sections, same discipline. */
-export const CONTROL_TOWER_SECTIONS: readonly StudioSection[] = [
-  { key: "home", label: "Home", href: "/control-tower", available: true },
-  { key: "portfolio", label: "Solution portfolio", href: "/control-tower/portfolio", available: true },
-  { key: "grants", label: "Access governance", href: "/control-tower/grants", available: true },
-  { key: "audit", label: "Governance audit", href: "/control-tower/audit", available: true },
-  { key: "connections", label: "Connection register", href: "/control-tower/connections", available: true },
-  { key: "tokens", label: "Credential register", href: "/control-tower/tokens", available: true },
-] as const;
+// The section lists themselves live in `@/lib/studio/sections` — plain data, no
+// directive — because a server module reading them out of a `"use client"` file
+// gets a client reference rather than an array, and finds out at `next build`
+// rather than in any test. See that file's header. They are deliberately NOT
+// re-exported from here: a re-export would put the broken import path back.
 
 const RAIL_WIDTH = 220;
 
