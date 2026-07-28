@@ -71,11 +71,11 @@ export const OPERATIONS_SECTIONS: readonly StudioSection[] = [
 /** Control Tower sections, same discipline. */
 export const CONTROL_TOWER_SECTIONS: readonly StudioSection[] = [
   { key: "home", label: "Home", href: "/control-tower", available: true },
-  { key: "portfolio", label: "Solution portfolio", href: "/control-tower/portfolio", available: false },
-  { key: "grants", label: "Access governance", href: "/control-tower/grants", available: false },
-  { key: "audit", label: "Governance audit", href: "/control-tower/audit", available: false },
-  { key: "connections", label: "Connection register", href: "/control-tower/connections", available: false },
-  { key: "tokens", label: "Credential register", href: "/control-tower/tokens", available: false },
+  { key: "portfolio", label: "Solution portfolio", href: "/control-tower/portfolio", available: true },
+  { key: "grants", label: "Access governance", href: "/control-tower/grants", available: true },
+  { key: "audit", label: "Governance audit", href: "/control-tower/audit", available: true },
+  { key: "connections", label: "Connection register", href: "/control-tower/connections", available: true },
+  { key: "tokens", label: "Credential register", href: "/control-tower/tokens", available: true },
 ] as const;
 
 const RAIL_WIDTH = 220;

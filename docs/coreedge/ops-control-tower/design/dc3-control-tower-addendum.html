@@ -1,0 +1,303 @@
+<title>dc3 · Control Tower addendum</title>
+<style>
+  :root {
+    --page-bg: #F7F6F2; --page-fg: #21201C; --page-fg-soft: #56534C;
+    --page-rule: #DEDACE; --page-accent: #002B5C; --page-code-bg: #EFEDE5;
+    --surface-cream: #FAF9F5; --surface-paper: #FFFFFE; --surface-ink-tint: #F4F2EB;
+    --ink-primary: #1A1A1A; --ink-secondary: #4A4A4A; --ink-muted: #8A8A8A;
+    --ink-disabled: #C4C4C4; --border-default: #E5E1D6; --border-strong: #C4BFAE;
+    --success: #166534; --warning: #B45309;
+    --sans: "Geist","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono: "Geist Mono","SF Mono",Consolas,monospace;
+    --serif: "Source Serif 4","Tiempos Headline",Georgia,serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --page-bg:#14140F; --page-fg:#EDEAE0; --page-fg-soft:#A8A296; --page-rule:#33322A; --page-accent:#8FB3DD; --page-code-bg:#22211A; }
+  }
+  :root[data-theme="dark"] { --page-bg:#14140F; --page-fg:#EDEAE0; --page-fg-soft:#A8A296; --page-rule:#33322A; --page-accent:#8FB3DD; --page-code-bg:#22211A; }
+  :root[data-theme="light"] { --page-bg:#F7F6F2; --page-fg:#21201C; --page-fg-soft:#56534C; --page-rule:#DEDACE; --page-accent:#002B5C; --page-code-bg:#EFEDE5; }
+
+  body { margin: 0; }
+  .doc { background: var(--page-bg); color: var(--page-fg); font-family: var(--sans); font-size: 15px; line-height: 1.6; padding: 48px 24px 96px; min-height: 100vh; }
+  .wrap { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+  .masthead { display: flex; flex-direction: column; gap: 10px; padding-bottom: 28px; border-bottom: 2px solid var(--page-fg); }
+  .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .14em; font-weight: 600; color: var(--page-fg-soft); }
+  h1 { font-family: var(--serif); font-size: 34px; line-height: 1.15; font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+  h2 { font-family: var(--serif); font-size: 24px; font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+  p { margin: 0; max-width: 66ch; }
+  .standfirst { font-size: 16px; color: var(--page-fg-soft); max-width: 62ch; }
+  .lede { color: var(--page-fg-soft); }
+  section { display: flex; flex-direction: column; gap: 18px; }
+  .sect-no { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--page-accent); letter-spacing: .04em; }
+  code, .f { font-family: var(--mono); font-size: .88em; background: var(--page-code-bg); padding: 1px 5px; border-radius: 4px; }
+  ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; max-width: 66ch; }
+  .specimen { background: var(--surface-cream); border: 1px solid var(--page-rule); border-radius: 4px; padding: 22px; overflow-x: auto; color: var(--ink-primary); }
+  .specimen-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .12em; font-weight: 600; color: var(--page-fg-soft); margin-bottom: -8px; }
+  .note { border-left: 2px solid var(--page-accent); padding-left: 14px; font-size: 14px; color: var(--page-fg-soft); max-width: 64ch; display: flex; flex-direction: column; gap: 6px; }
+  .note b { color: var(--page-fg); font-weight: 650; }
+  table.spec { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.spec th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--page-fg-soft); font-weight: 600; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--page-rule); }
+  table.spec td { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--page-rule); vertical-align: top; }
+  table.spec td:first-child { white-space: nowrap; }
+
+  .ce-card { background: var(--surface-paper); border: 1px solid var(--border-default); border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04); overflow: hidden; }
+  .ce-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 9999px; font-size: 11.5px; font-weight: 600; }
+  .ce-chip .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  .ce-absent { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 9999px; font-size: 11.5px; font-weight: 600; background: transparent; border: 1px dashed var(--border-strong); color: var(--ink-muted); }
+  .ce-table { width: 100%; border-collapse: collapse; }
+  .ce-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-muted); font-weight: 600; padding: 9px 12px; background: var(--surface-ink-tint); border-bottom: 1px solid var(--border-default); }
+  .ce-table td { padding: 9px 12px; border-bottom: 1px solid var(--border-default); font-size: 13px; vertical-align: top; }
+  .ce-mono { font-family: var(--mono); font-size: 12.5px; color: var(--ink-secondary); }
+  .ce-prov { background: var(--surface-ink-tint); border-top: 1px solid var(--border-default); padding: 11px 16px 13px; }
+  .ce-prov-claim { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; font-weight: 600; color: var(--ink-secondary); margin-bottom: 4px; }
+  .ce-prov-body { font-size: 12px; line-height: 1.5; color: var(--ink-secondary); }
+  .ce-btn-off { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 8px; font-size: 12.5px; font-weight: 600; background: transparent; border: 1px solid var(--border-default); color: var(--ink-disabled); cursor: not-allowed; }
+  .runway { display: flex; align-items: center; gap: 8px; }
+  .runway-bar { height: 5px; border-radius: 9999px; background: #EAEAE6; overflow: hidden; width: 84px; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+</style>
+
+<div class="doc"><div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">CoreEdge Console · design addendum · second tranche</div>
+    <h1>Two things Control Tower needs that neither dc2 nor the first tranche contains</h1>
+    <p class="standfirst">
+      The Operations Center tranche settled how a screen carries what its data cannot support. This
+      settles the two concepts specific to governance: a permission that ends by lapsing, and a
+      control that is real but belongs to somebody else.
+    </p>
+  </header>
+
+  <section>
+    <div class="sect-no">Context</div>
+    <h2>What is already decided, and stays decided</h2>
+    <p class="lede">
+      Everything from the Operations Center tranche applies unchanged. Nothing here re-opens it.
+    </p>
+    <ul>
+      <li><b>The provenance strip</b> — furniture on the table-header fill, claim as headline, inside the card.</li>
+      <li><b>The dashed absence pill</b> — an absence is not a status and does not get a colour.</li>
+      <li><b>Numbers carry their basis</b>, and a number that cannot exist renders an em-dash at full size.</li>
+      <li><b>Thin-not-empty</b> — the strip says "showing all N" so one row cannot read as a broken screen.</li>
+    </ul>
+    <div class="note">
+      <p><b>One inherited rule matters more here than it did there.</b> Governance screens are
+      censuses, not floors: the portfolio, the connection register and the credential register list
+      every row in scope, with no sampling and no page. That is the opposite of the broker feeds, and
+      the strips must say so — otherwise a reader who learned "these numbers are a floor" on one
+      screen carries that doubt onto a screen where it is not true, and under-trusts a complete count.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sect-no">E1</div>
+    <h2>A permission that ends only by lapsing</h2>
+    <p class="lede">
+      There is no revocation path in this release, and a settled grant cannot be re-decided. So an
+      approved grant ends one way: its expiry passes. Time remaining is not a date in a cell — it is
+      the entire lifecycle control, and it has to read like one.
+    </p>
+
+    <div class="specimen-label">Specimen · the grant queue</div>
+    <div class="specimen">
+      <div class="ce-card">
+        <table class="ce-table">
+          <thead><tr><th>Capability</th><th>Decision</th><th>Authorises</th><th>Ends</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>API_BUSINESS_PARTNER · READ<div class="ce-mono" style="font-size:11.5px;color:#8A8A8A">Finance accelerator · PROD</div></td>
+              <td><span class="ce-chip" style="background:#DCEBE3;color:#166534"><span class="dot"></span>approved</span></td>
+              <td><span class="ce-chip" style="background:#E0EBF4;color:#1A4D6F">read</span></td>
+              <td>
+                <div class="runway">
+                  <div class="runway-bar"><div style="width:62%;height:100%;background:#166534"></div></div>
+                  <span class="ce-mono">41 days</span>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td>API_SALES_ORDER · CREATE<div class="ce-mono" style="font-size:11.5px;color:#8A8A8A">Order portal · TEST</div></td>
+              <td><span class="ce-chip" style="background:#DCEBE3;color:#166534"><span class="dot"></span>approved</span></td>
+              <td><span class="ce-chip" style="background:#FBE9D1;color:#8B5A00">read + write</span></td>
+              <td>
+                <div class="runway">
+                  <div class="runway-bar"><div style="width:9%;height:100%;background:#B45309"></div></div>
+                  <span class="ce-mono" style="color:#B45309">6 days</span>
+                </div>
+                <div style="font-size:11.5px;color:#B45309;margin-top:3px">re-request to extend</div>
+              </td>
+            </tr>
+            <tr>
+              <td>API_BUSINESS_PARTNER · READ<div class="ce-mono" style="font-size:11.5px;color:#8A8A8A">Legacy pilot · PROD</div></td>
+              <td><span class="ce-chip" style="background:#EAEAE6;color:#6B6B6B"><span class="dot"></span>approved</span></td>
+              <td><span class="ce-absent">nothing — lapsed</span></td>
+              <td><span class="ce-mono" style="color:#8A8A8A">lapsed 12 Jun</span></td>
+            </tr>
+            <tr>
+              <td>API_PRODUCT · READ<div class="ce-mono" style="font-size:11.5px;color:#8A8A8A">Catalogue sync · SANDBOX</div></td>
+              <td><span class="ce-chip" style="background:#F4F2EB;color:#4A4A4A"><span class="dot"></span>sandbox only</span></td>
+              <td><span class="ce-chip" style="background:#E0EBF4;color:#1A4D6F">read</span></td>
+              <td><span class="ce-absent">no expiry — read only</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="ce-prov">
+          <div class="ce-prov-claim">Expiry is the only ending</div>
+          <div class="ce-prov-body">
+            There is no revocation control in this release and a settled request cannot be re-decided.
+            An approved grant ends when its expiry passes — which is why a write-granting decision
+            cannot be settled without one.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <p><b>Time remaining is a runway, not a date.</b> "Ends 8 Sep" requires arithmetic against
+      today; "6 days" does not. The bar makes a short runway visible without reading either. It
+      depletes toward zero rather than filling toward it — the thing being measured is what is left.</p>
+      <p><b>"Authorises" is its own column, and it is the honest one.</b> A decision label is not a
+      permission: <span class="f">SANDBOX_ONLY</span> on a PROD grant authorises nothing, and
+      <span class="f">READ_ONLY</span> on a CREATE request authorises a read and not the write that
+      was asked for. The endpoint computes this with the runtime predicates, so the column cannot
+      drift from what the broker will actually do. Rendering the decision alone would leave a reviewer
+      to know the rules from elsewhere.</p>
+      <p><b>A lapsed grant keeps its decision chip and loses its authority.</b> It still reads
+      "approved", muted, beside <i>nothing — lapsed</i>. Recolouring the decision would rewrite what
+      was decided; a decision that was made does not un-happen because time passed.</p>
+      <p><b>No expiry is an absence, not a blank.</b> On a read grant that is legitimate and gets the
+      dashed pill with its reason. On a settled <i>write</i> grant it cannot occur — the server
+      refuses it — and if one ever appears, it is a defect and must read as one.</p>
+    </div>
+
+    <div class="specimen-label">Specimen · the state a write grant must never reach</div>
+    <div class="specimen">
+      <div class="ce-card">
+        <table class="ce-table">
+          <tbody>
+            <tr>
+              <td>API_SALES_ORDER · CREATE<div class="ce-mono" style="font-size:11.5px;color:#8A8A8A">Order portal · PROD</div></td>
+              <td><span class="ce-chip" style="background:#DCEBE3;color:#166534"><span class="dot"></span>approved</span></td>
+              <td><span class="ce-chip" style="background:#FBE9D1;color:#8B5A00">read + write</span></td>
+              <td><span class="ce-chip" style="background:#F4DEDB;color:#8E2A26"><span class="dot"></span>unbounded</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="ce-prov">
+          <div class="ce-prov-claim">This should not exist</div>
+          <div class="ce-prov-body">
+            A write grant with no expiry cannot be ended — there is no revocation path and it cannot
+            be re-decided. The server refuses to settle one, so a row in this state predates that rule
+            and needs a new, bounded request to replace it.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <p><b>Designed as a defect, not as a state.</b> It is the one row on this screen that should
+      never appear, so it gets the failure colour and a strip that says what to do — rather than
+      sitting quietly in the list as though it were an ordinary variation.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sect-no">E2</div>
+    <h2>A control that is real, and is not yours</h2>
+    <p class="lede">
+      Rotating a credential and enabling write on a connection are genuine capabilities, gated to the
+      <i>consultant</i> role — so a platform admin, this workspace's owner, receives a 403. Deleting
+      them hides a capability from the person doing oversight; wiring them live ships a button that
+      fails for the only role that can reach the screen.
+    </p>
+
+    <div class="specimen-label">Specimen · the credential register</div>
+    <div class="specimen">
+      <div class="ce-card">
+        <table class="ce-table">
+          <thead><tr><th>Credential</th><th>Segregation</th><th>Ends</th><th style="text-align:right">Action</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Finance accelerator · DEV<div class="ce-mono" style="font-size:11.5px;color:#8A8A8A">issued 26 Jul</div></td>
+              <td><span class="ce-chip" style="background:#DCEBE3;color:#166534"><span class="dot"></span>issuer was not an owner</span></td>
+              <td><span class="ce-absent">no expiry</span></td>
+              <td style="text-align:right"><button class="ce-btn-off" disabled>Rotate or revoke</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="ce-prov">
+          <div class="ce-prov-claim">Rotation lives in Developer Studio</div>
+          <div class="ce-prov-body">
+            Rotating and revoking are the builder's actions on their own solution, gated to the
+            consultant role. Control Tower observes them; it does not perform them. The control is
+            shown disabled rather than hidden, because it exists.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <p><b>Disabled with a reason, in the strip rather than a tooltip.</b> A tooltip requires a
+      hover to discover and is unreachable by keyboard on a disabled control. The strip states where
+      the action lives, permanently, for everyone.</p>
+      <p><b>The button keeps its real label.</b> "Rotate or revoke", not "Unavailable". A reviewer
+      needs to know what capability exists and who holds it; renaming the control to describe its
+      own disabled-ness discards exactly that.</p>
+      <p><b>Segregation of duties is rendered as a verdict, not an id.</b> The register's job is to
+      let a reviewer confirm the control held. <i>issuer was not an owner</i> is the finding;
+      <span class="f">createdById: u_7f3a</span> is homework. Where the solution is out of scope the
+      cell shows the dashed pill — <i>unknowable</i>, which is not the same as passing.</p>
+    </div>
+
+    <div class="specimen-label">Specimen · the verdict that means a control did not hold</div>
+    <div class="specimen">
+      <div class="swatches">
+        <span class="ce-chip" style="background:#DCEBE3;color:#166534"><span class="dot"></span>issuer was not an owner</span>
+        <span class="ce-chip" style="background:#F4DEDB;color:#8E2A26"><span class="dot"></span>issued by an owner</span>
+        <span class="ce-chip" style="background:#FBE9D1;color:#8B5A00"><span class="dot"></span>issued while unowned</span>
+        <span class="ce-absent">unknowable — solution out of scope</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sect-no">E3</div>
+    <h2>Where governance differs from operations</h2>
+
+    <table class="spec">
+      <thead><tr><th>Concern</th><th>Operations Center</th><th>Control Tower</th></tr></thead>
+      <tbody>
+        <tr><td>Completeness</td><td>A floor — feeds under-report</td><td><b>A census</b> — every row in scope, stated as such</td></tr>
+        <tr><td>Deactivated connections</td><td>Excluded; no health worth reporting</td><td><b>Included</b>; still part of the estate</td></tr>
+        <tr><td>Time frame</td><td>A window, usually 24h</td><td><b>Current state</b>, with history in the audit trail</td></tr>
+        <tr><td>Audience</td><td><code>support</code> and admin</td><td>partner lead, exec sponsor, PM, admin — <b>not support</b></td></tr>
+        <tr><td>Actions</td><td>None; read-only throughout</td><td>One: the grant decision, admin-only</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      <p><b>The audience difference is the one to design for.</b> Operations is read by someone
+      on shift who needs the answer in seconds. Control Tower is read by someone reviewing, who
+      needs to be able to reconstruct a judgement — so it spends more words per row, states its
+      verdicts, and links out to where actions live rather than compressing.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Open questions</h2>
+    <p class="lede">Not resolved here — each is a product decision.</p>
+    <ul>
+      <li><b>Should the audit trail be filterable by actor?</b> The endpoint accepts the filter. Making
+      it prominent turns a governance record into something that reads as individual monitoring, and
+      that is a policy question rather than a UI one.</li>
+      <li><b>What is the expiry runway on a read grant?</b> Writes must be bounded; reads may be
+      unbounded and legitimately are. Whether an unbounded read grant deserves any visual weight at
+      all, or is simply normal, is unsettled.</li>
+      <li><b>Does the portfolio need a "governed" verdict per solution?</b> Ownership completeness and
+      a live credential are both shown. Combining them into one pass/fail badge would be scannable and
+      would also invent a threshold nobody has defined.</li>
+    </ul>
+  </section>
+
+</div></div>
