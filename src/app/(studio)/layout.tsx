@@ -54,7 +54,7 @@ export default async function StudioLayout({ children }: { children: ReactNode }
   // tenant to scope Studio's organization-anchored tables to, so it is rejected
   // here — before any query can run unscoped.
   if (!canAccessStudio(user.role) || lacksStudioTenantScope(user)) {
-    return <RoleGatedEmptyState roleLabel={roleLabel} />;
+    return <RoleGatedEmptyState roleLabel={roleLabel} activeWorkspace="developer-studio" />;
   }
 
   // Authorized tenants: this organization's own connections when it has any,
@@ -90,7 +90,7 @@ export default async function StudioLayout({ children }: { children: ReactNode }
       <StudioShell
         accessibleWorkspaces={accessibleWorkspaces(user.role)}
         sections={STUDIO_SECTIONS}
-        workspaceLabel="Developer Studio"
+        activeWorkspace="developer-studio"
         tenants={tenants}
         activeTenantKey={activeTenantKey}
         roleLabel={roleLabel}
