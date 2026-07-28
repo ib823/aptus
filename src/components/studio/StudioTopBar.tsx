@@ -38,7 +38,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 
 import { manualSlugForPath } from "@/lib/help/manual";
-import type { StudioSection } from "./StudioRail";
+import type { StudioSection } from "@/lib/studio/sections";
 
 export interface StudioTenantOption {
   /** SapConnection.key, or the env tenant key — probes are recorded under it. */

@@ -26,7 +26,7 @@ import {
   OPERATIONS_SECTIONS,
   STUDIO_SECTIONS,
   type StudioSection,
-} from "@/components/studio/StudioRail";
+} from "@/lib/studio/sections";
 import { INCIDENT_RULES, INCIDENT_THRESHOLDS } from "@/lib/ops/incidents";
 import {
   WORKSPACES,

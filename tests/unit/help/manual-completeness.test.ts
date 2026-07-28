@@ -20,7 +20,7 @@ import {
   CONTROL_TOWER_SECTIONS,
   OPERATIONS_SECTIONS,
   STUDIO_SECTIONS,
-} from "@/components/studio/StudioRail";
+} from "@/lib/studio/sections";
 import { INCIDENT_RULES } from "@/lib/ops/incidents";
 import { MANUAL, PROSE_KEYS, manualScreen, manualSlugForPath, INCIDENT_REFERENCE } from "@/lib/help/manual";
 import { WORKSPACES } from "@/lib/studio/rbac";
