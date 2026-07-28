@@ -3,7 +3,6 @@ import Link from "next/link";
 
 import { INCIDENT_REFERENCE, WORKSPACE_OVERVIEWS } from "@/lib/help/manual";
 
-export const dynamic = "force-static";
 export const metadata: Metadata = { title: "Console manual" };
 
 const card: React.CSSProperties = {
