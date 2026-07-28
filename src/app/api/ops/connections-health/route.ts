@@ -29,6 +29,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { opsWhere, requireOperations } from "@/lib/ops/guard";
 import { studioOk } from "@/lib/studio/api";
+import { deploymentFallbackTenants } from "@/lib/studio/tenants";
 
 export const dynamic = "force-dynamic";
 
@@ -90,6 +91,24 @@ export async function GET() {
     else if (r.environment.trim().toUpperCase() === "PROD") prodConnections++;
   }
 
+  /**
+   * WHAT IS ACTUALLY SERVING TRAFFIC WHEN THIS ORGANIZATION HAS NO CONNECTION.
+   *
+   * Two mechanisms reach SAP: stored `SapConnection` rows, and the deployment's
+   * `{PREFIX}_*` env tenants. The broker prefers the first and falls back to the
+   * second (`resolveSapConnection` returns null → caller uses env).
+   *
+   * This endpoint counted only the rows. On an env-only deployment it therefore
+   * reported "no active SAP connection" while SAP Explorer was reaching the TDD
+   * tenant on the next screen — literally true about a table, false about the
+   * world, and exactly the failure this workspace exists to prevent.
+   *
+   * Resolved ONLY when there are no stored rows, because that is precisely when
+   * the fallback is in use. Listing it beside real connections would show
+   * something that is not serving anything.
+   */
+  const fallback = rows.length === 0 ? deploymentFallbackTenants() : [];
+
   return studioOk({
     scope: guard.actor.kind,
     counts: {
@@ -100,6 +119,22 @@ export async function GET() {
       neverTested,
       byStatus,
     },
+    /**
+     * The deployment's shared tenants, in use because this organization has
+     * stored none. Emphatically NOT "this client's SAP" — one tenant serves
+     * every organization on the deployment, which is why `source` is carried
+     * and why these are listed apart from `connections` rather than merged in.
+     */
+    deploymentFallback: {
+      inUse: fallback.length > 0,
+      tenants: fallback.map((t) => ({
+        key: t.key,
+        label: t.label,
+        product: t.product,
+        environment: t.environment,
+        source: t.source,
+      })),
+    },
     provenance: {
       // Named because a deactivated connection still exists and can be
       // reactivated, so "we have 3 connections" and "3 are listed here" are
@@ -107,6 +142,14 @@ export async function GET() {
       activeOnly: true,
       excludedInactive: inactive,
       why: "A deactivated connection serves no traffic, so its probe status would be a stale claim about a system nothing is calling.",
+      fallbackIsShared:
+        fallback.length > 0
+          ? "This organization has no stored SAP connection, so the broker falls back to the deployment's configured tenant. That tenant is shared by every organization here — it is not this client's SAP, and no per-connection health, write flag or sealed secret exists for it."
+          : null,
+      noHealthForFallback:
+        fallback.length > 0
+          ? "Probe health is recorded per stored connection. A fallback tenant has no row, so there is no health record for it — that is an absence, not a failure, and not a pass."
+          : null,
     },
     bindingBacklog: {
       // Presented as work with a route to remediation, not a status. A count

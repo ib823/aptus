@@ -118,3 +118,48 @@ export function isSharedEnvironmentTenant(
   if (!activeKey) return false;
   return tenants.find((t) => t.key === activeKey)?.source === "environment";
 }
+
+/**
+ * The tenants this DEPLOYMENT falls back to when an organization has stored none.
+ *
+ * WHY THIS EXISTS SEPARATELY FROM `resolveStudioTenants`. That function answers
+ * "what may this caller use", preferring stored connections and falling back
+ * silently — which is right for a picker. The Operations Center and Control
+ * Tower need the opposite: to distinguish the two sources and say which is
+ * actually serving traffic, because "this organization has no connection" and
+ * "nothing is reaching SAP" are different statements and only the first is true
+ * on an env-only deployment.
+ *
+ * That distinction was lost once already. `tenants.ts` exists because Studio
+ * reported "No SAP tenant connected" on a deployment with a perfectly good env
+ * tenant and disabled its own Test Console. The Ops and Control Tower connection
+ * views reintroduced exactly that: they counted `SapConnection` rows, found
+ * none, and said "No active SAP connection" while SAP Explorer was reaching the
+ * TDD tenant on the next screen.
+ *
+ * Returns `[]` when the deployment genuinely has no env tenant configured — at
+ * which point "nothing is reaching SAP" is finally the honest sentence.
+ */
+export function deploymentFallbackTenants(product?: string): StudioTenant[] {
+  const products = product
+    ? SAP_ODATA_PRODUCTS.filter((p) => p.key === product)
+    : SAP_ODATA_PRODUCTS;
+
+  return products.flatMap((p) => {
+    // Same defensive read as above: one malformed *_TENANTS_JSON must not take
+    // down a whole console screen.
+    let configured;
+    try {
+      configured = getConfiguredSapTenants(p.envPrefix);
+    } catch {
+      return [];
+    }
+    return configured.map((t) => ({
+      key: t.key,
+      label: t.label,
+      product: p.key,
+      source: "environment" as const,
+      environment: t.environment ?? null,
+    }));
+  });
+}
