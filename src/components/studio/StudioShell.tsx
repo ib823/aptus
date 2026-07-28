@@ -8,7 +8,8 @@
  */
 
 import type { ReactNode } from "react";
-import { StudioRail, type StudioSection } from "./StudioRail";
+import { StudioRail } from "./StudioRail";
+import type { StudioSection } from "@/lib/studio/sections";
 import { StudioTopBar, type StudioTenantOption } from "./StudioTopBar";
 import { WORKSPACES, type StudioWorkspace } from "@/lib/studio/rbac";
 

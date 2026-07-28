@@ -40,7 +40,7 @@ import {
   OPERATIONS_SECTIONS,
   STUDIO_SECTIONS,
   type StudioSection,
-} from "@/components/studio/StudioRail";
+} from "@/lib/studio/sections";
 import { WORKSPACES, type StudioWorkspace } from "@/lib/studio/rbac";
 import { stripSource } from "../../helpers/source";
 

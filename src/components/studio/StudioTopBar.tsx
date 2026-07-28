@@ -35,7 +35,10 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
-import type { StudioSection } from "./StudioRail";
+import Link from "next/link";
+
+import { manualSlugForPath } from "@/lib/help/manual";
+import type { StudioSection } from "@/lib/studio/sections";
 
 export interface StudioTenantOption {
   /** SapConnection.key, or the env tenant key — probes are recorded under it. */
@@ -103,6 +106,7 @@ export function StudioTopBar({
   // merely untidy: `find` returns undefined for every /operations/* and
   // /control-tower/* path, so it fell through to the bare literal and the shared
   // top bar announced "Developer Studio" on every page of both other workspaces.
+  const manualSlug = manualSlugForPath(pathname);
   const section = sections.find((s) => s.href === pathname);
   const breadcrumb =
     section && section.key !== "home" ? `${workspaceLabel} · ${section.label}` : workspaceLabel;
@@ -139,6 +143,33 @@ export function StudioTopBar({
       </nav>
 
       <div style={{ flex: 1 }} />
+
+      {/* CONTEXTUAL HELP — the thing that makes the manual part of the product.
+          A manual you have to go and find is a manual nobody reads; this lands
+          on the page for the screen you are looking at. It renders only when
+          there IS a page, so it can never be a link to a guess. */}
+      {manualSlug ? (
+        <Link
+          href={`/help/${manualSlug}`}
+          aria-label={`Manual for ${breadcrumb}`}
+          title={`What this screen will not tell you`}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            border: "1px solid var(--border-default)",
+            color: "var(--ink-secondary)",
+            fontSize: 13,
+            fontWeight: 700,
+            textDecoration: "none",
+          }}
+        >
+          ?
+        </Link>
+      ) : null}
 
       {tenants.length > 0 && active ? (
         <div ref={tenantRef} style={{ position: "relative" }}>
