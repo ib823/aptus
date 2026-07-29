@@ -93,9 +93,9 @@ describe("structural facts are derived, not restated", () => {
     // Not a copy: a threshold change must move this page too, which is why the
     // severities are named constants rather than inline comparisons.
     expect(INCIDENT_REFERENCE).toHaveLength(Object.keys(INCIDENT_RULES).length);
-    const binding = INCIDENT_REFERENCE.find((r) => r.id === INCIDENT_RULES.bindingMismatch.id);
-    expect(binding?.severity).toBe(INCIDENT_RULES.bindingMismatch.severity);
-    expect(binding?.firesWhen).toBe(INCIDENT_RULES.bindingMismatch.firesWhen);
+    const binding = INCIDENT_REFERENCE.find((r) => r.id === INCIDENT_RULES.bindingRefused.id);
+    expect(binding?.severity).toBe(INCIDENT_RULES.bindingRefused.severity);
+    expect(binding?.firesWhen).toBe(INCIDENT_RULES.bindingRefused.firesWhen);
   });
 });
 
