@@ -185,3 +185,57 @@ describe("saving a test case", () => {
     );
   });
 });
+
+/**
+ * ONLY A SUCCESSFUL READ MAY CLAIM EMPTINESS.
+ *
+ * The honest-status fix made the badge, the HTTP figure and the detail line
+ * outcome-aware, and missed a fourth thing in the same card: an explanatory
+ * sentence keyed on `rows.length === 0` alone. A refusal returns no rows either,
+ * so a tenant answering 403 rendered
+ *
+ *     Needs setup · HTTP 403 · "The tenant refused this read..."
+ *
+ * and then, thirty pixels below, in grey:
+ *
+ *     "This is an empty resource, not a failure. Your application should treat
+ *      it as data."
+ *
+ * The same false sentence the original defect was raised for, surviving in the
+ * same card, because the fix corrected three of the four places that spoke.
+ *
+ * Worse, the fix CREATED the trigger: the old failure branches never set `rows`
+ * at all, so the line could not render on them. Introducing a uniform
+ * `rows: []` return made `run.rows` truthy on every failure. A change that
+ * makes a shape consistent can switch on code that was relying on the
+ * inconsistency.
+ *
+ * Emptiness is a property of a successful read and of nothing else.
+ */
+describe("emptiness is claimed only by a successful read", () => {
+  const render = CLIENT.slice(CLIENT.indexOf("return ("));
+
+  it("gates the empty-resource note on ACTIVATED, not on the row count", () => {
+    const idx = render.indexOf("This is an empty resource");
+    expect(idx, "the empty-resource note should still exist").toBeGreaterThan(-1);
+
+    // The condition immediately preceding it must test the outcome.
+    const condition = render.slice(Math.max(0, idx - 260), idx);
+    expect(
+      condition,
+      'the empty-resource note must be guarded by run.status === "ACTIVATED" — ' +
+        "a refusal has zero rows too, and may not be described as empty",
+    ).toContain('run.status === "ACTIVATED"');
+  });
+
+  it("has no other unconditional success language in the result card", () => {
+    // The detail strings live in previewOutcome and are chosen per outcome. Any
+    // success phrasing hardcoded into the render is by definition unconditional.
+    for (const phrase of ["answered successfully", "not an error"]) {
+      expect(
+        render,
+        `"${phrase}" is hardcoded in the render, so it shows under every outcome`,
+      ).not.toContain(phrase);
+    }
+  });
+});

@@ -195,27 +195,63 @@ export async function POST(request: NextRequest) {
     select: { id: true },
   });
 
-  const saved = await upsertSapConnection({
-    organizationId,
-    product: input.product,
-    key,
-    label: input.label,
-    baseUrl: input.baseUrl,
-    authType: input.authType,
-    secrets: {
-      ...(input.username ? { username: input.username } : {}),
-      ...(input.password ? { password: input.password } : {}),
-      ...(input.bearerToken ? { bearerToken: input.bearerToken } : {}),
-      ...(input.clientId ? { clientId: input.clientId } : {}),
-      ...(input.clientSecret ? { clientSecret: input.clientSecret } : {}),
-      ...(input.writeSecret ? { writeSecret: input.writeSecret } : {}),
-    },
-    oauthTokenUrl: input.oauthTokenUrl ?? null,
-    environment: input.environment ?? null,
-    writeEnabled: input.writeEnabled ?? false,
-    apiPath: input.apiPath ?? null,
-    timeoutMs: input.timeoutMs ?? null,
-  });
+  /*
+   * SEALING CAN THROW, AND AN UNCAUGHT THROW HERE IS INVISIBLE.
+   *
+   * `getEncryptionKey()` raises when SAP_CONNECTION_ENCRYPTION_KEY is unset or
+   * is not 64 hex characters. Nothing caught it, so Next returned a bare 500
+   * with a ZERO-BYTE body: no code, no message, no correlationId. The client
+   * then called `response.json()` on nothing, and the consultant's screen
+   * showed the resulting DOMException verbatim —
+   *
+   *     Failed to execute 'json' on 'Response': Unexpected end of JSON input
+   *
+   * Two layers compounding: the server could not say what broke, and the client
+   * could not say the server broke. Declaring a connection is the first thing
+   * this product claims to do, and on a deployment missing that key it has
+   * never once succeeded — which is also why `/api/studio/connections` returns
+   * an empty list, why the northbound path refuses with
+   * CONNECTION_NOT_CONFIGURED, and why three of the six incident rules,
+   * including the only `critical` one, cannot fire at all. One unset variable,
+   * silent at every layer.
+   *
+   * The refusal is now diagnosable. It stays deliberately vague to the caller
+   * about WHICH secret is missing — that is deployment configuration, not
+   * something a consultant should learn from an API — while the server log
+   * carries the real reason and the correlationId ties the two together.
+   */
+  let saved: Awaited<ReturnType<typeof upsertSapConnection>>;
+  try {
+    saved = await upsertSapConnection({
+      organizationId,
+      product: input.product,
+      key,
+      label: input.label,
+      baseUrl: input.baseUrl,
+      authType: input.authType,
+      secrets: {
+        ...(input.username ? { username: input.username } : {}),
+        ...(input.password ? { password: input.password } : {}),
+        ...(input.bearerToken ? { bearerToken: input.bearerToken } : {}),
+        ...(input.clientId ? { clientId: input.clientId } : {}),
+        ...(input.clientSecret ? { clientSecret: input.clientSecret } : {}),
+        ...(input.writeSecret ? { writeSecret: input.writeSecret } : {}),
+      },
+      oauthTokenUrl: input.oauthTokenUrl ?? null,
+      environment: input.environment ?? null,
+      writeEnabled: input.writeEnabled ?? false,
+      apiPath: input.apiPath ?? null,
+      timeoutMs: input.timeoutMs ?? null,
+    });
+  } catch (error) {
+    console.error("[studio/connections] seal or persist failed:", error);
+    return studioError(
+      "INTERNAL",
+      "The connection could not be sealed and was not saved. This is a deployment " +
+        "configuration problem, not a problem with what you entered — quote the " +
+        "correlation ID to whoever operates this environment.",
+    );
+  }
 
   // Records THAT the credential set was written, never what it is. The whole
   // point of sealing secrets is undone by an audit trail that quotes them.
