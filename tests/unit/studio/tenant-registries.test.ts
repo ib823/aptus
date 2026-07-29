@@ -137,3 +137,84 @@ describe("it refuses what neither registry knows, and says so usefully", () => {
     expect(msg.toLowerCase()).toContain("connection");
   });
 });
+
+/**
+ * EVERY ROUTE THAT RESOLVES A TENANT KEY RESOLVES BOTH REGISTRIES.
+ *
+ * The first fix for this defect changed the two routes it was reported against —
+ * /preview and /entities — and left five others calling `getSapTenant` directly.
+ * The tenant switcher offers CONNECTION keys to every SAP surface, so Discover's
+ * "Probe all" answered
+ *
+ *     No TDD tenant "qa-conn-verify" configured for S/4HANA Cloud
+ *
+ * to a key the product itself had just put in the dropdown. The user hit it in
+ * normal use, one merge after the fix was declared complete.
+ *
+ * The lesson was already written down, in the commit that closed the same shape
+ * for the probe guard: "the omission is never in the route you were told about."
+ * It was written and then not applied — which is why this is a scan and not a
+ * checklist. A scan cannot forget the seventh route.
+ */
+describe("no route resolves a tenant key from one registry only", () => {
+  it("finds the SAP routes, so a broken walk cannot pass vacuously", async () => {
+    const { readdirSync, statSync } = await import("node:fs");
+    const { join, resolve } = await import("node:path");
+    const root = resolve(__dirname, "../../../src/app/api/sap");
+    const walk = (d: string): string[] =>
+      readdirSync(d).flatMap((e) => {
+        const f = join(d, e);
+        return statSync(f).isDirectory() ? walk(f) : e === "route.ts" ? [f] : [];
+      });
+    expect(walk(root).length).toBeGreaterThan(5);
+  });
+
+  it("uses the shared resolver wherever a caller-supplied key is turned into a tenant", async () => {
+    const { readdirSync, readFileSync, statSync } = await import("node:fs");
+    const { join, relative, resolve } = await import("node:path");
+    const root = resolve(__dirname, "../../..");
+    const api = join(root, "src/app/api/sap");
+    const walk = (d: string): string[] =>
+      readdirSync(d).flatMap((e) => {
+        const f = join(d, e);
+        return statSync(f).isDirectory() ? walk(f) : e === "route.ts" ? [f] : [];
+      });
+
+    /*
+     * THE WRITE RING IS DEPLOYMENT-SCOPED, AND LEGITIMATELY SO.
+     *
+     * /write and hub-content/write-test are gated by isSapTddWriteEnabled — a
+     * DEPLOYMENT env flag — plus an env write secret and an env entity-set
+     * allowlist. Resolving an organization's own connection there would point a
+     * deployment-configured, env-secret-protected write ring at a tenant that
+     * facility knows nothing about. They read the deployment registry because
+     * that is the registry they belong to.
+     *
+     * Two entries, named, with a reason. If this list grows, the growth is the
+     * thing to question.
+     */
+    const DEPLOYMENT_SCOPED = [
+      "src/app/api/sap/tdd/write/route.ts",
+      "src/app/api/sap/tdd/hub-content/write-test/route.ts",
+    ];
+
+    const offenders = walk(api)
+      .filter((f) => {
+        const src = readFileSync(f, "utf8");
+        // Calling getSapTenant is only a problem when the route does NOT also
+        // consult the connection registry. A route may legitimately use both.
+        return src.includes("getSapTenant(") && !src.includes("resolveReadTenant");
+      })
+      .map((f) => relative(root, f))
+      .filter((f) => !DEPLOYMENT_SCOPED.includes(f));
+
+    expect(
+      offenders,
+      "These routes turn a caller-supplied key into a tenant using the DEPLOYMENT\n" +
+        "registry only. The Studio tenant switcher offers CONNECTION keys, so every\n" +
+        "connection a user declares is unusable here — the exact defect that was\n" +
+        "fixed in /preview and /entities and left in place everywhere else:\n" +
+        offenders.join("\n"),
+    ).toEqual([]);
+  });
+});

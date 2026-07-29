@@ -19,7 +19,6 @@ import {
   deriveReadWrite,
   getConfiguredSapTenants,
   getSapProduct,
-  getSapTenant,
   isSapTddPublicAccessEnabled,
 } from "@/lib/sap-public/tdd-connector";
 import { probeTenantCapabilities } from "@/lib/sap-public/capability-probe";
@@ -37,6 +36,7 @@ import {
   type HubContentType,
   type HubStatus,
 } from "@/lib/sap-public/hub-content";
+import { resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
 // This read endpoint must ALWAYS reflect the latest stored probe — never a
@@ -174,7 +174,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const configuredTenants = getConfiguredSapTenants(product.envPrefix);
   const defaultTenantKey = configuredTenants[0]?.key;
   const tenantKey = params.get("tenant") ?? defaultTenantKey;
-  const tenant = tenantKey ? getSapTenant(product.envPrefix, tenantKey) : null;
+  const tenant = tenantKey
+    ? (await resolveReadTenant(product.envPrefix, product.key, user?.organizationId ?? null, tenantKey))?.tenant ?? null
+    : null;
   const dataProbe = params.get("dataProbe") === "1"; // opt-in LIVE overlay (freshness + data-confirm)
 
   // Load the persisted probe for the FULL catalogue (rawMetadataJson.probes is
