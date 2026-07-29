@@ -39,7 +39,12 @@ export interface TestableInterface {
 
 interface RunState {
   phase: "idle" | "running" | "done";
-  status?: HonestStatus;
+  /**
+   * Absent when no probe reached the tenant — see previewOutcome. The chip is
+   * rendered only when this is set, because the vocabulary describes the
+   * tenant's capability and nothing else may borrow it.
+   */
+  status?: HonestStatus | undefined;
   detail?: string;
   rows?: Record<string, unknown>[];
   entitySets?: string[];

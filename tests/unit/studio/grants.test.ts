@@ -33,7 +33,11 @@ function base(overrides: Partial<DecisionRequest> = {}): DecisionRequest {
     deciderId: "u_approver",
     next: "APPROVED",
     writeChecklistAcknowledged: false,
-    expiresAt: null,
+    // A REAL DATE, because a bounded grant is now the norm. This defaulted to
+    // null, so every test that was not about expiry was quietly exercising the
+    // unbounded path and would now be refused for a reason it never meant to
+    // assert.
+    expiresAt: new Date("2027-01-01T00:00:00.000Z"),
     ...overrides,
   };
 }
@@ -124,7 +128,7 @@ describe("the write gate", () => {
       base({ operation: "UPDATE", writeChecklistAcknowledged: true, expiresAt: null }),
     );
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.reason).toBe("WRITE_GRANT_REQUIRES_EXPIRY");
+    if (!r.ok) expect(r.reason).toBe("GRANT_REQUIRES_EXPIRY");
   });
 
   it("refuses a write grant whose expiry field was omitted entirely", () => {
@@ -134,13 +138,44 @@ describe("the write gate", () => {
     delete (req as { expiresAt?: unknown }).expiresAt;
     const r = evaluateDecision(req);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.reason).toBe("WRITE_GRANT_REQUIRES_EXPIRY");
+    if (!r.ok) expect(r.reason).toBe("GRANT_REQUIRES_EXPIRY");
   });
 
-  it("does not demand an expiry for a READ grant", () => {
-    // Reads are revocable in practice by the credential, and an unbounded read
-    // grant was never the risk the expiry rule exists to close.
-    expect(evaluateDecision(base({ operation: "READ", expiresAt: null })).ok).toBe(true);
+  it("demands an expiry for a READ grant too", () => {
+    /*
+     * THIS TEST ASSERTED THE OPPOSITE, WITH A STATED RATIONALE: "Reads are
+     * revocable in practice by the credential, and an unbounded read grant was
+     * never the risk the expiry rule exists to close."
+     *
+     * The first half is not true, and the second follows from it. Revoking a
+     * credential does not revoke a grant — it SUSPENDS the only means of using
+     * one. The grant row stays APPROVED with no expiry, and the next credential
+     * issued for that solution and environment reactivates it. Nothing in the
+     * product ever ends it, which is why the grants API has always returned an
+     * `unbounded` flag for exactly this shape and the manual calls it "a defect,
+     * not a state".
+     *
+     * Credential revocation is also the wrong instrument: it is scoped to the
+     * SOLUTION, so using it to end one over-broad read grant takes down every
+     * other authorisation that solution holds.
+     *
+     * And a read is not a small thing to authorise forever. It is a standing
+     * permission to pull a client's financial and master data out of their
+     * production system. "We cannot revoke it, but it is only reading" is not an
+     * answer anyone wants to give.
+     *
+     * If this rationale is ever revisited, THIS is the line to change — the rule
+     * it guards is one condition in evaluateDecision.
+     */
+    const r = evaluateDecision(base({ operation: "READ", expiresAt: null }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("GRANT_REQUIRES_EXPIRY");
+  });
+
+  it("still lets a REJECTION through without an expiry — it authorises nothing", () => {
+    // The rule is about authorisation, not about decisions. Demanding an expiry
+    // on a refusal would be ceremony.
+    expect(evaluateDecision(base({ next: "REJECTED", expiresAt: null })).ok).toBe(true);
   });
 
   it("never requires the checklist for a plain read", () => {

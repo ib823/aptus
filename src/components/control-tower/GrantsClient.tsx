@@ -177,8 +177,10 @@ function GrantsBody({
             </span>
             <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-secondary)" }}>
               These settled grants have no expiry, so nothing will end them — there is no revocation
-              path and a settled request cannot be re-decided. They predate the rule that refuses to
-              approve an unbounded write. Each needs a new, bounded request to replace it.
+              path and a settled request cannot be re-decided. They predate the rule that now refuses
+              to approve ANY unbounded grant, reads included: revoking a credential only suspends the
+              means of using one, and the next credential issued for that solution reactivates it.
+              Each needs a new, bounded request to replace it.
             </p>
           </div>
         </OpsCard>

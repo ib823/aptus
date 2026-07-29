@@ -121,7 +121,21 @@ describe("recording a decision", () => {
     requestedById: "u_req",
     externalId: "API_X",
     solutionId: "sol_1",
+    // Bounded. The expiry rule covers reads now, so a request that arrived
+    // without one is refused — which is its own test below, not the default.
+    expiresAt: new Date("2027-01-01T00:00:00.000Z"),
   };
+
+  it("403s approving a READ that arrived with no expiry", async () => {
+    // The asymmetry this closes: a read grant approved unbounded could never
+    // end, because there is no revocation path and a settled grant cannot be
+    // re-decided.
+    mocks.getCurrentUser.mockResolvedValue(APPROVER);
+    mocks.findFirstGrant.mockResolvedValue({ ...PENDING_READ, expiresAt: null });
+    const res = await PATCH(req({ grantId: "g_1", decision: "APPROVED" }, "PATCH"));
+    expect(res.status).toBe(403);
+    expect(mocks.updateGrant).not.toHaveBeenCalled();
+  });
 
   it("scopes the grant lookup to the caller's organization", async () => {
     mocks.getCurrentUser.mockResolvedValue(APPROVER);
@@ -184,8 +198,13 @@ describe("recording a decision", () => {
     // This case previously PASSED against a `=== null` check, because the mocked
     // grant omits `expiresAt` entirely and `undefined !== null`. A missing field
     // is not a permission; the production check is `== null` for exactly this.
+    //
+    // `expiresAt: null` is now EXPLICIT. The shared fixture became bounded when
+    // the expiry rule widened to reads, so spreading it no longer produces an
+    // unbounded grant — this test would have kept passing while testing the
+    // checklist instead, which is the thing it is named after not testing.
     mocks.getCurrentUser.mockResolvedValue(APPROVER);
-    mocks.findFirstGrant.mockResolvedValue({ ...PENDING_READ, operation: "CREATE" });
+    mocks.findFirstGrant.mockResolvedValue({ ...PENDING_READ, operation: "CREATE", expiresAt: null });
     const res = await PATCH(
       req({ grantId: "g_1", decision: "APPROVED", writeChecklistAcknowledged: true }, "PATCH"),
     );
