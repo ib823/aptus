@@ -141,6 +141,40 @@ async function handleRequest(
     // Allowed paths fall through to rate limiting + the session bridge.
   }
 
+  /*
+   * THE MANUAL NEEDS A SESSION, AND THE LAYOUT CANNOT BE THE ONE TO SAY SO.
+   *
+   * `(help)/layout.tsx` calls getCurrentUser() and redirect(). That is correct
+   * for a document request — it answers 307 — and INSUFFICIENT for an RSC flight
+   * request, which answers 200 with a payload that contains BOTH a NEXT_REDIRECT
+   * instruction AND the fully rendered page. A browser follows the redirect and
+   * shows nothing. `curl -H 'RSC: 1'` reads the manual.
+   *
+   * WHY THIS PAGE AND NOT THE CONSOLE SCREENS, which are gated the same way and
+   * do NOT leak: their content needs a database round trip that never happens
+   * once the layout redirects, so their flight payload is an empty shell. The
+   * manual renders from CONSTANTS with no I/O — the property that made it cheap
+   * to serve is exactly what lets it finish rendering before the redirect can
+   * matter. "Costs nothing, no I/O" was written as a virtue in the commit that
+   * introduced it.
+   *
+   * So the gate moves to the only place that runs BEFORE anything is rendered or
+   * serialised. Middleware cannot verify a session, only detect one — which is
+   * the right amount of work here: the layout still does the real check, and
+   * this stops an anonymous request reaching the renderer at all.
+   */
+  if (pathname === '/help' || pathname.startsWith('/help/')) {
+    const signedIn =
+      request.cookies.has(SESSION_COOKIE) ||
+      hasCookieWithPrefix(request, NEXTAUTH_SESSION_COOKIE_PREFIXES);
+    if (!signedIn) {
+      const target = new URL('/presales/login', request.url);
+      // 307 for both document and flight requests. An RSC caller gets a
+      // redirect it cannot read past, instead of a 200 it can.
+      return NextResponse.redirect(target, 307);
+    }
+  }
+
   // ----- Host-based product split (Workbench vs Aptus portal) -----
   // Only active when both env vars are set. Until then this block is a
   // no-op and behavior is unchanged. Auth callbacks (/api/auth/*) and
