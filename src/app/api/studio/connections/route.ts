@@ -147,6 +147,12 @@ export async function GET() {
       label: true,
       baseUrl: true,
       authType: true,
+      // THE LEFT-HAND OPERAND OF THE CRITICAL binding-mismatch RULE. It was
+      // stored, and read by the tenant switcher's own query, and absent from
+      // this projection and from the Connections table — so an operator asked to
+      // explain a binding-mismatch incident could not see, anywhere on the screen
+      // that manages connections, the value the rule fired on.
+      environment: true,
       writeEnabled: true,
       isActive: true,
       apiPath: true,

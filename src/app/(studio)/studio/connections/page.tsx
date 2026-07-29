@@ -37,6 +37,8 @@ export default async function StudioConnectionsPage() {
           label: true,
           baseUrl: true,
           authType: true,
+          // The binding-mismatch rule's left operand — see the Connections table.
+          environment: true,
           writeEnabled: true,
           isActive: true,
           lastValidatedAt: true,
