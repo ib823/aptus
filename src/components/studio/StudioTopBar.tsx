@@ -33,8 +33,8 @@
  * inventing a default — an honest empty, consistent with honest status elsewhere.
  */
 
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { manualSlugForPath } from "@/lib/help/manual";
@@ -88,9 +88,7 @@ export function StudioTopBar({
   roleLabel: string;
   userEmail: string;
 }) {
-  const router = useRouter();
   const pathname = usePathname();
-  const [isPending, startTransition] = useTransition();
 
   const [tenantOpen, setTenantOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
@@ -110,13 +108,6 @@ export function StudioTopBar({
   const section = sections.find((s) => s.href === pathname);
   const breadcrumb =
     section && section.key !== "home" ? `${workspaceLabel} · ${section.label}` : workspaceLabel;
-
-  function selectTenant(key: string) {
-    // A view preference, not an authorization input (see file header).
-    document.cookie = `${STUDIO_TENANT_COOKIE}=${encodeURIComponent(key)}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
-    setTenantOpen(false);
-    startTransition(() => router.refresh());
-  }
 
   const active = tenants.find((t) => t.key === activeTenantKey) ?? tenants[0] ?? null;
   const initials = userEmail.slice(0, 2).toUpperCase();
@@ -176,7 +167,6 @@ export function StudioTopBar({
           <button
             type="button"
             onClick={() => setTenantOpen((o) => !o)}
-            disabled={isPending}
             aria-haspopup="listbox"
             aria-expanded={tenantOpen}
             aria-label={`Active tenant: ${active.label}. Choose an authorized tenant.`}
@@ -192,7 +182,7 @@ export function StudioTopBar({
               fontWeight: 600,
               background: "var(--surface-paper)",
               color: "var(--ink-primary)",
-              cursor: isPending ? "progress" : "pointer",
+              cursor: "pointer",
               maxWidth: 320,
             }}
           >
@@ -223,12 +213,20 @@ export function StudioTopBar({
             >
               <div style={panelHeading}>Authorized tenants</div>
               {tenants.map((t) => (
-                <button
+                <a
                   key={t.key}
-                  type="button"
                   role="option"
                   aria-selected={t.key === active.key}
-                  onClick={() => selectTenant(t.key)}
+                  /*
+                   * A LINK, NOT A CLICK HANDLER. The previous version wrote
+                   * document.cookie and called router.refresh(), which needs the
+                   * cookie write to succeed, the click to land after hydration,
+                   * and the refresh to re-read rather than serve a cached
+                   * segment. A user reported the tick simply never moving, and
+                   * all three were consistent with that. A navigation cannot
+                   * half-work.
+                   */
+                  href={`/api/studio/tenant?key=${encodeURIComponent(t.key)}&next=${encodeURIComponent(pathname)}`}
                   style={{
                     all: "unset",
                     display: "flex",
@@ -259,7 +257,7 @@ export function StudioTopBar({
                       ✓
                     </span>
                   )}
-                </button>
+                </a>
               ))}
               <div
                 style={{
