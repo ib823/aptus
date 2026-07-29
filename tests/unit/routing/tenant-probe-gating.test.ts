@@ -27,7 +27,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { stripSource } from "../../helpers/source";
 
@@ -117,5 +117,66 @@ describe("the guard says no to the right people", () => {
     for (const refused of ["support", "partner_lead", "project_manager", "executive_sponsor"]) {
       expect(canAccessStudio(refused), `${refused} must not be able to probe a tenant`).toBe(false);
     }
+  });
+});
+
+/**
+ * THE GUARD ITSELF REFUSES — behaviour, not wiring.
+ *
+ * The scan above proves every live-read route CALLS the guard. It cannot prove
+ * the guard says no, and the first version did not: it opened with
+ *
+ *     if (isSapTddPublicAccessEnabled(prefix)) return null;
+ *
+ * under a comment asserting that flag "is off in production unless explicitly
+ * enabled". It is enabled on the deployment. So the early return fired on every
+ * request, the role check below it was unreachable, and the fix shipped, passed
+ * CI and this scan, and changed nothing at all.
+ *
+ * It was caught by an unauthenticated curl — no session, HTTP 200, a real 325ms
+ * round trip to the tenant. Which means the wiring test and the route scan were
+ * both green while ANYONE ON THE INTERNET could make the product call SAP.
+ *
+ * A test that checks a guard is invoked is not a test that the guard works.
+ */
+describe("refuseUnlessMayProbeTenant refuses", () => {
+  it("refuses an anonymous caller with 401, whatever the public-access flag says", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/auth/session", () => ({ getCurrentUser: async () => null }));
+    const { refuseUnlessMayProbeTenant } = await import("@/lib/sap-public/probe-guard");
+
+    const res = await refuseUnlessMayProbeTenant("S4_TDD");
+    expect(res, "an anonymous caller must never reach a live tenant read").not.toBeNull();
+    expect(res!.status).toBe(401);
+    vi.doUnmock("@/lib/auth/session");
+  });
+
+  it.each([
+    ["support", 403],
+    ["partner_lead", 403],
+    ["project_manager", 403],
+    ["executive_sponsor", 403],
+  ])("refuses %s with %i", async (role, status) => {
+    vi.resetModules();
+    vi.doMock("@/lib/auth/session", () => ({
+      getCurrentUser: async () => ({ id: "u1", role }),
+    }));
+    const { refuseUnlessMayProbeTenant } = await import("@/lib/sap-public/probe-guard");
+
+    const res = await refuseUnlessMayProbeTenant("S4_TDD");
+    expect(res, `${role} must not be able to cause a tenant read`).not.toBeNull();
+    expect(res!.status).toBe(status);
+    vi.doUnmock("@/lib/auth/session");
+  });
+
+  it.each(["consultant", "platform_admin"])("admits %s", async (role) => {
+    vi.resetModules();
+    vi.doMock("@/lib/auth/session", () => ({
+      getCurrentUser: async () => ({ id: "u1", role }),
+    }));
+    const { refuseUnlessMayProbeTenant } = await import("@/lib/sap-public/probe-guard");
+
+    expect(await refuseUnlessMayProbeTenant("S4_TDD"), `${role} builds interfaces and must probe`).toBeNull();
+    vi.doUnmock("@/lib/auth/session");
   });
 });
