@@ -2,13 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   getConfiguredSapTenants,
   getSapProduct,
-  getSapTenant,
   inspectSapService,
   probeSapEntitySets,
 } from "@/lib/sap-public/tdd-connector";
 import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
 import { getLiveCache, setLiveCache } from "@/lib/sap-public/live-cache";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
+import { resolveReadTenant, unknownTenantMessage } from "@/lib/sap-public/tenant-for-read";
+import { getCurrentUser } from "@/lib/auth/session";
 import { ERROR_CODES } from "@/types/api";
 
 /** Reject array / duplicate query params (?tenant=a&tenant=b) instead of silently coercing. */
@@ -56,13 +57,27 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // Standardized with /operations: omitted tenant → the first configured tenant;
   // an INVALID tenant key → 400 (never silently fall back).
   const tenantKey = tenantParam ?? getConfiguredSapTenants(product.envPrefix)[0]?.key ?? "";
-  const tenant = getSapTenant(product.envPrefix, tenantKey);
+  // BOTH REGISTRIES. A key from the Studio tenant switcher is a CONNECTION key,
+  // not a deployment key — see tenant-for-read.
+  const viewer = await getCurrentUser();
+  const resolved = await resolveReadTenant(
+    product.envPrefix,
+    product.key,
+    viewer?.organizationId ?? null,
+    tenantKey,
+  );
+  const tenant = resolved?.tenant ?? null;
   const service = await resolveHubService(product, serviceParam ?? "");
   const probe = probeParam === "1";
 
   if (!tenant || !service) {
     return NextResponse.json(
-      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Valid tenant and service are required" } },
+      {
+        error: {
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: tenant ? "A valid service is required" : unknownTenantMessage(tenantKey),
+        },
+      },
       { status: 400 },
     );
   }

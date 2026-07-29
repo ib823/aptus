@@ -32,6 +32,8 @@
  * is no". This returns 401 only when there genuinely is no session.
  */
 
+import { randomUUID } from "node:crypto";
+
 import { NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
@@ -68,10 +70,21 @@ import { ERROR_CODES } from "@/types/api";
 export async function refuseUnlessMayProbeTenant(
   _envPrefix: string,
 ): Promise<NextResponse | null> {
+  // EVERY REFUSAL CARRIES A CORRELATION ID. This guard originally returned
+  // {code, message} only, while the auth layer's 401s and Control Tower's 403s
+  // both carried one — so the single path most likely to be debugged under
+  // pressure, a live SAP read, was the one with nothing to quote. The status
+  // code was reviewed and shipped; the envelope contract was not.
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
+      {
+        error: {
+          code: ERROR_CODES.UNAUTHORIZED,
+          message: "Not authenticated",
+          correlationId: randomUUID(),
+        },
+      },
       { status: 401 },
     );
   }
@@ -84,6 +97,7 @@ export async function refuseUnlessMayProbeTenant(
           message:
             "Reading a connected SAP tenant is limited to Developer Studio roles. " +
             "Your role can view what was found, but not cause a new read.",
+          correlationId: randomUUID(),
         },
       },
       { status: 403 },

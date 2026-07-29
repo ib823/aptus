@@ -20,6 +20,8 @@ export interface StudioConnection {
   label: string;
   baseUrl: string;
   authType: string;
+  /** DEV | TEST | PROD | SANDBOX, or null when undeclared (a scored incident). */
+  environment: string | null;
   writeEnabled: boolean;
   isActive: boolean;
   lastValidatedAt: string | null;
@@ -156,6 +158,13 @@ export function ConnectionsClient({
             <Th>Alias</Th>
             <Th>Key</Th>
             <Th>Product</Th>
+            {/* THE VALUE THE CRITICAL binding-mismatch RULE FIRES ON. It was
+                stored, and shown only inside the tenant switcher, so the screen
+                that manages connections could not tell you whether a row was
+                DEV or PROD — the single most consequential attribute a
+                connection has, and the left-hand operand of the one critical
+                incident rule in the product. */}
+            <Th>Environment</Th>
             <Th>Base URL</Th>
             <Th>Auth</Th>
             <Th>Secret</Th>
@@ -174,6 +183,18 @@ export function ConnectionsClient({
                 <Td>{c.label}</Td>
                 <Td mono>{c.key}</Td>
                 <Td>{c.product}</Td>
+                <Td>
+                  {c.environment ? (
+                    <span style={{ fontWeight: 600 }}>{c.environment}</span>
+                  ) : (
+                    // Undeclared is a SCORED minor incident and makes writes
+                    // through this connection refuse outright, so it is stated
+                    // rather than left blank.
+                    <span style={{ color: "var(--ink-muted)" }} title="Reads are served but marked unverified; writes are refused. Set it to clear the incident.">
+                      not declared
+                    </span>
+                  )}
+                </Td>
                 <Td mono>{c.baseUrl}</Td>
                 <Td>{c.authType}</Td>
                 <Td>
