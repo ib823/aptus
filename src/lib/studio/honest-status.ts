@@ -33,7 +33,22 @@ export interface PreviewEnvelope {
 }
 
 export interface PreviewOutcome {
-  status: HonestStatus;
+  /**
+   * Absent when NO PROBE RAN.
+   *
+   * The status vocabulary answers one question — what is true of this capability
+   * ON THE TENANT — so only the tenant can answer it. When CoreEdge refused the
+   * request itself, or could not form one, there is no fact about the capability
+   * to report and any chip fabricates one.
+   *
+   * This used to map every failure onto the vocabulary, so a 400 from our own
+   * parameter validation rendered as "Not probeable": a verdict about SAP, for a
+   * request that never left the building. At 02:00 a consultant reads that and
+   * escalates to the SAP team about a defect in this console.
+   */
+  status?: HonestStatus | undefined;
+  /** True only when the tenant actually answered — the chip's precondition. */
+  probed: boolean;
   /** The status a reader should be shown — upstream's, never the envelope's. */
   httpStatus?: number | undefined;
   detail: string;
@@ -75,20 +90,27 @@ export function previewOutcome(
   transport: { ok: boolean; status: number },
   body: { data?: PreviewEnvelope; error?: { message?: string } },
 ): PreviewOutcome {
-  // LAYER 1 — our own route.
-  if (transport.status === 401 || transport.status === 403) {
-    return {
-      status: "NEEDS_SETUP",
-      httpStatus: transport.status,
-      detail: "Reachable, but this entity is not released to the connected user.",
-      rows: [],
-    };
-  }
+  /*
+   * LAYER 1 — OUR OWN ROUTE. NOTHING HERE IS A FACT ABOUT THE TENANT.
+   *
+   * A 401 or 403 here is CoreEdge refusing the caller's role — it was previously
+   * reported as "Needs setup · reachable, but this entity is not released to the
+   * connected user", which describes the tenant's communication arrangement and
+   * is a sentence about a system that was never contacted.
+   *
+   * A 400 is our own parameter validation. A 5xx is our route failing. In every
+   * case the request did not reach SAP, so the outcome carries no status and the
+   * caller renders no chip.
+   */
   if (!transport.ok) {
     return {
-      status: "NOT_PROBEABLE",
+      probed: false,
       httpStatus: transport.status,
-      detail: body.error?.message ?? "The read failed.",
+      detail:
+        transport.status === 401 || transport.status === 403
+          ? "This console refused the read before it was sent — your role may not read a connected tenant. Nothing was asked of SAP."
+          : (body.error?.message ?? "The read could not be sent.") +
+            " This did not reach SAP, so it says nothing about the service.",
       rows: [],
     };
   }
@@ -100,6 +122,7 @@ export function previewOutcome(
     const code = upstream?.status ?? 0;
     if (code === 401 || code === 403) {
       return {
+        probed: true,
         status: "NEEDS_SETUP",
         httpStatus: code,
         detail:
@@ -110,6 +133,7 @@ export function previewOutcome(
     }
     if (code === 404) {
       return {
+        probed: true,
         status: "NOT_FOUND",
         httpStatus: code,
         detail: "The tenant has no such entity set on this service.",
@@ -117,6 +141,7 @@ export function previewOutcome(
       };
     }
     return {
+      probed: true,
       status: "NOT_PROBEABLE",
       httpStatus: code || undefined,
       detail: code
@@ -130,6 +155,7 @@ export function previewOutcome(
   // answered and has nothing in it. This is the only branch entitled to say so.
   const rows = upstream.rows ?? upstream.records ?? [];
   return {
+    probed: true,
     status: "ACTIVATED",
     httpStatus: upstream.status ?? 200,
     detail:

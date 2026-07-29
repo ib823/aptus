@@ -111,7 +111,7 @@ export interface DecisionRequest {
   writeChecklistAcknowledged: boolean;
   /**
    * When this grant lapses. Null means never — which a write may not be.
-   * See WRITE_GRANT_REQUIRES_EXPIRY.
+   * See GRANT_REQUIRES_EXPIRY.
    */
   expiresAt: Date | null;
 }
@@ -121,7 +121,8 @@ export type DecisionRefusal =
   | "NOT_DECIDABLE"
   | "SELF_APPROVAL"
   | "WRITE_CHECKLIST_REQUIRED"
-  | "WRITE_GRANT_REQUIRES_EXPIRY";
+  /** Renamed from WRITE_GRANT_REQUIRES_EXPIRY: it applies to reads too now. */
+  | "GRANT_REQUIRES_EXPIRY";
 
 export type DecisionOutcome = { ok: true } | { ok: false; reason: DecisionRefusal; message: string };
 
@@ -182,23 +183,43 @@ export function evaluateDecision(req: DecisionRequest): DecisionOutcome {
     };
   }
 
-  // A write grant must be bounded in time.
-  //
-  // This is the compensating control for the deliberate absence of revocation:
-  // a settled grant cannot be re-decided (NOT_PENDING above) and there is no
-  // withdrawal path, so an APPROVED write with no expiry is permanent — reachable
-  // by simply not filling in a field. Expiry is already evaluated on every call,
-  // which makes a bounded grant the one form of "ending" the runtime honours
-  // today, with no new state and no invariant broken.
-  // `== null` deliberately, not `=== null`: a caller that omits the field
-  // entirely must be refused exactly like one that passes null. This is a
-  // security control, and "the property was missing" is not a permission.
-  if (authorisesWrite && req.expiresAt == null) {
+  /*
+   * ANY GRANT THAT AUTHORISES ANYTHING MUST BE BOUNDED IN TIME.
+   *
+   * This is the compensating control for the deliberate absence of revocation:
+   * a settled grant cannot be re-decided (NOT_PENDING above) and there is no
+   * withdrawal path, so an approved grant with no expiry is PERMANENT — reachable
+   * by simply not filling in a field. Expiry is evaluated on every call, which
+   * makes a bounded grant the one form of "ending" the runtime honours today,
+   * with no new state and no invariant broken.
+   *
+   * IT USED TO ASK `authorisesWrite`, SO ONLY WRITES WERE BOUNDED. A read grant
+   * approved with no expiry authorised reads of a client's SAP data forever, and
+   * the product had no way to stop it: Control Tower states plainly that "an
+   * approved grant ends by lapsing", and one that cannot lapse cannot end.
+   *
+   * The asymmetry was not a decision anyone made. Every piece needed to close it
+   * already existed — this rule, the field, and an `unbounded` flag the grants
+   * API has always computed and returned. The manual even calls the resulting
+   * state "a defect, not a state". Only the condition on this `if` was narrow.
+   *
+   * A read is not harmless. It is a standing authorisation to pull a client's
+   * financial and master data out of their production system, and "we cannot
+   * revoke it, but it is only reading" is not an answer anyone wants to give.
+   *
+   * `== null` deliberately, not `=== null`: a caller that omits the field
+   * entirely must be refused exactly like one that passes null. This is a
+   * security control, and "the property was missing" is not a permission.
+   */
+  const authorisesAnything = isGranting(req.next);
+
+  if (authorisesAnything && req.expiresAt == null) {
     return {
       ok: false,
-      reason: "WRITE_GRANT_REQUIRES_EXPIRY",
-      message:
-        "A write grant must have an expiry date. There is no way to revoke it afterwards, so it has to end on its own.",
+      reason: "GRANT_REQUIRES_EXPIRY",
+      message: authorisesWrite
+        ? "A write grant must have an expiry date. There is no way to revoke it afterwards, so it has to end on its own."
+        : "A grant must have an expiry date. There is no way to revoke one afterwards, so it has to end on its own — an approved request with no expiry would authorise access to the client's SAP system permanently.",
     };
   }
 
