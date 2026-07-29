@@ -42,18 +42,55 @@ describe("no live SAP read happens on render", () => {
   });
 });
 
-describe("honest status is preserved, not re-invented", () => {
+/**
+ * WHAT THIS BLOCK USED TO DO, AND WHY IT IS DIFFERENT NOW.
+ *
+ * It was titled "honest status is preserved, not re-invented" and it asserted
+ * that the source text of `doRun` CONTAINED the strings "ACTIVATED", "no
+ * records" and "not an error". Those words were present, so it passed — for as
+ * long as the handler set `status: "ACTIVATED"` and `httpStatus: 200` as
+ * literals on every path, including when the tenant had answered 403 or 404.
+ *
+ * A test that greps for the vocabulary cannot tell correct usage from incorrect
+ * usage. It guarded the APPEARANCE of honest status while the behaviour was the
+ * exact conflation the doctrine forbids, and it would have gone on passing
+ * indefinitely.
+ *
+ * The mapping is now a pure function and is tested as behaviour, over the real
+ * observed payloads, in tests/unit/studio/preview-honest-status.test.ts. What
+ * remains here is the part a source scan is genuinely the right tool for: that
+ * the component DELEGATES rather than keeping a second copy of the rule — which
+ * is what the block's title claimed all along.
+ */
+describe("honest status is delegated, not re-invented here", () => {
   const runHandler = CLIENT.slice(CLIENT.indexOf("const doRun"), CLIENT.indexOf("const saveCase"));
 
-  it("maps 401/403 to NEEDS_SETUP rather than a generic failure", () => {
-    expect(runHandler).toContain("NEEDS_SETUP");
-    expect(runHandler).toMatch(/status === 401 \|\| \w+\.status === 403/);
+  it("hands the preview response to the shared mapping", () => {
+    expect(runHandler).toContain("previewOutcome(");
+    // Both layers must reach the mapping: the transport result AND the body.
+    // Passing only one is how the original defect read the wrong one.
+    expect(runHandler).toMatch(/previewOutcome\(\s*\{\s*ok:\s*\w+\.ok,\s*status:\s*\w+\.status\s*\}/);
   });
 
-  it("treats a 200 with zero rows as ACTIVATED — an empty resource, not a fault", () => {
-    expect(runHandler).toContain("ACTIVATED");
-    expect(runHandler.toLowerCase()).toContain("no records");
-    expect(runHandler.toLowerCase()).toContain("not an error");
+  it("keeps no second copy of the status rule in the component", () => {
+    // The literals are the tell. If a status word or one of the phrases comes
+    // back into this handler, someone has started deciding here again, and the
+    // two copies will diverge exactly as they did before.
+    const rowsSection = runHandler.slice(runHandler.indexOf("/api/sap/tdd/preview"));
+    for (const literal of ['"ACTIVATED"', '"NOT_FOUND"', "no records", "not an error"]) {
+      expect(
+        rowsSection.toLowerCase(),
+        `"${literal}" is back in doRun — the mapping belongs in previewOutcome`,
+      ).not.toContain(literal.toLowerCase());
+    }
+  });
+
+  it("still maps a transport 401/403 on the SCHEMA call to NEEDS_SETUP", () => {
+    // The schema call is a separate branch and legitimately reads its own
+    // transport status: /entities does not wrap an upstream refusal in a 200.
+    const schemaSection = runHandler.slice(0, runHandler.indexOf("/api/sap/tdd/preview"));
+    expect(schemaSection).toContain("NEEDS_SETUP");
+    expect(schemaSection).toMatch(/status === 401 \|\| \w+\.status === 403/);
   });
 });
 

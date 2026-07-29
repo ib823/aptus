@@ -1,15 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
 import {
   getConfiguredSapTenants,
   getSapProduct,
   getSapTenant,
   inspectSapService,
-  isSapTddPublicAccessEnabled,
   probeSapEntitySets,
 } from "@/lib/sap-public/tdd-connector";
 import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
 import { getLiveCache, setLiveCache } from "@/lib/sap-public/live-cache";
+import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import { ERROR_CODES } from "@/types/api";
 
 /** Reject array / duplicate query params (?tenant=a&tenant=b) instead of silently coercing. */
@@ -48,12 +47,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  if (!isSapTddPublicAccessEnabled(product.envPrefix) && !(await getCurrentUser())) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
+  // Inspecting a service is a LIVE READ of a customer tenant — and with
+  // ?probe=1 it is many of them — so the gate is a role, not merely a session.
+  // Same guard as /preview, deliberately shared: see refuseUnlessMayProbeTenant.
+  const refusal = await refuseUnlessMayProbeTenant(product.envPrefix);
+  if (refusal) return refusal;
 
   // Standardized with /operations: omitted tenant → the first configured tenant;
   // an INVALID tenant key → 400 (never silently fall back).

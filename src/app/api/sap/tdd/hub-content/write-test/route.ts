@@ -73,9 +73,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // Admin is evaluated but folded into the single fail-closed guard below.
   const auth = await requireAdmin();
   const isAdmin = !isAdminError(auth);
+  // requireAdmin already distinguishes "no session" (401) from "not an admin"
+  // (403); the boolean above threw that away. Recover it rather than asking the
+  // session layer a second time.
+  const authenticated = !isAdminError(auth) || auth.status !== 401;
 
   const decision = assertWriteTestAllowed({
     writeEnabled: isSapTddWriteEnabled(prefix),
+    authenticated,
     isAdmin,
     confirmation: readString(body.confirmation) === WRITE_TEST_CONFIRMATION ? WRITE_TEST_CONFIRMATION : "",
     writeSecretValid: validateWriteSecret(prefix, body.writeSecret),

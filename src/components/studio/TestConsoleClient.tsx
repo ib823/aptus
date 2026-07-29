@@ -20,7 +20,12 @@
 
 import { useCallback, useState } from "react";
 
-import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
+import { StudioStatusChip } from "@/components/studio/StudioStatusChip";
+import {
+  previewOutcome,
+  type HonestStatus,
+  type PreviewEnvelope,
+} from "@/lib/studio/honest-status";
 
 export interface TestableInterface {
   id: string;
@@ -38,7 +43,7 @@ interface RunState {
   detail?: string;
   rows?: Record<string, unknown>[];
   entitySets?: string[];
-  httpStatus?: number;
+  httpStatus?: number | undefined;
 }
 
 export function TestConsoleClient({
@@ -112,44 +117,23 @@ export function TestConsoleClient({
         `/api/sap/tdd/preview?${common}&entity=${encodeURIComponent(targetEntity)}&limit=${limit}`,
       );
       const rowsJson = (await rowsRes.json()) as {
-        data?: { rows?: Record<string, unknown>[]; records?: Record<string, unknown>[] };
+        data?: PreviewEnvelope;
         error?: { message?: string };
       };
 
-      if (rowsRes.status === 401 || rowsRes.status === 403) {
-        setRun({
-          phase: "done",
-          status: "NEEDS_SETUP",
-          entitySets,
-          httpStatus: rowsRes.status,
-          detail: "Reachable, but this entity is not released to the connected user.",
-        });
-        return;
-      }
-      if (!rowsRes.ok) {
-        setRun({
-          phase: "done",
-          status: "NOT_PROBEABLE",
-          entitySets,
-          httpStatus: rowsRes.status,
-          detail: rowsJson.error?.message ?? "The read failed.",
-        });
-        return;
-      }
-
-      const rows = rowsJson.data?.rows ?? rowsJson.data?.records ?? [];
+      // BOTH LAYERS, and neither speaks for the other: this route answers 200
+      // whether the tenant accepted the read or refused it, so `rowsRes.ok` only
+      // says CoreEdge replied. The upstream outcome is in data.ok/data.status.
+      // Reading the transport alone is what rendered a 403 as "Activated · HTTP
+      // 200 · the service answered successfully". See previewOutcome's header.
+      const outcome = previewOutcome({ ok: rowsRes.ok, status: rowsRes.status }, rowsJson);
       setRun({
         phase: "done",
-        // A 200 with no rows is ACTIVATED — the service answered. It just has
-        // nothing in it, which is data, not a fault.
-        status: "ACTIVATED",
+        status: outcome.status,
         entitySets,
-        rows,
-        httpStatus: 200,
-        detail:
-          rows.length === 0
-            ? "No records. The service answered successfully and returned nothing — that is not an error."
-            : `${rows.length} record${rows.length === 1 ? "" : "s"} returned.`,
+        rows: outcome.rows,
+        httpStatus: outcome.httpStatus,
+        detail: outcome.detail,
       });
     } catch {
       setRun({ phase: "done", status: "NOT_PROBEABLE", detail: "The read could not be completed." });

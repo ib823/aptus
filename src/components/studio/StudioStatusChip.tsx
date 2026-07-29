@@ -15,14 +15,12 @@
  * Rendered per the design tokens: pill radius, dot + label, 11.5/600.
  */
 
-export type HonestStatus =
-  | "ACTIVATED"
-  | "NEEDS_SETUP"
-  | "AVAILABLE"
-  | "NOT_PROBEABLE"
-  | "REFERENCE"
-  | "NOT_CHECKED"
-  | "NOT_FOUND";
+// The vocabulary itself lives in @/lib/studio/honest-status, not here: it is
+// shared with server code and with the preview mapping, and a `"use client"`
+// module is the wrong owner for anything both runtimes read.
+import type { HonestStatus } from "@/lib/studio/honest-status";
+
+export type { HonestStatus };
 
 /** Honest status → the existing status token pair. No new colours. */
 const TOKENS: Record<HonestStatus, { bg: string; fg: string }> = {

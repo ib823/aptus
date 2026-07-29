@@ -1,17 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
 import {
   getConfiguredSapTenants,
   getSapProduct,
   getSapService,
   getSapTenant,
-  isSapTddPublicAccessEnabled,
   previewSapEntitySet,
   type SapOdataProduct,
   type SapOperationConfig,
   type SapTenant,
 } from "@/lib/sap-public/tdd-connector";
 import { getLiveCache, setLiveCache } from "@/lib/sap-public/live-cache";
+import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import { ERROR_CODES } from "@/types/api";
 
 function displayValue(value: unknown): string {
@@ -114,12 +113,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  if (!isSapTddPublicAccessEnabled(product.envPrefix) && !(await getCurrentUser())) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
+  // This route calls previewSapEntitySet — several times, one per section — so
+  // it is a LIVE READ of a customer tenant like /preview and /entities, and takes
+  // the same role gate. It was found by checking the siblings of the two routes
+  // where the gap was reported, which is the only reliable way to close a
+  // per-route omission: the omission is never in the route you were told about.
+  const refusal = await refuseUnlessMayProbeTenant(product.envPrefix);
+  if (refusal) return refusal;
 
   const tenant = resolveTenant(product, request);
   if (!tenant) {

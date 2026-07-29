@@ -21,6 +21,19 @@ export const WRITE_TEST_CONFIRMATION = "WRITE TO SAP TDD";
 
 export interface WriteTestGuardInput {
   writeEnabled: boolean; // isSapTddWriteEnabled(prefix)
+  /**
+   * Is there a session at all? Separate from `isAdmin` ON PURPOSE.
+   *
+   * These were one boolean, so an authenticated non-admin and an anonymous
+   * caller were indistinguishable here and both received 401 "Admin role
+   * required" — telling a signed-in user to authenticate, which they already
+   * had. A client that treats 401 as "refresh the token and retry" loops
+   * forever on a refusal that will never change.
+   *
+   * Its sibling route probe-all, behind the same requireAdmin, answers 403 for
+   * the same caller. Two hand-rolled paths, two different codes, one guard.
+   */
+  authenticated: boolean;
   isAdmin: boolean; // requireAdmin() passed
   confirmation: string; // must equal WRITE_TEST_CONFIRMATION
   writeSecretValid: boolean; // timing-safe secret match (fail-closed if unset)
@@ -40,7 +53,11 @@ export interface GuardDecision {
  */
 export function assertWriteTestAllowed(input: WriteTestGuardInput): GuardDecision {
   if (!input.writeEnabled) return { ok: false, status: 403, message: "SAP TDD write-back is disabled" };
-  if (!input.isAdmin) return { ok: false, status: 401, message: "Admin role required" };
+  // 401 only when there is genuinely nobody to identify. Ordering is preserved:
+  // writeEnabled still comes first, so a disabled feature never reveals whether
+  // the caller would otherwise have qualified.
+  if (!input.authenticated) return { ok: false, status: 401, message: "Not authenticated" };
+  if (!input.isAdmin) return { ok: false, status: 403, message: "Admin access required" };
   if (input.confirmation !== WRITE_TEST_CONFIRMATION)
     return { ok: false, status: 400, message: "Confirmation phrase is required" };
   if (!input.writeSecretValid) return { ok: false, status: 403, message: "Invalid SAP write secret" };
