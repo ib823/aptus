@@ -142,6 +142,9 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       rowCount: null,
       correlationId,
       clientTokenId: client.clientId,
+      // The reason, so the incident engine can tell this apart from a
+      // grant-gate 403 — they are otherwise identical in the trail.
+      bindingRefusal: binding.reason,
     });
     return northboundError(
       "CONNECTION_NOT_CONFIGURED",

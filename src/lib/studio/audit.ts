@@ -19,9 +19,30 @@ export type AuditEntityType =
   | "Interface"
   | "ApiAccessGrant"
   | "TestCase"
+  /**
+   * A runtime credential — its own entity, because it used to be filed under
+   * the parent Solution with action UPDATE. Minting a live SAP token was
+   * therefore indistinguishable from renaming a record, and the governance
+   * question "what did this person issue, so it can be found and revoked" had
+   * no field to filter on.
+   */
+  | "ClientCredential"
   | "Connection";
 
-export type AuditAction = "CREATE" | "UPDATE" | "PROMOTE" | "DECISION" | "TEST_CONNECT";
+export type AuditAction =
+  | "CREATE"
+  | "UPDATE"
+  | "PROMOTE"
+  | "DECISION"
+  | "TEST_CONNECT"
+  /** A credential minted where none existed. */
+  | "ISSUE"
+  /**
+   * A credential minted OVER a live one. Distinct from ISSUE on purpose: because
+   * issuance upserts, the second call invalidates the token in production, and a
+   * trail that called both "ISSUE" would hide the outage inside the routine case.
+   */
+  | "ROTATE";
 
 export interface ConfigAuditInput {
   organizationId: string;

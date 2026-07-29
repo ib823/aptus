@@ -33,7 +33,7 @@ export type IncidentSeverity = "critical" | "major" | "minor";
 /** Firing thresholds, named so a number on a screen traces back to a line here. */
 export const INCIDENT_THRESHOLDS = {
   /** One is too many: it means a call was served from an undeclared landscape. */
-  bindingMismatch: 1,
+  bindingRefused: 1,
   /** One unhealthy connection is one integration that is down. */
   connectionUnhealthy: 1,
   /**
@@ -63,16 +63,48 @@ export interface IncidentRule {
   remediation: string;
 }
 
+/*
+ * WHAT HAPPENED TO `binding-mismatch`, AND WHY ITS REPLACEMENT IS NOT A RENAME.
+ *
+ * The old rule read: "at least 1 audited call has a connection environment that
+ * differs from the credential's". It was written against a real defect — the
+ * broker once could serve a PROD connection while the audit row sincerely said
+ * SANDBOX, and nothing in the trail could reveal it.
+ *
+ * That defect was then fixed, by making the mismatch IMPOSSIBLE rather than
+ * merely detectable: `resolveSapConnectionForEnvironment` returns a connection
+ * only when its environment equals the credential's, or when a single undeclared
+ * connection exists (recorded as unverified, never as agreement). Every other
+ * case refuses. So the two operands the rule compared became equal by
+ * construction, and the rule could never evaluate true again.
+ *
+ * IT WAS NEVER REMOVED. For months the product advertised a CRITICAL control it
+ * was architecturally incapable of firing, and reported `mismatch: 0` as though
+ * that were evidence of something. Four separate test runs went looking for it.
+ * It took an agent proving the negative — same interface, same solution, one
+ * credential reissued from PROD to DEV, the connection following the credential
+ * both times — to establish that the silence was the rule and not the engine.
+ *
+ * A detector outliving the defect it was built for is worse than no detector,
+ * because it occupies the space where a real one would go.
+ *
+ * SO THIS SCORES WHAT ACTUALLY HAPPENS. The binding guarantee turned mismatches
+ * into REFUSALS, and refusals were scored by nothing at all — they audit as a
+ * 403 with a null connection, indistinguishable from a grant-gate refusal until
+ * `bindingRefusal` was added to carry the reason. That is the real, observable,
+ * currently-invisible event: a live credential with an approved grant, calling
+ * an environment no connection serves, failing every time.
+ */
 export const INCIDENT_RULES = {
-  bindingMismatch: {
-    id: "binding-mismatch",
+  bindingRefused: {
+    id: "binding-refused",
     severity: "critical",
-    title: "A call was served from a different landscape than the credential declared",
-    firesWhen: `at least ${INCIDENT_THRESHOLDS.bindingMismatch} audited call in the window has a connection environment that differs from the credential's`,
+    title: "A call could not be bound to a connection for its environment",
+    firesWhen: `at least ${INCIDENT_THRESHOLDS.bindingRefused} audited call in the window was refused because no connection matched the credential's environment, or because several could and none could be chosen`,
     whyThisSeverity:
-      "Past tense and unrepeatable. The call already happened, data already moved, and the audit row records the credential's environment — so the record itself understates what occurred. This is the exact failure the environment binding exists to prevent.",
+      "A solution that believes it is integrated is not, and the failure is silent from the client's side beyond a 403 it cannot act on. It is critical rather than major because the broker is REFUSING to serve rather than serving something wrong — which is the safe behaviour, and is exactly why nothing else will ever surface it. Left unwatched, a credential can be live, granted and useless for as long as nobody calls it.",
     remediation:
-      "Check the connection's declared environment in Studio against the credential's. Reads through a mismatched pair are refused now; rows in the window predate that or came from a connection whose declaration changed.",
+      "Declare a connection for that environment in Studio, or point the credential at an environment you have. AMBIGUOUS means two or more active connections claim the same environment for one product: leave exactly one active, because the broker refuses to guess which client system to send a call to.",
   },
   connectionUnhealthy: {
     id: "connection-unhealthy",
@@ -123,7 +155,7 @@ export const INCIDENT_RULES = {
 
 /** Every signal a rule can fire on. Counts this deployment actually records. */
 export interface IncidentSignals {
-  bindingMismatches: number;
+  bindingRefusals: number;
   unhealthyConnections: number;
   upstreamErrors: number;
   throttled: number;
@@ -151,7 +183,7 @@ const SEVERITY_ORDER: Record<IncidentSeverity, number> = { critical: 0, major: 1
  */
 export function deriveIncidents(signals: IncidentSignals): Incident[] {
   const pairs: Array<[IncidentRule, number, number]> = [
-    [INCIDENT_RULES.bindingMismatch, signals.bindingMismatches, INCIDENT_THRESHOLDS.bindingMismatch],
+    [INCIDENT_RULES.bindingRefused, signals.bindingRefusals, INCIDENT_THRESHOLDS.bindingRefused],
     [
       INCIDENT_RULES.connectionUnhealthy,
       signals.unhealthyConnections,

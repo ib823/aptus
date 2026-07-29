@@ -38,19 +38,21 @@ export async function GET(request: NextRequest) {
   const now = new Date();
   const runway = new Date(now.getTime() + EXPIRY_RUNWAY_DAYS * 24 * 60 * 60 * 1000);
 
-  const [bindingPairs, unhealthyConnections, upstreamErrors, throttled, expiringCredentials, undeclared] =
+  const [bindingRefusals, unhealthyConnections, upstreamErrors, throttled, expiringCredentials, undeclared] =
     await Promise.all([
-      // Prisma cannot compare two columns in a `where`, so the mismatch is found
-      // by grouping the distinct pairs and comparing them here — exact, and over
-      // the whole window rather than a page.
-      prisma.northboundAuditEvent.groupBy({
-        by: ["environment", "connectionEnvironment"],
+      // Calls the broker REFUSED because it could not bind them to a connection
+      // for their environment. This replaces a comparison of two columns that the
+      // binding guarantee makes equal by construction — see INCIDENT_RULES.
+      //
+      // NO_CONNECTION is excluded deliberately: an organization with no
+      // connection at all has not misconfigured an environment, it has not
+      // started, and the Connections screen already says so. UNDECLARED_..._WRITE
+      // is the undeclared-environment rule's business, not this one.
+      prisma.northboundAuditEvent.count({
         where: opsWhere(guard.actor, {
           at: { gte: since },
-          connectionId: { not: null },
-          connectionEnvironment: { not: null },
+          bindingRefusal: { in: ["NO_MATCH_FOR_ENVIRONMENT", "AMBIGUOUS"] },
         }),
-        _count: { _all: true },
       }),
       prisma.sapConnection.count({
         where: opsWhere(guard.actor, { isActive: true, lastValidationStatus: { in: UNHEALTHY } }),
@@ -73,15 +75,8 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-  let bindingMismatches = 0;
-  for (const g of bindingPairs) {
-    if (g.connectionEnvironment !== null && g.connectionEnvironment.toUpperCase() !== g.environment.toUpperCase()) {
-      bindingMismatches += g._count._all;
-    }
-  }
-
   const incidents = deriveIncidents({
-    bindingMismatches,
+    bindingRefusals,
     unhealthyConnections,
     upstreamErrors,
     throttled,
