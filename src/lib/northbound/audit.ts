@@ -52,12 +52,24 @@ export interface NorthboundAuditInput {
    * duration for a request that never left. A zero would claim the opposite.
    */
   durationMs?: number | null;
+  /**
+   * Why the broker refused before reaching a connection, if it did.
+   *
+   * A binding refusal audits as HTTP 403 with a null connection — which is also
+   * exactly what a grant-gate refusal looks like. Without this field the one
+   * event meaning "no connection serves the environment this credential asked
+   * for" is indistinguishable from "you have no grant", and nothing can score
+   * it. That is why the only CRITICAL rule the product had watched a comparison
+   * that could never be unequal instead.
+   */
+  bindingRefusal?: string | null;
 }
 
 export async function recordNorthboundCall(input: NorthboundAuditInput): Promise<void> {
   try {
     await prisma.northboundAuditEvent.create({
       data: {
+        bindingRefusal: input.bindingRefusal ?? null,
         organizationId: input.organizationId,
         solutionId: input.solutionId,
         interfaceId: input.interfaceId,

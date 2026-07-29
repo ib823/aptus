@@ -25,7 +25,10 @@ import { studioOk } from "@/lib/studio/api";
 export const dynamic = "force-dynamic";
 
 /** The actions the platform actually writes. Anything else is shown verbatim. */
-const KNOWN_ACTIONS = ["CREATE", "UPDATE", "PROMOTE", "DECISION", "TEST_CONNECT"];
+// ISSUE and ROTATE exist because minting a runtime credential used to be filed
+// as "Solution / UPDATE" — a live SAP token indistinguishable from a rename, and
+// with no entity to filter on when asking what a departing consultant issued.
+const KNOWN_ACTIONS = ["CREATE", "UPDATE", "PROMOTE", "DECISION", "TEST_CONNECT", "ISSUE", "ROTATE"];
 
 export async function GET(request: NextRequest) {
   const guard = await requireControlTower();

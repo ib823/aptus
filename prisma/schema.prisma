@@ -744,6 +744,18 @@ model NorthboundAuditEvent {
   /// Which SolutionClient was used, so a leaked token can be traced and revoked.
   clientTokenId String
 
+  /// Why the broker refused before it reached a connection, or null if it did.
+  ///
+  /// NO_CONNECTION | NO_MATCH_FOR_ENVIRONMENT | AMBIGUOUS |
+  /// UNDECLARED_ENVIRONMENT_WRITE
+  ///
+  /// WITHOUT THIS, A BINDING REFUSAL IS INVISIBLE. It audits as HTTP 403 with a
+  /// null connection — byte-identical to a grant-gate refusal, which is also 403
+  /// with a null connection. The one event that means "this call asked for an
+  /// environment nothing serves" could not be told apart from "you have no
+  /// grant", so nothing could score it.
+  bindingRefusal String?
+
   /// Which SapConnection actually served the call, and the landscape THAT ROW
   /// declared. `environment` above is the CREDENTIAL's declared environment;
   /// these two are the connection's. The pair is deliberate: it is the only way

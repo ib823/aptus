@@ -135,6 +135,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Was there already a credential for this solution? Read it BEFORE the upsert,
+  // because afterwards the row has been overwritten and the question cannot be
+  // asked. This is the whole basis of the disclosure below.
+  const previous = await prisma.solutionClient.findFirst({
+    where: { organizationId: scope.organizationId, solutionId: solution.id },
+    select: { id: true, environment: true },
+  });
+  const replacedExisting = previous !== null;
+  const previousEnvironment = previous?.environment ?? null;
+
   const issued = await issueClientToken(scope, {
     solutionId: solution.id,
     label: input.label,
@@ -143,32 +153,90 @@ export async function POST(request: NextRequest) {
     expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
   });
 
+  /*
+   * ITS OWN ENTITY AND ITS OWN VERB.
+   *
+   * This wrote `entityType: "Solution", action: "UPDATE"` against the SOLUTION's
+   * id. So minting a live PROD token against a client's SAP system was recorded
+   * as "somebody edited a solution", indistinguishable from a rename. Across 41
+   * audit entries there was no credential entity of any kind, so the governance
+   * question the trail exists to answer — WHAT DID THIS PERSON ISSUE, so it can
+   * be found and revoked — had no field to filter on. Four tokens were minted in
+   * one session and left no enumerable record.
+   *
+   * `replacedExisting` matters as much as the entity does: because issuance
+   * upserts, a second call mints a new token and invalidates the live one. The
+   * trail has to say which happened, or two very different events look the same
+   * afterwards.
+   */
   await writeConfigAudit({
     organizationId: scope.organizationId,
     actorId: user.id,
-    entityType: "Solution",
-    entityId: solution.id,
-    action: "UPDATE",
+    entityType: "ClientCredential",
+    entityId: issued.id,
+    action: replacedExisting ? "ROTATE" : "ISSUE",
     // The token itself is absent, obviously — the audit records that a credential
     // was issued, never the credential.
     after: {
-      event: "client_credential_issued",
+      event: replacedExisting ? "client_credential_rotated" : "client_credential_issued",
       clientId: issued.id,
+      solutionId: solution.id,
+      label: input.label,
       environment: issued.environment,
+      replacedExisting,
+      ...(replacedExisting && previousEnvironment !== issued.environment
+        ? { environmentChangedFrom: previousEnvironment }
+        : {}),
     },
   });
 
+  /*
+   * SAY WHEN A LIVE CREDENTIAL WAS REPLACED.
+   *
+   * Issuance upserts on the solution, so a second call returns 201 with the SAME
+   * id, mints a fresh token, and INVALIDATES the one in production — while the
+   * only warning spoke about copying the token down. A colleague "issuing a
+   * credential" could silently kill a working integration, and if the
+   * environment differed it also reclassified the credential, voiding the grant
+   * that authorised it.
+   *
+   * The sibling connections endpoint already returns `replaced` for exactly this
+   * reason. The endpoint that mints secrets is the last one that should be
+   * quieter than its neighbour.
+   */
   return studioOk(
     {
       id: issued.id,
       solutionId: issued.solutionId,
       label: issued.label,
       environment: issued.environment,
+      replaced: replacedExisting,
+      ...(replacedExisting && previousEnvironment !== issued.environment
+        ? { environmentChangedFrom: previousEnvironment }
+        : {}),
       // Shown once. The server keeps only a hash and genuinely cannot show it again.
       token: issued.rawToken,
+      // The base sentence is unchanged and asserted by tests — a caller that
+      // learned to look for it keeps finding it. The replacement disclosure is
+      // APPENDED, using the same words the dedicated rotate path already uses
+      // ("stopped working immediately"), because two ways of describing one
+      // consequence is how a reader ends up believing they are two things.
       warning:
-        "Copy this token now — it is stored only as a hash and cannot be shown again. Keep it server-side.",
+        "Copy this token now — it is stored only as a hash and cannot be shown again. " +
+        "Keep it server-side." +
+        (replacedExisting
+          ? " THIS REPLACED THE EXISTING CREDENTIAL FOR THIS SOLUTION: the previous token " +
+            "stopped working immediately, so anything still using it is failing now." +
+            (previousEnvironment !== issued.environment
+              ? ` Its environment also changed from ${previousEnvironment} to ${issued.environment}, ` +
+                `so grants approved for ${previousEnvironment} no longer authorise it.`
+              : "")
+          : ""),
     },
+    // STILL 201. A new token genuinely was created, even when the record was
+    // reused — the defect was the SILENCE about replacement, not the status
+    // code, and changing a published contract to editorialise about it would
+    // break callers to make a point.
     201,
   );
 }

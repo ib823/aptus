@@ -63,7 +63,7 @@ describe("peeking the budget never spends it", () => {
 
 describe("incident severities come from named rules, not from request-time scoring", () => {
   const none: IncidentSignals = {
-    bindingMismatches: 0,
+    bindingRefusals: 0,
     unhealthyConnections: 0,
     upstreamErrors: 0,
     throttled: 0,
@@ -95,8 +95,8 @@ describe("incident severities come from named rules, not from request-time scori
     // One is too many: the call already happened, against a landscape nobody
     // declared, and the audit row records the credential's environment — so the
     // record itself understates it.
-    const [incident] = deriveIncidents({ ...none, bindingMismatches: 1 });
-    expect(incident?.id).toBe(INCIDENT_RULES.bindingMismatch.id);
+    const [incident] = deriveIncidents({ ...none, bindingRefusals: 1 });
+    expect(incident?.id).toBe(INCIDENT_RULES.bindingRefused.id);
     expect(incident?.severity).toBe("critical");
     expect(incident?.observed).toBe(1);
     expect(incident?.threshold).toBe(1);
@@ -104,7 +104,7 @@ describe("incident severities come from named rules, not from request-time scori
 
   it("ranks critical above major above minor", () => {
     const incidents = deriveIncidents({
-      bindingMismatches: 2,
+      bindingRefusals: 2,
       unhealthyConnections: 1,
       upstreamErrors: 50,
       throttled: 99,
@@ -125,7 +125,7 @@ describe("incident severities come from named rules, not from request-time scori
     // The property that makes a severity checkable rather than asserted.
     for (const incident of deriveIncidents({
       ...none,
-      bindingMismatches: 1,
+      bindingRefusals: 1,
       unhealthyConnections: 1,
       undeclaredEnvironmentConnections: 1,
     })) {
