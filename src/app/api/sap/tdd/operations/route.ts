@@ -3,7 +3,6 @@ import {
   getConfiguredSapTenants,
   getSapProduct,
   getSapService,
-  getSapTenant,
   previewSapEntitySet,
   type SapOdataProduct,
   type SapOperationConfig,
@@ -11,6 +10,8 @@ import {
 } from "@/lib/sap-public/tdd-connector";
 import { getLiveCache, setLiveCache } from "@/lib/sap-public/live-cache";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
+import { getCurrentUser } from "@/lib/auth/session";
+import { resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
 function displayValue(value: unknown): string {
@@ -98,9 +99,13 @@ async function loadOperationSection(
  *   - a tenant param OMITTED → the first configured tenant (documented default,
  *     so the dashboard's initial heartbeat load needs no explicit tenant).
  */
-function resolveTenant(product: SapOdataProduct, request: NextRequest): SapTenant | null {
+async function resolveTenant(
+  product: SapOdataProduct,
+  request: NextRequest,
+  organizationId: string | null,
+): Promise<SapTenant | null> {
   const tenantKey = request.nextUrl.searchParams.get("tenant");
-  if (tenantKey) return getSapTenant(product.envPrefix, tenantKey);
+  if (tenantKey) return (await resolveReadTenant(product.envPrefix, product.key, organizationId, tenantKey))?.tenant ?? null;
   return getConfiguredSapTenants(product.envPrefix)[0] ?? null;
 }
 
@@ -121,7 +126,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const refusal = await refuseUnlessMayProbeTenant(product.envPrefix);
   if (refusal) return refusal;
 
-  const tenant = resolveTenant(product, request);
+  const viewer = await getCurrentUser();
+  const tenant = await resolveTenant(product, request, viewer?.organizationId ?? null);
   if (!tenant) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "No SAP tenant is configured" } },

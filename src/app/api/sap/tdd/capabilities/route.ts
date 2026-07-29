@@ -10,12 +10,12 @@ import { getCurrentUser } from "@/lib/auth/session";
 import {
   getConfiguredSapTenants,
   getSapProduct,
-  getSapTenant,
   isSapTddPublicAccessEnabled,
 } from "@/lib/sap-public/tdd-connector";
 import { getDynamicOdataServices, mergeProbeTargets } from "@/lib/sap-public/dynamic-catalog";
 import { probeTenantCapabilities, summarize } from "@/lib/sap-public/capability-probe";
 import { auditCapabilityProbe } from "@/lib/sap-public/capability-audit";
+import { resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -38,7 +38,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const tenantKey =
     request.nextUrl.searchParams.get("tenant") ??
     getConfiguredSapTenants(product.envPrefix)[0]?.key;
-  const tenant = tenantKey ? getSapTenant(product.envPrefix, tenantKey) : null;
+  const tenant = tenantKey
+    ? (await resolveReadTenant(product.envPrefix, product.key, user?.organizationId ?? null, tenantKey))?.tenant ?? null
+    : null;
   if (!tenant) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "No configured tenant" } },

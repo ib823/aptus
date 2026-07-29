@@ -12,7 +12,6 @@ import {
   deriveReadWrite,
   getConfiguredSapTenants,
   getSapProduct,
-  getSapTenant,
   isSapTddPublicAccessEnabled,
 } from "@/lib/sap-public/tdd-connector";
 import { probeService } from "@/lib/sap-public/capability-probe";
@@ -23,6 +22,7 @@ import {
   type HubContentType,
 } from "@/lib/sap-public/hub-content";
 import { resolveHubItemDependencies } from "@/lib/sap-public/hub-dependencies";
+import { resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
 // A read endpoint whose result depends on a live per-tenant probe — never cache.
@@ -51,7 +51,13 @@ export async function GET(
 
   // Single-item live probe (only when probeable + a tenant is configured).
   const tenantKey = request.nextUrl.searchParams.get("tenant") ?? getConfiguredSapTenants(product.envPrefix)[0]?.key;
-  const tenant = tenantKey ? getSapTenant(product.envPrefix, tenantKey) : null;
+  // The caller's organization, so a DECLARED CONNECTION key resolves here too
+  // — the tenant switcher offers connection keys and this route used to accept
+  // only deployment ones.
+  const viewer = await getCurrentUser();
+  const tenant = tenantKey
+    ? (await resolveReadTenant(product.envPrefix, product.key, viewer?.organizationId ?? null, tenantKey))?.tenant ?? null
+    : null;
   const service = hubApiToService({
     contentType,
     apiType: item.apiType,

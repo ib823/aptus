@@ -19,12 +19,12 @@ import {
   deriveReadWrite,
   getConfiguredSapTenants,
   getSapProduct,
-  getSapTenant,
 } from "@/lib/sap-public/tdd-connector";
 import { probeService } from "@/lib/sap-public/capability-probe";
 import { hubApiToService, httpToRuntimeStatus, isProbeable, mergeStoredProbe, type HubContentType } from "@/lib/sap-public/hub-content";
 import { logDecision } from "@/lib/audit/decision-logger";
 import type { UserRole } from "@/types/assessment";
+import { resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
 const CONFIRMATION = "PROBE ALL SAP SERVICES";
@@ -55,7 +55,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // stored under this tenant's key, so probing one tenant never touches another's.
   const tenantKey =
     (typeof body.tenant === "string" && body.tenant) || getConfiguredSapTenants(product.envPrefix)[0]?.key;
-  const tenant = tenantKey ? getSapTenant(product.envPrefix, tenantKey) : null;
+  const tenant = tenantKey
+    ? (await resolveReadTenant(product.envPrefix, product.key, auth.user.organizationId ?? null, tenantKey))?.tenant ?? null
+    : null;
   if (!tenant || !tenantKey) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: `No TDD tenant "${String(body.tenant ?? "")}" configured for ${product.label}` } },
