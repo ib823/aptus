@@ -35,6 +35,15 @@ export const dynamic = "force-dynamic";
 const bodySchema = z.object({
   /** The honest status the run reported. */
   honestStatus: z.string().min(1),
+  /**
+   * The status the TENANT returned on that run.
+   *
+   * Optional because an older client will not send it, and rejecting those
+   * would break capture rather than improve it. What it must never do is
+   * DEFAULT: an absent value is recorded as null, meaning "this fixture cannot
+   * prove where it came from", which is a different claim from 200.
+   */
+  sourceStatus: z.number().int().min(100).max(599).optional(),
   rows: z.array(z.record(z.string(), z.unknown())).default([]),
 });
 
@@ -80,8 +89,17 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const saved = existing
     ? await prisma.mockFixture.update({
         where: { id: existing.id, organizationId: scope.organizationId },
-        data: { status, body: body as never, capturedAt: new Date() },
-        select: { id: true, scenario: true, status: true, capturedAt: true },
+        // sourceStatus is written on every replace, including back to null when
+        // the caller did not send one. A stale provenance stamp left over from a
+        // previous capture would be worse than none: it would evidence a run
+        // that is no longer the one stored here.
+        data: {
+          status,
+          body: body as never,
+          sourceStatus: parsed.data.sourceStatus ?? null,
+          capturedAt: new Date(),
+        },
+        select: { id: true, scenario: true, status: true, sourceStatus: true, capturedAt: true },
       })
     : await prisma.mockFixture.create({
         data: {
@@ -90,8 +108,9 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
           scenario,
           status,
           body: body as never,
+          sourceStatus: parsed.data.sourceStatus ?? null,
         },
-        select: { id: true, scenario: true, status: true, capturedAt: true },
+        select: { id: true, scenario: true, status: true, sourceStatus: true, capturedAt: true },
       });
 
   await writeConfigAudit({

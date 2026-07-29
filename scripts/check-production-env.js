@@ -44,6 +44,20 @@ const RECOMMENDED_VARS = [
   "NEXT_PUBLIC_SENTRY_DSN",
   // BYOAI encryption + at least one provider key are needed for AI features
   "BYOAI_ENCRYPTION_KEY",
+  // WITHOUT THIS, DECLARING A CONNECTION TO SAP IS IMPOSSIBLE — and used to be
+  // impossible SILENTLY. `getEncryptionKey()` throws when it is unset, nothing
+  // caught the throw, and the consultant saw a raw JSON-parse exception from a
+  // zero-byte 500. It is listed here because a deployment without it cannot do
+  // the first thing this product exists to do: no connection can be created, so
+  // /api/studio/connections stays empty, the northbound path refuses every call
+  // with CONNECTION_NOT_CONFIGURED, and three of the six incident rules —
+  // including the only critical one — can never fire.
+  //
+  // RECOMMENDED rather than REQUIRED_IN_PRODUCTION on purpose: a deployment that
+  // never declares an SAP connection is a legitimate configuration, and failing
+  // its build would be a worse lie than warning it. The point is that the
+  // absence is now SAID, at the moment it can still be fixed cheaply.
+  "SAP_CONNECTION_ENCRYPTION_KEY",
 ];
 
 // Backdoors that must NEVER be enabled on a production deploy — no override.

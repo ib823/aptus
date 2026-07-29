@@ -29,6 +29,15 @@ const createSchema = z.object({
   expectation: z.record(z.string(), z.unknown()).optional(),
   /** The honest outcome of the run being saved. */
   lastOutcome: z.enum(["PASS", "FAIL", "NOT_RUN"]).default("NOT_RUN"),
+  /**
+   * The status the tenant returned on the run being saved.
+   *
+   * Optional, never defaulted. A PASS with no httpStatus is a PASS that cannot
+   * say what it passed against — which is exactly the state every record
+   * written before this field existed is in, and the reader is entitled to know
+   * that rather than be given a plausible number.
+   */
+  httpStatus: z.number().int().min(100).max(599).optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -51,6 +60,7 @@ export async function GET(request: NextRequest) {
       expectation: true,
       lastRunAt: true,
       lastOutcome: true,
+      httpStatus: true,
       createdAt: true,
     },
     orderBy: { createdAt: "desc" },
@@ -89,10 +99,18 @@ export async function POST(request: NextRequest) {
       request: input.request as never,
       ...(input.expectation ? { expectation: input.expectation as never } : {}),
       lastOutcome: input.lastOutcome,
+      httpStatus: input.httpStatus ?? null,
       // Only stamp a run time if a run actually happened.
       ...(input.lastOutcome === "NOT_RUN" ? {} : { lastRunAt: new Date() }),
     },
-    select: { id: true, name: true, interfaceId: true, lastOutcome: true, lastRunAt: true },
+    select: {
+      id: true,
+      name: true,
+      interfaceId: true,
+      lastOutcome: true,
+      httpStatus: true,
+      lastRunAt: true,
+    },
   });
 
   await writeConfigAudit({
