@@ -308,8 +308,43 @@ function ConnectionForm() {
             : {}),
         }),
       });
-      const json = (await res.json()) as { error?: { message?: string } };
-      if (!res.ok) throw new Error(json.error?.message ?? "The connection could not be saved.");
+      /*
+       * A FAILING RESPONSE MAY HAVE NO BODY, AND `.json()` THROWS ON EMPTY.
+       *
+       * When the server died before it could write an envelope, this line threw
+       * a DOMException and the `catch` below rendered its message straight onto
+       * the screen:
+       *
+       *     Failed to execute 'json' on 'Response': Unexpected end of JSON input
+       *
+       * A consultant read that after filling in a nine-field form correctly. It
+       * names a browser API they have never heard of, says nothing about what
+       * went wrong, and gives them nothing to quote to support — while the
+       * actual failure was a missing deployment key. The parse error replaced
+       * the real error and became the only thing anyone could see.
+       *
+       * Parsing is now allowed to fail without becoming the story: an
+       * unreadable body from a failed request means the server could not say
+       * what happened, and THAT is what the reader is told, along with the
+       * status they can quote.
+       */
+      const json = (await res
+        .json()
+        .catch(() => null)) as { error?: { message?: string; correlationId?: string } } | null;
+
+      if (!res.ok) {
+        const stated = json?.error?.message;
+        const ref = json?.error?.correlationId;
+        throw new Error(
+          stated
+            ? ref
+              ? `${stated} (reference ${ref})`
+              : stated
+            : `The connection could not be saved, and the server returned no explanation ` +
+              `(HTTP ${res.status}). This is a problem with the environment rather than ` +
+              `with what you entered — report the status code to whoever operates it.`,
+        );
+      }
       window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "The connection could not be saved.");

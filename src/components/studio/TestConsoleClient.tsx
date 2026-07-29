@@ -350,7 +350,18 @@ export function TestConsoleClient({
             </div>
           )}
 
-          {run.rows && run.rows.length === 0 && (
+          {/* ONLY ON A REAL SUCCESS. This line was keyed on `rows.length === 0`
+              alone, which is true of every failure too — a refusal returns no
+              rows either. So a tenant answering 403 rendered "Needs setup · HTTP
+              403" and then, thirty pixels below, told the developer to treat the
+              refusal as data.
+
+              That is the same false sentence the honest-status fix was raised
+              for, surviving in the same card because only the badge, the status
+              and the detail were made outcome-aware. The condition has to read
+              the OUTCOME, not the row count: emptiness is a property of a
+              successful read, and nothing else may claim it. */}
+          {run.status === "ACTIVATED" && run.rows && run.rows.length === 0 && (
             <p style={{ ...muted, marginTop: 8 }}>
               This is an empty resource, not a failure. Your application should treat it as data.
             </p>
