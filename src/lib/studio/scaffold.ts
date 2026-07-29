@@ -427,11 +427,71 @@ COREEDGE_TOKEN=
 `;
 }
 
+/**
+ * fixtures.json — and the one sentence in it that has to be earned.
+ *
+ * THE NOTE USED TO READ "Recorded from real runs in CoreEdge Developer Studio"
+ * UNCONDITIONALLY. It was written into every download, including over fixtures
+ * captured while the Test Console was reporting a tenant's 403 as a successful
+ * empty read. So the file asserted provenance for records that had none, a
+ * developer took it into their own repository, and `npm run mock` served an
+ * invented 200 for a call that really refuses.
+ *
+ * A fixture can now say where it came from. One that cannot — because it
+ * predates `sourceStatus` — is not silently dropped and not silently blessed:
+ * it is shipped, flagged, and the note stops claiming what it cannot support.
+ * That is the same rule the product applies to a probe it has not run.
+ */
+function buildFixturesJson(
+  iface: { id: string; name: string },
+  fixtures: readonly ScaffoldFixture[],
+): string {
+  const unproven = fixtures.filter((f) => f.sourceStatus === null || f.sourceStatus === undefined);
+
+  return JSON.stringify(
+    {
+      interfaceId: iface.id,
+      interfaceName: iface.name,
+      note:
+        unproven.length === 0
+          ? "Recorded from real runs in CoreEdge Developer Studio, each carrying the status the tenant returned. Serve them with `npm run mock`."
+          : `Recorded in CoreEdge Developer Studio. ${unproven.length} of ${fixtures.length} ` +
+            "fixtures predate provenance recording and carry no sourceStatus, so what the " +
+            "tenant actually answered when they were captured cannot be established — they " +
+            "are marked unverified below. Re-run those scenarios in the Test Console and " +
+            "capture again to replace them. Serve with `npm run mock`.",
+      fixtures: fixtures.map((f) => ({
+        scenario: f.scenario,
+        status: f.status,
+        // Named for what it is, so a reader who never opens the docs still sees
+        // the difference between "the tenant said 200" and "nobody recorded it".
+        sourceStatus: f.sourceStatus ?? null,
+        capturedAt: f.capturedAt ?? null,
+        ...(f.sourceStatus === null || f.sourceStatus === undefined
+          ? { unverified: "Captured before CoreEdge recorded provenance; origin unknown." }
+          : {}),
+        body: f.body,
+      })),
+    },
+    null,
+    2,
+  );
+}
+
 /** A recorded response, as captured from a real run. */
 export interface ScaffoldFixture {
   scenario: string;
   status: number;
   body: unknown;
+  /**
+   * The status the tenant returned when this was recorded, and when.
+   *
+   * Both optional, because fixtures captured before provenance existed have
+   * neither — and that absence is carried into the file rather than smoothed
+   * over. See `buildFixturesJson`.
+   */
+  sourceStatus?: number | null;
+  capturedAt?: string | null;
 }
 
 /**
@@ -624,17 +684,7 @@ export function buildScaffold(
     { path: "mock.mjs", contents: buildMockServer(iface) },
     {
       path: "fixtures.json",
-      contents: JSON.stringify(
-        {
-          interfaceId: iface.id,
-          interfaceName: iface.name,
-          note:
-            "Recorded from real runs in CoreEdge Developer Studio. Serve them with `npm run mock`.",
-          fixtures,
-        },
-        null,
-        2,
-      ),
+      contents: buildFixturesJson(iface, fixtures),
     },
   ];
 }

@@ -151,8 +151,11 @@ export function TestConsoleClient({
           interfaceId: selected.id,
           name: `${selected.name} — ${entity || selected.entitySet || "default"} (${limit})`,
           request: { entity: entity || selected.entitySet, limit, tenant: tenantKey },
-          // The outcome is what actually happened, never inferred.
+          // The outcome is what actually happened, never inferred — and the
+          // status it happened against travels with it, so a stored PASS can be
+          // checked rather than trusted.
           lastOutcome: run.status === "ACTIVATED" ? "PASS" : "FAIL",
+          ...(run.httpStatus === undefined ? {} : { httpStatus: run.httpStatus }),
         }),
       });
       const json = (await res.json()) as { data?: { name: string }; error?: { message?: string } };
@@ -211,7 +214,14 @@ export function TestConsoleClient({
       const res = await fetch(`/api/studio/interfaces/${selected.id}/capture-fixture`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ honestStatus: run.status, rows: run.rows ?? [] }),
+        // The tenant's status travels with the capture. Without it a fixture
+        // cannot say where it came from, and a genuine empty read is
+        // indistinguishable from one recorded while this console was wrong.
+        body: JSON.stringify({
+          honestStatus: run.status,
+          sourceStatus: run.httpStatus,
+          rows: run.rows ?? [],
+        }),
       });
       const json = (await res.json()) as {
         data?: { scenario: string; rows: number; replaced: boolean };

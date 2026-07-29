@@ -54,7 +54,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   // is complete.
   const fixtureRows = await prisma.mockFixture.findMany({
     where: { organizationId, interfaceId: iface.id },
-    select: { scenario: true, status: true, body: true },
+    select: { scenario: true, status: true, body: true, sourceStatus: true, capturedAt: true },
     orderBy: { scenario: "asc" },
   });
 
@@ -72,7 +72,13 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       responseSchema: iface.responseSchema,
     },
     baseUrl,
-    fixtureRows.map((f) => ({ scenario: f.scenario, status: f.status, body: f.body })),
+    fixtureRows.map((f) => ({
+      scenario: f.scenario,
+      status: f.status,
+      body: f.body,
+      sourceStatus: f.sourceStatus,
+      capturedAt: f.capturedAt.toISOString(),
+    })),
   );
 
   return studioOk({ files });

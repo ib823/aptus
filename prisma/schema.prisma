@@ -635,6 +635,9 @@ model TestCase {
   lastRunAt   DateTime?
   /// PASS | FAIL | NOT_RUN
   lastOutcome String?
+  /// The status the tenant returned on that run. NULL means the run predates
+  /// provenance, so the outcome above is unevidenced — see MockFixture.sourceStatus.
+  httpStatus  Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -811,6 +814,18 @@ model MockFixture {
   scenario String
   status   Int
   body     Json
+
+  /// The status the TENANT returned when this fixture was recorded.
+  ///
+  /// NULLABLE ON PURPOSE, AND THE NULL IS THE POINT. A fixture used to carry
+  /// only {scenario, status, body}, so a genuine empty read and one recorded
+  /// while the console was mis-reporting a 403 as success were BYTE-IDENTICAL.
+  /// Nothing could target the bad ones, which is why they were never cleaned up.
+  ///
+  /// A row with sourceStatus 200 and scenario "empty" proves its own origin. A
+  /// row with NULL predates provenance and cannot prove anything — that is not
+  /// the same as being wrong, and the product must not pretend either way.
+  sourceStatus Int?
 
   capturedAt DateTime @default(now())
 
