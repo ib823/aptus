@@ -1,11 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth/session";
 import {
   getSapProduct,
   getSapTenant,
-  isSapTddPublicAccessEnabled,
   previewSapEntitySet,
 } from "@/lib/sap-public/tdd-connector";
+import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import { resolveHubService } from "@/lib/sap-public/resolve-hub-service";
 import { ERROR_CODES } from "@/types/api";
 
@@ -18,12 +17,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  if (!isSapTddPublicAccessEnabled(product.envPrefix) && !(await getCurrentUser())) {
-    return NextResponse.json(
-      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
-      { status: 401 },
-    );
-  }
+  // A preview is a LIVE READ of a customer tenant, not a catalogue lookup, so
+  // the gate is a role and not merely a session. See refuseUnlessMayProbeTenant.
+  const refusal = await refuseUnlessMayProbeTenant(product.envPrefix);
+  if (refusal) return refusal;
 
   const tenant = getSapTenant(product.envPrefix, request.nextUrl.searchParams.get("tenant") ?? "");
   const service = await resolveHubService(product, request.nextUrl.searchParams.get("service") ?? "");
