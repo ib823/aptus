@@ -69,7 +69,10 @@ function pendingGrant(over: Record<string, unknown> = {}) {
     requestedById: "u_requester",
     externalId: "API_BP",
     solutionId: "sol_1",
-    expiresAt: null,
+    // Bounded by default: the expiry rule now covers reads, so a null here would
+    // make every test that is not about expiry fail for a reason it never meant
+    // to assert. Tests probing the unbounded path pass null explicitly.
+    expiresAt: FUTURE,
     ...over,
   };
 }

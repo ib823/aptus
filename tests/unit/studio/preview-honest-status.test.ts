@@ -109,21 +109,31 @@ describe("a genuine empty result is still a result — the doctrine, intact", ()
 });
 
 describe("our own route failing is our failure, not the tenant's", () => {
-  it("reads a transport 403 as needs-setup", () => {
-    // This is the layer the old code checked — it was not wrong, only alone.
+  /*
+   * THESE TWO ASSERTED THE TENANT'S VOCABULARY FOR OUR OWN FAILURES — inside a
+   * describe block named "our own route failing is our failure, not the
+   * tenant's". The heading was right and the assertions contradicted it, which
+   * is how "Not probeable · HTTP 400" survived: a test asserted it.
+   *
+   * What is genuinely worth pinning at this layer is that the STATUS and the
+   * MESSAGE still reach the reader. Suppressing the chip must not mean
+   * suppressing the reason.
+   */
+  it("surfaces our status and our message, without a verdict about the tenant", () => {
     const out = previewOutcome({ ok: false, status: 403 }, {});
-    expect(out.status).toBe("NEEDS_SETUP");
     expect(out.httpStatus).toBe(403);
+    expect(out.status).toBeUndefined();
+    expect(out.probed).toBe(false);
   });
 
-  it("reads any other transport failure as not-probeable, surfacing the message", () => {
+  it("keeps the server's own explanation when it gave one", () => {
     const out = previewOutcome(
       { ok: false, status: 502 },
       { error: { message: "SAP preview request failed" } },
     );
-    expect(out.status).toBe("NOT_PROBEABLE");
     expect(out.httpStatus).toBe(502);
-    expect(out.detail).toBe("SAP preview request failed");
+    expect(out.detail).toContain("SAP preview request failed");
+    expect(out.status, "a 502 from our route is our route failing").toBeUndefined();
   });
 });
 
@@ -146,5 +156,64 @@ describe("nothing but a real success may be saved as one", () => {
       const out = previewOutcome(OK, { data: { ...data, rows: [] } });
       expect(out.status, `upstream ${data.status} must not be ACTIVATED`).not.toBe("ACTIVATED");
     }
+  });
+});
+
+/**
+ * THE STATUS VOCABULARY DESCRIBES THE TENANT, AND NOTHING ELSE MAY BORROW IT.
+ *
+ * A caller-side 400 — CoreEdge's own parameter validation — rendered as
+ * "Not probeable", a term reserved for a capability that cannot be asked. The
+ * request never left the building. At 02:00 a consultant reads a verdict about
+ * SAP and escalates to the SAP team about a defect in this console.
+ *
+ * A transport 401/403 was worse: it rendered "Needs setup — reachable, but this
+ * entity is not released to the connected user", which is a detailed sentence
+ * about a communication arrangement on a system that was never contacted. It is
+ * this console refusing the caller's ROLE.
+ *
+ * The fix is not an eighth vocabulary term. It is that no probe ran, so there is
+ * no fact about the capability, and absence is rendered as absence — the outcome
+ * carries no status and the card shows no chip. Adding a term would put
+ * CoreEdge's own faults on the same scale as SAP's capability states, which is
+ * the original error rather than a fix for it.
+ */
+describe("our own failures never wear the tenant's vocabulary", () => {
+  it("reports no status at all when our route refused the caller", () => {
+    const out = previewOutcome({ ok: false, status: 403 }, {});
+    expect(out.probed, "nothing was asked of SAP").toBe(false);
+    expect(out.status, "a chip here is a verdict about a system never contacted").toBeUndefined();
+    expect(out.detail).toMatch(/nothing was asked of sap/i);
+  });
+
+  it("reports no status when our own validation rejected the request", () => {
+    const out = previewOutcome(
+      { ok: false, status: 400 },
+      { error: { message: "Valid tenant, service, and entity are required" } },
+    );
+    expect(out.probed).toBe(false);
+    expect(out.status).toBeUndefined();
+    // The reason is still shown — silence would be its own dishonesty.
+    expect(out.detail).toContain("Valid tenant, service, and entity are required");
+    expect(out.detail).toMatch(/did not reach sap/i);
+  });
+
+  it("never says NOT_PROBEABLE or NEEDS_SETUP for a transport failure", () => {
+    for (const status of [400, 401, 403, 404, 500, 502]) {
+      const out = previewOutcome({ ok: false, status }, {});
+      expect(out.status, `transport ${status} must carry no tenant verdict`).toBeUndefined();
+    }
+  });
+
+  it("still marks a genuine tenant answer as probed, chip and all", () => {
+    // The control: the vocabulary is not being suppressed everywhere, only where
+    // it would be a fabrication.
+    const refused = previewOutcome({ ok: true, status: 200 }, { data: { ok: false, status: 403 } });
+    expect(refused.probed).toBe(true);
+    expect(refused.status).toBe("NEEDS_SETUP");
+
+    const ok = previewOutcome({ ok: true, status: 200 }, { data: { ok: true, status: 200, rows: [] } });
+    expect(ok.probed).toBe(true);
+    expect(ok.status).toBe("ACTIVATED");
   });
 });

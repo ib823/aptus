@@ -118,3 +118,75 @@ describe("every fixture carries its own provenance, or its own absence", () => {
     expect(out.fixtures[0]!.sourceStatus).not.toBe(200);
   });
 });
+
+/**
+ * A NAME THAT LEAVES THE BROWSER IS A NAME IN A DOCUMENT.
+ *
+ * Solution and interface names are free text. React escapes them on screen —
+ * which is where everyone looked, and where the check passed. The scaffold
+ * writes them into README.md and openapi.json and hands those files to a
+ * developer, and a stored `QA-<script>alert(1)</script>-XSS` arrived VERBATIM:
+ *
+ *     "Contract for the CoreEdge interface … of solution
+ *      "QA-<script>alert(1)</script>-XSS"."
+ *
+ * An OpenAPI `description` is rendered as markdown or HTML by Swagger UI, Redoc
+ * and every API portal; a README is rendered by the forge and the IDE. The
+ * payload executes in the VIEWER, which is why testing the product could never
+ * find it — the sink is a file on somebody else's machine.
+ *
+ * A prior test run concluded "no current vulnerability" here. It had generated a
+ * scaffold for an interface whose names contained no payload, could not read
+ * two of the five files, and presumed the rest — while its own register recorded
+ * the payload sitting in a stored solution name. The right status was NOT
+ * TESTED. This is what testing it looks like.
+ */
+describe("generated files never carry raw markup from a name", () => {
+  const HOSTILE = "QA-<script>alert(1)</script>-XSS";
+
+  function scaffoldFor(solutionName: string, interfaceName: string) {
+    return buildScaffold(
+      { ...(IFACE as object), name: interfaceName, solutionName } as never,
+      undefined,
+      [PROVEN],
+    );
+  }
+
+  it("escapes a payload in the SOLUTION name, in every file", () => {
+    for (const f of scaffoldFor(HOSTILE, "QA-Sink-Probe")) {
+      expect(
+        f.contents,
+        `${f.path} carries a raw <script> tag from the solution name`,
+      ).not.toContain("<script>");
+    }
+  });
+
+  it("escapes a payload in the INTERFACE name, in every file", () => {
+    for (const f of scaffoldFor("QA-Solution", HOSTILE)) {
+      expect(
+        f.contents,
+        `${f.path} carries a raw <script> tag from the interface name`,
+      ).not.toContain("<script>");
+    }
+  });
+
+  it("names README and openapi explicitly — they are the two that leaked", () => {
+    const files = scaffoldFor(HOSTILE, HOSTILE);
+    for (const path of ["README.md", "openapi.json"]) {
+      const f = files.find((x) => x.path === path)!;
+      expect(f, `${path} must still be generated`).toBeDefined();
+      expect(f.contents).not.toContain("<script>");
+      // Escaped, not deleted: a name is still a name after it goes through.
+      expect(f.contents).toContain("&lt;script&gt;");
+    }
+  });
+
+  it("leaves an ordinary name completely alone", () => {
+    // The control: escaping must not be mangling every title in the product.
+    const files = scaffoldFor("QA-Delivery-Tracker", "Attachments");
+    const readme = files.find((f) => f.path === "README.md")!;
+    expect(readme.contents).toContain("QA-Delivery-Tracker");
+    expect(readme.contents).toContain("Attachments");
+    expect(readme.contents).not.toContain("&amp;");
+  });
+});
