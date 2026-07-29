@@ -38,20 +38,36 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { canAccessStudio } from "@/lib/studio/rbac";
 import { ERROR_CODES } from "@/types/api";
 
-import { isSapTddPublicAccessEnabled } from "./tdd-connector";
-
 /**
  * Returns null when the caller may probe, or the refusal to return when not.
  *
- * The public-access branch is unchanged and deliberate: it is off in production
- * unless explicitly enabled, and exists so the public TDD catalogue can be
- * demonstrated without an account.
+ * PUBLIC ACCESS DOES NOT APPLY HERE, AND THE FIRST VERSION OF THIS GUARD SAID
+ * IT DID. It opened with `if (isSapTddPublicAccessEnabled(prefix)) return null`
+ * under a comment claiming that flag "is off in production unless explicitly
+ * enabled". It is explicitly enabled on this deployment — so the early return
+ * fired on every request and the entire role check below was unreachable. The
+ * fix shipped, passed CI, and changed nothing.
+ *
+ * It was caught by an unauthenticated curl: no session at all, HTTP 200, a real
+ * 325ms round trip to the tenant. So the exposure was never "every
+ * authenticated role" — it was everyone, and the guard's own header was the
+ * reason nobody looked at the line beneath it.
+ *
+ * The rule now has no exception, because the flag answers a different question.
+ * `PUBLIC_ACCESS` means "this catalogue may be browsed without an account".
+ * Opening a connection to a configured SAP tenant and issuing an OData request
+ * is not browsing: it consumes that tenant's quota, appears in its logs, and is
+ * made in CoreEdge's name. A read nobody is accountable for is the one case
+ * this guard exists to prevent, so an anonymous caller is the LAST caller who
+ * should reach it.
+ *
+ * If a public demo genuinely needs anonymous live reads, that is a real
+ * requirement and it needs its own narrow affordance — a designated demo tenant
+ * with its own quota — not the removal of this check for every tenant at once.
  */
 export async function refuseUnlessMayProbeTenant(
-  envPrefix: string,
+  _envPrefix: string,
 ): Promise<NextResponse | null> {
-  if (isSapTddPublicAccessEnabled(envPrefix)) return null;
-
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json(
