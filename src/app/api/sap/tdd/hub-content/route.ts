@@ -308,6 +308,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     communicationScenarios: r.communicationScenarios,
     scopeItemCodes: r.scopeItemCodes,
     itemCount: r.itemCount,
+    // TRUE = repo-authored placeholder; NULL = provenance unrecorded (row
+    // predates the column). The pill in the catalogue renders only on TRUE.
+    illustrative: r.illustrative,
     hubUrl: r.hubUrl,
     status: resolveHubStatus({ contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId }, outcomes),
     availabilityNote: hubAvailabilityQualifier(r.contentType as HubContentType),

@@ -354,6 +354,16 @@ model SapApiReference {
   /// product-scoped listing. NULL when not yet classified.
   apiType String?
 
+  /// SAP's product tag string, VERBATIM — e.g. "SAP S/4HANA Cloud" (human
+  /// export dialect) or "SAPS4HANA,SAPS4HANACloudPrivateEdition" (Hub OData
+  /// dialect). The importer already held this in memory to derive the edition
+  /// booleans and then dropped it, which left the 321 Ariba/SuccessFactors
+  /// rows — correctly no edition, they are not S/4 editions — with NO stored
+  /// product identity at all: unreachable by any query. Verbatim, not an
+  /// enum, so no classification loss; both dialects contain the product name
+  /// as a substring. NULL = imported before this column existed.
+  productTags String?
+
   /// Linkage to scope items — denormalized String[] (not FK). SAP's API tags
   /// reference scope codes (e.g. "J60") which may exist in multiple catalog
   /// versions or none. Matching at classification time uses (scopeCode,
@@ -438,6 +448,14 @@ model SapHubContent {
   /// For grouped rows (CDS views per LoB package, the BAdI group): how many
   /// underlying items the row represents. Null for a single concrete item.
   itemCount Int?
+
+  /// TRUE = a repo-authored placeholder, not SAP-published content. The seed
+  /// file flags all 36 of its rows `illustrative: true`; the import dropped
+  /// the flag, so the console showed them exactly like harvested catalogue
+  /// rows — the same defect fixed for MockFixture.sourceStatus. NULL means
+  /// the row was imported before this column existed and its provenance was
+  /// not recorded; a re-import (idempotent) fills it with the truth.
+  illustrative Boolean?
 
   hubUrl          String // canonical link back to api.sap.com
   rawMetadataJson Json?

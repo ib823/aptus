@@ -28,6 +28,13 @@ export interface NormalizedHubContent {
   communicationScenarios: string[];
   scopeItemCodes: string[];
   itemCount: number | null;
+  /**
+   * TRUE = the source file declares this row a repo-authored placeholder
+   * (the seed file marks all 36 of its rows). Absent in a real SAP export →
+   * false. This flag was DROPPED here for months, which made illustrative
+   * seed rows indistinguishable from harvested catalogue content.
+   */
+  illustrative: boolean;
   hubUrl: string;
   rawJson: Record<string, unknown>;
 }
@@ -141,6 +148,7 @@ export function normalizeHubRowForType(
     communicationScenarios: asArray(pickField(row, "communicationScenarios", "scenarios")),
     scopeItemCodes: asArray(pickField(row, "scopeItemCodes", "scopeItems", "scopeCodes", "businessScenarios")).map((s) => s.toUpperCase()),
     itemCount: asIntOrNull(pickField(row, "itemCount", "count", "total")),
+    illustrative: asBool(pickField(row, "illustrative"), false),
     hubUrl,
     rawJson: row,
   };
