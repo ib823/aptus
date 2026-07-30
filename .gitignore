@@ -102,6 +102,18 @@ test-results/
 /sap-references/*
 # …but ship the illustrative demo seed for the Capability Catalogue
 !/sap-references/hub-content-seed.json
+# The harvested Hub catalogue IS committed, deliberately.
+#
+# `/sap-references/*` exists to keep large downloaded exports out. This file is
+# not downloaded — it is produced by scripts/harvest-sap-api-hub.ts against a
+# public endpoint, and it carries its own provenance block (source, method,
+# harvestedAt, counts, and completeness: "floor").
+#
+# Committing it is the fix for a real gap: nothing recorded WHICH Hub snapshot
+# produced the catalogue rows or WHEN, so "is the catalogue current?" could only
+# be answered from memory. A gitignored input makes an import unreproducible and
+# unreviewable; 2.2MB of JSON is a small price for both.
+!/sap-references/api-hub-catalog.json
 # …and the per-type drop targets + README (committed, bundled into the admin
 # Rebuild endpoint). Real exports are dropped INTO these files, not new paths.
 !/sap-references/hub-content/
