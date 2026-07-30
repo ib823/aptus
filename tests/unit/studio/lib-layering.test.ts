@@ -35,6 +35,21 @@ import { stripSource } from "../../helpers/source";
 const ROOT = resolve(__dirname, "../../..");
 const SRC = join(ROOT, "src");
 const LIB = join(SRC, "lib");
+/**
+ * ROUTE HANDLERS TOO — added after this guard missed the second occurrence.
+ *
+ * The original scope was `src/lib` alone, which is where the first instance
+ * lived. The second was a route handler importing STUDIO_TENANT_COOKIE from a
+ * `"use client"` module: it set a cookie whose NAME was the stringified client
+ * reference, ~200 characters of error text, on a live deployment. It worked,
+ * because every reader imported the same broken reference and agreed on the same
+ * garbage — symmetric corruption reads as correctness.
+ *
+ * A route handler is server code with no client half at all, so the rule is the
+ * same one and only the directory was missing. Scoping a guard to the place the
+ * first instance happened to be is how the second one gets through.
+ */
+const API = join(SRC, "app", "api");
 
 function walk(dir: string): string[] {
   const out: string[] = [];
@@ -98,13 +113,13 @@ function importSpecifiers(src: string): string[] {
   return out;
 }
 
-describe("src/lib holds no dependency on client-only modules", () => {
-  const libFiles = walk(LIB);
+describe("server code holds no dependency on client-only modules", () => {
+  const libFiles = [...walk(LIB), ...walk(API)];
 
   it("finds library files to check, so a broken walk cannot pass vacuously", () => {
     // The scan's own failure mode: an empty file list asserts nothing and looks
     // identical to a clean result.
-    expect(libFiles.length).toBeGreaterThan(50);
+    expect(libFiles.length).toBeGreaterThan(80);
   });
 
   it("imports no module carrying the 'use client' directive", () => {

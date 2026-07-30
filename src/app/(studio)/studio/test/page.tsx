@@ -11,7 +11,7 @@ import { cookies } from "next/headers";
 
 import { ScopeNote } from "@/components/studio/ScopeNote";
 import { TestConsoleClient, type TestableInterface } from "@/components/studio/TestConsoleClient";
-import { STUDIO_TENANT_COOKIE } from "@/components/studio/StudioTopBar";
+import { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenants";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { canMutateStudio } from "@/lib/studio/rbac";
