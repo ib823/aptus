@@ -1,9 +1,10 @@
 /**
  * POST /api/presales/change-requests — post-signoff change request.
  *
- * Captures the description + priority, writes a ChangeRequest tied to the
- * underlying Assessment, audits the action. Routing to a consultant
- * review queue is a follow-up; v1 is capture + audit only.
+ * Captures the description + priority AS AN AUDIT EVENT. There is no
+ * ChangeRequest row — v1 is capture + audit only, and the audit event IS the
+ * record. Routing to a consultant review queue (and a real ChangeRequest
+ * entity, if one is ever needed) is a follow-up.
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
