@@ -29,6 +29,16 @@ export interface ProductMark {
   /** The edition qualifier SAP uses, e.g. "Public Cloud". Null when there is none. */
   edition: string | null;
   /**
+   * Whether a system of this product addresses an SAP client.
+   *
+   * MIRRORS `addressesClient` on SAP_ODATA_PRODUCTS, which is the authority. It
+   * is repeated here only because that module is server-side — it reads env and
+   * performs fetches — and a client component must not pull it into the browser
+   * bundle. A test reconciles the two, so this mirror cannot drift silently the
+   * way a hand-kept copy would.
+   */
+  addressesClient: boolean;
+  /**
    * Path under /public to the transparent symbol, or null where none exists.
    *
    * Null is meaningful: a product with no mark renders its name and nothing
@@ -41,25 +51,65 @@ export interface ProductMark {
 /**
  * Keyed by the product key used throughout the connector and the API.
  *
- * `s4hana` is the live one. `cloud-erp-private` and `s4hana-onprem` have marks
- * but no product entry yet — see docs/coreedge-sap-target-expansion-spec.md.
- * They are listed so the artwork has a home and so the gap between "we have a
- * logo" and "we support it" is visible in one place instead of implied.
+ * ALL SIX ARE SELECTABLE. Private cloud, on-premise and ECC were marks without
+ * a product while the connector could not address a client and the catalogue
+ * held no rows for their editions. Both changed — sap-url.ts carries the
+ * client, and the Hub harvest carries 627 private and 673 on-premise APIs — so
+ * they are products now.
+ *
+ * Selectable is not the same as reachable. These systems are usually not
+ * internet-facing, and whether this deployment can reach a SAP Cloud Connector
+ * is unresolved. A connection can be configured; the connection test is what
+ * says whether it answers.
  */
 export const PRODUCT_MARKS: Record<string, ProductMark> = {
   s4hana: {
     name: "SAP Cloud ERP",
     edition: "Public Cloud",
+    addressesClient: false,
     glyph: "/icons/sap/glyph-cloud-erp.png",
   },
   successfactors: {
     name: "SAP SuccessFactors",
     edition: null,
+    addressesClient: false,
     glyph: "/icons/sap/glyph-successfactors.png",
+  },
+  "cloud-erp-private": {
+    name: "SAP Cloud ERP Private",
+    edition: "RISE / Private Cloud",
+    addressesClient: true,
+    glyph: "/icons/sap/glyph-cloud-erp-private.png",
+  },
+  "s4hana-onprem": {
+    name: "SAP S/4HANA",
+    edition: "On-premise",
+    addressesClient: true,
+    glyph: "/icons/sap/glyph-s4hana-onprem.png",
+  },
+  /*
+   * ECC AND s4hana-onprem SHARE A PICTURE. Both supplied marks are a three-unit
+   * server rack, indistinguishable at 56px and more so at 20px. The glyph tells
+   * a reader nothing for these two; the name beside it does the work, which is
+   * why ProductLabel always renders one.
+   *
+   * ECC also ships NO service list. Its OData depends on NetWeaver Gateway
+   * being installed and the services activated, so there is no `API_*`
+   * convention to assume — see SAP_ODATA_PRODUCTS. It is selectable because a
+   * customer WITH Gateway is a real target; the catalogue reporting nothing is
+   * the honest answer until discovery from the tenant's own Gateway catalogue
+   * exists (spec §3.1).
+   */
+  ecc: {
+    name: "SAP ERP (ECC)",
+    edition: "Legacy on-premise",
+    addressesClient: true,
+    glyph: "/icons/sap/glyph-ecc.png",
   },
   ariba: {
     name: "SAP Ariba",
     edition: null,
+    addressesClient: false,
     glyph: "/icons/sap/glyph-ariba.png",
   },
 };
@@ -67,39 +117,17 @@ export const PRODUCT_MARKS: Record<string, ProductMark> = {
 /**
  * Marks for products that are NOT yet supported.
  *
- * Deliberately separate from PRODUCT_MARKS. Merging them would let a picker
- * offer a product the connector cannot serve — the same class of defect as a
- * rail entry pointing at a 404, which this codebase has already paid for once.
+ * EMPTY NOW, AND KEPT ON PURPOSE. Private cloud, on-premise and ECC lived here
+ * while the connector could not address a client and the catalogue held zero
+ * rows for their editions. Both are now true — sap-url.ts carries the client,
+ * and the 2026-07-30 Hub harvest carries 627 private and 673 on-premise APIs —
+ * so they moved to PRODUCT_MARKS and became selectable.
+ *
+ * The map stays because the RULE it enforces still holds: a product with
+ * artwork but no connector must not reach the picker, which is the same class
+ * of defect as a rail entry pointing at a 404. A test keeps the two disjoint.
  */
-export const UNSUPPORTED_PRODUCT_MARKS: Record<string, ProductMark> = {
-  "cloud-erp-private": {
-    name: "SAP Cloud ERP Private",
-    edition: "RISE / Private Cloud",
-    glyph: "/icons/sap/glyph-cloud-erp-private.png",
-  },
-  "s4hana-onprem": {
-    name: "SAP S/4HANA",
-    edition: "On-premise",
-    glyph: "/icons/sap/glyph-s4hana-onprem.png",
-  },
-  /*
-   * ECC and s4hana-onprem SHARE A PICTURE. Both supplied marks are a three-unit
-   * server rack, indistinguishable at 56px and more so at 20px. The glyph tells
-   * a reader nothing here; the name beside it does the work, which is why
-   * ProductLabel always renders one.
-   *
-   * ECC is also further from support than the other two: without NetWeaver
-   * Gateway it exposes no OData at all, so there is no $metadata, no entity set
-   * and nothing the honest-status vocabulary can probe. See
-   * docs/coreedge-sap-target-expansion-spec.md §2.2 — it needs a qualifying
-   * question answered before it is a target rather than an idea.
-   */
-  ecc: {
-    name: "SAP ERP (ECC)",
-    edition: "Legacy on-premise",
-    glyph: "/icons/sap/glyph-ecc.png",
-  },
-};
+export const UNSUPPORTED_PRODUCT_MARKS: Record<string, ProductMark> = {};
 
 /**
  * The name to show for a product key.
