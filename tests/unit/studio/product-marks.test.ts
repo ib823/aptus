@@ -101,6 +101,59 @@ describe("every referenced image exists", () => {
   });
 });
 
+describe("every mark is the same square, and every tile the same box", () => {
+  it("ships glyphs that are all one square size", async () => {
+    /*
+     * Different products have different symbols — a cloud is wide, a server
+     * rack is tall — so the FILES must be a common square with the symbol
+     * centred inside it. Otherwise a 56px render means a different optical
+     * weight per product and the row of tiles looks ragged.
+     */
+    const sharp = (await import("sharp")).default;
+    for (const m of Object.values({ ...PRODUCT_MARKS, ...UNSUPPORTED_PRODUCT_MARKS })) {
+      if (!m.glyph) continue;
+      const meta = await sharp(resolve(ROOT, "public", m.glyph.replace(/^\//, ""))).metadata();
+      expect(meta.width, `${m.glyph} width`).toBe(128);
+      expect(meta.height, `${m.glyph} height`).toBe(128);
+      expect(meta.hasAlpha, `${m.glyph} must be transparent`).toBe(true);
+    }
+  });
+
+  it("gives every product tile one fixed size", () => {
+    /*
+     * The tiles sized themselves to their contents, so "SAP SuccessFactors"
+     * made a wider box than "SAP Ariba", and the edition line under Cloud ERP
+     * made a taller one — three tiles, three shapes, conveying nothing.
+     *
+     * `all: unset` resets box-sizing to content-box, so without the explicit
+     * border-box the padding and border are ADDED to the fixed numbers and the
+     * tiles diverge again the moment either changes.
+     */
+    const client = readFileSync(
+      resolve(ROOT, "src/components/studio/ConnectionsClient.tsx"),
+      "utf8",
+    );
+    const tile = client.slice(client.indexOf("aria-pressed={selected}"));
+    const box = tile.slice(0, tile.indexOf("</button>"));
+
+    expect(box, "tile width is not fixed").toMatch(/width:\s*\d+/);
+    expect(box, "tile height is not fixed").toMatch(/height:\s*\d+/);
+    expect(box, "content-box would re-diverge the tiles").toContain('boxSizing: "border-box"');
+    expect(box, "a content-sized tile is back").not.toContain("minWidth: 96");
+  });
+
+  it("reserves the edition line so tiles without one do not shift up", () => {
+    const client = readFileSync(
+      resolve(ROOT, "src/components/studio/ConnectionsClient.tsx"),
+      "utf8",
+    );
+    // Rendered unconditionally — `?? ""` rather than a conditional that removes
+    // the element on the two products that have no edition.
+    expect(client).toContain('{mark?.edition ?? ""}');
+    expect(client).not.toContain("{mark?.edition ? (");
+  });
+});
+
 describe("unsupported products stay out of the picker", () => {
   it("does not offer a product the connector cannot serve", () => {
     /*
