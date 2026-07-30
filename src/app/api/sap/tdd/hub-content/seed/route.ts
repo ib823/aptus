@@ -106,6 +106,8 @@ async function rebuildApiSlice(): Promise<ApiSliceStats> {
       communicationScenarios: a.communicationScenarios,
       scopeItemCodes: a.scopeItemCodes,
       itemCount: null,
+      // Projected from real SapApiReference rows — SAP-published, not seed.
+      illustrative: false,
       hubUrl: a.apiHubUrl,
       rawMetadataJson: freshRaw as Prisma.InputJsonValue,
     };
@@ -140,6 +142,8 @@ async function rebuildApiSlice(): Promise<ApiSliceStats> {
         apiType: "ODATAV2",
         communicationScenarios: svc.scenario ? [svc.scenario] : [],
         scopeItemCodes: [],
+        // Curated = services this repo has really called, not placeholders.
+        illustrative: false,
         hubUrl: `https://api.sap.com/api/${apiId}`,
         rawMetadataJson: { source: "curated", key: svc.key } as Prisma.InputJsonValue,
       },
@@ -185,6 +189,7 @@ async function importBundledType(type: HubContentType, importedAt: string): Prom
       communicationScenarios: norm.communicationScenarios,
       scopeItemCodes: norm.scopeItemCodes,
       itemCount: norm.itemCount,
+      illustrative: norm.illustrative,
       hubUrl: norm.hubUrl,
       // Provenance; release intentionally NOT pinned (counts are indicative).
       rawMetadataJson: { source: `bundled:${type}`, release: null, importedAt, raw: norm.rawJson } as Prisma.InputJsonValue,

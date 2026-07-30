@@ -28,6 +28,29 @@ describe("normalizeHubRow", () => {
     expect(n.itemCount).toBeNull();
   });
 
+  describe("illustrative — the seed flag that used to be dropped", () => {
+    /*
+     * All 36 rows of hub-content-seed.json carry `illustrative: true`; the
+     * normalizer dropped the key, so repo-authored placeholders were stored
+     * exactly like SAP-published content. Same defect class fixed for
+     * MockFixture.sourceStatus.
+     */
+    it("carries true through from the seed row", () => {
+      const n = normalizeHubRow({ contentType: "API", externalId: "X", illustrative: true })!;
+      expect(n.illustrative).toBe(true);
+    });
+
+    it("a real SAP export (no key) is NOT illustrative", () => {
+      const n = normalizeHubRow({ contentType: "API", externalId: "X" })!;
+      expect(n.illustrative).toBe(false);
+    });
+
+    it("accepts the string form a CSV-ish export would produce", () => {
+      const n = normalizeHubRow({ contentType: "API", externalId: "X", illustrative: "true" })!;
+      expect(n.illustrative).toBe(true);
+    });
+  });
+
   it("maps a grouped CDS package row with itemCount", () => {
     const n = normalizeHubRow({ contentType: "CDS_VIEW", externalId: "CDS_SALES", title: "Sales CDS", itemCount: 1255, apiType: "CDS" })!;
     expect(n.contentType).toBe("CDS_VIEW");
@@ -94,5 +117,28 @@ describe("parseHubJson", () => {
   });
   it("throws on an unrecognized shape", () => {
     expect(() => parseHubJson(JSON.stringify({ nope: 1 }))).toThrow();
+  });
+});
+
+describe("the committed seed file declares itself illustrative", () => {
+  /*
+   * End-to-end over the REAL file: every seed row must both carry the flag
+   * and survive normalization with it intact. If someone adds a seed row
+   * without the flag, or the normalizer drops it again, this fails — the
+   * unit strings above cannot catch a regression that only exists in the
+   * committed data.
+   */
+  it("all 36 rows flag illustrative: true, and normalization keeps it", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const file = resolve(__dirname, "../../../sap-references/hub-content-seed.json");
+    const rows = parseHubJson(readFileSync(file, "utf8"));
+
+    expect(rows.length).toBeGreaterThanOrEqual(36);
+    for (const row of rows) {
+      expect(row.illustrative, `seed row ${String(row.externalId)} must be flagged`).toBe(true);
+      const n = normalizeHubRow(row);
+      expect(n?.illustrative, `normalization must keep the flag for ${String(row.externalId)}`).toBe(true);
+    }
   });
 });

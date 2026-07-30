@@ -32,6 +32,8 @@ interface HubItem {
   communicationScenarios: string[];
   scopeItemCodes: string[];
   itemCount: number | null;
+  /** TRUE = repo-authored placeholder, not SAP-published. Null = unrecorded. */
+  illustrative?: boolean | null;
   hubUrl: string;
   status: HubStatus;
   availabilityNote?: "subscribe" | null;
@@ -605,6 +607,15 @@ export function SapCapabilityCatalogue({
                               {item.itemCount != null && (
                                 <span className="text-xs tabular-nums" style={{ color: "var(--ink-muted)" }}>
                                   {item.itemCount.toLocaleString()} items
+                                </span>
+                              )}
+                              {item.illustrative === true && (
+                                <span
+                                  className="rounded-[var(--radius-input)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                                  style={{ background: "var(--surface-ink-tint)", color: "var(--ink-muted)" }}
+                                  title="Repo-authored placeholder — not SAP-published catalogue content"
+                                >
+                                  Illustrative
                                 </span>
                               )}
                             </div>

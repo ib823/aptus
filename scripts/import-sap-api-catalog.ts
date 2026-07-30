@@ -76,6 +76,13 @@ export interface NormalizedApi {
   /** Protocol/type declared by the file (ODATAV2/ODATAV4/REST/SOAP/EVENT), or null. */
   apiType: string | null;
   productTags: string[]; // raw product / category strings for edition mapping
+  /**
+   * The PRODUCT tag string alone, verbatim, for persistence — category
+   * excluded (it has its own column). This is what makes Ariba and
+   * SuccessFactors rows addressable: they correctly carry no edition flags,
+   * so without a stored product identity no query could reach them.
+   */
+  productTagsRaw: string | null;
   scopeItemCodes: string[];
   communicationScenarios: string[];
   apiHubUrl: string;
@@ -347,6 +354,9 @@ export function normalizeRow(row: Record<string, unknown>): NormalizedApi | null
   const product2 = asString(pickField(row, "productLine", "ProductLine", "Product Line"));
   const product3 = asString(pickField(row, "product", "Product"));
   const productTags = [product1, product2, product3, category].filter(Boolean);
+  // Persisted verbatim; category stays OUT (it is not a product and has its
+  // own column — folding it in here would make "Master Data" look like one).
+  const productTagsRaw = [product1, product2, product3].filter(Boolean).join("; ") || null;
 
   const scopeItemsRaw = pickField(row, "scopeItems", "ScopeItemIds", "Business Scenarios", "businessScenarios", "linkedScopeItems", "scopeItemCodes");
   const scopeItemCodes = asArray(scopeItemsRaw).map((s) => s.toUpperCase()).filter(Boolean);
@@ -365,6 +375,7 @@ export function normalizeRow(row: Record<string, unknown>): NormalizedApi | null
     apiType,
     category: category || null,
     productTags,
+    productTagsRaw,
     scopeItemCodes,
     communicationScenarios,
     apiHubUrl,
@@ -432,6 +443,7 @@ async function main(): Promise<void> {
       appliesToPublic: editions.appliesToPublic,
       appliesToPrivate: editions.appliesToPrivate,
       appliesToOnPrem: editions.appliesToOnPrem,
+      productTags: norm.productTagsRaw,
       // Only write apiType when the file declares one. Omitting it on re-import
       // preserves any value scripts/ingest/refresh-api-types.ts backfilled.
       ...(norm.apiType ? { apiType: norm.apiType } : {}),

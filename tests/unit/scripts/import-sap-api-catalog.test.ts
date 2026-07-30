@@ -55,6 +55,38 @@ describe("import-sap-api-catalog field mapping", () => {
     expect(normalizeRow({ apiName: "Orphan", status: "Active" })).toBeNull();
   });
 
+  describe("productTagsRaw — the product identity that used to be dropped", () => {
+    /*
+     * THE DEFECT THIS PINS. The importer derived edition booleans from the
+     * product tags and threw the tags away. Ariba/SuccessFactors rows
+     * correctly have NO edition (they are not S/4 editions), so with the
+     * tags gone they had no stored product identity at all — 321 rows no
+     * query could reach. The raw string is now persisted verbatim.
+     */
+    it("keeps the human-dialect tag verbatim", () => {
+      expect(normalizeRow(FIXTURE[0]!)!.productTagsRaw).toBe("SAP S/4HANA Cloud Public Edition");
+    });
+
+    it("keeps the Hub's compact comma dialect verbatim — no reformatting", () => {
+      const norm = normalizeRow({ apiId: "API_X", product: "SAPS4HANA,SAPS4HANACloudPrivateEdition" })!;
+      expect(norm.productTagsRaw).toBe("SAPS4HANA,SAPS4HANACloudPrivateEdition");
+    });
+
+    it("an Ariba row carries its product even though it has no edition", () => {
+      const norm = normalizeRow({ apiId: "ARIBA_X", product: "SAPAriba" })!;
+      expect(norm.productTagsRaw).toBe("SAPAriba");
+      const editions = mapEditionFromProductTags(norm.productTags);
+      expect(editions).toEqual({ appliesToPublic: false, appliesToPrivate: false, appliesToOnPrem: false });
+    });
+
+    it("excludes category — 'Master Data' is not a product", () => {
+      const norm = normalizeRow({ apiId: "API_X", category: "Master Data" })!;
+      expect(norm.productTagsRaw).toBeNull();
+      // …while the edition mapper still sees it, unchanged.
+      expect(norm.productTags).toEqual(["Master Data"]);
+    });
+  });
+
   it("falls back apiName to apiId when the name is absent", () => {
     const norm = normalizeRow({ apiId: "API_X" })!;
     expect(norm.apiName).toBe("API_X");
