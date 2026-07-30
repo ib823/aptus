@@ -158,7 +158,17 @@ describe("Control Tower · the register says whose estate is empty", () => {
 
     await screen.findByLabelText(/falls back to a shared tenant/);
     expect(document.body.textContent).toContain("governed at the deployment level");
-    expect(document.body.textContent).toContain("s4hana · s4_tdd");
+    /*
+     * The NAME, not the key. This asserted "s4hana · s4_tdd" and so pinned the
+     * raw product key into the Control Tower register — one of six surfaces
+     * that printed an internal identifier where a product name belongs.
+     *
+     * The tenant key stays: it IS an identifier, it is what someone would type,
+     * and it is still rendered in monospace beside the name.
+     */
+    expect(document.body.textContent).toContain("SAP Cloud ERP");
+    expect(document.body.textContent).toContain("s4_tdd");
+    expect(document.body.textContent).not.toContain("s4hana ·");
   });
 
   it("says nothing is registered AND nothing falls back, when that is true", async () => {

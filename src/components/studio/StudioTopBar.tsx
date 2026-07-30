@@ -39,6 +39,7 @@ import Link from "next/link";
 
 import { manualSlugForPath } from "@/lib/help/manual";
 import type { StudioSection } from "@/lib/studio/sections";
+import { ProductLabel } from "@/components/sap/ProductLabel";
 
 export interface StudioTenantOption {
   /** SapConnection.key, or the env tenant key — probes are recorded under it. */
@@ -249,7 +250,10 @@ export function StudioTopBar({
                       {t.label}
                     </span>
                     <span style={{ fontSize: 11.5, color: "var(--ink-muted)" }}>
-                      {t.product}
+                      {/* Read "s4hana" under every tenant. The switcher is the
+                          most-seen surface in the product and it was showing an
+                          internal key. */}
+                      <ProductLabel product={t.product} size={14} mutedName />
                       {t.source === "environment" ? " · shared environment tenant" : ""}
                     </span>
                   </span>
