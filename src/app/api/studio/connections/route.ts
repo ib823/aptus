@@ -59,11 +59,19 @@ const upsertSchema = z
     key: z.string().min(1).max(60),
     label: z.string().min(2).max(120),
     baseUrl: httpsUrl,
-    authType: z.enum(["basic", "bearer", "oauth-client-credentials"]),
+    authType: z.enum(["basic", "bearer", "oauth-client-credentials", "oauth-saml-bearer"]),
     environment: z.string().max(40).optional(),
     username: z.string().max(200).optional(),
     password: z.string().max(500).optional(),
     bearerToken: z.string().max(2000).optional(),
+    /** SuccessFactors company identifier — required by its token endpoint. */
+    companyId: z.string().max(120).optional(),
+    /**
+     * A signed SAML assertion. Long: these are base64 XML documents, routinely
+     * several kilobytes, so the usual 500-character ceiling would reject every
+     * real one.
+     */
+    samlAssertion: z.string().max(20000).optional(),
     clientId: z.string().max(200).optional(),
     clientSecret: z.string().max(500).optional(),
     oauthTokenUrl: httpsUrl.optional(),
@@ -84,6 +92,14 @@ const upsertSchema = z
       need("password", "password is required for basic auth");
     }
     if (v.authType === "bearer") need("bearerToken", "bearerToken is required for bearer auth");
+    if (v.authType === "oauth-saml-bearer") {
+      // SuccessFactors. `clientId` is the SF API key; the assertion is the
+      // credential, so there is no clientSecret in this flow.
+      need("clientId", "clientId (the SuccessFactors API key) is required for SAML bearer auth");
+      need("companyId", "companyId is required for SAML bearer auth");
+      need("samlAssertion", "samlAssertion is required for SAML bearer auth");
+      need("oauthTokenUrl", "oauthTokenUrl is required for SAML bearer auth");
+    }
     if (v.authType === "oauth-client-credentials") {
       need("clientId", "clientId is required for OAuth");
       need("clientSecret", "clientSecret is required for OAuth");
@@ -241,6 +257,8 @@ export async function POST(request: NextRequest) {
         ...(input.bearerToken ? { bearerToken: input.bearerToken } : {}),
         ...(input.clientId ? { clientId: input.clientId } : {}),
         ...(input.clientSecret ? { clientSecret: input.clientSecret } : {}),
+      ...(input.companyId ? { companyId: input.companyId } : {}),
+      ...(input.samlAssertion ? { samlAssertion: input.samlAssertion } : {}),
         ...(input.writeSecret ? { writeSecret: input.writeSecret } : {}),
       },
       oauthTokenUrl: input.oauthTokenUrl ?? null,

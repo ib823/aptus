@@ -29,6 +29,22 @@ export interface SapConnectionSecrets {
   /** oauth client-credentials */
   clientId?: string;
   clientSecret?: string;
+  /**
+   * OAuth 2.0 SAML bearer assertion — SuccessFactors.
+   *
+   * `clientId` above doubles as the SF API key. `companyId` is the SF company
+   * identifier, which the token endpoint requires alongside the assertion.
+   *
+   * THE ASSERTION IS TAKEN, NOT GENERATED. Producing one means signing XML with
+   * an X.509 key (XMLDSig: canonicalisation, digest, signature), and a subtly
+   * wrong signature fails only at runtime against a real tenant. There is no
+   * SuccessFactors system available to verify an implementation against, so
+   * generating one here would be shipping unverifiable cryptography into an auth
+   * path. SAP publishes an assertion generator and every trusted IdP emits them;
+   * this accepts the result and seals it like any other credential.
+   */
+  samlAssertion?: string;
+  companyId?: string;
   /** guarded-write secret (mirrors {PREFIX}_WRITE_SECRET) */
   writeSecret?: string;
 }

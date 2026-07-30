@@ -26,7 +26,20 @@ import {
   type SapConnectionSecrets,
 } from "@/lib/sap-public/connection-crypto";
 
-export type SapAuthType = "basic" | "bearer" | "oauth-client-credentials";
+export type SapAuthType =
+  | "basic"
+  | "bearer"
+  | "oauth-client-credentials"
+  /**
+   * OAuth 2.0 SAML bearer assertion — the SuccessFactors flow.
+   *
+   * NOT a variant of client-credentials. SAP is REMOVING HTTP Basic for
+   * SuccessFactors APIs on 20 November 2026, and this is one of the three
+   * replacements (the others being X.509 mutual TLS and OIDC via IAS). Without
+   * it, every SuccessFactors connection this product can express stops working
+   * on that date.
+   */
+  | "oauth-saml-bearer";
 
 /** A fully-resolved connection with decrypted secrets — server-side only. */
 export interface ResolvedSapConnection {
@@ -256,8 +269,95 @@ export async function buildAuthHeaderFromConnection(conn: ResolvedSapConnection)
     if (!s.bearerToken) throw new Error(`Connection ${conn.key} is bearer auth but missing bearerToken`);
     return `Bearer ${s.bearerToken}`;
   }
+  if (conn.authType === "oauth-saml-bearer") {
+    return `Bearer ${await fetchSamlBearerToken(conn)}`;
+  }
   // oauth-client-credentials
   return `Bearer ${await fetchOAuthTokenFromConnection(conn)}`;
+}
+
+/**
+ * Exchange a signed SAML assertion for an access token — SuccessFactors.
+ *
+ * SHARES THE TOKEN CACHE with client-credentials, keyed by connection id, for
+ * the same reason: without it every northbound call makes two round trips and
+ * hammers a rate-limited token endpoint in proportion to application traffic.
+ *
+ * UNVERIFIED AGAINST A LIVE TENANT. The request shape is from SAP's published
+ * documentation, not from observation — no SuccessFactors system was available.
+ * The parts that can be checked without one are: the cache, the timeout, the
+ * expiry margin, and that a misconfiguration fails with a message naming the
+ * missing field rather than a generic 400 from SAP. The end-to-end exchange
+ * needs a real tenant before anyone relies on it, and the connection test is the
+ * cheapest way to find out.
+ */
+async function fetchSamlBearerToken(
+  conn: ResolvedSapConnection,
+  fetchImpl: typeof fetch = fetch,
+  now: number = Date.now(),
+): Promise<string> {
+  const cached = oauthTokenCache.get(conn.id);
+  if (cached && cached.expiresAt > now) return cached.token;
+
+  const { clientId, samlAssertion, companyId } = conn.secrets;
+  const url = conn.oauthTokenUrl;
+
+  // Named individually. "oauth is misconfigured" on a five-field flow is a
+  // guessing game, and this one is being set up against a deadline.
+  const missing = [
+    !url && "oauthTokenUrl",
+    !clientId && "clientId (the SuccessFactors API key)",
+    !companyId && "companyId",
+    !samlAssertion && "samlAssertion",
+  ].filter(Boolean);
+  if (missing.length > 0) {
+    throw new Error(
+      `Connection ${conn.key} is SAML bearer auth but missing ${missing.join(", ")}.`,
+    );
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TOKEN_REQUEST_TIMEOUT_MS);
+
+  try {
+    const res = await fetchImpl(url!, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      // No Authorization header: the assertion IS the credential. Sending Basic
+      // as well would be a second, weaker credential on the same request.
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:saml2-bearer",
+        client_id: clientId!,
+        company_id: companyId!,
+        assertion: samlAssertion!,
+      }),
+      signal: controller.signal,
+    });
+    const json = (await res.json()) as OAuthTokenResponse;
+    if (!res.ok || typeof json.access_token !== "string") {
+      // The assertion is not echoed. It is a signed credential and a failed
+      // exchange is exactly when someone copies the error into a ticket.
+      throw new Error(
+        `SAML bearer token request failed for ${conn.key}: HTTP ${res.status}. ` +
+          "An expired or unregistered assertion is the usual cause.",
+      );
+    }
+
+    const ttlMs =
+      typeof json.expires_in === "number" && json.expires_in > 0
+        ? json.expires_in * 1000
+        : DEFAULT_TOKEN_TTL_MS;
+    oauthTokenCache.set(conn.id, {
+      token: json.access_token,
+      expiresAt: now + Math.max(ttlMs - TOKEN_EXPIRY_MARGIN_MS, 0),
+    });
+    return json.access_token;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 interface OAuthTokenResponse {
