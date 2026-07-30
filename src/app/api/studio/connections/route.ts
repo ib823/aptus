@@ -47,12 +47,15 @@ const PRODUCT_KEYS = SAP_ODATA_PRODUCTS.map((p) => p.key) as [string, ...string[
 /**
  * Products whose systems address an SAP client.
  *
- * EMPTY TODAY, AND THAT IS THE HONEST STATE. Every product this API currently
- * serves is a cloud product — one tenant per host, no client. The set exists so
- * that on-premise and RISE add a key here rather than removing a guard, and so
- * the rule is written down instead of implied by the absence of a check.
+ * DERIVED, NOT HAND-KEPT. This was a literal set, empty while every product was
+ * a cloud product. Adding private cloud, on-premise and ECC would have meant
+ * editing it here AND the product list — one fact in two places, which is the
+ * shape behind the two-registry defect and the five routes that knew one of
+ * them. `addressesClient` on the product is now the single source.
  */
-const PRODUCTS_WITH_CLIENT = new Set<string>([]);
+const PRODUCTS_WITH_CLIENT = new Set<string>(
+  SAP_ODATA_PRODUCTS.filter((p) => p.addressesClient).map((p) => p.key),
+);
 
 /**
  * An https base URL. Rejecting http is not pedantry: these carry a client's SAP

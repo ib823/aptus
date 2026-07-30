@@ -51,6 +51,24 @@ export interface SapOdataProduct {
   description: string;
   services: SapServiceDefinition[];
   operations: SapOperationConfig[];
+  /**
+   * Which S/4HANA edition this product is, for the catalogue filter in
+   * dynamic-catalog.ts. Null for products that are not S/4 editions —
+   * SuccessFactors and Ariba have no public/private/on-prem axis at all.
+   *
+   * The 2026-07-30 Hub harvest carries 561 public, 627 private and 673 on-prem
+   * APIs; before it, every caller could only ask for PUBLIC because that was
+   * the only edition with rows.
+   */
+  edition: "PUBLIC" | "PRIVATE" | "ON_PREM" | null;
+  /**
+   * Whether a system of this product addresses an SAP client.
+   *
+   * Cloud products are one tenant per host and have none. On-premise, RISE and
+   * ECC address a client INSIDE one system — X5M/100 and X5M/080 are different
+   * data containers at the same baseUrl. See sap-url.ts.
+   */
+  addressesClient: boolean;
 }
 
 export interface SapEntitySet {
@@ -305,6 +323,8 @@ export const SAP_ODATA_PRODUCTS: SapOdataProduct[] = [
     description: "S/4HANA Cloud Public Edition — procurement & finance OData APIs.",
     services: S4HANA_SERVICES,
     operations: S4HANA_OPERATIONS,
+    edition: "PUBLIC",
+    addressesClient: false,
   },
   {
     key: "successfactors",
@@ -313,6 +333,70 @@ export const SAP_ODATA_PRODUCTS: SapOdataProduct[] = [
     description: "SuccessFactors — Employee Central, Recruiting & Onboarding OData APIs.",
     services: SUCCESSFACTORS_SERVICES,
     operations: SUCCESSFACTORS_OPERATIONS,
+    edition: null,
+    addressesClient: false,
+  },
+  /*
+   * PRIVATE CLOUD AND ON-PREMISE SHARE S/4HANA'S SERVICE PATHS.
+   *
+   * All three editions expose the same `/sap/opu/odata/sap/API_*` convention,
+   * so the probe list is genuinely the same list — not a copy that will drift.
+   * What differs is the EDITION filter on the catalogue, and the client in the
+   * URL, both of which are fields above rather than a second array.
+   *
+   * NEITHER IS PROBEABLE YET, and that is a customer-network fact rather than a
+   * product one: these systems are typically not internet-reachable, and
+   * whether this deployment can reach a SAP Cloud Connector is unresolved (see
+   * docs/coreedge-sap-target-expansion-spec.md §3.4). A connection can be
+   * configured; whether it answers is what the connection test is for, and an
+   * unreachable host reports TIMEOUT or ERROR rather than pretending.
+   */
+  {
+    key: "cloud-erp-private",
+    label: "SAP Cloud ERP Private",
+    envPrefix: "S4_PRIVATE_TDD",
+    description:
+      "S/4HANA Cloud Private Edition (RISE) — same OData APIs as public, addressed per client.",
+    services: S4HANA_SERVICES,
+    operations: S4HANA_OPERATIONS,
+    edition: "PRIVATE",
+    addressesClient: true,
+  },
+  {
+    key: "s4hana-onprem",
+    label: "SAP S/4HANA (on-premise)",
+    envPrefix: "S4_ONPREM_TDD",
+    description:
+      "S/4HANA on-premise — customer-hosted, addressed per client, reachable only where the network allows.",
+    services: S4HANA_SERVICES,
+    operations: S4HANA_OPERATIONS,
+    edition: "ON_PREM",
+    addressesClient: true,
+  },
+  /*
+   * ECC SHIPS NO SERVICE LIST, DELIBERATELY.
+   *
+   * Its OData depends entirely on NetWeaver Gateway being installed and the
+   * services activated in SICF. There is no `API_*` convention to assume:
+   * a customer with Gateway exposes whatever they activated, including Z*
+   * services SAP has never published, and a customer without it exposes no
+   * OData at all.
+   *
+   * An empty list means the catalogue reports nothing rather than a list of
+   * services that do not exist — "Not found" over a confident wrong answer.
+   * Discovery from the tenant's own Gateway catalogue is the honest source and
+   * is not built yet (spec §3.1).
+   */
+  {
+    key: "ecc",
+    label: "SAP ERP (ECC)",
+    envPrefix: "ECC_TDD",
+    description:
+      "SAP ERP (ECC) — requires NetWeaver Gateway; services are whatever the customer activated, not a published list.",
+    services: [],
+    operations: [],
+    edition: "ON_PREM",
+    addressesClient: true,
   },
 ];
 
@@ -332,6 +416,8 @@ const ARIBA_ODATA_PLACEHOLDER: SapOdataProduct = {
   description: "SAP Ariba (REST) — not exposed via the OData routes.",
   services: [],
   operations: [],
+  edition: null,
+  addressesClient: false,
 };
 
 export function getSapProduct(key: string | null | undefined): SapOdataProduct | null {

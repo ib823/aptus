@@ -17,6 +17,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { buildSapUrl, isValidSapClient } from "@/lib/sap-public/sap-url";
+import { SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { stripSource } from "../../helpers/source";
 
 const ROOT = resolve(__dirname, "../../..");
@@ -212,10 +213,33 @@ describe("the API refuses a client on a product that has none", () => {
     expect(ROUTE).toMatch(/PRODUCTS_WITH_CLIENT\.has\(v\.product\)/);
   });
 
-  it("is empty today, because no supported product addresses a client", () => {
-    // On-premise and RISE ADD a key here. They must not arrive by someone
-    // deleting the guard.
-    expect(ROUTE).toMatch(/PRODUCTS_WITH_CLIENT\s*=\s*new Set<string>\(\[\]\)/);
+  it("derives the set from the products, rather than keeping a second list", () => {
+    /*
+     * This asserted the set was EMPTY, with a note that on-premise and RISE must
+     * arrive by adding a key rather than by deleting the guard. They have now
+     * arrived — and neither happened. The set is derived from `addressesClient`
+     * on SAP_ODATA_PRODUCTS, so there is no second list to add a key to and
+     * none to forget.
+     */
+    expect(ROUTE).toMatch(/SAP_ODATA_PRODUCTS\s*\.?\s*\n?\s*\.filter\(\(p\) => p\.addressesClient\)/);
+    expect(ROUTE, "a hand-kept literal is back").not.toMatch(
+      /PRODUCTS_WITH_CLIENT\s*=\s*new Set<string>\(\[["']/,
+    );
+  });
+
+  it("still refuses a client on a product that has none", () => {
+    // The rule did not relax when the set stopped being empty: Cloud ERP,
+    // SuccessFactors and Ariba are one tenant per host and must still refuse.
+    const cloudOnly = SAP_ODATA_PRODUCTS.filter((p) => !p.addressesClient);
+    expect(cloudOnly.map((p) => p.key)).toContain("s4hana");
+    expect(cloudOnly.map((p) => p.key)).toContain("successfactors");
+  });
+
+  it("marks on-premise, RISE and ECC as addressing a client", () => {
+    const withClient = SAP_ODATA_PRODUCTS.filter((p) => p.addressesClient).map((p) => p.key);
+    expect(withClient).toEqual(
+      expect.arrayContaining(["cloud-erp-private", "s4hana-onprem", "ecc"]),
+    );
   });
 
   it("validates the shape too, not only the product", () => {

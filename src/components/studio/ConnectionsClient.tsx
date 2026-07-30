@@ -287,6 +287,7 @@ export function ConnectionsClient({
  */
 function ConnectionForm() {
   const [product, setProduct] = useState("s4hana");
+  const [client, setClient] = useState("");
   const [key, setKey] = useState("");
   const [label, setLabel] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -335,6 +336,15 @@ function ConnectionForm() {
           baseUrl: baseUrl.trim(),
           authType,
           ...(environment.trim() ? { environment: environment.trim() } : {}),
+          /*
+           * Sent only where the product HAS a client. The API rejects one on a
+           * cloud product, so a stale value left behind by switching the picker
+           * from on-premise back to Cloud ERP would otherwise fail the whole
+           * save with a message about a field the form is no longer showing.
+           */
+          ...(PRODUCT_MARKS[product]?.addressesClient && client.trim()
+            ? { client: client.trim() }
+            : {}),
           ...(authType === "basic" ? { username: username.trim(), password } : {}),
           ...(authType === "bearer" ? { bearerToken } : {}),
           ...(authType === "oauth-saml-bearer"
@@ -392,7 +402,7 @@ function ConnectionForm() {
       setError(err instanceof Error ? err.message : "The connection could not be saved.");
       setBusy(false);
     }
-  }, [product, key, label, baseUrl, environment, authType, username, password, bearerToken, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion]);
+  }, [product, client, key, label, baseUrl, environment, authType, username, password, bearerToken, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
@@ -485,6 +495,29 @@ function ConnectionForm() {
             })}
           </div>
         </Label>
+        {PRODUCT_MARKS[product]?.addressesClient ? (
+          <Label
+            text="SAP client"
+            hint="Three digits, e.g. 100. Part of every URL — it decides which data container."
+          >
+            {/*
+              ONLY FOR PRODUCTS THAT HAVE ONE. Cloud products are a single
+              tenant per host, and the API refuses a client on them outright —
+              offering the field there would invite a value that cannot mean
+              anything. On-premise, RISE and ECC address a client INSIDE one
+              system: the same baseUrl with 100 and 080 is two different
+              companies' worth of data.
+            */}
+            <input
+              value={client}
+              onChange={(e) => setClient(e.target.value)}
+              placeholder="100"
+              inputMode="numeric"
+              maxLength={3}
+              style={input}
+            />
+          </Label>
+        ) : null}
         <Label text="Tenant key" hint="Normalized — probes are stored under it.">
           <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="x5m-100" style={input} />
         </Label>
@@ -608,7 +641,17 @@ function Label({ text, hint, children }: { text: string; hint?: string; children
 }
 
 /** Mirrors SAP_ODATA_PRODUCTS on the server, which the route validates against. */
-const PRODUCT_OPTIONS = ["s4hana", "successfactors", "ariba"] as const;
+/*
+ * DERIVED, NOT LISTED. This was `["s4hana", "successfactors", "ariba"]` — a
+ * THIRD place products were enumerated, after SAP_ODATA_PRODUCTS and the API's
+ * zod enum. Adding private cloud, on-premise and ECC to two of the three would
+ * have left the picker silently short, which is the same shape as the five
+ * routes that knew one of two tenant registries.
+ *
+ * PRODUCT_MARKS is the client-safe mirror of SAP_ODATA_PRODUCTS; a test
+ * reconciles them, so a product added to the connector cannot go unofferable.
+ */
+const PRODUCT_OPTIONS = Object.keys(PRODUCT_MARKS);
 
 const input: React.CSSProperties = {
   height: 34,

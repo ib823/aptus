@@ -154,6 +154,43 @@ describe("every mark is the same square, and every tile the same box", () => {
   });
 });
 
+describe("the client-safe mirror agrees with the connector", () => {
+  /*
+   * PRODUCT_MARKS is imported by a browser bundle, so it cannot import
+   * SAP_ODATA_PRODUCTS — that module reads env and performs fetches. The
+   * duplication is deliberate and therefore has to be policed: a mirror nobody
+   * checks is just a second list that drifts, which is the shape behind the
+   * two-registry defect.
+   */
+  it.each(SAP_ODATA_PRODUCTS.map((p) => [p.key, p.addressesClient] as const))(
+    "%s addressesClient=%s matches the mark",
+    (key, addressesClient) => {
+      expect(PRODUCT_MARKS[key]?.addressesClient, `${key} disagrees`).toBe(addressesClient);
+    },
+  );
+
+  it("offers every connector product in the picker", () => {
+    // PRODUCT_OPTIONS is derived from PRODUCT_MARKS, so a product present in
+    // the connector and absent from the marks would be unofferable.
+    for (const p of SAP_ODATA_PRODUCTS) {
+      expect(Object.keys(PRODUCT_MARKS), `${p.key} cannot be selected`).toContain(p.key);
+    }
+  });
+
+  it("shows the client field exactly where the API accepts one", () => {
+    const client = readFileSync(
+      resolve(ROOT, "src/components/studio/ConnectionsClient.tsx"),
+      "utf8",
+    );
+    // Gated on the same flag the API validates against — not on a product list
+    // written a third time in the component.
+    expect(client).toContain("PRODUCT_MARKS[product]?.addressesClient");
+    expect(client, "the picker enumerates products by hand again").not.toMatch(
+      /PRODUCT_OPTIONS = \[\s*"/,
+    );
+  });
+});
+
 describe("unsupported products stay out of the picker", () => {
   it("does not offer a product the connector cannot serve", () => {
     /*
