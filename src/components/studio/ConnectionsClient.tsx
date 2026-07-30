@@ -419,12 +419,31 @@ function ConnectionForm() {
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
+                    // Centred, so a name that wraps to two lines — "SAP Cloud
+                    // ERP Private" will, once it is supported — grows into the
+                    // box rather than pushing the tile out of line with the
+                    // others.
+                    justifyContent: "center",
                     gap: 4,
-                    padding: 8,
+                    padding: 10,
                     borderRadius: 10,
                     border: `1px solid ${selected ? "var(--brand-navy)" : "var(--border-default)"}`,
                     background: selected ? "var(--surface-ink-tint)" : "var(--surface-paper)",
-                    minWidth: 96,
+                    /*
+                       ONE SIZE FOR EVERY TILE. These sized themselves to their
+                       contents, so "SAP SuccessFactors" made a wider box than
+                       "SAP Ariba" and the edition line under Cloud ERP made a
+                       taller one. Three tiles, three shapes, for no reason a
+                       reader could act on.
+
+                       `all: unset` resets box-sizing to content-box, so the
+                       padding and border would otherwise be ADDED to these
+                       numbers and the tiles would differ again the moment a
+                       border width changed. Hence the explicit border-box.
+                    */
+                    boxSizing: "border-box",
+                    width: 148,
+                    height: 132,
                   }}
                 >
                   {mark?.glyph ? (
@@ -434,15 +453,33 @@ function ConnectionForm() {
                       alt=""
                       width={56}
                       height={56}
-                      style={{ display: "block" }}
+                      style={{ display: "block", flexShrink: 0 }}
                     />
                   ) : null}
-                  <span style={{ fontSize: 12, fontWeight: selected ? 650 : 500 }}>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: selected ? 650 : 500,
+                      textAlign: "center",
+                      lineHeight: 1.25,
+                    }}
+                  >
                     {mark?.name ?? p}
                   </span>
-                  {mark?.edition ? (
-                    <span style={{ fontSize: 10.5, color: "var(--ink-muted)" }}>{mark.edition}</span>
-                  ) : null}
+                  {/* The edition line is ALWAYS rendered, empty where there is
+                      none, so the glyph and name sit at the same height on
+                      every tile instead of shifting up on two of the three. */}
+                  <span
+                    style={{
+                      fontSize: 10.5,
+                      color: "var(--ink-muted)",
+                      textAlign: "center",
+                      lineHeight: 1.2,
+                      minHeight: 13,
+                    }}
+                  >
+                    {mark?.edition ?? ""}
+                  </span>
                 </button>
               );
             })}
