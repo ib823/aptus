@@ -19,6 +19,7 @@ import {
   buildAuthHeaderFromConnection,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
+import { buildSapUrl } from "@/lib/sap-public/sap-url";
 
 export type NorthboundReadStatus =
   | "OK"
@@ -109,9 +110,12 @@ export async function readEntitySet(
 
   try {
     const authorization = await buildAuthHeaderFromConnection(connection);
-    const url =
-      `${connection.baseUrl}${input.servicePath}/${encodeURIComponent(input.entitySet)}` +
-      `?$top=${limit}&$format=json`;
+    const url = buildSapUrl({
+      baseUrl: connection.baseUrl,
+      path: `${input.servicePath}/${encodeURIComponent(input.entitySet)}`,
+      client: connection.client,
+      query: { $top: limit, $format: "json" },
+    });
 
     const res = await fetchImpl(url, {
       method: "GET",

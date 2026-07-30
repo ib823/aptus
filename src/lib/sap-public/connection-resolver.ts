@@ -65,6 +65,14 @@ export interface ResolvedSapConnection {
    * where it permits a read (marked unverified) and refuses a write outright.
    */
   environment: string | null;
+  /**
+   * The SAP client — "100", "080" — or NULL where the product has none.
+   *
+   * Null is the truth for every cloud product: they are one tenant per host.
+   * On-premise and RISE address a client inside one system, so two connections
+   * can share a baseUrl and differ only here.
+   */
+  client: string | null;
 }
 
 /** Client-safe projection — NO secrets, NO baseHost. Safe to serialize to a UI. */
@@ -118,6 +126,7 @@ export async function resolveSapConnections(
     apiPath: r.apiPath,
     timeoutMs: r.timeoutMs,
     environment: r.environment,
+    client: r.client,
   }));
 }
 
@@ -475,6 +484,14 @@ export interface UpsertSapConnectionInput {
    * that guards production writes.
    */
   environment?: string | null;
+  /**
+   * The SAP client — "100", "080" — or null where the product has none.
+   *
+   * Validated at the API boundary (only landscapes that address a client may
+   * supply one), so by the time it reaches here it is either three digits or
+   * null.
+   */
+  client?: string | null;
 }
 
 /**
@@ -518,6 +535,7 @@ export async function upsertSapConnection(input: UpsertSapConnectionInput): Prom
       timeoutMs: input.timeoutMs ?? null,
       isActive: input.isActive ?? true,
       environment: normalizeEnvironment(input.environment),
+      client: input.client ?? null,
     },
     update: {
       label: input.label,
@@ -530,6 +548,7 @@ export async function upsertSapConnection(input: UpsertSapConnectionInput): Prom
       timeoutMs: input.timeoutMs ?? null,
       isActive: input.isActive ?? true,
       environment: normalizeEnvironment(input.environment),
+      client: input.client ?? null,
     },
   });
   return redactConnection(row);
