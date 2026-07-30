@@ -117,6 +117,7 @@ async function main(): Promise<void> {
         communicationScenarios: norm.communicationScenarios,
         scopeItemCodes: norm.scopeItemCodes,
         itemCount: norm.itemCount,
+        illustrative: norm.illustrative,
         hubUrl: norm.hubUrl,
         // Provenance: which file, when. release is intentionally NOT pinned — the
         // published counts are indicative volume, not a release-accurate snapshot.
