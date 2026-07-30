@@ -36,9 +36,11 @@ const mocks = vi.hoisted(() => {
     userFindUnique,
     transaction,
     prismaMock,
+    // Plain vi.fn() on purpose — an arrow implementation would type the mock's
+    // args as [], and strict tsc then rejects mock.calls[0][0] (TS2493).
     dispatchEmail: vi.fn(),
-    renderOtpEmail: vi.fn(() => ({ to: 'x', subject: 's', html: 'h', text: 't' })),
-    renderPresalesLockoutAlertEmail: vi.fn(() => ({ to: 'x', subject: 's', html: 'h', text: 't' })),
+    renderOtpEmail: vi.fn(),
+    renderPresalesLockoutAlertEmail: vi.fn(),
   };
 });
 
@@ -61,6 +63,9 @@ function otpHashFor(code: string): string {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.dispatchEmail.mockResolvedValue({ delivered: true, messageId: 'm1' });
+  const msg = { to: 'x', subject: 's', html: 'h', text: 't' };
+  mocks.renderOtpEmail.mockReturnValue(msg);
+  mocks.renderPresalesLockoutAlertEmail.mockReturnValue(msg);
   // guards.ts runs its lockout transaction as an array of prisma promises.
   mocks.transaction.mockImplementation(async (ops: Promise<unknown>[]) => Promise.all(ops));
   mocks.grantUpdate.mockResolvedValue({ email: 'guest@example.com' });
