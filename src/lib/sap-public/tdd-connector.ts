@@ -1,3 +1,4 @@
+import { buildSapUrl } from "@/lib/sap-public/sap-url";
 type SapAuthType = "basic" | "bearer" | "oauth-client-credentials";
 
 export interface SapTenant {
@@ -10,6 +11,11 @@ export interface SapTenant {
    * unknown, and unknown is rendered as no chip rather than a guess.
    */
   environment?: string;
+  /**
+   * The SAP client, for landscapes that have one. Absent for cloud products,
+   * which are one tenant per host — see src/lib/sap-public/sap-url.ts.
+   */
+  client?: string;
 }
 
 export interface SapServiceDefinition {
@@ -556,7 +562,9 @@ async function buildAuthHeader(prefix: string): Promise<string> {
 }
 
 function serviceUrl(tenant: SapTenant, service: SapServiceDefinition): string {
-  return `${tenant.baseUrl}${service.path}`;
+  // One builder, not a concatenation — see sap-url.ts for why the client cannot
+  // be folded into baseUrl.
+  return buildSapUrl({ baseUrl: tenant.baseUrl, path: service.path, client: tenant.client });
 }
 
 function extractCookies(headers: Headers): string {
@@ -898,9 +906,21 @@ export async function deleteSapEntityByLocation(
   location: string,
 ): Promise<{ ok: boolean; status: number }> {
   const { token, cookie } = await fetchCsrfSession(prefix, tenant, service);
+  /*
+   * The fifth place a SAP URL is built, and the least obvious: `location` comes
+   * from SAP's own Location header on the preceding create. An absolute one is
+   * used verbatim — SAP has already addressed the client it wrote to, and
+   * second-guessing it would risk deleting from a different container than the
+   * one just written. A relative one goes through the builder, which will not
+   * add a client the header already carries.
+   */
   const url = location.startsWith("http")
     ? location
-    : `${tenant.baseUrl}${location.startsWith("/") ? "" : "/"}${location}`;
+    : buildSapUrl({
+        baseUrl: tenant.baseUrl,
+        path: location.startsWith("/") ? location : `/${location}`,
+        client: tenant.client,
+      });
   const headers: HeadersInit = {
     Authorization: await buildAuthHeader(prefix),
     Accept: "application/json",

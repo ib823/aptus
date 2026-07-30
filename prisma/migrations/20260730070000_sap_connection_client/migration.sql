@@ -1,0 +1,14 @@
+-- The SAP client, for landscapes that address one.
+--
+-- NULLABLE ON PURPOSE, AND THE NULL IS THE TRUTH. S/4HANA Cloud Public,
+-- SuccessFactors and Ariba are one tenant per host and have no client at all,
+-- so every existing row is already correct with NULL — no backfill, no default,
+-- nothing to rewrite. On-premise and RISE address a client INSIDE one system:
+-- X5M/100 and X5M/080 are different data containers at the same baseUrl and are
+-- distinguishable only by this value.
+--
+-- No unique constraint here. The rule "two connections must not be
+-- indistinguishable" is real, but it is enforced today at write time in
+-- resolveSapConnectionForEnvironment, and adding the constraint before checking
+-- live rows against it would turn a detected ambiguity into a failed migration.
+ALTER TABLE "SapConnection" ADD COLUMN "client" TEXT;

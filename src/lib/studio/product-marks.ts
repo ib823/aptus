@@ -82,6 +82,23 @@ export const UNSUPPORTED_PRODUCT_MARKS: Record<string, ProductMark> = {
     edition: "On-premise",
     glyph: "/icons/sap/glyph-s4hana-onprem.png",
   },
+  /*
+   * ECC and s4hana-onprem SHARE A PICTURE. Both supplied marks are a three-unit
+   * server rack, indistinguishable at 56px and more so at 20px. The glyph tells
+   * a reader nothing here; the name beside it does the work, which is why
+   * ProductLabel always renders one.
+   *
+   * ECC is also further from support than the other two: without NetWeaver
+   * Gateway it exposes no OData at all, so there is no $metadata, no entity set
+   * and nothing the honest-status vocabulary can probe. See
+   * docs/coreedge-sap-target-expansion-spec.md §2.2 — it needs a qualifying
+   * question answered before it is a target rather than an idea.
+   */
+  ecc: {
+    name: "SAP ERP (ECC)",
+    edition: "Legacy on-premise",
+    glyph: "/icons/sap/glyph-ecc.png",
+  },
 };
 
 /**

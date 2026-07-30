@@ -34,6 +34,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { upsertSapConnection } from "@/lib/sap-public/connection-resolver";
+import { isValidSapClient } from "@/lib/sap-public/sap-url";
 import { sanitizeTenantKey, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
@@ -42,6 +43,16 @@ import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/
 export const dynamic = "force-dynamic";
 
 const PRODUCT_KEYS = SAP_ODATA_PRODUCTS.map((p) => p.key) as [string, ...string[]];
+
+/**
+ * Products whose systems address an SAP client.
+ *
+ * EMPTY TODAY, AND THAT IS THE HONEST STATE. Every product this API currently
+ * serves is a cloud product — one tenant per host, no client. The set exists so
+ * that on-premise and RISE add a key here rather than removing a guard, and so
+ * the rule is written down instead of implied by the absence of a check.
+ */
+const PRODUCTS_WITH_CLIENT = new Set<string>([]);
 
 /**
  * An https base URL. Rejecting http is not pedantry: these carry a client's SAP
@@ -61,6 +72,11 @@ const upsertSchema = z
     baseUrl: httpsUrl,
     authType: z.enum(["basic", "bearer", "oauth-client-credentials", "oauth-saml-bearer"]),
     environment: z.string().max(40).optional(),
+    /**
+     * The SAP client — "100", "080". Only meaningful for landscapes that
+     * address one; see the refinement below.
+     */
+    client: z.string().max(3).optional(),
     username: z.string().max(200).optional(),
     password: z.string().max(500).optional(),
     bearerToken: z.string().max(2000).optional(),
@@ -105,6 +121,34 @@ const upsertSchema = z
       need("clientSecret", "clientSecret is required for OAuth");
       need("oauthTokenUrl", "oauthTokenUrl is required for OAuth");
     }
+    /*
+     * A CLIENT ON A PRODUCT THAT HAS NONE IS A LIE THE URL WOULD TELL.
+     *
+     * S/4HANA Cloud Public, SuccessFactors and Ariba are one tenant per host.
+     * Accepting `client: "100"` on one of them would append `?sap-client=100`
+     * to every call to a system that has no such concept — at best ignored, at
+     * worst a 400 on a connection that worked a moment ago.
+     *
+     * Refused at the boundary rather than dropped silently, because a value the
+     * caller supplied and the system discarded is the kind of difference nobody
+     * finds until they are debugging something else.
+     */
+    if (v.client !== undefined) {
+      if (!PRODUCTS_WITH_CLIENT.has(v.product)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["client"],
+          message: `${v.product} is one tenant per host and has no SAP client`,
+        });
+      } else if (!isValidSapClient(v.client)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["client"],
+          message: "client must be three digits, e.g. 100",
+        });
+      }
+    }
+
     // writeEnabled without a write secret is a switch wired to nothing.
     if (v.writeEnabled && !v.writeSecret) {
       ctx.addIssue({
@@ -263,6 +307,7 @@ export async function POST(request: NextRequest) {
       },
       oauthTokenUrl: input.oauthTokenUrl ?? null,
       environment: input.environment ?? null,
+      client: input.client ?? null,
       writeEnabled: input.writeEnabled ?? false,
       apiPath: input.apiPath ?? null,
       timeoutMs: input.timeoutMs ?? null,
