@@ -7,9 +7,7 @@
  * the cross-assessment client will land in a follow-up.
  */
 
-export default function PortfolioActivityPage({
-  searchParams,
-}: { searchParams: Promise<{ assessmentId?: string }> }) {
+export default function PortfolioActivityPage() {
   return (
     <div className="max-w-5xl mx-auto p-6">
       <div className="mb-4">
@@ -24,9 +22,6 @@ export default function PortfolioActivityPage({
         Phase 8 frontend follow-up. The route + nav placement land in
         this PR; the rich aggregation client is additive.
       </div>
-      <pre className="text-xs mt-4 text-muted-foreground">
-        searchParams: {JSON.stringify(searchParams)}
-      </pre>
     </div>
   );
 }
