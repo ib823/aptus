@@ -51,6 +51,20 @@ prisma/dev.db
 *.zip
 *.gz
 *.png
+# Served assets are source, not generated output.
+#
+# `*.png` above exists to keep screenshots and generated reports out of the
+# repository. It also swallows anything under public/, which is the one place a
+# PNG is a shipped artefact rather than a by-product — the app requests these by
+# URL at runtime.
+#
+# This is the same shape as the `*.html` incident recorded below: the file was on
+# disk, `git add` reported success, the build passed, and the asset was absent
+# from the repository. Here it would have shipped five broken images to
+# production with nothing failing locally.
+#
+# `**` because an asset filed one folder deeper must not fall back out of scope.
+!public/**/*.png
 *.html
 # Design contracts are source-of-truth, not generated reports.
 #
