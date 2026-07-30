@@ -31,6 +31,7 @@ import {
   type OpsTone,
 } from "@/components/ops/OpsChrome";
 import { count, sinceLabel, useOpsFeed } from "@/components/ops/useOpsFeed";
+import { ProductLabel } from "@/components/sap/ProductLabel";
 import {
   DelegatedAction,
   ExpiryRunway,
@@ -324,14 +325,13 @@ function ConnectionsBody({ data }: { data: ConnectionsPayload }) {
               {data.deploymentFallback.tenants.map((t) => (
                 <span
                   key={`${t.product}:${t.key}`}
-                  style={{
-                    fontFamily: "var(--font-mono, monospace)",
-                    fontSize: 11.5,
-                    color: "var(--ink-muted)",
-                  }}
+                  style={{ fontSize: 11.5, color: "var(--ink-muted)", display: "inline-flex", alignItems: "center", gap: 6 }}
                 >
-                  {t.product} · {t.key}
-                  {t.environment ? ` · ${t.environment}` : ""}
+                  <ProductLabel product={t.product} size={14} />
+                  <span style={{ fontFamily: "var(--font-mono, monospace)" }}>
+                    · {t.key}
+                    {t.environment ? ` · ${t.environment}` : ""}
+                  </span>
                 </span>
               ))}
             </div>
@@ -357,15 +357,14 @@ function ConnectionsBody({ data }: { data: ConnectionsPayload }) {
             <tr key={c.id} style={c.isActive ? undefined : { opacity: 0.62 }}>
               <td style={opsCellStyle}>
                 {c.label}
-                <div
-                  style={{
-                    fontFamily: "var(--font-mono, monospace)",
-                    fontSize: 11.5,
-                    color: "var(--ink-muted)",
-                  }}
-                >
-                  {c.product} · {c.key} · {c.authType}
-                  {c.isActive ? "" : " · deactivated"}
+                {/* Name in ordinary type; key and authType stay mono because
+                    those two ARE the configured values, and the name is not. */}
+                <div style={{ fontSize: 11.5, color: "var(--ink-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                  <ProductLabel product={c.product} size={14} />
+                  <span style={{ fontFamily: "var(--font-mono, monospace)" }}>
+                    · {c.key} · {c.authType}
+                    {c.isActive ? "" : " · deactivated"}
+                  </span>
                 </div>
               </td>
               <td style={opsCellStyle}>

@@ -18,7 +18,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -54,13 +54,13 @@ describe("every supported product has a name", () => {
 describe("every referenced image exists", () => {
   const all = { ...PRODUCT_MARKS, ...UNSUPPORTED_PRODUCT_MARKS };
 
-  it.each(Object.entries(all).map(([k, m]) => [k, m.logo] as const))(
+  it.each(Object.entries(all).map(([k, m]) => [k, m.glyph] as const))(
     "%s → %s",
-    (_key, logo) => {
-      if (logo === null) return; // null is a legitimate "no artwork"
+    (_key, glyph) => {
+      if (glyph === null) return; // null is a legitimate "no artwork"
       expect(
-        existsSync(resolve(ROOT, "public", logo.replace(/^\//, ""))),
-        `${logo} is referenced but not in public/`,
+        existsSync(resolve(ROOT, "public", glyph.replace(/^\//, ""))),
+        `${glyph} is referenced but not in public/`,
       ).toBe(true);
     },
   );
@@ -84,8 +84,8 @@ describe("every referenced image exists", () => {
       .filter(Boolean);
 
     for (const m of Object.values(all)) {
-      if (!m.logo) continue;
-      const repoPath = `public${m.logo}`;
+      if (!m.glyph) continue;
+      const repoPath = `public${m.glyph}`;
       expect(tracked, `${repoPath} is on disk but not in the repository`).toContain(repoPath);
     }
   });
@@ -94,9 +94,9 @@ describe("every referenced image exists", () => {
     // The originals are ~1.4MB each. Five of those on one screen is 7MB of
     // decorative payload, which is a performance defect dressed as branding.
     for (const m of Object.values(all)) {
-      if (!m.logo) continue;
-      const bytes = readFileSync(resolve(ROOT, "public", m.logo.replace(/^\//, ""))).length;
-      expect(bytes, `${m.logo} is ${(bytes / 1024).toFixed(0)}KB`).toBeLessThan(60 * 1024);
+      if (!m.glyph) continue;
+      const bytes = readFileSync(resolve(ROOT, "public", m.glyph.replace(/^\//, ""))).length;
+      expect(bytes, `${m.glyph} is ${(bytes / 1024).toFixed(0)}KB`).toBeLessThan(60 * 1024);
     }
   });
 });
@@ -117,16 +117,70 @@ describe("unsupported products stay out of the picker", () => {
   });
 });
 
-describe("the table shows a name, not a key", () => {
-  it("renders productName rather than the raw product field", () => {
-    const client = readFileSync(
-      resolve(ROOT, "src/components/studio/ConnectionsClient.tsx"),
-      "utf8",
-    );
-    expect(client).toContain("productName(c.product)");
+describe("no surface renders the raw product key", () => {
+  /*
+   * THIS IS THE GUARD THAT WAS MISSING. The first pass fixed the Studio
+   * connections table and left FIVE other surfaces printing `s4hana` — the
+   * tenant switcher, two Ops tables and two Control Tower lines. The tenant
+   * switcher is the most-seen control in the product.
+   *
+   * That is the same shape as the two-registry defect and the five routes that
+   * knew only one of them: one concept, rendered from N inline expressions, and
+   * nothing failing when N-1 of them are wrong. So this sweeps the tree rather
+   * than pinning the one file that happened to be fixed first.
+   */
+  const SWEEP = ["src/components", "src/app"];
+
+  function tsxFiles(dir: string): string[] {
+    const out: string[] = [];
+    for (const e of readdirSync(resolve(ROOT, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${e.name}`;
+      if (e.isDirectory()) out.push(...tsxFiles(rel));
+      else if (e.name.endsWith(".tsx")) out.push(rel);
+    }
+    return out;
+  }
+
+  const files = SWEEP.flatMap(tsxFiles);
+
+  it("finds files to check, so a broken walk cannot pass vacuously", () => {
+    expect(files.length).toBeGreaterThan(50);
+  });
+
+  it("interpolates no bare `.product` into JSX text", () => {
+    /*
+     * Matches {c.product} / {t.product} / {product} sitting as rendered TEXT.
+     * Not `product={...}` (a prop), not `${t.product}:${t.key}` (a React key),
+     * and not `c.product ===` (a comparison) — those are legitimate.
+     */
+    const violations: string[] = [];
+
+    for (const f of files) {
+      const src = readFileSync(resolve(ROOT, f), "utf8")
+        .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")   // JSX comments
+        .replace(/\/\*[\s\S]*?\*\//g, "")         // block comments
+        .replace(/\/\/[^\n]*/g, "");               // line comments
+
+      for (const m of src.matchAll(/>\s*\{\s*(?:[A-Za-z_$][\w$]*\.)?product\s*\}/g)) {
+        violations.push(`${f}: ${m[0].trim()}`);
+      }
+      // `{x.product} · {x.key}` — rendered text that does not start right after '>'
+      for (const m of src.matchAll(/\{\s*[A-Za-z_$][\w$]*\.product\s*\}\s*(?:·|<\/)/g)) {
+        violations.push(`${f}: ${m[0].trim()}`);
+      }
+    }
+
     expect(
-      client,
-      "the raw key is back in the table cell",
-    ).not.toMatch(/<Td>\{c\.product\}<\/Td>/);
+      violations,
+      `render the product NAME via <ProductLabel>, not the key:\n${violations.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("routes every product render through the one component", () => {
+    // Six surfaces showed the product. Six inline expressions is what drifted.
+    const users = files.filter((f) =>
+      readFileSync(resolve(ROOT, f), "utf8").includes("<ProductLabel"),
+    );
+    expect(users.length, "surfaces rendering a product").toBeGreaterThanOrEqual(4);
   });
 });

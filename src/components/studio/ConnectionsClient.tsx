@@ -12,7 +12,8 @@
 import { useCallback, useState } from "react";
 
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
-import { PRODUCT_MARKS, productName } from "@/lib/studio/product-marks";
+import { PRODUCT_MARKS } from "@/lib/studio/product-marks";
+import { ProductLabel } from "@/components/sap/ProductLabel";
 
 export interface StudioConnection {
   id: string;
@@ -184,12 +185,7 @@ export function ConnectionsClient({
                 <Td>{c.label}</Td>
                 <Td mono>{c.key}</Td>
                 <Td>
-                  {/* The NAME, not the key. This cell read "s4hana", which is an
-                      identifier the product uses internally and not something a
-                      consultant should have to translate. No mark here: the
-                      artwork carries its own name and background, and at row
-                      height both are illegible. */}
-                  {productName(c.product)}
+                  <ProductLabel product={c.product} />
                 </Td>
                 <Td>
                   {c.environment ? (
@@ -402,11 +398,11 @@ function ConnectionForm() {
     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
         <Label text="Product">
-          {/* TILES, NOT A DROPDOWN — and this is the one place the supplied
-              artwork works. Each mark is 1024px of marketing imagery with the
-              product name rendered into it, so it needs room to be legible;
-              at 64px it reads, and the tile supplies the background the image
-              assumes. A dropdown of raw keys was the alternative. */}
+          {/* TILES, NOT A DROPDOWN — the alternative was a <select> of raw
+              keys. The glyph is the symbol lifted out of the supplied artwork;
+              the whole image would have put a grey marketing square on the
+              cream form and repeated, in baked-in pixels, the name written
+              underneath it in real text. */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {PRODUCT_OPTIONS.map((p) => {
               const mark = PRODUCT_MARKS[p];
@@ -431,14 +427,14 @@ function ConnectionForm() {
                     minWidth: 96,
                   }}
                 >
-                  {mark?.logo ? (
+                  {mark?.glyph ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={mark.logo}
+                      src={mark.glyph}
                       alt=""
-                      width={64}
-                      height={64}
-                      style={{ borderRadius: 8, display: "block" }}
+                      width={56}
+                      height={56}
+                      style={{ display: "block" }}
                     />
                   ) : null}
                   <span style={{ fontSize: 12, fontWeight: selected ? 650 : 500 }}>

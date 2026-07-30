@@ -35,6 +35,7 @@ import {
   type OpsTone,
 } from "@/components/ops/OpsChrome";
 import { count, sinceLabel, useOpsFeed } from "@/components/ops/useOpsFeed";
+import { ProductLabel } from "@/components/sap/ProductLabel";
 
 interface Connection {
   id: string;
@@ -176,14 +177,13 @@ function ConnectionsBody({ data }: { data: ConnectionsPayload }) {
               <tr key={c.id}>
                 <td style={opsCellStyle}>
                   {c.label}
-                  <div
-                    style={{
-                      fontFamily: "var(--font-mono, monospace)",
-                      fontSize: 11.5,
-                      color: "var(--ink-muted)",
-                    }}
-                  >
-                    {c.product} · {c.key}
+                  {/* The product NAME in ordinary type, the tenant key in mono.
+                      The mono line means "values you would type or paste", which
+                      is true of the key and not of "SAP Cloud ERP" — running
+                      both together would imply the name is an accepted input. */}
+                  <div style={{ fontSize: 11.5, color: "var(--ink-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                    <ProductLabel product={c.product} size={14} />
+                    <span style={{ fontFamily: "var(--font-mono, monospace)" }}>· {c.key}</span>
                   </div>
                 </td>
                 <td style={opsCellStyle}>
@@ -367,7 +367,9 @@ function DeploymentFallback({
                 {t.key}
               </div>
             </td>
-            <td style={opsCellStyle}>{t.product}</td>
+            <td style={opsCellStyle}>
+              <ProductLabel product={t.product} size={16} />
+            </td>
             <td style={opsCellStyle}>
               {t.environment ? (
                 <OpsChip

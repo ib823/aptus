@@ -1,13 +1,16 @@
 /**
  * How an SAP product is presented — its current name, and its mark.
  *
- * WHY NAMES AND LOGOS ARE SEPARATE CONCERNS HERE. The supplied artwork is
- * 1024×1024 marketing imagery: an opaque grey gradient, a glow, and the product
- * name rendered INTO the image. That is fine at tile size and actively harmful
- * below it — at 20px the embedded text is illegible, the grey fights the cream
- * surfaces, and it repeats a label already sitting beside it. So `logo` is
- * offered for tiles and `name` for everywhere else, rather than one asset
- * pressed into both jobs.
+ * THE MARK IS THE SYMBOL, NOT THE SUPPLIED IMAGE. The artwork is 1024×1024
+ * marketing imagery: a grey field, the SAP wordmark, a symbol, and the product
+ * name rendered INTO the picture. Used whole it is unusable below tile size —
+ * the embedded text turns to mush and the grey field fights the cream surfaces.
+ *
+ * But the symbol inside it sits on a transparent background, and lifted out it
+ * is a genuine icon: legible at 20px in a table row and clean at 64px on a
+ * tile. So each mark is the symbol alone, and the name is always real text
+ * beside it — which keeps it selectable, translatable and readable to a screen
+ * reader, none of which is true of a name baked into a PNG.
  *
  * THE NAMES ARE OUT OF DATE IN THE CONNECTOR, and the artwork is what revealed
  * it. SAP renamed S/4HANA Cloud Public Edition to "SAP Cloud ERP" and Private
@@ -26,13 +29,13 @@ export interface ProductMark {
   /** The edition qualifier SAP uses, e.g. "Public Cloud". Null when there is none. */
   edition: string | null;
   /**
-   * Path under /public, or null where no artwork exists.
+   * Path under /public to the transparent symbol, or null where none exists.
    *
    * Null is meaningful: a product with no mark renders its name and nothing
    * else, rather than a broken image or a placeholder that implies one is
    * coming.
    */
-  logo: string | null;
+  glyph: string | null;
 }
 
 /**
@@ -47,17 +50,17 @@ export const PRODUCT_MARKS: Record<string, ProductMark> = {
   s4hana: {
     name: "SAP Cloud ERP",
     edition: "Public Cloud",
-    logo: "/icons/sap/cloud-erp.png",
+    glyph: "/icons/sap/glyph-cloud-erp.png",
   },
   successfactors: {
     name: "SAP SuccessFactors",
     edition: null,
-    logo: "/icons/sap/successfactors.png",
+    glyph: "/icons/sap/glyph-successfactors.png",
   },
   ariba: {
     name: "SAP Ariba",
     edition: null,
-    logo: "/icons/sap/ariba.png",
+    glyph: "/icons/sap/glyph-ariba.png",
   },
 };
 
@@ -72,12 +75,12 @@ export const UNSUPPORTED_PRODUCT_MARKS: Record<string, ProductMark> = {
   "cloud-erp-private": {
     name: "SAP Cloud ERP Private",
     edition: "RISE / Private Cloud",
-    logo: "/icons/sap/cloud-erp-private.png",
+    glyph: "/icons/sap/glyph-cloud-erp-private.png",
   },
   "s4hana-onprem": {
     name: "SAP S/4HANA",
     edition: "On-premise",
-    logo: "/icons/sap/s4hana-onprem.png",
+    glyph: "/icons/sap/glyph-s4hana-onprem.png",
   },
 };
 
