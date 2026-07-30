@@ -27,7 +27,8 @@ import { AffirmLearnProvider } from "@/components/affirm/learn/AffirmLearnProvid
 import { RoleGatedEmptyState } from "@/components/studio/RoleGatedEmptyState";
 import { StudioShell } from "@/components/studio/StudioShell";
 import { STUDIO_SECTIONS } from "@/lib/studio/sections";
-import { STUDIO_TENANT_COOKIE, type StudioTenantOption } from "@/components/studio/StudioTopBar";
+import { type StudioTenantOption } from "@/components/studio/StudioTopBar";
+import { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenants";
 import { getCurrentUser } from "@/lib/auth/session";
 import { accessibleWorkspaces, canAccessStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { pickActiveTenant, resolveStudioTenants } from "@/lib/studio/tenants";

@@ -51,7 +51,9 @@ export interface StudioTenantOption {
   environment: string | null;
 }
 
-export const STUDIO_TENANT_COOKIE = "studio-tenant";
+// Owned by @/lib/studio/tenants — servers read this cookie, and a value defined
+// in a `"use client"` module reaches them as a client reference, not a string.
+export { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenants";
 
 /** Close on outside click or Escape — shared by both popovers. */
 function useDismiss(open: boolean, close: () => void, ref: React.RefObject<HTMLDivElement | null>) {

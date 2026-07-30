@@ -22,6 +22,28 @@
  * fiction honest status exists to prevent.
  */
 
+/**
+ * The cookie remembering which tenant you were last looking at.
+ *
+ * IT LIVED IN StudioTopBar, WHICH IS `"use client"`. Every server that reads it —
+ * three layouts, two pages, and the switch route — imported it from there, and a
+ * server importing a value from a client module does not get the value: it gets
+ * a client REFERENCE. Stringified into a cookie name, that produced
+ *
+ *     set-cookie: function(){throw Error("Attempted to call
+ *     STUDIO_TENANT_COOKIE() from the server but ...")}=x5m080-development
+ *
+ * on a live deployment. It WORKED, which is why nobody noticed: writer and
+ * readers all import the same broken reference, so they all agree on the same
+ * 200-character garbage name. Symmetric corruption is indistinguishable from
+ * correctness until something reads the cookie by its literal name.
+ *
+ * This is the same defect that broke the build in #192, where the manual read
+ * the rail's section arrays out of a client module. A guard was added then and
+ * scoped to `src/lib` — a route handler in `src/app/api` was outside it.
+ */
+export const STUDIO_TENANT_COOKIE = "studio-tenant";
+
 import { prisma } from "@/lib/db/prisma";
 import { getConfiguredSapTenants, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 
