@@ -1,16 +1,30 @@
 /**
  * ABeam Workbench — Presales OTP issue/verify.
  *
- * Stub for the Resend transport — real email send lands at build sequence
- * step 7. In dev the code is logged so a developer can copy it from the
- * server console.
+ * THE CODE IS DELIVERED BY EMAIL, through the same Brevo/nodemailer transport
+ * every other guest surface uses. It spent months as a stub instead: the send
+ * was a dev-only console.log "waiting for the Resend wiring", but Resend was
+ * dropped for Brevo and the wait's condition quietly stopped existing. The
+ * sibling flows (affirm, discovery) sent all along — only this one was left
+ * on the stub, while the redeem route wrote an `otp_sent` audit row for a
+ * send that never happened in production. A guest could never obtain their
+ * code.
+ *
+ * The send is best-effort: a failed dispatch never rolls back the issued
+ * hash — the guest can use /c/verify/resend, and the transport logs the
+ * failure.
  *
  * Lockout cascade fires via maybeApplyOtpLockout in guards.ts when
- * otpAttemptCount reaches 5.
+ * otpAttemptCount reaches 5. The consultant alert passed to it THROWS on
+ * dispatch failure on purpose: guards.ts owns the failure handling — it
+ * writes the `alert_dispatch_failed` audit row so the consultant's dashboard
+ * shows both the lockout and the delivery uncertainty. Swallowing the error
+ * here (bestEffort) would erase that record.
  */
 
 import { prisma } from '@/lib/db/prisma';
 import { createHash, randomInt } from 'crypto';
+import { dispatchEmail, renderOtpEmail, renderPresalesLockoutAlertEmail } from './emails';
 import { maybeApplyOtpLockout } from './guards';
 
 const OTP_TTL_MIN = 10;
@@ -24,12 +38,17 @@ export async function issuePresalesOtp(grantId: string, now: Date = new Date()):
   const otpHash = hashOtp(code, grantId);
   const otpExpiresAt = new Date(now.getTime() + OTP_TTL_MIN * 60 * 1000);
 
-  await prisma.presalesAccessGrant.update({
+  const grant = await prisma.presalesAccessGrant.update({
     where: { id: grantId },
     data: { otpHash, otpExpiresAt, otpAttemptCount: 0 },
+    select: { email: true },
   });
 
-  // Stub: real send lands when Resend wiring goes in (build seq §7).
+  await dispatchEmail(
+    renderOtpEmail({ recipientEmail: grant.email, code, expiresMinutes: OTP_TTL_MIN }),
+    { bestEffort: true },
+  );
+
   if (process.env.NODE_ENV !== 'production') {
     // eslint-disable-next-line no-console
     console.log(`[presales-otp] grantId=${grantId} code=${code} (dev-only log)`);
@@ -98,12 +117,25 @@ export async function verifyPresalesOtp(args: {
   const locked = await maybeApplyOtpLockout(
     {
       prisma,
-      sendConsultantLockoutAlert: async () => {
-        // Stubbed Resend dispatcher. Logs in dev for now.
-        if (process.env.NODE_ENV !== 'production') {
-          // eslint-disable-next-line no-console
-          console.log(`[presales-otp] consultant alert (stub) — grant=${args.grantId}`);
-        }
+      sendConsultantLockoutAlert: async ({ consultantUserId, bundleId, granteeEmail }) => {
+        const [consultant, bundle] = await Promise.all([
+          prisma.user.findUnique({ where: { id: consultantUserId }, select: { email: true } }),
+          prisma.presalesBundle.findUnique({
+            where: { id: bundleId },
+            select: { clientCompanyName: true },
+          }),
+        ]);
+        // A missing consultant email is a failed alert, not a skipped one —
+        // throw so guards.ts records alert_dispatch_failed.
+        if (!consultant?.email) throw new Error('consultant account has no email address');
+        await dispatchEmail(
+          renderPresalesLockoutAlertEmail({
+            consultantEmail: consultant.email,
+            granteeEmail,
+            clientCompanyName: bundle?.clientCompanyName ?? null,
+          }),
+          { bestEffort: false },
+        );
       },
     },
     { grantId: args.grantId, newAttemptCount: newCount },

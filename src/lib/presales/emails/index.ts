@@ -128,5 +128,6 @@ export async function dispatchEmail(
 
 export { renderMagicLinkEmail } from './magic-link';
 export { renderOtpEmail } from './otp';
+export { renderPresalesLockoutAlertEmail } from './lockout-alert';
 export { renderSignoffConfirmEmail } from './signoff-confirm';
 export { renderPdfDeliveryEmail } from './pdf-delivery';
