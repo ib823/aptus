@@ -32,7 +32,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
-import { STUDIO_TENANT_COOKIE } from "@/components/studio/StudioTopBar";
+import { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenants";
 import { resolveStudioTenants } from "@/lib/studio/tenants";
 
 export const dynamic = "force-dynamic";
