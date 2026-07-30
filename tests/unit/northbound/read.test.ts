@@ -28,6 +28,7 @@ function conn(overrides: Partial<ResolvedSapConnection> = {}): ResolvedSapConnec
     apiPath: null,
     timeoutMs: null,
     environment: null,
+    client: null,
     ...overrides,
   };
 }

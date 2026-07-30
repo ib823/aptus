@@ -483,6 +483,20 @@ model SapConnection {
   oauthTokenUrl     String?
   /// AES-256-GCM sealed JSON bundle of the secret fields. Never logged/returned.
   secretsCiphertext String  @db.Text
+  /// The SAP client — "100", "080" — or NULL where the product has none.
+  ///
+  /// NULL IS THE TRUTH, NOT A GAP. S/4HANA Cloud Public, SuccessFactors and
+  /// Ariba are one tenant per host and have no client at all. On-premise and
+  /// RISE address a client INSIDE one system: X5M/100 and X5M/080 are different
+  /// data containers reachable at the same baseUrl, distinguishable only by
+  /// this value.
+  ///
+  /// Stored ONCE and read twice — as `?sap-client=` on every outgoing URL, and
+  /// as part of the connection's identity. Folding it into the environment
+  /// label instead ("DEV/100") would have kept the same fact in two places, one
+  /// of them requiring a string to be parsed apart; this repository has twice
+  /// paid for one fact living in two places.
+  client            String?
   /// Gate for guarded writes on this connection (mirrors {PREFIX}_WRITE_ENABLED).
   writeEnabled      Boolean @default(false)
   /// Optional health-probe path + timeout override (fall back to product defaults).

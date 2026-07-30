@@ -17,6 +17,7 @@ import {
   buildAuthHeaderFromConnection,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
+import { buildSapUrl } from "@/lib/sap-public/sap-url";
 
 export type NorthboundWriteStatus =
   | "CREATED"
@@ -94,7 +95,23 @@ export async function writeEntitySet(
   const started = Date.now();
   const { connection } = input;
   const timeoutMs = Math.min(connection.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
-  const base = `${connection.baseUrl}${input.servicePath}`;
+  /*
+   * The client is applied to BOTH calls below. A CSRF handshake against one
+   * client followed by a POST to another would be refused by SAP at best and
+   * accepted against the wrong data container at worst — which is the whole
+   * reason the URL is built in one place.
+   *
+   * A FUNCTION, NOT A STRING. Both calls append a suffix, so a prebuilt base
+   * carrying `?sap-client=100` would yield `...?sap-client=100/` — a query
+   * followed by a path, which is not a URL. The client has to be applied after
+   * the suffix, every time.
+   */
+  const sapUrl = (suffix: string) =>
+    buildSapUrl({
+      baseUrl: connection.baseUrl,
+      path: `${input.servicePath}${suffix}`,
+      client: connection.client,
+    });
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -103,7 +120,7 @@ export async function writeEntitySet(
     const authorization = await buildAuthHeaderFromConnection(connection);
 
     // 1 — CSRF handshake against the service root, with the same credentials.
-    const csrfRes = await fetchImpl(`${base}/`, {
+    const csrfRes = await fetchImpl(sapUrl("/"), {
       method: "GET",
       headers: { Authorization: authorization, Accept: "application/json", "X-CSRF-Token": "Fetch" },
       signal: controller.signal,
@@ -135,7 +152,7 @@ export async function writeEntitySet(
     if (cookie) headers.Cookie = cookie;
 
     // 2 — the write itself.
-    const res = await fetchImpl(`${base}/${encodeURIComponent(input.entitySet)}`, {
+    const res = await fetchImpl(sapUrl(`/${encodeURIComponent(input.entitySet)}`), {
       method: "POST",
       headers,
       body: JSON.stringify(input.payload),
