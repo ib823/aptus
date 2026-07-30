@@ -149,10 +149,32 @@ function asArray(v: unknown): string[] {
 // in synthetic fixtures and likely in real exports). Split on those before
 // classifying so a single field declaring both editions tags both.
 function splitProductTag(raw: string): string[] {
-  // Don't split on ", " when it's part of a known SAP product name like
-  // "SAP S/4HANA Cloud, private edition" — we look for the explicit delimiter
-  // ";" first, falling back to "; " or " | " or newlines.
-  const parts = raw.split(/\s*;\s*|\s*\|\s*|\n/g).map((s) => s.trim()).filter(Boolean);
+  /*
+   * A COMMA MEANS TWO DIFFERENT THINGS AND BOTH APPEAR IN REAL DATA.
+   *
+   * The human export writes "SAP S/4HANA Cloud, private edition" — there the
+   * comma introduces a QUALIFIER of the product before it. The Hub's own OData
+   * writes "SAPS4HANA,SAPS4HANACloudPrivateEdition" — there it separates TWO
+   * products, and refusing to split it cost every one of those rows its
+   * edition: 547 APIs in the 2026-07-30 harvest carry exactly that tag.
+   *
+   * So split on the comma, then re-attach any part that begins with a bare
+   * qualifier, which is the only case the human form produces.
+   */
+  const rough = raw
+    .split(/\s*;\s*|\s*\|\s*|\n|,/g)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const parts: string[] = [];
+  for (const part of rough) {
+    const isBareQualifier = /^(private|public)\b/i.test(part);
+    if (isBareQualifier && parts.length > 0) {
+      parts[parts.length - 1] = `${parts[parts.length - 1]}, ${part}`;
+    } else {
+      parts.push(part);
+    }
+  }
   return parts.length > 0 ? parts : [raw.trim()];
 }
 
@@ -162,27 +184,38 @@ function classifyOneTag(t: string): {
   isOnPrem: boolean;
 } {
   const lower = t.toLowerCase();
-  const isPrivate =
-    lower.includes("private edition") ||
-    lower.includes("private cloud") ||
-    lower.includes("rise with sap") ||
-    lower.includes("s/4hana cloud, private");
+  /*
+   * TWO SPELLINGS OF EVERY PRODUCT NAME. A downloaded export writes them for
+   * people — "SAP S/4HANA Cloud, private edition". The Hub's OData writes them
+   * for machines — "SAPS4HANACloudPrivateEdition", with no spaces and no
+   * slash. Matching only the readable form tagged 4568 of 4597 harvested APIs
+   * as "no edition", which reads exactly like "SAP publishes nothing here".
+   *
+   * So every needle is tested against both, with the same punctuation removed
+   * from the needle as from the tag.
+   */
+  const compact = lower.replace(/[\s/,._-]/g, "");
+  const has = (...needles: string[]) =>
+    needles.some(
+      (n) => lower.includes(n) || compact.includes(n.replace(/[\s/,._-]/g, "")),
+    );
+
+  const isPrivate = has(
+    "private edition",
+    "private cloud",
+    "rise with sap",
+    "s/4hana cloud, private",
+  );
   const isPublic =
-    lower.includes("public edition") ||
-    lower.includes("public cloud") ||
-    lower.includes("s/4hana cloud, public") ||
-    lower.includes("multi-tenant") ||
+    has("public edition", "public cloud", "s/4hana cloud, public", "multi-tenant") ||
     // Bare "S/4HANA Cloud" with no private qualifier → Public (historical SAP convention)
-    (lower.includes("s/4hana cloud") && !isPrivate);
+    (has("s/4hana cloud") && !isPrivate);
   const isOnPrem =
-    lower.includes("on premise") ||
-    lower.includes("on-premise") ||
-    lower.includes("on-prem") ||
+    has("on premise", "on-premise", "on-prem") ||
     // Bare "SAP S/4HANA" without "Cloud" qualifier → On-Premise per SAP
-    // taxonomy. The check on absence of "cloud" excludes any tag containing
-    // "S/4HANA Cloud" / "S/4HANA Cloud, private edition" — those are
-    // already handled by isPublic / isPrivate above.
-    (lower.includes("s/4hana") && !lower.includes("cloud"));
+    // taxonomy. Tested on the COMPACT form, so "SAPS4HANACloud" is correctly
+    // excluded by its own "cloud" rather than slipping through on spacing.
+    (has("s/4hana") && !compact.includes("cloud"));
   return { isPublic, isPrivate, isOnPrem };
 }
 
