@@ -12,6 +12,7 @@
 import { useCallback, useState } from "react";
 
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
+import { PRODUCT_MARKS, productName } from "@/lib/studio/product-marks";
 
 export interface StudioConnection {
   id: string;
@@ -182,7 +183,14 @@ export function ConnectionsClient({
               <tr key={c.id} style={{ borderTop: "1px solid var(--border-default)" }}>
                 <Td>{c.label}</Td>
                 <Td mono>{c.key}</Td>
-                <Td>{c.product}</Td>
+                <Td>
+                  {/* The NAME, not the key. This cell read "s4hana", which is an
+                      identifier the product uses internally and not something a
+                      consultant should have to translate. No mark here: the
+                      artwork carries its own name and background, and at row
+                      height both are illegible. */}
+                  {productName(c.product)}
+                </Td>
                 <Td>
                   {c.environment ? (
                     <span style={{ fontWeight: 600 }}>{c.environment}</span>
@@ -394,11 +402,55 @@ function ConnectionForm() {
     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
         <Label text="Product">
-          <select value={product} onChange={(e) => setProduct(e.target.value)} style={input}>
-            {PRODUCT_OPTIONS.map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
+          {/* TILES, NOT A DROPDOWN — and this is the one place the supplied
+              artwork works. Each mark is 1024px of marketing imagery with the
+              product name rendered into it, so it needs room to be legible;
+              at 64px it reads, and the tile supplies the background the image
+              assumes. A dropdown of raw keys was the alternative. */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {PRODUCT_OPTIONS.map((p) => {
+              const mark = PRODUCT_MARKS[p];
+              const selected = p === product;
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setProduct(p)}
+                  style={{
+                    all: "unset",
+                    cursor: "pointer",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 4,
+                    padding: 8,
+                    borderRadius: 10,
+                    border: `1px solid ${selected ? "var(--brand-navy)" : "var(--border-default)"}`,
+                    background: selected ? "var(--surface-ink-tint)" : "var(--surface-paper)",
+                    minWidth: 96,
+                  }}
+                >
+                  {mark?.logo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={mark.logo}
+                      alt=""
+                      width={64}
+                      height={64}
+                      style={{ borderRadius: 8, display: "block" }}
+                    />
+                  ) : null}
+                  <span style={{ fontSize: 12, fontWeight: selected ? 650 : 500 }}>
+                    {mark?.name ?? p}
+                  </span>
+                  {mark?.edition ? (
+                    <span style={{ fontSize: 10.5, color: "var(--ink-muted)" }}>{mark.edition}</span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
         </Label>
         <Label text="Tenant key" hint="Normalized — probes are stored under it.">
           <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="x5m-100" style={input} />
