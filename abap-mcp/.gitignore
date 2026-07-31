@@ -1,0 +1,24 @@
+# Client connection profiles — confidential, may name client systems
+profiles/*.yaml
+!profiles/example.profile.yaml
+
+# Raw ADT captures — contain client object names, packages, developer IDs,
+# ATC findings. Never commit.
+captures/
+*.capture/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store

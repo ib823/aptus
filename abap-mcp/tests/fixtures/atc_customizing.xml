@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<atc:customizing xmlns:atc="http://www.sap.com/adt/atc">
+  <properties>
+    <property name="ciCheckFlavour" value="false"/>
+    <property name="systemCheckVariant" value="S4HANA_READINESS_2023"/>
+    <property name="afterActivationCheckVariant" value="ACTIVATION"/>
+  </properties>
+</atc:customizing>
