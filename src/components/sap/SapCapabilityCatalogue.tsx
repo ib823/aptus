@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { AlertTriangle, RefreshCw, Search } from "lucide-react";
 import { HUB_CONTENT_TYPE_META, type HubContentType, type HubStatus } from "@/lib/sap-public/hub-content";
+import { HARVEST_TYPES } from "@/lib/sap-public/hub-harvest-types";
 import { useAffirmLearn } from "@/components/affirm/learn/context";
 import { glossaryIdForStatus } from "@/constants/sap-glossary";
 import { ReadinessScorecard } from "./capability/ReadinessScorecard";
@@ -253,6 +254,61 @@ export function SapCapabilityCatalogue({
     }
   }, [load]);
 
+  /*
+   * IMPORT THE HARVESTED ARTIFACTS — DRIVEN TO COMPLETION FROM HERE.
+   *
+   * The endpoint is chunked and resumable because it fetches over the network
+   * and one call must not outrun the platform timeout. That makes the LOOP the
+   * caller's job, and leaving it to whoever holds a terminal would have meant a
+   * delivery path reachable only by curl — which is the gap this closes, not a
+   * smaller version of it.
+   *
+   * Progress is shown as it goes, and a partial result is reported as partial.
+   * A run that stops halfway leaves rows behind that look exactly like a
+   * finished import, so the count on screen is the only thing that can tell an
+   * operator which one they got.
+   */
+  const [harvesting, setHarvesting] = useState(false);
+  const [harvestProgress, setHarvestProgress] = useState<string | null>(null);
+  const importHarvest = useCallback(async () => {
+    setHarvesting(true);
+    setError(null);
+    setHarvestProgress(null);
+    let total = 0;
+    try {
+      for (const type of HARVEST_TYPES) {
+        let offset: number | null = 0;
+        let forType = 0;
+        // Bounded: 1,000 rows a call against the largest file (4,439) is 5 calls.
+        // The cap is a runaway guard, not an expected limit.
+        for (let guard = 0; offset !== null && guard < 50; guard++) {
+          const res = await fetch("/api/sap/tdd/hub-content/harvest-import", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ confirmation: "REBUILD SAP HUB CATALOGUE", contentType: type, offset, limit: 500 }),
+          });
+          const json = (await res.json()) as {
+            data?: { inserted: number; updated: number; nextOffset: number | null; total: number };
+            error?: { message?: string };
+          };
+          if (!res.ok || !json.data) throw new Error(json.error?.message ?? `Harvest import failed for ${type}`);
+          forType += json.data.inserted + json.data.updated;
+          total += json.data.inserted + json.data.updated;
+          offset = json.data.nextOffset;
+          setHarvestProgress(`${type}: ${forType} of ${json.data.total}`);
+        }
+      }
+      setHarvestProgress(`Imported ${total} artifacts`);
+      await load();
+    } catch (err) {
+      // Says how far it got. "Failed" alone would hide that rows did land.
+      setError(`${err instanceof Error ? err.message : "Harvest import failed"} — ${total} artifacts imported before stopping`);
+      setHarvestProgress(null);
+    } finally {
+      setHarvesting(false);
+    }
+  }, [load]);
+
   const [probing, setProbing] = useState(false);
   const probeAll = useCallback(async () => {
     setProbing(true);
@@ -328,7 +384,7 @@ export function SapCapabilityCatalogue({
             <button
               type="button"
               onClick={() => void importSeed()}
-              disabled={seeding || probing}
+              disabled={seeding || probing || harvesting}
               title="Rebuild the API rows from SapApiReference (admin only)"
               className="inline-flex items-center gap-2 rounded-[var(--radius-input)] px-3 py-1.5 text-sm font-medium disabled:opacity-50"
               style={{ border: "1px solid var(--brand-navy)", color: "var(--brand-navy)", background: "var(--surface-paper)" }}
@@ -338,8 +394,19 @@ export function SapCapabilityCatalogue({
             </button>
             <button
               type="button"
+              onClick={() => void importHarvest()}
+              disabled={seeding || probing || harvesting}
+              title="Fetch the harvested Hub artifacts (integrations, BAdIs, scenarios, events, BO interfaces) at this deployment's commit and import them (admin only)."
+              className="inline-flex items-center gap-2 rounded-[var(--radius-input)] px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+              style={{ border: "1px solid var(--brand-navy)", color: "var(--brand-navy)", background: "var(--surface-paper)" }}
+            >
+              {harvesting && <RefreshCw className="size-3.5 animate-spin" />}
+              {harvestProgress ?? "Import harvested artifacts"}
+            </button>
+            <button
+              type="button"
               onClick={() => void probeAll()}
-              disabled={seeding || probing}
+              disabled={seeding || probing || harvesting}
               title="Probe every OData service and store the result (admin only). Read-only $metadata."
               className="inline-flex items-center gap-2 rounded-[var(--radius-input)] px-3 py-1.5 text-sm font-medium disabled:opacity-50"
               style={{ border: "1px solid var(--brand-navy)", color: "var(--ink-on-navy)", background: "var(--brand-navy)" }}
