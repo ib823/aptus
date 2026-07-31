@@ -3,15 +3,18 @@
  *
  * Returns the tenant's real capability map: which published OData services the
  * configured tenant (e.g. ABeam TDD) actually exposes. Read-only ($metadata).
- * Guarded exactly like the other SAP read routes.
+ *
+ * Guarded by refuseUnlessMayProbeTenant, like the other SAP read routes. That
+ * sentence used to be here as a bare claim while the route checked PUBLIC_ACCESS
+ * instead — see the comment on the guard call below.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import {
   getConfiguredSapTenants,
   getSapProduct,
-  isSapTddPublicAccessEnabled,
 } from "@/lib/sap-public/tdd-connector";
+import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import { getDynamicOdataServices, mergeProbeTargets } from "@/lib/sap-public/dynamic-catalog";
 import { probeTenantCapabilities, summarize } from "@/lib/sap-public/capability-probe";
 import { auditCapabilityProbe } from "@/lib/sap-public/capability-audit";
@@ -27,8 +30,37 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  /*
+   * THIS ROUTE PROBES A REAL SAP TENANT ON EVERY CALL, SO IT USES THE GUARD.
+   *
+   * The header above says "Guarded exactly like the other SAP read routes." It
+   * was not. `operations`, `entities` and `preview` call
+   * refuseUnlessMayProbeTenant; this one checked PUBLIC_ACCESS instead — and
+   * that flag is explicitly ENABLED on this deployment, so `!user` never
+   * mattered and the route answered anyone on the internet with HTTP 200.
+   *
+   * What that returned: the tenant label ("Customizing X5M/100"), how many
+   * services are exposed versus not activated, and a per-entity CRUD map
+   * (readable/creatable/updatable/deletable) of a live customer system. And
+   * because `probeTenantCapabilities` runs before the response is built, every
+   * anonymous request ISSUED LIVE OData CALLS to that tenant — consuming its
+   * quota and appearing in its logs, in CoreEdge's name, on behalf of nobody.
+   *
+   * probe-guard.ts already states the rule and the reason, and records the
+   * previous time this same flag made a guard unreachable: "an anonymous caller
+   * is the LAST caller who should reach it", and "the rule now has no
+   * exception". The rule had an exception; it was this file.
+   *
+   * Found by an unauthenticated curl during a browser-agent audit — the same
+   * way the earlier incident in that file was found.
+   */
+  const refusal = await refuseUnlessMayProbeTenant(product.envPrefix);
+  if (refusal) return refusal;
+
   const user = await getCurrentUser();
-  if (!isSapTddPublicAccessEnabled(product.envPrefix) && !user) {
+  if (!user) {
+    // Unreachable: the guard above already 401s without a session. Kept so the
+    // narrowing below is a fact rather than an assumption.
     return NextResponse.json(
       { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
       { status: 401 },
