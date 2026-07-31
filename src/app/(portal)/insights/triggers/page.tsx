@@ -3,6 +3,12 @@
  *
  * Lifecycle triggers across all assessments — SAP updates, regulatory
  * changes, scope drift detection.
+ *
+ * DELIBERATELY UNLINKED from navigation until the aggregation client
+ * lands — reachable by typed URL only. Linking a page whose body says
+ * "scheduled for a follow-up" would advertise a feature that is not
+ * there; hiding the route entirely would 404 a documented Phase 8
+ * landing point. Unlinked-but-alive is the honest middle.
  */
 
 export default function PortfolioTriggersPage() {

@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { AssessmentPage } from "../pages/assessment.page";
+import { seedGate } from "../seed-gate";
 
 /**
  * T-E2E-J05 — Phase 2 Carry-Forward / Cloning
@@ -83,7 +84,7 @@ test.describe("T-E2E-J05 — Phase 2 Carry-Forward Cloning", () => {
   // Step 4: Navigate to cloned assessment profile
   test("Step 04 — Navigate to cloned assessment profile", async ({ page }) => {
     if (!clonedAssessmentId) {
-      test.skip(true, 'No cloned assessment available — seed required');
+      seedGate('No cloned assessment available');
       return;
     }
 
@@ -96,7 +97,7 @@ test.describe("T-E2E-J05 — Phase 2 Carry-Forward Cloning", () => {
   // Step 5: Verify gaps were carried forward
   test("Step 05 — Verify gaps carried forward from Phase 1", async ({ page, request }) => {
     if (!clonedAssessmentId) {
-      test.skip(true, 'No cloned assessment available — seed required');
+      seedGate('No cloned assessment available');
       return;
     }
 
@@ -117,7 +118,7 @@ test.describe("T-E2E-J05 — Phase 2 Carry-Forward Cloning", () => {
   // Step 6: Verify integrations were carried forward
   test("Step 06 — Verify integrations carried forward", async ({ page, request }) => {
     if (!clonedAssessmentId) {
-      test.skip(true, 'No cloned assessment available — seed required');
+      seedGate('No cloned assessment available');
       return;
     }
 
@@ -137,7 +138,7 @@ test.describe("T-E2E-J05 — Phase 2 Carry-Forward Cloning", () => {
   // Step 7: Add new scope items for Phase 2
   test("Step 07 — Add new scope items for Phase 2", async ({ page }) => {
     if (!clonedAssessmentId) {
-      test.skip(true, 'No cloned assessment available — seed required');
+      seedGate('No cloned assessment available');
       return;
     }
 
@@ -153,7 +154,7 @@ test.describe("T-E2E-J05 — Phase 2 Carry-Forward Cloning", () => {
     request,
   }) => {
     if (!clonedAssessmentId) {
-      test.skip(true, 'No cloned assessment available — seed required');
+      seedGate('No cloned assessment available');
       return;
     }
 
@@ -174,7 +175,7 @@ test.describe("T-E2E-J05 — Phase 2 Carry-Forward Cloning", () => {
   // Step 9: Verify cross-phase analytics link
   test("Step 09 — Verify cross-phase analytics available", async ({ page, request }) => {
     if (!clonedAssessmentId) {
-      test.skip(true, 'No cloned assessment available — seed required');
+      seedGate('No cloned assessment available');
       return;
     }
 

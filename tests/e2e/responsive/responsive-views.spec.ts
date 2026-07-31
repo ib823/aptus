@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { BasePage } from "../pages/base.page";
+import { seedGate } from "../seed-gate";
 
 /**
  * Responsive Views — Tests ~30 major views at 3 viewports:
@@ -170,7 +171,7 @@ test.describe("Responsive — Assessment Sub-Pages", () => {
           assessmentId = await getFirstAssessmentId(page);
         }
         if (!assessmentId) {
-          test.skip(true, 'No assessment data available — seed required');
+          seedGate('No assessment data available');
           return;
         }
 
