@@ -6,7 +6,6 @@
  * presented as its own product.
  */
 
-import { signOut } from 'next-auth/react';
 import { useState } from 'react';
 
 interface Props {
@@ -74,12 +73,29 @@ export function WorkbenchUserMenu({ email }: Props) {
             zIndex: 1000,
           }}
         >
-          <button
-            type="button"
-            onClick={() => signOut({ callbackUrl: '/presales/login' })}
+          {/*
+            A plain link to the GET logout route, NOT next-auth's signOut().
+            This is the same choice StudioTopBar documents, and it was missed
+            here — which meant Sign out on the Workbench did not sign anyone out.
+
+            next-auth's signOut() clears the NextAuth cookies and nothing else.
+            It never touches the custom session cookie and never revokes the
+            session row. The middleware authenticates on
+            `request.cookies.has(SESSION_COOKIE)`, so the surviving cookie kept
+            the user signed in — with a live server-side session — while the UI
+            said they had left. Found by a browser agent auditing this build,
+            which could not clear its own session to test the signed-out
+            perimeter.
+
+            /api/auth/logout revokes the session row AND expires every cookie
+            variant, including the secure-prefixed and chunked NextAuth names.
+          */}
+          <a
+            href="/api/auth/logout"
             role="menuitem"
             style={{
               display: 'block',
+              textDecoration: 'none',
               width: '100%',
               textAlign: 'left',
               padding: '8px 12px',
@@ -94,7 +110,7 @@ export function WorkbenchUserMenu({ email }: Props) {
             onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           >
             Sign out
-          </button>
+          </a>
         </div>
       ) : null}
     </div>
