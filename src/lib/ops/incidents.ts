@@ -28,6 +28,8 @@
  * here, so neither is ever reported as health.
  */
 
+import type { ConnectionBindingFailure } from "@/lib/sap-public/connection-resolver";
+
 export type IncidentSeverity = "critical" | "major" | "minor";
 
 /** Firing thresholds, named so a number on a screen traces back to a line here. */
@@ -152,6 +154,51 @@ export const INCIDENT_RULES = {
     remediation: "Set the environment on the connection in Studio.",
   },
 } as const satisfies Record<string, IncidentRule>;
+
+/**
+ * Which binding refusals the `binding-refused` rule counts — and, just as
+ * importantly, which it deliberately does not.
+ *
+ * THIS LIST USED TO LIVE INLINE IN THE OPS QUERY, and drifted the moment a new
+ * refusal reason existed. `NO_MATCH_FOR_CLIENT` was added to the resolver when
+ * credentials learned to name an SAP client; the query's `in` array was not
+ * updated, so a credential bound to a client no connection carries failed every
+ * call while this CRITICAL rule reported zero. Exactly the failure mode the
+ * comment above describes — a detector that cannot see the thing it exists for.
+ *
+ * `bindingRefusalCoverage` below forces the choice to be made explicitly for
+ * every reason the resolver can return, and a test reconciles the two, so the
+ * next reason cannot be added silently.
+ */
+export const BINDING_REFUSAL_COVERAGE = {
+  /** No connection serves the caller's environment. The rule's original case. */
+  NO_MATCH_FOR_ENVIRONMENT: "counted",
+  /** Several could serve it and none could be chosen. */
+  AMBIGUOUS: "counted",
+  /**
+   * The environment is served, but no connection carries the credential's SAP
+   * client. Counted for the same reason as the other two: the credential is
+   * live, the grant is approved, and every call fails.
+   */
+  NO_MATCH_FOR_CLIENT: "counted",
+  /**
+   * The organization has no connection at all for this product. Excluded
+   * deliberately: that is "has not started", not "misconfigured", and the
+   * Connections screen already says so plainly.
+   */
+  NO_CONNECTION: "excluded",
+  /**
+   * A write against a connection that never declared its landscape. Excluded
+   * deliberately: it is the undeclared-environment rule's business, and
+   * counting it in both would double-report one estate problem.
+   */
+  UNDECLARED_ENVIRONMENT_WRITE: "excluded",
+} as const satisfies Record<ConnectionBindingFailure, "counted" | "excluded">;
+
+/** The reasons the ops query filters on. Derived, never hand-maintained. */
+export const COUNTED_BINDING_REFUSALS = Object.entries(BINDING_REFUSAL_COVERAGE)
+  .filter(([, v]) => v === "counted")
+  .map(([k]) => k);
 
 /** Every signal a rule can fire on. Counts this deployment actually records. */
 export interface IncidentSignals {
