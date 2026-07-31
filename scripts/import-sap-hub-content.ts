@@ -86,6 +86,8 @@ async function main(): Promise<void> {
   let inserted = 0;
   let updated = 0;
   let skipped = 0;
+  // Illustrative rows refused because a REAL row already holds that key.
+  let skippedReal = 0;
   const byType: Record<string, number> = {};
 
   for (const src of sources) {
@@ -125,9 +127,29 @@ async function main(): Promise<void> {
       };
       const existing = await prisma.sapHubContent.findUnique({
         where: { contentType_externalId: { contentType: norm.contentType, externalId: norm.externalId } },
-        select: { id: true },
+        select: { id: true, illustrative: true },
       });
       if (existing) {
+        /*
+         * AN ILLUSTRATIVE ROW MUST NOT REPLACE A REAL ONE.
+         *
+         * The seed file and real exports upsert into the same table on the same
+         * key, so WHICHEVER RAN LAST WON — and the seed carries placeholder
+         * titles and descriptions for ids that are genuinely published, ten of
+         * them on a populated catalogue including API_BUSINESS_PARTNER. Running
+         * the seed after a real import silently replaced activated content with
+         * demo text and stamped it `illustrative`, so the console showed a
+         * placeholder badge on an API the tenant actually uses.
+         *
+         * The order of two imports is not something an operator should have to
+         * know, so the rule is direction-based instead: real content is never
+         * demoted. The reverse — a real import overwriting a placeholder — is
+         * the whole point of importing, and still happens.
+         */
+        if (norm.illustrative && existing.illustrative === false) {
+          skippedReal++;
+          continue;
+        }
         await prisma.sapHubContent.update({ where: { id: existing.id }, data });
         updated++;
       } else {
@@ -160,6 +182,10 @@ async function main(): Promise<void> {
   console.log(`  Inserted: ${inserted}`);
   console.log(`  Updated:  ${updated}`);
   console.log(`  Skipped:  ${skipped}`);
+  if (skippedReal > 0) {
+    // Loud, because silence here is what let the seed quietly demote real rows.
+    console.log(`  Kept real (illustrative row refused): ${skippedReal}`);
+  }
   console.log("  By content type:");
   for (const t of Object.keys(HUB_CONTENT_TYPE_META)) {
     if (byType[t]) console.log(`    ${t.padEnd(18)} ${byType[t]}`);
