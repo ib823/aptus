@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<atcworklist:worklist xmlns:atcworklist="http://www.sap.com/adt/atc/worklist" atcworklist:id="CB763CE23E611EDDB38C172F2E7607EB" atcworklist:timestamp="2026-03-27T05:32:22Z" atcworklist:usedObjectSet="00000000000000000000000000000000" atcworklist:objectSetIsComplete="false">
+    <atcworklist:objectSets>
+        <atcworklist:objectSet atcworklist:name="00000000000000000000000000000000" atcworklist:title="All Objects" atcworklist:kind="ALL"/>
+    </atcworklist:objectSets>
+    <atcworklist:objects>
+        <atcobject:object xmlns:atcobject="http://www.sap.com/adt/atc/object" xmlns:adtcore="http://www.sap.com/adt/core" adtcore:uri="/sap/bc/adt/atc/objects/R3TR/PROG/ZMM_STOCK_LIST" adtcore:type="PROG" adtcore:name="ZMM_STOCK_LIST" adtcore:packageName="ZMM_REMED" atcobject:author="ABAPDEV">
+            <atcobject:findings>
+                <atcfinding:finding xmlns:atcfinding="http://www.sap.com/adt/atc/finding" adtcore:uri="/sap/bc/adt/atc/findings/itemid/A32FC0C4E8521EDDB1F11923DA6F0C5A/index/9" atcfinding:location="/sap/bc/adt/vit/atc/runs/CB763CE23E611EDDB38C172F2E7607EB/verdict/ZMM_STOCK_LIST/PROG/005056AB5B8D1ED4BFDA1CA5D9EBA6C4/0898/974362469" atcfinding:processor="ABAPDEV" atcfinding:lastChangedBy="" atcfinding:priority="2" atcfinding:checkId="005056AB5B8D1ED4BFDA1CA5D9EBA6C4" atcfinding:checkTitle="S/4HANA: Field length extensions" atcfinding:messageId="0898" atcfinding:messageTitle="MATNR moved to a field shorter than 40 characters" atcfinding:exemptionApproval="" atcfinding:exemptionKind="" atcfinding:checksum="974362469">
+                    <atom:link xmlns:atom="http://www.w3.org/2005/Atom" href="/sap/bc/adt/documentation/atc/documents/itemid/A32FC0C4E8521EDDB1F11923DA6F0C5A/index/9" rel="http://www.sap.com/adt/relations/documentation" type="text/html"/>
+                    <atcfinding:quickfixes xmlns:atcfinding="http://www.sap.com/adt/atc/finding" atcfinding:manual="false" atcfinding:automatic="true" atcfinding:pseudo="false"/>
+                </atcfinding:finding>
+            </atcobject:findings>
+        </atcobject:object>
+        <atcobject:object xmlns:atcobject="http://www.sap.com/adt/atc/object" xmlns:adtcore="http://www.sap.com/adt/core" adtcore:uri="/sap/bc/adt/atc/objects/R3TR/TABL/ZTBL1" adtcore:type="TABL" adtcore:name="ZTBL1" adtcore:packageName="$TMP" atcobject:author="ABAPDEV">
+            <atcobject:findings/>
+        </atcobject:object>
+    </atcworklist:objects>
+    <atcworklist:infos/>
+</atcworklist:worklist>

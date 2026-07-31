@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/zsd_pricing_rpt" adtcore:type="PROG/P" adtcore:name="ZSD_PRICING_RPT" adtcore:packageName="ZSD_REMED" adtcore:description="SD pricing analysis report"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/zcl_sd_helper" adtcore:type="CLAS/OC" adtcore:name="ZCL_SD_HELPER" adtcore:packageName="ZSD_REMED" adtcore:description="SD helper class"/>
+</adtcore:objectReferences>

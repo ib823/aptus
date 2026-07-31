@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapsource:objectStructureElement xmlns:abapsource="http://www.sap.com/adt/abapsource" xmlns:adtcore="http://www.sap.com/adt/core" adtcore:name="ZCL_SD_HELPER" adtcore:type="CLAS/OC" adtcore:description="SD helper class">
+  <abapsource:objectStructureElement adtcore:name="READ_PRICING" adtcore:type="CLAS/OM" adtcore:description="Read pricing conditions" visibility="public" level="instance"/>
+  <abapsource:objectStructureElement adtcore:name="MAP_KONV" adtcore:type="CLAS/OM" adtcore:description="Map KONV to PRCD_ELEMENTS" visibility="private" level="static"/>
+  <abapsource:objectStructureElement adtcore:name="GC_MAX_ROWS" adtcore:type="CLAS/OA" adtcore:description="Row cap" visibility="private"/>
+</abapsource:objectStructureElement>
