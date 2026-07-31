@@ -196,9 +196,20 @@ async function importBundledType(type: HubContentType, importedAt: string): Prom
     };
     const existing = await prisma.sapHubContent.findUnique({
       where: { contentType_externalId: { contentType: ct, externalId: norm.externalId } },
-      select: { id: true },
+      select: { id: true, illustrative: true },
     });
     if (existing) {
+      /*
+       * AN ILLUSTRATIVE ROW MUST NOT REPLACE A REAL ONE — same rule as the
+       * local script (scripts/import-sap-hub-content.ts), because this is the
+       * same upsert against the same key and the hazard travels with it.
+       * Whichever import ran last used to win, and the illustrative seed
+       * carries placeholder text for ids that are genuinely published.
+       */
+      if (norm.illustrative && existing.illustrative === false) {
+        skipped++;
+        continue;
+      }
       await prisma.sapHubContent.update({ where: { id: existing.id }, data });
       updated++;
     } else {
