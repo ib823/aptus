@@ -5,6 +5,12 @@
  * ?assessmentId=X. Currently a scaffold — the existing
  * src/components/collaboration/ActivityFeed.tsx is assessment-scoped;
  * the cross-assessment client will land in a follow-up.
+ *
+ * DELIBERATELY UNLINKED from navigation until the aggregation client
+ * lands — reachable by typed URL only. Linking a page whose body says
+ * "scheduled for a follow-up" would advertise a feature that is not
+ * there; hiding the route entirely would 404 a documented Phase 8
+ * landing point. Unlinked-but-alive is the honest middle.
  */
 
 export default function PortfolioActivityPage() {

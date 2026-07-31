@@ -18,6 +18,7 @@ function createBase(overrides: UserOverrides = {}): User {
     image: overrides.image ?? null,
     role: overrides.role ?? "consultant",
     organizationId: overrides.organizationId ?? null,
+    presalesPreferences: overrides.presalesPreferences ?? null,
     isActive: overrides.isActive ?? true,
     avatarUrl: overrides.avatarUrl ?? null,
     mfaEnabled: overrides.mfaEnabled ?? false,
