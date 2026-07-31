@@ -2,20 +2,20 @@
  "_provenance": {
   "source": "https://api.sap.com/odata/1.0/catalog.svc",
   "method": "anonymous ContentPackages → Artifacts navigation",
-  "harvestedAt": "2026-07-30T07:49:35.305Z",
-  "finishedAt": "2026-07-30T07:51:05.019Z",
+  "harvestedAt": "2026-07-31T08:07:42.098Z",
+  "finishedAt": "2026-07-31T08:09:10.284Z",
   "packagesRead": 1949,
   "packagesWalled": 0,
   "artifactTypeCounts": {
    "IFlow": 4439,
-   "API": 4597,
+   "API": 4598,
    "Build": 6755,
-   "IntegrationAdapter": 91,
    "ValueMapping": 279,
-   "Scenario": 734,
+   "IntegrationAdapter": 91,
    "VisibilityScenario": 81,
    "Process": 59,
    "BRProject": 100,
+   "Scenario": 734,
    "DataProduct": 312,
    "Event": 496,
    "MessageMapping": 244,
@@ -31,92 +31,29 @@
    "BusinessObject": 152,
    "Solution": 12
   },
-  "apiRowsBeforeDedupe": 4597,
-  "apiRows": 4597,
+  "apiRowsBeforeDedupe": 4598,
+  "apiRows": 4598,
   "completeness": "floor",
+  "unmappedArtifactTypes": {
+   "ValueMapping": 279,
+   "IntegrationAdapter": 91,
+   "VisibilityScenario": 81,
+   "Process": 59,
+   "BRProject": 100,
+   "DataProduct": 312,
+   "MessageMapping": 244,
+   "ScriptCollection": 59,
+   "ICD": 62,
+   "PolicyTemplate": 25,
+   "BusinessRules": 6,
+   "OData Service": 2,
+   "DataHub Solutions": 1,
+   "BusinessObject": 152,
+   "Solution": 12
+  },
   "note": "Lower bound on what SAP publishes. NOT evidence that any service is available on any tenant — only a probe against a real system can say that."
  },
  "apis": [
-  {
-   "apiId": "ccpcustmasterdata",
-   "apiName": "Customer Master Data",
-   "apiType": "ODATAV4",
-   "status": "DEPRECATED",
-   "description": "Create, read, and delete master data for a customer using this synchronous inbound service",
-   "product": "SAPS4HANACloudforcustomerpayments",
-   "packageId": "SAPS4HANACloudforCustomerPayments",
-   "packageTitle": "SAP S/4HANA Cloud for Customer Payments",
-   "lineOfBusiness": "Finance",
-   "version": "1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPS4HANACloudforCustomerPayments"
-   ]
-  },
-  {
-   "apiId": "ccpcustpayment",
-   "apiName": "Customer Payment",
-   "apiType": "ODATAV4",
-   "status": "DEPRECATED",
-   "description": "Create, read, and delete customer payments and customer numbers in process using this synchronous inbound service",
-   "product": "SAPS4HANACloudforcustomerpayments",
-   "packageId": "SAPS4HANACloudforCustomerPayments",
-   "packageTitle": "SAP S/4HANA Cloud for Customer Payments",
-   "lineOfBusiness": "Finance",
-   "version": "1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPS4HANACloudforCustomerPayments"
-   ]
-  },
-  {
-   "apiId": "ccpselfregistration",
-   "apiName": "Self Registration",
-   "apiType": "ODATAV4",
-   "status": "DEPRECATED",
-   "description": "Enables the new user to register the user via self registration.",
-   "product": "SAPS4HANACloudforcustomerpayments",
-   "packageId": "SAPS4HANACloudforCustomerPayments",
-   "packageTitle": "SAP S/4HANA Cloud for Customer Payments",
-   "lineOfBusiness": "Finance",
-   "version": "1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPS4HANACloudforCustomerPayments"
-   ]
-  },
-  {
-   "apiId": "ccpcustpaymentadvice",
-   "apiName": "Customer Payment Advice",
-   "apiType": "ODATAV4",
-   "status": "DEPRECATED",
-   "description": "Create, read and delete customer payment advice data using this synchronous inbound service",
-   "product": "SAPS4HANACloudforcustomerpayments",
-   "packageId": "SAPS4HANACloudforCustomerPayments",
-   "packageTitle": "SAP S/4HANA Cloud for Customer Payments",
-   "lineOfBusiness": "Finance",
-   "version": "1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPS4HANACloudforCustomerPayments"
-   ]
-  },
-  {
-   "apiId": "ccpcustinvoice",
-   "apiName": "Customer Invoice",
-   "apiType": "ODATAV4",
-   "status": "DEPRECATED",
-   "description": "Read customer invoice data using this synchronous inbound service",
-   "product": "SAPS4HANACloudforcustomerpayments",
-   "packageId": "SAPS4HANACloudforCustomerPayments",
-   "packageTitle": "SAP S/4HANA Cloud for Customer Payments",
-   "lineOfBusiness": "Finance",
-   "version": "1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPS4HANACloudforCustomerPayments"
-   ]
-  },
   {
    "apiId": "OnboardingOBX",
    "apiName": "Onboarding",
@@ -230,6 +167,86 @@
    ]
   },
   {
+   "apiId": "ccpcustmasterdata",
+   "apiName": "Customer Master Data",
+   "apiType": "ODATAV4",
+   "status": "DEPRECATED",
+   "description": "Create, read, and delete master data for a customer using this synchronous inbound service",
+   "product": "SAPS4HANACloudforcustomerpayments",
+   "packageId": "SAPS4HANACloudforCustomerPayments",
+   "packageTitle": "SAP S/4HANA Cloud for Customer Payments",
+   "lineOfBusiness": "Finance",
+   "version": "1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPS4HANACloudforCustomerPayments"
+   ]
+  },
+  {
+   "apiId": "ccpcustpayment",
+   "apiName": "Customer Payment",
+   "apiType": "ODATAV4",
+   "status": "DEPRECATED",
+   "description": "Create, read, and delete customer payments and customer numbers in process using this synchronous inbound service",
+   "product": "SAPS4HANACloudforcustomerpayments",
+   "packageId": "SAPS4HANACloudforCustomerPayments",
+   "packageTitle": "SAP S/4HANA Cloud for Customer Payments",
+   "lineOfBusiness": "Finance",
+   "version": "1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPS4HANACloudforCustomerPayments"
+   ]
+  },
+  {
+   "apiId": "ccpselfregistration",
+   "apiName": "Self Registration",
+   "apiType": "ODATAV4",
+   "status": "DEPRECATED",
+   "description": "Enables the new user to register the user via self registration.",
+   "product": "SAPS4HANACloudforcustomerpayments",
+   "packageId": "SAPS4HANACloudforCustomerPayments",
+   "packageTitle": "SAP S/4HANA Cloud for Customer Payments",
+   "lineOfBusiness": "Finance",
+   "version": "1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPS4HANACloudforCustomerPayments"
+   ]
+  },
+  {
+   "apiId": "ccpcustpaymentadvice",
+   "apiName": "Customer Payment Advice",
+   "apiType": "ODATAV4",
+   "status": "DEPRECATED",
+   "description": "Create, read and delete customer payment advice data using this synchronous inbound service",
+   "product": "SAPS4HANACloudforcustomerpayments",
+   "packageId": "SAPS4HANACloudforCustomerPayments",
+   "packageTitle": "SAP S/4HANA Cloud for Customer Payments",
+   "lineOfBusiness": "Finance",
+   "version": "1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPS4HANACloudforCustomerPayments"
+   ]
+  },
+  {
+   "apiId": "ccpcustinvoice",
+   "apiName": "Customer Invoice",
+   "apiType": "ODATAV4",
+   "status": "DEPRECATED",
+   "description": "Read customer invoice data using this synchronous inbound service",
+   "product": "SAPS4HANACloudforcustomerpayments",
+   "packageId": "SAPS4HANACloudforCustomerPayments",
+   "packageTitle": "SAP S/4HANA Cloud for Customer Payments",
+   "lineOfBusiness": "Finance",
+   "version": "1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPS4HANACloudforCustomerPayments"
+   ]
+  },
+  {
    "apiId": "office365",
    "apiName": "Microsoft Office 365",
    "apiType": "REST",
@@ -243,22 +260,6 @@
    "apiHubUrl": null,
    "packageIds": [
     "productivity"
-   ]
-  },
-  {
-   "apiId": "OP_ERP_FMCA_MC_SRV_0001",
-   "apiName": "Multichannel Foundation for Public Sector",
-   "apiType": "ODATA",
-   "status": "ACTIVE",
-   "description": "Enable interaction with customers through communication channels, for example, online self-services, mobile, and social networks using this inbound service",
-   "product": "SAP S/4HANA",
-   "packageId": "S4HANAOPAPIFMCA",
-   "packageTitle": "SAP S/4HANA Package for Public Sector",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "S4HANAOPAPIFMCA"
    ]
   },
   {
@@ -339,6 +340,22 @@
    "apiHubUrl": null,
    "packageIds": [
     "sap-s4com-PublicSectorBudgetaryReportingAndAnalyticsAPI"
+   ]
+  },
+  {
+   "apiId": "OP_ERP_FMCA_MC_SRV_0001",
+   "apiName": "Multichannel Foundation for Public Sector",
+   "apiType": "ODATA",
+   "status": "ACTIVE",
+   "description": "Enable interaction with customers through communication channels, for example, online self-services, mobile, and social networks using this inbound service",
+   "product": "SAP S/4HANA",
+   "packageId": "S4HANAOPAPIFMCA",
+   "packageTitle": "SAP S/4HANA Package for Public Sector",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "S4HANAOPAPIFMCA"
    ]
   },
   {
@@ -2038,38 +2055,6 @@
    ]
   },
   {
-   "apiId": "VOPAPIDetails",
-   "apiName": "Verification of payee",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "SAP S/4HANA Banking for Payment Centralization",
-   "product": "SAPS4HANABankingforpaymentcentralization",
-   "packageId": "SAPS4HANABankingforPaymentCentralization",
-   "packageTitle": "SAP S/4HANA Banking for Payment Centralization",
-   "lineOfBusiness": "Finance",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPS4HANABankingforPaymentCentralization"
-   ]
-  },
-  {
-   "apiId": "PEAPIdetails",
-   "apiName": "Customer payment initiation and request for cancellation",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "SAP S/4HANA Banking for Payment Centralization",
-   "product": "SAPS4HANABankingforpaymentcentralization",
-   "packageId": "SAPS4HANABankingforPaymentCentralization",
-   "packageTitle": "SAP S/4HANA Banking for Payment Centralization",
-   "lineOfBusiness": "Finance",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPS4HANABankingforPaymentCentralization"
-   ]
-  },
-  {
    "apiId": "ProjectExperience",
    "apiName": "Project Experience",
    "apiType": "ODATAV4",
@@ -2134,6 +2119,38 @@
    ]
   },
   {
+   "apiId": "VOPAPIDetails",
+   "apiName": "Verification of payee",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "SAP S/4HANA Banking for Payment Centralization",
+   "product": "SAPS4HANABankingforpaymentcentralization",
+   "packageId": "SAPS4HANABankingforPaymentCentralization",
+   "packageTitle": "SAP S/4HANA Banking for Payment Centralization",
+   "lineOfBusiness": "Finance",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPS4HANABankingforPaymentCentralization"
+   ]
+  },
+  {
+   "apiId": "PEAPIdetails",
+   "apiName": "Customer payment initiation and request for cancellation",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "SAP S/4HANA Banking for Payment Centralization",
+   "product": "SAPS4HANABankingforpaymentcentralization",
+   "packageId": "SAPS4HANABankingforPaymentCentralization",
+   "packageTitle": "SAP S/4HANA Banking for Payment Centralization",
+   "lineOfBusiness": "Finance",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPS4HANABankingforPaymentCentralization"
+   ]
+  },
+  {
    "apiId": "IBP_Batch_RAP_ODataService",
    "apiName": "Batch Data Integration",
    "apiType": "ODATAV4",
@@ -2147,70 +2164,6 @@
    "apiHubUrl": null,
    "packageIds": [
     "IBPAPIBatchService"
-   ]
-  },
-  {
-   "apiId": "APIM_SB_SYNC",
-   "apiName": "Synchronization of API Metering Data",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Synchronizes SAP API Management metering data with SAP Subscription Billing.",
-   "product": "SAP Subscription Billing,SAP API Management",
-   "packageId": "APIMMONETIZATIONUSINGSB",
-   "packageTitle": "SAP API Management Monetization using SAP Subscription Billing",
-   "lineOfBusiness": null,
-   "version": "1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "APIMMONETIZATIONUSINGSB"
-   ]
-  },
-  {
-   "apiId": "REST_Charging",
-   "apiName": "Charging Service",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Rate event based and session based usage consumptions.",
-   "product": "SAP Convergent Charging",
-   "packageId": "SAPConvergentCharging",
-   "packageTitle": "SAP Convergent Charging",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPConvergentCharging"
-   ]
-  },
-  {
-   "apiId": "REST_AuditData",
-   "apiName": "Audit Data Service",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Get audit data like user operation log records and object change logs.",
-   "product": "SAP Convergent Charging",
-   "packageId": "SAPConvergentCharging",
-   "packageTitle": "SAP Convergent Charging",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPConvergentCharging"
-   ]
-  },
-  {
-   "apiId": "REST_Loading",
-   "apiName": "Loading Service",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Load event based usage consumptions to be rated afterwards.",
-   "product": "SAP Convergent Charging",
-   "packageId": "SAPConvergentCharging",
-   "packageTitle": "SAP Convergent Charging",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPConvergentCharging"
    ]
   },
   {
@@ -2438,6 +2391,102 @@
    ]
   },
   {
+   "apiId": "APIM_SB_SYNC",
+   "apiName": "Synchronization of API Metering Data",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Synchronizes SAP API Management metering data with SAP Subscription Billing.",
+   "product": "SAP Subscription Billing,SAP API Management",
+   "packageId": "APIMMONETIZATIONUSINGSB",
+   "packageTitle": "SAP API Management Monetization using SAP Subscription Billing",
+   "lineOfBusiness": null,
+   "version": "1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "APIMMONETIZATIONUSINGSB"
+   ]
+  },
+  {
+   "apiId": "REST_Charging",
+   "apiName": "Charging Service",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Rate event based and session based usage consumptions.",
+   "product": "SAP Convergent Charging",
+   "packageId": "SAPConvergentCharging",
+   "packageTitle": "SAP Convergent Charging",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPConvergentCharging"
+   ]
+  },
+  {
+   "apiId": "REST_AuditData",
+   "apiName": "Audit Data Service",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Get audit data like user operation log records and object change logs.",
+   "product": "SAP Convergent Charging",
+   "packageId": "SAPConvergentCharging",
+   "packageTitle": "SAP Convergent Charging",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPConvergentCharging"
+   ]
+  },
+  {
+   "apiId": "REST_Loading",
+   "apiName": "Loading Service",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Load event based usage consumptions to be rated afterwards.",
+   "product": "SAP Convergent Charging",
+   "packageId": "SAPConvergentCharging",
+   "packageTitle": "SAP Convergent Charging",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPConvergentCharging"
+   ]
+  },
+  {
+   "apiId": "HCP_Logging",
+   "apiName": "Logs API",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Get the logs of an application.",
+   "product": "SAPApplicationLoggingserviceforSAPBTP,SAPCloudPlatform",
+   "packageId": "SAPCPAppLogging",
+   "packageTitle": "SAP Application Logging Service for SAP BTP",
+   "lineOfBusiness": null,
+   "version": "v1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCPAppLogging"
+   ]
+  },
+  {
+   "apiId": "HCP_Log_channels",
+   "apiName": "Log Channels",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Receive logs on a specified channel.",
+   "product": "SAPApplicationLoggingserviceforSAPBTP,SAPCloudPlatform",
+   "packageId": "SAPCPAppLogging",
+   "packageTitle": "SAP Application Logging Service for SAP BTP",
+   "lineOfBusiness": null,
+   "version": "v1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCPAppLogging"
+   ]
+  },
+  {
    "apiId": "RCMCandidate",
    "apiName": "Candidate",
    "apiType": "ODATA",
@@ -2515,38 +2564,6 @@
    "apiHubUrl": null,
    "packageIds": [
     "SuccessFactorsRecruiting"
-   ]
-  },
-  {
-   "apiId": "HCP_Logging",
-   "apiName": "Logs API",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Get the logs of an application.",
-   "product": "SAPApplicationLoggingserviceforSAPBTP,SAPCloudPlatform",
-   "packageId": "SAPCPAppLogging",
-   "packageTitle": "SAP Application Logging Service for SAP BTP",
-   "lineOfBusiness": null,
-   "version": "v1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCPAppLogging"
-   ]
-  },
-  {
-   "apiId": "HCP_Log_channels",
-   "apiName": "Log Channels",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Receive logs on a specified channel.",
-   "product": "SAPApplicationLoggingserviceforSAPBTP,SAPCloudPlatform",
-   "packageId": "SAPCPAppLogging",
-   "packageTitle": "SAP Application Logging Service for SAP BTP",
-   "lineOfBusiness": null,
-   "version": "v1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCPAppLogging"
    ]
   },
   {
@@ -2678,22 +2695,6 @@
    ]
   },
   {
-   "apiId": "IBP_Sales_RAP_ODataService",
-   "apiName": "Sales Document Integration",
-   "apiType": "ODATAV4",
-   "status": "ACTIVE",
-   "description": "Extracting and Importing Sales Document Data",
-   "product": "SAPIntegratedBusinessPlanningforSupplyChain",
-   "packageId": "IBPAPISalesService",
-   "packageTitle": "SAP IBP - Sales Service",
-   "lineOfBusiness": "Sourcing and Procurement,Supply Chain,Manufacturing",
-   "version": "1.0.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "IBPAPISalesService"
-   ]
-  },
-  {
    "apiId": "sap-s4com-ContrAcctgBillingDocument-v1",
    "apiName": "Contract Accounting Billing Document",
    "apiType": "DELTAAPI",
@@ -2803,6 +2804,22 @@
    "apiHubUrl": null,
    "packageIds": [
     "sap-s4com-ContractAccountingDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "IBP_Sales_RAP_ODataService",
+   "apiName": "Sales Document Integration",
+   "apiType": "ODATAV4",
+   "status": "ACTIVE",
+   "description": "Extracting and Importing Sales Document Data",
+   "product": "SAPIntegratedBusinessPlanningforSupplyChain",
+   "packageId": "IBPAPISalesService",
+   "packageTitle": "SAP IBP - Sales Service",
+   "lineOfBusiness": "Sourcing and Procurement,Supply Chain,Manufacturing",
+   "version": "1.0.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "IBPAPISalesService"
    ]
   },
   {
@@ -2950,38 +2967,6 @@
    ]
   },
   {
-   "apiId": "IBP_BusinessRoleChanges_Read",
-   "apiName": "Business Role Changes - Read",
-   "apiType": "ODATA",
-   "status": "ACTIVE",
-   "description": "Read change documents for business roles using this synchronous inbound service",
-   "product": "SAPIntegratedBusinessPlanningforSupplyChain",
-   "packageId": "SAPIBPSecurityMonitoringIntegration",
-   "packageTitle": "SAP IBP - Security Monitoring Integration",
-   "lineOfBusiness": "Manufacturing,Sourcing and Procurement,Supply Chain",
-   "version": "1.0.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPIBPSecurityMonitoringIntegration"
-   ]
-  },
-  {
-   "apiId": "IBP_BusinessUserChanges_Read",
-   "apiName": "Business User Change - Read",
-   "apiType": "ODATA",
-   "status": "ACTIVE",
-   "description": "Read change documents for business users using this synchronous inbound service",
-   "product": "SAPIntegratedBusinessPlanningforSupplyChain",
-   "packageId": "SAPIBPSecurityMonitoringIntegration",
-   "packageTitle": "SAP IBP - Security Monitoring Integration",
-   "lineOfBusiness": "Manufacturing,Sourcing and Procurement,Supply Chain",
-   "version": "1.0.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPIBPSecurityMonitoringIntegration"
-   ]
-  },
-  {
    "apiId": "Mobile",
    "apiName": "Mobile Service",
    "apiType": "REST",
@@ -3123,6 +3108,38 @@
    "apiHubUrl": null,
    "packageIds": [
     "serviceapi"
+   ]
+  },
+  {
+   "apiId": "IBP_BusinessRoleChanges_Read",
+   "apiName": "Business Role Changes - Read",
+   "apiType": "ODATA",
+   "status": "ACTIVE",
+   "description": "Read change documents for business roles using this synchronous inbound service",
+   "product": "SAPIntegratedBusinessPlanningforSupplyChain",
+   "packageId": "SAPIBPSecurityMonitoringIntegration",
+   "packageTitle": "SAP IBP - Security Monitoring Integration",
+   "lineOfBusiness": "Manufacturing,Sourcing and Procurement,Supply Chain",
+   "version": "1.0.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPIBPSecurityMonitoringIntegration"
+   ]
+  },
+  {
+   "apiId": "IBP_BusinessUserChanges_Read",
+   "apiName": "Business User Change - Read",
+   "apiType": "ODATA",
+   "status": "ACTIVE",
+   "description": "Read change documents for business users using this synchronous inbound service",
+   "product": "SAPIntegratedBusinessPlanningforSupplyChain",
+   "packageId": "SAPIBPSecurityMonitoringIntegration",
+   "packageTitle": "SAP IBP - Security Monitoring Integration",
+   "lineOfBusiness": "Manufacturing,Sourcing and Procurement,Supply Chain",
+   "version": "1.0.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPIBPSecurityMonitoringIntegration"
    ]
   },
   {
@@ -4566,6 +4583,38 @@
    ]
   },
   {
+   "apiId": "IBP_API_RealignmentService",
+   "apiName": "Realignment Project Integration",
+   "apiType": "ODATA",
+   "status": "ACTIVE",
+   "description": "Upload realignment projects to SAP Integrated Business Planning for Supply Chain",
+   "product": "SAPIntegratedBusinessPlanningforSupplyChain",
+   "packageId": "IBPAPIRealignmentService",
+   "packageTitle": "SAP IBP - Realignment Project Integration",
+   "lineOfBusiness": "Manufacturing,Supply Chain,Sourcing and Procurement",
+   "version": "1.0.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "IBPAPIRealignmentService"
+   ]
+  },
+  {
+   "apiId": "IBP_ManageProcesses_RAP_ODataService_v3",
+   "apiName": "Extract and Manage Process Management Data",
+   "apiType": "ODATAV4",
+   "status": "ACTIVE",
+   "description": "Extract business process data, steps and tasks in SAP Integrated Business Planning for Supply Chain",
+   "product": "SAPIntegratedBusinessPlanningforSupplyChain",
+   "packageId": "IBPAPIManageProcesses",
+   "packageTitle": "SAP IBP - Manage Processes",
+   "lineOfBusiness": "Sourcing and Procurement,Supply Chain,Manufacturing",
+   "version": "1.0.3",
+   "apiHubUrl": null,
+   "packageIds": [
+    "IBPAPIManageProcesses"
+   ]
+  },
+  {
    "apiId": "SAPEngagementCloudSalesData",
    "apiName": "Sales Data",
    "apiType": "REST",
@@ -4758,22 +4807,6 @@
    ]
   },
   {
-   "apiId": "IBP_API_RealignmentService",
-   "apiName": "Realignment Project Integration",
-   "apiType": "ODATA",
-   "status": "ACTIVE",
-   "description": "Upload realignment projects to SAP Integrated Business Planning for Supply Chain",
-   "product": "SAPIntegratedBusinessPlanningforSupplyChain",
-   "packageId": "IBPAPIRealignmentService",
-   "packageTitle": "SAP IBP - Realignment Project Integration",
-   "lineOfBusiness": "Manufacturing,Supply Chain,Sourcing and Procurement",
-   "version": "1.0.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "IBPAPIRealignmentService"
-   ]
-  },
-  {
    "apiId": "sap-lgm-WarehouseTaskAPI-v1",
    "apiName": "Warehouse Task API",
    "apiType": "ODATAV4",
@@ -4787,38 +4820,6 @@
    "apiHubUrl": null,
    "packageIds": [
     "sap-lgm-PublicAPIs"
-   ]
-  },
-  {
-   "apiId": "IBP_ManageProcesses_RAP_ODataService_v3",
-   "apiName": "Extract and Manage Process Management Data",
-   "apiType": "ODATAV4",
-   "status": "ACTIVE",
-   "description": "Extract business process data, steps and tasks in SAP Integrated Business Planning for Supply Chain",
-   "product": "SAPIntegratedBusinessPlanningforSupplyChain",
-   "packageId": "IBPAPIManageProcesses",
-   "packageTitle": "SAP IBP - Manage Processes",
-   "lineOfBusiness": "Sourcing and Procurement,Supply Chain,Manufacturing",
-   "version": "1.0.3",
-   "apiHubUrl": null,
-   "packageIds": [
-    "IBPAPIManageProcesses"
-   ]
-  },
-  {
-   "apiId": "IBP_Delivery_RAP_OdataService",
-   "apiName": "Delivery Documents Integration",
-   "apiType": "ODATAV4",
-   "status": "ACTIVE",
-   "description": "Extracting and Importing Delivery Document Data",
-   "product": "SAPIntegratedBusinessPlanningforSupplyChain",
-   "packageId": "SAPIBPDeliveryService",
-   "packageTitle": "SAP IBP - Delivery Service",
-   "lineOfBusiness": "Sourcing and Procurement,Supply Chain,Manufacturing",
-   "version": "1.0.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPIBPDeliveryService"
    ]
   },
   {
@@ -4899,6 +4900,22 @@
    "apiHubUrl": null,
    "packageIds": [
     "sap-s4com-ServiceDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "IBP_Delivery_RAP_OdataService",
+   "apiName": "Delivery Documents Integration",
+   "apiType": "ODATAV4",
+   "status": "ACTIVE",
+   "description": "Extracting and Importing Delivery Document Data",
+   "product": "SAPIntegratedBusinessPlanningforSupplyChain",
+   "packageId": "SAPIBPDeliveryService",
+   "packageTitle": "SAP IBP - Delivery Service",
+   "lineOfBusiness": "Sourcing and Procurement,Supply Chain,Manufacturing",
+   "version": "1.0.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPIBPDeliveryService"
    ]
   },
   {
@@ -6134,54 +6151,6 @@
    ]
   },
   {
-   "apiId": "CPIAIFErrorForward",
-   "apiName": "Error Forwarding to SAP Application Interface Framework",
-   "apiType": "SOAP",
-   "status": "DEPRECATED",
-   "description": "View SAP Cloud Integration errors in SAP Application Interface Framework",
-   "product": "SAP Application Interface Framework,SAP S/4HANA,SAP Cloud Integration",
-   "packageId": "CPIAIFErrFwd",
-   "packageTitle": "SAP Application Interface Framework - Error Forwarding",
-   "lineOfBusiness": null,
-   "version": "1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "CPIAIFErrFwd"
-   ]
-  },
-  {
-   "apiId": "CPIAIFErrorPropagation",
-   "apiName": "Error Forwarding to Message Monitoring",
-   "apiType": "SOAP",
-   "status": "ACTIVE",
-   "description": "View SAP Cloud Integration errors in SAP Application Interface Framework and SAP S/4HANA Cloud Message Monitoring",
-   "product": "SAP Application Interface Framework,SAP S/4HANA,SAP Cloud Integration",
-   "packageId": "CPIAIFErrFwd",
-   "packageTitle": "SAP Application Interface Framework - Error Forwarding",
-   "lineOfBusiness": null,
-   "version": "1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "CPIAIFErrFwd"
-   ]
-  },
-  {
-   "apiId": "CPIAIFCloudErrorForward",
-   "apiName": "Error Forwarding to SAP S/4HANA Cloud Message Monitor",
-   "apiType": "SOAP",
-   "status": "DEPRECATED",
-   "description": "View SAP Cloud Integration errors in Message Monitor",
-   "product": "SAP Application Interface Framework,SAP S/4HANA,SAP Cloud Integration",
-   "packageId": "CPIAIFErrFwd",
-   "packageTitle": "SAP Application Interface Framework - Error Forwarding",
-   "lineOfBusiness": null,
-   "version": "1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "CPIAIFErrFwd"
-   ]
-  },
-  {
    "apiId": "CDMSearchAPI",
    "apiName": "Core Data Search",
    "apiType": "REST",
@@ -6227,6 +6196,54 @@
    "apiHubUrl": null,
    "packageIds": [
     "SAPMasterDataApplication"
+   ]
+  },
+  {
+   "apiId": "CPIAIFErrorForward",
+   "apiName": "Error Forwarding to SAP Application Interface Framework",
+   "apiType": "SOAP",
+   "status": "DEPRECATED",
+   "description": "View SAP Cloud Integration errors in SAP Application Interface Framework",
+   "product": "SAP Application Interface Framework,SAP S/4HANA,SAP Cloud Integration",
+   "packageId": "CPIAIFErrFwd",
+   "packageTitle": "SAP Application Interface Framework - Error Forwarding",
+   "lineOfBusiness": null,
+   "version": "1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "CPIAIFErrFwd"
+   ]
+  },
+  {
+   "apiId": "CPIAIFErrorPropagation",
+   "apiName": "Error Forwarding to Message Monitoring",
+   "apiType": "SOAP",
+   "status": "ACTIVE",
+   "description": "View SAP Cloud Integration errors in SAP Application Interface Framework and SAP S/4HANA Cloud Message Monitoring",
+   "product": "SAP Application Interface Framework,SAP S/4HANA,SAP Cloud Integration",
+   "packageId": "CPIAIFErrFwd",
+   "packageTitle": "SAP Application Interface Framework - Error Forwarding",
+   "lineOfBusiness": null,
+   "version": "1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "CPIAIFErrFwd"
+   ]
+  },
+  {
+   "apiId": "CPIAIFCloudErrorForward",
+   "apiName": "Error Forwarding to SAP S/4HANA Cloud Message Monitor",
+   "apiType": "SOAP",
+   "status": "DEPRECATED",
+   "description": "View SAP Cloud Integration errors in Message Monitor",
+   "product": "SAP Application Interface Framework,SAP S/4HANA,SAP Cloud Integration",
+   "packageId": "CPIAIFErrFwd",
+   "packageTitle": "SAP Application Interface Framework - Error Forwarding",
+   "lineOfBusiness": null,
+   "version": "1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "CPIAIFErrFwd"
    ]
   },
   {
@@ -6374,22 +6391,6 @@
    ]
   },
   {
-   "apiId": "hireright",
-   "apiName": "HireRight",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "On-demand employment background checks and screening",
-   "product": "SAPCloudPlatformOpenConnectors",
-   "packageId": "screening",
-   "packageTitle": "Screening - Open Connectors",
-   "lineOfBusiness": null,
-   "version": "api-v2",
-   "apiHubUrl": null,
-   "packageIds": [
-    "screening"
-   ]
-  },
-  {
    "apiId": "API_TRANSPORT_MANAGEMENT",
    "apiName": "ODATA Service for Change and Transport System",
    "apiType": "ODATA",
@@ -6403,6 +6404,22 @@
    "apiHubUrl": null,
    "packageIds": [
     "ctsCloudAPI"
+   ]
+  },
+  {
+   "apiId": "hireright",
+   "apiName": "HireRight",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "On-demand employment background checks and screening",
+   "product": "SAPCloudPlatformOpenConnectors",
+   "packageId": "screening",
+   "packageTitle": "Screening - Open Connectors",
+   "lineOfBusiness": null,
+   "version": "api-v2",
+   "apiHubUrl": null,
+   "packageIds": [
+    "screening"
    ]
   },
   {
@@ -9430,102 +9447,6 @@
    ]
   },
   {
-   "apiId": "AuditlogSearchAPI",
-   "apiName": "Audit Log Search",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Search and retrieve NG audit logs with advanced filtering and multi-tenant support. Does not search Legacy logs.",
-   "product": "SAPAuditLogservice",
-   "packageId": "scpauditlogging",
-   "packageTitle": "SAP Audit Log Service",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "scpauditlogging"
-   ]
-  },
-  {
-   "apiId": "AuditLogRetentionAPI",
-   "apiName": "Audit Log Retention API (Neo environment)",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Returns the active retention period for the audit logs or changes the active retention period.",
-   "product": "SAPAuditLogservice",
-   "packageId": "scpauditlogging",
-   "packageTitle": "SAP Audit Log Service",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "scpauditlogging"
-   ]
-  },
-  {
-   "apiId": "CFAuditLogRetrievalAPI",
-   "apiName": "Audit Log Retrieval API (Cloud Foundry environment)",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Provides functionality to retrieve audit logs.",
-   "product": "SAPAuditLogservice",
-   "packageId": "scpauditlogging",
-   "packageTitle": "SAP Audit Log Service",
-   "lineOfBusiness": null,
-   "version": "2.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "scpauditlogging"
-   ]
-  },
-  {
-   "apiId": "AuditLogRetrievalAPI",
-   "apiName": "Audit Log Retrieval API (Neo environment)",
-   "apiType": "ODATA",
-   "status": "ACTIVE",
-   "description": "Provides functionality to retrieve audit logs.",
-   "product": "SAPAuditLogservice",
-   "packageId": "scpauditlogging",
-   "packageTitle": "SAP Audit Log Service",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "scpauditlogging"
-   ]
-  },
-  {
-   "apiId": "AuditlogSearchAPIv2",
-   "apiName": "Audit Log Search",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Search and retrieve audit logs across both NG and Legacy data streams with batch search, advanced filtering, and multi-tenant support.",
-   "product": "SAPAuditLogservice",
-   "packageId": "scpauditlogging",
-   "packageTitle": "SAP Audit Log Service",
-   "lineOfBusiness": null,
-   "version": "2.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "scpauditlogging"
-   ]
-  },
-  {
-   "apiId": "CFAuditLogWriteAPI",
-   "apiName": "Audit Log Write API (Cloud Foundry environment)",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Provides functionality to write audit logs.",
-   "product": "SAPAuditLogservice",
-   "packageId": "scpauditlogging",
-   "packageTitle": "SAP Audit Log Service",
-   "lineOfBusiness": null,
-   "version": "2.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "scpauditlogging"
-   ]
-  },
-  {
    "apiId": "sap-s4com-ManufacturingCodes-v1",
    "apiName": "Manufacturing Codes",
    "apiType": "DELTAAPI",
@@ -9635,6 +9556,102 @@
    "apiHubUrl": null,
    "packageIds": [
     "sap-s4com-ManufacturingDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "AuditlogSearchAPI",
+   "apiName": "Audit Log Search",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Search and retrieve NG audit logs with advanced filtering and multi-tenant support. Does not search Legacy logs.",
+   "product": "SAPAuditLogservice",
+   "packageId": "scpauditlogging",
+   "packageTitle": "SAP Audit Log Service",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "scpauditlogging"
+   ]
+  },
+  {
+   "apiId": "AuditLogRetentionAPI",
+   "apiName": "Audit Log Retention API (Neo environment)",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Returns the active retention period for the audit logs or changes the active retention period.",
+   "product": "SAPAuditLogservice",
+   "packageId": "scpauditlogging",
+   "packageTitle": "SAP Audit Log Service",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "scpauditlogging"
+   ]
+  },
+  {
+   "apiId": "CFAuditLogRetrievalAPI",
+   "apiName": "Audit Log Retrieval API (Cloud Foundry environment)",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Provides functionality to retrieve audit logs.",
+   "product": "SAPAuditLogservice",
+   "packageId": "scpauditlogging",
+   "packageTitle": "SAP Audit Log Service",
+   "lineOfBusiness": null,
+   "version": "2.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "scpauditlogging"
+   ]
+  },
+  {
+   "apiId": "AuditLogRetrievalAPI",
+   "apiName": "Audit Log Retrieval API (Neo environment)",
+   "apiType": "ODATA",
+   "status": "ACTIVE",
+   "description": "Provides functionality to retrieve audit logs.",
+   "product": "SAPAuditLogservice",
+   "packageId": "scpauditlogging",
+   "packageTitle": "SAP Audit Log Service",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "scpauditlogging"
+   ]
+  },
+  {
+   "apiId": "AuditlogSearchAPIv2",
+   "apiName": "Audit Log Search",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Search and retrieve audit logs across both NG and Legacy data streams with batch search, advanced filtering, and multi-tenant support.",
+   "product": "SAPAuditLogservice",
+   "packageId": "scpauditlogging",
+   "packageTitle": "SAP Audit Log Service",
+   "lineOfBusiness": null,
+   "version": "2.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "scpauditlogging"
+   ]
+  },
+  {
+   "apiId": "CFAuditLogWriteAPI",
+   "apiName": "Audit Log Write API (Cloud Foundry environment)",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Provides functionality to write audit logs.",
+   "product": "SAPAuditLogservice",
+   "packageId": "scpauditlogging",
+   "packageTitle": "SAP Audit Log Service",
+   "lineOfBusiness": null,
+   "version": "2.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "scpauditlogging"
    ]
   },
   {
@@ -13670,6 +13687,22 @@
    ]
   },
   {
+   "apiId": "ExternalDocuments",
+   "apiName": "External Documents",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Exchanges electronic documents between your business system and external systems",
+   "product": "SAPDocumentandReportingCompliance",
+   "packageId": "SAPDocumentandReportingComplianceExternalDocuments",
+   "packageTitle": "SAP Document and Reporting Compliance - External Documents",
+   "lineOfBusiness": "Finance,Sales,Sourcing and Procurement",
+   "version": "1.1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPDocumentandReportingComplianceExternalDocuments"
+   ]
+  },
+  {
    "apiId": "Batches_ClinicalTrialsService",
    "apiName": "Clinical Trial Data",
    "apiType": "ODATAV4",
@@ -14915,22 +14948,6 @@
    "apiHubUrl": null,
    "packageIds": [
     "SAPBatchReleaseHubForLifeSciences"
-   ]
-  },
-  {
-   "apiId": "ExternalDocuments",
-   "apiName": "External Documents",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Exchanges electronic documents between your business system and external systems",
-   "product": "SAPDocumentandReportingCompliance",
-   "packageId": "SAPDocumentandReportingComplianceExternalDocuments",
-   "packageTitle": "SAP Document and Reporting Compliance - External Documents",
-   "lineOfBusiness": "Finance,Sales,Sourcing and Procurement",
-   "version": "1.1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPDocumentandReportingComplianceExternalDocuments"
    ]
   },
   {
@@ -19830,6 +19847,22 @@
    ]
   },
   {
+   "apiId": "SecurityAuditLog_ODataService",
+   "apiName": "Security Audit Log services",
+   "apiType": "ODATAV4",
+   "status": "DEPRECATED",
+   "description": "This service enables you to retrieve the Security Audit Log data",
+   "product": "SAPIntegratedBusinessPlanningforSupplyChain",
+   "packageId": "SecurityAuditLogODataService",
+   "packageTitle": "Security Audit Log",
+   "lineOfBusiness": "Sourcing and Procurement,Supply Chain,Manufacturing",
+   "version": "1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SecurityAuditLogODataService"
+   ]
+  },
+  {
    "apiId": "insights",
    "apiName": "Insights",
    "apiType": "REST",
@@ -19891,22 +19924,6 @@
    "apiHubUrl": null,
    "packageIds": [
     "sapsignavioprocesstransformationmanagerexternal"
-   ]
-  },
-  {
-   "apiId": "SecurityAuditLog_ODataService",
-   "apiName": "Security Audit Log services",
-   "apiType": "ODATAV4",
-   "status": "DEPRECATED",
-   "description": "This service enables you to retrieve the Security Audit Log data",
-   "product": "SAPIntegratedBusinessPlanningforSupplyChain",
-   "packageId": "SecurityAuditLogODataService",
-   "packageTitle": "Security Audit Log",
-   "lineOfBusiness": "Sourcing and Procurement,Supply Chain,Manufacturing",
-   "version": "1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SecurityAuditLogODataService"
    ]
   },
   {
@@ -24934,54 +24951,6 @@
    ]
   },
   {
-   "apiId": "ProductConfigurationService",
-   "apiName": "Variant Configuration service",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Let your customers configure your products interactively.",
-   "product": "SAPVariantConfigurationandPricing",
-   "packageId": "SAPProductConfiguration",
-   "packageTitle": "SAP Variant Configuration and Pricing",
-   "lineOfBusiness": "Sales,Commerce",
-   "version": "v2",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPProductConfiguration"
-   ]
-  },
-  {
-   "apiId": "PricingService",
-   "apiName": "Pricing service",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Calculate prices for configurable and non-configurable products.",
-   "product": "SAPVariantConfigurationandPricing",
-   "packageId": "SAPProductConfiguration",
-   "packageTitle": "SAP Variant Configuration and Pricing",
-   "lineOfBusiness": "Sales,Commerce",
-   "version": "v1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPProductConfiguration"
-   ]
-  },
-  {
-   "apiId": "AdministrationService",
-   "apiName": "Administration Service",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Administer the configuration and pricing services.",
-   "product": "SAPVariantConfigurationandPricing",
-   "packageId": "SAPProductConfiguration",
-   "packageTitle": "SAP Variant Configuration and Pricing",
-   "lineOfBusiness": "Sales,Commerce",
-   "version": "v1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPProductConfiguration"
-   ]
-  },
-  {
    "apiId": "sap-odm-workforce-foundation-JobClassification-2-0-0-v1",
    "apiName": "JobClassification",
    "apiType": "REST",
@@ -25667,6 +25636,54 @@
    "apiHubUrl": null,
    "packageIds": [
     "sap-mdi-masterDataIntegration"
+   ]
+  },
+  {
+   "apiId": "ProductConfigurationService",
+   "apiName": "Variant Configuration service",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Let your customers configure your products interactively.",
+   "product": "SAPVariantConfigurationandPricing",
+   "packageId": "SAPProductConfiguration",
+   "packageTitle": "SAP Variant Configuration and Pricing",
+   "lineOfBusiness": "Sales,Commerce",
+   "version": "v2",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPProductConfiguration"
+   ]
+  },
+  {
+   "apiId": "PricingService",
+   "apiName": "Pricing service",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Calculate prices for configurable and non-configurable products.",
+   "product": "SAPVariantConfigurationandPricing",
+   "packageId": "SAPProductConfiguration",
+   "packageTitle": "SAP Variant Configuration and Pricing",
+   "lineOfBusiness": "Sales,Commerce",
+   "version": "v1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPProductConfiguration"
+   ]
+  },
+  {
+   "apiId": "AdministrationService",
+   "apiName": "Administration Service",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Administer the configuration and pricing services.",
+   "product": "SAPVariantConfigurationandPricing",
+   "packageId": "SAPProductConfiguration",
+   "packageTitle": "SAP Variant Configuration and Pricing",
+   "lineOfBusiness": "Sales,Commerce",
+   "version": "v1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPProductConfiguration"
    ]
   },
   {
@@ -28742,6 +28759,22 @@
    ]
   },
   {
+   "apiId": "DocumentServiceOData",
+   "apiName": "Document Service",
+   "apiType": "ODATAV4",
+   "status": "ACTIVE",
+   "description": "Manage documents, folders and links in a collaborative project",
+   "product": "SAPProjectandResourceManagement",
+   "packageId": "SAPProjectIntelligenceNetwork",
+   "packageTitle": "SAP Project and Resource Management - Project Management",
+   "lineOfBusiness": null,
+   "version": "1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPProjectIntelligenceNetwork"
+   ]
+  },
+  {
    "apiId": "ProjectPlanService",
    "apiName": "Project Plan Service",
    "apiType": "ODATAV4",
@@ -28858,7 +28891,7 @@
    "apiName": "Resource Service",
    "apiType": "ODATAV4",
    "status": "BETA",
-   "description": "Maintain Resources and Resource Types",
+   "description": "Maintain resources and resource types with their resource groups, capabilities, assigned containers, crops, and characteristic values, and view their availability",
    "product": "SAPIntelligentAgriculture",
    "packageId": "SAPIntelligentAgriculture",
    "packageTitle": "SAP Intelligent Agriculture",
@@ -29690,7 +29723,7 @@
    "apiName": "Farm and Field Service",
    "apiType": "ODATAV4",
    "status": "BETA",
-   "description": "Manage farms and fields in SAP Intelligent Agriculture, including their assigned field groups, crop zones, areas, seasons, crops, varieties, and tasks.",
+   "description": "Maintain farms and fields with their assigned field groups, locations, crop zones, areas, seasons, crops, varieties, and tasks",
    "product": "SAPIntelligentAgriculture",
    "packageId": "SAPIntelligentAgriculture",
    "packageTitle": "SAP Intelligent Agriculture",
@@ -34339,6 +34372,230 @@
    "apiHubUrl": null,
    "packageIds": [
     "sap-int-eic-eic-operations"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-ARBankStatement-v1",
+   "apiName": "Accounts Receivable Bank Statement",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Accounts Receivable Bank Statement",
+   "product": null,
+   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.0.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-FinancialOperationsDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-CreditManagementCodes-v1",
+   "apiName": "Credit Management Codes",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Credit Management Codes",
+   "product": null,
+   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-FinancialOperationsDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-PaymentTerms-v1",
+   "apiName": "Payment Terms",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Payment Terms",
+   "product": null,
+   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-FinancialOperationsDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-SecurityClass-v1",
+   "apiName": "Security Class",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Security Class",
+   "product": null,
+   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-FinancialOperationsDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-FinancialTransaction-v1",
+   "apiName": "Financial Transaction",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Financial Transaction",
+   "product": null,
+   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-FinancialOperationsDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-DunningBlockingReason-v1",
+   "apiName": "Dunning Blocking Reason",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Dunning Blocking Reason",
+   "product": null,
+   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-FinancialOperationsDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-WithholdingTaxCode-v1",
+   "apiName": "Withholding Tax Code",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Withholding Tax Code",
+   "product": null,
+   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-FinancialOperationsDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-PaymentMethod-v1",
+   "apiName": "Payment Method",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Payment Method",
+   "product": null,
+   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-FinancialOperationsDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-WithholdingTaxItem-v1",
+   "apiName": "Withholding Tax Item",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Withholding Tax Item",
+   "product": null,
+   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.0.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-FinancialOperationsDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-CashFlow-v1",
+   "apiName": "Cash Flow",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Cash Flow",
+   "product": null,
+   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.1.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-FinancialOperationsDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-SecuritiesAccount-v1",
+   "apiName": "Securities Account",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Securities Account",
+   "product": null,
+   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-FinancialOperationsDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-BankAccount-v1",
+   "apiName": "Bank Account",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Bank Account",
+   "product": null,
+   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.0.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-FinancialOperationsDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-TreasuryLedgerPosition-v1",
+   "apiName": "Treasury Ledger Position",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Treasury Ledger Position",
+   "product": null,
+   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-FinancialOperationsDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-HouseBank-v1",
+   "apiName": "House Bank",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product House Bank",
+   "product": null,
+   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.1.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-FinancialOperationsDataProductsAPI"
    ]
   },
   {
@@ -42342,230 +42599,6 @@
    ]
   },
   {
-   "apiId": "sap-s4com-ARBankStatement-v1",
-   "apiName": "Accounts Receivable Bank Statement",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Accounts Receivable Bank Statement",
-   "product": null,
-   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.0.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-FinancialOperationsDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "sap-s4com-CreditManagementCodes-v1",
-   "apiName": "Credit Management Codes",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Credit Management Codes",
-   "product": null,
-   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-FinancialOperationsDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "sap-s4com-PaymentTerms-v1",
-   "apiName": "Payment Terms",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Payment Terms",
-   "product": null,
-   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-FinancialOperationsDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "sap-s4com-SecurityClass-v1",
-   "apiName": "Security Class",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Security Class",
-   "product": null,
-   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-FinancialOperationsDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "sap-s4com-FinancialTransaction-v1",
-   "apiName": "Financial Transaction",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Financial Transaction",
-   "product": null,
-   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-FinancialOperationsDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "sap-s4com-DunningBlockingReason-v1",
-   "apiName": "Dunning Blocking Reason",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Dunning Blocking Reason",
-   "product": null,
-   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-FinancialOperationsDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "sap-s4com-WithholdingTaxCode-v1",
-   "apiName": "Withholding Tax Code",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Withholding Tax Code",
-   "product": null,
-   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-FinancialOperationsDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "sap-s4com-PaymentMethod-v1",
-   "apiName": "Payment Method",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Payment Method",
-   "product": null,
-   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-FinancialOperationsDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "sap-s4com-WithholdingTaxItem-v1",
-   "apiName": "Withholding Tax Item",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Withholding Tax Item",
-   "product": null,
-   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.0.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-FinancialOperationsDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "sap-s4com-CashFlow-v1",
-   "apiName": "Cash Flow",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Cash Flow",
-   "product": null,
-   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.1.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-FinancialOperationsDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "sap-s4com-SecuritiesAccount-v1",
-   "apiName": "Securities Account",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Securities Account",
-   "product": null,
-   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-FinancialOperationsDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "sap-s4com-BankAccount-v1",
-   "apiName": "Bank Account",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Bank Account",
-   "product": null,
-   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.0.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-FinancialOperationsDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "sap-s4com-TreasuryLedgerPosition-v1",
-   "apiName": "Treasury Ledger Position",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Treasury Ledger Position",
-   "product": null,
-   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-FinancialOperationsDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "sap-s4com-HouseBank-v1",
-   "apiName": "House Bank",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product House Bank",
-   "product": null,
-   "packageId": "sap-s4com-FinancialOperationsDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Financial Operations Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.1.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-FinancialOperationsDataProductsAPI"
-   ]
-  },
-  {
    "apiId": "lithiumlsw",
    "apiName": "Lithium Response",
    "apiType": "REST",
@@ -43510,6 +43543,22 @@
    ]
   },
   {
+   "apiId": "PRINTAPI",
+   "apiName": "SAP Print Service",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Manage print queue and create print queue items",
+   "product": "SAPCloudPlatformPrintservice",
+   "packageId": "SCPPrintService",
+   "packageTitle": "SAP Print Service",
+   "lineOfBusiness": null,
+   "version": "1.3",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SCPPrintService"
+   ]
+  },
+  {
    "apiId": "SecuritySettingsAPI",
    "apiName": "Security Settings",
    "apiType": "REST",
@@ -43574,22 +43623,6 @@
    ]
   },
   {
-   "apiId": "PRINTAPI",
-   "apiName": "SAP Print Service",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Manage print queue and create print queue items",
-   "product": "SAPCloudPlatformPrintservice",
-   "packageId": "SCPPrintService",
-   "packageTitle": "SAP Print Service",
-   "lineOfBusiness": null,
-   "version": "1.3",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SCPPrintService"
-   ]
-  },
-  {
    "apiId": "RecipeV1",
    "apiName": "Recipe",
    "apiType": "ODATAV4",
@@ -43635,6 +43668,86 @@
    "apiHubUrl": null,
    "packageIds": [
     "SAPIPDFormulation"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-RealEstateConfigurationData-v1",
+   "apiName": "Real Estate Configuration Data",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Real Estate Configuration Data",
+   "product": null,
+   "packageId": "sap-s4com-RealEstateDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Real Estate Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.0.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-RealEstateDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-RealEstateUsableObject-v1",
+   "apiName": "Real Estate Usable Object",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Real Estate Usable Object",
+   "product": null,
+   "packageId": "sap-s4com-RealEstateDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Real Estate Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.0.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-RealEstateDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-RealEstateArchitectureObject-v1",
+   "apiName": "Real Estate Architecture Object",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Real Estate Architecture Object",
+   "product": null,
+   "packageId": "sap-s4com-RealEstateDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Real Estate Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.0.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-RealEstateDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-RealEstateRentableObject-v1",
+   "apiName": "Real Estate Rentable Object",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Real Estate Rentable Object",
+   "product": null,
+   "packageId": "sap-s4com-RealEstateDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Real Estate Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.0.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-RealEstateDataProductsAPI"
+   ]
+  },
+  {
+   "apiId": "sap-s4com-RealEstateContract-v1",
+   "apiName": "Real Estate Contract",
+   "apiType": "DELTAAPI",
+   "status": "ACTIVE",
+   "description": "Data Product Real Estate Contract",
+   "product": null,
+   "packageId": "sap-s4com-RealEstateDataProductsAPI",
+   "packageTitle": "SAP S/4HANA Real Estate Data Products API",
+   "lineOfBusiness": null,
+   "version": "1.0.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-s4com-RealEstateDataProductsAPI"
    ]
   },
   {
@@ -43910,166 +44023,6 @@
    ]
   },
   {
-   "apiId": "sap-s4com-RealEstateConfigurationData-v1",
-   "apiName": "Real Estate Configuration Data",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Real Estate Configuration Data",
-   "product": null,
-   "packageId": "sap-s4com-RealEstateDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Real Estate Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.0.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-RealEstateDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "sap-s4com-RealEstateUsableObject-v1",
-   "apiName": "Real Estate Usable Object",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Real Estate Usable Object",
-   "product": null,
-   "packageId": "sap-s4com-RealEstateDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Real Estate Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.0.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-RealEstateDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "sap-s4com-RealEstateArchitectureObject-v1",
-   "apiName": "Real Estate Architecture Object",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Real Estate Architecture Object",
-   "product": null,
-   "packageId": "sap-s4com-RealEstateDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Real Estate Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.0.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-RealEstateDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "sap-s4com-RealEstateRentableObject-v1",
-   "apiName": "Real Estate Rentable Object",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Real Estate Rentable Object",
-   "product": null,
-   "packageId": "sap-s4com-RealEstateDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Real Estate Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.0.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-RealEstateDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "sap-s4com-RealEstateContract-v1",
-   "apiName": "Real Estate Contract",
-   "apiType": "DELTAAPI",
-   "status": "ACTIVE",
-   "description": "Data Product Real Estate Contract",
-   "product": null,
-   "packageId": "sap-s4com-RealEstateDataProductsAPI",
-   "packageTitle": "SAP S/4HANA Real Estate Data Products API",
-   "lineOfBusiness": null,
-   "version": "1.0.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-s4com-RealEstateDataProductsAPI"
-   ]
-  },
-  {
-   "apiId": "DSAPIsImplementedByApplication",
-   "apiName": "Configure Data Subject Deletion",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Configuration for deletion of data subject and End of Purpose (EoP) check",
-   "product": "SAP Data Retention Manager",
-   "packageId": "SAPDataRetentionManager",
-   "packageTitle": "SAP Data Retention Manager",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPDataRetentionManager"
-   ]
-  },
-  {
-   "apiId": "ArchiveDestructionAPIToBEImplementedByApplications",
-   "apiName": "Configure Archiving and Destruction",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Configuration for archiving and destruction of transactional data",
-   "product": "SAP Data Retention Manager",
-   "packageId": "SAPDataRetentionManager",
-   "packageTitle": "SAP Data Retention Manager",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPDataRetentionManager"
-   ]
-  },
-  {
-   "apiId": "ArchiveDestructionAPIConsumed",
-   "apiName": "Archive and Destruction",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Archiving and destruction of transactional data",
-   "product": "SAP Data Retention Manager",
-   "packageId": "SAPDataRetentionManager",
-   "packageTitle": "SAP Data Retention Manager",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPDataRetentionManager"
-   ]
-  },
-  {
-   "apiId": "BusinessPurposeAPIConsumed",
-   "apiName": "Business Purpose",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Helps you get information of business purpose which are active",
-   "product": "SAP Data Retention Manager",
-   "packageId": "SAPDataRetentionManager",
-   "packageTitle": "SAP Data Retention Manager",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPDataRetentionManager"
-   ]
-  },
-  {
-   "apiId": "DataSubjectAPIConsumed",
-   "apiName": "Data Subject Blocking/Deletion",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Managing data subject deletion",
-   "product": "SAP Data Retention Manager",
-   "packageId": "SAPDataRetentionManager",
-   "packageTitle": "SAP Data Retention Manager",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPDataRetentionManager"
-   ]
-  },
-  {
    "apiId": "ConcurInvoiceListItems",
    "apiName": "List Items",
    "apiType": "REST",
@@ -44211,6 +44164,86 @@
    "apiHubUrl": null,
    "packageIds": [
     "ConcurInvoice"
+   ]
+  },
+  {
+   "apiId": "DSAPIsImplementedByApplication",
+   "apiName": "Configure Data Subject Deletion",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Configuration for deletion of data subject and End of Purpose (EoP) check",
+   "product": "SAP Data Retention Manager",
+   "packageId": "SAPDataRetentionManager",
+   "packageTitle": "SAP Data Retention Manager",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPDataRetentionManager"
+   ]
+  },
+  {
+   "apiId": "ArchiveDestructionAPIToBEImplementedByApplications",
+   "apiName": "Configure Archiving and Destruction",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Configuration for archiving and destruction of transactional data",
+   "product": "SAP Data Retention Manager",
+   "packageId": "SAPDataRetentionManager",
+   "packageTitle": "SAP Data Retention Manager",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPDataRetentionManager"
+   ]
+  },
+  {
+   "apiId": "ArchiveDestructionAPIConsumed",
+   "apiName": "Archive and Destruction",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Archiving and destruction of transactional data",
+   "product": "SAP Data Retention Manager",
+   "packageId": "SAPDataRetentionManager",
+   "packageTitle": "SAP Data Retention Manager",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPDataRetentionManager"
+   ]
+  },
+  {
+   "apiId": "BusinessPurposeAPIConsumed",
+   "apiName": "Business Purpose",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Helps you get information of business purpose which are active",
+   "product": "SAP Data Retention Manager",
+   "packageId": "SAPDataRetentionManager",
+   "packageTitle": "SAP Data Retention Manager",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPDataRetentionManager"
+   ]
+  },
+  {
+   "apiId": "DataSubjectAPIConsumed",
+   "apiName": "Data Subject Blocking/Deletion",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Managing data subject deletion",
+   "product": "SAP Data Retention Manager",
+   "packageId": "SAPDataRetentionManager",
+   "packageTitle": "SAP Data Retention Manager",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPDataRetentionManager"
    ]
   },
   {
@@ -44646,38 +44679,6 @@
    ]
   },
   {
-   "apiId": "TrustManagementAPI",
-   "apiName": "Trust Management API",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Provides functionality for exporting and importing the trust configuration of a subaccount.",
-   "product": "SAP Business Technology Platform",
-   "packageId": "SAPHCPPlatformAPIs",
-   "packageTitle": "SAP BTP Security for the Neo Environment",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPHCPPlatformAPIs"
-   ]
-  },
-  {
-   "apiId": "AccountMembersManagementAPI",
-   "apiName": "Platform Authorization Management API",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Provides functionality for subaccount members managing.",
-   "product": "SAP Business Technology Platform",
-   "packageId": "SAPHCPPlatformAPIs",
-   "packageTitle": "SAP BTP Security for the Neo Environment",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPHCPPlatformAPIs"
-   ]
-  },
-  {
    "apiId": "HCP_Virtual_Machines",
    "apiName": "SAP Virtual Machine Service (Basic Authentication)",
    "apiType": "REST",
@@ -44739,6 +44740,38 @@
    "apiHubUrl": null,
    "packageIds": [
     "LifecycleManagement"
+   ]
+  },
+  {
+   "apiId": "TrustManagementAPI",
+   "apiName": "Trust Management API",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Provides functionality for exporting and importing the trust configuration of a subaccount.",
+   "product": "SAP Business Technology Platform",
+   "packageId": "SAPHCPPlatformAPIs",
+   "packageTitle": "SAP BTP Security for the Neo Environment",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPHCPPlatformAPIs"
+   ]
+  },
+  {
+   "apiId": "AccountMembersManagementAPI",
+   "apiName": "Platform Authorization Management API",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Provides functionality for subaccount members managing.",
+   "product": "SAP Business Technology Platform",
+   "packageId": "SAPHCPPlatformAPIs",
+   "packageTitle": "SAP BTP Security for the Neo Environment",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPHCPPlatformAPIs"
    ]
   },
   {
@@ -45203,182 +45236,6 @@
    "apiHubUrl": null,
    "packageIds": [
     "SAPCPABAPENV"
-   ]
-  },
-  {
-   "apiId": "billingDocument_v1",
-   "apiName": "Billing Documents",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Import billing document items to SAP Sustainability solutions.",
-   "product": "SAPResponsibleDesignandProduction",
-   "packageId": "SAPSustainabilitySolutions",
-   "packageTitle": "SAP Sustainability Solutions",
-   "lineOfBusiness": "Sustainability",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPSustainabilitySolutions"
-   ]
-  },
-  {
-   "apiId": "batch_v1",
-   "apiName": "Batches",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Import batches to SAP Sustainability solutions.",
-   "product": "SAPResponsibleDesignandProduction",
-   "packageId": "SAPSustainabilitySolutions",
-   "packageTitle": "SAP Sustainability Solutions",
-   "lineOfBusiness": "Sustainability",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPSustainabilitySolutions"
-   ]
-  },
-  {
-   "apiId": "masterdata_v1",
-   "apiName": "Master Data",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Import master data entities to SAP Sustainability solutions.",
-   "product": "SAPResponsibleDesignandProduction",
-   "packageId": "SAPSustainabilitySolutions",
-   "packageTitle": "SAP Sustainability Solutions",
-   "lineOfBusiness": "Sustainability",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPSustainabilitySolutions"
-   ]
-  },
-  {
-   "apiId": "materialDocument_v1",
-   "apiName": "Material Documents",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Import material documents to SAP Sustainability solutions.",
-   "product": "SAPResponsibleDesignandProduction",
-   "packageId": "SAPSustainabilitySolutions",
-   "packageTitle": "SAP Sustainability Solutions",
-   "lineOfBusiness": "Sustainability",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPSustainabilitySolutions"
-   ]
-  },
-  {
-   "apiId": "delivery_v1",
-   "apiName": "Deliveries",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Import deliveries to SAP Sustainability solutions.",
-   "product": "SAPResponsibleDesignandProduction",
-   "packageId": "SAPSustainabilitySolutions",
-   "packageTitle": "SAP Sustainability Solutions",
-   "lineOfBusiness": "Sustainability",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPSustainabilitySolutions"
-   ]
-  },
-  {
-   "apiId": "packagingBeta_v1",
-   "apiName": "Packaging Data (Beta)",
-   "apiType": "REST",
-   "status": "BETA",
-   "description": "Import packaging elements and packaging compositions to SAP Sustainability solutions (Beta).",
-   "product": "SAPResponsibleDesignandProduction",
-   "packageId": "SAPSustainabilitySolutions",
-   "packageTitle": "SAP Sustainability Solutions",
-   "lineOfBusiness": "Sustainability",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPSustainabilitySolutions"
-   ]
-  },
-  {
-   "apiId": "inventory_v1",
-   "apiName": "Inventories",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Import inventories to SAP Sustainability solutions.",
-   "product": "SAPResponsibleDesignandProduction",
-   "packageId": "SAPSustainabilitySolutions",
-   "packageTitle": "SAP Sustainability Solutions",
-   "lineOfBusiness": "Sustainability",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPSustainabilitySolutions"
-   ]
-  },
-  {
-   "apiId": "packaging_v1",
-   "apiName": "Packaging Data",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Import packaging elements and packaging compositions to SAP Sustainability solutions.",
-   "product": "SAPResponsibleDesignandProduction",
-   "packageId": "SAPSustainabilitySolutions",
-   "packageTitle": "SAP Sustainability Solutions",
-   "lineOfBusiness": "Sustainability",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPSustainabilitySolutions"
-   ]
-  },
-  {
-   "apiId": "config_v1",
-   "apiName": "Configuration Data",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Import configuration data entities to SAP Sustainability solutions.",
-   "product": "SAPResponsibleDesignandProduction",
-   "packageId": "SAPSustainabilitySolutions",
-   "packageTitle": "SAP Sustainability Solutions",
-   "lineOfBusiness": "Sustainability",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPSustainabilitySolutions"
-   ]
-  },
-  {
-   "apiId": "supplierInvoice_v1",
-   "apiName": "Supplier Invoices",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Import supplier invoice items to SAP Sustainability solutions.",
-   "product": "SAPResponsibleDesignandProduction",
-   "packageId": "SAPSustainabilitySolutions",
-   "packageTitle": "SAP Sustainability Solutions",
-   "lineOfBusiness": "Sustainability",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPSustainabilitySolutions"
-   ]
-  },
-  {
-   "apiId": "orgdata_v1",
-   "apiName": "Organization Data",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Import organization data entities to SAP Sustainability solutions.",
-   "product": "SAPResponsibleDesignandProduction",
-   "packageId": "SAPSustainabilitySolutions",
-   "packageTitle": "SAP Sustainability Solutions",
-   "lineOfBusiness": "Sustainability",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPSustainabilitySolutions"
    ]
   },
   {
@@ -47254,6 +47111,182 @@
    ]
   },
   {
+   "apiId": "billingDocument_v1",
+   "apiName": "Billing Documents",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Import billing document items to SAP Sustainability solutions.",
+   "product": "SAPResponsibleDesignandProduction",
+   "packageId": "SAPSustainabilitySolutions",
+   "packageTitle": "SAP Sustainability Solutions",
+   "lineOfBusiness": "Sustainability",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPSustainabilitySolutions"
+   ]
+  },
+  {
+   "apiId": "batch_v1",
+   "apiName": "Batches",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Import batches to SAP Sustainability solutions.",
+   "product": "SAPResponsibleDesignandProduction",
+   "packageId": "SAPSustainabilitySolutions",
+   "packageTitle": "SAP Sustainability Solutions",
+   "lineOfBusiness": "Sustainability",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPSustainabilitySolutions"
+   ]
+  },
+  {
+   "apiId": "masterdata_v1",
+   "apiName": "Master Data",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Import master data entities to SAP Sustainability solutions.",
+   "product": "SAPResponsibleDesignandProduction",
+   "packageId": "SAPSustainabilitySolutions",
+   "packageTitle": "SAP Sustainability Solutions",
+   "lineOfBusiness": "Sustainability",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPSustainabilitySolutions"
+   ]
+  },
+  {
+   "apiId": "materialDocument_v1",
+   "apiName": "Material Documents",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Import material documents to SAP Sustainability solutions.",
+   "product": "SAPResponsibleDesignandProduction",
+   "packageId": "SAPSustainabilitySolutions",
+   "packageTitle": "SAP Sustainability Solutions",
+   "lineOfBusiness": "Sustainability",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPSustainabilitySolutions"
+   ]
+  },
+  {
+   "apiId": "delivery_v1",
+   "apiName": "Deliveries",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Import deliveries to SAP Sustainability solutions.",
+   "product": "SAPResponsibleDesignandProduction",
+   "packageId": "SAPSustainabilitySolutions",
+   "packageTitle": "SAP Sustainability Solutions",
+   "lineOfBusiness": "Sustainability",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPSustainabilitySolutions"
+   ]
+  },
+  {
+   "apiId": "packagingBeta_v1",
+   "apiName": "Packaging Data (Beta)",
+   "apiType": "REST",
+   "status": "BETA",
+   "description": "Import packaging elements and packaging compositions to SAP Sustainability solutions (Beta).",
+   "product": "SAPResponsibleDesignandProduction",
+   "packageId": "SAPSustainabilitySolutions",
+   "packageTitle": "SAP Sustainability Solutions",
+   "lineOfBusiness": "Sustainability",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPSustainabilitySolutions"
+   ]
+  },
+  {
+   "apiId": "inventory_v1",
+   "apiName": "Inventories",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Import inventories to SAP Sustainability solutions.",
+   "product": "SAPResponsibleDesignandProduction",
+   "packageId": "SAPSustainabilitySolutions",
+   "packageTitle": "SAP Sustainability Solutions",
+   "lineOfBusiness": "Sustainability",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPSustainabilitySolutions"
+   ]
+  },
+  {
+   "apiId": "packaging_v1",
+   "apiName": "Packaging Data",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Import packaging elements and packaging compositions to SAP Sustainability solutions.",
+   "product": "SAPResponsibleDesignandProduction",
+   "packageId": "SAPSustainabilitySolutions",
+   "packageTitle": "SAP Sustainability Solutions",
+   "lineOfBusiness": "Sustainability",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPSustainabilitySolutions"
+   ]
+  },
+  {
+   "apiId": "config_v1",
+   "apiName": "Configuration Data",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Import configuration data entities to SAP Sustainability solutions.",
+   "product": "SAPResponsibleDesignandProduction",
+   "packageId": "SAPSustainabilitySolutions",
+   "packageTitle": "SAP Sustainability Solutions",
+   "lineOfBusiness": "Sustainability",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPSustainabilitySolutions"
+   ]
+  },
+  {
+   "apiId": "supplierInvoice_v1",
+   "apiName": "Supplier Invoices",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Import supplier invoice items to SAP Sustainability solutions.",
+   "product": "SAPResponsibleDesignandProduction",
+   "packageId": "SAPSustainabilitySolutions",
+   "packageTitle": "SAP Sustainability Solutions",
+   "lineOfBusiness": "Sustainability",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPSustainabilitySolutions"
+   ]
+  },
+  {
+   "apiId": "orgdata_v1",
+   "apiName": "Organization Data",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Import organization data entities to SAP Sustainability solutions.",
+   "product": "SAPResponsibleDesignandProduction",
+   "packageId": "SAPSustainabilitySolutions",
+   "packageTitle": "SAP Sustainability Solutions",
+   "lineOfBusiness": "Sustainability",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPSustainabilitySolutions"
+   ]
+  },
+  {
    "apiId": "IBP_Snapshot_RAP_ODataService",
    "apiName": "Snapshot Management for Stock and Order Data",
    "apiType": "ODATAV4",
@@ -47382,6 +47415,22 @@
    ]
   },
   {
+   "apiId": "EnterpriseInfoMgmt",
+   "apiName": "Enterprise Information Management",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Run and monitor tasks or manipulate virtual tables with your application.",
+   "product": "SAP HANA smart data quality,SAP HANA smart data integration",
+   "packageId": "SmartDataIntegration",
+   "packageTitle": "SAP HANA Smart Data Integration",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SmartDataIntegration"
+   ]
+  },
+  {
    "apiId": "googlecalendar",
    "apiName": "Google Calendar",
    "apiType": "REST",
@@ -47411,22 +47460,6 @@
    "apiHubUrl": null,
    "packageIds": [
     "scheduling"
-   ]
-  },
-  {
-   "apiId": "EnterpriseInfoMgmt",
-   "apiName": "Enterprise Information Management",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Run and monitor tasks or manipulate virtual tables with your application.",
-   "product": "SAP HANA smart data quality,SAP HANA smart data integration",
-   "packageId": "SmartDataIntegration",
-   "packageTitle": "SAP HANA Smart Data Integration",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SmartDataIntegration"
    ]
   },
   {
@@ -47702,6 +47735,22 @@
    ]
   },
   {
+   "apiId": "CloudCiApiSuite",
+   "apiName": "SAP Continuous Integration and Delivery Service",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Configure and run predefined continuous integration and delivery pipelines.",
+   "product": "SAPContinuousIntegrationandDelivery",
+   "packageId": "SAPContinuousIntegrationandDelivery",
+   "packageTitle": "SAP Continuous Integration and Delivery",
+   "lineOfBusiness": "R&D Engineering,Service",
+   "version": "v2",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPContinuousIntegrationandDelivery"
+   ]
+  },
+  {
    "apiId": "MarketRates",
    "apiName": "Market Rates API",
    "apiType": "REST",
@@ -47731,22 +47780,6 @@
    "apiHubUrl": null,
    "packageIds": [
     "MarketRatesManagementAPI"
-   ]
-  },
-  {
-   "apiId": "CloudCiApiSuite",
-   "apiName": "SAP Continuous Integration and Delivery Service",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Configure and run predefined continuous integration and delivery pipelines.",
-   "product": "SAPContinuousIntegrationandDelivery",
-   "packageId": "SAPContinuousIntegrationandDelivery",
-   "packageTitle": "SAP Continuous Integration and Delivery",
-   "lineOfBusiness": "R&D Engineering,Service",
-   "version": "v2",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPContinuousIntegrationandDelivery"
    ]
   },
   {
@@ -51174,118 +51207,6 @@
    ]
   },
   {
-   "apiId": "SAPCPQNotifications",
-   "apiName": "Notifications",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Allows you to externally retrieve, create, delete and update email notifications in SAP Configure Price Quote based on the notification ID.",
-   "product": "SAPCPQ",
-   "packageId": "SAPConfigurePriceQuoteWorkflow",
-   "packageTitle": "SAP Configure Price Quote - Workflow",
-   "lineOfBusiness": "Sales,Service,Commerce",
-   "version": "1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPConfigurePriceQuoteWorkflow"
-   ]
-  },
-  {
-   "apiId": "SAPCPQWorkflow",
-   "apiName": "Workflow",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Used to manage the workflow in SAP Configure Price Quote externally.",
-   "product": "SAPCPQ",
-   "packageId": "SAPConfigurePriceQuoteWorkflow",
-   "packageTitle": "SAP Configure Price Quote - Workflow",
-   "lineOfBusiness": "Sales,Service,Commerce",
-   "version": "1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPConfigurePriceQuoteWorkflow"
-   ]
-  },
-  {
-   "apiId": "SAPCPQWorkflowPermissions",
-   "apiName": "Workflow Permissions",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Used for externally managing workflow permissions in SAP Configure Price Quote.",
-   "product": "SAPCPQ",
-   "packageId": "SAPConfigurePriceQuoteWorkflow",
-   "packageTitle": "SAP Configure Price Quote - Workflow",
-   "lineOfBusiness": "Sales,Service,Commerce",
-   "version": "1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPConfigurePriceQuoteWorkflow"
-   ]
-  },
-  {
-   "apiId": "SAPCPQItemActions",
-   "apiName": "Item Actions",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Used for externally managing item actions and the item actions workflow.",
-   "product": "SAPCPQ",
-   "packageId": "SAPConfigurePriceQuoteWorkflow",
-   "packageTitle": "SAP Configure Price Quote - Workflow",
-   "lineOfBusiness": "Sales,Service,Commerce",
-   "version": "1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPConfigurePriceQuoteWorkflow"
-   ]
-  },
-  {
-   "apiId": "SAPCPQStatuses",
-   "apiName": "Statuses",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Easily manage workflow statuses in SAP Configure Price Quote.",
-   "product": "SAPCPQ",
-   "packageId": "SAPConfigurePriceQuoteWorkflow",
-   "packageTitle": "SAP Configure Price Quote - Workflow",
-   "lineOfBusiness": "Sales,Service,Commerce",
-   "version": "1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPConfigurePriceQuoteWorkflow"
-   ]
-  },
-  {
-   "apiId": "SAPCPQAction",
-   "apiName": "Action",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Manage actions and custom actions in SAP Configure Price Quote externally.",
-   "product": "SAPCPQ",
-   "packageId": "SAPConfigurePriceQuoteWorkflow",
-   "packageTitle": "SAP Configure Price Quote - Workflow",
-   "lineOfBusiness": "Sales,Service,Commerce",
-   "version": "1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPConfigurePriceQuoteWorkflow"
-   ]
-  },
-  {
-   "apiId": "SAPCPQApprovalRules",
-   "apiName": "Approval Rules",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Used to externally manage approval rules in SAP Configure Price Quote.",
-   "product": "SAPCPQ",
-   "packageId": "SAPConfigurePriceQuoteWorkflow",
-   "packageTitle": "SAP Configure Price Quote - Workflow",
-   "lineOfBusiness": "Sales,Service,Commerce",
-   "version": "1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPConfigurePriceQuoteWorkflow"
-   ]
-  },
-  {
    "apiId": "AggregatesOdata_EIOT_APIs",
    "apiName": "Time Series Aggregate",
    "apiType": "ODATAV4",
@@ -51475,6 +51396,118 @@
    "apiHubUrl": null,
    "packageIds": [
     "SAPAssetPerformanceManagementAssetHealthEIOT"
+   ]
+  },
+  {
+   "apiId": "SAPCPQNotifications",
+   "apiName": "Notifications",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Allows you to externally retrieve, create, delete and update email notifications in SAP Configure Price Quote based on the notification ID.",
+   "product": "SAPCPQ",
+   "packageId": "SAPConfigurePriceQuoteWorkflow",
+   "packageTitle": "SAP Configure Price Quote - Workflow",
+   "lineOfBusiness": "Sales,Service,Commerce",
+   "version": "1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPConfigurePriceQuoteWorkflow"
+   ]
+  },
+  {
+   "apiId": "SAPCPQWorkflow",
+   "apiName": "Workflow",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Used to manage the workflow in SAP Configure Price Quote externally.",
+   "product": "SAPCPQ",
+   "packageId": "SAPConfigurePriceQuoteWorkflow",
+   "packageTitle": "SAP Configure Price Quote - Workflow",
+   "lineOfBusiness": "Sales,Service,Commerce",
+   "version": "1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPConfigurePriceQuoteWorkflow"
+   ]
+  },
+  {
+   "apiId": "SAPCPQWorkflowPermissions",
+   "apiName": "Workflow Permissions",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Used for externally managing workflow permissions in SAP Configure Price Quote.",
+   "product": "SAPCPQ",
+   "packageId": "SAPConfigurePriceQuoteWorkflow",
+   "packageTitle": "SAP Configure Price Quote - Workflow",
+   "lineOfBusiness": "Sales,Service,Commerce",
+   "version": "1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPConfigurePriceQuoteWorkflow"
+   ]
+  },
+  {
+   "apiId": "SAPCPQItemActions",
+   "apiName": "Item Actions",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Used for externally managing item actions and the item actions workflow.",
+   "product": "SAPCPQ",
+   "packageId": "SAPConfigurePriceQuoteWorkflow",
+   "packageTitle": "SAP Configure Price Quote - Workflow",
+   "lineOfBusiness": "Sales,Service,Commerce",
+   "version": "1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPConfigurePriceQuoteWorkflow"
+   ]
+  },
+  {
+   "apiId": "SAPCPQStatuses",
+   "apiName": "Statuses",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Easily manage workflow statuses in SAP Configure Price Quote.",
+   "product": "SAPCPQ",
+   "packageId": "SAPConfigurePriceQuoteWorkflow",
+   "packageTitle": "SAP Configure Price Quote - Workflow",
+   "lineOfBusiness": "Sales,Service,Commerce",
+   "version": "1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPConfigurePriceQuoteWorkflow"
+   ]
+  },
+  {
+   "apiId": "SAPCPQAction",
+   "apiName": "Action",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Manage actions and custom actions in SAP Configure Price Quote externally.",
+   "product": "SAPCPQ",
+   "packageId": "SAPConfigurePriceQuoteWorkflow",
+   "packageTitle": "SAP Configure Price Quote - Workflow",
+   "lineOfBusiness": "Sales,Service,Commerce",
+   "version": "1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPConfigurePriceQuoteWorkflow"
+   ]
+  },
+  {
+   "apiId": "SAPCPQApprovalRules",
+   "apiName": "Approval Rules",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Used to externally manage approval rules in SAP Configure Price Quote.",
+   "product": "SAPCPQ",
+   "packageId": "SAPConfigurePriceQuoteWorkflow",
+   "packageTitle": "SAP Configure Price Quote - Workflow",
+   "lineOfBusiness": "Sales,Service,Commerce",
+   "version": "1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPConfigurePriceQuoteWorkflow"
    ]
   },
   {
@@ -60390,22 +60423,6 @@
    ]
   },
   {
-   "apiId": "IBP_UserGroup_RAP_ODataService",
-   "apiName": "User Groups",
-   "apiType": "ODATAV4",
-   "status": "ACTIVE",
-   "description": "Manage User Groups in SAP Integrated Business Planning for Supply Chain",
-   "product": "SAPIntegratedBusinessPlanningforSupplyChain",
-   "packageId": "IBPAPIUserGroupService",
-   "packageTitle": "SAP IBP - User Groups",
-   "lineOfBusiness": "Supply Chain,Manufacturing,Sourcing and Procurement",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "IBPAPIUserGroupService"
-   ]
-  },
-  {
    "apiId": "GetDeletedChildrenApi",
    "apiName": "Get Deleted Children",
    "apiType": "REST",
@@ -61318,6 +61335,22 @@
    ]
   },
   {
+   "apiId": "IBP_UserGroup_RAP_ODataService",
+   "apiName": "User Groups",
+   "apiType": "ODATAV4",
+   "status": "ACTIVE",
+   "description": "Manage User Groups in SAP Integrated Business Planning for Supply Chain",
+   "product": "SAPIntegratedBusinessPlanningforSupplyChain",
+   "packageId": "IBPAPIUserGroupService",
+   "packageTitle": "SAP IBP - User Groups",
+   "lineOfBusiness": "Supply Chain,Manufacturing,Sourcing and Procurement",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "IBPAPIUserGroupService"
+   ]
+  },
+  {
    "apiId": "translationhubK8S",
    "apiName": "Software Translation",
    "apiType": "REST",
@@ -61750,6 +61783,22 @@
    ]
   },
   {
+   "apiId": "sap-intake-request-v0",
+   "apiName": "Intake Request",
+   "apiType": "ODATAV4",
+   "status": "BETA",
+   "description": "Enables integration between custom processes and SAP Ariba Intake Management.",
+   "product": "SAPAribaIntakeManagement",
+   "packageId": "sap-intake-management",
+   "packageTitle": "SAP Ariba Intake Management",
+   "lineOfBusiness": null,
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-intake-management"
+   ]
+  },
+  {
    "apiId": "ExportMarketCurvesAndAssignmentdataAPI",
    "apiName": "Export Data - Market Curves and Assignments",
    "apiType": "ODATAV4",
@@ -61779,22 +61828,6 @@
    "apiHubUrl": null,
    "packageIds": [
     "ACRA"
-   ]
-  },
-  {
-   "apiId": "sap-intake-request-v0",
-   "apiName": "Intake Request",
-   "apiType": "ODATAV4",
-   "status": "BETA",
-   "description": "Enables integration between custom processes and SAP Ariba Intake Management.",
-   "product": "SAPAribaIntakeManagement",
-   "packageId": "sap-intake-management",
-   "packageTitle": "SAP Ariba Intake Management",
-   "lineOfBusiness": null,
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-intake-management"
    ]
   },
   {
@@ -68550,406 +68583,6 @@
    ]
   },
   {
-   "apiId": "CALM_PM",
-   "apiName": "SAP Cloud ALM Process Scopes",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Allows to get, create, modify, or delete entities in process management.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.1.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_XLIB_APP",
-   "apiName": "SAP Cloud ALM Cross Library Applications",
-   "apiType": "ODATAV4",
-   "status": "BETA",
-   "description": "Allows to create, read, update and delete cross-library elements of type application.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_CDM_ODATA",
-   "apiName": "SAP Cloud ALM Features",
-   "apiType": "ODATAV4",
-   "status": "BETA",
-   "description": "Allows to read and query Features with their related entities.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.6",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_SR",
-   "apiName": "SAP Cloud ALM Service Request API",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Service request management in the SAP Support Backbone.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_TM",
-   "apiName": "SAP Cloud ALM Test Cases",
-   "apiType": "ODATAV4",
-   "status": "BETA",
-   "description": "Allows creation, reading, querying, and deletion of Manual Test Cases and their related entities, as well as read access to Automated Test Cases.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.5",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_LOGS",
-   "apiName": "SAP Cloud ALM Raw Logs",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Inject or consume SAP Cloud ALM log records using OpenTelemetry format.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_SD",
-   "apiName": "SAP Cloud ALM Documents",
-   "apiType": "ODATAV4",
-   "status": "BETA",
-   "description": "Allows to create, read, query and delete documents with their related entities.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.4",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_EVENT_SITUATIONS",
-   "apiName": "SAP Cloud ALM Event  Situations",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Allows to close, update event situations",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_XLIB_CON",
-   "apiName": "SAP Cloud ALM Cross Library Configurations",
-   "apiType": "ODATAV4",
-   "status": "BETA",
-   "description": "Allows to create, read, update and delete cross-library elements of type configuration.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_LMS",
-   "apiName": "SAP Cloud ALM Landscape",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Get landscape objects (cloud services and technical systems with logical systems) from Landscape Management Service",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_TKM",
-   "apiName": "SAP Cloud ALM Tasks",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Allows to get, create, modify or delete tasks in task management.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.29",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_PMGE",
-   "apiName": "SAP Cloud ALM Custom Processes",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Allows to get, create, modify, or delete entities in process authoring",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_XLIB_DEV",
-   "apiName": "SAP Cloud ALM Cross Library Developments",
-   "apiType": "ODATAV4",
-   "status": "BETA",
-   "description": "Allows to create, read, update and delete cross-library elements of type development.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_RESOURCE_CHANGES",
-   "apiName": "SAP Cloud ALM Resource Changes",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "This API notifies external third party applications about changes on SAP Cloud ALM resources.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_ANALYTICS",
-   "apiName": "SAP Cloud ALM Analytics",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Access to all analytics from SAP Cloud ALM data providers.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_TRACES",
-   "apiName": "SAP Cloud ALM Raw Traces",
-   "apiType": "REST",
-   "status": "BETA",
-   "description": "Consume SAP Cloud ALM trace spans using OpenTelemetry format.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_XLIB_INT",
-   "apiName": "SAP Cloud ALM Cross Library Interfaces",
-   "apiType": "ODATAV4",
-   "status": "BETA",
-   "description": "Allows to create, read, update and delete cross-library elements of type interface.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_ANALYTICS_ODATA",
-   "apiName": "SAP Cloud ALM Analytics",
-   "apiType": "ODATAV4",
-   "status": "ACTIVE",
-   "description": "Access to all analytics from SAP Cloud ALM data providers.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_ITSM",
-   "apiName": "SAP Cloud ALM ITSM",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Support cases management from ITSM system in SAP Cloud ALM.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.5.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_TEST_AUTOMATION",
-   "apiName": "SAP Cloud ALM Test Automation",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Allows cloud-based test automation providers to integrate with SAP Cloud ALM.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.13",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_BSM",
-   "apiName": "SAP Cloud ALM Status Events",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Get downtime events (disruptions, degradations, maintenance etc) from Business Service Management",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_PJM",
-   "apiName": "SAP Cloud ALM Projects",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Allows to get or create projects in project management.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.11",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_PH",
-   "apiName": "SAP Cloud ALM Process Hierarchy",
-   "apiType": "ODATAV4",
-   "status": "ACTIVE",
-   "description": "Allows to create, read, update, query and delete Process Hierarchy Nodes with their related entities.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.2.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_METRICS",
-   "apiName": "SAP Cloud ALM Raw Metrics",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "Inject or consume SAP Cloud ALM metrics using OpenMetrics or OpenTelemetry format.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.1",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
-   "apiId": "CALM_IAM",
-   "apiName": "SAP Cloud ALM Issues",
-   "apiType": "ODATAV4",
-   "status": "BETA",
-   "description": "Allows updating the status, priority, and due date of Issues and Actions from an external system.",
-   "product": "SAPCloudALM",
-   "packageId": "SAPCloudALM",
-   "packageTitle": "SAP Cloud ALM",
-   "lineOfBusiness": "Service",
-   "version": "1.0.5",
-   "apiHubUrl": null,
-   "packageIds": [
-    "SAPCloudALM"
-   ]
-  },
-  {
    "apiId": "autotaskcrm",
    "apiName": "Autotask CRM",
    "apiType": "REST",
@@ -69350,6 +68983,406 @@
    ]
   },
   {
+   "apiId": "CALM_PM",
+   "apiName": "SAP Cloud ALM Process Scopes",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Allows to get, create, modify, or delete entities in process management.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.1.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_XLIB_APP",
+   "apiName": "SAP Cloud ALM Cross Library Applications",
+   "apiType": "ODATAV4",
+   "status": "BETA",
+   "description": "Allows to create, read, update and delete cross-library elements of type application.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_CDM_ODATA",
+   "apiName": "SAP Cloud ALM Features",
+   "apiType": "ODATAV4",
+   "status": "BETA",
+   "description": "Allows to read and query Features with their related entities.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.6",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_SR",
+   "apiName": "SAP Cloud ALM Service Request API",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Service request management in the SAP Support Backbone.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_TM",
+   "apiName": "SAP Cloud ALM Test Cases",
+   "apiType": "ODATAV4",
+   "status": "BETA",
+   "description": "Allows creation, reading, querying, and deletion of Manual Test Cases and their related entities, as well as read access to Automated Test Cases.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.5",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_LOGS",
+   "apiName": "SAP Cloud ALM Raw Logs",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Inject or consume SAP Cloud ALM log records using OpenTelemetry format.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_SD",
+   "apiName": "SAP Cloud ALM Documents",
+   "apiType": "ODATAV4",
+   "status": "BETA",
+   "description": "Allows to create, read, query and delete documents with their related entities.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.4",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_EVENT_SITUATIONS",
+   "apiName": "SAP Cloud ALM Event  Situations",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Allows to close, update event situations",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_XLIB_CON",
+   "apiName": "SAP Cloud ALM Cross Library Configurations",
+   "apiType": "ODATAV4",
+   "status": "BETA",
+   "description": "Allows to create, read, update and delete cross-library elements of type configuration.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_LMS",
+   "apiName": "SAP Cloud ALM Landscape",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Get landscape objects (cloud services and technical systems with logical systems) from Landscape Management Service",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_TKM",
+   "apiName": "SAP Cloud ALM Tasks",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Allows to get, create, modify or delete tasks in task management.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.29",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_PMGE",
+   "apiName": "SAP Cloud ALM Custom Processes",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Allows to get, create, modify, or delete entities in process authoring",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_XLIB_DEV",
+   "apiName": "SAP Cloud ALM Cross Library Developments",
+   "apiType": "ODATAV4",
+   "status": "BETA",
+   "description": "Allows to create, read, update and delete cross-library elements of type development.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_RESOURCE_CHANGES",
+   "apiName": "SAP Cloud ALM Resource Changes",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "This API notifies external third party applications about changes on SAP Cloud ALM resources.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_ANALYTICS",
+   "apiName": "SAP Cloud ALM Analytics",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Access to all analytics from SAP Cloud ALM data providers.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_TRACES",
+   "apiName": "SAP Cloud ALM Raw Traces",
+   "apiType": "REST",
+   "status": "BETA",
+   "description": "Consume SAP Cloud ALM trace spans using OpenTelemetry format.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_XLIB_INT",
+   "apiName": "SAP Cloud ALM Cross Library Interfaces",
+   "apiType": "ODATAV4",
+   "status": "BETA",
+   "description": "Allows to create, read, update and delete cross-library elements of type interface.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_ANALYTICS_ODATA",
+   "apiName": "SAP Cloud ALM Analytics",
+   "apiType": "ODATAV4",
+   "status": "ACTIVE",
+   "description": "Access to all analytics from SAP Cloud ALM data providers.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_ITSM",
+   "apiName": "SAP Cloud ALM ITSM",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Support cases management from ITSM system in SAP Cloud ALM.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.5.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_TEST_AUTOMATION",
+   "apiName": "SAP Cloud ALM Test Automation",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Allows cloud-based test automation providers to integrate with SAP Cloud ALM.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.13",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_BSM",
+   "apiName": "SAP Cloud ALM Status Events",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Get downtime events (disruptions, degradations, maintenance etc) from Business Service Management",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_PJM",
+   "apiName": "SAP Cloud ALM Projects",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Allows to get or create projects in project management.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.11",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_PH",
+   "apiName": "SAP Cloud ALM Process Hierarchy",
+   "apiType": "ODATAV4",
+   "status": "ACTIVE",
+   "description": "Allows to create, read, update, query and delete Process Hierarchy Nodes with their related entities.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.2.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_METRICS",
+   "apiName": "SAP Cloud ALM Raw Metrics",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "Inject or consume SAP Cloud ALM metrics using OpenMetrics or OpenTelemetry format.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.1",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
+   "apiId": "CALM_IAM",
+   "apiName": "SAP Cloud ALM Issues",
+   "apiType": "ODATAV4",
+   "status": "BETA",
+   "description": "Allows updating the status, priority, and due date of Issues and Actions from an external system.",
+   "product": "SAPCloudALM",
+   "packageId": "SAPCloudALM",
+   "packageTitle": "SAP Cloud ALM",
+   "lineOfBusiness": "Service",
+   "version": "1.0.5",
+   "apiHubUrl": null,
+   "packageIds": [
+    "SAPCloudALM"
+   ]
+  },
+  {
    "apiId": "ConcurExpenseReceiptImages",
    "apiName": "Receipt Images",
    "apiType": "REST",
@@ -69699,6 +69732,86 @@
    "apiHubUrl": null,
    "packageIds": [
     "SAPDocumentandReportingComplianceElectronicDocumentsforTurkey"
+   ]
+  },
+  {
+   "apiId": "sap-dpi-pseudonymization-v1",
+   "apiName": "Pseudonymization Service",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "This service is utilized for pseudonymizing unstructured data.",
+   "product": "SAPCloudPlatformDataPrivacyIntegration",
+   "packageId": "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization",
+   "packageTitle": "SAP Data Privacy Integration NextGen - Data Anonymization",
+   "lineOfBusiness": "R&D Engineering",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization"
+   ]
+  },
+  {
+   "apiId": "sap-dpi-customProfile-v1",
+   "apiName": "Custom Profile Service",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "This service is utilized for configuration of custom profiles.",
+   "product": "SAPCloudPlatformDataPrivacyIntegration",
+   "packageId": "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization",
+   "packageTitle": "SAP Data Privacy Integration NextGen - Data Anonymization",
+   "lineOfBusiness": "R&D Engineering",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization"
+   ]
+  },
+  {
+   "apiId": "sap-dpi-anonymization-v1",
+   "apiName": "Anonymization Service",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "This service is utilized for anonymizing unstructured data.",
+   "product": "SAPCloudPlatformDataPrivacyIntegration",
+   "packageId": "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization",
+   "packageTitle": "SAP Data Privacy Integration NextGen - Data Anonymization",
+   "lineOfBusiness": "R&D Engineering",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization"
+   ]
+  },
+  {
+   "apiId": "sap-dpi-confidenceReport-v1",
+   "apiName": "Confidence Report Service",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "This service is utilized for getting accuracy metrics for pseudonymized results of unstructured data.",
+   "product": "SAPCloudPlatformDataPrivacyIntegration",
+   "packageId": "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization",
+   "packageTitle": "SAP Data Privacy Integration NextGen - Data Anonymization",
+   "lineOfBusiness": "R&D Engineering",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization"
+   ]
+  },
+  {
+   "apiId": "sap-dpi-batchProcessing-v1",
+   "apiName": "SAP Anonymization Service - Batch APIs",
+   "apiType": "REST",
+   "status": "ACTIVE",
+   "description": "This service is utilized for anonymizing unstructured data in batch mode.",
+   "product": "SAPCloudPlatformDataPrivacyIntegration",
+   "packageId": "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization",
+   "packageTitle": "SAP Data Privacy Integration NextGen - Data Anonymization",
+   "lineOfBusiness": "R&D Engineering",
+   "version": "1.0.0",
+   "apiHubUrl": null,
+   "packageIds": [
+    "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization"
    ]
   },
   {
@@ -71203,86 +71316,6 @@
    "apiHubUrl": null,
    "packageIds": [
     "DataIngestionforIndustryCloudSolutions"
-   ]
-  },
-  {
-   "apiId": "sap-dpi-pseudonymization-v1",
-   "apiName": "Pseudonymization Service",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "This service is utilized for pseudonymizing unstructured data.",
-   "product": "SAPCloudPlatformDataPrivacyIntegration",
-   "packageId": "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization",
-   "packageTitle": "SAP Data Privacy Integration NextGen - Data Anonymization",
-   "lineOfBusiness": "R&D Engineering",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization"
-   ]
-  },
-  {
-   "apiId": "sap-dpi-customProfile-v1",
-   "apiName": "Custom Profile Service",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "This service is utilized for configuration of custom profiles.",
-   "product": "SAPCloudPlatformDataPrivacyIntegration",
-   "packageId": "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization",
-   "packageTitle": "SAP Data Privacy Integration NextGen - Data Anonymization",
-   "lineOfBusiness": "R&D Engineering",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization"
-   ]
-  },
-  {
-   "apiId": "sap-dpi-anonymization-v1",
-   "apiName": "Anonymization Service",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "This service is utilized for anonymizing unstructured data.",
-   "product": "SAPCloudPlatformDataPrivacyIntegration",
-   "packageId": "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization",
-   "packageTitle": "SAP Data Privacy Integration NextGen - Data Anonymization",
-   "lineOfBusiness": "R&D Engineering",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization"
-   ]
-  },
-  {
-   "apiId": "sap-dpi-confidenceReport-v1",
-   "apiName": "Confidence Report Service",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "This service is utilized for getting accuracy metrics for pseudonymized results of unstructured data.",
-   "product": "SAPCloudPlatformDataPrivacyIntegration",
-   "packageId": "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization",
-   "packageTitle": "SAP Data Privacy Integration NextGen - Data Anonymization",
-   "lineOfBusiness": "R&D Engineering",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization"
-   ]
-  },
-  {
-   "apiId": "sap-dpi-batchProcessing-v1",
-   "apiName": "SAP Anonymization Service - Batch APIs",
-   "apiType": "REST",
-   "status": "ACTIVE",
-   "description": "This service is utilized for anonymizing unstructured data in batch mode.",
-   "product": "SAPCloudPlatformDataPrivacyIntegration",
-   "packageId": "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization",
-   "packageTitle": "SAP Data Privacy Integration NextGen - Data Anonymization",
-   "lineOfBusiness": "R&D Engineering",
-   "version": "1.0.0",
-   "apiHubUrl": null,
-   "packageIds": [
-    "sap-dpi-SAPDataPrivacyIntegrationNextGenDataAnonymization"
    ]
   },
   {
