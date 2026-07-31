@@ -14,6 +14,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isAdminRole } from "@/lib/auth/permissions";
+import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import { prisma } from "@/lib/db/prisma";
 import {
   deriveReadWrite,
@@ -173,7 +174,33 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // ── tenant + PERSISTED probe (per-tenant; no cross-tenant leak, no hammering) ──
   const configuredTenants = getConfiguredSapTenants(product.envPrefix);
   const defaultTenantKey = configuredTenants[0]?.key;
-  const tenantKey = params.get("tenant") ?? defaultTenantKey;
+
+  /*
+   * AN ANONYMOUS CALLER GETS THE PUBLISHED CATALOGUE, NEVER TENANT OBSERVATIONS.
+   *
+   * `PUBLIC_ACCESS` means "this catalogue may be browsed without an account" —
+   * probe-guard.ts states it in those words, and browsing SAP's published list
+   * is genuinely public information. What was ALSO being served to anyone on
+   * the internet was tenant-derived: the system label ("Customizing X5M/100"),
+   * its key, and every row's probe status — which is to say WHICH SAP SERVICES
+   * ARE LIVE ON A REAL CUSTOMER SYSTEM, plus dataConfirmed, capability, the
+   * probed count and lastProbedAt. That is reconnaissance, not a catalogue.
+   *
+   * The line is the same one probe-guard.ts already draws, and this route
+   * carried facts across it: browsing what SAP publishes is public; what we
+   * observed about a specific tenant is not. Found by an unauthenticated curl
+   * during a browser-agent audit — no session, HTTP 200, tenant named in the
+   * body, exactly as the earlier incident in that file was found.
+   *
+   * Resolving no tenant is what enforces it, rather than redacting fields on
+   * the way out: with `tenantKey` null nothing reads the stored probes, the
+   * live `dataProbe` overlay cannot fire, and `resolveHubStatus` classifies
+   * from each row's own nature — REFERENCE, NOT_PROBEABLE, or NOT_CHECKED.
+   * "Not checked" is the honest answer to a caller we cannot attribute, and it
+   * is what the vocabulary means. A redaction pass would have left the probe
+   * still running and one forgotten field away from leaking again.
+   */
+  const tenantKey = user ? params.get("tenant") ?? defaultTenantKey : null;
   const tenant = tenantKey
     ? (await resolveReadTenant(product.envPrefix, product.key, user?.organizationId ?? null, tenantKey))?.tenant ?? null
     : null;
@@ -216,7 +243,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // Opt-in LIVE overlay: a bounded (~60) fresh probe that WINS over stored, and
   // adds the 1-row data-confirm. Default loads never trigger it (no hammering).
   let dataConfirmed = new Set<string>();
+  /*
+   * THE OVERLAY IS A LIVE TENANT READ, SO IT TAKES THE GUARD THE CATALOGUE DOES NOT.
+   *
+   * Loading the catalogue is browsing and needs no Studio role. `?dataProbe=1`
+   * is not browsing: it opens a connection to the configured SAP tenant and
+   * issues OData requests. probe-guard.ts draws exactly that line — "a read
+   * nobody is accountable for is the one case this guard exists to prevent".
+   *
+   * The anonymous case is already closed above (no session resolves no tenant,
+   * so `tenant` is null here). This closes the other half: an AUTHENTICATED
+   * role with no Studio entitlement — an executive sponsor, a project manager —
+   * could still cause a live read of a customer system by appending a query
+   * parameter, which is the 403 branch of the guard, not the 401 one.
+   */
   if (tenant && dataProbe) {
+    const probeRefusal = await refuseUnlessMayProbeTenant(product.envPrefix);
+    if (probeRefusal) return probeRefusal;
     try {
       const r = await probeActivatedApiIds(product.envPrefix, tenant, product, true);
       for (const [k, v] of r.outcomes) outcomes.set(k, v);
