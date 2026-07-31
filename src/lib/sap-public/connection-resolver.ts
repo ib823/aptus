@@ -186,6 +186,13 @@ export async function resolveSapConnection(
 export type ConnectionBindingFailure =
   /** The organization has no active connection at all for this product. */
   | "NO_CONNECTION"
+  /**
+   * A connection declares this environment, but none carries the SAP client
+   * the caller's credential is bound to. Distinct from NO_MATCH_FOR_ENVIRONMENT
+   * because the fix is different: the landscape is configured, the data
+   * container is not.
+   */
+  | "NO_MATCH_FOR_CLIENT"
   /** It has connections, but none declares this environment. */
   | "NO_MATCH_FOR_ENVIRONMENT"
   /** Several candidates and no way to choose — refuse rather than guess. */
@@ -207,17 +214,46 @@ export async function resolveSapConnectionForEnvironment(
   product: string,
   environment: string,
   operation: "READ" | "WRITE",
+  /**
+   * The SAP client the CALLER'S CREDENTIAL is bound to, or null when it names
+   * none. Optional so the many callers on products without an SAP client stay
+   * unchanged; passing null and omitting it mean the same thing.
+   */
+  sapClient?: string | null,
 ): Promise<ConnectionBinding> {
   const all = await resolveSapConnections(organizationId, product);
   if (all.length === 0) return { ok: false, reason: "NO_CONNECTION" };
 
   const target = environment.trim().toUpperCase();
-  const matches = all.filter((c) => normalizedEnvironmentOf(c) === target);
+  const envMatches = all.filter((c) => normalizedEnvironmentOf(c) === target);
+
+  /*
+   * THE SECOND HALF OF THE BINDING. Environment names a landscape; on-premise
+   * and RISE put several data containers inside one — X5M/100 and X5M/080
+   * share a baseUrl and differ only here. Before this, such an estate could
+   * only ever get AMBIGUOUS: both rows matched DEV and nothing could choose.
+   *
+   * A credential that names a client is answered ONLY by a connection carrying
+   * that client. It never falls back to a client-less row: "no client" is not
+   * a wildcard, it is a different container, and serving one for the other is
+   * the cross-container read this whole mechanism exists to prevent.
+   */
+  const declaredClient = sapClient?.trim() ? sapClient.trim() : null;
+  const matches = declaredClient
+    ? envMatches.filter((c) => (c.client ?? null) === declaredClient)
+    : envMatches;
 
   if (matches.length === 1) {
     return { ok: true, connection: matches[0]!, bindingUnverified: false };
   }
   if (matches.length > 1) return { ok: false, reason: "AMBIGUOUS" };
+
+  // The environment matched but the client did not — a distinct failure from
+  // "nothing serves this environment", and a distinct fix (correct the
+  // credential's client, or add the connection for that container).
+  if (declaredClient && envMatches.length > 0) {
+    return { ok: false, reason: "NO_MATCH_FOR_CLIENT" };
+  }
 
   const undeclared = all.filter((c) => normalizedEnvironmentOf(c) === null);
   if (undeclared.length === 0) return { ok: false, reason: "NO_MATCH_FOR_ENVIRONMENT" };
@@ -229,7 +265,19 @@ export async function resolveSapConnectionForEnvironment(
   // declared PROD row beside an undeclared one we must not assume the undeclared
   // row is the sandbox the caller asked for.
   if (all.length === 1) {
-    return { ok: true, connection: all[0]!, bindingUnverified: true };
+    /*
+     * …and not even then, when the row AFFIRMATIVELY CONTRADICTS the caller.
+     * An undeclared environment is missing information, which the
+     * bindingUnverified flag exists to carry. A row that declares client 080
+     * against a credential bound to 100 is not missing information — it is
+     * the wrong data container, and reading it would be exactly the
+     * cross-container read the client field was added to stop.
+     */
+    const only = all[0]!;
+    if (declaredClient && only.client != null && only.client !== declaredClient) {
+      return { ok: false, reason: "NO_MATCH_FOR_CLIENT" };
+    }
+    return { ok: true, connection: only, bindingUnverified: true };
   }
   return { ok: false, reason: "AMBIGUOUS" };
 }
@@ -251,8 +299,10 @@ export function connectionRefusalMessage(
       return "No SAP connection is configured for this organization and product.";
     case "NO_MATCH_FOR_ENVIRONMENT":
       return `No SAP connection is configured for the ${environment} environment. This credential is bound to ${environment} and will not fall back to another landscape.`;
+    case "NO_MATCH_FOR_CLIENT":
+      return `A SAP connection is configured for the ${environment} environment, but none of them addresses the SAP client this credential is bound to. A client is a separate data container inside the same system, so this will not fall back to another one. Add the connection for that client in Studio, or re-issue this credential against a client that exists.`;
     case "AMBIGUOUS":
-      return `More than one SAP connection could serve the ${environment} environment, so none was chosen. Declare a distinct environment on each connection in Studio.`;
+      return `More than one SAP connection could serve the ${environment} environment, so none was chosen. Declare a distinct environment on each connection in Studio — or, where one system hosts several SAP clients, set the client on each connection and on this credential so the pair identifies exactly one.`;
     case "UNDECLARED_ENVIRONMENT_WRITE":
       return "This organization's SAP connection has not declared which environment it is, so a write cannot be authorised against it. Set the environment on the connection in Studio.";
   }
@@ -499,8 +549,16 @@ export interface UpsertSapConnectionInput {
  * The write path that a self-service "add a connection" UI calls. Admin-gated
  * at the route layer — this helper assumes authorization already happened.
  */
-/** Blank is not an environment. Upper-cased so the chip reads consistently. */
-function normalizeEnvironment(value: string | null | undefined): string | null {
+/**
+ * Blank is not an environment. Upper-cased so the chip reads consistently.
+ *
+ * EXPORTED because the write path is no longer the only caller: the
+ * connections route compares a proposed environment against stored ones to
+ * refuse indistinguishable twins, and the stored side is whatever THIS
+ * function produced. A second spelling of "normalize" there would let
+ * "dev" slip past a row stored as "DEV" — one fact, one definition.
+ */
+export function normalizeEnvironment(value: string | null | undefined): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed ? trimmed.toUpperCase() : null;

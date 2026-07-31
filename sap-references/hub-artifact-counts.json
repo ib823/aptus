@@ -1,0 +1,34 @@
+{
+ "_provenance": {
+  "source": "https://api.sap.com/odata/1.0/catalog.svc",
+  "method": "anonymous ContentPackages -> Artifacts, Type-only select, tallied per package Products tag",
+  "harvestedAt": "2026-07-31T00:06:07.237Z",
+  "packagesRead": 1949,
+  "packagesWalled": 0,
+  "completeness": "floor",
+  "note": "COUNTS ONLY, BY PACKAGE PRODUCT TAG. Walks the same anonymous ContentPackages -> Artifacts route as api-hub-catalog.json but keeps tallies rather than rows: ~13,000 CDS views and BAdIs would dominate the repository for content nothing probes. A floor for the same reason the API harvest is one — it counts artifacts that belong to a package. NOT evidence that any of it is active on a tenant.",
+  "hubWideTotals": {
+   "CDS_VIEW": 12100,
+   "BADI": 1000
+  }
+ },
+ "byProductTag": {
+  "SAPS4HANA,SAPS4HANACloudPrivateEdition": {
+   "CDS_VIEW": 55
+  },
+  "SAPS4HANACloud": {
+   "CDS_VIEW": 5873,
+   "BADI": 500
+  },
+  "SAPS4HANACloudPrivateEdition": {
+   "CDS_VIEW": 5581,
+   "BADI": 500
+  },
+  "SAPS4HANA,SAPS4HANACloudPrivateEdition,SAPS4HANAUtilities": {
+   "CDS_VIEW": 401
+  },
+  "SAPS4HANA,SAPS4HANAAssetManagement,SAPS4HANACloudPrivateEdition": {
+   "CDS_VIEW": 190
+  }
+ }
+}

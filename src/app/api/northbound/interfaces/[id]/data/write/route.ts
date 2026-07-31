@@ -198,6 +198,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
         iface.sapProduct,
         client.environment,
         "WRITE",
+        client.sapClient,
       )
     : ({ ok: false, reason: "NO_CONNECTION" } as const);
 

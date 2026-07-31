@@ -41,10 +41,17 @@
  *   HARVEST_LIMIT=50 pnpm tsx scripts/harvest-sap-api-hub.ts     # quick pilot
  *   HARVEST_OUT=path/to.json pnpm tsx scripts/harvest-sap-api-hub.ts
  *
- * Writes sap-references/api-hub-catalog.json in the shape
- * import-sap-api-catalog.ts already accepts, so the next step is:
+ * Writes sap-references/api-hub-catalog.json as `{ _provenance, apis: [...] }`,
+ * which the importer reads, so the next step is:
  *
- *   pnpm tsx scripts/import-sap-api-catalog.ts
+ *   pnpm sap:catalog:import
+ *
+ * THAT SENTENCE USED TO SAY "in the shape import-sap-api-catalog.ts already
+ * accepts", and it was wrong from the day it was written: the importer knew
+ * `value` and `d.results` envelopes but not `apis`, so step two failed every
+ * time with "Unrecognized JSON shape". Nothing caught it because nothing ran
+ * the chain — the tests over the harvested file call the tag mappers directly.
+ * Both sides are now pinned by tests that parse the committed artifact.
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";

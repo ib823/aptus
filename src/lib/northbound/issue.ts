@@ -32,6 +32,8 @@ export interface IssuedClient {
   solutionId: string;
   label: string;
   environment: string;
+  /** The SAP client this credential may read, or null when it names none. */
+  sapClient: string | null;
   createdAt: Date;
   /** Present ONLY on the response that created or rotated it. Never re-readable. */
   rawToken: string;
@@ -42,6 +44,8 @@ export interface ClientSummary {
   solutionId: string;
   label: string;
   environment: string;
+  /** The SAP client this credential may read, or null when it names none. */
+  sapClient: string | null;
   isActive: boolean;
   lastUsedAt: Date | null;
   expiresAt: Date | null;
@@ -62,6 +66,12 @@ export async function issueClientToken(
     solutionId: string;
     label: string;
     environment: ClientEnvironment;
+    /**
+     * The SAP client to bind this credential to — for on-premise and RISE,
+     * where one landscape holds several data containers. Omit (or null) for
+     * products that address no client.
+     */
+    sapClient?: string | null;
     createdById: string;
     expiresAt?: Date | null;
   },
@@ -88,6 +98,7 @@ export async function issueClientToken(
       label: input.label,
       tokenHash,
       environment: input.environment,
+      sapClient: input.sapClient ?? null,
       createdById: input.createdById,
       expiresAt: input.expiresAt ?? null,
     },
@@ -95,13 +106,17 @@ export async function issueClientToken(
       label: input.label,
       tokenHash,
       environment: input.environment,
+      // Rotation re-states the binding rather than preserving it: the caller
+      // just described the credential it wants, and a silently-kept client
+      // from a previous issue would be a binding nobody chose.
+      sapClient: input.sapClient ?? null,
       expiresAt: input.expiresAt ?? null,
       // Re-issuing revives a revoked or deactivated credential deliberately:
       // the operator has just asked for a working token.
       isActive: true,
       revokedAt: null,
     },
-    select: { id: true, solutionId: true, label: true, environment: true, createdAt: true },
+    select: { id: true, solutionId: true, label: true, environment: true, sapClient: true, createdAt: true },
   });
 
   return { ...row, rawToken };
@@ -130,7 +145,7 @@ export async function rotateClientToken(
       isActive: true,
       revokedAt: null,
     },
-    select: { id: true, solutionId: true, label: true, environment: true, createdAt: true },
+    select: { id: true, solutionId: true, label: true, environment: true, sapClient: true, createdAt: true },
   });
 
   return { ...row, rawToken };
@@ -161,6 +176,7 @@ export async function revokeClientToken(
       solutionId: true,
       label: true,
       environment: true,
+      sapClient: true,
       isActive: true,
       lastUsedAt: true,
       expiresAt: true,
@@ -179,6 +195,7 @@ export async function listClients(scope: TenantScope): Promise<ClientSummary[]> 
       solutionId: true,
       label: true,
       environment: true,
+      sapClient: true,
       isActive: true,
       lastUsedAt: true,
       expiresAt: true,

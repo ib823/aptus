@@ -537,6 +537,15 @@ model SapConnection {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  /// ALSO CONSTRAINED BY A PARTIAL UNIQUE INDEX Prisma cannot express:
+  /// SapConnection_active_binding_tuple on (organizationId, product,
+  /// environment, client) NULLS NOT DISTINCT, WHERE isActive AND environment
+  /// IS NOT NULL — see migrations/20260731010000_connection_binding_tuple.
+  /// It stops two ACTIVE connections becoming indistinguishable to
+  /// resolveSapConnectionForEnvironment, which would otherwise refuse every
+  /// request for that environment as AMBIGUOUS. Because it lives only in
+  /// SQL, `prisma db push` against a scratch database will not create it —
+  /// migrate, don't push.
   @@unique([organizationId, product, key])
   @@index([organizationId, product])
   @@index([organizationId, isActive])
@@ -726,6 +735,25 @@ model SolutionClient {
   tokenHash   String @unique
   /// SANDBOX | DEV | TEST | PROD — the trust level this client runs at.
   environment String
+
+  /// The SAP client this credential is bound to — "100", "080" — or NULL.
+  ///
+  /// NAMED sapClient, not client, because "client" on this model already means
+  /// the API consumer. This is SAP's meaning: a data container inside one
+  /// system.
+  ///
+  /// WHY IT IS PART OF THE BINDING. `environment` alone identifies a landscape,
+  /// which is enough where one system serves one dataset. On-premise and RISE
+  /// break that: X5M/100 and X5M/080 are different data containers at the same
+  /// baseUrl, so a credential naming only DEV cannot say which one it means.
+  /// The resolver refuses AMBIGUOUS in that case rather than guessing — correct,
+  /// but it leaves multi-client estates unable to use the northbound API at all.
+  /// This field is how a credential says which container it may read.
+  ///
+  /// NULL IS THE TRUTH FOR MOST ROWS, not a gap: public cloud, SuccessFactors
+  /// and Ariba have no SAP client, and a credential for them is fully specified
+  /// by its environment.
+  sapClient String?
 
   /// Optional sealed extras (AES-256-GCM, bound to this row by AAD).
   secretsCiphertext String? @db.Text
