@@ -36,6 +36,8 @@ const prisma = new PrismaClient();
 
 const REF_DIR = "sap-references";
 const PER_TYPE_DIR = path.join(REF_DIR, "hub-content");
+/** Individual artifacts from the Hub harvest — never bundled, see resolveSources. */
+const HARVEST_DIR = path.join(REF_DIR, "hub-harvest");
 const EXPLICIT_FILE = process.env.HUB_IMPORT_FILE ?? null;
 const DRY_RUN = process.env.HUB_IMPORT_DRY_RUN === "1";
 
@@ -52,12 +54,27 @@ function resolveSources(): ImportSource[] {
   }
   const sources: ImportSource[] = [];
 
-  // 1) Per-type files: sap-references/hub-content/<TYPE>.json → contentType from name.
-  const perTypeDir = path.resolve(process.cwd(), PER_TYPE_DIR);
-  if (existsSync(perTypeDir)) {
-    for (const f of readdirSync(perTypeDir).filter((f) => f.toLowerCase().endsWith(".json")).sort()) {
+  /*
+   * 1) Per-type files, from BOTH directories, curated first.
+   *
+   *   hub-content/  — hand-curated rows, often GROUPED (one `S4HANACloudBADI`
+   *                   standing for a thousand BAdIs). Small, and statically
+   *                   imported by hub-content-bundled.ts for the admin Rebuild.
+   *   hub-harvest/  — individual artifacts from scripts/harvest-sap-api-hub.ts.
+   *                   Large, and deliberately NEVER statically imported, so it
+   *                   cannot reach the serverless bundle.
+   *
+   * They key differently — grouped id versus artifact id — so both survive the
+   * upsert rather than one erasing the other. Writing the harvest into the
+   * curated files instead destroyed 158 integrations and 77 builds before this
+   * split existed.
+   */
+  for (const dir of [PER_TYPE_DIR, HARVEST_DIR]) {
+    const abs = path.resolve(process.cwd(), dir);
+    if (!existsSync(abs)) continue;
+    for (const f of readdirSync(abs).filter((f) => f.toLowerCase().endsWith(".json")).sort()) {
       const typeRaw = path.basename(f, path.extname(f)).toUpperCase().replace(/[\s-]+/g, "_");
-      if (isHubContentType(typeRaw)) sources.push({ file: path.join(perTypeDir, f), contentType: typeRaw });
+      if (isHubContentType(typeRaw)) sources.push({ file: path.join(abs, f), contentType: typeRaw });
     }
   }
 

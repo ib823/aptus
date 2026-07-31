@@ -66,6 +66,41 @@ const PAGE = 500;
 /** OData v2 string keys are single-quoted, and an inner quote is doubled. */
 const odataKey = (name: string) => encodeURIComponent(name).replace(/'/g, "%27%27");
 
+/**
+ * The Hub's artifact-type names, mapped to the content types this repository
+ * stores (`HubContentType` in lib/sap-public/hub-content).
+ *
+ * DELIBERATELY PARTIAL, AND THE REMAINDER IS REPORTED. The Hub emits 23 types;
+ * these seven plus API cover 30,599 of 32,084 artifacts. The rest — Data Products,
+ * Value and Message Mappings, Business Objects, Integration Adapters, Policy
+ * Templates and friends — have no content type here yet, so they are counted
+ * under `unmappedArtifactTypes` in the output rather than silently discarded.
+ * Adding one is a matter of extending HubContentType first; guessing a mapping
+ * would file real SAP content under the wrong heading.
+ *
+ * "API" is absent on purpose: APIs go to api-hub-catalog.json for
+ * SapApiReference, which is a different table with edition tagging of its own.
+ */
+const HUB_TYPE_MAP: Record<string, string> = {
+  IFlow: "INTEGRATION",
+  Event: "EVENT",
+  Scenario: "SCENARIO",
+  BOInterface: "BO_INTERFACE",
+  BADI: "BADI",
+};
+
+/**
+ * Types kept as COUNTS ONLY, in sap-references/hub-artifact-counts.json.
+ *
+ * CDS views (12,100) and Builds (6,755) are 59% of the Hub's artifacts and the
+ * least individually actionable — nobody browses twelve thousand CDS views, and
+ * a developer who needs one queries their own system, where it either exists or
+ * does not. Committing 7.3MB of rows for content nothing probes would dominate
+ * the repository and, for the two that are statically imported, the serverless
+ * bundle as well. The counts file already carries them with provenance.
+ */
+const COUNT_ONLY_TYPES = new Set(["CDSVIEW", "Build"]);
+
 interface HubArtifact {
   Name: string;
   DisplayName?: string | null;
@@ -157,6 +192,10 @@ async function main() {
   let walled = 0;
   const typeCounts: Record<string, number> = {};
   const rows: Record<string, unknown>[] = [];
+  /** Mappable non-API artifacts, grouped into the per-type drop targets. */
+  const byHubType: Record<string, Record<string, unknown>[]> = {};
+  /** Types the Hub publishes that this repository has no content type for. */
+  const unmappedTypes: Record<string, number> = {};
 
   await pooled(packages, CONCURRENCY, async (p) => {
     const arts = await get<HubArtifact>(
@@ -170,6 +209,45 @@ async function main() {
     }
     for (const a of arts) {
       typeCounts[a.Type ?? "UNKNOWN"] = (typeCounts[a.Type ?? "UNKNOWN"] ?? 0) + 1;
+
+      /*
+       * EVERY MAPPABLE TYPE IS KEPT NOW, NOT JUST APIs.
+       *
+       * This walk always SAW all of it — 32,084 artifacts across 23 types —
+       * and threw away 27,487 of them on the next line, because the filter
+       * was `Type !== "API"`. The catalogue held 14% of what one run had
+       * already fetched, and nothing said so: the type counts were recorded
+       * in provenance while the rows were dropped.
+       *
+       * Unmappable types are still skipped, but they are COUNTED and named
+       * in the output, so "we do not carry this" is a visible statement
+       * rather than a silence.
+       */
+      const hubType = a.Type ? HUB_TYPE_MAP[a.Type] : undefined;
+      if (a.Type && COUNT_ONLY_TYPES.has(a.Type)) {
+        // Counted in typeCounts above and carried by hub-artifact-counts.json.
+        // Not "unmapped" — a deliberate choice, so it must not be reported as a gap.
+      } else if (hubType && a.Name) {
+        (byHubType[hubType] ??= []).push({
+          externalId: a.Name,
+          title: a.DisplayName ?? a.Name,
+          description: a.Description ?? "",
+          // Line of business, matching how the API slice populates packageId.
+          packageId: p.LineOfBusiness ?? null,
+          status: a.State ?? null,
+          apiType: a.SubType ?? null,
+          hubUrl: a.URI ?? null,
+          // Harvested from SAP, not authored here. The importer refuses to let
+          // an illustrative row overwrite one of these.
+          illustrative: false,
+          product: p.Products ?? null,
+          packageTechnicalName: p.TechnicalName,
+          version: a.Version ?? null,
+        });
+      } else if (a.Type && a.Type !== "API") {
+        unmappedTypes[a.Type] = (unmappedTypes[a.Type] ?? 0) + 1;
+      }
+
       if (a.Type !== "API" || !a.Name) continue;
       rows.push({
         apiId: a.Name,
@@ -231,6 +309,12 @@ async function main() {
        * the OAuth wall, so the size of the gap cannot be measured from here.
        */
       completeness: "floor",
+      /**
+       * Types the Hub publishes that this repository cannot file. Named rather
+       * than dropped, so "we do not carry Data Products" is a statement someone
+       * can act on instead of an absence nobody notices.
+       */
+      unmappedArtifactTypes: unmappedTypes,
       note:
         "Lower bound on what SAP publishes. NOT evidence that any service is " +
         "available on any tenant — only a probe against a real system can say that.",
@@ -242,9 +326,46 @@ async function main() {
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, JSON.stringify(payload, null, 1));
 
+  /*
+   * A SEPARATE DIRECTORY FROM THE CURATED DROP TARGETS, for two reasons found
+   * the hard way by writing into them first.
+   *
+   * 1. IT CLOBBERS. hub-content/*.json hold hand-curated rows keyed by GROUPED
+   *    identifiers — `S4HANACloudBADI` standing for a thousand BAdIs, and
+   *    similar summary rows for integrations and builds. The harvest emits
+   *    INDIVIDUAL artifacts with different ids, so writing over those files
+   *    silently destroyed 158 integrations, 77 builds and 19 CDS groupings.
+   *    Different vocabularies, both legitimate; neither should erase the other.
+   *
+   * 2. IT WOULD BLOAT THE FUNCTION. hub-content-bundled.ts STATICALLY IMPORTS
+   *    several of those files so the admin Rebuild endpoint works without a DB
+   *    secret leaving Vercel. A static import is a bundling instruction — 4,439
+   *    integrations would be baked into every serverless function. The existing
+   *    guard already excludes high-volume types for exactly this reason; this
+   *    keeps that guard intact by never being imported at all.
+   *
+   * Deduplicated by externalId within a type: one artifact can belong to
+   * several packages, exactly as an API can.
+   */
+  const perTypeDir = resolve(process.cwd(), dirname(OUT), "hub-harvest");
+  mkdirSync(perTypeDir, { recursive: true });
+  const written: Record<string, number> = {};
+  for (const [type, items] of Object.entries(byHubType)) {
+    const seen = new Map<string, Record<string, unknown>>();
+    for (const item of items) if (!seen.has(String(item.externalId))) seen.set(String(item.externalId), item);
+    const deduped = [...seen.values()];
+    writeFileSync(resolve(perTypeDir, `${type}.json`), JSON.stringify(deduped, null, 1));
+    written[type] = deduped.length;
+  }
+
   console.log(`\nWrote ${apis.length} APIs (${rows.length} before dedupe) → ${OUT}`);
   console.log(`Packages: ${packages.length} read, ${walled} walled`);
-  console.log("Artifact types:", JSON.stringify(typeCounts));
+  console.log("Artifact types seen:", JSON.stringify(typeCounts));
+  console.log("Per-type files written:", JSON.stringify(written));
+  if (Object.keys(unmappedTypes).length > 0) {
+    // Loud, because this is the list of things the catalogue still cannot hold.
+    console.log("NOT carried (no content type for these):", JSON.stringify(unmappedTypes));
+  }
 }
 
 void main();

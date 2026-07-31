@@ -123,6 +123,18 @@ test-results/
 # provenance block, ~2KB. A test computes the per-edition split from it using
 # the real tag classifier.
 !/sap-references/hub-artifact-counts.json
+# …and the harvested per-type artifacts, for the same reason as the catalogue.
+#
+# Produced by scripts/harvest-sap-api-hub.ts against a public endpoint, not
+# downloaded by a human, and carrying the same provenance. 7,147 individual
+# integrations, events, scenarios, BAdIs and BO interfaces — the 26,002 the
+# harvest saw minus CDS views and Builds, which stay counts-only.
+#
+# DELIBERATELY SEPARATE from hub-content/ and never statically imported:
+# hub-content-bundled.ts bakes its imports into the serverless function, and
+# 2.4MB of integrations do not belong there. See resolveSources in
+# scripts/import-sap-hub-content.ts.
+!/sap-references/hub-harvest/
 # …and the per-type drop targets + README (committed, bundled into the admin
 # Rebuild endpoint). Real exports are dropped INTO these files, not new paths.
 !/sap-references/hub-content/
