@@ -327,13 +327,31 @@ export function parseJson(text: string): Array<Record<string, unknown>> {
   if (Array.isArray(parsed)) return parsed as Array<Record<string, unknown>>;
   if (parsed && typeof parsed === "object") {
     const o = parsed as Record<string, unknown>;
+    /*
+     * `{ _provenance, apis: [...] }` — WHAT THE HARVESTER ACTUALLY WRITES.
+     *
+     * Its header has claimed since it shipped that it "writes the shape
+     * import-sap-api-catalog.ts already accepts", and it never did: this
+     * function knew `value` and `d.results` but not `apis`, so the documented
+     * two-step flow (harvest, then import) failed on the second step every
+     * time with "Unrecognized JSON shape".
+     *
+     * It went unseen because nothing exercised the chain. The tests that read
+     * the harvested file call `mapEditionFromProductTags` directly, so they
+     * pass while the workflow they appear to cover is broken — which also
+     * means `productTags` and every edition flag re-derived by an import have
+     * never once been populated from a harvest on any database.
+     */
+    if (Array.isArray(o.apis)) return o.apis as Array<Record<string, unknown>>;
     if (Array.isArray(o.value)) return o.value as Array<Record<string, unknown>>;
     if (o.d && typeof o.d === "object") {
       const d = o.d as Record<string, unknown>;
       if (Array.isArray(d.results)) return d.results as Array<Record<string, unknown>>;
     }
   }
-  throw new Error("Unrecognized JSON shape — expected array, { value: [] }, or { d: { results: [] } }");
+  throw new Error(
+    "Unrecognized JSON shape — expected an array, { apis: [] } (the harvester's output), { value: [] }, or { d: { results: [] } }",
+  );
 }
 
 // ── Normalize one parsed row ────────────────────────────────────────────────

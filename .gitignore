@@ -114,6 +114,15 @@ test-results/
 # be answered from memory. A gitignored input makes an import unreproducible and
 # unreviewable; 2.2MB of JSON is a small price for both.
 !/sap-references/api-hub-catalog.json
+# …and the artifact COUNTS, for the same reason and by the same route.
+#
+# CDS views and BAdIs number ~13,000 Hub-wide: too many to commit as rows for
+# content nothing probes, and previously represented only by illustrative seed
+# numbers (4,513 / 1,665) that no measurement supported. This file is the
+# measurement — counts per package product tag, same anonymous harvest, same
+# provenance block, ~2KB. A test computes the per-edition split from it using
+# the real tag classifier.
+!/sap-references/hub-artifact-counts.json
 # …and the per-type drop targets + README (committed, bundled into the admin
 # Rebuild endpoint). Real exports are dropped INTO these files, not new paths.
 !/sap-references/hub-content/

@@ -1,0 +1,20 @@
+-- The SAP client a northbound credential is bound to.
+--
+-- NULLABLE, AND NULL IS THE TRUTH FOR EVERY EXISTING ROW. Public cloud,
+-- SuccessFactors and Ariba have no SAP client at all, so a credential for
+-- them is fully specified by its environment — there is nothing to backfill
+-- and nothing to rewrite.
+--
+-- It completes the binding for the landscapes that DO address a client.
+-- `environment` alone identifies a landscape; on-premise and RISE put several
+-- data containers inside one landscape (X5M/100 and X5M/080 share a baseUrl),
+-- so a credential naming only DEV cannot say which container it means. The
+-- resolver refuses such a request as AMBIGUOUS rather than guessing — safe,
+-- but it locks multi-client estates out of the northbound API entirely. This
+-- column is how the credential answers.
+--
+-- No unique constraint: two solutions may legitimately hold credentials for
+-- the same environment and client. The uniqueness that matters is on the
+-- CONNECTION side (SapConnection_active_binding_tuple), which is what makes
+-- the pair resolvable to exactly one row.
+ALTER TABLE "SolutionClient" ADD COLUMN "sapClient" TEXT;

@@ -24,6 +24,7 @@ import {
   revokeClientToken,
   rotateClientToken,
 } from "@/lib/northbound/issue";
+import { isValidSapClient } from "@/lib/sap-public/sap-url";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
@@ -32,12 +33,31 @@ import { scopedById, tenantScopeFor, type TenantScope } from "@/lib/studio/tenan
 
 export const dynamic = "force-dynamic";
 
-const issueSchema = z.object({
-  solutionId: z.string().min(1),
-  label: z.string().min(1).max(120),
-  environment: z.enum(["SANDBOX", "DEV", "TEST", "PROD"]),
-  expiresAt: z.string().datetime().optional(),
-});
+const issueSchema = z
+  .object({
+    solutionId: z.string().min(1),
+    label: z.string().min(1).max(120),
+    environment: z.enum(["SANDBOX", "DEV", "TEST", "PROD"]),
+    /**
+     * The SAP client to bind this credential to. Only meaningful where one
+     * landscape holds several data containers (on-premise, RISE) — omit it
+     * for public cloud, SuccessFactors and Ariba, which have no SAP client.
+     */
+    sapClient: z.string().max(3).optional(),
+    expiresAt: z.string().datetime().optional(),
+  })
+  .superRefine((v, ctx) => {
+    // A malformed client is worse than none: it silently matches no
+    // connection, and the caller sees NO_MATCH_FOR_CLIENT with no hint that
+    // the value they typed was never valid.
+    if (v.sapClient !== undefined && !isValidSapClient(v.sapClient)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["sapClient"],
+        message: "sapClient must be exactly three digits, e.g. 100",
+      });
+    }
+  });
 
 const patchSchema = z.object({
   clientId: z.string().min(1),
@@ -149,6 +169,7 @@ export async function POST(request: NextRequest) {
     solutionId: solution.id,
     label: input.label,
     environment: input.environment,
+    sapClient: input.sapClient ?? null,
     createdById: user.id,
     expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
   });

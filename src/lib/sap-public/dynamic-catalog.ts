@@ -20,6 +20,50 @@ const EDITION_FIELD = {
 } as const;
 export type SapEdition = keyof typeof EDITION_FIELD;
 
+/**
+ * Products that are NOT editions of S/4HANA, and so are unreachable by edition.
+ *
+ * THE GAP THIS ADDRESSES. `getDynamicOdataServices` filters on the edition
+ * booleans, which is right for S/4: every row is public, private, on-prem, or
+ * some combination. Ariba and SuccessFactors are not editions of anything —
+ * they correctly carry NO edition flag — so an edition filter can never return
+ * them. 321 harvested rows were addressable by no query at all until
+ * `SapApiReference.productTags` began storing SAP's tag string verbatim.
+ */
+export type SapNonEditionProduct = "ariba" | "successfactors";
+
+/**
+ * A `where` fragment selecting one non-edition product's rows by product tag.
+ *
+ * MATCHES BOTH DIALECTS SAP WRITES. The Hub's OData emits "SAPAriba" and
+ * "SAPSuccessFactors" (no spaces); a downloaded export writes "SAP Ariba" and
+ * "SAP SuccessFactors". A case-insensitive substring on the un-spaced core
+ * covers both, and no S/4 tag contains either word — see the truth table in
+ * tests/unit/sap/by-product-retrieval.test.ts.
+ *
+ * RETRIEVAL ONLY, DELIBERATELY. It does not derive service paths, because
+ * `odataPath` builds `/sap/opu/odata/sap/<apiId>` — an S/4 convention that is
+ * wrong for SuccessFactors (one `/odata/v2` root) and meaningless for Ariba
+ * (REST, not OData). Wiring these into probe targets would manufacture URLs
+ * that 404 by construction. Path derivation waits for a live system of each to
+ * verify against; this makes the rows countable and queryable in the meantime.
+ */
+export function productTagFilter(product: SapNonEditionProduct): {
+  productTags: { contains: string; mode: "insensitive" };
+} {
+  return {
+    productTags: {
+      contains: product === "ariba" ? "ariba" : "successfactors",
+      mode: "insensitive",
+    },
+  };
+}
+
+/** How many catalogue rows this repository holds for a non-edition product. */
+export async function countByProduct(product: SapNonEditionProduct): Promise<number> {
+  return prisma.sapApiReference.count({ where: productTagFilter(product) });
+}
+
 export interface DynamicCatalogOpts {
   edition?: SapEdition;
   /** Lifecycle states to include. Default: current, non-deprecated. */
