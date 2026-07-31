@@ -2,15 +2,18 @@
  * Consultant presales settings — /presales/settings.
  *
  * Profile (PDF title), notification toggles, default window length,
- * default accent color. Pass 7. v1 stores these in localStorage on
- * submit — the form posts to /api/presales/preferences which is a stub
- * that records the audit event but defers persistence to a follow-up
- * (no schema column yet for consultant defaults).
+ * default accent color. The form posts to /api/presales/preferences, which
+ * persists to User.presalesPreferences, and this page renders the stored
+ * values back — Save round-trips for real now. (It spent months as a no-op
+ * that redirected back looking successful; this header claimed localStorage
+ * persistence that never existed either.)
  */
 
 import { redirect } from 'next/navigation';
+import { prisma } from '@/lib/db/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
 import { canAccessPresales } from '@/lib/presales/rbac';
+import { readPresalesPreferences } from '@/lib/presales/preferences';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +23,12 @@ export default async function PresalesSettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/presales/login');
   if (!canAccessPresales(user.role)) redirect('/presales');
+
+  const row = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { presalesPreferences: true },
+  });
+  const prefs = readPresalesPreferences(row?.presalesPreferences);
 
   return (
     <main style={{ maxWidth: 720, margin: '32px auto', padding: '0 24px' }}>
@@ -41,25 +50,25 @@ export default async function PresalesSettingsPage() {
           <span style={{ fontSize: 13, fontWeight: 600, color: '#5A5A5A' }}>Display name on signed PDF</span>
           <input
             name="pdfDisplayName"
-            defaultValue={user.name ?? ''}
+            defaultValue={prefs.pdfDisplayName || (user.name ?? '')}
             style={inputStyle}
           />
         </label>
         <label style={{ display: 'grid', gap: 4 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: '#5A5A5A' }}>Default access window (days)</span>
-          <input type="number" min={1} max={30} name="defaultWindowDays" defaultValue={7} style={inputStyle} />
+          <input type="number" min={1} max={30} name="defaultWindowDays" defaultValue={prefs.defaultWindowDays} style={inputStyle} />
         </label>
         <label style={{ display: 'grid', gap: 4 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: '#5A5A5A' }}>Default accent color (hex)</span>
-          <input name="defaultAccent" defaultValue="#002B5C" style={inputStyle} />
+          <input name="defaultAccent" defaultValue={prefs.defaultAccent} style={inputStyle} />
         </label>
         <fieldset style={{ border: '1px solid #E5E5E5', padding: 12, borderRadius: 8, display: 'grid', gap: 8 }}>
           <legend style={{ fontSize: 13, color: '#5A5A5A', padding: '0 4px' }}>Notifications</legend>
           <label style={{ fontSize: 13 }}>
-            <input type="checkbox" name="notifyOnSignoff" defaultChecked /> Email me when a bundle is signed
+            <input type="checkbox" name="notifyOnSignoff" defaultChecked={prefs.notifyOnSignoff} /> Email me when a bundle is signed
           </label>
           <label style={{ fontSize: 13 }}>
-            <input type="checkbox" name="notifyOnOtpLockout" defaultChecked /> Email me when a grant is locked out (5 failed OTPs)
+            <input type="checkbox" name="notifyOnOtpLockout" defaultChecked={prefs.notifyOnOtpLockout} /> Email me when a grant is locked out (5 failed OTPs)
           </label>
         </fieldset>
         <div style={{ fontSize: 12, color: '#888780' }}>

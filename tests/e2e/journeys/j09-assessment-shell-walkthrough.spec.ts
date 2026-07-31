@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
+import { seedGate } from "../seed-gate";
 
 /**
  * J09 — Assessment shell walkthrough (post-cleanup verification)
@@ -28,7 +29,7 @@ test.beforeAll(async () => {
     select: { id: true, companyName: true },
   });
   if (!a) {
-    test.skip(true, "No Bursa Malaysia assessment in DB — re-run the importer");
+    seedGate("No Bursa Malaysia assessment in DB — re-run the importer");
     return;
   }
   assessmentId = a.id;

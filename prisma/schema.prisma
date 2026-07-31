@@ -1979,6 +1979,13 @@ model User {
   presalesGrantsRevoked  PresalesAccessGrant[] @relation("GrantsRevoked")
   presalesAuditActions   PresalesAuditEvent[]  @relation("PresalesAuditActions")
 
+  /// Consultant presales defaults from /presales/settings (pdfDisplayName,
+  /// defaultWindowDays, defaultAccent, notify toggles). The settings form
+  /// existed and POSTed for months while the route was a no-op that answered
+  /// with a success-shaped 303 — a submit that stored nothing. NULL = the
+  /// consultant never saved; the form then shows its built-in defaults.
+  presalesPreferences Json?
+
   // ABeam Workbench — Value-Stream Affirm-Set (CCC build, 2026-05-22)
   affirmBundlesCreated   AffirmBundle[]         @relation("AffirmBundlesCreated")
   affirmBundlesReleased  AffirmBundle[]         @relation("AffirmBundlesReleased")

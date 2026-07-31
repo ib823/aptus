@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { AssessmentPage } from "./pages/assessment.page";
 import { SettingsPage } from "./pages/settings.page";
+import { seedGate } from "./seed-gate";
 
 /**
  * T-EDGE-001 through T-EDGE-025 — Destructive / Edge Case Tests
@@ -89,7 +90,7 @@ test.describe("T-EDGE — Destructive & Edge Case Tests", () => {
   test("T-EDGE-004 — Two tabs editing the same assessment", async ({ page, context }) => {
     const id = await getFirstAssessmentId(page);
     if (!id) {
-      test.skip(true, 'No assessment data available — seed required');
+      seedGate('No assessment data available');
       return;
     }
 
@@ -167,7 +168,7 @@ test.describe("T-EDGE — Destructive & Edge Case Tests", () => {
   test("T-EDGE-007 — Back button after sign-off completion", async ({ page }) => {
     const id = await getFirstAssessmentId(page);
     if (!id) {
-      test.skip(true, 'No assessment data available — seed required');
+      seedGate('No assessment data available');
       return;
     }
 
@@ -190,7 +191,7 @@ test.describe("T-EDGE — Destructive & Edge Case Tests", () => {
   test("T-EDGE-008 — URL manipulation to skip workflow steps", async ({ page }) => {
     const id = await getFirstAssessmentId(page);
     if (!id) {
-      test.skip(true, 'No assessment data available — seed required');
+      seedGate('No assessment data available');
       return;
     }
 
@@ -261,7 +262,7 @@ test.describe("T-EDGE — Destructive & Edge Case Tests", () => {
   }) => {
     const id = await getFirstAssessmentId(page);
     if (!id) {
-      test.skip(true, 'No assessment data available — seed required');
+      seedGate('No assessment data available');
       return;
     }
 
@@ -308,7 +309,7 @@ test.describe("T-EDGE — Destructive & Edge Case Tests", () => {
   }) => {
     const id = await getFirstAssessmentId(page);
     if (!id) {
-      test.skip(true, 'No assessment data available — seed required');
+      seedGate('No assessment data available');
       return;
     }
 
@@ -364,7 +365,7 @@ test.describe("T-EDGE — Destructive & Edge Case Tests", () => {
   test("T-EDGE-016 — Assessment with 0 scope items", async ({ page, request }) => {
     const id = await getFirstAssessmentId(page);
     if (!id) {
-      test.skip(true, 'No assessment data available — seed required');
+      seedGate('No assessment data available');
       return;
     }
 
@@ -384,7 +385,7 @@ test.describe("T-EDGE — Destructive & Edge Case Tests", () => {
   }) => {
     const id = await getFirstAssessmentId(page);
     if (!id) {
-      test.skip(true, 'No assessment data available — seed required');
+      seedGate('No assessment data available');
       return;
     }
 
@@ -414,7 +415,7 @@ test.describe("T-EDGE — Destructive & Edge Case Tests", () => {
   }) => {
     const id = await getFirstAssessmentId(page);
     if (!id) {
-      test.skip(true, 'No assessment data available — seed required');
+      seedGate('No assessment data available');
       return;
     }
 
@@ -502,7 +503,7 @@ test.describe("T-EDGE — Destructive & Edge Case Tests", () => {
   test("T-EDGE-022 — Clock skew with future timestamps", async ({ page, request }) => {
     const id = await getFirstAssessmentId(page);
     if (!id) {
-      test.skip(true, 'No assessment data available — seed required');
+      seedGate('No assessment data available');
       return;
     }
 

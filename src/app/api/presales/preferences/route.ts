@@ -1,14 +1,22 @@
 /**
- * POST /api/presales/preferences — stub.
+ * POST /api/presales/preferences — persist consultant settings.
  *
- * Stores consultant preferences. v1 audits the change and returns the
- * user to the settings page; persistent storage is deferred to a follow-
- * up (no schema column yet for these defaults).
+ * THIS WAS A NO-OP THAT ANSWERED WITH SUCCESS. The settings form POSTed here
+ * since Pass 7; the route logged a line in dev and 303-redirected back, so
+ * pressing Save looked like it worked while storing nothing. The column now
+ * exists (User.presalesPreferences) and the form reads its values back — the
+ * redirect is the same, but it is no longer a lie.
+ *
+ * Parsing is tolerant (clamp, fall back, ignore unknown fields) because this
+ * is a browser form, not an API client — see lib/presales/preferences.ts.
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
+import type { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/db/prisma';
 import { getCurrentUser } from '@/lib/auth/session';
 import { canAccessPresales } from '@/lib/presales/rbac';
+import { parsePresalesPreferences } from '@/lib/presales/preferences';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const user = await getCurrentUser();
@@ -16,9 +24,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!canAccessPresales(user.role)) {
     return NextResponse.json({ error: { code: 'FORBIDDEN' } }, { status: 403 });
   }
-  // Body intentionally not persisted in v1 — see Pass 7 deferred-items
-  // note in README. The audit log line below is informational only.
-  // eslint-disable-next-line no-console
-  console.log(`[presales-prefs] user=${user.id} saved preferences (no-op v1)`);
+
+  const prefs = parsePresalesPreferences(await req.formData());
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { presalesPreferences: prefs as unknown as Prisma.InputJsonValue },
+  });
+
+  // 303 = POST-redirect-GET back to the form, which now renders what was saved.
   return NextResponse.redirect(new URL('/presales/settings', req.url), { status: 303 });
 }
