@@ -18,6 +18,8 @@
  */
 import { PrismaClient } from "@prisma/client";
 
+import { productTagFilter } from "@/lib/sap-public/dynamic-catalog";
+
 const prisma = new PrismaClient();
 
 function line(label: string, value: number | string, total?: number): string {
@@ -95,6 +97,27 @@ async function main(): Promise<void> {
     console.log(line(s.status, s._count._all, total));
   }
   console.log(line("Deprecated (rollup)", deprecated, total));
+
+  /*
+   * ── Products that belong to no edition ──────────────────────────────────
+   *
+   * Ariba and SuccessFactors are not editions of S/4HANA, so every count
+   * above — which is grouped by the edition flags — excludes them entirely.
+   * They were invisible in this report AND unreachable by any query until
+   * `productTags` began storing SAP's tag string. Printing them here is how
+   * an operator learns they exist at all.
+   *
+   * Zero here means the catalogue was imported before productTags existed;
+   * re-run `pnpm sap:catalog:import` to backfill it.
+   */
+  console.log("\nBy product (no edition — invisible to the edition counts above):");
+  for (const product of ["ariba", "successfactors"] as const) {
+    // The PURE filter, counted through this script's own client — importing
+    // the count helper instead would drag in the app's shared PrismaClient
+    // and open a second connection for one query.
+    const n = await prisma.sapApiReference.count({ where: productTagFilter(product) });
+    console.log(line(product, n, total));
+  }
 
   console.log("\n[report-sap-catalog] OK — catalogue populated.");
   await prisma.$disconnect();

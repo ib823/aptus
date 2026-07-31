@@ -127,6 +127,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
         iface.sapProduct,
         client.environment,
         "READ",
+        client.sapClient,
       )
     : ({ ok: false, reason: "NO_CONNECTION" } as const);
 

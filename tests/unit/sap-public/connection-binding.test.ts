@@ -46,6 +46,7 @@ function row(over: Partial<Record<string, unknown>> = {}) {
     apiPath: null,
     timeoutMs: null,
     environment: null,
+    client: null,
     ...over,
   };
 }
@@ -162,6 +163,7 @@ describe("refusal messages are safe", () => {
   it("never leaks a host, URL, or credential", () => {
     const reasons = [
       "NO_CONNECTION",
+      "NO_MATCH_FOR_CLIENT",
       "NO_MATCH_FOR_ENVIRONMENT",
       "AMBIGUOUS",
       "UNDECLARED_ENVIRONMENT_WRITE",
@@ -174,5 +176,93 @@ describe("refusal messages are safe", () => {
       expect(message).not.toMatch(/s4hana\.cloud\.sap/);
       expect(message).not.toMatch(/password|secret|token/i);
     }
+  });
+});
+
+describe("the SAP client completes the binding", () => {
+  /*
+   * WHY THIS EXISTS. `environment` names a landscape. On-premise and RISE put
+   * several data containers INSIDE one landscape — X5M/100 and X5M/080 share a
+   * baseUrl and differ only by SAP client. Before the client became part of the
+   * binding, both rows matched a DEV credential, the resolver could not choose,
+   * and such an estate got AMBIGUOUS on every call: correct, and unusable.
+   */
+  const DEV_100 = row({ id: "c100", key: "x5m100", environment: "DEV", client: "100" });
+  const DEV_080 = row({ id: "c080", key: "x5m080", environment: "DEV", client: "080" });
+
+  it("picks the connection carrying the credential's client", async () => {
+    mocks.findMany.mockResolvedValue([DEV_100, DEV_080]);
+
+    const result = await resolveSapConnectionForEnvironment("org_a", "s4hana", "DEV", "READ", "100");
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.connection.key).toBe("x5m100");
+    // A fully-specified binding is verified, not merely permitted.
+    expect(result.bindingUnverified).toBe(false);
+  });
+
+  it("still refuses when the credential names no client and two containers match", async () => {
+    mocks.findMany.mockResolvedValue([DEV_100, DEV_080]);
+
+    const result = await resolveSapConnectionForEnvironment("org_a", "s4hana", "DEV", "READ");
+
+    expect(result).toEqual({ ok: false, reason: "AMBIGUOUS" });
+  });
+
+  it("NEVER falls back to a client-less connection — absence is a different container, not a wildcard", async () => {
+    mocks.findMany.mockResolvedValue([row({ id: "any", key: "x5m", environment: "DEV", client: null })]);
+
+    const result = await resolveSapConnectionForEnvironment("org_a", "s4hana", "DEV", "READ", "100");
+
+    expect(result).toEqual({ ok: false, reason: "NO_MATCH_FOR_CLIENT" });
+  });
+
+  it("distinguishes a wrong client from an unserved environment", async () => {
+    mocks.findMany.mockResolvedValue([DEV_100]);
+
+    // The landscape IS configured; the container is not. Different fix, so a
+    // different reason — merging these two would send the operator to the
+    // wrong screen.
+    const wrongClient = await resolveSapConnectionForEnvironment("org_a", "s4hana", "DEV", "READ", "200");
+    expect(wrongClient).toEqual({ ok: false, reason: "NO_MATCH_FOR_CLIENT" });
+
+    const wrongEnv = await resolveSapConnectionForEnvironment("org_a", "s4hana", "PROD", "READ", "100");
+    expect(wrongEnv).toEqual({ ok: false, reason: "NO_MATCH_FOR_ENVIRONMENT" });
+  });
+
+  it("a lone UNDECLARED row still serves a read — missing information, not contradiction", async () => {
+    mocks.findMany.mockResolvedValue([row({ id: "legacy", environment: null, client: null })]);
+
+    const result = await resolveSapConnectionForEnvironment("org_a", "s4hana", "DEV", "READ", "100");
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // The unbackfilled-estate allowance survives: the row says nothing about
+    // its client, so nothing contradicts the caller.
+    expect(result.bindingUnverified).toBe(true);
+  });
+
+  it("…but a lone undeclared row that names a DIFFERENT client is refused", async () => {
+    mocks.findMany.mockResolvedValue([row({ id: "legacy", environment: null, client: "080" })]);
+
+    // This row affirmatively says 080. Serving it to a credential bound to 100
+    // would be exactly the cross-container read the client field prevents —
+    // and bindingUnverified would understate it as a mere gap in metadata.
+    const result = await resolveSapConnectionForEnvironment("org_a", "s4hana", "DEV", "READ", "100");
+
+    expect(result).toEqual({ ok: false, reason: "NO_MATCH_FOR_CLIENT" });
+  });
+
+  it("products without a client are unaffected — omitting the argument changes nothing", async () => {
+    mocks.findMany.mockResolvedValue([row({ id: "pub", environment: "PROD", client: null })]);
+
+    const omitted = await resolveSapConnectionForEnvironment("org_a", "s4hana", "PROD", "READ");
+    const explicitNull = await resolveSapConnectionForEnvironment("org_a", "s4hana", "PROD", "READ", null);
+    const blank = await resolveSapConnectionForEnvironment("org_a", "s4hana", "PROD", "READ", "  ");
+
+    expect(omitted.ok).toBe(true);
+    expect(explicitNull).toEqual(omitted);
+    expect(blank).toEqual(omitted);
   });
 });

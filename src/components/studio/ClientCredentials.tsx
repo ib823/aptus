@@ -21,6 +21,7 @@ export interface CredentialSummary {
   solutionName: string;
   label: string;
   environment: string;
+  sapClient?: string | null;
   isActive: boolean;
   lastUsedAt: string | null;
   revokedAt: string | null;
@@ -44,6 +45,13 @@ export function ClientCredentials({
 }) {
   const [solutionId, setSolutionId] = useState(solutions[0]?.id ?? "");
   const [environment, setEnvironment] = useState("SANDBOX");
+  /*
+   * The SAP client half of the binding. Optional by design: most products
+   * address no client, and requiring one would be a field nobody could fill.
+   * Where a landscape holds several data containers (on-premise, RISE), a
+   * credential without it can only ever be refused as AMBIGUOUS.
+   */
+  const [sapClient, setSapClient] = useState("");
   const [busy, setBusy] = useState(false);
   const [issued, setIssued] = useState<{ token: string; warning: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +116,19 @@ export function ClientCredentials({
               ))}
             </select>
           </label>
+          <label>
+            <span style={labelText}>SAP client (optional)</span>
+            <input
+              value={sapClient}
+              onChange={(e) => setSapClient(e.target.value.replace(/\D/g, "").slice(0, 3))}
+              placeholder="100"
+              inputMode="numeric"
+              style={field}
+            />
+            <span style={{ fontSize: 11, color: "var(--ink-muted)" }}>
+              Only for systems that address one — on-premise and RISE. Leave empty otherwise.
+            </span>
+          </label>
           <button
             type="button"
             disabled={busy || !solutionId || Boolean(selected?.viewerOwns)}
@@ -115,7 +136,8 @@ export function ClientCredentials({
               call("POST", {
                 solutionId,
                 environment,
-                label: `${selected?.name ?? "solution"} · ${environment}`,
+                ...(sapClient ? { sapClient } : {}),
+                label: `${selected?.name ?? "solution"} · ${environment}${sapClient ? `/${sapClient}` : ""}`,
               })
             }
             title={
@@ -182,7 +204,7 @@ export function ClientCredentials({
               {credentials.map((c) => (
                 <tr key={c.id} style={{ borderTop: "1px solid var(--border-default)" }}>
                   <Td>{c.solutionName}</Td>
-                  <Td>{c.environment}</Td>
+                  <Td>{c.sapClient ? `${c.environment}/${c.sapClient}` : c.environment}</Td>
                   <Td>
                     {c.revokedAt ? "revoked" : c.isActive ? "active" : "inactive"}
                   </Td>

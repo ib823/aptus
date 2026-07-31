@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, it, vi } from "vitest";
 
 // The importer instantiates a PrismaClient at module load. We never touch the
@@ -130,6 +133,32 @@ describe("import-sap-api-catalog field mapping", () => {
     it("accepts an OData v2 { d: { results: [] } } envelope", () => {
       expect(parseJson(JSON.stringify({ d: { results: FIXTURE } }))).toHaveLength(1);
     });
+    it("accepts the harvester's { _provenance, apis: [] } — the documented flow", () => {
+      /*
+       * THE TWO-STEP FLOW NEVER WORKED. harvest-sap-api-hub.ts has claimed
+       * since it shipped that it "writes the shape import-sap-api-catalog.ts
+       * already accepts". It writes `{ _provenance, apis }`; this parser knew
+       * `value` and `d.results` and not `apis`, so step two failed every time
+       * with "Unrecognized JSON shape".
+       *
+       * Nothing caught it because nothing ran the chain: the tests that read
+       * the harvested file call the tag mappers directly. So `productTags`
+       * and every re-derived edition flag had never once been written from a
+       * harvest on any database — the import that would do it could not start.
+       */
+      expect(parseJson(JSON.stringify({ _provenance: { completeness: "floor" }, apis: FIXTURE }))).toHaveLength(1);
+    });
+
+    it("reads the REAL harvested file, not a hand-built envelope", () => {
+      // The unit case above would pass against a fixture shaped by the same
+      // assumption that was wrong. This one opens the committed artifact.
+      const file = resolve(__dirname, "../../../sap-references/api-hub-catalog.json");
+      const rows = parseJson(readFileSync(file, "utf8"));
+      expect(rows.length).toBeGreaterThan(4000);
+      // And the rows must be importable — an apiId is the one required field.
+      expect(rows.every((r) => typeof r.apiId === "string" && r.apiId.length > 0)).toBe(true);
+    });
+
     it("throws on an unrecognized shape", () => {
       expect(() => parseJson(JSON.stringify({ nope: true }))).toThrow();
     });

@@ -33,7 +33,7 @@ import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { upsertSapConnection } from "@/lib/sap-public/connection-resolver";
+import { normalizeEnvironment, upsertSapConnection } from "@/lib/sap-public/connection-resolver";
 import { isValidSapClient } from "@/lib/sap-public/sap-url";
 import { sanitizeTenantKey, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
@@ -263,6 +263,48 @@ export async function POST(request: NextRequest) {
     where: { organizationId, product: input.product, key },
     select: { id: true },
   });
+
+  /*
+   * REFUSE A TWIN THE BINDING COULD NOT TELL APART.
+   *
+   * The database backstops this with a partial unique index (see the
+   * 20260731010000 migration), but a raw 23505 reaches the consultant as an
+   * opaque 500. Checking here turns it into a sentence naming the other
+   * connection, while they are still looking at the form.
+   *
+   * The comparison normalizes through the SAME function the write path uses,
+   * because the stored side is whatever that function produced — comparing
+   * a raw "dev" against a stored "DEV" would wave the twin straight through.
+   *
+   * Only ACTIVE rows with a DECLARED environment collide, matching both the
+   * index and resolveSapConnectionForEnvironment's own filters. Re-saving the
+   * same KEY is replacement, not duplication, so it is excluded: that is the
+   * documented way to rotate a connection's credentials.
+   */
+  const environment = normalizeEnvironment(input.environment);
+  if (environment) {
+    const twin = await prisma.sapConnection.findFirst({
+      where: {
+        organizationId,
+        product: input.product,
+        isActive: true,
+        environment,
+        client: input.client ?? null,
+        NOT: { key },
+      },
+      select: { key: true, label: true },
+    });
+    if (twin) {
+      const where = input.client ? `${environment} client ${input.client}` : environment;
+      return studioError(
+        "VALIDATION_ERROR",
+        `"${twin.label}" (${twin.key}) is already the active ${where} connection for this product. ` +
+          `Two connections the binding cannot tell apart would make every ${environment} request ambiguous, ` +
+          `so neither would be served. Deactivate that one first, or give this one a different environment` +
+          `${PRODUCTS_WITH_CLIENT.has(input.product) ? " or SAP client" : ""}.`,
+      );
+    }
+  }
 
   /*
    * SEALING CAN THROW, AND AN UNCAUGHT THROW HERE IS INVISIBLE.

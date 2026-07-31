@@ -41,6 +41,14 @@ export interface AuthenticatedClient {
   organizationId: string;
   solutionId: string;
   environment: string;
+  /**
+   * The SAP client this credential is bound to, or null when it names none.
+   *
+   * Carried alongside `environment` because the two together are the binding:
+   * on-premise and RISE put several data containers in one landscape, so the
+   * environment alone cannot say which the caller may read.
+   */
+  sapClient: string | null;
   /** Proof of tenancy, so every downstream query is structurally scoped. */
   scope: TenantScope;
 }
@@ -77,6 +85,7 @@ export async function authenticateClientToken(
       organizationId: true,
       solutionId: true,
       environment: true,
+      sapClient: true,
       isActive: true,
       revokedAt: true,
       expiresAt: true,
@@ -99,6 +108,7 @@ export async function authenticateClientToken(
       organizationId: row.organizationId,
       solutionId: row.solutionId,
       environment: row.environment,
+      sapClient: row.sapClient,
       scope: tenantScopeOf(row.organizationId),
     },
   };
