@@ -80,6 +80,19 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     // connection was involved.
     conn?: { id: string; environment: string | null },
     durationMs?: number,
+    /*
+     * WHY A REFUSAL REASON ON THE WRITE PATH.
+     *
+     * This helper never passed one, so every binding refusal on a WRITE
+     * audited as a bare 403 with `bindingRefusal: null` — indistinguishable
+     * from a grant-gate denial. The `binding-refused` incident rule counts
+     * that column, so the CRITICAL control that exists to catch "a live,
+     * granted credential that fails every call" has only ever seen READS.
+     * A write-only integration could fail indefinitely and the console would
+     * report zero incidents, which is the same silence the rule was written
+     * to end.
+     */
+    bindingRefusal?: string | null,
   ) =>
     recordNorthboundCall({
       organizationId: client.organizationId,
@@ -95,6 +108,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       connectionId: conn?.id ?? null,
       connectionEnvironment: conn?.environment ?? null,
       durationMs: durationMs ?? null,
+      bindingRefusal: bindingRefusal ?? null,
     });
 
   // 2 — the WRITE credential. A separate secret from the bearer token, so a
@@ -204,7 +218,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
 
   if (!binding.ok) {
     await releaseIdempotencyKey(reservation.recordId);
-    await audit(403, iface.id, iface.externalId);
+    await audit(403, iface.id, iface.externalId, undefined, undefined, binding.reason);
     return northboundError(
       "CONNECTION_NOT_CONFIGURED",
       connectionRefusalMessage(binding.reason, client.environment),
