@@ -88,12 +88,17 @@ export const PRODUCT_MARKS: Record<string, ProductMark> = {
     glyph: "/icons/sap/glyph-s4hana-onprem.png",
   },
   /*
-   * ECC AND s4hana-onprem SHARE A PICTURE. Both supplied marks are a three-unit
-   * server rack, indistinguishable at 56px and more so at 20px. The glyph tells
-   * a reader nothing for these two; the name beside it does the work, which is
-   * why ProductLabel always renders one.
+   * ECC AND s4hana-onprem NO LONGER SHARE A PICTURE. This comment used to say
+   * they did, and it was right: both supplied marks were a three-unit server
+   * rack, indistinguishable at 56px and more so at 20px. The replacement art
+   * (#218) separates them — ECC carries an ECC hexagon badge, on-premise a
+   * shield and lock.
    *
-   * ECC also ships NO service list. Its OData depends on NetWeaver Gateway
+   * ProductLabel still always renders the name beside the glyph. Not because
+   * the glyph is uninformative now, but because six small marks at 20px are a
+   * weaker cue than the word, and the name is what a reader confirms against.
+   *
+   * ECC ships NO service list. Its OData depends on NetWeaver Gateway
    * being installed and the services activated, so there is no `API_*`
    * convention to assume — see SAP_ODATA_PRODUCTS. It is selectable because a
    * customer WITH Gateway is a real target; the catalogue reporting nothing is
