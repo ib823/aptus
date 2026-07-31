@@ -1,0 +1,36 @@
+# Copy to profiles/<your-id>.yaml and edit. NEVER put credentials in here —
+# profiles/*.yaml is gitignored, but treat the whole folder as confidential
+# regardless: it names client systems.
+#
+# Credentials come from environment variables, derived from the profile id
+# (uppercased, dashes -> underscores):
+#     export ABAP_MCP_SANDBOX_DEV_USER=SVC_REMEDIATE
+#     export ABAP_MCP_SANDBOX_DEV_PASS=********
+
+id: sandbox-dev
+client_name: "Internal Sandbox"
+base_url: "https://sandbox.example.com:44300"
+sap_client: "100"
+language: "EN"
+
+# Informational, but record it accurately — it is the first thing to check when
+# a parser returns nothing. e.g. ECC6-EHP7, NW-750, S4HANA-2023
+release: "S4HANA-2023"
+
+# false ONLY for sandboxes with self-signed certificates. Never for a
+# productive landscape.
+verify_tls: true
+
+# Reserved for the future write phase. The read-only toolset ignores it; the
+# real boundary is the service user's authorizations.
+allow_write: false
+
+# The ATC check variant used by abap_run_atc when no override is passed.
+# Run BOTH the plain and the _NO_FLE variant on an MFLE engagement — the delta
+# between them is the cost of activating the extended material number.
+atc_check_variant: "S4HANA_READINESS_2023"
+
+# HTTP read timeout in seconds. ATC over a large object set takes minutes.
+timeout_seconds: 600
+
+notes: "Sandbox DE1. Basis contact: <name>. Service user: SVC_REMEDIATE (display only)."

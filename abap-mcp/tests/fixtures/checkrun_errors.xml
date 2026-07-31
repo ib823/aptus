@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<chkrun:checkRunReports xmlns:chkrun="http://www.sap.com/adt/checkrun">
+  <chkrun:checkReport chkrun:reporter="abapCheckRun" chkrun:triggeringUri="/sap/bc/adt/oo/classes/zcl_sd_helper" chkrun:status="processed" chkrun:statusText="Object ZCL_SD_HELPER has been checked">
+    <chkrun:checkMessageList>
+      <chkrun:checkMessage chkrun:uri="/sap/bc/adt/oo/classes/zcl_sd_helper/source/main#start=27,2;end=27,15" chkrun:type="E" chkrun:shortText="Variable &quot;LT_KONV&quot; is not type-compatible" chkrun:code="SYNTAX(001)"/>
+      <chkrun:checkMessage chkrun:uri="/sap/bc/adt/oo/classes/zcl_sd_helper/source/main#start=41" chkrun:type="W" chkrun:shortText="Host variable should be escaped with @" chkrun:category="Check1">
+        <atom:link xmlns:atom="http://www.w3.org/2005/Atom" href="/sap/bc/adt/messageclass/DT/messages/242/longtext?language=E" rel="http://www.sap.com/adt/relations/longtext" type="text/html"/>
+        <chkrun:t100Key chkrun:msgid="DT" chkrun:msgno="242" chkrun:msgv1="" chkrun:msgv2="" chkrun:msgv3="" chkrun:msgv4=""/>
+      </chkrun:checkMessage>
+    </chkrun:checkMessageList>
+  </chkrun:checkReport>
+</chkrun:checkRunReports>

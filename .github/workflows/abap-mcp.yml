@@ -1,0 +1,27 @@
+name: ABAP MCP
+
+# The Python MCP server is a sibling deliverable inside this repo — vendored,
+# versioned, and tested with the solution, but not part of the Next.js build.
+# Path-filtered so web PRs don't pay for it and MCP PRs don't run the web CI.
+on:
+  push:
+    branches: [main]
+    paths: ["abap-mcp/**"]
+  pull_request:
+    paths: ["abap-mcp/**"]
+
+jobs:
+  pytest:
+    name: pytest (offline suite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: abap-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: pytest tests/ -q

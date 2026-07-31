@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<program:abapProgram xmlns:program="http://www.sap.com/adt/programs/programs" xmlns:adtcore="http://www.sap.com/adt/core" xmlns:atom="http://www.w3.org/2005/Atom" adtcore:name="ZSD_PRICING_RPT" adtcore:type="PROG/P" adtcore:changedAt="2026-05-14T08:11:02Z" adtcore:changedBy="ABAPDEV" adtcore:createdAt="2018-02-01T00:00:00Z" adtcore:version="active" adtcore:description="SD pricing analysis report" adtcore:packageName="ZSD_REMED">
+  <atom:link href="source/main" rel="http://www.sap.com/adt/relations/source" type="text/plain"/>
+  <atom:link href="versions" rel="http://www.sap.com/adt/relations/versions"/>
+</program:abapProgram>

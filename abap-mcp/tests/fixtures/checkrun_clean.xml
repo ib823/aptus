@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<chkrun:checkRunReports xmlns:chkrun="http://www.sap.com/adt/checkrun">
+  <chkrun:checkReport chkrun:reporter="abapCheckRun" chkrun:triggeringUri="/sap/bc/adt/programs/programs/zsd_pricing_rpt" chkrun:status="processed" chkrun:statusText="Object ZSD_PRICING_RPT has been checked">
+    <chkrun:checkMessageList/>
+  </chkrun:checkReport>
+</chkrun:checkRunReports>

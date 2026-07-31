@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<atcworklist:worklistRun xmlns:atcworklist="http://www.sap.com/adt/atc/worklist">
+    <atcworklist:worklistId>0242AC1100021EE9AAE43D24739F1C3A</atcworklist:worklistId>
+    <atcworklist:worklistTimestamp>2026-07-20T19:09:34Z</atcworklist:worklistTimestamp>
+    <atcworklist:infos>
+        <atcinfo:info xmlns:atcinfo="http://www.sap.com/adt/atc/info">
+            <atcinfo:type>NO_OBJS</atcinfo:type>
+            <atcinfo:description>Selection does not contain objects which can be checked by ATC</atcinfo:description>
+        </atcinfo:info>
+    </atcworklist:infos>
+</atcworklist:worklistRun>
