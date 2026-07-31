@@ -18,7 +18,12 @@ import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/db/prisma";
 import { opsWhere, opsWindowHours, requireOperations } from "@/lib/ops/guard";
-import { deriveIncidents, INCIDENT_RULES, INCIDENT_THRESHOLDS } from "@/lib/ops/incidents";
+import {
+  COUNTED_BINDING_REFUSALS,
+  deriveIncidents,
+  INCIDENT_RULES,
+  INCIDENT_THRESHOLDS,
+} from "@/lib/ops/incidents";
 import { studioOk } from "@/lib/studio/api";
 
 export const dynamic = "force-dynamic";
@@ -44,14 +49,17 @@ export async function GET(request: NextRequest) {
       // for their environment. This replaces a comparison of two columns that the
       // binding guarantee makes equal by construction — see INCIDENT_RULES.
       //
-      // NO_CONNECTION is excluded deliberately: an organization with no
-      // connection at all has not misconfigured an environment, it has not
-      // started, and the Connections screen already says so. UNDECLARED_..._WRITE
-      // is the undeclared-environment rule's business, not this one.
+      // The reason list is DERIVED from BINDING_REFUSAL_COVERAGE, not written
+      // here. It used to be an inline array, and it drifted: when the resolver
+      // gained NO_MATCH_FOR_CLIENT, this filter kept its old two entries, so a
+      // credential bound to an SAP client no connection carries failed every
+      // call while this critical rule reported zero. The coverage map forces an
+      // explicit counted/excluded decision per reason, and a test reconciles it
+      // against the resolver's own union.
       prisma.northboundAuditEvent.count({
         where: opsWhere(guard.actor, {
           at: { gte: since },
-          bindingRefusal: { in: ["NO_MATCH_FOR_ENVIRONMENT", "AMBIGUOUS"] },
+          bindingRefusal: { in: COUNTED_BINDING_REFUSALS },
         }),
       }),
       prisma.sapConnection.count({
