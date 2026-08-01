@@ -492,6 +492,7 @@ export function SapCapabilityCatalogue({
               needsSetup={byStatus.NEEDS_SETUP}
               notChecked={byStatus.NOT_CHECKED}
               notProbeable={byStatus.NOT_PROBEABLE}
+              available={byStatus.AVAILABLE}
               probed={probed}
               probeable={probeable}
               apiTotal={apiTotal}

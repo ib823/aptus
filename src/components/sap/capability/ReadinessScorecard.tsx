@@ -32,6 +32,7 @@ export function ReadinessScorecard({
   needsSetup,
   notChecked,
   notProbeable,
+  available,
   probed,
   probeable,
   apiTotal,
@@ -46,6 +47,8 @@ export function ReadinessScorecard({
   needsSetup: number;
   notChecked: number;
   notProbeable: number;
+  /** Published for this edition but not yet probed on this tenant. */
+  available: number;
   probed: number;
   probeable: number;
   apiTotal: number;
@@ -121,13 +124,32 @@ export function ReadinessScorecard({
         rest reference
       </p>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      {/*
+        EVERY BUCKET, so the row adds up to the browsable total.
+
+        This showed five of the six statuses — `available` was passed nowhere
+        and rendered nowhere — so the pills summed to 1,822 while the status
+        filter above them offered 1,973. A reader could subtract and get 151
+        items that exist, are filterable, and appear in no summary. On a screen
+        whose whole argument is "nothing is inferred, every number traces to a
+        probe", a silently missing bucket is the worst kind of error.
+      */}
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <CountPill label="Authorized" value={activated} bg="var(--status-signed-bg)" fg="var(--status-signed-fg)" />
         <CountPill label="Needs setup" value={needsSetup} bg="var(--status-awaiting-bg)" fg="var(--status-awaiting-fg)" />
+        <CountPill label="Available" value={available} bg="var(--status-sent-bg)" fg="var(--status-sent-fg)" />
         <CountPill label="Not checked" value={notChecked} bg="var(--surface-ink-tint)" fg="var(--ink-secondary)" />
         <CountPill label="Not probeable" value={notProbeable} bg="var(--status-expired-bg)" fg="var(--status-expired-fg)" />
         <CountPill label="Reference" value={reference} bg="var(--status-draft-bg)" fg="var(--status-draft-fg)" />
       </div>
+      <p className="mt-2 text-xs" style={{ color: "var(--ink-muted)" }}>
+        These six add up to{" "}
+        <strong style={{ color: "var(--ink-secondary)" }}>
+          {(activated + needsSetup + available + notChecked + notProbeable + reference).toLocaleString()}
+        </strong>{" "}
+        browsable items — the same number the status filter offers. Stated so the
+        two can be checked against each other rather than taken on trust.
+      </p>
     </section>
   );
 }

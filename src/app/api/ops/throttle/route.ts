@@ -51,9 +51,34 @@ export async function GET(request: NextRequest) {
   // listing it would imply it could still be called.
   const credentials = await prisma.solutionClient.findMany({
     where: opsWhere(guard.actor, { isActive: true, revokedAt: null }),
-    select: { id: true, solutionId: true, label: true, environment: true },
+    select: {
+      id: true,
+      solutionId: true,
+      label: true,
+      environment: true,
+    },
     orderBy: { createdAt: "desc" },
   });
+
+  /*
+   * Solution names, resolved separately.
+   *
+   * SolutionClient carries `solutionId` but has no Prisma relation to Solution,
+   * so this cannot be an include. Resolved so this screen names a credential
+   * the same way the Control Tower Credential Register does — one credential
+   * appearing under two different names across two screens is impossible to
+   * cross-reference during an incident, which is exactly when you need to.
+   */
+  const solutionNames = new Map(
+    (
+      await prisma.solution.findMany({
+        where: opsWhere(guard.actor, {
+          id: { in: [...new Set(credentials.map((c) => c.solutionId))] },
+        }),
+        select: { id: true, name: true },
+      })
+    ).map((sn) => [sn.id, sn.name]),
+  );
 
   const [throttled429, headroom] = await Promise.all([
     prisma.northboundAuditEvent.groupBy({
@@ -105,6 +130,7 @@ export async function GET(request: NextRequest) {
       return {
         clientId: c.id,
         solutionId: c.solutionId,
+        solutionName: solutionNames.get(c.solutionId) ?? null,
         label: c.label,
         environment: c.environment,
         read: budget(h?.read ?? null),

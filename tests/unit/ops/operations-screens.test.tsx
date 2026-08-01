@@ -28,7 +28,14 @@ function serve(byPath: Record<string, unknown>) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: string) => {
-      const body = byPath[input];
+      /*
+       * Match on the PATH, ignoring the query string. The feeds now send
+       * ?hours= so the Operations window control can widen the range; keying
+       * the stub on the full URL would make every test here a test of the
+       * default window rather than of the screen.
+       */
+      const path = input.split("?")[0]!;
+      const body = byPath[path] ?? byPath[input];
       if (body === undefined) throw new Error(`unstubbed fetch: ${input}`);
       return { ok: true, status: 200, json: async () => ({ data: body }) };
     }),

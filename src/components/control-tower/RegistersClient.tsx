@@ -153,7 +153,18 @@ function CredentialsBody({ data }: { data: CredentialsPayload }) {
           {credentials.map((c) => (
             <tr key={c.id}>
               <td style={opsCellStyle}>
-                {c.solutionName ?? c.label}
+                {/*
+                  CREDENTIAL LABEL FIRST, solution beneath.
+
+                  This showed `solutionName ?? label` while the Operations
+                  Center's Throttle view showed `label`, so one credential
+                  appeared as "QA-Delivery-Tracker" here and
+                  "QA-Cred-SANDBOX-NoMatch" there. During an incident you hold a
+                  credential and need to find it on the other screen; two names
+                  for one row makes that impossible. Both screens now lead with
+                  the credential's own label and name its solution beneath.
+                */}
+                {c.label}
                 <div
                   style={{
                     fontFamily: "var(--font-mono, monospace)",
@@ -161,7 +172,7 @@ function CredentialsBody({ data }: { data: CredentialsPayload }) {
                     color: "var(--ink-muted)",
                   }}
                 >
-                  issued {sinceLabel(c.createdAt)}
+                  {c.solutionName ?? c.solutionId} · issued {sinceLabel(c.createdAt)}
                 </div>
               </td>
               <td style={opsCellStyle}>
@@ -235,7 +246,9 @@ interface ConnectionsPayload {
     inactive: number;
     writeEnabled: number;
     prod: number;
+  prodInactive: number;
     undeclaredEnvironment: number;
+  undeclaredEnvironmentInactive: number;
   };
   delegatedActions: DelegatedActionSpec[];
   provenance: {
@@ -291,11 +304,23 @@ function ConnectionsBody({ data }: { data: ConnectionsPayload }) {
           value={count(counts.writeEnabled)}
           tone={counts.writeEnabled > 0 ? "attention" : "default"}
         />
-        <Stat label="Production" value={count(counts.prod)} />
+        <Stat
+          label="Production"
+          value={count(counts.prod)}
+          basis={
+            counts.prodInactive > 0
+              ? `active only · ${counts.prodInactive} deactivated PROD row${counts.prodInactive === 1 ? "" : "s"} below`
+              : "active only"
+          }
+        />
         <Stat
           label="Undeclared environment"
           value={count(counts.undeclaredEnvironment)}
-          basis="writes refused through these"
+          basis={
+            counts.undeclaredEnvironmentInactive > 0
+              ? `active only · ${counts.undeclaredEnvironmentInactive} deactivated below`
+              : "active only · writes refused through these"
+          }
           tone={counts.undeclaredEnvironment > 0 ? "attention" : "default"}
         />
       </div>

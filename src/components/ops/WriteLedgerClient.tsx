@@ -16,6 +16,7 @@
  * never as an apology, and never with sample rows.
  */
 
+import { useState } from "react";
 import {
   OpsCard,
   OpsChip,
@@ -29,7 +30,13 @@ import {
   opsMonoStyle,
   type OpsTone,
 } from "@/components/ops/OpsChrome";
-import { count, sinceLabel, useOpsFeed } from "@/components/ops/useOpsFeed";
+import {
+  DEFAULT_OPS_WINDOW_HOURS,
+  OpsWindowPicker,
+  count,
+  sinceLabel,
+  useOpsFeed,
+} from "@/components/ops/useOpsFeed";
 
 interface ReservationRow {
   id: string;
@@ -90,7 +97,8 @@ const RESERVATION: Record<ReservationRow["state"], { tone: OpsTone; label: strin
 };
 
 export function WriteLedgerClient() {
-  const { feed } = useOpsFeed<LedgerPayload>("/api/ops/write-ledger");
+  const [windowHours, setWindowHours] = useState(DEFAULT_OPS_WINDOW_HOURS);
+  const { feed } = useOpsFeed<LedgerPayload>("/api/ops/write-ledger", windowHours);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -108,18 +116,28 @@ export function WriteLedgerClient() {
           <OpsPlaceholder kind="error" title="The write ledger could not be read" detail={feed.message} />
         </OpsCard>
       ) : (
-        <LedgerBody data={feed.data} />
+        <LedgerBody data={feed.data} onWindowChange={setWindowHours} />
       )}
     </div>
   );
 }
 
-function LedgerBody({ data }: { data: LedgerPayload }) {
+function LedgerBody({
+  data,
+  onWindowChange,
+}: {
+  data: LedgerPayload;
+  onWindowChange: (hours: number) => void;
+}) {
   const { reservations, fromAudit, provenance, reservationRows, auditRows, windowHours } = data;
   const page = provenance.rowsAreAPage;
 
   return (
     <>
+      {/* Window control — see useOpsFeed.OPS_WINDOWS. */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+        <OpsWindowPicker id="ops-window-ledger" hours={windowHours} onChange={onWindowChange} />
+      </div>
       <OpsCard>
         <div style={{ display: "flex", gap: 30, padding: "15px 16px", flexWrap: "wrap" }}>
           <Stat label="Reserved" value={count(reservations.total)} basis={`last ${windowHours} hours`} />

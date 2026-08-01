@@ -16,6 +16,7 @@
  * the page — which is the difference between a measurement and a judgement.
  */
 
+import { useState } from "react";
 import {
   OpsCard,
   OpsChip,
@@ -24,7 +25,12 @@ import {
   ProvenanceStrip,
   type OpsTone,
 } from "@/components/ops/OpsChrome";
-import { count, useOpsFeed } from "@/components/ops/useOpsFeed";
+import {
+  DEFAULT_OPS_WINDOW_HOURS,
+  OpsWindowPicker,
+  count,
+  useOpsFeed,
+} from "@/components/ops/useOpsFeed";
 
 type Severity = "critical" | "major" | "minor";
 
@@ -56,7 +62,8 @@ const TONE: Record<Severity, OpsTone> = {
 };
 
 export function IncidentsClient() {
-  const { feed } = useOpsFeed<IncidentsPayload>("/api/ops/incidents");
+    const [windowHours, setWindowHours] = useState(DEFAULT_OPS_WINDOW_HOURS);
+const { feed } = useOpsFeed<IncidentsPayload>("/api/ops/incidents", windowHours);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -78,17 +85,29 @@ export function IncidentsClient() {
           />
         </OpsCard>
       ) : (
-        <IncidentsBody data={feed.data} />
+        <IncidentsBody data={feed.data} onWindowChange={setWindowHours} />
       )}
     </div>
   );
 }
 
-function IncidentsBody({ data }: { data: IncidentsPayload }) {
+function IncidentsBody({
+  data,
+  onWindowChange,
+}: {
+  data: IncidentsPayload;
+  onWindowChange: (hours: number) => void;
+}) {
   const { counts, incidents, rules, provenance, windowHours } = data;
 
   return (
     <>
+      {/* The window control. Every ops feed accepted ?hours= and clamped it;
+          the screens simply never sent one, so all four were hard-wired to 24
+          hours with no way to widen during an investigation. */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+        <OpsWindowPicker id="ops-window-incidents" hours={windowHours} onChange={onWindowChange} />
+      </div>
       <OpsCard>
         {incidents.length === 0 ? (
           <OpsPlaceholder

@@ -33,7 +33,27 @@ interface ApiEnvelope<T> {
   error?: { code?: string; message?: string };
 }
 
-export function useOpsFeed<T>(path: string): { feed: OpsFeed<T>; reload: () => void } {
+/**
+ * Windows the Operations Center offers.
+ *
+ * Every feed already accepts `?hours=` and clamps it (opsWindowHours, capped at
+ * 30 days) — the screens simply never sent one, so all four were hard-wired to
+ * the server's 24-hour default with no way to widen it. During an investigation
+ * "was this happening last week?" was an unanswerable question on a monitoring
+ * console, which is the one question such a console exists for.
+ */
+export const OPS_WINDOWS = [
+  { hours: 24, label: "24 hours" },
+  { hours: 24 * 7, label: "7 days" },
+  { hours: 24 * 30, label: "30 days" },
+] as const;
+
+export const DEFAULT_OPS_WINDOW_HOURS = 24;
+
+export function useOpsFeed<T>(
+  path: string,
+  hours: number = DEFAULT_OPS_WINDOW_HOURS,
+): { feed: OpsFeed<T>; reload: () => void } {
   const [feed, setFeed] = useState<OpsFeed<T>>({ state: "loading" });
   const [nonce, setNonce] = useState(0);
 
@@ -45,7 +65,10 @@ export function useOpsFeed<T>(path: string): { feed: OpsFeed<T>; reload: () => v
 
     void (async () => {
       try {
-        const res = await fetch(path, { cache: "no-store" });
+        // The window is a query param, not a body: these are GETs and the
+        // server clamps whatever arrives.
+        const url = `${path}${path.includes("?") ? "&" : "?"}hours=${hours}`;
+        const res = await fetch(url, { cache: "no-store" });
         const body = (await res.json().catch(() => ({}))) as ApiEnvelope<T>;
         if (!live) return;
 
@@ -72,7 +95,7 @@ export function useOpsFeed<T>(path: string): { feed: OpsFeed<T>; reload: () => v
     return () => {
       live = false;
     };
-  }, [path, nonce]);
+  }, [path, nonce, hours]);
 
   return { feed, reload };
 }
@@ -97,4 +120,49 @@ export function sinceLabel(iso: string | null): string {
 /** Thousands separators, so a four-figure count is readable at a glance. */
 export function count(n: number): string {
   return n.toLocaleString("en-GB");
+}
+
+/**
+ * The window control itself.
+ *
+ * A plain select rather than a segmented control: three options, and a native
+ * select is keyboard- and screen-reader-correct without any of the roving
+ * tabindex work a custom widget would need to get right.
+ */
+export function OpsWindowPicker({
+  hours,
+  onChange,
+  id = "ops-window",
+}: {
+  hours: number;
+  onChange: (hours: number) => void;
+  id?: string;
+}) {
+  return (
+    <label
+      htmlFor={id}
+      style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5 }}
+    >
+      <span style={{ color: "var(--ink-secondary)" }}>Window</span>
+      <select
+        id={id}
+        value={hours}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={{
+          fontSize: 12.5,
+          padding: "3px 7px",
+          borderRadius: 6,
+          border: "1px solid var(--border-default)",
+          background: "var(--surface-paper)",
+          color: "var(--ink-primary)",
+        }}
+      >
+        {OPS_WINDOWS.map((w) => (
+          <option key={w.hours} value={w.hours}>
+            {w.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }

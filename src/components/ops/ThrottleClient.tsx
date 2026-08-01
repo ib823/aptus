@@ -17,6 +17,7 @@
  * would sit beside real figures in the same layout.
  */
 
+import { useState } from "react";
 import {
   OpsCard,
   OpsChip,
@@ -28,7 +29,12 @@ import {
   opsCellStyle,
   opsMonoStyle,
 } from "@/components/ops/OpsChrome";
-import { count, useOpsFeed } from "@/components/ops/useOpsFeed";
+import {
+  DEFAULT_OPS_WINDOW_HOURS,
+  OpsWindowPicker,
+  count,
+  useOpsFeed,
+} from "@/components/ops/useOpsFeed";
 
 interface Bucket {
   id: string;
@@ -50,6 +56,8 @@ interface CredentialBudget {
   clientId: string;
   solutionId: string;
   label: string;
+  /** Resolved for display so this matches the Credential Register. */
+  solutionName?: string | null;
   environment: string;
   read: Budget;
   write: Budget;
@@ -73,7 +81,8 @@ interface ThrottlePayload {
 }
 
 export function ThrottleClient() {
-  const { feed } = useOpsFeed<ThrottlePayload>("/api/ops/throttle");
+    const [windowHours, setWindowHours] = useState(DEFAULT_OPS_WINDOW_HOURS);
+const { feed } = useOpsFeed<ThrottlePayload>("/api/ops/throttle", windowHours);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -91,19 +100,29 @@ export function ThrottleClient() {
           <OpsPlaceholder kind="error" title="Throttle status could not be read" detail={feed.message} />
         </OpsCard>
       ) : (
-        <ThrottleBody data={feed.data} />
+        <ThrottleBody data={feed.data} onWindowChange={setWindowHours} />
       )}
     </div>
   );
 }
 
-function ThrottleBody({ data }: { data: ThrottlePayload }) {
+function ThrottleBody({
+  data,
+  onWindowChange,
+}: {
+  data: ThrottlePayload;
+  onWindowChange: (hours: number) => void;
+}) {
   const { buckets, credentials, provenance, windowHours } = data;
   const observable = buckets.filter((b) => b.observable);
   const opaque = buckets.filter((b) => !b.observable);
 
   return (
     <>
+      {/* Window control — see useOpsFeed.OPS_WINDOWS. */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+        <OpsWindowPicker id="ops-window-throttle" hours={windowHours} onChange={onWindowChange} />
+      </div>
       {/* The configuration warning comes first when it is a fault, because it
           changes what every number below means. */}
       {provenance.headroomIsPerInstance ? (
@@ -131,9 +150,11 @@ function ThrottleBody({ data }: { data: ThrottlePayload }) {
             {credentials.map((c) => (
               <tr key={c.clientId}>
                 <td style={opsCellStyle}>
+                  {/* Same shape as the Control Tower Credential Register, so a
+                      credential can be matched between the two screens. */}
                   {c.label}
                   <div style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 11.5, color: "var(--ink-muted)" }}>
-                    {c.solutionId}
+                    {c.solutionName ?? c.solutionId}
                   </div>
                 </td>
                 <td style={opsCellStyle}>

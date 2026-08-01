@@ -22,6 +22,7 @@
  * calls were correctly refused, and colouring them red would invent an incident.
  */
 
+import { useState } from "react";
 import {
   OpsCard,
   OpsChip,
@@ -35,7 +36,12 @@ import {
   opsMonoStyle,
   type OpsTone,
 } from "@/components/ops/OpsChrome";
-import { count, useOpsFeed } from "@/components/ops/useOpsFeed";
+import {
+  DEFAULT_OPS_WINDOW_HOURS,
+  OpsWindowPicker,
+  count,
+  useOpsFeed,
+} from "@/components/ops/useOpsFeed";
 
 interface TrafficEvent {
   id: string;
@@ -93,7 +99,8 @@ const OUTCOME: Record<string, { tone: OpsTone; label: string; meaning: string }>
 };
 
 export function BrokerTrafficClient() {
-  const { feed } = useOpsFeed<TrafficPayload>("/api/ops/broker-traffic");
+    const [windowHours, setWindowHours] = useState(DEFAULT_OPS_WINDOW_HOURS);
+const { feed } = useOpsFeed<TrafficPayload>("/api/ops/broker-traffic", windowHours);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -115,18 +122,30 @@ export function BrokerTrafficClient() {
           />
         </OpsCard>
       ) : (
-        <TrafficBody data={feed.data} />
+        <TrafficBody data={feed.data} onWindowChange={setWindowHours} />
       )}
     </div>
   );
 }
 
-function TrafficBody({ data }: { data: TrafficPayload }) {
+function TrafficBody({
+  data,
+  onWindowChange,
+}: {
+  data: TrafficPayload;
+  onWindowChange: (hours: number) => void;
+}) {
   const { counts, latency, environmentBinding: eb, provenance, events, windowHours } = data;
   const page = provenance.eventsAreAPage;
 
   return (
     <>
+      {/* The window control. Every ops feed accepted ?hours= and clamped it;
+          the screens simply never sent one, so all four were hard-wired to 24
+          hours with no way to widen during an investigation. */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+        <OpsWindowPicker id="ops-window-traffic" hours={windowHours} onChange={onWindowChange} />
+      </div>
       <OpsCard>
         <div style={{ display: "flex", gap: 34, padding: "15px 16px", flexWrap: "wrap" }}>
           <Stat label="Calls" value={count(counts.total)} basis={`last ${windowHours} hours`} />

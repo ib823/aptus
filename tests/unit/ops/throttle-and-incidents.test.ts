@@ -163,6 +163,7 @@ describe("the throttle endpoint is honest about which buckets it can see", () =>
   const mocks = vi.hoisted(() => ({
     getCurrentUser: vi.fn(),
     clientFindMany: vi.fn(),
+  solutionFindMany: vi.fn(async () => []),
     auditGroupBy: vi.fn(),
   }));
 
@@ -185,6 +186,10 @@ describe("the throttle endpoint is honest about which buckets it can see", () =>
     prisma: {
       solutionClient: { findMany: mocks.clientFindMany },
       northboundAuditEvent: { groupBy: mocks.auditGroupBy },
+      // Solution names are resolved separately (SolutionClient has no Prisma
+      // relation to Solution) so this screen can name a credential the same way
+      // the Credential Register does.
+      solution: { findMany: mocks.solutionFindMany },
     },
   }));
 

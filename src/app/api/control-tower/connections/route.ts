@@ -58,8 +58,31 @@ export async function GET(_request: NextRequest) {
 
   const active = rows.filter((r) => r.isActive);
   const writeEnabled = active.filter((r) => r.writeEnabled);
-  const undeclared = active.filter((r) => !r.environment || r.environment.trim().length === 0);
-  const prod = active.filter((r) => r.environment?.trim().toUpperCase() === "PROD");
+  const isUndeclared = (r: { environment: string | null }) =>
+    !r.environment || r.environment.trim().length === 0;
+  const isProd = (r: { environment: string | null }) =>
+    r.environment?.trim().toUpperCase() === "PROD";
+
+  const undeclared = active.filter(isUndeclared);
+  const prod = active.filter(isProd);
+
+  /*
+   * THE SAME PREDICATES OVER THE DEACTIVATED ROWS.
+   *
+   * The tiles count ACTIVE connections; the table below lists every connection
+   * in scope. That difference was never stated, so the register showed
+   * "PRODUCTION 0" directly above a row plainly labelled PROD, and
+   * "UNDECLARED ENVIRONMENT 0" above one with no environment — on a page whose
+   * own copy promises that every connection in scope is listed.
+   *
+   * Counting deactivated rows INTO the headline would be wrong: a deactivated
+   * PROD connection is not production exposure, and inflating the number would
+   * make the tile useless for the thing it exists for. So the basis is named
+   * and the excluded rows are reported beside it. A reader can then see that
+   * zero means "none active", not "none exist".
+   */
+  const inactiveProd = rows.filter((r) => !r.isActive && isProd(r));
+  const inactiveUndeclared = rows.filter((r) => !r.isActive && isUndeclared(r));
 
   return studioOk({
     scope: guard.actor.kind,
@@ -70,6 +93,9 @@ export async function GET(_request: NextRequest) {
       writeEnabled: writeEnabled.length,
       prod: prod.length,
       undeclaredEnvironment: undeclared.length,
+      /** Deactivated rows matching the same predicates. Explains a zero tile. */
+      prodInactive: inactiveProd.length,
+      undeclaredEnvironmentInactive: inactiveUndeclared.length,
       // NOT a "has a sealed secret" count. `SapConnection.secretsCiphertext` is
       // a REQUIRED column, so such a count could only ever equal the total — a
       // tile that cannot vary is not a measurement, it is decoration that looks
@@ -119,6 +145,8 @@ export async function GET(_request: NextRequest) {
       environmentGatesWrites:
         "A connection with no declared environment serves reads marked unverified and refuses writes outright. The count is a backlog expected to reach zero.",
       countsAreComplete: "Every connection in scope is listed. There is no sampling and no page.",
+      tilesCountActiveOnly:
+        "The tiles count ACTIVE connections; the table lists every connection in scope, deactivated ones included. That is why a tile can read zero above a row that plainly matches it — a deactivated PROD connection is not production exposure, and counting it into the headline would make the number useless for the thing it exists to report. The deactivated matches are reported separately (prodInactive, undeclaredEnvironmentInactive) so a zero can be read as 'none active' rather than 'none exist'.",
     },
     connections: rows.map((r) => ({
       id: r.id,
