@@ -40,8 +40,11 @@ interface Entry {
   id: string;
   at: string;
   actorId: string;
+  /** Resolved at read time; null when the id resolves to nothing. */
+  actorLabel: string | null;
   entityType: string;
   entityId: string;
+  entityLabel: string | null;
   action: string;
 }
 
@@ -180,7 +183,7 @@ function AuditBody({
                 />
               </td>
               <td style={opsCellStyle}>
-                {e.entityType}
+                {e.entityLabel ? `${e.entityType} · ${e.entityLabel}` : e.entityType}
                 <div
                   style={{
                     fontFamily: "var(--font-mono, monospace)",
@@ -188,10 +191,43 @@ function AuditBody({
                     color: "var(--ink-muted)",
                   }}
                 >
+                  {/* The id stays visible beneath the label: it is the
+                      citable evidence, and it does not change when someone
+                      renames a solution. */}
                   {e.entityId}
                 </div>
               </td>
-              <td style={opsMonoStyle}>{e.actorId}</td>
+              <td style={opsCellStyle}>
+                {e.actorLabel ? (
+                  <>
+                    <div style={{ fontSize: 12.5 }}>{e.actorLabel}</div>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-mono, monospace)",
+                        fontSize: 11.5,
+                        color: "var(--ink-muted)",
+                      }}
+                    >
+                      {e.actorId}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 12.5, color: "var(--ink-muted)" }}>
+                      unknown actor
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-mono, monospace)",
+                        fontSize: 11.5,
+                        color: "var(--ink-muted)",
+                      }}
+                    >
+                      {e.actorId}
+                    </div>
+                  </>
+                )}
+              </td>
             </tr>
           ))}
         </OpsTable>

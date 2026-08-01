@@ -102,6 +102,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       { status: 400 },
     );
   }
+  /*
+   * A window that has already closed is well-formed and useless: the ordering
+   * check above accepts "1 Jan to 2 Jan 2020", so the bundle is created, the
+   * invitation goes out, and every recipient meets an expired link. Cheap to
+   * type by accident on a datetime-local field, and invisible until a client
+   * reports it.
+   */
+  if (expiresAt <= new Date()) {
+    return NextResponse.json(
+      { error: { code: 'WINDOW_ALREADY_CLOSED', message: 'That access window has already expired. Anyone invited would meet a dead link.' } },
+      { status: 400 },
+    );
+  }
 
   // Confirm the assessment belongs to this org.
   const assessment = await prisma.assessment.findFirst({
