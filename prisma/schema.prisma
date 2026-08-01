@@ -684,6 +684,9 @@ model ApiAccessGrant {
   revoker  User?    @relation("ApiAccessGrantsRevoked", fields: [revokedById], references: [id])
 
   @@index([organizationId, solutionId])
+  // The runtime access check filters on this on every call, and the common
+  // case — not revoked — is the cheap half.
+  @@index([revokedAt])
 }
 
 /// A saved Test Console run.
@@ -4542,10 +4545,17 @@ model AffirmQuestion {
   /// only 3 of 150 questions carry a country marker today, so exceptions are
   /// tagged rather than the whole bank being curated. Same shape as the
   /// Discovery library's `industry` field, which already works this way.
-  countryScope           String[]
+  ///
+  /// `@default([])` is load-bearing and not decoration: it is the DB-level
+  /// default the migration used to back-fill all 150 existing rows to `{}`
+  /// rather than NULL. Most `String[]` fields in this schema omit it, which is
+  /// Prisma's convention; these two do not, because "empty means universal" is
+  /// a rule the readers rely on and NULL is not the same value as `{}` to a
+  /// raw-SQL writer.
+  countryScope           String[] @default([])
   /// Which industries this question applies to. Empty means all — same rule.
   /// Stops a Public-Sector "Budget Execution" item reaching a generic bundle.
-  industryScope          String[]
+  industryScope          String[] @default([])
   // null | "config-how-to" | "no-question-source".
   // 13 rows carry "config-how-to" — drafted but flagged for the
   // consultant because they read like an L3 configuration step rather
@@ -4832,6 +4842,11 @@ model AffirmAccessGrant {
 
   @@index([bundleId])
   @@index([email])
+  // The expiry sweep and the "which links are still live?" view both filter on
+  // this. Declared here as well as in the migration: an index that exists in
+  // the database but not in the model is drift, and the Migration Integrity
+  // gate is right to fail on it.
+  @@index([expiresAt])
 }
 
 /// Short-lived guest cookie session for the Affirm external surface. NOT

@@ -66,6 +66,7 @@
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio --port 5556",
+    "db:check-drift": "bash scripts/check-migration-drift.sh",
     "postinstall": "prisma generate",
     "prepare": "bash scripts/install-githooks.sh",
     "hooks:install": "bash scripts/install-githooks.sh",
