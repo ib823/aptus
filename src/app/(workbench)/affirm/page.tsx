@@ -8,6 +8,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
+import { countClientFacingQuestions } from "@/lib/affirm/queries";
 import { ScreenGuide } from "@/components/affirm/learn/ScreenGuide";
 import { Term } from "@/components/affirm/learn/TermChip";
 import { SampleSandboxCard } from "@/components/affirm/learn/SampleSandboxCard";
@@ -37,9 +38,14 @@ export default async function AffirmIndexPage() {
     orderBy: { createdAt: "desc" },
     take: 50,
     include: {
-      _count: { select: { scopeItems: true, questions: true } },
+      _count: { select: { scopeItems: true } },
     },
   });
+
+  // The "Questions" column must be the same number the bundle itself reports.
+  // `_count.questions` counted override rows, not the affirm-set — see
+  // countClientFacingQuestions.
+  const questionCounts = await countClientFacingQuestions(bundles.map((b) => b.id));
 
   // The training sandbox is offered only on internal-test / workbench-only
   // deployments (matches the /api/affirm/sample gate).
@@ -135,7 +141,7 @@ export default async function AffirmIndexPage() {
                       {b._count.scopeItems}
                     </td>
                     <td className="px-5 py-4 font-mono text-xs tabular-nums text-ink-soft">
-                      {b._count.questions}
+                      {questionCounts.get(b.id) ?? 0}
                     </td>
                     <td className="px-5 py-4 text-ink-muted">
                       {new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(

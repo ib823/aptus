@@ -138,7 +138,19 @@ describe("grants — a decision label is not a permission", () => {
 
     const lapsedChip = await screen.findByLabelText(/decided, and since lapsed/);
     expect(lapsedChip.textContent).toContain("approved");
-    expect(screen.getByText(/lapsed 1[0-9] /)).toBeTruthy();
+    /*
+     * Derive the expected label from the fixture rather than matching a digit
+     * range. This asserted /lapsed 1[0-9] / — a day-of-month between 10 and 19
+     * — against a date computed as "12 days before whenever the suite runs", so
+     * it passed only on the ~10 days a month when today-minus-12 happens to
+     * land in that window, and failed the rest of the time with no code change.
+     * A test that depends on the calendar is not testing the component.
+     */
+    const lapsedOn = new Date(GRANTS.grants[2]!.expiresAt!).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+    });
+    expect(screen.getByText(`lapsed ${lapsedOn}`)).toBeTruthy();
   });
 
   it("mutes a lapsed decision without changing what it says", async () => {

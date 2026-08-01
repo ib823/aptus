@@ -6,7 +6,9 @@
  */
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { prisma } from "@/lib/db/prisma";
+import { bundleMetadata } from "@/lib/affirm/page-metadata";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getValueStreamTree } from "@/lib/affirm/queries";
 import { ValueStreamTreePicker } from "@/components/affirm/ValueStreamTreePicker";
@@ -17,6 +19,10 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  return bundleMetadata(params, "Scope");
 }
 
 export default async function EditScopePage({ params }: PageProps) {

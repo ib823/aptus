@@ -265,6 +265,71 @@ export async function getAffirmSetForBundle(
 }
 
 /**
+ * How many client-facing questions each bundle carries, for list screens.
+ *
+ * WHY THIS EXISTS RATHER THAN `_count: { questions: true }`.
+ *
+ * `AffirmBundleQuestion` is NOT the affirm-set. It is a per-bundle override
+ * table (enabled / displayOrder / format) that is only populated at issue, so
+ * counting its rows answers "how many overrides exist", not "how many questions
+ * does this bundle ask". The affirm-set is the union built in
+ * `getAffirmSetForBundle`: scope-item refs, plus stream-level questions with
+ * empty refs, plus any snapshot rows.
+ *
+ * The bundle list used the join count and the bundle itself used the union, so
+ * the same bundle read "6 questions" on one screen and "2 of 5 answered" on the
+ * next. Two denominators for one bundle is a data-integrity problem on a record
+ * that becomes a signed client artefact, so both screens now come through here.
+ *
+ * Cost: two queries total, not one per bundle. The question bank is ~150 rows,
+ * so the union is resolved in memory rather than as N round-trips.
+ */
+export async function countClientFacingQuestions(
+  bundleIds: readonly string[],
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>(bundleIds.map((id) => [id, 0]));
+  if (bundleIds.length === 0) return counts;
+
+  const [bundles, questions] = await Promise.all([
+    prisma.affirmBundle.findMany({
+      where: { id: { in: [...bundleIds] } },
+      select: {
+        id: true,
+        scopeItems: {
+          select: { scopeItemId: true, scopeItem: { select: { streamId: true } } },
+        },
+        questions: { select: { questionId: true, enabled: true } },
+      },
+    }),
+    prisma.affirmQuestion.findMany({
+      select: { id: true, streamId: true, scopeItemRefs: true, status: true },
+    }),
+  ]);
+
+  for (const bundle of bundles) {
+    const scopeIds = new Set(bundle.scopeItems.map((s) => s.scopeItemId));
+    const streamIds = new Set(bundle.scopeItems.map((s) => s.scopeItem.streamId));
+    const joinByQid = new Map(bundle.questions.map((q) => [q.questionId, q]));
+
+    let n = 0;
+    for (const q of questions) {
+      const inScope =
+        q.scopeItemRefs.some((ref) => scopeIds.has(ref)) ||
+        (q.scopeItemRefs.length === 0 && streamIds.has(q.streamId)) ||
+        joinByQid.has(q.id);
+      if (!inScope) continue;
+      // Same predicate as `forClient` in getAffirmSetForBundle: the join row's
+      // `enabled` wins when present, otherwise the question's own status does.
+      const enabled = joinByQid.get(q.id)?.enabled ?? q.status !== "excluded";
+      if (enabled && q.status !== "excluded") n += 1;
+    }
+    counts.set(bundle.id, n);
+  }
+
+  return counts;
+}
+
+/**
  * Coverage report for a bundle's selected scope — used by Screen 1 to
  * surface sub-processes that carry no affirm-set, and by Screen 3 to
  * explain "5 of your 12 sub-processes carry questions; the other 7
