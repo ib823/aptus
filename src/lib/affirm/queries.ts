@@ -168,6 +168,11 @@ export async function getAffirmSetForBundle(
           enabled: true,
           displayOrder: true,
           format: true,
+          // Present from issue onwards; NULL while the bundle is a draft.
+          frozenWording: true,
+          frozenAboutText: true,
+          frozenStandardMeans: true,
+          frozenAt: true,
         },
       },
     },
@@ -220,6 +225,19 @@ export async function getAffirmSetForBundle(
 
   let mapped: AffirmQuestionRow[] = rows.map((q) => {
     const bq = joinByQid.get(q.id);
+    /*
+     * ONCE FROZEN, THE BUNDLE READS ITS OWN COPY.
+     *
+     * `frozenAt` is set at issue. Before that it is null and the bundle reads
+     * live from the shared question bank, which is correct for a draft — the
+     * consultant is still curating. After it, the bank is irrelevant to this
+     * bundle: that is the whole point of issuing.
+     *
+     * Testing `frozenAt` rather than `frozenWording` matters. A question whose
+     * wording was legitimately empty at issue must stay empty, not silently
+     * fall back to whatever the bank says today.
+     */
+    const isFrozen = bq?.frozenAt != null;
     return {
       id: q.id,
       streamId: q.streamId,
@@ -228,9 +246,9 @@ export async function getAffirmSetForBundle(
       subProcessName: q.subProcess.name,
       sapVerbatim: q.sapVerbatim,
       plainLanguageSuggested: q.plainLanguageSuggested,
-      consultantWording: q.consultantWording,
-      aboutText: q.aboutText,
-      standardMeans: q.standardMeans,
+      consultantWording: isFrozen ? bq.frozenWording : q.consultantWording,
+      aboutText: isFrozen ? bq.frozenAboutText : q.aboutText,
+      standardMeans: isFrozen ? bq.frozenStandardMeans : q.standardMeans,
       sapArea: q.sapArea,
       sapTopic: q.sapTopic,
       sscuiRef: q.sscuiRef,

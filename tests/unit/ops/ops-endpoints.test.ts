@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   clientFindMany: vi.fn(),
   clientCount: vi.fn(),
   solutionFindMany: vi.fn(),
+  grantCount: vi.fn(),
   fallbackTenants: vi.fn(),
 }));
 
@@ -43,6 +44,8 @@ vi.mock("@/lib/db/prisma", () => ({
     sapConnection: { findMany: mocks.connectionFindMany, count: mocks.connectionCount },
     solution: { findMany: mocks.solutionFindMany },
     solutionClient: { findMany: mocks.clientFindMany, count: mocks.clientCount },
+    // Standing-access incident rules count grants that never end.
+    apiAccessGrant: { count: mocks.grantCount },
   },
 }));
 
@@ -98,6 +101,7 @@ beforeEach(() => {
   mocks.connectionCount.mockResolvedValue(0);
   mocks.clientFindMany.mockResolvedValue([]);
   mocks.clientCount.mockResolvedValue(0);
+  mocks.grantCount.mockResolvedValue(0);
   mocks.solutionFindMany.mockResolvedValue([]);
   mocks.fallbackTenants.mockReturnValue([]);
 });

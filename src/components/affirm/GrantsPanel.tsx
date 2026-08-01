@@ -22,6 +22,7 @@ export interface GrantClient {
   status: string;
   answered: number;
   total: number;
+  expiresAt: string | null;
 }
 
 interface StreamOption {
@@ -45,6 +46,9 @@ const STATUS_META: Record<string, { label: string; tone: PillTone }> = {
   locked_out: { label: "Revoked", tone: "revoked" },
   revoked: { label: "Revoked", tone: "revoked" },
   reissued: { label: "Reissued", tone: "neutral" },
+  // Lapsed reads like revoked because the link is equally dead; the word
+  // differs so the panel still says WHY it ended.
+  expired: { label: "Expired", tone: "revoked" },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -58,6 +62,8 @@ export function GrantsPanel({ bundleId, streams, initialGrants }: GrantsPanelPro
   const [displayName, setDisplayName] = useState("");
   const [roleLabel, setRoleLabel] = useState("");
   const [selectedStreams, setSelectedStreams] = useState<string[]>([]);
+  /** Blank means the standard 30-day window — never "forever". */
+  const [expiresAt, setExpiresAt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -81,6 +87,33 @@ export function GrantsPanel({ bundleId, streams, initialGrants }: GrantsPanelPro
       setError("Name and email are required.");
       return;
     }
+    /*
+     * Scope is chosen, never defaulted. The API used to accept an empty array
+     * and every reader reads that as "all streams", so the quiet path was to
+     * send an external executive the entire bundle.
+     */
+    if (selectedStreams.length === 0) {
+      setError(
+        "Choose at least one value stream. An invite with no streams selected would show this executive the whole bundle.",
+      );
+      return;
+    }
+    /*
+     * CONFIRM BEFORE AN EXTERNAL EMAIL LEAVES. This sends a named outsider a
+     * live link to a client's unreleased Fit-to-Standard decisions, and it was
+     * a single unguarded click with no undo — the mail is gone the moment the
+     * request lands.
+     */
+    const scopeText = selectedStreams
+      .map((id) => streams.find((s) => s.id === id)?.name ?? id)
+      .join(", ");
+    const ok = window.confirm(
+      `Email an invite to ${displayName.trim()} <${email.trim()}>?\n\n` +
+        `They will get access to: ${scopeText}\n` +
+        `Access ends: ${expiresAt || "in 30 days"}\n\n` +
+        "This sends a real email to an external recipient and cannot be unsent.",
+    );
+    if (!ok) return;
     startTransition(async () => {
       const res = await fetch(`/api/affirm/bundles/${bundleId}/grants`, {
         method: "POST",
@@ -90,6 +123,11 @@ export function GrantsPanel({ bundleId, streams, initialGrants }: GrantsPanelPro
           displayName: displayName.trim(),
           roleLabel: roleLabel.trim() || null,
           valueStreamIds: selectedStreams,
+          // A date input gives a local calendar day; send end-of-day UTC so
+          // "expires 12 Aug" does not cut off on the morning of the 12th.
+          ...(expiresAt
+            ? { expiresAt: new Date(`${expiresAt}T23:59:59Z`).toISOString() }
+            : {}),
         }),
       });
       if (!res.ok) {
@@ -101,6 +139,7 @@ export function GrantsPanel({ bundleId, streams, initialGrants }: GrantsPanelPro
       setDisplayName("");
       setRoleLabel("");
       setSelectedStreams([]);
+      setExpiresAt("");
       setNotice(`Invite sent to ${email.trim()}.`);
       await refresh();
     });
@@ -124,7 +163,9 @@ export function GrantsPanel({ bundleId, streams, initialGrants }: GrantsPanelPro
 
   const scopeLabel = (ids: string[]) =>
     ids.length === 0
-      ? "All streams"
+      ? // Only reachable on grants written before scope became mandatory. Say
+        // what it means rather than the neutral-sounding "All streams".
+        "All streams (unscoped — pre-dates scope selection)"
       : ids
           .map((id) => streams.find((s) => s.id === id)?.name ?? id)
           .join(", ");
@@ -160,6 +201,19 @@ export function GrantsPanel({ bundleId, streams, initialGrants }: GrantsPanelPro
                 </div>
                 <div className="mt-0.5 truncate text-xs text-ink-muted">
                   {g.email} · {scopeLabel(g.valueStreamIds)} · {g.answered}/{g.total} answered
+                  {g.expiresAt ? (
+                    <>
+                      {" · "}
+                      {g.status === "expired" ? "ended " : "ends "}
+                      {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(
+                        new Date(g.expiresAt),
+                      )}
+                    </>
+                  ) : (
+                    // Pre-dates the expiry column. Naming it is the point: an
+                    // unbounded external link is a defect, not a state.
+                    <span className="text-cta"> · no expiry recorded</span>
+                  )}
                 </div>
               </div>
               {canAct(g.status) ? (
@@ -191,22 +245,28 @@ export function GrantsPanel({ bundleId, streams, initialGrants }: GrantsPanelPro
 
       {/* Invite form */}
       <div className="rounded-card-warm border border-border-default bg-cream p-4">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="text-xs font-medium text-ink-soft">
-            Name
+            Name <span aria-hidden="true">*</span>
             <input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
+              required
+              name="displayName"
+              autoComplete="name"
               className="mt-1 w-full rounded-input border border-border-default bg-paper px-2.5 py-1.5 text-sm text-ink"
               placeholder="Jane Tan"
             />
           </label>
           <label className="text-xs font-medium text-ink-soft">
-            Email
+            Email <span aria-hidden="true">*</span>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              required
+              name="email"
+              autoComplete="email"
               className="mt-1 w-full rounded-input border border-border-default bg-paper px-2.5 py-1.5 text-sm text-ink"
               placeholder="jane.tan@company.com"
             />
@@ -216,15 +276,32 @@ export function GrantsPanel({ bundleId, streams, initialGrants }: GrantsPanelPro
             <input
               value={roleLabel}
               onChange={(e) => setRoleLabel(e.target.value)}
+              name="roleLabel"
+              autoComplete="organization-title"
               className="mt-1 w-full rounded-input border border-border-default bg-paper px-2.5 py-1.5 text-sm text-ink"
               placeholder="CFO"
             />
+          </label>
+          <label className="text-xs font-medium text-ink-soft">
+            Access ends
+            <input
+              type="date"
+              value={expiresAt}
+              onChange={(e) => setExpiresAt(e.target.value)}
+              min={new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)}
+              max={new Date(Date.now() + 90 * 86_400_000).toISOString().slice(0, 10)}
+              name="expiresAt"
+              className="mt-1 w-full rounded-input border border-border-default bg-paper px-2.5 py-1.5 text-sm text-ink"
+            />
+            <span className="mt-1 block text-[11px] font-normal text-ink-muted">
+              Blank = 30 days. There is no &ldquo;never&rdquo;.
+            </span>
           </label>
         </div>
 
         <fieldset className="mt-3">
           <legend className="text-xs font-medium text-ink-soft">
-            Value streams (none selected = all streams in this bundle)
+            Value streams — choose at least one
           </legend>
           <div className="mt-1.5 flex flex-wrap gap-2">
             {streams.map((s) => {

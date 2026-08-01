@@ -69,6 +69,9 @@ export async function GET(request: NextRequest) {
         decidedAt: true,
         expiresAt: true,
         createdAt: true,
+        revokedAt: true,
+        revokedById: true,
+        revokedReason: true,
       },
       // Pending first: the queue is the thing this screen exists for.
       orderBy: [{ decision: "asc" }, { createdAt: "desc" }],
@@ -88,6 +91,8 @@ export async function GET(request: NextRequest) {
     const operation = g.operation as GrantOperation;
     const isWrite = isWriteOperation(operation);
     const expired = g.expiresAt !== null && g.expiresAt.getTime() <= now.getTime();
+    // Withdrawn by a human. Distinct from lapsed: the clock did not do this.
+    const revoked = g.revokedAt != null;
 
     return {
       id: g.id,
@@ -105,6 +110,14 @@ export async function GET(request: NextRequest) {
       decidedAt: g.decidedAt ? g.decidedAt.toISOString() : null,
       expiresAt: g.expiresAt ? g.expiresAt.toISOString() : null,
       createdAt: g.createdAt.toISOString(),
+      /*
+       * Revocation is reported ALONGSIDE the decision, never instead of it.
+       * `decision` above still reads APPROVED on a revoked grant, because the
+       * approval happened and the ledger's job is to say so.
+       */
+      revokedAt: g.revokedAt ? g.revokedAt.toISOString() : null,
+      revokedById: g.revokedById,
+      revokedReason: g.revokedReason,
 
       /**
        * What this decision authorises AT RUNTIME, computed with the same
@@ -115,18 +128,24 @@ export async function GET(request: NextRequest) {
        * grant and have to know, from elsewhere, that it authorises nothing.
        */
       authorises: {
-        read: !expired && grantsRead(decision, environment),
-        write: !expired && isWrite && grantsWrite(decision, environment),
+        read: !revoked && !expired && grantsRead(decision, environment),
+        write: !revoked && !expired && isWrite && grantsWrite(decision, environment),
       },
-      lifecycle: expired
+      lifecycle: revoked
+        ? ("revoked" as const)
+        : expired
         ? ("lapsed" as const)
         : g.expiresAt !== null && g.expiresAt.getTime() <= soon.getTime()
           ? ("expiring-soon" as const)
           : g.decidedAt === null
             ? ("pending" as const)
             : ("live" as const),
-      /** A settled write grant with no expiry would be permanent — it cannot be. */
-      unbounded: !expired && g.decidedAt !== null && g.expiresAt === null,
+      /**
+       * A settled grant with no expiry and no revocation is permanent. Once
+       * revocation exists this is a fixable state rather than a terminal one,
+       * but it is still the thing to fix — so it keeps being reported.
+       */
+      unbounded: !revoked && !expired && g.decidedAt !== null && g.expiresAt === null,
     };
   });
 
@@ -139,11 +158,15 @@ export async function GET(request: NextRequest) {
       pending: grants.filter((g) => g.lifecycle === "pending").length,
       expiringSoon: grants.filter((g) => g.lifecycle === "expiring-soon").length,
       lapsed: grants.filter((g) => g.lifecycle === "lapsed").length,
+      revoked: grants.filter((g) => g.lifecycle === "revoked").length,
+      unbounded: grants.filter((g) => g.unbounded).length,
     },
     truncated: total > rows.length,
     provenance: {
-      expiryIsTheOnlyEnd:
-        "There is no revocation path in this release. A settled grant cannot be re-decided, so an approved grant ends only by lapsing — which is why a write-granting decision cannot be settled without an expiry date.",
+      howAGrantEnds:
+        "A grant ends in one of two ways: it lapses at its expiry, or an admin revokes it. Revocation is NOT a re-decision — the decision column is left exactly as it was, and the withdrawal is recorded beside it with its actor, timestamp and stated reason, so both facts survive. A settled grant still cannot be re-decided; that is what keeps the ledger honest.",
+      whyExpiryIsStillRequired:
+        "Expiry remains mandatory on any granting decision. Revocation is a manual act that depends on somebody noticing; an expiry ends a grant whether or not anyone is watching, which is the stronger control.",
       restrictionsAreEnforced:
         "READ_ONLY and SANDBOX_ONLY are enforced at runtime on every call. `authorises` is computed with the same predicates the broker uses, so the decision label and what it actually permits cannot drift apart on this screen.",
       emptyByDesign:

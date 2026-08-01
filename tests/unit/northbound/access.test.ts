@@ -152,6 +152,51 @@ describe("the grant requirement", () => {
     expect((await resolveReadableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW)).ok).toBe(true);
   });
 
+  /*
+   * REVOCATION HAS TO REACH THE BROKER, or it is a status badge.
+   *
+   * The point of shipping withdrawal is that access stops on the next call —
+   * not at the next expiry, not when a sweep runs. These pin that, and pin the
+   * distinction between "a human ended this" and "the clock ended this",
+   * because the refusal an operator reads during an incident should say which.
+   */
+  it("refuses a REVOKED grant on the very next call", async () => {
+    mocks.findManyGrants.mockResolvedValue([
+      { decision: "APPROVED", expiresAt: FUTURE, revokedAt: PAST },
+    ]);
+    const r = await resolveReadableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("GRANT_REVOKED");
+  });
+
+  it("refuses a revoked grant that has no expiry at all", async () => {
+    // The case revocation exists for: a permanent grant written before the
+    // expiry rule, with no other way to end it.
+    mocks.findManyGrants.mockResolvedValue([
+      { decision: "APPROVED", expiresAt: null, revokedAt: PAST },
+    ]);
+    const r = await resolveReadableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("GRANT_REVOKED");
+  });
+
+  it("blames the withdrawal, not the clock, when a grant is both revoked and lapsed", async () => {
+    mocks.findManyGrants.mockResolvedValue([
+      { decision: "APPROVED", expiresAt: PAST, revokedAt: PAST },
+    ]);
+    const r = await resolveReadableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("GRANT_REVOKED");
+  });
+
+  it("still accepts when one grant is revoked and another is live", async () => {
+    mocks.findManyGrants.mockResolvedValue([
+      { decision: "APPROVED", expiresAt: FUTURE, revokedAt: PAST },
+      { decision: "APPROVED", expiresAt: FUTURE, revokedAt: null },
+    ]);
+    expect((await resolveReadableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW)).ok).toBe(true);
+  });
+
   it("accepts when ANY of several grants is live", async () => {
     mocks.findManyGrants.mockResolvedValue([
       { decision: "APPROVED", expiresAt: PAST },

@@ -22,9 +22,10 @@
  * the question is consultant-added. Disable via PUT { enabled:false }
  * instead.
  *
- * Available while bundle.state is "draft" OR "issued" (consultant can
- * keep curating until the client submits). Rejected on submitted /
- * released.
+ * Available ONLY while bundle.state is "draft". Issuing freezes the
+ * question content onto the bundle (AffirmBundleQuestion.frozen*), so
+ * there is nothing here to edit afterwards: the client has been shown a
+ * specific set of words and the record has to keep saying them.
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -42,7 +43,20 @@ const PutBody = z.object({
 });
 
 function isEditable(state: string): boolean {
-  return state === "draft" || state === "issued";
+  /*
+   * DRAFT ONLY. This used to return true for "issued" as well, so a bundle the
+   * client had already partly answered stayed fully editable: wording, format,
+   * order and enable/disable all flowed straight through to the client view,
+   * silently, with no version, no notification and no record of what the
+   * question said when it was answered.
+   *
+   * The Review screen promises the opposite in as many words — "client answers
+   * are sealed". Both cannot be true, and the one that must be true is the one
+   * printed on the artefact the client signs.
+   *
+   * Curation belongs in draft. After issue, the bundle is a record.
+   */
+  return state === "draft";
 }
 
 export async function PUT(

@@ -246,7 +246,8 @@ export function QuestionEditor({
             ? "Add at least one scope item before issuing."
             : j.error === "not_found"
               ? "Bundle no longer exists."
-              : j.error ?? `Issue failed (${res.status}).`,
+              : // The server carries the readable sentence for the confirm gate.
+                j.message ?? j.error ?? `Issue failed (${res.status}).`,
         );
         return;
       }
@@ -273,11 +274,22 @@ export function QuestionEditor({
   }, [rows]);
 
   const enabledCount = rows.filter((r) => r.enabled).length;
+  // The consultant confirm pass, counted here so the gate is visible BEFORE
+  // the button is pressed rather than as a server error afterwards. Excluded
+  // questions carry status "excluded", so they never appear in this list.
+  const unconfirmed = rows.filter((r) => r.status === "suggested");
   const decisionCount = rows.filter((r) => r.enabled && r.format === "decision").length;
   const infoCount = rows.filter((r) => r.enabled && r.format === "information").length;
   const excludedDisabledCount = rows.filter((r) => !r.enabled && r.status === "excluded").length;
   const customCount = rows.filter((r) => r.isCustom).length;
-  const editable = bundleState === "draft" || bundleState === "issued";
+  /*
+   * Curation is a draft-state activity. It used to include "issued", so the
+   * consultant could rewrite a question the client had already answered and
+   * the change reached the client view immediately — while the Review screen
+   * told them answers were sealed. Issuing now freezes the content onto the
+   * bundle, so after issue there is genuinely nothing here to edit.
+   */
+  const editable = bundleState === "draft";
 
   return (
     <div className="space-y-5" data-tour="affirm-question-editor">
@@ -575,9 +587,21 @@ export function QuestionEditor({
               {infoCount} Information
             </div>
             <div className="mt-0.5 text-xs text-ink-muted">
-              Issuing seals the scope + question set and unlocks the client affirm
-              view. You can still keep editing wording until the client submits.
+              Issuing freezes the scope, the question set and the wording onto this
+              bundle and unlocks the client affirm view. After this the wording
+              cannot change — the client answers these words, so the record has to
+              keep saying them.
             </div>
+            {unconfirmed.length > 0 && (
+              <p className="mt-2 rounded-md border border-cta/40 bg-paper px-3 py-2 text-xs text-ink-soft">
+                <span className="font-semibold text-ink">
+                  {unconfirmed.length} question{unconfirmed.length === 1 ? "" : "s"} still
+                  carry the auto-suggested draft.
+                </span>{" "}
+                Confirm the plain-language wording on each before issuing. Nothing
+                reaches the client unread.
+              </p>
+            )}
             {issueError && (
               <p className="mt-2 rounded-md border border-cta/40 bg-paper px-3 py-2 text-xs text-cta">
                 {issueError}
@@ -586,7 +610,12 @@ export function QuestionEditor({
           </div>
           <button
             onClick={issue}
-            disabled={issuing || enabledCount === 0}
+            disabled={issuing || enabledCount === 0 || unconfirmed.length > 0}
+            title={
+              unconfirmed.length > 0
+                ? `${unconfirmed.length} question(s) awaiting the consultant confirm pass`
+                : undefined
+            }
             data-tour="affirm-issue"
             className="inline-flex h-10 items-center rounded-input bg-cta px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-cta-hover disabled:opacity-60"
           >

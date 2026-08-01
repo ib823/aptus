@@ -657,9 +657,31 @@ model ApiAccessGrant {
   decidedAt     DateTime?
   expiresAt     DateTime?
 
+  /// Emergency withdrawal.
+  ///
+  /// v1 shipped deliberately without one: a settled grant cannot be re-decided,
+  /// so expiry was "the one form of ending the runtime honours". That reasoning
+  /// holds for the ORDINARY case — a grant should lapse rather than be yanked,
+  /// and the ledger should record why it ended.
+  ///
+  /// It does not hold when access must stop NOW: a credential is leaked, a
+  /// solution turns out to be a test artefact, a client withdraws consent. The
+  /// product's own manual calls an unbounded grant "a defect, not a state", and
+  /// a defect with no remedy is an outage you cannot end.
+  ///
+  /// This is NOT a re-decision. `decision` is left exactly as it was, because a
+  /// decision does not un-happen; revocation is a second, later fact recorded
+  /// alongside it, and both appear in the ledger.
+  revokedAt     DateTime?
+  revokedById   String?
+  /// Why, in the revoker's words. Required by the API — a withdrawal with no
+  /// stated reason is unreviewable.
+  revokedReason String?
+
   createdAt DateTime @default(now())
 
   solution Solution @relation(fields: [solutionId], references: [id], onDelete: Cascade)
+  revoker  User?    @relation("ApiAccessGrantsRevoked", fields: [revokedById], references: [id])
 
   @@index([organizationId, solutionId])
 }
@@ -2020,6 +2042,7 @@ model User {
   affirmEventsByUser     AffirmEvent[]          @relation("AffirmEventsByUser")
   affirmQuestionsCreated AffirmQuestion[]       @relation("AffirmQuestionsCreated")
   affirmGrantsRevoked    AffirmAccessGrant[]    @relation("AffirmGrantsRevoked")
+  apiGrantsRevoked       ApiAccessGrant[]       @relation("ApiAccessGrantsRevoked")
   affirmStoriesReviewed  AffirmScopeItemStory[] @relation("AffirmStoriesReviewed")
 
   // ABeam Workbench — Neutral Process Discovery (PR-2a, 2026-07-17).
@@ -4627,6 +4650,31 @@ model AffirmBundleQuestion {
   displayOrder Int     @default(0)
   format       String  @default("decision")
 
+  // ── Content frozen at issue ──────────────────────────────────────
+  //
+  // WHY THESE EXIST. Question wording lives on AffirmQuestion, which is the
+  // GLOBAL bank (L2-001..L2-150) shared by every bundle. The issue route's
+  // header claimed it "snapshots the in-scope L2 questions onto the bundle so
+  // a later question-bank edit cannot mutate what the client sees" — but the
+  // join row only ever carried enabled/displayOrder/format. The words did not
+  // travel with it.
+  //
+  // Two consequences, both on the artefact the client signs:
+  //   - A consultant editing wording in ANY bundle's editor rewrote that
+  //     question for every other bundle using it, including bundles already
+  //     issued and already answered.
+  //   - A client could answer "Adopt SAP standard", the wording could then
+  //     change, and the signed record would show an affirmation against text
+  //     the client never saw.
+  //
+  // NULL means "not frozen yet" — the bundle is still a draft and reads live
+  // from the bank. Populated at issue; from that moment the bundle renders
+  // its own copy and the bank cannot reach it.
+  frozenWording      String? @db.Text
+  frozenAboutText    String? @db.Text
+  frozenStandardMeans String? @db.Text
+  frozenAt           DateTime?
+
   bundle   AffirmBundle   @relation(fields: [bundleId], references: [id], onDelete: Cascade)
   question AffirmQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
@@ -4705,9 +4753,24 @@ model AffirmAccessGrant {
   // Token (the credential) — SHA-256 of the raw token; raw lives only in URL
   tokenHash String @unique // 64 hex chars
 
-  // Persona scope: value streams this executive may see. Empty = all streams
-  // in the bundle. Filtered in getAffirmSetForGrant.
+  // Persona scope: value streams this executive may see.
+  //
+  // EMPTY MEANS EVERY STREAM IN THE BUNDLE, which made the default fail OPEN:
+  // the create API defaulted this to [], so a consultant who forgot to tick a
+  // stream sent an external executive the entire bundle. The API now requires
+  // at least one stream, so an empty array can only reach here on rows written
+  // before that rule — the readers still honour "empty = all" for those.
   valueStreamIds String[]
+
+  // When this executive's access ends. Required on creation.
+  //
+  // The presales invite flow has always had a mandatory access window; this,
+  // the more sensitive of the two mechanisms — it emails an external executive
+  // a link to a client's unreleased Fit-to-Standard decisions — had none, so
+  // every link ever issued was good forever. NULL only on rows predating this
+  // column; readers treat NULL as "no expiry recorded" and keep working, which
+  // is why the backfill in the migration matters.
+  expiresAt DateTime?
 
   // Legal acknowledgement (set on POST /a/[token]/redeem)
   ackAt       DateTime?

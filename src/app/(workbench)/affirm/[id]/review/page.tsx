@@ -136,6 +136,7 @@ export default async function ReviewPage({ params }: PageProps) {
         status: g.status,
         answered: g.answered,
         total: g.total,
+        expiresAt: g.expiresAt ? g.expiresAt.toISOString() : null,
       }))
     : [];
 

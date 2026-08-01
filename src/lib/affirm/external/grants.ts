@@ -23,7 +23,8 @@ export type GrantStatus =
   | "submitted"
   | "locked_out"
   | "revoked"
-  | "reissued";
+  | "reissued"
+  | "expired";
 
 export interface GrantSummary {
   id: string;
@@ -35,8 +36,22 @@ export interface GrantSummary {
   answered: number;
   total: number;
   createdAt: Date;
+  expiresAt: Date | null;
   revokedAt: Date | null;
   supersededByGrantId: string | null;
+}
+
+/**
+ * How long an executive invite lasts when the caller does not say.
+ *
+ * 30 days is the pre-workshop window: long enough that an executive who is
+ * travelling still gets in, short enough that a link forwarded out of an inbox
+ * is dead well before the engagement ends.
+ */
+export const DEFAULT_GRANT_WINDOW_DAYS = 30;
+
+export function defaultGrantExpiry(now: Date = new Date()): Date {
+  return new Date(now.getTime() + DEFAULT_GRANT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 }
 
 /** Mint a grant + return the raw token (for the invite URL). Writes grant_created. */
@@ -46,6 +61,8 @@ export async function createGrant(args: {
   displayName: string;
   roleLabel?: string | null;
   valueStreamIds: string[];
+  /** When this executive's access ends. Required — see the model comment. */
+  expiresAt: Date;
   actorId: string;
 }): Promise<{ grant: AffirmAccessGrant; rawToken: string }> {
   const { raw, tokenHash } = mintToken();
@@ -56,6 +73,7 @@ export async function createGrant(args: {
       displayName: args.displayName,
       roleLabel: args.roleLabel ?? null,
       valueStreamIds: args.valueStreamIds,
+      expiresAt: args.expiresAt,
       tokenHash,
     },
   });
@@ -64,7 +82,11 @@ export async function createGrant(args: {
     type: "grant_created",
     grantId: grant.id,
     actorId: args.actorId,
-    payload: { email: args.email, valueStreamIds: args.valueStreamIds },
+    payload: {
+      email: args.email,
+      valueStreamIds: args.valueStreamIds,
+      expiresAt: args.expiresAt.toISOString(),
+    },
   });
   return { grant, rawToken: raw };
 }
@@ -108,6 +130,8 @@ export async function revokeGrant(args: {
 export async function reissueGrant(args: {
   grantId: string;
   actorId: string;
+  /** Window for the fresh grant. Defaults to the standard invite window. */
+  expiresAt?: Date;
   now?: Date;
 }): Promise<{ grant: AffirmAccessGrant; rawToken: string } | null> {
   const now = args.now ?? new Date();
@@ -122,6 +146,14 @@ export async function reissueGrant(args: {
       displayName: old.displayName,
       roleLabel: old.roleLabel,
       valueStreamIds: old.valueStreamIds,
+      /*
+       * A REISSUE IS AN ISSUE. Copying every field except the expiry would
+       * mint an unbounded grant through the "resend" button — the exact hole
+       * the expiry column closes, reachable by a different verb. The window
+       * restarts from now rather than being inherited, because the old one
+       * has usually lapsed (which is why someone is resending).
+       */
+      expiresAt: args.expiresAt ?? defaultGrantExpiry(now),
       tokenHash,
     },
   });
@@ -151,7 +183,12 @@ export async function reissueGrant(args: {
 function deriveStatus(
   grant: Pick<
     AffirmAccessGrant,
-    "ackAt" | "otpVerifiedUaHashes" | "otpAttemptCount" | "revokedAt" | "supersededByGrantId"
+    | "ackAt"
+    | "otpVerifiedUaHashes"
+    | "otpAttemptCount"
+    | "revokedAt"
+    | "supersededByGrantId"
+    | "expiresAt"
   >,
   bundleState: string,
   answered: number,
@@ -161,6 +198,12 @@ function deriveStatus(
     if (grant.supersededByGrantId) return "reissued";
     if (grant.otpAttemptCount >= 5) return "locked_out";
     return "revoked";
+  }
+  // Lapsing is reported like revocation because it has the same effect on the
+  // holder: the link no longer opens. Checked after the revoked branch so an
+  // explicitly revoked grant keeps saying so.
+  if (grant.expiresAt !== null && grant.expiresAt.getTime() <= Date.now()) {
+    return "expired";
   }
   if ((bundleState === "submitted" || bundleState === "released") && grant.ackAt) return "submitted";
   if (!grant.ackAt) return "invited";
@@ -205,6 +248,7 @@ export async function listGrantsForBundle(bundleId: string): Promise<GrantSummar
       answered,
       total,
       createdAt: grant.createdAt,
+      expiresAt: grant.expiresAt,
       revokedAt: grant.revokedAt,
       supersededByGrantId: grant.supersededByGrantId,
     });

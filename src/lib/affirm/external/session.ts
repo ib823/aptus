@@ -98,6 +98,12 @@ export async function readGuestSession(opts: {
   const grant = session.grant;
   if (grant.revokedAt) return null;
   if (grant.supersededByGrantId) return null;
+  /*
+   * A LAPSED GRANT IS A CLOSED DOOR. Checked alongside revocation because it
+   * has the same meaning to the holder: this link no longer opens. Without it
+   * the expiry column would be a label the runtime never reads.
+   */
+  if (grant.expiresAt !== null && grant.expiresAt <= now) return null;
 
   const bundle = grant.bundle;
   if (!isClientFacingState(bundle.state)) return null;

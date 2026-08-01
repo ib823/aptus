@@ -52,8 +52,10 @@ interface Grant {
   expiresAt: string | null;
   createdAt: string;
   authorises: { read: boolean; write: boolean };
-  lifecycle: "pending" | "live" | "expiring-soon" | "lapsed";
+  lifecycle: "pending" | "live" | "expiring-soon" | "lapsed" | "revoked";
   unbounded: boolean;
+  revokedAt: string | null;
+  revokedReason: string | null;
 }
 
 interface GrantsPayload {
@@ -66,7 +68,8 @@ interface GrantsPayload {
     lapsed: number;
   };
   provenance: {
-    expiryIsTheOnlyEnd: string;
+    howAGrantEnds: string;
+    whyExpiryIsStillRequired: string;
     restrictionsAreEnforced: string;
     emptyByDesign: string | null;
     decisionsAreAudited: string;
@@ -159,8 +162,9 @@ function GrantsBody({
           </OpsTable>
         )}
 
-        <ProvenanceStrip claim="Expiry is the only ending">
-          {provenance.expiryIsTheOnlyEnd}
+        <ProvenanceStrip claim="How a grant ends">
+          {provenance.howAGrantEnds}
+          <div style={{ marginTop: 6 }}>{provenance.whyExpiryIsStillRequired}</div>
           <div style={{ marginTop: 6 }}>{provenance.restrictionsAreEnforced}</div>
           <div style={{ marginTop: 6 }}>
             {provenance.decisionsAreAudited} Every grant in scope is listed — this is a complete
@@ -176,11 +180,14 @@ function GrantsBody({
               <OpsChip tone="bad" label={`${unbounded.length} unbounded`} />
             </span>
             <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-secondary)" }}>
-              These settled grants have no expiry, so nothing will end them — there is no revocation
-              path and a settled request cannot be re-decided. They predate the rule that now refuses
-              to approve ANY unbounded grant, reads included: revoking a credential only suspends the
-              means of using one, and the next credential issued for that solution reactivates it.
-              Each needs a new, bounded request to replace it.
+              These settled grants have no expiry, so nothing will end them on its own. They predate
+              the rule that now refuses to approve ANY unbounded grant, reads included. Revoking the
+              credential does not help: it suspends the means of using a grant, and the next
+              credential issued for that solution reactivates it.
+              <br />
+              <br />
+              <strong>Revoke each one, then raise a bounded request to replace it.</strong> Revocation
+              takes effect on the next call and leaves the original decision intact in the ledger.
             </p>
           </div>
         </OpsCard>
@@ -200,7 +207,10 @@ function GrantRow({
   runwayDays: number;
   onDecided: () => void;
 }) {
-  const lapsed = grant.lifecycle === "lapsed";
+  const revoked = grant.lifecycle === "revoked";
+  // A revoked grant is muted for the same reason a lapsed one is: the decision
+  // stands, its force does not.
+  const lapsed = grant.lifecycle === "lapsed" || revoked;
   const isWrite = grant.operation !== "READ";
 
   return (
@@ -221,8 +231,21 @@ function GrantRow({
         <OpsChip
           tone={decisionTone(grant.decision, lapsed)}
           label={humanDecision(grant.decision)}
-          meaning={lapsed ? "decided, and since lapsed" : undefined}
+          meaning={
+            revoked
+              ? "decided, and since revoked"
+              : lapsed
+                ? "decided, and since lapsed"
+                : undefined
+          }
         />
+        {revoked && grant.revokedReason ? (
+          <div style={{ marginTop: 4, fontSize: 11.5, color: "var(--ink-muted)" }}>
+            {/* The reason IS the record. A withdrawal with no visible cause is
+                the thing the required-reason rule exists to prevent. */}
+            revoked: {grant.revokedReason}
+          </div>
+        ) : null}
       </td>
       <td style={opsCellStyle}>
         <Authorises read={grant.authorises.read} write={grant.authorises.write} />
@@ -244,6 +267,12 @@ function GrantRow({
         <td style={{ ...opsCellStyle, textAlign: "right" }}>
           {grant.lifecycle === "pending" ? (
             <DecideControls grant={grant} onDecided={onDecided} />
+          ) : revoked ? (
+            <span style={{ fontSize: 11.5, color: "var(--ink-muted)" }}>revoked</span>
+          ) : grant.authorises.read || grant.authorises.write ? (
+            // Only a grant that still authorises something has anything to
+            // withdraw. A lapsed one is already ended.
+            <RevokeControl grant={grant} onRevoked={onDecided} />
           ) : (
             <span style={{ fontSize: 11.5, color: "var(--ink-muted)" }}>settled</span>
           )}
@@ -359,6 +388,147 @@ function DecideControls({ grant, onDecided }: { grant: Grant; onDecided: () => v
           {error}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Emergency withdrawal.
+ *
+ * SEPARATE FROM `DecideControls` ON PURPOSE. Deciding settles a pending request;
+ * revoking ends a settled one. Putting them in one control would invite the
+ * reading that revocation is another decision value — it is not. The decision
+ * stays exactly as it was recorded, and the withdrawal is a second fact beside
+ * it.
+ *
+ * The reason is mandatory and the server enforces a floor, so this cannot be
+ * clicked through: it is the field someone reads later when a client asks why
+ * their integration stopped.
+ */
+function RevokeControl({ grant, onRevoked }: { grant: Grant; onRevoked: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function revoke() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/control-tower/grants/${grant.id}/revoke`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+      if (!res.ok) {
+        // The server's refusals name what to do; keep its words.
+        setError(body.error?.message ?? `Revocation was refused (HTTP ${res.status}).`);
+        setBusy(false);
+        return;
+      }
+      onRevoked();
+    } catch {
+      setError("The revocation could not be sent. Check the connection and try again.");
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        style={{
+          fontSize: 11.5,
+          fontWeight: 600,
+          color: "var(--cta-red, #B3261E)",
+          background: "none",
+          border: "1px solid var(--border-default)",
+          borderRadius: 6,
+          padding: "3px 9px",
+          cursor: "pointer",
+        }}
+      >
+        Revoke
+      </button>
+    );
+  }
+
+  const tooShort = reason.trim().length < 10;
+
+  return (
+    <div style={{ display: "grid", gap: 6, justifyItems: "stretch", minWidth: 240 }}>
+      <label
+        htmlFor={`revoke-reason-${grant.id}`}
+        style={{ fontSize: 11.5, color: "var(--ink-secondary)", textAlign: "left" }}
+      >
+        Why is this access being withdrawn?
+      </label>
+      <textarea
+        id={`revoke-reason-${grant.id}`}
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        rows={2}
+        disabled={busy}
+        style={{
+          fontSize: 12.5,
+          padding: "5px 7px",
+          borderRadius: 6,
+          border: "1px solid var(--border-default)",
+          background: "var(--surface-paper)",
+          color: "var(--ink-primary)",
+          resize: "vertical",
+        }}
+      />
+      <p style={{ margin: 0, fontSize: 11, color: "var(--ink-muted)", textAlign: "left" }}>
+        Takes effect on the next call. The decision stays in the ledger as it was.
+      </p>
+      {error ? (
+        <p style={{ margin: 0, fontSize: 11.5, color: "var(--cta-red, #B3261E)", textAlign: "left" }}>
+          {error}
+        </p>
+      ) : null}
+      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setReason("");
+            setError(null);
+          }}
+          disabled={busy}
+          style={{
+            fontSize: 11.5,
+            background: "none",
+            border: "1px solid var(--border-default)",
+            borderRadius: 6,
+            padding: "3px 9px",
+            cursor: "pointer",
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={revoke}
+          disabled={busy || tooShort}
+          title={tooShort ? "Give a reason of at least 10 characters" : undefined}
+          style={{
+            fontSize: 11.5,
+            fontWeight: 600,
+            color: "#fff",
+            background: "var(--cta-red, #B3261E)",
+            border: "1px solid transparent",
+            borderRadius: 6,
+            padding: "3px 9px",
+            cursor: busy || tooShort ? "not-allowed" : "pointer",
+            opacity: busy || tooShort ? 0.55 : 1,
+          }}
+        >
+          {busy ? "Revoking…" : "Confirm revoke"}
+        </button>
+      </div>
     </div>
   );
 }
