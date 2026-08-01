@@ -53,6 +53,18 @@ export const INCIDENT_THRESHOLDS = {
   expiringCredential: 1,
   /** Any connection still undeclared. The backlog is meant to reach zero. */
   undeclaredEnvironment: 1,
+  /**
+   * Any grant that authorises access and has no expiry. Expiry is the ONLY end
+   * a grant has, so one without an expiry never ends.
+   */
+  unboundedGrant: 1,
+  /**
+   * Any live credential with no expiry. One is enough: it is the state the
+   * expiring-credential rule structurally cannot see.
+   */
+  credentialWithoutExpiry: 1,
+  /** Any PROD grant whose solution is unowned or not ACTIVE. */
+  unaccountableProdGrant: 1,
 } as const;
 
 export interface IncidentRule {
@@ -153,6 +165,52 @@ export const INCIDENT_RULES = {
       "Reads through it are served but marked unverified, and writes are refused outright — so it is a backlog with a known consequence rather than a failure. It is listed because a count that never falls is the signal that the permissive read rule has quietly become permanent.",
     remediation: "Set the environment on the connection in Studio.",
   },
+  /*
+   * THE THREE RULES BELOW WATCH STANDING ACCESS, WHICH NOTHING WATCHED.
+   *
+   * Two controls were tightened after rows had already been written under the
+   * looser ones, and neither tightening is retroactive: `evaluateDecision` now
+   * refuses a granting decision with no expiry, and credential issue/rotate now
+   * refuse an unowned solution. Both are enforced going forward and neither
+   * says anything about what already exists.
+   *
+   * That gap is invisible by construction. `expiring-credential` fires on a
+   * credential inside its expiry runway — a credential with NO expiry is never
+   * inside any runway, so the one rule that looks at credential lifetimes is
+   * precisely blind to the worst case. A count that reads zero because the
+   * predicate cannot be satisfied is the failure mode this file already has a
+   * long comment about.
+   */
+  unboundedGrant: {
+    id: "unbounded-grant",
+    severity: "critical",
+    title: "A grant authorises access and can never end",
+    firesWhen: `at least ${INCIDENT_THRESHOLDS.unboundedGrant} settled grant confers access and has no expiry date`,
+    whyThisSeverity:
+      "There is no revocation path and a settled grant cannot be re-decided, so expiry is the only end a grant has. One without an expiry is permanent access to a client's SAP system, reachable by leaving a field blank. It is critical rather than major because nothing degrades to make it visible: it will read as healthy forever.",
+    remediation:
+      "There is no in-product way to bound a settled grant. Raise a fresh request with an expiry, and treat the unbounded row as live access until the data is corrected directly.",
+  },
+  credentialWithoutExpiry: {
+    id: "credential-without-expiry",
+    severity: "major",
+    title: "A live credential has no expiry",
+    firesWhen: `at least ${INCIDENT_THRESHOLDS.credentialWithoutExpiry} active, unrevoked credential has no expiry date`,
+    whyThisSeverity:
+      "A working token that never lapses is a standing key to a client's SAP system, and it is the exact case 'a credential expires soon' cannot report — that rule needs an expiry to compare against. Major rather than critical because rotation IS available here: unlike a grant, this one has a remedy today.",
+    remediation:
+      "Rotate the credential in Studio with an expiry set. Rotation replaces the token immediately and has no overlap window.",
+  },
+  unaccountableProdGrant: {
+    id: "unaccountable-prod-grant",
+    severity: "critical",
+    title: "A production grant is held by a solution nobody owns",
+    firesWhen: `at least ${INCIDENT_THRESHOLDS.unaccountableProdGrant} grant conferring PROD access belongs to a solution that is not ACTIVE or has an empty owner slot`,
+    whyThisSeverity:
+      "The product states that a solution cannot reach ACTIVE without all three owners, and a credential is a stronger thing than ACTIVE status. A DRAFT or unowned solution holding production access means there is no accountable party for reads of a client's live financial data, and no one to ask when the access is questioned.",
+    remediation:
+      "Assign the technical, business and support owners in Studio, or raise a fresh bounded request against a solution that has them. Check whether the holder is a test artefact that should not exist in this environment at all.",
+  },
 } as const satisfies Record<string, IncidentRule>;
 
 /**
@@ -208,6 +266,12 @@ export interface IncidentSignals {
   throttled: number;
   expiringCredentials: number;
   undeclaredEnvironmentConnections: number;
+  /** Settled grants that confer access and carry no expiry. */
+  unboundedGrants: number;
+  /** Active, unrevoked credentials with no expiry date. */
+  credentialsWithoutExpiry: number;
+  /** PROD grants whose solution is not ACTIVE or has an empty owner slot. */
+  unaccountableProdGrants: number;
 }
 
 export interface Incident {
@@ -247,6 +311,21 @@ export function deriveIncidents(signals: IncidentSignals): Incident[] {
       INCIDENT_RULES.undeclaredEnvironment,
       signals.undeclaredEnvironmentConnections,
       INCIDENT_THRESHOLDS.undeclaredEnvironment,
+    ],
+    [
+      INCIDENT_RULES.unboundedGrant,
+      signals.unboundedGrants,
+      INCIDENT_THRESHOLDS.unboundedGrant,
+    ],
+    [
+      INCIDENT_RULES.credentialWithoutExpiry,
+      signals.credentialsWithoutExpiry,
+      INCIDENT_THRESHOLDS.credentialWithoutExpiry,
+    ],
+    [
+      INCIDENT_RULES.unaccountableProdGrant,
+      signals.unaccountableProdGrants,
+      INCIDENT_THRESHOLDS.unaccountableProdGrant,
     ],
   ];
 

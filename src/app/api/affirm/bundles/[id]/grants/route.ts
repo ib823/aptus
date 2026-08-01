@@ -12,7 +12,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
-import { createGrant, listGrantsForBundle } from "@/lib/affirm/external/grants";
+import {
+  createGrant,
+  defaultGrantExpiry,
+  listGrantsForBundle,
+} from "@/lib/affirm/external/grants";
+
+/** Nobody needs an external executive holding a link for longer than a quarter. */
+const MAX_GRANT_WINDOW_DAYS = 90;
 import { dispatchEmail } from "@/lib/presales/emails";
 import { renderAffirmInviteEmail } from "@/lib/affirm/external/emails";
 import { requireAffirmBundleAccess } from "@/lib/affirm/authz";
@@ -21,7 +28,17 @@ const Body = z.object({
   email: z.string().email(),
   displayName: z.string().min(1).max(200),
   roleLabel: z.string().max(80).nullish(),
-  valueStreamIds: z.array(z.string()).default([]),
+  /*
+   * FAIL CLOSED. This was `.default([])`, and every reader treats an empty
+   * array as "every stream in the bundle" — so the default was to send an
+   * external executive the whole thing, and forgetting to tick a box was
+   * indistinguishable from deliberately granting everything.
+   *
+   * A scope you have to state is a scope somebody chose.
+   */
+  valueStreamIds: z.array(z.string()).min(1),
+  /** ISO date. Omitted means the standard 30-day window, never "forever". */
+  expiresAt: z.string().datetime().optional(),
 });
 
 function inviteUrl(req: NextRequest, rawToken: string): string {
@@ -77,12 +94,31 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const badStream = valueStreamIds.find((s) => !bundleStreams.has(s));
   if (badStream) return NextResponse.json({ error: "stream_out_of_scope" }, { status: 422 });
 
+  /*
+   * An access window that ends in the past, or does not end, is not a window.
+   * Capped as well as floored: "expires in 2099" is how an unbounded grant
+   * gets written once the field is mandatory.
+   */
+  const now = new Date();
+  const requestedExpiry = parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null;
+  const maxExpiry = new Date(now.getTime() + MAX_GRANT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  if (requestedExpiry && requestedExpiry <= now) {
+    return NextResponse.json({ error: "expiry_in_past" }, { status: 422 });
+  }
+  if (requestedExpiry && requestedExpiry > maxExpiry) {
+    return NextResponse.json(
+      { error: "expiry_too_far", maxDays: MAX_GRANT_WINDOW_DAYS },
+      { status: 422 },
+    );
+  }
+
   const { grant, rawToken } = await createGrant({
     bundleId: id,
     email,
     displayName,
     roleLabel,
     valueStreamIds,
+    expiresAt: requestedExpiry ?? defaultGrantExpiry(now),
     actorId: user.id,
   });
 

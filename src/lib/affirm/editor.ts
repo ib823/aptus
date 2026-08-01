@@ -37,6 +37,8 @@ export interface EditorRow {
   status: string;
   flag: string | null;
   isCustom: boolean;
+  /** True once the bundle was issued and this row carries its own copy. */
+  frozen: boolean;
 }
 
 export async function materializeBundleQuestions(
@@ -114,7 +116,13 @@ export async function getEditorRows(bundleId: string): Promise<EditorRow[]> {
     ],
   });
 
-  return rows.map((r) => ({
+  return rows.map((r) => {
+    // Show the consultant exactly what the client is being shown. Once the
+    // bundle is issued that is the frozen copy on the join row, not whatever
+    // the shared question bank says now — otherwise this screen would report a
+    // wording the client never saw. See AffirmBundleQuestion.frozenAt.
+    const isFrozen = r.frozenAt != null;
+    return {
     bundleId: r.bundleId,
     questionId: r.questionId,
     enabled: r.enabled,
@@ -128,9 +136,9 @@ export async function getEditorRows(bundleId: string): Promise<EditorRow[]> {
     subProcessName: r.question.subProcess.name,
     sapVerbatim: r.question.sapVerbatim,
     plainLanguageSuggested: r.question.plainLanguageSuggested,
-    consultantWording: r.question.consultantWording,
-    aboutText: r.question.aboutText,
-    standardMeans: r.question.standardMeans,
+    consultantWording: isFrozen ? r.frozenWording : r.question.consultantWording,
+    aboutText: isFrozen ? r.frozenAboutText : r.question.aboutText,
+    standardMeans: isFrozen ? r.frozenStandardMeans : r.question.standardMeans,
     sapArea: r.question.sapArea,
     sapTopic: r.question.sapTopic,
     sscuiRef: r.question.sscuiRef,
@@ -138,5 +146,7 @@ export async function getEditorRows(bundleId: string): Promise<EditorRow[]> {
     status: r.question.status,
     flag: r.question.flag,
     isCustom: r.question.isCustom,
-  }));
+    frozen: isFrozen,
+    };
+  });
 }

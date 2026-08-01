@@ -259,12 +259,34 @@ describe("grants report what a decision actually authorises", () => {
   });
 
   it("marks a settled grant with no expiry as unbounded", async () => {
-    // With no revocation path, an unbounded approved grant is permanent.
+    // Still reported even now that revocation exists: nothing ENDS this grant
+    // on its own, and a manual withdrawal depends on somebody noticing. The
+    // remedy changed; the defect did not.
     mocks.grantFindMany.mockResolvedValue([grantRow()]);
     mocks.grantCount.mockResolvedValue(1);
     const body = await (await grants(req("grants"))).json();
     expect(body.data.grants[0].unbounded).toBe(true);
-    expect(body.data.provenance.expiryIsTheOnlyEnd).toContain("no revocation path");
+    expect(body.data.counts.unbounded).toBe(1);
+    // The provenance used to claim "there is no revocation path in this
+    // release". There is one now, and a screen that still said otherwise would
+    // be telling an operator they cannot do the thing they can.
+    expect(body.data.provenance.howAGrantEnds).toContain("revoke");
+    expect(body.data.provenance.whyExpiryIsStillRequired).toContain("Expiry remains mandatory");
+  });
+
+  it("reports a revoked grant as authorising nothing, without rewriting the decision", async () => {
+    mocks.grantFindMany.mockResolvedValue([
+      grantRow({ revokedAt: new Date("2026-07-01"), revokedReason: "credential leaked" }),
+    ]);
+    mocks.grantCount.mockResolvedValue(1);
+    const body = await (await grants(req("grants"))).json();
+    const g = body.data.grants[0];
+    expect(g.lifecycle).toBe("revoked");
+    expect(g.authorises.read).toBe(false);
+    expect(g.authorises.write).toBe(false);
+    // The approval happened. The ledger keeps saying so.
+    expect(g.decision).toBe("APPROVED");
+    expect(g.revokedReason).toBe("credential leaked");
   });
 
   it("treats a lapsed grant as authorising nothing", async () => {

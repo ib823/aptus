@@ -110,6 +110,12 @@ export async function verifyGuestOtp(args: {
   });
   if (!grant) return { kind: "invalid", attemptsRemaining: 0 };
   if (grant.revokedAt) return { kind: "locked" };
+  /*
+   * A LAPSED GRANT IS A CLOSED DOOR. Checked alongside revocation because it
+   * has the same meaning to the holder: this link no longer opens. Without it
+   * the expiry column would be a label the runtime never reads.
+   */
+  if (grant.expiresAt !== null && grant.expiresAt <= now) return { kind: "locked" };
   if (!grant.otpHash || !grant.otpExpiresAt) return { kind: "expired" };
   if (grant.otpExpiresAt <= now) return { kind: "expired" };
 

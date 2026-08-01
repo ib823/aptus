@@ -45,6 +45,9 @@ const NONE = {
   // not typecheck, so a malformed fixture sails straight through — only
   // tsc --noEmit caught it. A guard can be green and wrong in its own setup.
   undeclaredEnvironmentConnections: 0,
+    unboundedGrants: 0,
+    credentialsWithoutExpiry: 0,
+    unaccountableProdGrants: 0,
 } as const;
 
 describe("the replaced rule is gone, and its replacement is still critical", () => {
@@ -60,8 +63,18 @@ describe("the replaced rule is gone, and its replacement is still critical", () 
 
   it("keeps the severity, because the product should not quietly lose a critical", () => {
     expect(INCIDENT_RULES.bindingRefused.severity).toBe("critical");
-    const criticals = Object.values(INCIDENT_RULES).filter((r) => r.severity === "critical");
-    expect(criticals, "exactly one critical rule, as before").toHaveLength(1);
+    // Was "exactly one critical rule". Two standing-access rules joined it:
+    // an unbounded grant and an unaccountable PROD grant are both past-tense
+    // and irreversible, which is what the critical band means here.
+    const criticalIds = Object.values(INCIDENT_RULES)
+      .filter((r) => r.severity === "critical")
+      .map((r) => r.id)
+      .sort();
+    expect(criticalIds).toEqual([
+      "binding-refused",
+      "unaccountable-prod-grant",
+      "unbounded-grant",
+    ]);
   });
 
   it("describes a refusal, not a comparison", () => {
@@ -74,8 +87,11 @@ describe("the replaced rule is gone, and its replacement is still critical", () 
     ).not.toContain("differs");
   });
 
-  it("still keeps all six rules", () => {
-    expect(Object.keys(INCIDENT_RULES)).toHaveLength(6);
+  it("keeps every rule reachable from the exported map", () => {
+    // Six original rules plus the three standing-access rules. The count is
+    // asserted so a rule cannot be dropped in a refactor without a test saying
+    // so — the failure mode this whole file exists to prevent.
+    expect(Object.keys(INCIDENT_RULES)).toHaveLength(9);
   });
 });
 

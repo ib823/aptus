@@ -61,6 +61,12 @@ export async function POST(req: NextRequest, ctx: RouteContext): Promise<NextRes
   if (!grant) return redirectTo(req, "/a/expired");
   if (grant.revokedAt) return redirectTo(req, "/a/expired");
   if (grant.supersededByGrantId) return redirectTo(req, "/a/expired");
+  /*
+   * A LAPSED GRANT IS A CLOSED DOOR. Checked alongside revocation because it
+   * has the same meaning to the holder: this link no longer opens. Without it
+   * the expiry column would be a label the runtime never reads.
+   */
+  if (grant.expiresAt !== null && grant.expiresAt <= now) return redirectTo(req, "/a/expired");
   if (!isClientFacingState(grant.bundle.state)) return redirectTo(req, "/a/expired");
 
   const ua = req.headers.get("user-agent") ?? "";

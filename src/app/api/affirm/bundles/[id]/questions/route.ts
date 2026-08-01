@@ -17,7 +17,9 @@
  * Custom questions have no sapVerbatim. They appear under the chosen
  * sub-process in the editor and on the client view.
  *
- * Available while bundle.state is "draft" OR "issued".
+ * Available ONLY while bundle.state is "draft" — after issue the question
+ * set is frozen onto the bundle and adding to it would change what the
+ * client was asked after they started answering.
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -35,7 +37,20 @@ const PostBody = z.object({
 });
 
 function isEditable(state: string): boolean {
-  return state === "draft" || state === "issued";
+  /*
+   * DRAFT ONLY. This used to return true for "issued" as well, so a bundle the
+   * client had already partly answered stayed fully editable: wording, format,
+   * order and enable/disable all flowed straight through to the client view,
+   * silently, with no version, no notification and no record of what the
+   * question said when it was answered.
+   *
+   * The Review screen promises the opposite in as many words — "client answers
+   * are sealed". Both cannot be true, and the one that must be true is the one
+   * printed on the artefact the client signs.
+   *
+   * Curation belongs in draft. After issue, the bundle is a record.
+   */
+  return state === "draft";
 }
 
 function customQuestionId(): string {

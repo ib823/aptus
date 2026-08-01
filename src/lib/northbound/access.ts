@@ -46,6 +46,8 @@ export type AccessRefusal =
   | "NOT_THIS_SOLUTION"
   | "NO_APPROVED_GRANT"
   | "GRANT_EXPIRED"
+  /** Withdrawn by a human, as distinct from lapsed by the clock. */
+  | "GRANT_REVOKED"
   | "WRITE_NOT_SERVED"
   | "READ_ONLY_INTERFACE"
   | "INTERFACE_NOT_ACTIVE";
@@ -124,7 +126,7 @@ export async function resolveWritableInterface(
       operation: iface.operation,
       environment,
     }),
-    select: { decision: true, expiresAt: true, operation: true },
+    select: { decision: true, expiresAt: true, operation: true, revokedAt: true },
   });
 
   // A READ grant never authorises a write.
@@ -140,7 +142,25 @@ export async function resolveWritableInterface(
     };
   }
 
-  const live = granting.filter((g) => g.expiresAt === null || g.expiresAt.getTime() > now.getTime());
+  /*
+   * REVOKED BEFORE EXPIRED. A withdrawal is immediate and deliberate; checking
+   * it first means the refusal says what actually happened rather than blaming
+   * the clock. A revoked grant with a future expiry would otherwise pass here.
+   */
+  // `== null` matches null and undefined alike. Prisma returns null for an
+  // unset column, and a row read without this field selected must not be
+  // mistaken for a revoked one — that would refuse traffic that was never
+  // withdrawn, which is a louder failure than it looks.
+  const unrevoked = granting.filter((g) => g.revokedAt == null);
+  if (unrevoked.length === 0) {
+    return {
+      ok: false,
+      reason: "GRANT_REVOKED",
+      message: `The WRITE grant for this capability in ${environment} has been revoked.`,
+    };
+  }
+
+  const live = unrevoked.filter((g) => g.expiresAt === null || g.expiresAt.getTime() > now.getTime());
   if (live.length === 0) {
     return {
       ok: false,
@@ -221,7 +241,7 @@ export async function resolveReadableInterface(
       operation: iface.operation,
       environment,
     }),
-    select: { decision: true, expiresAt: true },
+    select: { decision: true, expiresAt: true, revokedAt: true },
   });
 
   const granting = grants.filter((g) =>
@@ -235,9 +255,24 @@ export async function resolveReadableInterface(
     };
   }
 
+  // Revoked before expired — see the WRITE path above. A withdrawal is a
+  // deliberate act and the refusal should name it.
+  // `== null` matches null and undefined alike. Prisma returns null for an
+  // unset column, and a row read without this field selected must not be
+  // mistaken for a revoked one — that would refuse traffic that was never
+  // withdrawn, which is a louder failure than it looks.
+  const unrevoked = granting.filter((g) => g.revokedAt == null);
+  if (unrevoked.length === 0) {
+    return {
+      ok: false,
+      reason: "GRANT_REVOKED",
+      message: `The access grant for this capability in ${environment} has been revoked.`,
+    };
+  }
+
   // Evaluated at call time: an expired grant must stop working the moment it
   // expires, not whenever a background job next runs.
-  const live = granting.filter((g) => g.expiresAt === null || g.expiresAt.getTime() > now.getTime());
+  const live = unrevoked.filter((g) => g.expiresAt === null || g.expiresAt.getTime() > now.getTime());
   if (live.length === 0) {
     return {
       ok: false,

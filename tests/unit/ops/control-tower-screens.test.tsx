@@ -39,7 +39,8 @@ const GRANTS = {
   expiryRunwayDays: 14,
   counts: { total: 3, byDecision: {}, pending: 1, expiringSoon: 1, lapsed: 1 },
   provenance: {
-    expiryIsTheOnlyEnd: "There is no revocation path in this release.",
+    howAGrantEnds: "A grant lapses at its expiry, or an admin revokes it.",
+    whyExpiryIsStillRequired: "Expiry remains mandatory on any granting decision.",
     restrictionsAreEnforced: "READ_ONLY and SANDBOX_ONLY are enforced at runtime.",
     emptyByDesign: null,
     decisionsAreAudited: "Every decision writes a ConfigAudit entry.",
@@ -193,7 +194,9 @@ describe("grants — a decision label is not a permission", () => {
     render(<GrantsClient canDecide={false} />);
 
     await screen.findByLabelText(/cannot be ended/);
-    expect(screen.getByText(/needs a new, bounded request/)).toBeTruthy();
+    // The remedy is no longer "raise a replacement and wait" — the grant can
+    // be withdrawn now, and the panel has to say so.
+    expect(screen.getByText(/Revoke each one/)).toBeTruthy();
   });
 
   it("says an empty queue means nothing was asked for", async () => {
