@@ -99,7 +99,7 @@ export async function GET(_request: NextRequest) {
     },
     provenance: {
       dataClassIsNotEnforced:
-        "dataClass is a free-text declaration recorded at registration. Nothing in the platform reads it, and no gate depends on it. It is shown as what a team said about their solution, never as a control.",
+        "dataClass is now a controlled vocabulary — it was free text, which is how the value `czxgvz` reached this register. Closing the list makes the field comparable across solutions; it does NOT make it a control. Nothing in the platform gates on it yet, so it is still shown as what a team declared about their solution, never as something the runtime checks. Rows registered before the vocabulary closed read as UNCLASSIFIED rather than being mapped onto a class nobody chose.",
       ownershipGatesIssuance:
         "A solution cannot be promoted to ACTIVE, and no runtime credential can be issued for it, until all three owner slots are filled. Owners are claimed by the person accountable — they cannot be assigned to someone else.",
       countsAreComplete:

@@ -18,6 +18,7 @@ import { prisma } from "@/lib/db/prisma";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
+import { DATA_CLASS_VALUES } from "@/lib/studio/data-class";
 import {
   evaluatePromotion,
   isOrphaningAnActiveSolution,
@@ -36,7 +37,12 @@ const createSchema = z.object({
   name: z.string().min(2).max(120),
   classification: z.enum(KINDS),
   businessProblem: z.string().min(10).max(2000),
-  dataClass: z.string().min(1).max(80),
+  /*
+   * A closed vocabulary. This was z.string().min(1).max(80), which is how
+   * `czxgvz` reached the solution register — a classification field that
+   * accepts anything classifies nothing.
+   */
+  dataClass: z.enum(DATA_CLASS_VALUES as unknown as [string, ...string[]]),
   repoUrl: z.string().url().max(500).optional(),
   packagingNote: z.string().max(2000).optional(),
   reuseIntent: z.string().max(2000).optional(),

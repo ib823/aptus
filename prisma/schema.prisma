@@ -4528,6 +4528,24 @@ model AffirmQuestion {
   //   (14 mistagged Quality Management config rows with no question text;
   //   1 Finance row whose verbatim is literally "Not Applicable").
   status                 String   @default("suggested")
+
+  /// Which countries this question applies to. EMPTY MEANS UNIVERSAL.
+  ///
+  /// The affirm set had no country facet at all, so a Malaysia-scoped bundle —
+  /// company codes 5410/5430, MYR, step lists headed "Mandatory Malaysia
+  /// process steps" — asked the client to affirm L2-115 ("This is CZ specific
+  /// requirement", Czech MT940 mapping) and L2-113/L2-114 ("Localized for AT").
+  /// L2-114 is worse than mislabelled: its text names Austria while its SSCUI
+  /// is the Uruguayan D.G.I. document-type mapping.
+  ///
+  /// Empty-means-universal is deliberate, and it is what makes this cheap:
+  /// only 3 of 150 questions carry a country marker today, so exceptions are
+  /// tagged rather than the whole bank being curated. Same shape as the
+  /// Discovery library's `industry` field, which already works this way.
+  countryScope           String[]
+  /// Which industries this question applies to. Empty means all — same rule.
+  /// Stops a Public-Sector "Budget Execution" item reaching a generic bundle.
+  industryScope          String[]
   // null | "config-how-to" | "no-question-source".
   // 13 rows carry "config-how-to" — drafted but flagged for the
   // consultant because they read like an L3 configuration step rather
@@ -4582,6 +4600,18 @@ model AffirmBundle {
   id     String @id @default(cuid())
   client String
   state  String @default("draft")
+
+  /// ISO-3166-1 alpha-2. What the client's localisation actually is.
+  ///
+  /// Filtered against AffirmQuestion.countryScope so a Malaysian bundle stops
+  /// asking Czech, Austrian and Uruguayan localisation questions. NULL means
+  /// "not stated", and a bundle that does not state a country is not filtered
+  /// — silently dropping questions because a field was never filled in would
+  /// be a worse failure than showing too many.
+  country  String?
+  /// Free-form industry key, filtered against AffirmQuestion.industryScope on
+  /// the same "null means do not filter" rule.
+  industry String?
 
   createdById  String?
   releasedById String?

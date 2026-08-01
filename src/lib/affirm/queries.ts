@@ -141,6 +141,10 @@ export interface AffirmQuestionRow {
   sapTopic: string | null;
   sscuiRef: string | null;
   scopeItemRefs: string[];
+  /** Countries this question applies to. Empty = universal. */
+  countryScope: string[];
+  /** Industries this question applies to. Empty = all. */
+  industryScope: string[];
   status: string;
   flag: string | null;
   displayOrder: number;
@@ -253,6 +257,8 @@ export async function getAffirmSetForBundle(
       sapTopic: q.sapTopic,
       sscuiRef: q.sscuiRef,
       scopeItemRefs: q.scopeItemRefs,
+      countryScope: q.countryScope,
+      industryScope: q.industryScope,
       status: q.status,
       flag: q.flag,
       displayOrder: bq?.displayOrder ?? q.displayOrder,
@@ -263,6 +269,35 @@ export async function getAffirmSetForBundle(
       enabled: bq?.enabled ?? q.status !== "excluded",
     };
   });
+
+  /*
+   * LOCALISATION FILTER.
+   *
+   * A question with an empty countryScope is universal and always in. A
+   * question that names countries is in only when the bundle's country is one
+   * of them. Same rule for industry.
+   *
+   * A bundle with no country stated is NOT filtered. Dropping questions
+   * because a field was never filled in would be a silent, invisible loss of
+   * scope — much worse than showing a consultant something they can exclude.
+   *
+   * Applies to the consultant view too, not just forClient: a Czech MT940
+   * question has no business appearing in a Malaysian bundle's editor either,
+   * and hiding it only from the client would leave the consultant confirming
+   * wording for a question nobody should be asked.
+   */
+  if (bundle.country) {
+    const country = bundle.country;
+    mapped = mapped.filter(
+      (q) => q.countryScope.length === 0 || q.countryScope.includes(country),
+    );
+  }
+  if (bundle.industry) {
+    const industry = bundle.industry;
+    mapped = mapped.filter(
+      (q) => q.industryScope.length === 0 || q.industryScope.includes(industry),
+    );
+  }
 
   if (opts.forClient) {
     // v2 §4: excluded rows are pre-disabled at issue; we belt-and-braces
@@ -313,6 +348,8 @@ export async function countClientFacingQuestions(
       where: { id: { in: [...bundleIds] } },
       select: {
         id: true,
+        country: true,
+        industry: true,
         scopeItems: {
           select: { scopeItemId: true, scopeItem: { select: { streamId: true } } },
         },
@@ -320,7 +357,16 @@ export async function countClientFacingQuestions(
       },
     }),
     prisma.affirmQuestion.findMany({
-      select: { id: true, streamId: true, scopeItemRefs: true, status: true },
+      select: {
+        id: true,
+        streamId: true,
+        scopeItemRefs: true,
+        status: true,
+        // The list must apply the SAME localisation filter as the bundle, or
+        // the two denominators diverge again for a new reason.
+        countryScope: true,
+        industryScope: true,
+      },
     }),
   ]);
 
@@ -336,6 +382,22 @@ export async function countClientFacingQuestions(
         (q.scopeItemRefs.length === 0 && streamIds.has(q.streamId)) ||
         joinByQid.has(q.id);
       if (!inScope) continue;
+      // Same localisation rule as getAffirmSetForBundle: empty scope is
+      // universal; a stated scope must contain the bundle's country.
+      if (
+        bundle.country &&
+        q.countryScope.length > 0 &&
+        !q.countryScope.includes(bundle.country)
+      ) {
+        continue;
+      }
+      if (
+        bundle.industry &&
+        q.industryScope.length > 0 &&
+        !q.industryScope.includes(bundle.industry)
+      ) {
+        continue;
+      }
       // Same predicate as `forClient` in getAffirmSetForBundle: the join row's
       // `enabled` wins when present, otherwise the question's own status does.
       const enabled = joinByQid.get(q.id)?.enabled ?? q.status !== "excluded";

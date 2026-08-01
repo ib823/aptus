@@ -203,7 +203,13 @@ describe("the portfolio is honest about what it does not enforce", () => {
 
   it("names dataClass as a declaration rather than a control", async () => {
     const body = await (await portfolio(req("portfolio"))).json();
-    expect(body.data.provenance.dataClassIsNotEnforced).toContain("no gate depends on it");
+    // The vocabulary is closed now, so the wording changed — but the claim
+    // that matters has NOT: this field is still a declaration, and the screen
+    // must keep saying so rather than borrowing authority the runtime does not
+    // give it. Asserted on the meaning, not the old sentence.
+    const note = body.data.provenance.dataClassIsNotEnforced as string;
+    expect(note).toContain("does NOT make it a control");
+    expect(note).toContain("Nothing in the platform gates on it");
   });
 
   it("names which owner slots are missing, not just how many", async () => {
