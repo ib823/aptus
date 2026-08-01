@@ -157,7 +157,11 @@ export default async function PresalesIndexPage({ searchParams }: PageProps) {
       </header>
 
       <form method="GET" style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <label htmlFor="presales-search" className="sr-only">
+          Search bundles by client or scope code
+        </label>
         <input
+          id="presales-search"
           type="search"
           name="q"
           placeholder="Search client or scope code"
@@ -170,13 +174,25 @@ export default async function PresalesIndexPage({ searchParams }: PageProps) {
             fontSize: 14,
           }}
         />
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        {/*
+          The active filter was conveyed by background colour alone, so a
+          screen-reader user could not tell which of the six was in force —
+          and neither could anyone who cannot distinguish navy from white.
+          aria-pressed states it; the group gets a name so the buttons are
+          announced as a set rather than six loose submits.
+        */}
+        <div
+          role="group"
+          aria-label="Filter bundles by status"
+          style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}
+        >
           {(['all', 'draft', 'sent', 'awaiting', 'signed', 'expired'] as FilterStatus[]).map((s) => (
             <button
               key={s}
               type="submit"
               name="status"
               value={s}
+              aria-pressed={filter === s}
               style={{
                 padding: '8px 12px',
                 fontSize: 13,

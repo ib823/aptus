@@ -42,19 +42,27 @@ export default async function RootNotFound() {
         <p className="text-base text-muted-foreground mb-8 max-w-md">
           The page you&apos;re looking for doesn&apos;t exist or has been moved.
         </p>
+        {/*
+          `asChild` renders the Button's styling ONTO the Link rather than
+          wrapping a <button> inside an <a>. The nested form is invalid HTML and
+          produces two focus stops for one control, so a keyboard user tabs
+          through the same destination twice.
+        */}
         <div className="flex items-center justify-center gap-3">
           {hasSession ? (
-            <Link href={signedInHref}>
-              <Button size="lg">{workbenchOnly ? "Go to Workbench" : "Go to Dashboard"}</Button>
-            </Link>
+            <Button size="lg" asChild>
+              <Link href={signedInHref}>
+                {workbenchOnly ? "Go to Workbench" : "Go to Dashboard"}
+              </Link>
+            </Button>
           ) : (
-            <Link href={signInHref}>
-              <Button size="lg">Sign In</Button>
-            </Link>
+            <Button size="lg" asChild>
+              <Link href={signInHref}>Sign In</Link>
+            </Button>
           )}
-          <Link href={homeHref}>
-            <Button variant="outline" size="lg">Home</Button>
-          </Link>
+          <Button variant="outline" size="lg" asChild>
+            <Link href={homeHref}>Home</Link>
+          </Button>
         </div>
         <p className="mt-8 text-sm text-muted-foreground/60">ABeam Workbench</p>
       </div>

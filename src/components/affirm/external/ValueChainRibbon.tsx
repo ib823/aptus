@@ -63,7 +63,7 @@ export function ValueChainRibbon({ streams }: { streams: JourneyStreamSummary[] 
                 {s.nodes.map((n) => (
                   <span
                     key={n.scopeItemId}
-                    className={`inline-flex h-6 items-center gap-1.5 rounded-pill px-2 font-mono text-[10px] font-semibold ${NODE[n.state]}`}
+                    className={`inline-flex h-6 items-center gap-1.5 rounded-pill px-2 font-mono text-[11px] font-semibold ${NODE[n.state]}`}
                   >
                     <span className={`size-1.5 rounded-full ${NODE_DOT[n.state]}`} aria-hidden="true" />
                     {n.scopeItemId}

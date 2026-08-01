@@ -47,7 +47,7 @@ export function StatusPill({
 }) {
   return (
     <span
-      className={`inline-flex h-[22px] items-center rounded-pill px-2 text-[10px] font-bold uppercase tracking-[0.06em] ${
+      className={`inline-flex h-[22px] items-center rounded-pill px-2 text-[11px] font-bold uppercase tracking-[0.06em] ${
         mono ? "font-mono" : ""
       } ${TONES[tone]}`}
     >

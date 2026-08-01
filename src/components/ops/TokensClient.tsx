@@ -34,6 +34,7 @@ import {
   type OpsTone,
 } from "@/components/ops/OpsChrome";
 import { count, sinceLabel, useOpsFeed } from "@/components/ops/useOpsFeed";
+import { formatDate } from "@/lib/format/date";
 
 type CredentialState = "active" | "expiring-soon" | "expired" | "revoked";
 
@@ -180,7 +181,7 @@ function TokensBody({ data }: { data: TokensPayload }) {
                 )}
               </td>
               <td style={opsMonoStyle}>
-                {c.expiresAt ? new Date(c.expiresAt).toLocaleDateString("en-GB") : "no expiry"}
+                {c.expiresAt ? formatDate(c.expiresAt) : "no expiry"}
               </td>
             </tr>
           ))}

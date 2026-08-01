@@ -8,6 +8,8 @@
  * separately; no percentage over 128 or 941. Colour via var(--token) only.
  */
 
+import { formatDateTime } from "@/lib/format/date";
+
 /** activated / probed as a 0–100 integer (0 when nothing was probed). */
 export function readinessPercent(activated: number, probed: number): number {
   if (probed <= 0) return 0;
@@ -78,7 +80,7 @@ export function ReadinessScorecard({
           <span style={{ color: "var(--ink-muted)" }}>
             {probed > 0
               ? lastProbedAt
-                ? `(stored · last probed ${new Date(lastProbedAt).toLocaleString()})`
+                ? `(stored · last probed ${formatDateTime(lastProbedAt)})`
                 : "(stored probe)"
               : "(not probed yet — run “Probe all”)"}
           </span>

@@ -18,6 +18,7 @@ import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db/prisma";
 import { bundleMetadata } from "@/lib/affirm/page-metadata";
+import { countOf, pluralise, verb } from "@/lib/format/plural";
 import { getCurrentUser } from "@/lib/auth/session";
 import {
   getAffirmSetForBundle,
@@ -31,6 +32,7 @@ import { ScreenGuide } from "@/components/affirm/learn/ScreenGuide";
 import { GrantsPanel, type GrantClient } from "@/components/affirm/GrantsPanel";
 import { listGrantsForBundle } from "@/lib/affirm/external/grants";
 import { isAffirmExternalEnabled } from "@/lib/affirm/external/guards";
+import { formatDate } from "@/lib/format/date";
 
 export const dynamic = "force-dynamic";
 
@@ -163,7 +165,7 @@ export default async function ReviewPage({ params }: PageProps) {
             {bundle.state === "submitted"
               ? `Submitted${
                   bundle.submittedAt
-                    ? ` ${new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(bundle.submittedAt)}`
+                    ? ` ${formatDate(bundle.submittedAt)}`
                     : ""
                 } · ${answeredCount} of ${clientFacing.length} answered`
               : bundle.state === "issued"
@@ -244,15 +246,17 @@ export default async function ReviewPage({ params }: PageProps) {
               {excluded.length > 0 && (
                 <li>
                   <span className="font-semibold text-ink">{excluded.length}</span>{" "}
-                  excluded rows are hidden from the client view (mistagged config rows /
-                  no usable question text in the SAP source).
+                  excluded {pluralise(excluded.length, "row")}{" "}
+                  {verb(excluded.length, "is")} hidden from the client view (mistagged
+                  config rows / no usable question text in the SAP source).
                 </li>
               )}
               {flagged.length > 0 && (
                 <li>
                   <span className="font-semibold text-ink">{flagged.length}</span>{" "}
-                  questions are flagged as configuration how-to rather than business
-                  decisions — review whether they belong in the pre-workshop set.
+                  {pluralise(flagged.length, "question")} {verb(flagged.length, "is")}{" "}
+                  flagged as configuration how-to rather than business decisions —
+                  review whether they belong in the pre-workshop set.
                 </li>
               )}
               {pendingPlainLanguage.length > 0 && (
@@ -260,8 +264,10 @@ export default async function ReviewPage({ params }: PageProps) {
                   <span className="font-semibold text-ink">
                     {pendingPlainLanguage.length}
                   </span>{" "}
-                  questions still use the suggested plain-language draft (status =
-                  suggested). The consultant confirm pass is pending.
+                  {pluralise(pendingPlainLanguage.length, "question")} still{" "}
+                  {verb(pendingPlainLanguage.length, "uses")} the suggested
+                  plain-language draft (status = suggested). The consultant confirm
+                  pass is pending.
                 </li>
               )}
               <li>
@@ -456,8 +462,10 @@ export default async function ReviewPage({ params }: PageProps) {
               </svg>
               <div>
                 <strong className="text-ink">
-                  {flagged.length} flagged question
-                  {flagged.length === 1 ? "" : "s"} need your call.
+                  {/* The noun was pluralised and the verb was not: "1 flagged
+                      question need your call". */}
+                  {countOf(flagged.length, "flagged question")}{" "}
+                  {verb(flagged.length, "needs")} your call.
                 </strong>{" "}
                 These are phrased by SAP as configuration setup steps rather than
                 business decisions. They were shown to the client but flagged — decide

@@ -87,8 +87,13 @@ describe("--status-nocheck-* token", () => {
   it("is defined in globals.css for light AND dark", () => {
     // NOT_CHECKED had no named var before Studio; it must exist in both themes or
     // the chip renders unstyled in one of them.
-    expect(globalsCss).toContain("--status-nocheck-bg:  #EFEDE6");
-    expect(globalsCss).toContain("--status-nocheck-fg:  #8A8A8A");
+    // The exact hex is NOT asserted here any more. #8A8A8A was 2.95:1 against
+    // this chip's own background — the worst pair in the set, on a chip whose
+    // whole job is to say "not yet probed" clearly — and pinning the value here
+    // meant a contrast fix had to fight a test that only cared the token
+    // existed. contrast-tokens.test.ts owns the ratio; this owns the presence.
+    expect(globalsCss).toMatch(/--status-nocheck-bg:\s*#[0-9A-Fa-f]{6}/);
+    expect(globalsCss).toMatch(/--status-nocheck-fg:\s*#[0-9A-Fa-f]{6}/);
     const darkBlock = globalsCss.slice(globalsCss.indexOf(".dark"));
     expect(darkBlock).toContain("--status-nocheck-bg:");
     expect(darkBlock).toContain("--status-nocheck-fg:");

@@ -59,7 +59,7 @@
   --shadow-card-warm:       0 1px 2px rgba(20,20,20,0.04), 0 1px 0 rgba(20,20,20,0.02);
   --shadow-card-warm-hover: 0 4px 10px rgba(20,20,20,0.06), 0 2px 4px rgba(20,20,20,0.04);
   --shadow-pop:             0 10px 24px rgba(20,20,20,0.10), 0 4px 10px rgba(20,20,20,0.06);
-  --shadow-focus-ring:      0 0 0 3px var(--cta-red-focus);
+  --shadow-focus-ring:      0 0 0 3px var(--focus-ring);
 
   /* Tailwind v4 default palette is used directly — the legacy SAP-Horizon
    * token bridge that remapped slate/blue/red/green/amber/yellow/orange/
@@ -125,6 +125,9 @@
   --brand-navy-border:  #CFD7E0;
   --cta-red:            #C8102E;
   --cta-red-hover:      #A30D26;
+  /* A pale warm-red TINT. Used as a background behind CTA-red text
+     (bg-cta-focus text-cta, inline-error-banner), so it must stay light.
+     Despite the name it is NOT the focus ring — see --focus-ring below. */
   --cta-red-focus:      #FBE9EC;
   --surface-cream:      #FAF9F5;
   --surface-paper:      #FFFFFE;
@@ -132,7 +135,19 @@
   --surface-banner-warn:#FDF7E6;
   --ink-primary:        #1A1A1A;
   --ink-secondary:      #4A4A4A;
-  --ink-muted:          #8A8A8A;
+  /* WCAG AA body text needs 4.5:1. #8A8A8A is 3.45:1 on paper and 3.28:1 on
+     cream — a fail everywhere it is used, and it is used for scope-item
+     identifiers and SAP process-step names at 10-11px on the client-facing
+     affirm page, which is the screen a CFO opens in a meeting.
+     #6B6B6B is 5.33:1 on paper, 5.06:1 on cream.
+
+     This fix already existed, scoped to [data-sap-explorer] only, to avoid
+     re-baselining visual-regression snapshots. That cost is not real for the
+     surfaces that need it: the entire snapshot suite is 43 images covering
+     assessments, dashboard, login and the report contact sheets. NOTHING
+     covers affirm, workbench, studio, control tower, operations, presales or
+     discovery — so the scoping bought nothing and cost the fix. */
+  --ink-muted:          #6B6B6B;
   --ink-disabled:       #C4C4C4;
   --ink-on-navy:        #FFFFFF;
   --ink-on-navy-muted:  rgba(255,255,255,0.72);
@@ -140,20 +155,40 @@
   --border-strong:      #C4BFAE;
   --border-focus:       var(--brand-navy);
 
+  /* THE FOCUS RING, as its own token.
+     --shadow-focus-ring used to draw 3px of --cta-red-focus, which is a pale
+     #FBE9EC tint: 1.17:1 against paper. That is not a weak focus indicator,
+     it is an absent one, product-wide, where WCAG 2.4.11 requires 3:1 against
+     adjacent colours.
+     It could not simply be darkened, because --cta-red-focus is also the
+     BACKGROUND behind CTA-red text (bg-cta-focus text-cta) — darkening it
+     would have made those unreadable. The ring and the tint were one token
+     doing two jobs; this splits them.
+     #C8102E on paper is 5.35:1. */
+  --focus-ring:         #C8102E;
+
   --status-draft-bg:    #F4F2EB;  --status-draft-fg:    #4A4A4A;
   --status-sent-bg:     #E0EBF4;  --status-sent-fg:     #1A4D6F;
   --status-awaiting-bg: #FBE9D1;  --status-awaiting-fg: #8B5A00;
   --status-signed-bg:   #DCEBE3;  --status-signed-fg:   #166534;
-  --status-expired-bg:  #EAEAE6;  --status-expired-fg:  #6B6B6B;
+  /* fg darkened from #6B6B6B (4.42:1 on its own bg) to clear AA on the pill. */
+  --status-expired-bg:  #EAEAE6;  --status-expired-fg:  #5C5C5C;
   --status-revoked-bg:  #F4DEDB;  --status-revoked-fg:  #8E2A26;
   /* CoreEdge honest-status NOT_CHECKED — "not yet probed". Distinct from
      expired (grey) so "never probed" never reads as "probed and inactive". */
-  --status-nocheck-bg:  #EFEDE6;  --status-nocheck-fg:  #8A8A8A;
+  /* fg was #8A8A8A: 2.95:1 on its own background — the worst pair in the set,
+     on a chip whose entire job is to say "not yet probed" clearly. */
+  --status-nocheck-bg:  #EFEDE6;  --status-nocheck-fg:  #5F5F5F;
 
   --decision-standard:  #0F766E;
   --decision-configure: #1D4ED8;
-  --decision-custom:    #B45309;
-  --decision-open:      #8A8A8A;
+  /* Was #B45309. Readable on paper (5.02:1) but not on its own 15% tint
+     (4.08:1), which is exactly how it is used — a pill of `bg-decision-custom/15
+     text-decision-custom` on the client-facing affirm cards. #9A4A08 is 6.25:1
+     on paper and 5.40:1 on the tint, so the pill works in both places. */
+  --decision-custom:    #9A4A08;
+  /* Follows --ink-muted: it is muted TEXT and was failing for the same reason. */
+  --decision-open:      #6B6B6B;
 
   --success:            #166534;
   --warning:            #B45309;
@@ -290,15 +325,9 @@
   --status-na-fg: oklch(0.55 0 0);
 }
 
-/* WCAG contrast: the global --ink-muted (#8A8A8A ≈ 3.5:1 on white) fails the
- * 4.5:1 body-text minimum. Darken it to #6B6B6B (≈ 5:1 on white/cream) within
- * the SAP Operations screens only, so this middleware ships the fix without
- * re-baselining unrelated visual-regression snapshots. The catalogue's own
- * dark flip below (.dark [data-cap-catalogue], higher specificity) still wins
- * inside the catalogue, so dark mode is unaffected. */
-[data-sap-explorer] {
-  --ink-muted: #6B6B6B;
-}
+/* The [data-sap-explorer] scoped --ink-muted override that used to live here is
+ * gone: the value it set is now the global default, so the block only restated
+ * it. See the token definition above for why the scoping was dropped. */
 
 /* SAP Capability Catalogue — scoped dark flip of the (otherwise light-only)
  * presales brand/ink/surface + status + decision tokens. Scoped to
@@ -314,6 +343,10 @@
   --border-default: var(--border);
   --brand-navy: oklch(0.78 0.09 250);
   --cta-red: oklch(0.72 0.18 20);
+  /* The light-mode #C8102E ring is only 1.9:1 against this dark surface, so
+     the ring flips with everything else. Lightened red keeps the meaning and
+     clears 3:1 the other way. */
+  --focus-ring: oklch(0.72 0.18 20);
 
   --status-signed-bg: oklch(0.3 0.06 145);
   --status-signed-fg: oklch(0.85 0.12 145);

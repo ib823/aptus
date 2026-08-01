@@ -327,7 +327,11 @@ export function QuestionEditor({
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-navy">
                 New consultant-added question
               </p>
+              <label htmlFor={`new-q-wording-${subId}`} className="sr-only">
+                Wording for the new consultant-added question
+              </label>
               <textarea
+                id={`new-q-wording-${subId}`}
                 value={adding.wording}
                 onChange={(e) => setAdding({ ...adding, wording: e.target.value })}
                 rows={2}
@@ -413,10 +417,18 @@ export function QuestionEditor({
                     </span>
                   </header>
 
-                  <label className="block text-[11px] font-medium text-ink-soft">
+                  {/* htmlFor/id, not adjacency. These labels were siblings with
+                      no association, so the visible text was right there and the
+                      accessible name was empty — a screen reader announced "edit
+                      text, multiline" three times per question. */}
+                  <label
+                    htmlFor={`q-wording-${r.questionId}`}
+                    className="block text-[11px] font-medium text-ink-soft"
+                  >
                     Plain-language wording (editable)
                   </label>
                   <textarea
+                    id={`q-wording-${r.questionId}`}
                     value={draft.consultantWording}
                     onChange={(e) =>
                       setField(r.questionId, "consultantWording", e.target.value)
@@ -464,10 +476,14 @@ export function QuestionEditor({
 
                   <div className="mt-2 grid gap-2 sm:grid-cols-2">
                     <div>
-                      <label className="block text-[11px] font-medium text-ink-soft">
+                      <label
+                        htmlFor={`q-about-${r.questionId}`}
+                        className="block text-[11px] font-medium text-ink-soft"
+                      >
                         About this question
                       </label>
                       <textarea
+                        id={`q-about-${r.questionId}`}
                         value={draft.aboutText}
                         onChange={(e) =>
                           setField(r.questionId, "aboutText", e.target.value)
@@ -481,10 +497,14 @@ export function QuestionEditor({
                     </div>
                     {r.format === "decision" && (
                       <div>
-                        <label className="block text-[11px] font-medium text-ink-soft">
+                        <label
+                          htmlFor={`q-standard-${r.questionId}`}
+                          className="block text-[11px] font-medium text-ink-soft"
+                        >
                           What &quot;Adopt SAP standard&quot; means here
                         </label>
                         <textarea
+                          id={`q-standard-${r.questionId}`}
                           value={draft.standardMeans}
                           onChange={(e) =>
                             setField(r.questionId, "standardMeans", e.target.value)
@@ -524,8 +544,13 @@ export function QuestionEditor({
                         every breakpoint (deviation noted in
                         affirm-responsive.css). */}
                     <div className="reorder-buttons ml-3 flex items-center gap-1">
+                      {/* Every reorder button on the page was named "Move up" /
+                          "Move down", so a screen-reader user tabbing the list
+                          heard the same two names dozens of times with nothing
+                          to say WHICH question would move. Naming them by
+                          question id makes the controls usable non-visually. */}
                       <IconBtn
-                        title="Move up"
+                        title={`Move ${r.questionId} up`}
                         className="reorder-btn"
                         onClick={() => move(r, "up")}
                         disabled={!editable || isFirst || busy === r.questionId}
@@ -533,7 +558,7 @@ export function QuestionEditor({
                         ↑
                       </IconBtn>
                       <IconBtn
-                        title="Move down"
+                        title={`Move ${r.questionId} down`}
                         className="reorder-btn"
                         onClick={() => move(r, "down")}
                         disabled={!editable || isLast || busy === r.questionId}
@@ -545,6 +570,10 @@ export function QuestionEditor({
                     <button
                       onClick={() => toggleEnabled(r)}
                       disabled={!editable || busy === r.questionId}
+                      // Visible label stays the verb; the accessible name says
+                      // which question it acts on. Same reason as the reorder
+                      // buttons above.
+                      aria-label={`${r.enabled ? "Disable" : "Enable"} question ${r.questionId}`}
                       className={`ml-auto inline-flex h-8 items-center rounded-input border px-3 text-xs font-semibold transition ${
                         r.enabled
                           ? "border-border-default bg-paper text-ink hover:bg-ink-tint"
@@ -626,9 +655,14 @@ export function QuestionEditor({
 
       {bundleState === "issued" && (
         <div className="mt-6 rounded-card-warm border border-border-default bg-paper p-4 text-sm text-ink-soft">
-          <strong className="text-ink">Bundle is live with the client.</strong> You
-          can keep editing wording, format, and order — changes flow through to the
-          client view immediately. Disable / enable also flows through.
+          <strong className="text-ink">Bundle is live with the client.</strong> The
+          wording, format and order are frozen as they were at issue — this screen
+          shows exactly what the client is answering. Nothing here can change under
+          them mid-answer, and the signed record will say what they actually saw.
+          <div className="mt-1.5 text-xs text-ink-muted">
+            Need a change? Raise a new bundle. Editing this one would mean the client
+            affirmed wording that no longer exists.
+          </div>
         </div>
       )}
     </div>

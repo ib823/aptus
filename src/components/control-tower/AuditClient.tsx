@@ -34,6 +34,7 @@ import {
   type OpsTone,
 } from "@/components/ops/OpsChrome";
 import { count, sinceLabel, useOpsFeed } from "@/components/ops/useOpsFeed";
+import { formatDateTime } from "@/lib/format/date";
 
 interface Entry {
   id: string;
@@ -169,7 +170,7 @@ function AuditBody({
               <td style={opsMonoStyle}>
                 {sinceLabel(e.at)}
                 <div style={{ fontSize: 11, color: "var(--ink-muted)" }}>
-                  {new Date(e.at).toLocaleString("en-GB")}
+                  {formatDateTime(e.at)}
                 </div>
               </td>
               <td style={opsCellStyle}>

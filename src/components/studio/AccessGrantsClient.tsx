@@ -18,6 +18,7 @@ import { useCallback, useState } from "react";
 
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
 import { ENVIRONMENT_ORDER, isWriteOperation, type GrantEnvironment } from "@/lib/studio/grants";
+import { formatDate } from "@/lib/format/date";
 
 /**
  * An interface a request may be raised against.
@@ -192,7 +193,7 @@ export function AccessGrantsClient({
                       <Td>
                         {!pending ? (
                           <span style={{ color: "var(--ink-muted)", fontSize: 12 }}>
-                            {g.decidedAt ? `decided ${new Date(g.decidedAt).toLocaleDateString()}` : "—"}
+                            {g.decidedAt ? `decided ${formatDate(g.decidedAt)}` : "—"}
                           </span>
                         ) : isOwnRequest ? (
                           <span style={{ color: "var(--ink-muted)", fontSize: 12, maxWidth: 220, display: "block" }}>

@@ -22,6 +22,7 @@
  */
 
 import { AbsencePill, OpsChip, type OpsTone } from "@/components/ops/OpsChrome";
+import { formatDate } from "@/lib/format/date";
 
 /**
  * TIME REMAINING AS A RUNWAY, NOT A DATE.
@@ -73,7 +74,7 @@ export function ExpiryRunway({
       <span
         style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 12.5, color: "var(--ink-muted)" }}
       >
-        lapsed {new Date(expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+        lapsed {formatDate(expiresAt)}
       </span>
     );
   }

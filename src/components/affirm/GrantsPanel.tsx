@@ -12,6 +12,7 @@
 
 import { useState, useTransition } from "react";
 import { StatusPill, type PillTone } from "@/components/affirm/external/StatusPill";
+import { formatDate } from "@/lib/format/date";
 
 export interface GrantClient {
   id: string;
@@ -205,9 +206,7 @@ export function GrantsPanel({ bundleId, streams, initialGrants }: GrantsPanelPro
                     <>
                       {" · "}
                       {g.status === "expired" ? "ended " : "ends "}
-                      {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(
-                        new Date(g.expiresAt),
-                      )}
+                      {formatDate(g.expiresAt)}
                     </>
                   ) : (
                     // Pre-dates the expiry column. Naming it is the point: an

@@ -25,6 +25,7 @@ import {
   ConnectionRegisterClient,
   CredentialRegisterClient,
 } from "@/components/control-tower/RegistersClient";
+import { formatDate } from "@/lib/format/date";
 
 function serve(body: unknown) {
   vi.stubGlobal(
@@ -147,10 +148,9 @@ describe("grants — a decision label is not a permission", () => {
      * land in that window, and failed the rest of the time with no code change.
      * A test that depends on the calendar is not testing the component.
      */
-    const lapsedOn = new Date(GRANTS.grants[2]!.expiresAt!).toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-    });
+    // Formatted with the SAME helper the component uses, so a change to the
+    // product's date format updates both sides at once instead of failing here.
+    const lapsedOn = formatDate(GRANTS.grants[2]!.expiresAt!);
     expect(screen.getByText(`lapsed ${lapsedOn}`)).toBeTruthy();
   });
 

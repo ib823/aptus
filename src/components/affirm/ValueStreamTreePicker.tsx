@@ -17,6 +17,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { TreeStream } from "@/lib/affirm/queries";
+import { countOf } from "@/lib/format/plural";
 
 interface Props {
   tree: TreeStream[];
@@ -209,7 +210,14 @@ export function ValueStreamTreePicker({
             </span>
           </div>
 
+          {/* A placeholder is not a label: it disappears the moment you type,
+              and a screen reader announces an unnamed search box. */}
+          <label htmlFor="scope-filter" className="sr-only">
+            Filter scope items by code or text
+          </label>
           <input
+            id="scope-filter"
+            name="scopeFilter"
             type="search"
             placeholder="Filter by scope code or text…"
             value={filter}
@@ -269,7 +277,7 @@ export function ValueStreamTreePicker({
                       <span className="text-ink-muted">
                         ·{" "}
                         {stream.questionCount > 0
-                          ? `${stream.questionCount} questions`
+                          ? countOf(stream.questionCount, "question")
                           : "no affirm-set"}
                       </span>
                     </span>
@@ -332,11 +340,18 @@ export function ValueStreamTreePicker({
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
             Bundle
           </p>
-          <label className="mt-3 block text-xs font-medium text-ink-soft">
-            Client / project
+          <label
+            htmlFor="bundle-client"
+            className="mt-3 block text-xs font-medium text-ink-soft"
+          >
+            Client / project <span aria-hidden="true">*</span>
           </label>
           <input
+            id="bundle-client"
+            name="client"
             type="text"
+            required
+            autoComplete="organization"
             value={client}
             onChange={(e) => setClient(e.target.value)}
             placeholder="e.g. Acme Corp — F2S 2026"
@@ -369,17 +384,41 @@ export function ValueStreamTreePicker({
             </p>
           )}
 
-          <button
-            onClick={save}
-            disabled={pending}
-            className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-input bg-cta px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-cta-hover disabled:opacity-60"
-          >
-            {pending
-              ? "Saving…"
-              : mode === "new"
-                ? "Create bundle"
-                : "Save scope"}
-          </button>
+          {/*
+            A bundle with no client name and no scope items is not a draft, it is
+            litter — and the register is full of it (`sdgsdg`, `asdfa`, three
+            bundles with zero questions). The register describes itself as a
+            complete governance record, so what can be created into it matters.
+            Guarded here AND explained, so the button says why it is inert
+            instead of just being grey.
+          */}
+          {(() => {
+            const missing: string[] = [];
+            if (mode === "new" && !client.trim()) missing.push("a client name");
+            if (totalSelected === 0) missing.push("at least one scope item");
+            const blocked = missing.length > 0;
+            return (
+              <>
+                <button
+                  onClick={save}
+                  disabled={pending || blocked}
+                  title={blocked ? `Add ${missing.join(" and ")} first` : undefined}
+                  className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-input bg-cta px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-cta-hover disabled:opacity-60"
+                >
+                  {pending
+                    ? "Saving…"
+                    : mode === "new"
+                      ? "Create bundle"
+                      : "Save scope"}
+                </button>
+                {blocked && (
+                  <p className="mt-2 text-xs text-ink-muted" role="status">
+                    Add {missing.join(" and ")} to continue.
+                  </p>
+                )}
+              </>
+            );
+          })()}
           <p className="mt-3 text-xs text-ink-muted">
             Next: review the in-scope L2 questions in the question editor before
             issuing to the client.
@@ -458,7 +497,7 @@ function SubProcessRow({
           {/* v2 §5: coverage badge per sub-process */}
           {sp.questionCount > 0 ? (
             <span className="rounded-pill bg-status-signed-bg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-status-signed-fg">
-              {sp.questionCount} questions
+              {countOf(sp.questionCount, "question")}
             </span>
           ) : (
             <span className="rounded-pill bg-ink-tint px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-ink-muted">
