@@ -34,6 +34,33 @@ const AUTH_VIEWS = [
   { name: "admin-baselines", path: "/admin/baselines" },
   { name: "admin-catalog", path: "/admin/catalog" },
   { name: "workshops-join", path: "/workshops/join" },
+
+  /*
+   * WORKBENCH SURFACES.
+   *
+   * This suite covered the portal only — dashboard, assessments, admin — so
+   * every Workbench screen shipped with no responsive coverage at all. That is
+   * the surface consultants live in and the one an audit flagged as untested
+   * on narrow viewports.
+   *
+   * NOT covered here: the external executive journey at /a/*. Those routes are
+   * reachable only with a live guest grant token, so they need a fixture that
+   * mints one — a real piece of work, not a line in this list. It is the single
+   * most important screen to check on a real device (a CFO opening it on a
+   * laptop in a meeting) and it remains uncovered.
+   */
+  { name: "workbench-home", path: "/workbench" },
+  { name: "affirm-list", path: "/affirm" },
+  { name: "affirm-new", path: "/affirm/new" },
+  { name: "presales-list", path: "/presales" },
+  { name: "studio-solutions", path: "/studio/solutions" },
+  { name: "studio-connections", path: "/studio/connections" },
+  { name: "studio-test-console", path: "/studio/test" },
+  { name: "control-tower-grants", path: "/control-tower/grants" },
+  { name: "control-tower-audit", path: "/control-tower/audit" },
+  { name: "operations-traffic", path: "/operations/traffic" },
+  { name: "sap-explorer", path: "/sap-explorer" },
+  { name: "discovery-library", path: "/discovery/library" },
 ] as const;
 
 const UNAUTH_VIEWS = [
@@ -73,7 +100,21 @@ async function getFirstAssessmentId(page: Page): Promise<string | null> {
 }
 
 function allowsIntentionalHorizontalScroll(path: string, viewportWidth: number): boolean {
-  return path.startsWith("/admin") && viewportWidth <= 1024;
+  /*
+   * Wide data tables scroll horizontally ON PURPOSE — the alternative is
+   * truncating columns a reader needs. The rule is that the SCROLL is confined
+   * to the table, not that the page may overflow; this list records where that
+   * trade has been accepted rather than letting any overflow pass silently.
+   */
+  if (path.startsWith("/admin") && viewportWidth <= 1024) return true;
+  const WIDE_TABLE_ROUTES = [
+    "/discovery/library",
+    "/sap-explorer",
+    "/operations/",
+    "/control-tower/",
+    "/studio/",
+  ];
+  return viewportWidth <= 1024 && WIDE_TABLE_ROUTES.some((r) => path.startsWith(r));
 }
 
 // ──────────────────────────────────────────────────────────────
