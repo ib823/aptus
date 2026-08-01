@@ -18,7 +18,7 @@
  * lives in the developer's own repository.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { StudioStatusChip } from "@/components/studio/StudioStatusChip";
 import {
@@ -70,6 +70,19 @@ export function TestConsoleClient({
   const [files, setFiles] = useState<{ path: string; contents: string }[] | null>(null);
 
   const selected = interfaces.find((i) => i.id === selectedId) ?? null;
+
+  /*
+   * Entity sets this tenant actually exposed on the last run, unioned with the
+   * one the Interfaces record declares. Read from `run` so the dropdown gets
+   * richer after a probe without another request.
+   */
+  const knownEntitySets = useMemo(() => {
+    const names = new Set<string>();
+    if (selected?.entitySet) names.add(selected.entitySet);
+    for (const n of run?.entitySets ?? []) names.add(n);
+    return [...names].sort();
+  }, [selected?.entitySet, run?.entitySets]);
+
 
   /** The only place a live SAP read is triggered. */
   const doRun = useCallback(async () => {
@@ -292,12 +305,38 @@ export function TestConsoleClient({
           </label>
           <label style={{ display: "block" }}>
             <span style={labelText}>Entity set</span>
-            <input
+            {/*
+              A SELECT, not free text.
+
+              This value is concatenated into an OData path aimed at a real
+              client tenant. The platform already KNOWS the valid entity sets
+              two ways — the Interfaces record declares one (`A_BankDetail`),
+              and the run itself reads $metadata — so accepting arbitrary
+              typing offered nothing except a way to send malformed paths
+              upstream and to mistype a name that then reads as "not probeable".
+
+              Before the first run the only known name is the declared one, so
+              that is the single option; after a run the list is whatever
+              $metadata actually exposed on this tenant. The server validates
+              regardless — this is the affordance, not the control.
+            */}
+            <select
               value={entity}
               onChange={(e) => setEntity(e.target.value)}
-              placeholder={selected?.entitySet ?? "first available"}
               style={{ ...field, width: 220 }}
-            />
+              disabled={!selected}
+            >
+              <option value="">
+                {selected?.entitySet ? `${selected.entitySet} (declared)` : "First available"}
+              </option>
+              {knownEntitySets
+                .filter((name) => name !== selected?.entitySet)
+                .map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+            </select>
           </label>
           <label style={{ display: "block" }}>
             <span style={labelText}>Rows</span>

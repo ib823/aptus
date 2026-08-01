@@ -22,10 +22,31 @@ export function ProductMapTable({ rows }: ProductMapTableProps) {
   const [saving, setSaving] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [local, setLocal] = useState<Record<string, Record<string, string | null>>>({});
+  /*
+   * Cells whose last save FAILED.
+   *
+   * The single aria-live note at the foot of the table is correct and useless
+   * on its own: this table is 742 rows and 2,226 inputs, so a message under
+   * the last row is invisible while you are editing row 400. Worse, a failed
+   * save leaves the typed value sitting in the input, so the screen shows a
+   * mapping the server never stored — the UI states something false and
+   * nothing on it disagrees.
+   *
+   * Marked per cell, and NOT cleared on blur: an error that vanishes when you
+   * look away is the same problem again.
+   */
+  const [failed, setFailed] = useState<Record<string, true>>({});
 
   async function save(scopeId: string, product: Product, value: string) {
     if (product === "sap") return; // derived — not writable, by construction
-    setSaving(`${scopeId}:${product}`);
+    const cellKey = `${scopeId}:${product}`;
+    setSaving(cellKey);
+    setFailed((f) => {
+      if (!f[cellKey]) return f;
+      const next = { ...f };
+      delete next[cellKey];
+      return next;
+    });
     const key = product === "oracle" ? "oracleRef" : product === "netsuite" ? "netsuiteRef" : "otherRef";
     try {
       const res = await fetch("/api/discovery/product-map", {
@@ -37,10 +58,16 @@ export function ProductMapTable({ rows }: ProductMapTableProps) {
         setLocal((s) => ({ ...s, [scopeId]: { ...s[scopeId], [product]: value.trim() || null } }));
         setNote(`Saved ${PRODUCT_LABELS[product]} mapping for ${scopeId}`);
       } else {
-        setNote("Could not save that mapping.");
+        setFailed((f) => ({ ...f, [cellKey]: true }));
+        setNote(
+          `NOT SAVED: ${PRODUCT_LABELS[product]} mapping for ${scopeId} (HTTP ${res.status}). The value on screen is not stored — edit the cell to retry.`,
+        );
       }
     } catch {
-      setNote("Could not save that mapping.");
+      setFailed((f) => ({ ...f, [cellKey]: true }));
+      setNote(
+        `NOT SAVED: ${PRODUCT_LABELS[product]} mapping for ${scopeId}. The value on screen is not stored — edit the cell to retry.`,
+      );
     } finally {
       setSaving(null);
     }
@@ -109,7 +136,17 @@ export function ProductMapTable({ rows }: ProductMapTableProps) {
                           if ((next.trim() || null) !== value) void save(r.scopeId, p, next);
                         }}
                         disabled={saving === `${r.scopeId}:${p}`}
-                        className="h-[26px] w-full rounded-input border border-navy-border bg-navy-soft px-2 text-[11px] text-ink placeholder:font-bold placeholder:text-ink-soft focus-visible:border-navy focus-visible:shadow-focus-ring focus-visible:outline-none"
+                        aria-invalid={failed[`${r.scopeId}:${p}`] ? true : undefined}
+                        title={
+                          failed[`${r.scopeId}:${p}`]
+                            ? "This value was not saved. Edit the cell to retry."
+                            : undefined
+                        }
+                        className={`h-[26px] w-full rounded-input px-2 text-[11px] text-ink placeholder:font-bold placeholder:text-ink-soft focus-visible:shadow-focus-ring focus-visible:outline-none ${
+                          failed[`${r.scopeId}:${p}`]
+                            ? "border-2 border-cta bg-cta-focus"
+                            : "border border-navy-border bg-navy-soft focus-visible:border-navy"
+                        }`}
                       />
                     </td>
                   );
@@ -119,7 +156,23 @@ export function ProductMapTable({ rows }: ProductMapTableProps) {
           </tbody>
         </table>
       </div>
-      <p aria-live="polite" className="mt-2 min-h-[16px] text-[11px] text-ink-soft">{note}</p>
+      {/* assertive, not polite, when something failed: a save that did not
+          happen is not an incidental status update. */}
+      <p
+        aria-live={Object.keys(failed).length > 0 ? "assertive" : "polite"}
+        className={`mt-2 min-h-[16px] text-[11px] ${
+          Object.keys(failed).length > 0 ? "font-semibold text-cta" : "text-ink-soft"
+        }`}
+      >
+        {note}
+      </p>
+      {Object.keys(failed).length > 0 && (
+        <p className="mt-1 text-[11px] font-semibold text-cta">
+          {Object.keys(failed).length} cell
+          {Object.keys(failed).length === 1 ? "" : "s"} on this page did not save. They are
+          outlined in red.
+        </p>
+      )}
     </>
   );
 }

@@ -154,10 +154,24 @@ export default async function PresalesNewBundlePage() {
 
         <Section index={5} title="Access window">
           <Field label="Starts at">
-            <input name="startsAt" type="datetime-local" required style={inputStyle} />
+            {/* `min` stops the common accident client-side; the server
+                rejects a closed window regardless. */}
+            <input
+              name="startsAt"
+              type="datetime-local"
+              required
+              min={new Date().toISOString().slice(0, 16)}
+              style={inputStyle}
+            />
           </Field>
           <Field label="Expires at">
-            <input name="expiresAt" type="datetime-local" required style={inputStyle} />
+            <input
+              name="expiresAt"
+              type="datetime-local"
+              required
+              min={new Date().toISOString().slice(0, 16)}
+              style={inputStyle}
+            />
           </Field>
           <Field label="Acknowledgement text version">
             <input name="acknowledgementTextVersion" required defaultValue="v1" style={inputStyle} />

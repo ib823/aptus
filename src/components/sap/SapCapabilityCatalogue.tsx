@@ -236,6 +236,23 @@ export function SapCapabilityCatalogue({
 
   const [seeding, setSeeding] = useState(false);
   const importSeed = useCallback(async () => {
+    /*
+     * CONFIRM BEFORE REBUILDING. The server requires a confirmation PHRASE, and
+     * this client has always supplied it automatically — so the guard proved
+     * "a caller that knows the API" and never "a human who meant it". These
+     * are plain buttons beside ordinary filters; a mis-click regenerated the
+     * catalogue with nothing to undo it.
+     */
+    if (
+      !window.confirm(
+        "Rebuild the API rows from SapApiReference?\n\n" +
+          "This regenerates the catalogue for this tenant. Probe results already " +
+          "stored are kept, but any row SAP no longer publishes disappears.\n\n" +
+          "There is no undo.",
+      )
+    ) {
+      return;
+    }
     setSeeding(true);
     setError(null);
     try {
@@ -271,6 +288,15 @@ export function SapCapabilityCatalogue({
   const [harvesting, setHarvesting] = useState(false);
   const [harvestProgress, setHarvestProgress] = useState<string | null>(null);
   const importHarvest = useCallback(async () => {
+    if (
+      !window.confirm(
+        "Import the harvested Hub artifacts?\n\n" +
+          "This replaces the stored integrations, BAdIs, scenarios, events and " +
+          "BO interfaces with the set harvested at this deployment's commit.",
+      )
+    ) {
+      return;
+    }
     setHarvesting(true);
     setError(null);
     setHarvestProgress(null);
@@ -311,6 +337,23 @@ export function SapCapabilityCatalogue({
 
   const [probing, setProbing] = useState(false);
   const probeAll = useCallback(async () => {
+    /*
+     * This fires one live $metadata request per probeable service at a REAL
+     * client tenant. Read-only, but hundreds of calls arriving unannounced is
+     * something an operator should choose rather than discover — and the cost
+     * is knowable, so it is shown rather than described as "a lot".
+     */
+    const toProbe = data?.counts.probeableRuntime ?? 0;
+    if (
+      !window.confirm(
+        `Probe all ${toProbe} probeable services on ${tenant ?? "the default tenant"}?\n\n` +
+          "Each is a live read-only $metadata request against the client's SAP " +
+          "system. They are not billable, but they are real traffic on someone " +
+          "else's tenant and cannot be cancelled once started.",
+      )
+    ) {
+      return;
+    }
     setProbing(true);
     setError(null);
     try {
@@ -330,7 +373,7 @@ export function SapCapabilityCatalogue({
     } finally {
       setProbing(false);
     }
-  }, [load, product, tenant]);
+  }, [load, product, tenant, data?.counts.probeableRuntime]);
 
   const byType = data?.counts.byType ?? {};
   const byTypeItems = data?.counts.byTypeItems ?? {};

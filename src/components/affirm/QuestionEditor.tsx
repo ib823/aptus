@@ -593,11 +593,18 @@ export function QuestionEditor({
                       </button>
                     )}
 
+                    {/* Announced, not just shown. These already rendered, but
+                        silently: a screen-reader user got no signal that a save
+                        had failed on a field they had just left. */}
                     {draft.dirty && (
-                      <span className="text-xs text-ink-muted">unsaved…</span>
+                      <span role="status" className="text-xs text-ink-muted">
+                        unsaved…
+                      </span>
                     )}
                     {draft.error && (
-                      <span className="text-xs text-cta">{draft.error}</span>
+                      <span role="alert" className="text-xs font-semibold text-cta">
+                        Not saved: {draft.error}
+                      </span>
                     )}
                   </div>
                 </li>
