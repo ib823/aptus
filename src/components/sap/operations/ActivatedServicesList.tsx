@@ -19,6 +19,7 @@ import type { HubContentType, HubStatus } from "@/lib/sap-public/hub-content";
 import { CapabilityDetail } from "../capability/CapabilityDetail";
 import { CapabilityChips } from "../capability/CapabilityChips";
 import { StatusBadge } from "../capability/StatusBadge";
+import { formatDateTime } from "@/lib/format/date";
 
 interface ActivatedItem {
   id: string;
@@ -149,7 +150,7 @@ export function ActivatedServicesList({ product, tenantKey }: { product: string;
         <span>
           Status as of{" "}
           <strong style={{ color: "var(--ink-primary)" }}>
-            {lastProbedAt ? new Date(lastProbedAt).toLocaleString() : "never probed"}
+            {lastProbedAt ? formatDateTime(lastProbedAt) : "never probed"}
           </strong>{" "}
           (stored, not live). A newly-activated API appears here only after{" "}
           {isAdmin ? "Refresh status" : "an admin runs Refresh status / Probe-all"}.

@@ -45,11 +45,11 @@ export function InfoCard({
         <span className="ac-category text-sm font-semibold text-ink-soft">
           {q.sapTopic ?? "General"}
         </span>
-        <span className="fmt-badge information rounded-pill bg-ink-tint px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-ink-soft">
+        <span className="fmt-badge information rounded-pill bg-ink-tint px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-ink-soft">
           Information
         </span>
         {q.isCustom && (
-          <span className="rounded-pill bg-navy/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-navy">
+          <span className="rounded-pill bg-navy/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-navy">
             consultant-added
           </span>
         )}
@@ -117,7 +117,7 @@ export function InfoCard({
           </button>
           {verbatimOpen && (
             <div className="sap-verbatim mt-1.5 mb-2.5 rounded-input bg-ink-tint px-3.5 py-2.5">
-              <span className="label block font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+              <span className="label block font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
                 SAP verbatim · source of truth · never changed
               </span>
               <span className="text mt-1 block text-xs leading-[18px] text-ink-soft">

@@ -106,7 +106,7 @@ export default async function AffirmProcessPage({ params }: PageProps) {
 
         {/* Attribution */}
         <div className="mt-7 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border-default pt-4">
-          <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-muted">
+          <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-ink-muted">
             Source: SAP Best Practices · S/4HANA Cloud Public Edition 2602
           </span>
           {story?.processNavigatorUrl && (

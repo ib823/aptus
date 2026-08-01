@@ -79,7 +79,13 @@ export default async function RootLayout({
         <Providers {...(nonce ? { nonce } : {})}>
           <ServiceWorkerProvider />
           <TooltipProvider>
-            <div id="main-content">{children}</div>
+            {/* tabIndex={-1} so the skip link's target can actually RECEIVE
+                focus. Without it the browser scrolls but leaves focus on the
+                link, so the next Tab lands back in the header — the skip did
+                nothing for the keyboard user it exists for. */}
+            <div id="main-content" tabIndex={-1}>
+              {children}
+            </div>
           </TooltipProvider>
           <Toaster />
         </Providers>

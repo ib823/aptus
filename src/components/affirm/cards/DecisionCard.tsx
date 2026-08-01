@@ -61,16 +61,16 @@ export function DecisionCard({
         <span className="ac-category text-sm font-semibold text-ink-soft">
           {q.sapTopic ?? "General"}
         </span>
-        <span className="fmt-badge decision rounded-pill bg-decision-configure/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-decision-configure">
+        <span className="fmt-badge decision rounded-pill bg-decision-configure/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-decision-configure">
           Decision
         </span>
         {isStd && (
-          <span className="rounded-pill bg-decision-standard/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-decision-standard">
+          <span className="rounded-pill bg-decision-standard/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-decision-standard">
             default
           </span>
         )}
         {q.isCustom && (
-          <span className="rounded-pill bg-navy/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-navy">
+          <span className="rounded-pill bg-navy/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-navy">
             consultant-added
           </span>
         )}
@@ -132,7 +132,7 @@ export function DecisionCard({
           </button>
           {verbatimOpen && (
             <div className="sap-verbatim mt-1.5 mb-2.5 rounded-input bg-ink-tint px-3.5 py-2.5">
-              <span className="label block font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+              <span className="label block font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
                 SAP verbatim · source of truth · never changed
               </span>
               <span className="text mt-1 block text-xs leading-[18px] text-ink-soft">
