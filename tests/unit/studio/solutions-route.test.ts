@@ -46,7 +46,7 @@ const VALID_CREATE = {
   name: "Finance Accelerator",
   classification: "INTERNAL_ACCELERATOR",
   businessProblem: "Speeds up the finance close for mid-market clients.",
-  dataClass: "internal",
+  dataClass: "INTERNAL",
 };
 
 const ACTIVE_COMPLETE = {
@@ -60,7 +60,7 @@ const ACTIVE_COMPLETE = {
   packagingNote: null,
   reuseIntent: null,
   businessProblem: "x",
-  dataClass: "internal",
+  dataClass: "INTERNAL",
   classification: "INTERNAL_ACCELERATOR",
 };
 
@@ -172,7 +172,7 @@ describe("the ownership gate lives on the write path", () => {
 
   it("leaves an ACTIVE solution active when an unrelated field changes", async () => {
     mocks.findFirstSolution.mockResolvedValue(ACTIVE_COMPLETE);
-    await PATCH(req({ id: "sol_1", dataClass: "confidential" }, "PATCH"));
+    await PATCH(req({ id: "sol_1", dataClass: "CLIENT_CONFIDENTIAL" }, "PATCH"));
     const data = mocks.updateSolution.mock.calls[0]?.[0]?.data as Record<string, unknown>;
     expect(data.status).toBe("ACTIVE");
   });

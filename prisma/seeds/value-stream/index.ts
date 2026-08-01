@@ -65,6 +65,10 @@ type AffirmQuestionSeed = {
   // v2.1: seeded from Standard-Answer-Layer.xlsx.
   aboutText?: string | null;
   format?: "decision" | "information";
+  /** Countries this question applies to. Empty/absent = universal. */
+  countryScope?: string[];
+  /** Industries this question applies to. Empty/absent = all. */
+  industryScope?: string[];
 };
 
 type Dataset = {
@@ -161,6 +165,10 @@ export async function seedValueStream(
         // v2.1 (Standard-Answer-Layer):
         aboutText: q.aboutText ?? null,
         format: q.format ?? "decision",
+        // Localisation facet. Empty means universal, which is the vast
+        // majority — only 3 of 150 name a country.
+        countryScope: q.countryScope ?? [],
+        industryScope: q.industryScope ?? [],
       },
       create: {
         id: q.id,
@@ -181,6 +189,8 @@ export async function seedValueStream(
         displayOrder: q.displayOrder,
         aboutText: q.aboutText ?? null,
         format: q.format ?? "decision",
+        countryScope: q.countryScope ?? [],
+        industryScope: q.industryScope ?? [],
       },
     });
   }

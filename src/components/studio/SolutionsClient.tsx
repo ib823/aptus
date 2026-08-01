@@ -21,6 +21,7 @@ import { useCallback, useState } from "react";
 
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
 import { missingOwners, type SolutionStatus } from "@/lib/studio/solutions";
+import { DATA_CLASSES, dataClassLabel } from "@/lib/studio/data-class";
 
 export interface StudioSolution {
   id: string;
@@ -166,7 +167,7 @@ export function SolutionsClient({
               <div style={{ ...muted, marginTop: 4 }}>{s.classification.replace(/_/g, " ").toLowerCase()}</div>
               <div style={{ ...muted, marginTop: 6 }}>
                 {s.interfaceCount} interface{s.interfaceCount === 1 ? "" : "s"} · {s.grantCount} grant
-                {s.grantCount === 1 ? "" : "s"} · {s.dataClass}
+                {s.grantCount === 1 ? "" : "s"} · {dataClassLabel(s.dataClass)}
               </div>
               {missing.length > 0 && (
                 <div style={{ marginTop: 6, fontSize: 11, color: "var(--status-awaiting-fg)" }}>
@@ -210,7 +211,7 @@ export function SolutionsClient({
               <>
                 <Field label="Business problem">{selected.businessProblem}</Field>
                 <Field label="Classification">{selected.classification.replace(/_/g, " ")}</Field>
-                <Field label="Data class">{selected.dataClass}</Field>
+                <Field label="Data class">{dataClassLabel(selected.dataClass)}</Field>
               </>
             )}
 
@@ -405,7 +406,7 @@ function RegisterSolutionForm() {
   const problems: string[] = [];
   if (name.trim().length < 2) problems.push("a name of at least 2 characters");
   if (businessProblem.trim().length < 10) problems.push("a business problem of at least 10 characters");
-  if (dataClass.trim().length < 1) problems.push("a data class");
+  if (!dataClass) problems.push("a data class");
 
   const submit = useCallback(async () => {
     setBusy(true);
@@ -475,16 +476,25 @@ function RegisterSolutionForm() {
 
       <label style={fieldLabel}>
         Data class
-        <input
+        {/* A select, not a text box. This was free text with a placeholder of
+            "client-operational", which is how `czxgvz` reached the register —
+            and two teams typing "Confidential" and "confidential (PII)" have
+            not classified anything comparably. */}
+        <select
           value={dataClass}
           onChange={(e) => setDataClass(e.target.value)}
-          maxLength={80}
-          placeholder="client-operational"
           style={input}
-        />
+        >
+          <option value="">Choose a classification…</option>
+          {DATA_CLASSES.map((c) => (
+            <option key={c.value} value={c.value}>
+              {c.label}
+            </option>
+          ))}
+        </select>
         <span style={muted}>
-          What kind of data this handles — it travels with the solution into every access
-          decision made about it.
+          {DATA_CLASSES.find((c) => c.value === dataClass)?.description ??
+            "What kind of data this handles — it travels with the solution into every access decision made about it."}
         </span>
       </label>
 

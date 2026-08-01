@@ -458,7 +458,7 @@
     {
       "id": "finance::general-by-questionnaire",
       "streamId": "finance",
-      "name": "(general - by questionnaire)",
+      "name": "Finance — general",
       "type": "catch-all",
       "displayOrder": 20
     }
@@ -6532,7 +6532,9 @@
       "displayOrder": 1,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "These questions are designed to introduce the implementing team to the fundamentals of the business, so that subsequent answers can be properly contextualized.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-002",
@@ -6552,7 +6554,9 @@
       "displayOrder": 2,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "These questions are designed to introduce the implementing team to the fundamentals of the business, so that subsequent answers can be properly contextualized.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-003",
@@ -6572,7 +6576,9 @@
       "displayOrder": 3,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Specify responsible units for groups of employees in your company who can read or work on the same compliance relevant objects.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-004",
@@ -6592,7 +6598,9 @@
       "displayOrder": 4,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "A legal composition lists only specific components that reflect a particular regulation-related point of view, such as a composition that includes only hazardous ingredients as components.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-005",
@@ -6612,7 +6620,9 @@
       "displayOrder": 5,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Defines which document type is used in SAP DMS for defining document info records.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-006",
@@ -6632,7 +6642,9 @@
       "displayOrder": 6,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Define material types for software. The default type of software material is non-valuated. Non-valuated software refers to software that is included in your product with no extra charge.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-007",
@@ -6652,7 +6664,9 @@
       "displayOrder": 7,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Define engineering change record types and settings specific to each change record type.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-008",
@@ -6672,7 +6686,9 @@
       "displayOrder": 8,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Define types of relevance that can be assigned to engineering change record items. A relevance indicates why a specific item is included in the change record?",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-009",
@@ -6694,7 +6710,9 @@
       "displayOrder": 9,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Editability of Distributed Purchase Outline Agreements in Connected Systems",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-010",
@@ -6717,7 +6735,9 @@
       "displayOrder": 10,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "The Procurement Overview Page displays, at a glance, the most important information and tasks relevant for a purchaser.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-011",
@@ -6739,7 +6759,9 @@
       "displayOrder": 11,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "The Procurement Overview Page displays, at a glance, the most important information and tasks relevant for a purchaser.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-012",
@@ -6763,7 +6785,9 @@
       "displayOrder": 12,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Allows activating SAP S/4HANA as a central hub for Procurement Scenarios for purchasing contracts and purchase requisitions.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-013",
@@ -6785,7 +6809,9 @@
       "displayOrder": 13,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Identify documents that can be created automatically",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-014",
@@ -6814,7 +6840,9 @@
       "displayOrder": 14,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "The purchasing organization is an organizational unit which procures articles and negotiates general purchase price conditions with vendors. It is responsible for all purchasing transactions in the company. As of release 1705, a purchasing organization can be assigned to one company code only.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-015",
@@ -6836,7 +6864,9 @@
       "displayOrder": 15,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "This purchasing process uses purchase requisitions that are generated either by the Material Requirements Planning (MRP) process or manually by a requester",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-016",
@@ -6860,7 +6890,9 @@
       "displayOrder": 16,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "SAP S/4HANA Cloud ships a default organizational structure which enables you to explore your solution covering company codes, plants, credit control areas, shipping points, etc.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-017",
@@ -6882,7 +6914,9 @@
       "displayOrder": 17,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Use the new app Manage Model Product Specifications",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-018",
@@ -6904,7 +6938,9 @@
       "displayOrder": 18,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "With this feature, you can use rounding profiles for purchase order items. Rounding profiles are part of the quantity optimization functionality, which allows you to automatically round item quantities to values that you can specify in the rounding profile.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-019",
@@ -6926,7 +6962,9 @@
       "displayOrder": 19,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "different product types can be maintained for capital spares, MRO, finished products?",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-020",
@@ -6948,7 +6986,9 @@
       "displayOrder": 20,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Define the activity management process for users who need to create tasks and inform the assigned employee via e-mail about the task.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-021",
@@ -6970,7 +7010,9 @@
       "displayOrder": 21,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "In professional services, the possible procurement subprocesses are: Service procurement - an external service is ordered. The external service company confirms the purchase order and performs the service. The supplier posts the expenses back. A supplier invoice is created and processed. Material procurement for consumption - a consumption material is requested from a customer or internal project and a purchase order is created and sent to the supplier. The supplier sends the material to the company, and the goods receipt is checked. Finally, the supplier invoice is created and the invoice is paid. Procurement for third-party order processing - a material is ordered by the purchaser of the ordering company for an end-customer from a supplier. The supplier ships the material directly to this end-customer.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-022",
@@ -6997,7 +7039,9 @@
       "displayOrder": 22,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "A purchasing group code is a three-digit code that represents a buyer or a group of buyers.The purchasing organization is further sub-divided into purchasing groups, which are responsible for day-to-day buying activities.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-023",
@@ -7019,7 +7063,9 @@
       "displayOrder": 23,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-024",
@@ -7044,7 +7090,9 @@
       "displayOrder": 24,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "For availability checking, SAP uses a concept of available-to-promise (ATP). In addition to the physical stock currently on hand, the ATP can be configured to include or exclude planned future stock receipts and issues, safety stock, quality inspection stock, stock in transfer and other parameters. How the system calculates possible delivery dates to customers are can also be adjusted here, to include or exclude purchase orders etc. with or without a lead time applied.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-025",
@@ -7069,7 +7117,9 @@
       "displayOrder": 25,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Delivery priorities are used to prioritize the delivery of sales order items. This Configuration Activity allows you to define more delivery priority categories which can then be assigned to customers on their master data. A customer with a delivery priority of 1 will get priority delivery over a customer with delivery priority of 2.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-026",
@@ -7098,7 +7148,9 @@
       "displayOrder": 26,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Depending on the delivery type and item you are using, an Item Category is determined for each order line item. For example, on a standard order for a stock material the TAN item category is determined, while for a free of charge order and a stock material the item category CBXN is determined. This Configuration Activity allows you to stipulate for each item category, whether or not automatic batch determination should be carried out in the delivery.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-027",
@@ -7118,7 +7170,9 @@
       "displayOrder": 27,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "This functionality allows you to define the MRP area for every plant for which you would like to carry out material requirements planning separately. You must also enter a storage location as a receiving storage location. This storage location must belong to the MRP area.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-028",
@@ -7138,7 +7192,9 @@
       "displayOrder": 28,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "This functionality allows you to define the MRP area for subcontractors that need to be planned separately from the plant.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-029",
@@ -7158,7 +7214,9 @@
       "displayOrder": 29,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "MRP Groups are used to group materials that use the same MRP control parameters. By defining an MRP Group, planning can be executed for all of the materials in the group in one planning run, that you do not want to include in a generic plant-wide planning run.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-030",
@@ -7178,7 +7236,9 @@
       "displayOrder": 30,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Order types provide a way to define parameters (such as time before archiving, functional area, status management, and number range) regarding how types of orders should be handled. There are preset order types that come with the system, but additional order types can be defined.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-031",
@@ -7198,7 +7258,9 @@
       "displayOrder": 31,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Define parameters, which you then assign to standard value keys. The parameters in the standard value keys can be used in the calculation of execution time, capacity requirements, and costs.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-032",
@@ -7218,7 +7280,9 @@
       "displayOrder": 32,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "The control key determines the behavior of the operation by identifying the business functions that are applicable to the operation.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-033",
@@ -7241,7 +7305,9 @@
       "displayOrder": 33,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "The stock transfer process begins with a requirement to transfer material from one company or plant to another company or plant within the same country.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-034",
@@ -7261,7 +7327,9 @@
       "displayOrder": 34,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-035",
@@ -7281,7 +7349,9 @@
       "displayOrder": 35,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-036",
@@ -7301,7 +7371,9 @@
       "displayOrder": 36,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-037",
@@ -7321,7 +7393,9 @@
       "displayOrder": 37,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-038",
@@ -7341,7 +7415,9 @@
       "displayOrder": 38,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-039",
@@ -7361,7 +7437,9 @@
       "displayOrder": 39,
       "statusNote": "Suggested - CONFIRM:\nNo question in SAP source - configuration step, not a business decision.",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-040",
@@ -7381,7 +7459,9 @@
       "displayOrder": 40,
       "statusNote": "Suggested - CONFIRM:\nNo question in SAP source - configuration step, not a business decision.",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-041",
@@ -7401,7 +7481,9 @@
       "displayOrder": 41,
       "statusNote": "Suggested - CONFIRM:\nNo question in SAP source - configuration step, not a business decision.",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-042",
@@ -7421,7 +7503,9 @@
       "displayOrder": 42,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-043",
@@ -7441,7 +7525,9 @@
       "displayOrder": 43,
       "statusNote": "Suggested - CONFIRM:\nNo question in SAP source - configuration step, not a business decision.",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-044",
@@ -7461,7 +7547,9 @@
       "displayOrder": 44,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-045",
@@ -7481,7 +7569,9 @@
       "displayOrder": 45,
       "statusNote": "Suggested - CONFIRM:\nNo question in SAP source - configuration step, not a business decision.",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-046",
@@ -7501,7 +7591,9 @@
       "displayOrder": 46,
       "statusNote": "Suggested - CONFIRM:\nNo question in SAP source - configuration step, not a business decision.",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-047",
@@ -7521,7 +7613,9 @@
       "displayOrder": 47,
       "statusNote": "Suggested - CONFIRM:\nNo question in SAP source - configuration step, not a business decision.",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-048",
@@ -7541,7 +7635,9 @@
       "displayOrder": 48,
       "statusNote": "Suggested - CONFIRM:\nNo question in SAP source - configuration step, not a business decision.",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-049",
@@ -7561,7 +7657,9 @@
       "displayOrder": 49,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-050",
@@ -7581,7 +7679,9 @@
       "displayOrder": 50,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-051",
@@ -7601,7 +7701,9 @@
       "displayOrder": 51,
       "statusNote": "Suggested - CONFIRM:\nNo question in SAP source - configuration step, not a business decision.",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-052",
@@ -7621,7 +7723,9 @@
       "displayOrder": 52,
       "statusNote": "Suggested - CONFIRM:\nNo question in SAP source - configuration step, not a business decision.",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-053",
@@ -7641,7 +7745,9 @@
       "displayOrder": 53,
       "statusNote": "Suggested - CONFIRM:\nNo question in SAP source - configuration step, not a business decision.",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-054",
@@ -7661,7 +7767,9 @@
       "displayOrder": 54,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-055",
@@ -7681,7 +7789,9 @@
       "displayOrder": 55,
       "statusNote": "Suggested - CONFIRM:\nNo question in SAP source - configuration step, not a business decision.",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-056",
@@ -7701,7 +7811,9 @@
       "displayOrder": 56,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-057",
@@ -7721,7 +7833,9 @@
       "displayOrder": 57,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-058",
@@ -7741,7 +7855,9 @@
       "displayOrder": 58,
       "statusNote": "Suggested - CONFIRM:\nNo question in SAP source - configuration step, not a business decision.",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-059",
@@ -7761,7 +7877,9 @@
       "displayOrder": 59,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-060",
@@ -7781,7 +7899,9 @@
       "displayOrder": 60,
       "statusNote": "Suggested - CONFIRM:\nNo question in SAP source - configuration step, not a business decision.",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-061",
@@ -7801,7 +7921,9 @@
       "displayOrder": 61,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "When performing a goods movement, you can define various reasons that can be logged to indicate the reason behind the goods movement.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-062",
@@ -7821,7 +7943,9 @@
       "displayOrder": 62,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "To ensure that SAP S/4HANA can recognize which storage locations in Materials Management are controlled by the Warehouse Management system (LE-WM), you must assign the plants and the storage location to the warehouse number. Within a plant, it is possible to assign several storage locations to the same warehouse number.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-063",
@@ -7841,7 +7965,9 @@
       "displayOrder": 63,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Carry out a consistency check for settings related to integration with a decentralized warehouse management system.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-064",
@@ -7861,7 +7987,9 @@
       "displayOrder": 64,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "The warehouse number identifies a physical warehouse structure within the Warehouse Management system (for example, SAP EWM).",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-065",
@@ -7881,7 +8009,9 @@
       "displayOrder": 65,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "For existing plants, you can maintain descriptions and assign them to a factory calendar, a county code, and a city code. Plants are used to separate a company by organizational units according to production, procurement, maintenance, and materials planning.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-066",
@@ -7901,7 +8031,9 @@
       "displayOrder": 66,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "You can maintain descriptions for existing storage locations that are relevant for your company. Storage locations are the places where stock is physically kept within a plant. They are also used to define an organizational unit that allows the differentiation of material stocks within a plant.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-067",
@@ -7921,7 +8053,9 @@
       "displayOrder": 67,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "A warehouse complex is represented in the Warehouse Management system as a warehouse number that is used to identify a complex warehouse setup. The physical location is usually decisive for assigning the definition of the warehouse number. A warehouse number groups together storage types and storage bins that are organized and maintained as a complete unit. All warehouse procedures, such as stock placements and stock removals of materials, are always executed within a warehouse number. A warehouse number has the following characteristics: • A warehouse number does not have an address, but a short descriptive text • It is possible to store material data that is specific to a warehouse number • Within each warehouse number, the stock figures are managed as quantities, not as values • Within a plant it is possible to assign several storage locations to the same warehouse number",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-068",
@@ -7941,7 +8075,9 @@
       "displayOrder": 68,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Modes of transport specify certain aspects of shipping and shipping costs.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-069",
@@ -7961,7 +8097,9 @@
       "displayOrder": 69,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Shipping types are used within route determination to specify whether a route from dispatch to a destination is by air, sea, road, etc.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-070",
@@ -7981,7 +8119,9 @@
       "displayOrder": 70,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "A shipping point within SAP is an independent organizational entity which is responsible for planning and processing deliveries to the customer.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-071",
@@ -8001,7 +8141,9 @@
       "displayOrder": 71,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "The shipping point is the top priority in the organization for shipping. Shipping points can be allocated to the desired combinations of shipping condition and loading group for each plant. Before allocation of shipping points, the following needs to be defined: plants, shipping points, shipping conditions, and loading groups.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-072",
@@ -8025,7 +8167,9 @@
       "displayOrder": 72,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "This Configuration Activity allows you to stipulate whether the billing plan is controlled by the creation date of the order, the contract start date, or other parameters. You may also change the default description of the Milestone Billing type.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-073",
@@ -8047,7 +8191,9 @@
       "displayOrder": 73,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Professional services agreements can be sold as: • Fixed price • Time & expense • Periodic service • Usage-based projects. Revenue recognition methods are tied to contract types. A project can support the bundling of multiple contract types.",
-      "format": "information"
+      "format": "information",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-074",
@@ -8075,7 +8221,9 @@
       "displayOrder": 74,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "An incompleteness procedure can be used to stop the sales process from proceeding if critical data is missing. E.g. This can be used to set a sales order as incomplete and ineligible for delivery if incoterms have not been entered . This Configuration Activity allows you to modify existing incompleteness procedures, or define new ones - that control when various aspects of a sales document are considered incomplete, and how the system reacts to that status. With CE2011, you can now use custom fields in incompleteness procedures for sales documents. You can add custom fields to an incompleteness procedure and navigate to the custom fields tab from the incompletion log.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-075",
@@ -8097,7 +8245,9 @@
       "displayOrder": 75,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "With this feature, you get a product and quantity proposals as an input help to enable faster selection of products during sales order entry with Create Sales Orders – VA01 app. It allows to predict whether the quantity of products ordered will increase or decrease. In this configuration step, you have to maintain an algorithm parameter that helps to calculate and predict whether the quantity of the products ordered will increase or decrease. The default smoothing factor is 0.2, but you can change this to any value between 0 and 1.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-076",
@@ -8125,7 +8275,9 @@
       "displayOrder": 76,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Material listing and exclusion allows you to restrict what materials can or cannot be bought by a customer. The system will check against a set of tables when determining if the combination of customer, material, plant, or organizational unit is relevant for material listing or exclusion. This Configuration Activity allows you to assign a listing/exclusion procedure to each different sales document type. For example, you may enable an exclusion procedure only on return type sales documents if you only needed to prevent return of particular materials but do not enforce such exclusion on outbound sales.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-077",
@@ -8149,7 +8301,9 @@
       "displayOrder": 77,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "You may use workflows to prevent further processing of sales documents until they are released by a specific user or function. This Configuration Activity allows you to define the reason that will be displayed in a sales quotation to let the user know why an approval is required.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-078",
@@ -8177,7 +8331,9 @@
       "displayOrder": 78,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "When a billing document is saved, it may be assigned an automatic number. These numbers must be within an allowed range of numbers that are defined in this Configuration Activity. This Configuration Activity allows you to define the number ranges for billing documents. Also, you can use this Configuration Activity to define number ranges with a prefix in the step 'Define Number Range Prefixes for Billing Document' (103283). Please note that there is a system restriction to define prefix characters up to 5 digits only. The number range including the prefix has a total limit of 10 digits.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-079",
@@ -8205,7 +8361,9 @@
       "displayOrder": 79,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "This Configuration Activity allows you to define various number range prefixes to be assigned to your billing document before the automatically generated number. For example, you could define a prefix 'US' that is applied to all billing documents in the US company code if you include this logic as a part of your custom routine. Please note that there is a system restriction to define prefix characters up to 5 digits only. The number range including the prefix has a total limit of 10 digits.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-080",
@@ -8225,7 +8383,9 @@
       "displayOrder": 80,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "These questions are designed to introduce the implementing team to the fundamentals of the business, so that subsequent answers can be properly contextualized.",
-      "format": "information"
+      "format": "information",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-081",
@@ -8245,7 +8405,9 @@
       "displayOrder": 81,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "These questions are designed to introduce the implementing team to the fundamentals of the business, so that subsequent answers can be properly contextualized.",
-      "format": "information"
+      "format": "information",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-082",
@@ -8265,7 +8427,9 @@
       "displayOrder": 82,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "These questions are designed to introduce the implementing team to the fundamentals of the business, so that subsequent answers can be properly contextualized.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-083",
@@ -8285,7 +8449,9 @@
       "displayOrder": 83,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "These questions are designed to introduce the implementing team to the fundamentals of the business, so that subsequent answers can be properly contextualized.",
-      "format": "information"
+      "format": "information",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-084",
@@ -8310,7 +8476,9 @@
       "displayOrder": 84,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "This Configuration Activity allows you to configure various reasons that can be assigned to return order types. These reasons may be used in analytics and reports.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-085",
@@ -8340,7 +8508,9 @@
       "displayOrder": 85,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "A Sales Organization in SAP is a representation of the sales legal entity within the business, responsible for the sale of goods and/or services. This is the primary organizational unit in sales and is part of what forms the 'Sales Area'. Materials and Business partners can have different master data in each sales area. This Configuration Activity allows the modification of the name, address, language and e-mail address of the sales organizations you have defined.",
-      "format": "information"
+      "format": "information",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-086",
@@ -8370,7 +8540,9 @@
       "displayOrder": 86,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "The Distribution Channel in SAP represents the channels through which saleable goods or services reach the customer. Typical examples of Distribution Channels include wholesale, retail, direct and online sales. Divisions are attached to Sales Organizations, and are part of what forms the Sales Area. This Configuration Activity allows the user to change the description of the distribution channels that have been defined.",
-      "format": "information"
+      "format": "information",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-087",
@@ -8400,7 +8572,9 @@
       "displayOrder": 87,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "In SAP, a division represents a product line, or a grouping of materials or services. For example, one might categorize Fresh foods, Frozen foods and drinks into different product divisions. Using this Configuration Activity you can change the names of the divisions within your company. If additional divisions are needed, use the Organizational Structure app in Configure Your Solution.",
-      "format": "information"
+      "format": "information",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-088",
@@ -8430,7 +8604,9 @@
       "displayOrder": 88,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "In SAP, a sales office is a physical location (for example, an office branch) that has responsibility for the sales within a given geographical area. This Configuration Activity allows you to stipulate the name, address, country, language, jurisdiction, and contact information for your sales office.",
-      "format": "information"
+      "format": "information",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-089",
@@ -8460,7 +8636,9 @@
       "displayOrder": 89,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "A sales group is used to identify sales representatives, or groups of sales representatives. E.g. If you have nine total sales representatives split over three regions, then you might define three sales groups to represent each region's sales reps - or nine sales groups for each sales rep, depending on your business context. The responsible sales group can be assigned to a customer in their master data, and used for analysis or pricing determination.",
-      "format": "information"
+      "format": "information",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-090",
@@ -8488,7 +8666,9 @@
       "displayOrder": 90,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "A pricing procedure is the logic used to determine the final price of an item or service. It stipulates the condition types that are evaluated, the order in which they are evaluated, and the relationship between the pricing elements such as the subtotals that are to be calculated. If for example, tax is calculated in one country on subtotal of pricing elements A + B, and in another country it is calculated on the basis of pricing elements B + C, then you may achieve this with different pricing procedures.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-091",
@@ -8516,7 +8696,9 @@
       "displayOrder": 91,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "If you have different pricing procedures, you can define which combination of sales area, document pricing procedure and customer pricing procedure should tell the system to use which overall pricing procedure.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-092",
@@ -8544,7 +8726,9 @@
       "displayOrder": 92,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "You may define groups into which you can classify customers on their master data. For example, you may create different groups for Wholesale, Retail and Government customers. These groupings can be used to control pricing, analytics, and authorizations. This Configuration Activity allows you to update the description of customer groups created in the organizational structure.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-093",
@@ -8572,7 +8756,9 @@
       "displayOrder": 93,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "You can define a set of customer classifications that can be assigned to customers in their master data. This classification can be used for some reports and product allocation logic. For example, you can classify customers as A,B or C ranking. This Configuration Activity allows you to modify the description of existing classification groups A, B and C, or to define new classification groups.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-094",
@@ -8602,7 +8788,9 @@
       "displayOrder": 94,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "A Sales District is defined as a geographical district or sales region. With this Configuration Activity, you can define sales districts that you can assign to customers and use in analytics or reporting. For example, US sales districts might be defined as Southeast, Northeast, Northwest etc.",
-      "format": "information"
+      "format": "information",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-095",
@@ -8630,7 +8818,9 @@
       "displayOrder": 95,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "This Configuration Activity allows you to configure whether for each pre-delivered item category, rounding is enabled or not. Rounding may be useful if you want to allow the system to round the quantity in the sales document up or down to match the permitted delivery quantity for example.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-096",
@@ -8658,7 +8848,9 @@
       "displayOrder": 96,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "This Configuration Activity allows you to define various purchase order types by which your customers submit their order requests to you. Purchase order type refers to the channel a customer uses to place an order, such as email. With the purchase order types, you can specify whether an order was received online, by phone, or by fax. When creating or changing a sales document, a salesperson can select an order type in purchase order data at the header level, and it will be copied to the item level. Once defined, you may assign the purchase order type on your sales document for use in reporting and logic.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-097",
@@ -8681,7 +8873,9 @@
       "displayOrder": 97,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Requested delivery date during sales order creation is defaulted based on lead time maintained in configuration step 'configure sales document types (102495). Alternatively, you can choose to apply a custom logic to determine the requested delivery date in Sales documents. In this configuration step, you choose relevant sales document types and assign custom routines for determination of requested delivery date.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-098",
@@ -8701,7 +8895,9 @@
       "displayOrder": 98,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Determine service level agreements (SLAs) for a service transaction line item based on the access sequence. Determine SLAs for the transaction line item based on the access sequence. The access sequence tells the system where and in what order to find the appropriate SLA information.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-099",
@@ -8721,7 +8917,9 @@
       "displayOrder": 99,
       "statusNote": "Suggested - CONFIRM:\nReads like a configuration setup step (L3) - confirm whether it belongs in the pre-workshop set.",
       "aboutText": "Assign plant and storage location to country for procurement integration.",
-      "format": "information"
+      "format": "information",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-100",
@@ -8741,7 +8939,9 @@
       "displayOrder": 100,
       "statusNote": "Suggested - CONFIRM:\nReads like a configuration setup step (L3) - confirm whether it belongs in the pre-workshop set.",
       "aboutText": "Provide settings for plants to enable the billing integration and optimize the procurement integration. For the billing integration, define the mapping between plant, employee, and country.",
-      "format": "information"
+      "format": "information",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-101",
@@ -8761,7 +8961,9 @@
       "displayOrder": 101,
       "statusNote": "Suggested - CONFIRM:\nReads more like a configuration setup step (L3) than a business-affirm question - confirm whether it belongs in the pre-workshop set.",
       "aboutText": "Provide settings for plants to enable the billing integration and optimize the procurement integration.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-102",
@@ -8781,7 +8983,9 @@
       "displayOrder": 102,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Assign plant and storage location to country for procurement integration. For billing integration, define the mapping between plant and country. For procurement integration, specify the service parts location for the service employee in more detail by adding a storage location inside the plant to the mapping between plant, employee, and country.",
-      "format": "information"
+      "format": "information",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-103",
@@ -8801,7 +9005,9 @@
       "displayOrder": 103,
       "statusNote": "Suggested - CONFIRM:\nVerbatim is a configuration instruction (L3) - confirm whether it belongs in the pre-workshop set.",
       "aboutText": "Assign a condition type to item categories. In the standard configuration, condition type PMP0 is assigned to the item categories SVS1, SVS2, SVS4, SCS1, and SCS3.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-104",
@@ -8821,7 +9027,9 @@
       "displayOrder": 104,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Assign a planning plant to a maintenance plant. Perform this activity for each maintenance plant if there are multiple maintenance plants.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-105",
@@ -8841,7 +9049,9 @@
       "displayOrder": 105,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "These questions are designed to introduce the implementing team to the fundamentals of the business, so that subsequent answers can be properly contextualized.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-106",
@@ -8861,7 +9071,9 @@
       "displayOrder": 106,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "These questions are designed to introduce the implementing team to the fundamentals of the business, so that subsequent answers can be properly contextualized.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-107",
@@ -8881,7 +9093,9 @@
       "displayOrder": 107,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Define your structure indicators* for reference functional locations* and functional locations*. The structure indicator determines the edit mask and the number of the hierarchy levels when you create functional location structures.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-108",
@@ -8901,7 +9115,9 @@
       "displayOrder": 108,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Define plant sections to divide maintenance plants into production areas in Plant Maintenance.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-109",
@@ -8921,7 +9137,9 @@
       "displayOrder": 109,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Defines a plant as a maintenance planning plant.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-110",
@@ -8943,7 +9161,9 @@
       "displayOrder": 110,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "The internal and external workforce can use the pre-delivered standard application in S/4HANA Cloud for time recording. Alternatively, it is possible to use a 3rd party timesheet solution and integrate it with S/4HANA Cloud using released APIs.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-111",
@@ -8965,7 +9185,9 @@
       "displayOrder": 111,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "SAP S/4HANA Cloud offers the ability to consolidate the financial statements of the whole report in multiple group currencies so a group accountant can publish the results for stakeholders (e.g. analysts, investors) located in different regions or that are interesting in different reporting currencies.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-112",
@@ -8990,7 +9212,9 @@
       "displayOrder": 112,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "From an SAP point of view, the company code is an independent accounting unit for which a balanced set of books is produced. It represents the legal entity from fiscal point of view.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-113",
@@ -9010,7 +9234,11 @@
       "displayOrder": 113,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Localized for AT(For tax reporting , you assign each process key a tax class. The tax classes enable the system to distinguish between different taxes for reporting purposes. The tax classes are predefined.)",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [
+        "AT"
+      ],
+      "industryScope": []
     },
     {
       "id": "L2-114",
@@ -9030,7 +9258,12 @@
       "displayOrder": 114,
       "statusNote": "Suggested - CONFIRM:\nCountry-specific localization item - relevant only where a DGI-type tax authority applies.",
       "aboutText": "Localized for AT (Assign, per program, an official DGI document type to all combinations of Austrian document class, official document type, and print character.)You assign an official document class per program, which means that for different programs you can assign different document classes to the same FI document type.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [
+        "AT",
+        "UY"
+      ],
+      "industryScope": []
     },
     {
       "id": "L2-115",
@@ -9052,7 +9285,11 @@
       "displayOrder": 115,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "This is CZ specific requirement to map data for MT940 bank statement import functionality. Here you can map 1.Code of country into Ctry 2. Bank key code in Bank Key 3. operator in Delimiter",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [
+        "CZ"
+      ],
+      "industryScope": []
     },
     {
       "id": "L2-116",
@@ -9074,7 +9311,9 @@
       "displayOrder": 116,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "SAP Bank Communication Management is used to manage interfaces for communication with banks and gives you the ability to connect with your bank, track the entire lifecycle of a transaction, and improve straight-through processing and compliance with internal policies. Bank Communication Management is also responsible for batch creation and approval, the payment status monitor, and the bank statement monitor. When working with Bank Communication Management, payments in one or more payment runs can be mapped and processed in a payment status monitor. This monitor also serves as a repository for incoming status messages from SWIFT and individual banks. The payments in the payment run can be grouped into one or more batches according to your requirements. For example, payments can be grouped by low or high payment amount. You also have the option to use digital signatures to approve, reject or resubmit payments",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-117",
@@ -9097,7 +9336,9 @@
       "displayOrder": 117,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "SAP Advanced payment management allows you to centralize all payment activities of a corporate group. Advanced payment management supports four payment scenarios: Internal payments, payments ‘in name of’ with forwarding only, payments ‘in name of’ with routing optimization, and payments 'on behalf of'. It integrates with other areas within S/4HANA such as In-House Cash, Cash Management, Bank Communication Management, Bank Account Management and General Ledger.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-118",
@@ -9119,7 +9360,9 @@
       "displayOrder": 118,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Connect banks and other financial institutions with corporate customers on a secure network owned and managed by SAP. The SAP Multi-Bank Connectivity solution offers multiple services over one single channel, while supporting the deployment of new ones.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-119",
@@ -9142,7 +9385,9 @@
       "displayOrder": 119,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "You can define the basic settings that are required for using Cash and Liquidity Management, including scope determination, change request grouping options, bank account control modes, snapshots, as well as the cash request functions.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-120",
@@ -9164,7 +9409,9 @@
       "displayOrder": 120,
       "statusNote": "Suggested - CONFIRM:\nPhrased as a how-to / config-design question, not a business decision - confirm whether it belongs in the pre-workshop set.",
       "aboutText": "Planning level provides information on the causes of bank or account transactions for bank accounts and planning groups. For example, you can identify how a piece of information came into the system (posting or payment advices/plan item) and how probable it is that a cash inflow or outflow will take place on the day planned. you can assign planning levels to cash requests with different statues. Planning levels are derived for a cash request. By assign planning levels to cash requests, you can then see cash requests in different statues by planning level.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-121",
@@ -9190,7 +9437,9 @@
       "displayOrder": 121,
       "statusNote": "Suggested - CONFIRM:\nPhrased as a how-to / config-design question, not a business decision - confirm whether it belongs in the pre-workshop set.",
       "aboutText": "One you define necessary flow types (for all possible floe in financial transaction) for your product types in the money market area you can assign the flows with condition types. Condition types help to assign the time and amount structure to the various financial transactions. Interest, repayment or commission are examples of condition types. Condition types automatically generate flows which are the basis for further processing in Finance and Cash Management as well as for analysis in Treasury and Risk Management.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-122",
@@ -9212,7 +9461,9 @@
       "displayOrder": 122,
       "statusNote": "Suggested - CONFIRM:\nPhrased as a how-to / config-design question, not a business decision - confirm whether it belongs in the pre-workshop set.",
       "aboutText": "Assign flow calculation procedure IDs to specified transaction flows",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-123",
@@ -9234,7 +9485,9 @@
       "displayOrder": 123,
       "statusNote": "Suggested - CONFIRM:\nPhrased as a how-to / config-design question, not a business decision - confirm whether it belongs in the pre-workshop set.",
       "aboutText": "Set up calculation procedures for tax flows to calculate the tax amounts for deposits and loans in accordance with legal requirements in Turkey",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-124",
@@ -9260,7 +9513,9 @@
       "displayOrder": 124,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "This SSCUI helps in settings for different functions relevant for the solution capabilities (Debt and Investment Management and Financial Risk Management processes).With this step you can create rating procedures and assign ratings to them",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-125",
@@ -9290,7 +9545,9 @@
       "displayOrder": 125,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Provides comprehensive features and functions to secure against financial risks (liquidity risks​, FX risks, counterparty risks, and further market risks). Accurate registration and a comprehensive view of all business activities aligned with (inter)national accounting principles such as IFRS and US GAAP is included.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-126",
@@ -9320,7 +9577,9 @@
       "displayOrder": 126,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "The Trading Platform Integration connects external trading platforms (like 360T, FXall, Bloomberg etc.) with your SAP back-end system. With this SAP Business Technology Platform (BTP) you can Transfer FX transactions, fixed term deposits/loans (money market) and purchase/sale of money market funds from external trading platforms to your SAP system automatically. Addionally you can transfer trade requests from your SAP system to external trading platforms, store competitive bids, process intercompany trades, and for example check counterparty limits and its utilization.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-127",
@@ -9342,7 +9601,9 @@
       "displayOrder": 127,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Intrastat is for collecting information and producing statistics on the trade in goods between the countries of the European Union. You can modify the default values for modes of transport at the border, ports, and airports. You can set default values for transportation data to be able to use these values when creating Intrastat declarations for receipts. Mode of Transport at the Border (Intrastat) Identifies the mode of transport (i.e. road, rail, or sea) by which the goods cross a border. This information is required for the Intrastat declaration.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-128",
@@ -9364,7 +9625,9 @@
       "displayOrder": 128,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "The process of vendor/customer payments in SAP S4HANA Cloud is performed automatically once the system is set up for you. It utilizes different payment methods (i.e. wire transfers, checks, direct debit, etc.) to determine how payables are made. To make or enable automatic payments of customer credit balances or vendor payments, bank accounts from which the payments are made from are required.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-129",
@@ -9386,7 +9649,9 @@
       "displayOrder": 129,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Reason codes are used for the reasons for the handling of payment differences. Standard reason codes also allow management and auditors to analyze transaction history by specific reason. You can assign reason codes for the following: Partial payments made for open items. Residual items created for an open item. Differences posted on account without reference to an open item.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-130",
@@ -9409,7 +9674,9 @@
       "displayOrder": 130,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "SAP Credit Management comes with pre-delivered best practices 'Automatic Credit Control Checks.' You can decide to define your own credit checks. The automatic credit check can target certain aspects during a check and run at different times during order processing. You can define your own credit checks to correspond to your requirements in the area of Credit Management. You can determine an automatic credit check for any combination of the following: - Credit Segment - Risk Class - Credit Group Example: you can define a credit check for a certain credit segment and for all sales orders in which the customer has risk class 2 (RK2). It is possible to define a system response for each credit check (for example, warning message). In the case of a warning message, a block can be set in the credit status of a document. If you define your own credit checks, proceed as follows: specify whether a credit check in SAP Credit Management is in scope You can define check rules for the credit check in SAP Credit Management in the Define Checking Rules Customizing activity. - Specify system response to check - Allocate credit segment - Allocate risk class - Assign description to the credit check.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-131",
@@ -9432,7 +9699,9 @@
       "displayOrder": 131,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "SAP Credit Management helps you to make efficient credit decisions. Your system offers functions to determine the risk of lack of payment early on and helps the credit controller to make credit decisions quickly. Customer credit groups are used to group business partners. The customer credit group is used as a selection criterion in reporting and when generating worklists. For example, possible customer credit groups are domestic and foreign customers, regular customers, or insured customers.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-132",
@@ -9454,7 +9723,9 @@
       "displayOrder": 132,
       "statusNote": "Suggested - CONFIRM:\nPhrased as a how-to / config-design question, not a business decision - confirm whether it belongs in the pre-workshop set.",
       "aboutText": "Credit segments are required for calculating the credit limit and enable you to carry out detailed checks at business partner level. To calculate scores or credit limits, you can define different formulas with which you can make a distinction between business customers or private customers, for example. This step define the formulas for calculating the score and the credit limit.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-133",
@@ -9476,7 +9747,9 @@
       "displayOrder": 133,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Many companies receive their bank statement data from the bank electronically. With SAP S/4HANA Cloud, you can import the bank statement files into the SAP system using the electronic bank statement.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-134",
@@ -9498,7 +9771,9 @@
       "displayOrder": 134,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "SAP provides each customer with an SAP Best Practice chart of accounts which covers all the reporting requirements for the business adopting SAP S/4HANA Cloud.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-135",
@@ -9520,7 +9795,9 @@
       "displayOrder": 135,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Cost of Sales Accounting is supported in SAP S/4HANA Cloud by using the functional areas - characteristic that sorts operating expenses according to functions. SAP Best Practices provides functional areas for the following areas: Production, Marketing, Administration, Sales, etc.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-136",
@@ -9542,7 +9819,9 @@
       "displayOrder": 136,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "During an intercompany sales process, the supplying company generates an intercompany invoice to the ordering company. You can generate the SAP Electronic Data Interchange (EDI) configuration that the system uses to post this invoice to the ordering company code. The intercompany invoice is a customer invoice (sent from the supplying company). And a supplier invoice (received by the ordering company). The system uses IDocs to automatically generate the corresponding payables in the ordering company's accounts.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-137",
@@ -9564,7 +9843,9 @@
       "displayOrder": 137,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Localization topic for China. In this configuration step, you define and activate a non-leading ledger for offsetting account determination and other related reports. You can only define and activate one non-leading ledger per company code for this purpose. Once you have created offsetting account postings in this non-leading ledger, the system automatically uses this ledger for offsetting account determination; you cannot change the ledger.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-138",
@@ -9586,7 +9867,9 @@
       "displayOrder": 138,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "A posting period variant is created and assigned to each company code to support opening and closing periods. In SAP S/4HANA Cloud, there is a 1:1 relationship between company code and posting year variant as the posting period variant is created when the company code is created.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-139",
@@ -9608,7 +9891,9 @@
       "displayOrder": 139,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "In accordance with special accounting principles, such as IAS/ IFRS, segment reporting is required for product related enterprise areas. The purpose of segment reporting is to make the profit and risk situation of individual areas (segments) in your enterprise transparent.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-140",
@@ -9630,7 +9915,9 @@
       "displayOrder": 140,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Per the accounting principles IFRS and US GAAP, companies are required to report on their operating segments. In order to comply with this requirement, SAP offers the possibility to create segments. From an SAP point of view, profit centers represent divisions of the company for which financial statements and external reports can be created.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-141",
@@ -9652,7 +9939,9 @@
       "displayOrder": 141,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Per the accounting principles IFRS and US GAAP, companies are required to report on their operating segments. In order to comply with this requirement, SAP offers the possibility to create segments. From an SAP point of view, profit centers represent divisions of the company for which financial statements and external reports can be created.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-142",
@@ -9675,7 +9964,9 @@
       "displayOrder": 142,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "You can set up all company codes against which there would be payables/receivables that have to be paid/received. You can make specifications for all company codes involved in the payment transactions. You can also define permitted customer/vendor special GL transactions to be received/paid.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-143",
@@ -9697,7 +9988,9 @@
       "displayOrder": 143,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "Financial Statement Versions helps to group all the related accounts to get the Balance Sheet and Income Statement for the purpose of Reporting. For Multi GAAP reporting it is required to assign these versions for accounting principles used in organization for reporting. This step helps to assign charts of accounts and financial statement versions to accounting principles.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-144",
@@ -9719,7 +10012,9 @@
       "displayOrder": 144,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "This SSCUI helps in clean up unwanted reporting tasks from the Run Compliance Reports app. The program is used to delete unwanted reporting tasks from the Run Compliance Reports app for specific reporting entity, reporting category, and reporting period. The reporting tasks along with any generated legal documents, correspondence documents, manual attachments are also removed from the Run Compliance Reports app.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-145",
@@ -9741,7 +10036,9 @@
       "displayOrder": 145,
       "statusNote": "Suggested - CONFIRM:\nPhrased as a how-to / config-design question, not a business decision - confirm whether it belongs in the pre-workshop set.",
       "aboutText": "In this Customizing activity, you define material classification codes for tax codes. If you need classification codes for materials at tax-code-level, enter the tax code in this activity, and either enter directly the classification code in the Material Classification Code field, or select the Read Material No. checkbox.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-146",
@@ -9763,7 +10060,9 @@
       "displayOrder": 146,
       "statusNote": "Suggested - CONFIRM:\nPhrased as a how-to / config-design question, not a business decision - confirm whether it belongs in the pre-workshop set.",
       "aboutText": "VAT Ledger Section identifies the section in the VAT ledger report to where the system assigns the relevant tax items. In this Customizing activity, you define the criteria on the basis of which the system assigns the VAT data in the relevant section in the VAT ledger. For the combination of country of reporting authority, the company code, and the tax grouping version you can assign : Tax code ,Transaction key, Document type, Debit/credit indicator, Posting key. And for each such combination VAT section can be assigned",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-147",
@@ -9783,7 +10082,9 @@
       "displayOrder": 147,
       "statusNote": "Suggested - CONFIRM:\nNo usable question in SAP source - exclude from the affirm-set.",
       "aboutText": null,
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-148",
@@ -9810,7 +10111,9 @@
       "displayOrder": 148,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "The SAP S/4HANA system allows you to define company codes that you want to use in Contract Accounts Receivable and Payable. You will also have to assign the attributes required for controlling postings to each company code that you want to use in Contract Accounts Receivable and Payable.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-149",
@@ -9832,7 +10135,9 @@
       "displayOrder": 149,
       "statusNote": "Suggested - CONFIRM:\nPhrased as a how-to / config-design question, not a business decision - confirm whether it belongs in the pre-workshop set.",
       "aboutText": "The billing cycle is part of scheduling for billing and invoicing. It controls the derivation of the billing period for periodic bills. This step define rules for determining the billing date. Determination of the billing date is based by default on the creation date of a billable item in the system. In this step, you specify the rules that scheduling uses to calculate the target date of billing for a billable item.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     },
     {
       "id": "L2-150",
@@ -9855,7 +10160,9 @@
       "displayOrder": 150,
       "statusNote": "Suggested - awaiting confirmation",
       "aboutText": "The following sections describe the tools for transferring market data. Market data can be transferred to the system from a file interface or via realtime datafeed. You can use the function for market data transfer from spreadsheets. In addition to the back end functions, you can also use the SAP Fiori launchpad to access the Import Market Dataapp for the data transfer, and other apps for the manual entry.",
-      "format": "decision"
+      "format": "decision",
+      "countryScope": [],
+      "industryScope": []
     }
   ],
   "curationReview": [
