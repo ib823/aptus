@@ -62,7 +62,21 @@ export default async function DiscoveryHomePage() {
     <WorkbenchView
       breadcrumb="Home"
       title={`Process Discovery${user?.name ? ` — ${user.name}` : ""}`}
-      caption="Curate the neutral library, govern its coverage, and run client discovery."
+      /*
+        POSITIONING, STATED HONESTLY.
+
+        "Neutral library" invited the obvious question, and the product's own
+        process detail answers it: source "SAP Best Practices 2602 (rendered
+        neutral)". In a competitive bake-off that is one question away from
+        being read as a claim the library is vendor-independent by origin,
+        which it is not.
+
+        Neutral-by-RENDERING is true, defensible, and stronger — because it
+        also lets us say the part that was being hidden: 88 of the 742
+        processes are ABeam-authored overlay content covering ground the SAP
+        catalogue does not. That is the differentiator, not something to bury.
+      */
+      caption="APQC-mapped process library, rendered vendor-neutral from the SAP S/4HANA Cloud 2602 catalogue and extended with ABeam-authored processes. Curate it, govern its coverage, and run client discovery."
       actions={QUICK_ACTIONS.map((a) => (
         <Link
           key={a.href}
