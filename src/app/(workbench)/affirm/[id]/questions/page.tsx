@@ -15,7 +15,9 @@
  */
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { prisma } from "@/lib/db/prisma";
+import { bundleMetadata } from "@/lib/affirm/page-metadata";
 import { getCurrentUser } from "@/lib/auth/session";
 import {
   getEditorRows,
@@ -30,6 +32,10 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  return bundleMetadata(params, "Questions");
 }
 
 export default async function QuestionsEditorPage({ params }: PageProps) {

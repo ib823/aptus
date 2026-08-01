@@ -51,6 +51,75 @@ OUT_PATH = os.path.join(REPO_ROOT, "prisma", "seeds", "value-stream", "process-f
 FIORI_DELIM = re.compile(r"\s{2,}/\s{2,}")
 FIORI_NONE = {"-", "", None}
 
+# ── Mojibake repair ──────────────────────────────────────────────────
+# Some activity names arrive already mangled IN THE WORKBOOK: UTF-8 bytes
+# that were decoded as CP1252 somewhere upstream of this repo. The J60
+# Accounts Payable sheet carried "Report Generic Withholding Tax -
+#马来西亚" as "...- é©¬æ¥è¥¿äºš", and it rendered that way on the
+# client-facing affirm page.
+#
+# openpyxl reads XLSX correctly, so there is nothing to fix in how we read
+# the file — the damage predates it. Repairing here rather than in the JSON
+# is the difference between a fix and a fix that survives: the next person
+# to re-run this extractor would otherwise silently reintroduce it.
+#
+# CP1252, not Latin-1: byte 0x9A surfaces as U+0161 and 0x80 as U+20AC,
+# which a Latin-1 round-trip cannot undo.
+CP1252_HIGH = {
+    0x20AC: 0x80, 0x201A: 0x82, 0x0192: 0x83, 0x201E: 0x84, 0x2026: 0x85,
+    0x2020: 0x86, 0x2021: 0x87, 0x02C6: 0x88, 0x2030: 0x89, 0x0160: 0x8A,
+    0x2039: 0x8B, 0x0152: 0x8C, 0x017D: 0x8E, 0x2018: 0x91, 0x2019: 0x92,
+    0x201C: 0x93, 0x201D: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97,
+    0x02DC: 0x98, 0x2122: 0x99, 0x0161: 0x9A, 0x203A: 0x9B, 0x0153: 0x9C,
+    0x017E: 0x9E, 0x0178: 0x9F,
+}
+_MOJIBAKE_RUN = re.compile(
+    "[-ÿ" + "".join(chr(c) for c in CP1252_HIGH) + "]+"
+)
+# Every repair made, for the run report. Silent data rewriting is worse than
+# the mojibake — the operator has to be able to see what changed.
+REPAIRS: dict[str, str] = {}
+
+
+def _repair_run(run: str) -> str:
+    raw = bytearray()
+    for ch in run:
+        cp = ord(ch)
+        b = CP1252_HIGH.get(cp, cp if cp < 0x100 else None)
+        if b is None:
+            return run
+        raw.append(b)
+
+    out: list[str] = []
+    i = 0
+    changed = False
+    while i < len(raw):
+        # Only 2-4 byte sequences are interesting. A lone high byte is almost
+        # certainly legitimate Western text (an accented Fiori app name), and
+        # rewriting it would be the bug this function exists to avoid.
+        for width in (4, 3, 2):
+            if i + width > len(raw):
+                continue
+            try:
+                out.append(raw[i : i + width].decode("utf-8"))
+            except UnicodeDecodeError:
+                continue
+            i += width
+            changed = True
+            break
+        else:
+            out.append(run[i])
+            i += 1
+    return "".join(out) if changed else run
+
+
+def demojibake(text: str) -> str:
+    """Repair UTF-8-read-as-CP1252 damage, recording anything changed."""
+    fixed = _MOJIBAKE_RUN.sub(lambda m: _repair_run(m.group(0)), text)
+    if fixed != text:
+        REPAIRS[text] = fixed
+    return fixed
+
 
 def find_header(rows: Iterable[tuple]) -> int:
     for i, r in enumerate(rows):
@@ -65,7 +134,7 @@ def parse_fiori(cell) -> list[str]:
     s = str(cell).strip()
     if s in FIORI_NONE:
         return []
-    parts = [p.strip() for p in FIORI_DELIM.split(s)]
+    parts = [demojibake(p.strip()) for p in FIORI_DELIM.split(s)]
     return [p for p in parts if p]
 
 
@@ -101,7 +170,7 @@ def main() -> None:
             {
                 "scopeItemId": str(scope_id),
                 "stepNumber": int(step_no),
-                "activity": str(activity).strip(),
+                "activity": demojibake(str(activity).strip()),
                 "fioriApps": parse_fiori(fiori),
             }
         )
@@ -138,6 +207,10 @@ def main() -> None:
 
     with open(OUT_PATH, "w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=2, ensure_ascii=False)
+    if REPAIRS:
+        print(f"repaired {len(REPAIRS)} mojibake string(s):")
+        for bad, good in REPAIRS.items():
+            print(f"  {bad!r} -> {good!r}")
     print(f"wrote {OUT_PATH}")
     print("counts:", json.dumps(out["meta"]["counts"], indent=2))
 

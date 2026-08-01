@@ -10,7 +10,9 @@
  * to "Adopt SAP standard", and requires a reason on deviate.
  */
 import { notFound, redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { prisma } from "@/lib/db/prisma";
+import { bundleMetadata } from "@/lib/affirm/page-metadata";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getAffirmSetForBundle } from "@/lib/affirm/queries";
 import { getProcessFlowsForBundle } from "@/lib/affirm/process-flow";
@@ -23,6 +25,10 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  return bundleMetadata(params, "Client view");
 }
 
 export default async function ClientAffirmPage({ params }: PageProps) {

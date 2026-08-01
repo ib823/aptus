@@ -15,7 +15,9 @@
  */
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { prisma } from "@/lib/db/prisma";
+import { bundleMetadata } from "@/lib/affirm/page-metadata";
 import { getCurrentUser } from "@/lib/auth/session";
 import {
   getAffirmSetForBundle,
@@ -34,6 +36,10 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  return bundleMetadata(params, "Review & release");
 }
 
 const PILL_FOR: Record<string, { label: string; bg: string; fg: string }> = {
@@ -69,6 +75,21 @@ export default async function ReviewPage({ params }: PageProps) {
 
   const clientFacing = questions.filter((q) => q.status !== "excluded");
   const excluded = questions.filter((q) => q.status === "excluded");
+
+  /*
+   * COUNT THE NUMERATOR OVER THE SAME SET AS THE DENOMINATOR.
+   *
+   * `bundle.responses` is every response row ever recorded for this bundle.
+   * The denominator is `clientFacing`, which drops excluded questions. So a
+   * question that was answered and THEN excluded stayed in the numerator and
+   * left the denominator, and the header read "9 of 8 answered".
+   *
+   * That is not cosmetic. This screen is the record a consultant reads before
+   * releasing a signed client artefact, and a reviewer seeing more answers than
+   * questions cannot tell whether an answer was silently dropped. The count IS
+   * the record, so it has to be countable.
+   */
+  const answeredCount = clientFacing.filter((q) => responseById.has(q.id)).length;
   const flagged = clientFacing.filter((q) => q.flag === "config-how-to");
   const pendingPlainLanguage = clientFacing.filter(
     (q) => q.status !== "confirmed",
@@ -143,9 +164,9 @@ export default async function ReviewPage({ params }: PageProps) {
                   bundle.submittedAt
                     ? ` ${new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(bundle.submittedAt)}`
                     : ""
-                } · ${bundle.responses.length} of ${clientFacing.length} answered`
+                } · ${answeredCount} of ${clientFacing.length} answered`
               : bundle.state === "issued"
-                ? `Issued · ${bundle.responses.length} of ${clientFacing.length} answered so far`
+                ? `Issued · ${answeredCount} of ${clientFacing.length} answered so far`
                 : `Draft · ${coverage.totalScopeItems} scope items selected`}
           </p>
         </div>
@@ -314,7 +335,7 @@ export default async function ReviewPage({ params }: PageProps) {
             Once the client submits their answers, this screen unlocks the release
             control. Answered so far:{" "}
             <span className="font-semibold text-ink">
-              {bundle.responses.length} / {clientFacing.length}
+              {answeredCount} / {clientFacing.length}
             </span>
             .
           </p>
@@ -350,7 +371,7 @@ export default async function ReviewPage({ params }: PageProps) {
               />
               <KV
                 k="Questions answered"
-                v={`${bundle.responses.length} of ${clientFacing.length}`}
+                v={`${answeredCount} of ${clientFacing.length}`}
               />
               <KV
                 k="Adopt standard"
