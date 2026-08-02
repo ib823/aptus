@@ -184,12 +184,12 @@ export const INCIDENT_RULES = {
   unboundedGrant: {
     id: "unbounded-grant",
     severity: "critical",
-    title: "A grant authorises access and can never end",
+    title: "A grant authorises access with no end date",
     firesWhen: `at least ${INCIDENT_THRESHOLDS.unboundedGrant} settled grant confers access and has no expiry date`,
     whyThisSeverity:
-      "There is no revocation path and a settled grant cannot be re-decided, so expiry is the only end a grant has. One without an expiry is permanent access to a client's SAP system, reachable by leaving a field blank. It is critical rather than major because nothing degrades to make it visible: it will read as healthy forever.",
+      "A settled grant cannot be re-decided, so unless somebody revokes it by hand, nothing will close it. One without an expiry is standing access to a client's SAP system, reachable by leaving a field blank. It stays critical now that revocation exists, because nothing degrades to make it visible: until somebody reads this rule it looks healthy forever.",
     remediation:
-      "There is no in-product way to bound a settled grant. Raise a fresh request with an expiry, and treat the unbounded row as live access until the data is corrected directly.",
+      "Revoke the grant in Control Tower with a stated reason, then raise a fresh request bounded by an expiry. Revocation does not re-decide the grant — the original decision stands in the ledger and the withdrawal is recorded beside it.",
   },
   credentialWithoutExpiry: {
     id: "credential-without-expiry",
@@ -197,7 +197,7 @@ export const INCIDENT_RULES = {
     title: "A live credential has no expiry",
     firesWhen: `at least ${INCIDENT_THRESHOLDS.credentialWithoutExpiry} active, unrevoked credential has no expiry date`,
     whyThisSeverity:
-      "A working token that never lapses is a standing key to a client's SAP system, and it is the exact case 'a credential expires soon' cannot report — that rule needs an expiry to compare against. Major rather than critical because rotation IS available here: unlike a grant, this one has a remedy today.",
+      "A working token that never lapses is a standing key to a client's SAP system, and it is the exact case 'a credential expires soon' cannot report — that rule needs an expiry to compare against. Major rather than critical because the fix is one action by the builder who already holds it: rotation replaces the token in place, without the fresh request an unbounded grant needs.",
     remediation:
       "Rotate the credential in Studio with an expiry set. Rotation replaces the token immediately and has no overlap window.",
   },

@@ -127,7 +127,7 @@ const PROSE: Record<string, ScreenProse> = {
       {
         seeing: "A write request refused for having no expiry",
         means:
-          "There is no revocation in this release, so a write grant that never ends could never be ended. The expiry is the control that replaces revocation.",
+          "A grant with no end date is standing access that nobody has to review. Revocation exists as an emergency stop, but it needs somebody to notice first — the expiry is what ends the access without anyone having to.",
       },
     ],
   },
@@ -245,7 +245,7 @@ const PROSE: Record<string, ScreenProse> = {
   "control-tower/portfolio": {
     answers: "Every registered solution, and whether anyone is accountable for it.",
     cannotTell: [
-      "Anything enforced by the declared data class. It is free text recorded at registration; nothing in the platform reads it and no gate depends on it.",
+      "Anything enforced by the declared data class. It is a closed vocabulary now rather than free text, so the values are comparable — but nothing in the platform reads it and no gate depends on it. Rows registered before the list closed read as UNCLASSIFIED, which is what they are.",
     ],
     misreadings: [
       {
@@ -258,7 +258,7 @@ const PROSE: Record<string, ScreenProse> = {
   "control-tower/grants": {
     answers: "What was asked for, what was decided, and when that decision stops being true.",
     cannotTell: [
-      "How to revoke a grant. There is no revocation in this release — an approved grant ends only by lapsing.",
+      "Whether access actually stopped. Revoking a grant closes it here and at the broker's next check; it does not reach into SAP, and it cannot tell you what the holder read while it was live. The traffic feed answers that.",
     ],
     misreadings: [
       {
@@ -269,7 +269,12 @@ const PROSE: Record<string, ScreenProse> = {
       {
         seeing: "A settled grant marked unbounded",
         means:
-          "A defect, not a state. It has no expiry and cannot be re-decided, so nothing will ever end it. It needs a new, bounded request to replace it.",
+          "A defect, not a state. It has no expiry and cannot be re-decided, so nothing will end it on its own. Revoke it with a reason and raise a fresh, bounded request in its place.",
+      },
+      {
+        seeing: "Revoke available on a grant that is already APPROVED",
+        means:
+          "Not a re-decision, and it does not overwrite the approval. The decision stands in the ledger and the withdrawal is recorded beside it, because a decision does not un-happen — you are meant to be able to read both.",
       },
     ],
   },

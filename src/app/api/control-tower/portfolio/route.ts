@@ -8,8 +8,9 @@
  * with the three slots named individually — "2 of 3 owners" tells an operator
  * nothing about who to chase.
  *
- * `dataClass` IS A DECLARATION, NOT A CONTROL, and the response says so. It is a
- * free-text string that gates nothing anywhere in the system. Rendered beside
+ * `dataClass` IS A DECLARATION, NOT A CONTROL, and the response says so. Closing
+ * it to a fixed vocabulary made the values comparable; it did not make them
+ * enforced, and the two are easy to confuse. Rendered beside
  * governed fields without that caveat it would read as an enforced
  * classification, which is precisely the kind of borrowed authority this
  * console exists not to lend.

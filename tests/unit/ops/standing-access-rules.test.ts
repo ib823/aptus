@@ -48,15 +48,28 @@ describe("unbounded-grant", () => {
     expect(idsFrom({ unboundedGrants: 0 })).not.toContain("unbounded-grant");
   });
 
-  it("is critical, because there is no path to undo it", () => {
-    // A settled grant cannot be re-decided and there is no revocation path, so
-    // this is past-tense and irreversible — the definition of the band.
+  it("stays critical even though revocation now exists", () => {
+    /*
+     * The original reason was "there is no path to undo it". That reason died
+     * when revocation shipped — in the same session that added this rule, which
+     * is how the remediation below came to tell an operator to leave standing
+     * access in place next to a working Revoke button.
+     *
+     * The severity does not change, but the REASON does, and it is worth being
+     * precise about: a remedy existing is not the same as the problem being
+     * self-announcing. Nothing degrades, nothing errors, and no other rule can
+     * see it — a grant with no expiry is never inside an expiry runway. It is
+     * critical because it stays invisible until somebody reads this rule.
+     */
     expect(INCIDENT_RULES.unboundedGrant.severity).toBe("critical");
   });
 
-  it("does not promise a remedy the product does not have", () => {
+  it("points at the remedy the product actually has", () => {
     const remedy = INCIDENT_RULES.unboundedGrant.remediation.toLowerCase();
-    expect(remedy).toContain("no in-product way");
+    expect(remedy).toContain("revoke");
+    // And says what to put in its place, so the access is not merely removed
+    // from a caller that legitimately needed it.
+    expect(remedy).toContain("expiry");
   });
 });
 

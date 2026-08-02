@@ -9,7 +9,8 @@
  * So the missing slots are NAMED — "2 of 3 owners" tells a reviewer nothing
  * about who to chase.
  *
- * `dataClass` IS A DECLARATION AND IS RENDERED AS ONE. It is free text that
+ * `dataClass` IS A DECLARATION AND IS RENDERED AS ONE. It is a closed vocabulary
+ * now rather than free text, which makes the values comparable — but it still
  * gates nothing anywhere in the platform. Sitting in a column beside status and
  * ownership it would read as an enforced classification, so it is visually
  * quieter than its neighbours and the strip says outright that nothing reads it.

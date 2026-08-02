@@ -26,8 +26,8 @@ export const metadata: Metadata = {
  * This group shipped with no gate at all and was anonymous-readable on the
  * internet — all twenty pages, 200 with no cookie. The claim in this comment's
  * previous version was true and beside the point: the pages carry no customer
- * data, and they carry the authorization roster verbatim, the fact that grants
- * cannot be revoked in this release, and a named unfixed defect about unbounded
+ * data, and they carry the authorization roster verbatim, every incident rule
+ * with the threshold that fires it, and a named unfixed defect about unbounded
  * grants. The manual's most valuable section is a catalogue of where the product
  * is weakest, which is worth a great deal to a colleague and rather more to
  * someone probing it.
