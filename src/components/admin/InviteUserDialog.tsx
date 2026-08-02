@@ -31,13 +31,21 @@ export function InviteUserDialog({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const availableRoles = getRolesForOrgType(normalizeOrgType(orgType)).map(
-    (r) => ({
-      value: r,
-      label: ROLE_METADATA[r].label,
-      description: ROLE_METADATA[r].description,
-    })
-  );
+  /*
+   * An unrecognised organization type is NOT an organization with no roles.
+   * `normalizeOrgType` used to cast whatever it was given, so an unknown value
+   * produced a canonical type that matches nothing and this list came back
+   * empty — a dialog offering no roles at all, which reads as a rule rather
+   * than as a failure to parse. The two cases are told apart here.
+   */
+  const canonicalOrgType = normalizeOrgType(orgType);
+  const availableRoles = canonicalOrgType
+    ? getRolesForOrgType(canonicalOrgType).map((r) => ({
+        value: r,
+        label: ROLE_METADATA[r].label,
+        description: ROLE_METADATA[r].description,
+      }))
+    : [];
 
   const handleSubmit = async () => {
     if (!email || !role) return;
@@ -120,6 +128,17 @@ export function InviteUserDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {/* Says which of the two happened, and names the value to fix. An
+              empty role list with no explanation is indistinguishable from a
+              policy decision. */}
+          {!canonicalOrgType && (
+            <p className="text-sm text-amber-700 bg-amber-50 p-2 rounded">
+              This organization&apos;s type is <span className="font-mono">{orgType || "not set"}</span>,
+              which the platform does not recognise, so no roles can be offered. Set it to Platform,
+              Partner or Client in organization settings.
+            </p>
+          )}
 
           {error && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</p>}
           {success && <p className="text-sm text-green-600 bg-green-50 p-2 rounded">Invitation sent successfully!</p>}

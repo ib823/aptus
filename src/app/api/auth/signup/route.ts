@@ -91,7 +91,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       data: {
         name: orgName,
         slug,
-        type: "PARTNER",
+        // BOTH COLUMNS, THE SAME VALUE, IN THE CANONICAL VOCABULARY.
+        // This wrote `type: "PARTNER"` beside `orgType: "partner"` — the same
+        // organization spelled two ways on one row, which is how the admin
+        // badge (reads `type`) and the settings page (reads `orgType`) came to
+        // be able to disagree about what an organization is.
+        type: "partner",
         orgType: "partner",
         contactEmail: email,
       },

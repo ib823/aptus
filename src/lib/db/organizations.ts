@@ -18,7 +18,11 @@ export async function ensureOrganization(
   const org = await prisma.organization.create({
     data: {
       name: companyName,
+      // Set together. `orgType` defaults to "client" so omitting it happened to
+      // agree here — but relying on a column default to keep two columns equal
+      // is not agreement, it is luck that holds until the default changes.
       type: "client",
+      orgType: "client",
     },
   });
 

@@ -119,7 +119,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         data: {
           name: "E2E Test Organization",
           slug: "e2e-test-org",
+          // Both columns, canonical, same as every other creation path — a test
+          // fixture that is shaped differently from real data tests the wrong
+          // thing.
           type: "partner",
+          orgType: "partner",
           plan: "ENTERPRISE",
           subscriptionStatus: "ACTIVE",
         },

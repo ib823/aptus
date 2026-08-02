@@ -75,7 +75,11 @@ export function UserManagementTable({
 
   const canManageUsers = ["platform_admin", "partner_lead", "client_admin"].includes(currentUserRole);
 
-  const filteredRoles = getRolesForOrgType(normalizeOrgType(orgType));
+  // Null when the organization's type is not one the platform knows. Offering
+  // no roles is the right refusal; offering it without saying why is not, so
+  // the picker below states the reason rather than rendering an empty list.
+  const canonicalOrgType = normalizeOrgType(orgType);
+  const filteredRoles = canonicalOrgType ? getRolesForOrgType(canonicalOrgType) : [];
 
   const getRoleLabel = (role: string): string =>
     ROLE_METADATA[role as UserRole]?.label ?? role;
@@ -137,6 +141,13 @@ export function UserManagementTable({
 
   return (
     <>
+      {canManageUsers && !canonicalOrgType && (
+        <p className="mb-3 text-sm text-amber-700 bg-amber-50 p-2 rounded">
+          This organization&apos;s type is <span className="font-mono">{orgType || "not set"}</span>,
+          which the platform does not recognise. Role changes are unavailable until it is set to
+          Platform, Partner or Client.
+        </p>
+      )}
       <div className="border rounded-lg overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50">
