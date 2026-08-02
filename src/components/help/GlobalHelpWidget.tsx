@@ -45,7 +45,14 @@ export function GlobalHelpWidget({ userRole, assessmentId }: GlobalHelpWidgetPro
   const [resolved, setResolved] = useState(false);
   const [rating, setRating] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Held so the auto-close cannot fire into an unmounted widget, and so a
+  // reopened session does not inherit a pending close from the last one.
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isConsultant = CONSULTANT_ROLES.includes(userRole);
+
+  useEffect(() => () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  }, []);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -156,30 +163,50 @@ export function GlobalHelpWidget({ userRole, assessmentId }: GlobalHelpWidgetPro
     }
   }, [message, sessionId, isConsultant]);
 
+  /*
+   * BOTH OF THESE USED TO REPORT SUCCESS THEY HAD NOT CONFIRMED.
+   * Neither checked `res.ok`, so a 403 or a 500 still painted "Session resolved"
+   * and "Thank you for your feedback!" — the user believed a consultant had been
+   * released, or that a rating had been recorded, when the server had refused.
+   * A silent catch is defensible for a poll that will retry in five seconds; it
+   * is not defensible for a terminal action the user is told succeeded.
+   */
   const handleResolve = useCallback(async () => {
     if (!sessionId) return;
+    setSendError(null);
     try {
-      await fetch(`/api/help/sessions/${sessionId}/resolve`, {
+      const res = await fetch(`/api/help/sessions/${sessionId}/resolve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "resolve" }),
       });
+      if (!res.ok) {
+        setSendError("Could not mark this resolved. The session is still open.");
+        return;
+      }
       setResolved(true);
     } catch {
-      // Silent
+      setSendError("Network error. The session is still open.");
     }
   }, [sessionId]);
 
   const handleRate = useCallback(async (stars: number) => {
     if (!sessionId) return;
-    setRating(stars);
+    setSendError(null);
     try {
-      await fetch(`/api/help/sessions/${sessionId}/resolve`, {
+      const res = await fetch(`/api/help/sessions/${sessionId}/resolve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "rate", rating: stars }),
       });
-      setTimeout(() => {
+      if (!res.ok) {
+        // Leave the stars unset: showing them filled would claim the rating
+        // landed. The session stays resolved, because it is.
+        setSendError("Could not record your rating.");
+        return;
+      }
+      setRating(stars);
+      closeTimer.current = setTimeout(() => {
         setIsOpen(false);
         setSessionId(null);
         setMessages([]);
@@ -188,7 +215,7 @@ export function GlobalHelpWidget({ userRole, assessmentId }: GlobalHelpWidgetPro
         setRating(0);
       }, 1500);
     } catch {
-      // Silent
+      setSendError("Could not record your rating.");
     }
   }, [sessionId]);
 
@@ -322,6 +349,14 @@ export function GlobalHelpWidget({ userRole, assessmentId }: GlobalHelpWidgetPro
                 )}
                 {rating > 0 && (
                   <p className="text-xs text-green-600 font-medium">Thank you for your feedback!</p>
+                )}
+                {/* The footer that normally carries sendError is not rendered once
+                    the session is resolved, so a failed rating would have had
+                    nowhere to appear. It is repeated here rather than moved,
+                    because the footer's copy is about the message that failed to
+                    send and this one is about the rating. */}
+                {sendError && (
+                  <p role="alert" className="text-xs text-red-500">{sendError}</p>
                 )}
               </div>
             )}

@@ -27,8 +27,20 @@ export const revalidate = 0;
  *
  * Removed (handled differently in the new design):
  *   - <PortalNav>            → replaced by <AptusTopbar> + <AptusSideRail>
- *   - <GlobalHelpWidget>     → replaced by Help item in side rail
  *   - <MobileBottomTabBar>   → mobile is out of scope per spec §10.3 (v1)
+ *   - <GlobalHelpWidget>     → NOT replaced. See below.
+ *
+ * WHAT HAPPENED TO THE HELP WIDGET. This comment used to say it was "replaced by
+ * Help item in side rail". There is no Help item in the side rail: the user menu
+ * has "Help & docs", which opens the Console manual. Static documentation is not
+ * a replacement for a live channel to a consultant, and the swap left the rest of
+ * the feature stranded — /api/help/* still serves, and /admin/help still renders a
+ * consultant queue, but GlobalHelpWidget was the only thing that could CREATE a
+ * session and it is mounted nowhere. So the queue cannot receive work.
+ *
+ * Left in place rather than deleted, because which way to resolve it is a product
+ * call: re-mount the widget, or retire the queue and the routes with it. The
+ * queue now says why it is empty instead of implying nobody has asked.
  */
 export default async function PortalLayout({
   children,

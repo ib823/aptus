@@ -171,9 +171,24 @@ export default function AdminHelpPage() {
           </div>
           <div className="divide-y max-h-[600px] overflow-y-auto">
             {sessions.length === 0 ? (
+              /*
+                AN EMPTY QUEUE THAT SAYS WHY IT IS EMPTY.
+                "No active help sessions" reads as "nobody needs you right now".
+                The truth is that nobody CAN need you here: GlobalHelpWidget was
+                the only thing that could open a session, and it is mounted
+                nowhere since the portal moved to the new shell. An operator
+                refreshing an unreachable queue is the same defect this codebase
+                fixes everywhere else — an absence presented as an all-clear.
+              */
               <div className="p-8 text-center">
                 <MessageCircleQuestion className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">No active help sessions</p>
+                <p className="text-sm text-muted-foreground">No help sessions — and none can be started</p>
+                <p className="mt-2 text-xs text-muted-foreground/80 leading-relaxed">
+                  The client-side help widget was removed when the portal moved to the new shell, and
+                  nothing else in the product opens a session. This queue stays empty until an entry
+                  point ships again. Users who click <span className="font-medium">Help &amp; docs</span> reach
+                  the Console manual instead.
+                </p>
               </div>
             ) : (
               sessions.map((s) => (

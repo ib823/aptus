@@ -61,6 +61,21 @@ const AUTH_VIEWS = [
   { name: "operations-traffic", path: "/operations/traffic" },
   { name: "sap-explorer", path: "/sap-explorer" },
   { name: "discovery-library", path: "/discovery/library" },
+
+  /*
+   * THE MANUAL, which is reachable from every one of the screens above.
+   *
+   * It shipped with a fixed 264 px rail beside its content at every width, so on
+   * a phone the navigation took most of the screen and the prose it exists to
+   * carry was left in a gutter. Nothing caught it because no viewport test ever
+   * opened /help — the one surface a reader reaches precisely when they are
+   * already stuck.
+   *
+   * Both an index and a leaf page: they use different layouts, and only the leaf
+   * renders the "what this screen will not tell you" section.
+   */
+  { name: "manual-index", path: "/help" },
+  { name: "manual-screen", path: "/help/control-tower/grants" },
 ] as const;
 
 const UNAUTH_VIEWS = [
