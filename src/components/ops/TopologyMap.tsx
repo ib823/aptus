@@ -407,10 +407,21 @@ export function TopologyMap({ lens }: { lens: Lens }) {
             </div>
           </div>
 
+          {layout.unplaced.length > 0 ? (
+            // Surfaced, not swallowed. A node the grid could not take renders
+            // as nothing at all, which leaves a canvas that looks complete.
+            <p role="alert" style={{ margin: "8px 0 0", fontSize: 12.5, color: "var(--cta-red)" }}>
+              {layout.unplaced.length} component(s) could not be placed on the grid and are not
+              shown. This view is incomplete — treat it as a defect in the diagram, not in the
+              tenant.
+            </p>
+          ) : null}
+
           <Provenance
             node={hovered}
             payload={data}
             edges={edges}
+            folded={(data?.collapsed ?? []).length > 0}
             liveEdgeCount={liveEdges.length}
             showsTraffic={showsTraffic}
           />
@@ -625,12 +636,22 @@ function NodeBox({
  * encode — how many pairings, how much was recorded, how much was refused —
  * is written here.
  */
-function wiringSentence(node: TopologyNode, edges: TopologyEdge[]): string {
+function wiringSentence(node: TopologyNode, edges: TopologyEdge[], folded: boolean): string {
   const out = edges.filter((e) => e.from === node.id);
   const into = edges.filter((e) => e.to === node.id);
   const all = [...out, ...into];
   if (all.length === 0) {
-    return "Nothing is wired to this — no pairing and no recorded call reaches it.";
+    /*
+     * "NOTHING IS WIRED TO THIS" IS A CLAIM, and it is false whenever a column
+     * has been folded: the route drops any edge whose other end was collapsed
+     * away, so a grant whose solution did not survive the fold arrives here
+     * looking unconnected. Saying so would report a configuration problem that
+     * does not exist — and this sentence is the only form a keyboard user gets
+     * the wiring in, so there is nothing else to correct it.
+     */
+    return folded
+      ? "No lines are shown for this. Some columns are folded, and an edge is dropped when the component at its other end is not on the canvas — so this may be wired to something that is currently hidden."
+      : "Nothing is wired to this — no pairing and no recorded call reaches it.";
   }
 
   const calls = all.reduce((n, e) => n + e.calls, 0);
@@ -649,12 +670,15 @@ function Provenance({
   node,
   payload,
   edges,
+  folded,
   liveEdgeCount,
   showsTraffic,
 }: {
   node: TopologyNode | null;
   payload: Payload | null;
   edges: TopologyEdge[];
+  /** Any column folded, so an absent line is not proof of an absent link. */
+  folded: boolean;
   liveEdgeCount: number;
   showsTraffic: boolean;
 }) {
@@ -678,7 +702,7 @@ function Provenance({
         <>
           <strong style={{ color: "var(--ink-primary)" }}>{node.label}</strong>
           <div style={{ marginTop: 4 }}>{node.provenance.derived}</div>
-          <div style={{ marginTop: 4 }}>{wiringSentence(node, edges)}</div>
+          <div style={{ marginTop: 4 }}>{wiringSentence(node, edges, folded)}</div>
           <div style={{ marginTop: 4 }}>
             <em>Will not tell you:</em> {node.provenance.cannotTell}
           </div>

@@ -718,3 +718,34 @@ describe("the direction of the graph is written on it, in the product's own word
     expect(l.positions.get("n")!.y).toBeGreaterThanOrEqual(LAYOUT.bandH + LAYOUT.headerH);
   });
 });
+
+describe("the layout never drops a node without saying so", () => {
+  it("reports a node it could not place instead of silently omitting it", () => {
+    /*
+     * Silent truncation is never acceptable — the same rule `collapseColumn`
+     * already obeys. A node whose column falls outside the grid gets no
+     * position, the component renders nothing for it, and the canvas looks
+     * complete. That is how a seventh column shipped once and an eighth would
+     * again.
+     */
+    const stray: TopologyNode = {
+      id: "stray",
+      kind: "grant",
+      column: COLUMN_COUNT,
+      label: "stray",
+      state: "observed-good",
+      ended: null,
+      quiet: false,
+      badge: null,
+      href: "/x",
+      provenance: { derived: "", observedAt: null, cannotTell: "" },
+    };
+    const l = layoutTopology([stray]);
+    expect(l.positions.has("stray")).toBe(false);
+    expect(l.unplaced, "an unplaceable node must be reported, not dropped").toEqual(["stray"]);
+  });
+
+  it("reports nothing when every node fits", () => {
+    expect(layoutTopology([]).unplaced).toEqual([]);
+  });
+});

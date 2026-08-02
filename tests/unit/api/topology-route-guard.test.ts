@@ -248,3 +248,55 @@ describe("edges are built from pairings, not from node totals", () => {
     expect(/edge\(`iface:\$\{i\.id\}`, `conn:\$\{c\.id\}`, seen/.test(block)).toBe(false);
   });
 });
+
+/**
+ * A line on this canvas is an assertion about authorisation.
+ *
+ * These are the ones that were wrong once the lines were actually drawn. Each
+ * looked correct in review and was only visible as a claim on screen.
+ */
+describe("the lines do not assert authorisations the broker refuses", () => {
+  it("matches a grant to an interface on operation, not just the service", () => {
+    /*
+     * `src/lib/northbound/access.ts` is explicit: "A READ grant does not
+     * authorise a write, even for the same service in the same environment —
+     * that distinction is the entire reason `operation` is recorded on a
+     * grant." Matching on solution + externalId alone drew a READ grant into a
+     * CREATE interface, which is the one relationship the broker exists to
+     * refuse.
+     */
+    const block = code.slice(code.indexOf("grants.filter"), code.indexOf("byGrantInterface"));
+    expect(block).toContain("x.externalId === i.externalId");
+    expect(
+      /x\.operation === i\.operation/.test(block),
+      "grant→interface must match on operation — otherwise a READ grant is drawn " +
+        "as authorising a CREATE interface",
+    ).toBe(true);
+  });
+
+  it("does not put environment in that match, because an interface has none", () => {
+    // The same capability legitimately holds separate grants per landscape;
+    // requiring equality would drop every one of them.
+    const block = code.slice(code.indexOf("grants.filter"), code.indexOf("byGrantInterface"));
+    expect(/x\.environment === i\.environment/.test(block)).toBe(false);
+  });
+
+  it("mirrors the incident rule's predicate rather than a better one", () => {
+    /*
+     * `unaccountable-prod-grant` counts on decision and environment alone — it
+     * filters neither revoked nor expired rows. A stricter test here would be
+     * the more defensible RULE and the wrong answer to what the node is asking,
+     * which is not "should anything watch this" but "does anything". A node
+     * claiming to be unmonitored while an incident is open about it is the
+     * worse lie.
+     */
+    const block = code.slice(code.indexOf("const holdsProdGrant"));
+    const decl = block.slice(0, block.indexOf(");"));
+    expect(decl).toContain("grantConfersAccess");
+    expect(decl).toContain('"PROD"');
+    expect(
+      /revokedAt/.test(decl),
+      "the rule does not filter revoked grants, so this must not either",
+    ).toBe(false);
+  });
+});

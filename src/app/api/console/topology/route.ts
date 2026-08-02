@@ -284,13 +284,22 @@ export async function GET(request: NextRequest) {
     /*
      * The PROD test is the incident rule's condition, not the defect's. An
      * empty owner slot is a defect wherever it occurs; only the ones holding
-     * live PROD access are watched by anything.
+     * PROD access are watched by anything.
+     *
+     * THIS MIRRORS `unaccountable-prod-grant`'S OWN PREDICATE, deliberately
+     * including the part that looks wrong. That rule counts a grant on decision
+     * and environment alone — it filters neither revoked nor expired rows — so
+     * a solution whose only PROD grant was revoked yesterday IS still counted
+     * by it. Adding a revocation check here would be the more defensible rule
+     * and the wrong answer to the question this node is asking, which is not
+     * "should something watch this" but "does anything". A node that claims to
+     * be unmonitored while an incident is open about it is a worse lie than one
+     * that inherits a rule's odd edges.
      */
     const holdsProdGrant = grants.some(
       (g) =>
         g.solutionId === s.id &&
         g.environment.toUpperCase() === "PROD" &&
-        g.revokedAt == null &&
         grantConfersAccess(g.decision),
     );
     const d = deriveSolution({ missingOwnerCount: missing.length, recordedCalls: seen.calls, holdsProdGrant });
@@ -396,8 +405,24 @@ export async function GET(request: NextRequest) {
         cannotTell: `Whether the capability is permitted — that is decided by a grant and enforced per call. ${FEED_CAVEAT}`,
       },
     });
+    /*
+     * OPERATION IS PART OF THE MATCH, and leaving it out was a fabrication.
+     *
+     * `access.ts` states the rule this drawing has to respect: "A READ grant
+     * does not authorise a write, even for the same service in the same
+     * environment — that distinction is the entire reason `operation` is
+     * recorded on a grant." Matching on solution + service alone drew a line
+     * from a READ grant to a CREATE interface, asserting an authorisation the
+     * broker refuses on every call.
+     *
+     * Environment is deliberately NOT in the match: an interface has none, and
+     * the same capability legitimately holds separate grants per landscape.
+     */
     for (const g of grants.filter(
-      (x) => x.solutionId === i.solutionId && x.externalId === i.externalId,
+      (x) =>
+        x.solutionId === i.solutionId &&
+        x.externalId === i.externalId &&
+        x.operation === i.operation,
     )) {
       const gk = grantKey(g.solutionId, g.externalId, g.operation, g.environment);
       edges.push(

@@ -792,6 +792,15 @@ export interface TopologyLayout {
   chips: Map<number, Point>;
   /** Column → x. Used for the headings, which are not nodes. */
   columnX: number[];
+  /**
+   * Nodes whose column falls outside the grid, so they were not placed.
+   *
+   * SILENT TRUNCATION IS NEVER ACCEPTABLE — the same rule `collapseColumn`
+   * obeys. Without this an out-of-range node gets no position, renders as
+   * nothing, and leaves a canvas that looks complete. Empty in every correct
+   * case; a caller that finds it non-empty has a bug to surface, not to hide.
+   */
+  unplaced: string[];
 }
 
 /**
@@ -821,8 +830,10 @@ export function layoutTopology(
 ): TopologyLayout {
   const pitch = opts.nodeH + opts.rowGap;
   const perColumn: TopologyNode[][] = Array.from({ length: COLUMN_COUNT }, () => []);
+  const unplaced: string[] = [];
   for (const n of nodes) {
     if (n.column >= 0 && n.column < COLUMN_COUNT) perColumn[n.column]!.push(n);
+    else unplaced.push(n.id);
   }
 
   const hasChip = (c: number) => collapsed.some((x) => x.column === c && x.count > 0);
@@ -847,6 +858,7 @@ export function layoutTopology(
     positions,
     chips,
     columnX,
+    unplaced,
   };
 }
 
