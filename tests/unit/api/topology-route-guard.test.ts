@@ -44,6 +44,30 @@ const code = src
   })
   .join("\n");
 
+/**
+ * The full argument list of the call that starts at `from`, parens balanced.
+ *
+ * A FIXED-LENGTH WINDOW WOULD DRIFT. The first version of this read 260
+ * characters and passed until a `groupBy` grew an eighth column, at which point
+ * it reported an unscoped query that was in fact scoped — a guard test that
+ * cries wolf gets its threshold raised, and the next raise hides a real one.
+ * Balancing the parens asks the actual question: is `opsWhere` in THIS call.
+ */
+function callBody(source: string, from: number): string {
+  const open = source.indexOf("(", from);
+  if (open === -1) return "";
+  let depth = 0;
+  for (let i = open; i < source.length; i++) {
+    const ch = source[i];
+    if (ch === "(") depth++;
+    else if (ch === ")") {
+      depth--;
+      if (depth === 0) return source.slice(open, i + 1);
+    }
+  }
+  return source.slice(open);
+}
+
 describe("every lens is gated by its own workspace predicate", () => {
   it.each([
     ["developer-studio", "requireStudio"],
@@ -87,11 +111,7 @@ describe("every query is tenant-scoped", () => {
     const prismaCalls = [...src.matchAll(/prisma\.(\w+)\.(findMany|groupBy|findFirst|count)\(/g)];
     expect(prismaCalls.length, "no prisma calls found — has the route moved?").toBeGreaterThanOrEqual(6);
 
-    const unscoped = prismaCalls.filter((m) => {
-      // Look at the 260 characters after the call opens; the `where` is first.
-      const window = src.slice(m.index!, m.index! + 260);
-      return !window.includes("opsWhere(actor");
-    });
+    const unscoped = prismaCalls.filter((m) => !callBody(src, m.index!).includes("opsWhere(actor"));
     expect(
       unscoped.map((m) => `prisma.${m[1]}.${m[2]}`),
       "these queries do not go through opsWhere",
@@ -131,5 +151,100 @@ describe("it carries its provenance rather than presenting counts as totals", ()
     for (const forbidden of ["healthScore", "uptime", "healthPercent", "availability"]) {
       expect(code.includes(forbidden), `${forbidden} must not appear in the code`).toBe(false);
     }
+  });
+});
+
+/**
+ * An edge is a pairing, never one end's total.
+ *
+ * WHAT THIS PREVENTS, in the words of the bug it replaced. The route used to
+ * build credential→grant edges by cross-producting every credential on the
+ * solution against the grant, and give each one the GRANT's whole call count.
+ * A grant with 400 recorded calls and three credentials drew three 400-call
+ * edges: one call rendered three times, along two pairings that never
+ * happened. Interface→connection was worse — every interface was wired into
+ * every connection that had any traffic at all, which is a wiring diagram the
+ * platform invented.
+ *
+ * It was invisible for as long as nothing drew the lines. It is not the kind of
+ * thing that stays fixed on its own, because the wrong version is shorter.
+ */
+describe("edges are built from pairings, not from node totals", () => {
+  it("groups the feed by both ends of every edge it draws", () => {
+    // Without clientTokenId there is no credential→grant pairing to be had, and
+    // without status a refused call is indistinguishable from a served one.
+    for (const column of ["clientTokenId", "status", "interfaceId", "connectionId"]) {
+      expect(
+        new RegExp(`by:\\s*\\[[^\\]]*"${column}"`, "s").test(src.replace(/\n/g, " ")),
+        `${column} must be in the audit groupBy — the edge counts cannot be derived without it`,
+      ).toBe(true);
+    }
+  });
+
+  it("routes every edge through one constructor rather than hand-built literals", () => {
+    // `edges.push({ ... calls: someNodeTotal })` is exactly how the bug was
+    // written, and it reads as correct at the call site.
+    expect(
+      /edges\.push\(\s*\{/.test(code),
+      "edges must be built by the `edge(from, to, tally, inert)` helper, so the count " +
+        "always comes from a tally and never from a number in scope",
+    ).toBe(false);
+  });
+
+  it("takes each edge's count from the pair map for that pair", () => {
+    expect(code).toContain("attributed.byCredentialSolution");
+    expect(code).toContain("attributed.byGrantInterface");
+    expect(code).toContain("attributed.byInterfaceConnection");
+    // Keyed on both ends, in that order.
+    expect(/pairKey\(c\.id,\s*s\.id\)/.test(code)).toBe(true);
+    expect(/pairKey\(gk,\s*i\.id\)/.test(code)).toBe(true);
+    expect(/pairKey\(i\.id,\s*c\.id\)/.test(code)).toBe(true);
+  });
+
+  it("routes the caller to the grant THROUGH the solution, not around it", () => {
+    /*
+     * A direct credential→grant line would jump the solution column and draw
+     * the same traffic twice on one canvas — once on the short line and once on
+     * the two-hop path beside it.
+     */
+    expect(/edge\(\s*`cred:\$\{c\.id\}`,\s*`grant:/.test(code)).toBe(false);
+    expect(code).toContain("`sol:${g.solutionId}`");
+  });
+
+  it("draws an interface-to-connection line only where a call named both", () => {
+    /*
+     * There is NO schema link between Interface and SapConnection — the broker
+     * resolves the binding per call from the declared environment. So an
+     * unobserved pairing is not a fact and must not be drawn, which means this
+     * one edge is conditional where the structural ones are not.
+     */
+    const block = src.slice(src.indexOf("byInterfaceConnection"));
+    expect(/if \(pair\)\s*edges\.push\(/.test(block)).toBe(true);
+    expect(src).toContain("binding");
+  });
+
+  it("keeps the grant's own total out of the edges entirely", () => {
+    /*
+     * `recordedCalls` is the grant NODE's count, and the right input to exactly
+     * one thing: deriveGrant, which needs to know whether a revoked grant ever
+     * carried anything. Handing it to an edge is the original bug verbatim.
+     *
+     * Not a tautology — the mutation that reintroduces the cross-product is a
+     * two-token edit, and this is the line it has to cross.
+     */
+    expect(/edge\([^)]*recordedCalls/.test(code)).toBe(false);
+    expect(/deriveGrant\(\{ \.\.\.g, recordedCalls \}/.test(code)).toBe(true);
+  });
+
+  it("passes a connection's own total only to the edge that genuinely carries it", () => {
+    /*
+     * connection→tenant is the one place a node total IS the edge total: every
+     * call recorded through a connection went on to the tenant behind it. Every
+     * other edge out of that loop must come from a pairing, which is why the
+     * interface pairing is looked up separately a few lines above.
+     */
+    const block = src.slice(src.indexOf("/* Column 4"));
+    expect(/edge\(`conn:\$\{c\.id\}`, "tenant", seen,/.test(block)).toBe(true);
+    expect(/edge\(`iface:\$\{i\.id\}`, `conn:\$\{c\.id\}`, seen/.test(block)).toBe(false);
   });
 });

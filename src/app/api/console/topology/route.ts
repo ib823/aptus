@@ -39,12 +39,20 @@ import {
 import { studioError, studioOk } from "@/lib/studio/api";
 import { missingOwners } from "@/lib/studio/solutions";
 import {
+  attributeCalls,
   collapseColumn,
+  deriveSolution,
+  grantConfersAccess,
   deriveConnection,
   deriveCredential,
   deriveGrant,
+  grantKey,
+  observeEdge,
+  pairKey,
   routeFor,
+  tallyOf,
   type Lens,
+  type Tally,
   type TopologyEdge,
   type TopologyNode,
 } from "@/lib/ops/topology";
@@ -154,7 +162,16 @@ export async function GET(request: NextRequest) {
      * struggling. Nothing below may present these numbers as totals.
      */
     prisma.northboundAuditEvent.groupBy({
-      by: ["solutionId", "interfaceId", "connectionId", "externalId", "operation", "environment"],
+      by: [
+        "solutionId",
+        "interfaceId",
+        "connectionId",
+        "clientTokenId",
+        "externalId",
+        "operation",
+        "environment",
+        "status",
+      ],
       where: opsWhere(actor, { at: { gte: since } }),
       _count: { _all: true },
     }),
@@ -171,25 +188,35 @@ export async function GET(request: NextRequest) {
    * authorised it is whichever row matches that tuple. If two grants overlap on
    * it, this attribution is ambiguous, and the provenance on every grant node
    * says so rather than presenting the count as certain.
+   *
+   * EVERY EDGE COUNT COMES FROM A PAIRING, never from one end's total. The row
+   * names both ends — `clientTokenId` with the grant tuple, `interfaceId` with
+   * `connectionId` — so a line is drawn only between two things a recorded call
+   * actually joined.
    */
-  const grantKey = (s: string, e: string, o: string, env: string) =>
-    `${s}|${e}|${o}|${env}`.toUpperCase();
-  const callsByGrant = new Map<string, number>();
-  const callsByInterface = new Map<string, number>();
-  const callsByConnection = new Map<string, number>();
-  for (const row of audit) {
-    const n = row._count._all;
-    callsByGrant.set(
-      grantKey(row.solutionId, row.externalId, row.operation, row.environment),
-      (callsByGrant.get(grantKey(row.solutionId, row.externalId, row.operation, row.environment)) ?? 0) + n,
-    );
-    if (row.interfaceId) {
-      callsByInterface.set(row.interfaceId, (callsByInterface.get(row.interfaceId) ?? 0) + n);
-    }
-    if (row.connectionId) {
-      callsByConnection.set(row.connectionId, (callsByConnection.get(row.connectionId) ?? 0) + n);
-    }
-  }
+  const attributed = attributeCalls(
+    audit.map((row) => ({
+      solutionId: row.solutionId,
+      interfaceId: row.interfaceId,
+      connectionId: row.connectionId,
+      clientTokenId: row.clientTokenId,
+      externalId: row.externalId,
+      operation: row.operation,
+      environment: row.environment,
+      status: row.status,
+      count: row._count._all,
+    })),
+  );
+
+  /** An edge, with its observation derived from the pair's own tally. */
+  const edge = (from: string, to: string, t: Tally, inert: boolean): TopologyEdge => ({
+    from,
+    to,
+    calls: t.calls,
+    failures: t.failures,
+    observed: observeEdge(t.calls, t.failures),
+    inert,
+  });
 
   const FEED_CAVEAT =
     "The audit feed is a floor, not a census: calls refused at the throttle leave no record, and an audit write can itself fail.";
@@ -218,6 +245,7 @@ export async function GET(request: NextRequest) {
   /* Column 1 — credentials. */
   for (const c of credentials) {
     const d = deriveCredential(c, now);
+    const seen = tallyOf(attributed.byCredential, c.id);
     nodes.push({
       id: `cred:${c.id}`,
       kind: "credential",
@@ -229,25 +257,93 @@ export async function GET(request: NextRequest) {
       badge: d.badge ?? c.environment,
       href: routeFor(lens, "credential", "/control-tower/tokens"),
       provenance: {
-        derived: `SolutionClient in ${c.environment}; last observed use ${c.lastUsedAt ? c.lastUsedAt.toISOString() : "never recorded"}.`,
+        derived: `SolutionClient in ${c.environment}; ${seen.calls} call(s) recorded against this token in the window; last observed use ${c.lastUsedAt ? c.lastUsedAt.toISOString() : "never recorded"}.`,
         observedAt: c.lastUsedAt?.toISOString() ?? null,
         cannotTell:
-          "Whether this credential is dormant. Last-observed use is written fire-and-forget and often does not land, so a blank is an absent observation rather than an absent call.",
+          "Whether this credential is dormant, and which application holds it. Last-observed use is written fire-and-forget and often does not land, so a blank is an absent observation rather than an absent call.",
       },
       ...(d.incidentId ? { incidentId: d.incidentId } : {}),
     });
-    edges.push({ from: "caller", to: `cred:${c.id}`, calls: 0, inert: d.ended != null });
+    // The only edge the caller column can carry: N calls arrived presenting
+    // this token. It still says nothing about WHO presented it.
+    edges.push(edge("caller", `cred:${c.id}`, seen, d.ended != null));
   }
 
-  /* Column 2 — grants. */
+  /*
+   * Column 2 — solutions.
+   *
+   * THE SPINE. A solution owns the credential, the grants and the interfaces,
+   * so a graph without it shows a token and a list of permissions and nothing
+   * that says whose they are. It also closes a hole in the defect vocabulary:
+   * "a solution with an empty owner slot" is one of the four defects this
+   * module declares, and until there was a solution node it could never render.
+   */
+  for (const s of solutions) {
+    const missing = missingOwners(s);
+    const seen = tallyOf(attributed.bySolution, s.id);
+    /*
+     * The PROD test is the incident rule's condition, not the defect's. An
+     * empty owner slot is a defect wherever it occurs; only the ones holding
+     * live PROD access are watched by anything.
+     */
+    const holdsProdGrant = grants.some(
+      (g) =>
+        g.solutionId === s.id &&
+        g.environment.toUpperCase() === "PROD" &&
+        g.revokedAt == null &&
+        grantConfersAccess(g.decision),
+    );
+    const d = deriveSolution({ missingOwnerCount: missing.length, recordedCalls: seen.calls, holdsProdGrant });
+
+    nodes.push({
+      id: `sol:${s.id}`,
+      kind: "solution",
+      column: 2,
+      label: s.name,
+      state: d.state,
+      ended: d.ended,
+      quiet: d.quiet,
+      badge: d.badge ?? s.status,
+      href: routeFor(lens, "solution", "/studio/solutions"),
+      provenance: {
+        derived: missing.length
+          ? `Solution ${s.status}; no ${missing.join(", no ")} assigned.`
+          : `Solution ${s.status}; all three owners assigned; ${seen.calls} call(s) recorded across its grants in the window.`,
+        observedAt: null,
+        cannotTell: `Which deployment is calling as this solution — the platform sees one credential, not the applications holding it. ${FEED_CAVEAT}`,
+        ...(d.noRule ? { noRule: d.noRule } : {}),
+      },
+      ...(d.incidentId ? { incidentId: d.incidentId } : {}),
+    });
+
+    /*
+     * One credential per solution in v1 (`SolutionClient.solutionId` is
+     * unique), so this pairing is a foreign key rather than an inference — but
+     * the COUNT still comes from the observed pair, because a structural link
+     * says the two are wired and says nothing about what ran.
+     */
+    for (const c of credentials.filter((x) => x.solutionId === s.id)) {
+      edges.push(
+        edge(
+          `cred:${c.id}`,
+          `sol:${s.id}`,
+          tallyOf(attributed.byCredentialSolution, pairKey(c.id, s.id)),
+          c.revokedAt != null,
+        ),
+      );
+    }
+  }
+
+  /* Column 3 — grants. */
   for (const g of grants) {
-    const recordedCalls =
-      callsByGrant.get(grantKey(g.solutionId, g.externalId, g.operation, g.environment)) ?? 0;
+    const gk = grantKey(g.solutionId, g.externalId, g.operation, g.environment);
+    const grantTally = tallyOf(attributed.byGrant, gk);
+    const recordedCalls = grantTally.calls;
     const d = deriveGrant({ ...g, recordedCalls }, now);
     nodes.push({
       id: `grant:${g.id}`,
       kind: "grant",
-      column: 2,
+      column: 3,
       label: `${g.externalId} · ${g.operation}`,
       state: d.state,
       ended: d.ended,
@@ -267,24 +363,25 @@ export async function GET(request: NextRequest) {
       },
       ...(d.incidentId ? { incidentId: d.incidentId } : {}),
     });
-    for (const c of credentials.filter((x) => x.solutionId === g.solutionId)) {
-      edges.push({
-        from: `cred:${c.id}`,
-        to: `grant:${g.id}`,
-        calls: recordedCalls,
-        inert: d.ended != null || c.revokedAt != null,
-      });
-    }
+    /*
+     * A grant hangs off exactly one solution, by foreign key, so this edge is
+     * one-to-one and the grant's own tally IS the pair's tally — no fan-out and
+     * nothing repeated. The credential reaches the grant THROUGH the solution
+     * now; a direct credential→grant line would jump a column and draw the same
+     * traffic twice on one canvas.
+     */
+    edges.push(edge(`sol:${g.solutionId}`, `grant:${g.id}`, grantTally, d.ended != null));
   }
 
-  /* Column 3 — interfaces. */
+  /* Column 4 — interfaces. */
   for (const i of interfaces) {
-    const calls = callsByInterface.get(i.id) ?? 0;
+    const seen = tallyOf(attributed.byInterface, i.id);
+    const calls = seen.calls;
     const noEntitySet = !i.entitySet;
     nodes.push({
       id: `iface:${i.id}`,
       kind: "interface",
-      column: 3,
+      column: 4,
       label: i.name,
       state: noEntitySet ? "defect" : calls > 0 ? "observed-good" : "never-observed",
       ended: null,
@@ -302,18 +399,26 @@ export async function GET(request: NextRequest) {
     for (const g of grants.filter(
       (x) => x.solutionId === i.solutionId && x.externalId === i.externalId,
     )) {
-      edges.push({ from: `grant:${g.id}`, to: `iface:${i.id}`, calls, inert: g.revokedAt != null });
+      const gk = grantKey(g.solutionId, g.externalId, g.operation, g.environment);
+      edges.push(
+        edge(
+          `grant:${g.id}`,
+          `iface:${i.id}`,
+          tallyOf(attributed.byGrantInterface, pairKey(gk, i.id)),
+          g.revokedAt != null,
+        ),
+      );
     }
   }
 
-  /* Column 4 — connections. */
+  /* Column 5 — connections. */
   for (const c of connections) {
     const d = deriveConnection(c);
-    const calls = callsByConnection.get(c.id) ?? 0;
+    const seen = tallyOf(attributed.byConnection, c.id);
     nodes.push({
       id: `conn:${c.id}`,
       kind: "connection",
-      column: 4,
+      column: 5,
       label: c.label,
       state: d.state,
       ended: d.ended,
@@ -322,25 +427,34 @@ export async function GET(request: NextRequest) {
       href: routeFor(lens, "connection", "/operations/connections"),
       provenance: {
         derived: c.lastValidatedAt
-          ? `last successful probe ${c.lastValidatedAt.toISOString()}, status ${c.lastValidationStatus ?? "unknown"}.`
-          : "No probe has ever been recorded against this connection.",
+          ? `last successful probe ${c.lastValidatedAt.toISOString()}, status ${c.lastValidationStatus ?? "unknown"}; ${seen.calls} call(s) recorded through it in the window.`
+          : `No probe has ever been recorded against this connection; ${seen.calls} call(s) recorded through it in the window.`,
         observedAt: c.lastValidatedAt?.toISOString() ?? null,
         cannotTell:
           "Whether it is answering right now. The timestamp moves only on a real success, so a failure beside an old success date is the truth, not an inconsistency.",
       },
       ...(d.incidentId ? { incidentId: d.incidentId } : {}),
     });
+
+    /*
+     * OBSERVED PAIRINGS ONLY. There is no schema link between an interface and
+     * a connection — the broker resolves the binding per call from the declared
+     * environment — so "which interface uses this connection" is answerable
+     * only from rows that named both. Drawing every interface into every
+     * connection, which is what this did before, invents a wiring diagram.
+     */
     for (const i of interfaces) {
-      if (calls > 0) edges.push({ from: `iface:${i.id}`, to: `conn:${c.id}`, calls, inert: false });
+      const pair = attributed.byInterfaceConnection.get(pairKey(i.id, c.id));
+      if (pair) edges.push(edge(`iface:${i.id}`, `conn:${c.id}`, pair, false));
     }
-    edges.push({ from: `conn:${c.id}`, to: "tenant", calls, inert: !c.isActive });
+    edges.push(edge(`conn:${c.id}`, "tenant", seen, !c.isActive));
   }
 
-  /* Column 5 — the customer's SAP. */
+  /* Column 6 — the customer's SAP. */
   nodes.push({
     id: "tenant",
     kind: "tenant",
-    column: 5,
+    column: 6,
     label: "Client SAP tenant",
     state: "unobservable",
     ended: null,
@@ -373,11 +487,12 @@ export async function GET(request: NextRequest) {
     nodes: kept,
     edges: edges.filter((e) => keptIds.has(e.from) && keptIds.has(e.to)),
     collapsed,
-    unownedSolutions: solutions.filter((s) => missingOwners(s).length > 0).length,
     provenance: {
       feedIsAFloor: FEED_CAVEAT,
       grantAttribution:
         "Calls are attributed to a grant by matching solution, service, operation and environment — there is no grant id on an audit row.",
+      binding:
+        "A line between an interface and a connection is drawn only where a recorded call named both. The broker resolves that binding per call from the declared environment, so an unused pairing is not a fact and is not shown.",
       noSummary:
         "This view carries no totals worth copying. Every number with an authoritative screen stays on that screen.",
     },

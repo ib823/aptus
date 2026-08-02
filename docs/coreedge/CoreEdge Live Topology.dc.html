@@ -68,6 +68,35 @@ button{font:inherit;}
 </style>
 </helmet>
 
+<!--
+  AMENDED AFTER IMPLEMENTATION — 2026-08-02.
+
+  This contract is the design as agreed, and the shipped canvas now differs from
+  it in two ways that were decided during the build. The mock below has NOT been
+  regenerated; read these two notes as superseding it.
+
+  1 · SEVEN COLUMNS, NOT SIX. A Solution column sits between Credential and
+      Grant. The solution owns the credential, the grants and the interfaces, so
+      the six-column version had no spine: a reader looking for their
+      application found a token and a list of permissions and nothing that said
+      whose they were. It also made one of the four declared defect classes —
+      "a solution with an empty owner slot" — impossible to render at all.
+
+        caller → credential → solution → grant → interface → connection → SAP
+
+  2 · A DIRECTION BAND SITS ABOVE THE COLUMNS. The left-to-right order follows
+      the REQUEST, which is not self-evident and was in fact misread. The bands
+      are "Northbound · the API your app calls" over columns 0–4 and "Bound to
+      SAP" over 5–6. "Southbound" is deliberately NOT used: it appears in no
+      route, no model, no doc and no manual page, and putting it on the most-read
+      diagram in the Console would teach a term nothing else in the product uses.
+
+  Everything else in the mock holds: the state glyphs, the endedness stroke, the
+  ≥ counts, the one-shot replay, and the rule that motion means a recorded event.
+  The authority for the shipped behaviour is src/lib/ops/topology.ts and its
+  tests, not this file.
+-->
+
 <div style="display:flex;flex-direction:column;height:100vh;min-height:640px;background:var(--surface-cream);color:var(--ink-primary);font-family:system-ui,-apple-system,'Segoe UI',sans-serif;overflow:hidden">
 
   <div style="height:56px;flex:none;display:flex;align-items:center;gap:16px;padding:0 18px;background:var(--surface-paper);border-bottom:1px solid var(--border-default)">
