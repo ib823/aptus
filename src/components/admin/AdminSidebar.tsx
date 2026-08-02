@@ -2,11 +2,7 @@
 
 // Use native <a> tags instead of Next.js Link to avoid silent router.push failures
 import { usePathname } from "next/navigation";
-import {
-  Home, Building2, BarChart3, Puzzle, ArrowLeftRight,
-  Database, Upload, CheckCircle, Landmark, Users, Shield, List, MessageCircleQuestion,
-  Layers, Activity,
-} from "lucide-react";
+import { Home, Building2, BarChart3, Puzzle, ArrowLeftRight, Database, Upload, CheckCircle, Landmark, Users, Shield, List, Layers, Activity } from "lucide-react";
 
 const NAV_SECTIONS = [
   {
@@ -46,7 +42,12 @@ const NAV_SECTIONS = [
       { href: "/admin/users", label: "Users", icon: Users },
       { href: "/admin/roles", label: "Roles & Permissions", icon: Shield },
       { href: "/admin/assessments", label: "All Assessments", icon: List },
-      { href: "/admin/help", label: "Help Queue", icon: MessageCircleQuestion },
+      // "Help Queue" was here and is gone with the rest of the help chat. It
+      // pointed at a consultant queue that could never receive work: the widget
+      // that created sessions was unmounted when the portal moved to the new
+      // shell, and nothing replaced it. A rail entry to a screen that is
+      // permanently empty is worse than no entry — it reads as "nobody has
+      // asked" rather than "nobody can".
     ],
   },
 ] as const;

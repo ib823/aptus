@@ -2244,6 +2244,22 @@ model MagicLinkToken {
 
 // =============================================================
 // Layer 4c: Live Support (help chat between client and consultant)
+//
+// RETIRED. No code reads or writes these two tables any more.
+//
+// The feature was half-dead rather than finished: `GlobalHelpWidget` was the
+// only thing that could CREATE a session, and it stopped being mounted when the
+// portal moved to the new shell. The consultant queue at /admin/help went on
+// rendering, and could never receive a row. The widget, the four /api/help/*
+// routes, the queue and its rail entry are all gone; contextual help is the
+// Console manual and the "?" in each workspace's top bar.
+//
+// THE TABLES STAY. Sessions written before the widget was unmounted are real
+// conversations between a client and a consultant, and dropping them is
+// irreversible — a decision that belongs to whoever can look at the data, not
+// to the commit that removes the code. They are kept here rather than deleted
+// from the schema so that migration history and schema.prisma continue to
+// agree; dropping them is a follow-up once the rows are confirmed disposable.
 // =============================================================
 
 model HelpSession {

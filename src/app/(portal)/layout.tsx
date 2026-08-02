@@ -28,19 +28,23 @@ export const revalidate = 0;
  * Removed (handled differently in the new design):
  *   - <PortalNav>            → replaced by <AptusTopbar> + <AptusSideRail>
  *   - <MobileBottomTabBar>   → mobile is out of scope per spec §10.3 (v1)
- *   - <GlobalHelpWidget>     → NOT replaced. See below.
+ *   - <GlobalHelpWidget>     → the help chat is retired. See below.
  *
- * WHAT HAPPENED TO THE HELP WIDGET. This comment used to say it was "replaced by
- * Help item in side rail". There is no Help item in the side rail: the user menu
- * has "Help & docs", which opens the Console manual. Static documentation is not
- * a replacement for a live channel to a consultant, and the swap left the rest of
- * the feature stranded — /api/help/* still serves, and /admin/help still renders a
- * consultant queue, but GlobalHelpWidget was the only thing that could CREATE a
- * session and it is mounted nowhere. So the queue cannot receive work.
+ * THE HELP CHAT IS GONE, DELIBERATELY. This comment once said the widget was
+ * "replaced by Help item in side rail". There was no Help item in the side rail:
+ * the user menu has "Help & docs", which opens the Console manual. The swap left
+ * the rest of the feature stranded — /api/help/* still served and /admin/help
+ * still rendered a consultant queue, but the widget was the only thing that
+ * could CREATE a session, so the queue could never receive work.
  *
- * Left in place rather than deleted, because which way to resolve it is a product
- * call: re-mount the widget, or retire the queue and the routes with it. The
- * queue now says why it is empty instead of implying nobody has asked.
+ * Rather than re-mount a half-built live channel, the feature was retired: the
+ * widget, the four routes, the queue and its rail entry are all removed. Help is
+ * the Console manual plus the "?" in each workspace's top bar, which covers 42
+ * screens and is contextual to the one you are on.
+ *
+ * The HelpSession / HelpMessage TABLES are kept — sessions written before the
+ * widget was unmounted are real conversations, and dropping them is a decision
+ * for whoever can look at the data. See the note in prisma/schema.prisma.
  */
 export default async function PortalLayout({
   children,
