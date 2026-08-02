@@ -472,6 +472,35 @@ function EdgeLayer({
       focusable="false"
       style={{ position: "absolute", left: 0, top: 0, overflow: "visible", pointerEvents: "none" }}
     >
+      {/*
+        * ARROWHEADS, BECAUSE A LINE HAS NO DIRECTION.
+        *
+        * The band above the columns says which way a request travels, but a
+        * reader tracing one specific line gets nothing from the band — and the
+        * ordering alone was already misread once. An arrowhead is the cheapest
+        * honest direction cue: it survives a screenshot, it needs no legend,
+        * and unlike motion it asserts nothing about how much traffic there is.
+        *
+        * One marker per colour: a marker does not inherit its path's stroke,
+        * and `context-stroke` is not old enough to rely on here.
+        */}
+      <defs>
+        {(Object.keys(EDGE_COLOUR) as EdgeObservation[]).map((o) => (
+          <marker
+            key={o}
+            id={`ce-arrow-${lens}-${o}`}
+            viewBox="0 0 6 6"
+            markerWidth={5}
+            markerHeight={5}
+            refX={5.4}
+            refY={3}
+            orient="auto-start-reverse"
+            markerUnits="strokeWidth"
+          >
+            <path d="M 0 0.6 L 6 3 L 0 5.4 z" fill={EDGE_COLOUR[o]} />
+          </marker>
+        ))}
+      </defs>
       {edges.map((e, i) => {
         const a = layout.positions.get(e.from);
         const b = layout.positions.get(e.to);
@@ -505,6 +534,7 @@ function EdgeLayer({
               stroke={colour}
               strokeWidth={1.5}
               strokeDasharray={faint || e.inert ? "3 4" : undefined}
+              markerEnd={`url(#ce-arrow-${lens}-${e.observed})`}
               opacity={opacity}
             />
             {showsTraffic && e.calls > 0 ? (
@@ -825,6 +855,9 @@ function Legend({ showsTraffic }: { showsTraffic: boolean }) {
       ))}
       <li>
         <span aria-hidden="true">┄</span> dashed = ended, nothing further will flow
+      </li>
+      <li>
+        <span aria-hidden="true">▸</span> arrows point the way a request travels, app to SAP
       </li>
       {showsTraffic
         ? (["good", "mixed", "bad", "never"] as EdgeObservation[]).map((o) => (

@@ -37,6 +37,7 @@ import {
   type OpsActor,
 } from "@/lib/ops/guard";
 import { studioError, studioOk } from "@/lib/studio/api";
+import { productMark, productName } from "@/lib/studio/product-marks";
 import { missingOwners } from "@/lib/studio/solutions";
 import {
   attributeCalls,
@@ -207,6 +208,9 @@ export async function GET(request: NextRequest) {
       count: row._count._all,
     })),
   );
+
+  /** One node per SAP product, keyed the same way from both ends of the edge. */
+  const sapNodeId = (product: string) => `sap:${product}`;
 
   /** An edge, with its observation derived from the pair's own tally. */
   const edge = (from: string, to: string, t: Tally, inert: boolean): TopologyEdge => ({
@@ -472,27 +476,48 @@ export async function GET(request: NextRequest) {
       const pair = attributed.byInterfaceConnection.get(pairKey(i.id, c.id));
       if (pair) edges.push(edge(`iface:${i.id}`, `conn:${c.id}`, pair, false));
     }
-    edges.push(edge(`conn:${c.id}`, "tenant", seen, !c.isActive));
+    edges.push(edge(`conn:${c.id}`, sapNodeId(c.product), seen, !c.isActive));
   }
 
-  /* Column 6 — the customer's SAP. */
-  nodes.push({
-    id: "tenant",
-    kind: "tenant",
-    column: 6,
-    label: "Client SAP tenant",
-    state: "unobservable",
-    ended: null,
-    quiet: false,
-    badge: null,
-    href: routeFor(lens, "tenant", "/operations/connections"),
-    provenance: {
-      derived: "Nothing. The platform observes its own calls, not the system answering them.",
-      observedAt: null,
-      cannotTell:
-        "Anything about the SAP system itself — its load, its other clients, or whether a read reflected committed data.",
-    },
-  });
+  /*
+   * Column 6 — the customer's SAP systems. ONE NODE PER PRODUCT, not one for
+   * "SAP".
+   *
+   * A tenant running Cloud ERP, SuccessFactors and Ariba has three different
+   * systems, owned by different teams, with different outage blast radii.
+   * Drawing every connection converging on a single "Client SAP tenant" said
+   * they were one thing, which is wrong in the way that matters: it makes a
+   * SuccessFactors outage look like it touches the finance integration.
+   *
+   * WHICH SYSTEM A CALL REACHES IS THE CONNECTION LAYER'S ANSWER — `product`
+   * with `environment` and the SAP client is the binding identity the resolver
+   * uses — so these nodes are derived from the connections rather than declared
+   * anywhere. A tenant with no connections still gets one placeholder, because
+   * an empty column would read as "there is no SAP", which is not the claim.
+   */
+  const products = [...new Set(connections.map((c) => c.product))].sort();
+  for (const product of products.length ? products : [null]) {
+    const mark = product ? productMark(product) : null;
+    nodes.push({
+      id: product ? sapNodeId(product) : "tenant",
+      kind: "tenant",
+      column: 6,
+      label: product ? productName(product) : "Client SAP tenant",
+      state: "unobservable",
+      ended: null,
+      quiet: false,
+      badge: mark?.edition ?? null,
+      href: routeFor(lens, "tenant", "/operations/connections"),
+      provenance: {
+        derived: product
+          ? `Derived from the ${connections.filter((c) => c.product === product).length} connection(s) declaring this product. The platform observes its own calls, not the system answering them.`
+          : "Nothing. No connection declares a product, so there is no system to name.",
+        observedAt: null,
+        cannotTell:
+          "Anything about the SAP system itself — its load, its other clients, or whether a read reflected committed data.",
+      },
+    });
+  }
 
   // Collapse per column, reporting what was folded rather than truncating.
   const byColumn = new Map<number, TopologyNode[]>();

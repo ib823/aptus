@@ -244,7 +244,7 @@ describe("edges are built from pairings, not from node totals", () => {
      * interface pairing is looked up separately a few lines above.
      */
     const block = src.slice(src.indexOf("/* Column 4"));
-    expect(/edge\(`conn:\$\{c\.id\}`, "tenant", seen,/.test(block)).toBe(true);
+    expect(/edge\(`conn:\$\{c\.id\}`, sapNodeId\(c\.product\), seen,/.test(block)).toBe(true);
     expect(/edge\(`iface:\$\{i\.id\}`, `conn:\$\{c\.id\}`, seen/.test(block)).toBe(false);
   });
 });
@@ -298,5 +298,47 @@ describe("the lines do not assert authorisations the broker refuses", () => {
       /revokedAt/.test(decl),
       "the rule does not filter revoked grants, so this must not either",
     ).toBe(false);
+  });
+});
+
+/**
+ * "Client SAP tenant" was one node, and a tenant's SAP is not one system.
+ *
+ * A customer running Cloud ERP, SuccessFactors and Ariba has three, owned by
+ * different teams with different blast radii. Converging every connection on a
+ * single node asserted they were one thing — which makes a SuccessFactors
+ * outage look like it touches the finance integration.
+ */
+describe("the last column names the systems, not 'SAP'", () => {
+  it("derives one node per product from the connection layer", () => {
+    // The connection is where product lives; nothing else declares it, which is
+    // why `product` sat in the select unused for as long as the column was one
+    // generic node.
+    expect(code).toContain("new Set(connections.map((c) => c.product))");
+    expect(code).toContain("productName(");
+  });
+
+  it("keys both ends of the connection edge the same way", () => {
+    // A mismatch here drops the edge silently: the route filters edges to nodes
+    // it kept, so a wrong id reads as "this connection reaches nothing".
+    expect(code).toContain("sapNodeId(c.product)");
+    expect(/id: product \? sapNodeId\(product\)/.test(code)).toBe(true);
+  });
+
+  it("still names one system when no connection declares a product", () => {
+    // An empty column would read as "there is no SAP", which is not the claim.
+    expect(code).toContain('[null]');
+    expect(code).toContain('"Client SAP tenant"');
+  });
+
+  it("does not resurrect a hardcoded product list", () => {
+    /*
+     * ConnectionsClient's comment records why: an inline
+     * ["s4hana","successfactors","ariba"] was a third enumeration, and adding
+     * private cloud, on-premise and ECC to two of three left the picker
+     * silently short.
+     */
+    expect(/\["s4hana"/.test(code)).toBe(false);
+    expect(/"successfactors"/.test(code)).toBe(false);
   });
 });
