@@ -20,6 +20,7 @@
 import { $Enums } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 
+import { OPS_WINDOWS } from "@/components/ops/useOpsFeed";
 import { INCIDENT_RULES } from "@/lib/ops/incidents";
 import {
   BANDS,
@@ -28,7 +29,9 @@ import {
   COLUMN_LABELS,
   EDGE_WEIGHT,
   LAYOUT,
+  DEFAULT_WINDOW_HOURS,
   bandExtent,
+  carriedBefore,
   deriveSolution,
   attributeCalls,
   collapseColumn,
@@ -52,7 +55,17 @@ const NOW = new Date("2026-08-02T00:00:00.000Z");
 const PAST = new Date("2026-06-01T00:00:00.000Z");
 const FUTURE = new Date("2026-12-01T00:00:00.000Z");
 
-const grant = (over: Partial<Parameters<typeof deriveGrant>[0]> = {}) =>
+/**
+ * The window the fixtures read through, opening well before PAST.
+ *
+ * DELIBERATELY WIDE. `carried` is only answerable when the row ended INSIDE the
+ * window, so a narrow default here would turn most of these assertions into
+ * tests of `unobservable` rather than of the branch they are about. The
+ * window's own effect is tested separately, below.
+ */
+const SINCE = new Date("2026-01-01T00:00:00.000Z");
+
+const grant = (over: Partial<Parameters<typeof deriveGrant>[0]> = {}, since: Date = SINCE) =>
   deriveGrant(
     {
       id: "g",
@@ -65,6 +78,7 @@ const grant = (over: Partial<Parameters<typeof deriveGrant>[0]> = {}) =>
       ...over,
     },
     NOW,
+    since,
   );
 
 describe("an unbounded settled grant is a defect, before anything else", () => {
@@ -747,5 +761,86 @@ describe("the layout never drops a node without saying so", () => {
 
   it("reports nothing when every node fits", () => {
     expect(layoutTopology([]).unplaced).toEqual([]);
+  });
+});
+
+/**
+ * The window decides what "observed" means, and it must not decide more.
+ *
+ * THE FAILURE THIS CATCHES. Every count on the canvas comes from a feed bounded
+ * to the selected window. While `carried` was a plain boolean, a grant revoked
+ * three months ago had no rows inside a 24-hour window and therefore reported
+ * `carried: false` — "nothing ever ran under this" — for essentially every
+ * ended row on the default view. That is the exact assertion the state/ended
+ * split was built to prevent, made by the split itself.
+ */
+describe("what the window can and cannot answer", () => {
+  const NARROW = new Date("2026-08-01T00:00:00.000Z"); // opens after PAST
+
+  it("cannot say whether a grant revoked before the window ever carried traffic", () => {
+    const d = grant({ revokedAt: PAST, recordedCalls: 0 }, NARROW);
+    expect(d.ended?.carried, "false here would be a claim made by not looking").toBeNull();
+    expect(d.state).toBe("unobservable");
+  });
+
+  it("still says false when the row ended inside the window and nothing was recorded", () => {
+    // Here the feed genuinely covers the period, so the absence is evidence.
+    const d = grant({ revokedAt: PAST, recordedCalls: 0 }, SINCE);
+    expect(d.ended?.carried).toBe(false);
+    expect(d.state).toBe("never-observed");
+  });
+
+  it("says true on recorded traffic regardless of where the window opens", () => {
+    for (const since of [SINCE, NARROW]) {
+      const d = grant({ revokedAt: PAST, recordedCalls: 812 }, since);
+      expect(d.ended?.carried).toBe(true);
+      expect(d.state).toBe("observed-good");
+    }
+  });
+
+  it("applies the same rule to expiry as to revocation", () => {
+    expect(grant({ expiresAt: PAST }, NARROW).ended?.carried).toBeNull();
+    expect(grant({ expiresAt: PAST }, SINCE).ended?.carried).toBe(false);
+  });
+
+  it("keeps a rejected grant at false, because that one is knowable absolutely", () => {
+    // It authorised nothing, so nothing can have run under it — no window needed.
+    expect(grant({ decision: "REJECTED" }, NARROW).ended?.carried).toBe(false);
+  });
+
+  it("leaves a live grant alone — there is nothing ended to ask about", () => {
+    expect(grant({ recordedCalls: 0 }, NARROW).ended).toBeNull();
+  });
+
+  it("computes the boundary directly, with no window to argue about", () => {
+    const at = new Date("2026-05-01T00:00:00.000Z");
+    expect(carriedBefore(0, at, new Date("2026-06-01T00:00:00.000Z"))).toBeNull();
+    expect(carriedBefore(0, at, new Date("2026-04-01T00:00:00.000Z"))).toBe(false);
+    expect(carriedBefore(9, at, new Date("2026-06-01T00:00:00.000Z"))).toBe(true);
+  });
+});
+
+describe("each workspace looks back as far as its own question needs", () => {
+  it("gives Control Tower the widest default, because governance is not about today", () => {
+    /*
+     * At 24 hours a quarterly batch integration reads as not observed. In the
+     * Operations Center that is the right answer to "what moved today". In
+     * Control Tower it invites somebody to revoke a healthy integration.
+     */
+    expect(DEFAULT_WINDOW_HOURS["control-tower"]).toBeGreaterThan(
+      DEFAULT_WINDOW_HOURS["developer-studio"],
+    );
+    expect(DEFAULT_WINDOW_HOURS["developer-studio"]).toBeGreaterThan(
+      DEFAULT_WINDOW_HOURS["operations-center"],
+    );
+  });
+
+  it("offers only windows the control can actually select", () => {
+    // A default outside OPS_WINDOWS renders as no button pressed, which reads
+    // as a broken control rather than as a considered starting point.
+    const offered = OPS_WINDOWS.map((w) => w.hours as number);
+    for (const lens of ["developer-studio", "operations-center", "control-tower"] as const) {
+      expect(offered).toContain(DEFAULT_WINDOW_HOURS[lens]);
+    }
   });
 });

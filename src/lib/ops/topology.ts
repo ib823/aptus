@@ -34,6 +34,14 @@
  * `carried: false` means "no call was recorded", never "no call happened". The
  * provenance says so on every node that carries it.
  *
+ * AND IT IS TRI-STATE, BECAUSE THE FEED IS WINDOWED. The example above only
+ * works if the six months of traffic are inside the window being read; at the
+ * 24-hour default they are not, and a `boolean` would have answered "never
+ * carried anything" for essentially every ended row on the canvas — defeating
+ * the distinction this whole split exists to protect. `carried: null` means the
+ * window cannot answer it, and the node renders `unobservable` rather than
+ * picking whichever of true or false is more convenient.
+ *
  * ─────────────────────────────────────────────────────────────────────────────
  * DEFECT IS FOUR THINGS AND NOTHING ELSE
  *
@@ -86,8 +94,16 @@ export interface Ended {
    * FALSE MEANS "NOT RECORDED", NOT "DID NOT HAPPEN". The feed is a floor:
    * calls throttled at the edge persist no record at all, and an audit write
    * can itself fail. Anything rendering this must say so.
+   *
+   * NULL MEANS THE WINDOW CANNOT ANSWER IT, and that case is not rare — it is
+   * the common one. Every count here comes from a feed bounded to the selected
+   * window, so a grant revoked three months ago has no rows inside a 24-hour
+   * window whatever it did while it was live. Returning `false` there would
+   * assert "nothing ever ran under this" on the strength of not having looked,
+   * which is precisely the claim `carried` was introduced to prevent, and it
+   * would fire on almost every ended row at the default window.
    */
-  carried: boolean;
+  carried: boolean | null;
   reason?: string;
 }
 
@@ -214,6 +230,32 @@ export interface GrantInput {
   recordedCalls: number;
 }
 
+/**
+ * Whether anything ran under a thing that has since ended.
+ *
+ * THE WINDOW IS THE WHOLE PROBLEM. Counts come from a feed bounded to the
+ * selected window, so a grant revoked in March has no rows inside a 24-hour
+ * window no matter how much traffic it carried while it was live. Reporting
+ * `false` there would say "nothing ever ran under this" on the strength of not
+ * having looked — and at the 24-hour default it would say it about very nearly
+ * every ended row on the canvas, which would quietly destroy the one
+ * distinction this module was built to preserve.
+ */
+export function carriedBefore(
+  recordedCalls: number,
+  endedAt: Date,
+  since: Date,
+): boolean | null {
+  if (recordedCalls > 0) return true;
+  return endedAt.getTime() < since.getTime() ? null : false;
+}
+
+/** An unanswerable question is `unobservable`, which the vocabulary already has. */
+function stateForCarried(carried: boolean | null): NodeState {
+  if (carried === null) return "unobservable";
+  return carried ? "observed-good" : "never-observed";
+}
+
 export interface DerivedGrant {
   state: NodeState;
   ended: Ended | null;
@@ -232,8 +274,7 @@ export interface DerivedGrant {
  *      property of its decision.
  *   3. Then the decision itself.
  */
-export function deriveGrant(g: GrantInput, now: Date): DerivedGrant {
-  const carried = g.recordedCalls > 0;
+export function deriveGrant(g: GrantInput, now: Date, since: Date): DerivedGrant {
   const settled = SETTLED.has(g.decision);
   const confersAccess = !CONFERS_NOTHING.has(g.decision);
 
@@ -251,8 +292,9 @@ export function deriveGrant(g: GrantInput, now: Date): DerivedGrant {
   // 2 · Revoked. The decision is untouched — revocation is a second, later
   //     fact recorded beside it, not a re-decision.
   if (g.revokedAt) {
+    const carried = carriedBefore(g.recordedCalls, g.revokedAt, since);
     return {
-      state: carried ? "observed-good" : "never-observed",
+      state: stateForCarried(carried),
       ended: {
         kind: "revoked",
         at: g.revokedAt.toISOString(),
@@ -269,9 +311,11 @@ export function deriveGrant(g: GrantInput, now: Date): DerivedGrant {
     g.decision === "EXPIRED" ||
     (g.expiresAt != null && g.expiresAt.getTime() <= now.getTime());
   if (lapsed) {
+    const at = g.expiresAt ?? now;
+    const carried = carriedBefore(g.recordedCalls, at, since);
     return {
-      state: carried ? "observed-good" : "never-observed",
-      ended: { kind: "expired", at: (g.expiresAt ?? now).toISOString(), carried },
+      state: stateForCarried(carried),
+      ended: { kind: "expired", at: at.toISOString(), carried },
       quiet: false,
       badge: "EXPIRED",
     };
@@ -306,7 +350,7 @@ export function deriveGrant(g: GrantInput, now: Date): DerivedGrant {
   }
 
   return {
-    state: carried ? "observed-good" : "never-observed",
+    state: g.recordedCalls > 0 ? "observed-good" : "never-observed",
     ended: null,
     quiet: false,
     badge: null,
@@ -707,6 +751,26 @@ export const EDGE_WEIGHT: Record<Lens, number> = {
   "developer-studio": 0.22,
   "operations-center": 1,
   "control-tower": 0.4,
+};
+
+/**
+ * How far back each workspace looks by default.
+ *
+ * ONE DEFAULT WAS WRONG FOR TWO OF THE THREE. Every "observed" state on this
+ * canvas is observed WITHIN THE WINDOW, so the window decides what reads as
+ * used. At 24 hours a quarterly batch integration shows as never observed —
+ * which is fine in the Operations Center, whose question is "what moved
+ * today", and actively misleading in Control Tower, whose question is who is
+ * accountable for what. A governance view that calls a healthy integration
+ * unused invites somebody to revoke it.
+ *
+ * Studio sits between: long enough that a feature built last week still looks
+ * built, short enough to stay about current work.
+ */
+export const DEFAULT_WINDOW_HOURS: Record<Lens, number> = {
+  "operations-center": 24,
+  "developer-studio": 24 * 7,
+  "control-tower": 24 * 30,
 };
 
 /** Call counts and replay only where the page is asking about traffic. */

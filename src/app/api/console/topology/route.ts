@@ -348,7 +348,7 @@ export async function GET(request: NextRequest) {
     const gk = grantKey(g.solutionId, g.externalId, g.operation, g.environment);
     const grantTally = tallyOf(attributed.byGrant, gk);
     const recordedCalls = grantTally.calls;
-    const d = deriveGrant({ ...g, recordedCalls }, now);
+    const d = deriveGrant({ ...g, recordedCalls }, now, since);
     nodes.push({
       id: `grant:${g.id}`,
       kind: "grant",

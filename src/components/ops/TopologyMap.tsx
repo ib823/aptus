@@ -60,6 +60,7 @@ import { OPS_WINDOWS } from "@/components/ops/useOpsFeed";
 import {
   BANDS,
   COLUMN_LABELS,
+  DEFAULT_WINDOW_HOURS,
   EDGE_WEIGHT,
   LAYOUT,
   bandExtent,
@@ -103,7 +104,13 @@ const STATE: Record<NodeState, { glyph: string; label: string; fg: string; bg: s
   },
   "never-observed": {
     glyph: "∅",
-    label: "Never observed",
+    /*
+     * NOT "NEVER OBSERVED". Every count behind this state comes from a feed
+     * bounded to the selected window, so the honest reading is "nothing was
+     * recorded in the period being looked at" — which is a different and much
+     * weaker statement than "this has never been used".
+     */
+    label: "Not observed in this window",
     fg: "var(--status-nocheck-fg)",
     bg: "var(--status-nocheck-bg)",
   },
@@ -139,7 +146,7 @@ const EDGE_LABEL: Record<EdgeObservation, string> = {
 const { nodeW: NODE_W, nodeH: NODE_H, bandH: BAND_H } = LAYOUT;
 
 export function TopologyMap({ lens }: { lens: Lens }) {
-  const [hours, setHours] = useState(24);
+  const [hours, setHours] = useState(DEFAULT_WINDOW_HOURS[lens]);
   const [data, setData] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -714,16 +721,20 @@ function Provenance({
           {node.ended ? (
             <div style={{ marginTop: 4 }}>
               Ended ({node.ended.kind}).{" "}
-              {node.ended.carried
+              {node.ended.carried === true
                 ? "It carried recorded traffic before it ended."
-                : "No traffic was recorded under it — which is not the same as none having run."}
+                : node.ended.carried === null
+                  ? "It ended before this window opened, so whether it ever carried traffic cannot be told from here. Widen the window past that date to ask."
+                  : "No traffic was recorded under it — which is not the same as none having run."}
             </div>
           ) : null}
         </>
       ) : (
         <>
           Hover or focus a component to see what its state is derived from, what it is wired to,
-          and what it will not tell you. {payload?.provenance.feedIsAFloor}{" "}
+          and what it will not tell you. The window scopes what counts as OBSERVED — it does not
+          change what exists, and structure, ownership and expiry are not windowed.{" "}
+          {payload?.provenance.feedIsAFloor}{" "}
           {liveEdgeCount === 0
             ? "No calls were recorded in this window, which is a floor rather than a count of zero."
             : `${liveEdgeCount} connection(s) between components carried recorded calls in this window.`}
@@ -871,6 +882,25 @@ function Frame({
           {LENS_CAPTION[lens]}
         </span>
         <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+          {/*
+            * LABELLED, because it is not a filter on a list — it decides what
+            * counts as observed. A node with no recorded call inside it reads
+            * ∅, so moving this control changes states, and an unlabelled row of
+            * durations gave no hint that it would.
+            */}
+          <span
+            id={`topology-window-${lens}`}
+            style={{
+              fontSize: 10.5,
+              textTransform: "uppercase",
+              letterSpacing: ".07em",
+              fontWeight: 700,
+              color: "var(--ink-muted)",
+              marginRight: 2,
+            }}
+          >
+            Observed over
+          </span>
           {OPS_WINDOWS.map((w) => (
             <button
               key={w.hours}
