@@ -38,6 +38,12 @@ import {
   type StudioWorkspace,
 } from "@/lib/studio/rbac";
 import { ALL_USER_ROLES, ROLE_LABELS, type UserRole } from "@/types/assessment";
+import {
+  WORKBENCH_PROSE_KEYS,
+  WORKBENCH_WORKSPACES,
+  type WorkbenchWorkspace,
+} from "@/lib/help/workbench-manual";
+import { canPerformPresalesAction } from "@/lib/presales/rbac";
 
 /** The prose a screen needs and nothing can compute for it. */
 interface ScreenProse {
@@ -318,21 +324,42 @@ const PROSE: Record<string, ScreenProse> = {
   },
 };
 
+export type ManualWorkspace = StudioWorkspace | WorkbenchWorkspace;
+
 export interface ManualScreen {
   /** `operations-center/incidents` — the manual's own URL segment. */
   slug: string;
-  workspace: StudioWorkspace;
+  workspace: ManualWorkspace;
   workspaceLabel: string;
   sectionKey: string;
   title: string;
-  /** The real screen this documents. Null when it is not built yet. */
+  /**
+   * The real screen this documents, when it has an address.
+   *
+   * Null for two different reasons, which the reader has to be able to tell
+   * apart: a Console screen that is not built yet, and a Workbench stage that
+   * exists but lives inside a bundle — /affirm/{bundle}/questions is a shape,
+   * not a URL. `available` distinguishes them, and `reachedBy` says how to get
+   * to the second kind.
+   */
   href: string | null;
   available: boolean;
+  /** Directions, when there is no link to give. Null when `href` is set. */
+  reachedBy: string | null;
+  /** The route as a reader should recognise it, parameters and all. */
+  pattern: string;
   answers: string;
   cannotTell: readonly string[];
   misreadings: readonly { seeing: string; means: string }[];
   /** Computed from the real predicates — never a maintained list. */
   openTo: readonly string[];
+  /**
+   * What that roster MEANS. "role" — a predicate decides. "session" — the only
+   * gate is being signed in, so every role is listed because every role really
+   * can open it. Printing the same list for both would turn the absence of a
+   * control into the appearance of one.
+   */
+  accessBasis: "role" | "session";
 }
 
 const SECTION_LISTS: Record<StudioWorkspace, readonly StudioSection[]> = {
@@ -352,8 +379,8 @@ function rolesFor(workspace: StudioWorkspace): string[] {
   return ALL_USER_ROLES.filter((r) => predicate(r)).map((r) => ROLE_LABELS[r as UserRole]);
 }
 
-/** The whole manual, assembled from the rail plus the prose above. */
-export const MANUAL: readonly ManualScreen[] = WORKSPACES.flatMap((w) =>
+/** The Console's twenty screens, assembled from the rail plus the prose above. */
+const CONSOLE_MANUAL: readonly ManualScreen[] = WORKSPACES.flatMap((w) =>
   SECTION_LISTS[w.key].map((section): ManualScreen => {
     const slug = `${w.key}/${section.key}`;
     const prose = PROSE[slug];
@@ -365,56 +392,179 @@ export const MANUAL: readonly ManualScreen[] = WORKSPACES.flatMap((w) =>
       title: section.label,
       href: section.available ? section.href : null,
       available: section.available,
+      reachedBy: null,
+      pattern: section.href,
       // A missing entry is caught by the completeness test rather than papered
       // over here — an empty string in the UI would read as "nothing to say".
       answers: prose?.answers ?? "",
       cannotTell: prose?.cannotTell ?? [],
       misreadings: prose?.misreadings ?? [],
       openTo: rolesFor(w.key),
+      accessBasis: "role",
     };
   }),
 );
 
+/**
+ * The Workbench's twenty-two, on the same terms.
+ *
+ * `available` is true throughout: unlike the Console rail, which flips sections
+ * on as their PRs land, every Workbench route documented here is checked against
+ * the real route tree by `workbench-routes.test.ts`. A pattern that stopped
+ * resolving would fail there rather than render as a link to a 404.
+ */
+const WORKBENCH_MANUAL: readonly ManualScreen[] = WORKBENCH_WORKSPACES.flatMap((w) =>
+  w.sections.map((section): ManualScreen => {
+    const slug = `${w.key}/${section.key}`;
+    const prose = w.prose[slug];
+    return {
+      slug,
+      workspace: w.key,
+      workspaceLabel: w.label,
+      sectionKey: section.key,
+      title: section.label,
+      href: section.href,
+      available: true,
+      reachedBy: section.reachedBy,
+      pattern: section.pattern,
+      answers: prose?.answers ?? "",
+      cannotTell: prose?.cannotTell ?? [],
+      misreadings: prose?.misreadings ?? [],
+      openTo: w.openTo,
+      accessBasis: w.accessBasis,
+    };
+  }),
+);
+
+/** The whole manual — Console first, because the Workbench pages link into it. */
+export const MANUAL: readonly ManualScreen[] = [...CONSOLE_MANUAL, ...WORKBENCH_MANUAL];
+
 /** Every prose key, so a stale entry can be detected as well as a missing one. */
-export const PROSE_KEYS: readonly string[] = Object.keys(PROSE);
+export const PROSE_KEYS: readonly string[] = [
+  ...Object.keys(PROSE),
+  ...WORKBENCH_PROSE_KEYS,
+];
 
 export function manualScreen(slug: string): ManualScreen | null {
   return MANUAL.find((m) => m.slug === slug) ?? null;
 }
 
+const escapeRegex = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * A route pattern as something a pathname can be tested against.
+ *
+ * Scored by how much of it is LITERAL, which is what stops the parameterised
+ * patterns from swallowing their siblings: `/affirm/{bundle}` matches
+ * `/affirm/new` perfectly well, and would win on length. It has one literal
+ * segment; `/affirm/new` has two, so the real screen wins and the bundle
+ * pattern is left for actual bundle ids.
+ */
+function matcherFor(pattern: string): { re: RegExp; literals: number; segments: number } {
+  const segs = pattern.split("/").filter(Boolean);
+  return {
+    re: new RegExp(
+      `^/${segs.map((s) => (s.startsWith("{") ? "[^/]+" : escapeRegex(s))).join("/")}(?:/|$)`,
+    ),
+    literals: segs.filter((s) => !s.startsWith("{")).length,
+    segments: segs.length,
+  };
+}
+
+const MATCHERS = MANUAL.map((screen) => ({ screen, ...matcherFor(screen.pattern) }));
+
 /**
  * The manual page for a screen you are looking at.
  *
- * Longest match wins, so `/operations/connections` resolves to its own entry
- * rather than to `/operations`. Returns null off the Console entirely, which is
- * how the contextual help control knows to hide rather than to guess.
+ * Most specific match wins, so `/operations/connections` resolves to its own
+ * entry rather than to `/operations`, and `/affirm/abc123/questions` resolves to
+ * the question editor rather than to the bundle it belongs to.
+ *
+ * Returns null off the documented product entirely — the portal, the assessment
+ * screens, the external client journey — which is how the contextual help
+ * control knows to hide rather than to guess. It used to return null across the
+ * whole Workbench too, because there was nothing to point at.
  */
 export function manualSlugForPath(pathname: string): string | null {
-  let best: ManualScreen | null = null;
-  for (const screen of MANUAL) {
-    if (!screen.href) continue;
-    if (pathname === screen.href || pathname.startsWith(`${screen.href}/`)) {
-      if (!best || screen.href.length > (best.href?.length ?? 0)) best = screen;
+  let best: (typeof MATCHERS)[number] | null = null;
+  for (const m of MATCHERS) {
+    if (!m.re.test(pathname)) continue;
+    if (
+      !best ||
+      m.literals > best.literals ||
+      (m.literals === best.literals && m.segments > best.segments)
+    ) {
+      best = m;
     }
   }
-  return best?.slug ?? null;
+  return best?.screen.slug ?? null;
+}
+
+export interface WorkspaceOverview {
+  key: ManualWorkspace;
+  label: string;
+  purpose: string;
+  openTo: readonly string[];
+  accessBasis: "role" | "session";
+  /** Whether a change is possible here at all, and by whom. */
+  mutations: { possible: boolean; by: readonly string[] };
+  /** Which product half this belongs to, so the index can group them. */
+  family: "console" | "workbench";
+  screens: readonly ManualScreen[];
 }
 
 /** What each workspace is for — from the descriptors, not restated. */
-export const WORKSPACE_OVERVIEWS = WORKSPACES.map((w) => ({
-  key: w.key,
+const CONSOLE_OVERVIEWS: readonly WorkspaceOverview[] = WORKSPACES.map((w) => ({
+  key: w.key as ManualWorkspace,
   label: w.label,
   purpose: w.purpose,
   openTo: rolesFor(w.key),
-  /** Whether a governance mutation is possible here at all, and by whom. */
+  accessBasis: "role" as const,
   mutations:
     w.key === "developer-studio"
       ? { possible: true, by: ALL_USER_ROLES.filter((r) => canMutateStudio(r)).map((r) => ROLE_LABELS[r as UserRole]) }
       : w.key === "control-tower"
         ? { possible: true, by: ALL_USER_ROLES.filter((r) => canMutateControlTower(r)).map((r) => ROLE_LABELS[r as UserRole]) }
         : { possible: false, by: [] as string[] },
+  family: "console" as const,
   screens: MANUAL.filter((m) => m.workspace === w.key),
 }));
+
+const WORKBENCH_OVERVIEWS: readonly WorkspaceOverview[] = WORKBENCH_WORKSPACES.map((w) => ({
+  key: w.key,
+  label: w.label,
+  purpose: w.purpose,
+  openTo: w.openTo,
+  accessBasis: w.accessBasis,
+  /*
+   * Presales is the only one of the three with an action matrix, so it is the
+   * only one that can answer "by whom" with a shorter list than "everyone".
+   * `create_bundle` is the representative action: it is the one that starts a
+   * bundle's life, and the roles that hold it are the roles that can change
+   * anything of consequence here.
+   *
+   * Affirm and Discovery have no such predicate. Saying `possible: true, by:
+   * <every role>` is not a shrug — it is the honest reading of a workspace whose
+   * only gate is a session, and it is exactly the sentence someone reviewing the
+   * access model should trip over.
+   */
+  mutations:
+    w.key === "presales"
+      ? {
+          possible: true,
+          by: ALL_USER_ROLES.filter((r) => canPerformPresalesAction(r, "create_bundle")).map(
+            (r) => ROLE_LABELS[r as UserRole],
+          ),
+        }
+      : { possible: true, by: w.openTo },
+  family: "workbench" as const,
+  screens: MANUAL.filter((m) => m.workspace === w.key),
+}));
+
+export const WORKSPACE_OVERVIEWS: readonly WorkspaceOverview[] = [
+  ...CONSOLE_OVERVIEWS,
+  ...WORKBENCH_OVERVIEWS,
+];
 
 /**
  * The incident rules, rendered from the constants the endpoint scores with.

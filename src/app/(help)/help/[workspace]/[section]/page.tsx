@@ -69,6 +69,13 @@ export default async function ManualScreenPage({ params }: Params) {
             >
               Open {screen.title} →
             </Link>
+          ) : screen.available ? (
+            // A Workbench stage. It exists — it just has no address of its own,
+            // because it lives inside a bundle. Rendering "not built yet" here
+            // would be the more damaging of the two possible lies.
+            <span style={{ fontSize: 12.5, color: "var(--ink-secondary)" }}>
+              <code style={{ fontSize: 12 }}>{screen.pattern}</code>
+            </span>
           ) : (
             // Stated rather than silently omitted: a manual entry for a screen
             // that does not exist yet is more useful than a gap, provided it
@@ -78,9 +85,17 @@ export default async function ManualScreenPage({ params }: Params) {
             </span>
           )}
           <span style={{ fontSize: 12.5, color: "var(--ink-muted)" }}>
-            Open to {screen.openTo.join(", ")}
+            {screen.accessBasis === "session"
+              ? "Open to any signed-in user — no role gate"
+              : `Open to ${screen.openTo.join(", ")}`}
           </span>
         </div>
+
+        {screen.reachedBy ? (
+          <p style={{ margin: "10px 0 0", fontSize: 13, lineHeight: "20px", color: "var(--ink-secondary)" }}>
+            <strong style={{ fontWeight: 600 }}>Getting there.</strong> {screen.reachedBy}
+          </p>
+        ) : null}
       </header>
 
       {/* THE SECTION THIS MANUAL EXISTS FOR. Every Console screen refuses to

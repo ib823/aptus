@@ -21,89 +21,66 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
-interface RailItem {
-  href: string;
-  label: string;
-  icon: ReactNode;
-}
+import { DISCOVERY_SECTIONS } from "@/lib/workbench/sections";
 
 const S = { stroke: "currentColor", strokeWidth: 1.75, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
-const ITEMS: RailItem[] = [
-  {
-    href: "/discovery",
-    label: "Home",
-    icon: (
+/**
+ * Icons only. The hrefs and labels come from DISCOVERY_SECTIONS.
+ *
+ * They used to live here as one list, which made this component the inventory
+ * of the workspace — fine until the manual needed the same inventory and could
+ * not have it: a server module reading a value out of a `"use client"` module
+ * gets a client reference back, not an array (see src/lib/studio/sections.ts,
+ * where exactly that broke a production build).
+ *
+ * So the data moved to lib and the icons stayed, keyed by href. A section
+ * without an icon still renders — losing a glyph is a blemish, whereas dropping
+ * the rail entry would hide a screen.
+ */
+const ICONS: Record<string, ReactNode> = {
+  "/discovery": (
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M4 11 L12 4 L20 11 V20 H4 Z" {...S} />
       </svg>
-    ),
-  },
-  {
-    href: "/discovery/library",
-    label: "Library",
-    icon: (
+  ),
+  "/discovery/library": (
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M4 5h16M4 10h16M4 15h16M4 20h10" {...S} />
       </svg>
-    ),
-  },
-  {
-    href: "/discovery/coverage",
-    label: "Coverage",
-    icon: (
+  ),
+  "/discovery/coverage": (
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <circle cx="12" cy="12" r="8" {...S} />
         <path d="M12 4a8 8 0 0 1 8 8h-8Z" {...S} />
       </svg>
-    ),
-  },
-  {
-    href: "/discovery/sources",
-    label: "Sources",
-    icon: (
+  ),
+  "/discovery/sources": (
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M5 4h9l5 5v11H5z M14 4v5h5" {...S} />
       </svg>
-    ),
-  },
-  {
-    href: "/discovery/sessions",
-    label: "Sessions",
-    icon: (
+  ),
+  "/discovery/sessions": (
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M9 6l9 6-9 6z" {...S} />
       </svg>
-    ),
-  },
-  {
-    href: "/discovery/map",
-    label: "Product map",
-    icon: (
+  ),
+  "/discovery/map": (
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M4 8h11l-2-2M20 16H9l2 2" {...S} />
       </svg>
-    ),
-  },
-  {
-    href: "/discovery/outputs",
-    label: "Outputs",
-    icon: (
+  ),
+  "/discovery/outputs": (
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14" {...S} />
       </svg>
-    ),
-  },
-  {
-    href: "/discovery/health",
-    label: "Library health",
-    icon: (
+  ),
+  "/discovery/health": (
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M3 12h4l2-5 3 10 2-5h7" {...S} />
       </svg>
-    ),
-  },
-];
+  ),
+};
 
 export function DiscoverySiderail() {
   const pathname = usePathname();
@@ -129,17 +106,21 @@ export function DiscoverySiderail() {
       </span>
 
       <ul className="flex flex-col items-center gap-1">
-        {ITEMS.map((item) => {
+        {DISCOVERY_SECTIONS.map((item) => {
+          // `href` is nullable on the shared type because Affirm and Presales
+          // have stages that live inside a bundle and have no address. Every
+          // Discovery section is a place, so none of them is null — this narrows
+          // the type rather than handling a case that occurs.
+          const href = item.href;
+          if (!href) return null;
           // Exact match for the home link; prefix match for the sections, so a
           // drawer route still lights its parent.
           const active =
-            item.href === "/discovery"
-              ? pathname === "/discovery"
-              : pathname.startsWith(item.href);
+            href === "/discovery" ? pathname === "/discovery" : pathname.startsWith(href);
           return (
-            <li key={item.href}>
+            <li key={href}>
               <Link
-                href={item.href}
+                href={href}
                 aria-current={active ? "page" : undefined}
                 className={`flex h-11 w-12 flex-col items-center justify-center gap-0.5 rounded-input border-l-[3px] transition-colors focus-visible:shadow-focus-ring focus-visible:outline-none ${
                   active
@@ -147,7 +128,7 @@ export function DiscoverySiderail() {
                     : "border-transparent text-white/[0.72] hover:bg-white/[0.08]"
                 }`}
               >
-                {item.icon}
+                {ICONS[href]}
                 <span className="text-[8px] font-semibold tracking-[0.02em]">{item.label}</span>
               </Link>
             </li>

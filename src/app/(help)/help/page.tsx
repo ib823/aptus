@@ -65,10 +65,24 @@ export default function ManualIndexPage() {
 
           <dl style={{ margin: "0 0 14px", display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 14px", fontSize: 12.5 }}>
             <dt style={{ color: "var(--ink-muted)" }}>Open to</dt>
-            <dd style={{ margin: 0, color: "var(--ink-secondary)" }}>{w.openTo.join(", ")}</dd>
+            <dd style={{ margin: 0, color: "var(--ink-secondary)" }}>
+              {/*
+                A workspace whose only gate is a session gets a sentence, not a
+                roster. Listing every role would look identical to a roster
+                somebody chose, and the difference between "these five roles may
+                enter" and "there is no role check" is the whole point.
+              */}
+              {w.accessBasis === "session"
+                ? "Any signed-in user — this workspace has no role gate"
+                : w.openTo.join(", ")}
+            </dd>
             <dt style={{ color: "var(--ink-muted)" }}>Can change things</dt>
             <dd style={{ margin: 0, color: "var(--ink-secondary)" }}>
-              {w.mutations.possible ? w.mutations.by.join(", ") : "Nobody — this workspace is read-only"}
+              {!w.mutations.possible
+                ? "Nobody — this workspace is read-only"
+                : w.accessBasis === "session"
+                  ? "Any signed-in user"
+                  : w.mutations.by.join(", ")}
             </dd>
           </dl>
 

@@ -8,10 +8,20 @@
  *
  * Available while bundle.state is "draft" OR "issued":
  *   - draft     : editing pre-issue. CTA = Issue to client.
- *   - issued    : editing post-issue (changes flow through to live
- *                 client view).
+ *   - issued    : READ-ONLY. The screen still opens, because seeing exactly
+ *                 what the client is answering is worth having; nothing on it
+ *                 can be changed.
  *   - submitted : redirect to /review (client sealed; editor closed).
  *   - released  : redirect to /output.
+ *
+ * That second line used to read "editing post-issue (changes flow through to
+ * live client view)", and it was accurate: wording, format, order and
+ * enable/disable all reached a client mid-answer, with no version and no record
+ * of what a question said when it was answered — while the Review screen
+ * promised in as many words that client answers are sealed. The API is
+ * draft-only now (`isEditable` in the questions routes) and QuestionEditor
+ * renders the issued state read-only with the reason on screen. This comment
+ * was the last place the old behaviour was still described.
  */
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";

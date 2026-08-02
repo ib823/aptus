@@ -40,8 +40,22 @@ describe("every screen is documented, and every entry is a screen", () => {
     ).toEqual([]);
   });
 
-  it("has no entry for a screen that does not exist", () => {
-    const orphans = PROSE_KEYS.filter((key) => !RAIL_SLUGS.includes(key));
+  it("has no entry for a Console screen that does not exist", () => {
+    /*
+     * Scoped to the Console's own prose keys. The manual now also covers the
+     * Workbench — Affirm, Presales, Process Discovery — whose screens come from
+     * route patterns rather than a rail, because two of those three are flows
+     * through a bundle with no rail to enumerate. Their both-directions check
+     * lives in `workbench-routes.test.ts` and runs against the real route tree.
+     *
+     * Filtering here rather than widening RAIL_SLUGS keeps each guard pointed at
+     * the source of truth it can actually verify: this one would have no way to
+     * tell whether `affirm/questions` is real.
+     */
+    const consoleKeys = PROSE_KEYS.filter((key) =>
+      WORKSPACES.some((w) => key.startsWith(`${w.key}/`)),
+    );
+    const orphans = consoleKeys.filter((key) => !RAIL_SLUGS.includes(key));
     expect(
       orphans,
       `These manual entries document nothing:\n${orphans.join("\n")}`,
@@ -112,10 +126,27 @@ describe("the contextual help control resolves a real page or nothing", () => {
     expect(manualSlugForPath("/control-tower/tokens")).toBe("control-tower/tokens");
   });
 
-  it("returns nothing off the Console, so the control hides rather than guesses", () => {
+  it("returns nothing off the documented product, so the control hides rather than guesses", () => {
     // A "?" linking to a page about a different product is worse than no "?".
-    for (const outside of ["/dashboard", "/assessments/123", "/presales", "/"]) {
+    // `/presales` used to belong in this list and no longer does: it is a
+    // documented workspace now, and resolving it is the point.
+    for (const outside of ["/dashboard", "/assessments/123", "/workshops/join", "/"]) {
       expect(manualSlugForPath(outside), outside).toBeNull();
     }
+  });
+
+  it("resolves Workbench stages without a bundle id swallowing its siblings", () => {
+    /*
+     * `/affirm/{bundle}` matches `/affirm/new` perfectly well and would win on
+     * length, pointing a consultant creating a bundle at the manual page for the
+     * client's answering screen. Specificity is counted in literal segments, so
+     * the real screen wins.
+     */
+    expect(manualSlugForPath("/affirm/new")).toBe("affirm/new");
+    expect(manualSlugForPath("/affirm/clx123")).toBe("affirm/client");
+    expect(manualSlugForPath("/affirm/clx123/questions")).toBe("affirm/questions");
+    expect(manualSlugForPath("/presales/settings")).toBe("presales/settings");
+    expect(manualSlugForPath("/presales/clx123/audit")).toBe("presales/audit");
+    expect(manualSlugForPath("/discovery/library")).toBe("discovery/library");
   });
 });

@@ -14,6 +14,7 @@
 
 import type { ReactNode } from 'react';
 import { Wordmark } from '@/components/brand/Wordmark';
+import { WorkbenchHelpLink } from './WorkbenchHelpLink';
 import { WorkbenchUserMenu } from './WorkbenchUserMenu';
 
 interface Props {
@@ -48,7 +49,12 @@ export function WorkbenchShell({ userEmail, children }: Props) {
         >
           <Wordmark size="md" />
         </a>
-        <WorkbenchUserMenu email={userEmail} />
+        {/* The manual, on the screen you are looking at. Hides itself on the
+            routes that have no page rather than linking to a guess. */}
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
+          <WorkbenchHelpLink />
+          <WorkbenchUserMenu email={userEmail} />
+        </div>
       </header>
       <main>{children}</main>
     </div>
