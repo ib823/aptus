@@ -23,7 +23,7 @@
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { studioError } from "@/lib/studio/api";
-import { canAccessControlTower, canAccessOperations } from "@/lib/studio/rbac";
+import { canAccessControlTower, canAccessOperations, canAccessStudio } from "@/lib/studio/rbac";
 import { scopedWhere, tenantScopeFor, type TenantScope } from "@/lib/studio/tenant-scope";
 
 export type OpsActor =
@@ -81,6 +81,23 @@ async function requireWorkspace(
 
 export async function requireOperations(): Promise<OpsGuardResult> {
   return requireWorkspace(canAccessOperations, "Operations Center is role-gated.");
+}
+
+/**
+ * Developer Studio's preamble.
+ *
+ * Added for the topology endpoint, which is the first thing to serve all three
+ * workspaces from one route: the graph is the same, the lens over it differs.
+ * Each lens must be gated by ITS OWN workspace predicate — a `support` user may
+ * read the Operations lens and must not be able to ask for the Control Tower
+ * one by changing a query parameter.
+ *
+ * `canAccessStudio` is builders plus admins. Note it is deliberately NOT
+ * `canMutateStudio`: an admin's Studio access is oversight, and reading a
+ * topology is oversight.
+ */
+export async function requireStudio(): Promise<OpsGuardResult> {
+  return requireWorkspace(canAccessStudio, "Developer Studio is role-gated.");
 }
 
 /**

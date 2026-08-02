@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<style>
+:root{
+--brand-navy:#002B5C;--cta-red:#C8102E;--surface-cream:#FAF9F5;--surface-paper:#FFFFFE;
+--ink-primary:#1A1A1A;--ink-secondary:#4A4A4A;--ink-muted:#6B6B6B;
+--border-default:#E5E1D6;--border-strong:#C4BFAE;--focus-ring:#C8102E;
+--rail-bg:#002B5C;--rail-ink:#DCE5F0;--rail-ink-dim:#8FA6C4;--rail-sel:#0A3E77;
+--st-good:#1F7A5C;--st-good-bg:#EDF5F1;
+--st-bad:#B25E00;--st-bad-bg:#FBF1E5;
+--st-never:#7A756A;--st-never-bg:transparent;
+--st-unobs:#5B5476;--st-unobs-bg:#F1EFF6;
+--st-defect:#C8102E;--st-defect-bg:#FBEBEE;
+--edge-line:#B9B3A3;--grid:#EFEBDF;
+}
+@media (prefers-color-scheme: dark){
+:root:not([data-theme="light"]){
+--surface-cream:#12151A;--surface-paper:#1B2028;
+--ink-primary:#F1EFE9;--ink-secondary:#C2BEB4;--ink-muted:#8B867C;
+--border-default:#2B323C;--border-strong:#414A57;--focus-ring:#FF7085;
+--rail-bg:#0A1220;--rail-ink:#D3DCEA;--rail-ink-dim:#7C8DA6;--rail-sel:#152540;
+--st-good:#54BF97;--st-good-bg:#12261F;
+--st-bad:#E0A25C;--st-bad-bg:#2A2114;
+--st-never:#8B867C;--st-never-bg:transparent;
+--st-unobs:#A79BD0;--st-unobs-bg:#201E2B;
+--st-defect:#FF7085;--st-defect-bg:#2B1419;
+--edge-line:#3B434F;--grid:#191E25;
+}}
+:root[data-theme="light"]{
+--surface-cream:#FAF9F5;--surface-paper:#FFFFFE;
+--ink-primary:#1A1A1A;--ink-secondary:#4A4A4A;--ink-muted:#6B6B6B;
+--border-default:#E5E1D6;--border-strong:#C4BFAE;--focus-ring:#C8102E;
+--rail-bg:#002B5C;--rail-ink:#DCE5F0;--rail-ink-dim:#8FA6C4;--rail-sel:#0A3E77;
+--st-good:#1F7A5C;--st-good-bg:#EDF5F1;
+--st-bad:#B25E00;--st-bad-bg:#FBF1E5;
+--st-never:#7A756A;--st-never-bg:transparent;
+--st-unobs:#5B5476;--st-unobs-bg:#F1EFF6;
+--st-defect:#C8102E;--st-defect-bg:#FBEBEE;
+--edge-line:#B9B3A3;--grid:#EFEBDF;
+}
+:root[data-theme="dark"]{
+--surface-cream:#12151A;--surface-paper:#1B2028;
+--ink-primary:#F1EFE9;--ink-secondary:#C2BEB4;--ink-muted:#8B867C;
+--border-default:#2B323C;--border-strong:#414A57;--focus-ring:#FF7085;
+--rail-bg:#0A1220;--rail-ink:#D3DCEA;--rail-ink-dim:#7C8DA6;--rail-sel:#152540;
+--st-good:#54BF97;--st-good-bg:#12261F;
+--st-bad:#E0A25C;--st-bad-bg:#2A2114;
+--st-never:#8B867C;--st-never-bg:transparent;
+--st-unobs:#A79BD0;--st-unobs-bg:#201E2B;
+--st-defect:#FF7085;--st-defect-bg:#2B1419;
+--edge-line:#3B434F;--grid:#191E25;
+}
+html,body{margin:0;padding:0;background:var(--surface-cream);}
+*{-webkit-font-smoothing:antialiased;}
+a{color:var(--brand-navy);text-decoration:none;}
+a:hover{color:var(--cta-red);}
+button{font:inherit;}
+@keyframes ce-breathe{0%,100%{opacity:.35}50%{opacity:1}}
+@media (prefers-reduced-motion: reduce){*{animation:none !important}}
+</style>
+</helmet>
+
+<div style="display:flex;flex-direction:column;height:100vh;min-height:640px;background:var(--surface-cream);color:var(--ink-primary);font-family:system-ui,-apple-system,'Segoe UI',sans-serif;overflow:hidden">
+
+  <div style="height:56px;flex:none;display:flex;align-items:center;gap:16px;padding:0 18px;background:var(--surface-paper);border-bottom:1px solid var(--border-default)">
+    <div style="display:flex;align-items:baseline;gap:8px">
+      <span style="font-family:Georgia,'Iowan Old Style','Times New Roman',serif;font-size:16px;font-weight:600;letter-spacing:-0.01em">CoreEdge</span>
+      <span style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-muted)">Console</span>
+    </div>
+    <div style="width:1px;height:22px;background:var(--border-default)"></div>
+    <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px">
+      <span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:var(--ink-secondary)">{{ routeCrumb }}</span>
+      <sc-if value="{{ opened }}" hint-placeholder-val="{{ false }}">
+        <span style="display:inline-flex;align-items:center;gap:7px;padding:3px 8px;border:1px solid var(--border-strong);border-radius:5px;background:var(--surface-cream)">
+          <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-muted)">would open</span>
+          <span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:var(--ink-primary)">{{ opened }}</span>
+          <button onClick="{{ clearOpened }}" style="border:0;background:transparent;color:var(--ink-muted);cursor:pointer;padding:0 0 0 2px;font-size:12px">×</button>
+        </span>
+      </sc-if>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <span style="font-size:11px;color:var(--ink-muted)">Tenant</span>
+      <span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px">{{ tenantName }}</span>
+      <button onClick="{{ toggleTheme }}" style-hover="border-color:var(--border-strong)" style="margin-left:10px;padding:5px 10px;border:1px solid var(--border-default);border-radius:6px;background:var(--surface-cream);color:var(--ink-secondary);font-size:11px;cursor:pointer">{{ themeLabel }}</button>
+    </div>
+  </div>
+
+  <div style="flex:1;min-height:0;display:flex">
+
+    <div style="width:220px;flex:none;background:var(--rail-bg);color:var(--rail-ink);display:flex;flex-direction:column;padding:16px 0 12px">
+      <div style="padding:0 16px 12px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--rail-ink-dim)">Workspaces</div>
+      <sc-for list="{{ workspaces }}" as="w" hint-placeholder-count="3">
+        <button onClick="{{ w.select }}" style="{{ w.style }}" style-hover="background:var(--rail-sel)">
+          <span style="display:block;font-size:13px;font-weight:600">{{ w.name }}</span>
+          <span style="display:block;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;color:var(--rail-ink-dim);margin-top:2px">{{ w.route }}</span>
+        </button>
+      </sc-for>
+      <div style="margin:18px 16px 8px;height:1px;background:rgba(255,255,255,.12)"></div>
+      <div style="padding:0 16px 8px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--rail-ink-dim)">In this workspace</div>
+      <sc-for list="{{ railRoutes }}" as="r" hint-placeholder-count="4">
+        <button onClick="{{ r.open }}" style="display:flex;flex-direction:column;gap:1px;width:100%;text-align:left;border:0;background:transparent;color:var(--rail-ink);padding:5px 16px;cursor:pointer" style-hover="color:#fff">
+          <span style="font-size:12px">{{ r.label }}</span>
+          <span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10px;color:var(--rail-ink-dim)">{{ r.path }}</span>
+        </button>
+      </sc-for>
+      <div style="flex:1"></div>
+      <div style="padding:10px 16px 0;font-size:10.5px;line-height:1.5;color:var(--rail-ink-dim);border-top:1px solid rgba(255,255,255,.12);margin-top:10px">Simulated tenant. Every state on this canvas is derived from a record, or says that it isn't.</div>
+    </div>
+
+    <div style="flex:1;min-width:0;overflow:auto;padding:22px 26px 48px">
+
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:4px">
+        <div style="max-width:640px">
+          <h1 style="margin:0;font-family:Georgia,'Iowan Old Style','Times New Roman',serif;font-size:26px;font-weight:600;letter-spacing:-0.015em;color:var(--ink-primary)">{{ lensTitle }}</h1>
+          <p style="margin:6px 0 0;font-size:13px;line-height:1.55;color:var(--ink-secondary);text-wrap:pretty">{{ lensBlurb }}</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-muted)">Scenario</span>
+          <sc-for list="{{ scenarios }}" as="s" hint-placeholder-count="3">
+            <button onClick="{{ s.select }}" style="{{ s.style }}">{{ s.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+
+      <sc-if value="{{ showSolutionStrip }}" hint-placeholder-val="{{ true }}">
+        <div style="margin-top:18px;border:1px solid var(--border-default);border-radius:10px;background:var(--surface-paper);padding:12px 14px">
+          <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">
+            <span style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-muted)">Solutions &amp; owner slots</span>
+            <span style="font-size:11.5px;color:var(--ink-secondary)">{{ ownerNote }}</span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px">
+            <sc-for list="{{ solutions }}" as="s" hint-placeholder-count="6">
+              <div style="{{ s.style }}">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                  <span style="font-size:12px;font-weight:600;line-height:1.25">{{ s.name }}</span>
+                  <span style="{{ s.statusStyle }}">{{ s.status }}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:5px;margin-top:8px">
+                  <sc-for list="{{ s.owners }}" as="o" hint-placeholder-count="3">
+                    <span style="{{ o.style }}" title="{{ o.title }}">{{ o.key }}</span>
+                  </sc-for>
+                  <span style="margin-left:4px;font-size:10.5px;color:var(--ink-muted)">{{ s.ownerNote }}</span>
+                </div>
+                <div style="margin-top:6px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9px;letter-spacing:.06em;color:var(--ink-muted)">{{ s.kind }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <div style="margin-top:18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-muted)">Window</span>
+          <div style="display:flex;border:1px solid var(--border-default);border-radius:7px;overflow:hidden;background:var(--surface-paper)">
+            <sc-for list="{{ windows }}" as="w" hint-placeholder-count="3">
+              <button onClick="{{ w.select }}" style="{{ w.style }}">{{ w.label }}</button>
+            </sc-for>
+          </div>
+          <span style="font-size:11px;color:var(--ink-muted)">server clamps at 30d</span>
+        </div>
+        <div style="flex:1"></div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button onClick="{{ replayNow }}" style="{{ replayBtnStyle }}">{{ replayLabel }}</button>
+          <button onClick="{{ zoomOut }}" style="{{ ctlBtn }}">−</button>
+          <button onClick="{{ zoomIn }}" style="{{ ctlBtn }}">+</button>
+          <button onClick="{{ fitAll }}" style="{{ ctlBtn }}">Fit</button>
+          <span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:var(--ink-muted);min-width:38px;text-align:right;font-variant-numeric:tabular-nums">{{ zoomLabel }}</span>
+        </div>
+      </div>
+
+      <sc-if value="{{ showCaveat }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:12px;display:flex;gap:10px;align-items:flex-start;border:1px solid var(--st-unobs);border-left-width:4px;border-radius:8px;background:var(--st-unobs-bg);padding:10px 12px">
+          <span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;color:var(--st-unobs);line-height:1.2">—</span>
+          <div style="font-size:12px;line-height:1.55;color:var(--ink-secondary);text-wrap:pretty"><strong style="color:var(--ink-primary)">The audit feed is a floor, not a census.</strong> Calls refused by the IP-keyed edge throttle are never attributed to a tenant and never reach the audit log. Every count on this canvas is a lower bound, written “≥”. The volume of refused traffic is not small, unknown, or zero — it is <em>unobservable</em>.</div>
+        </div>
+      </sc-if>
+
+      <div style="{{ canvasRowStyle }}">
+
+        <div ref="{{ viewportRef }}" tabindex="0" onWheel="{{ onWheel }}" onMouseDown="{{ onDown }}" onKeyDown="{{ onKey }}" style="{{ viewportStyle }}" style-focus="outline:2px solid var(--focus-ring);outline-offset:-2px">
+
+          <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:40px">
+              <div style="max-width:460px;text-align:left">
+                <div style="display:inline-flex;align-items:center;gap:8px;padding:4px 9px;border:1px dashed var(--st-never);border-radius:999px;color:var(--st-never);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;letter-spacing:.08em">∅ NOTHING SET UP YET</div>
+                <h2 style="margin:14px 0 0;font-family:Georgia,'Iowan Old Style','Times New Roman',serif;font-size:22px;font-weight:600;color:var(--ink-primary)">This tenant has no solutions, no interfaces and no connections.</h2>
+                <p style="margin:10px 0 0;font-size:13px;line-height:1.6;color:var(--ink-secondary);text-wrap:pretty">There is nothing here to observe, so there is nothing here to report. An empty graph is not a green graph — this screen makes no claim about health, reachability or compliance, because no record exists that could support one. An absence here is information, not a rendering fault.</p>
+                <div style="margin-top:16px;display:flex;flex-wrap:wrap;gap:8px">
+                  <button onClick="{{ openSolutions }}" style="padding:8px 12px;border:1px solid var(--brand-navy);border-radius:7px;background:var(--brand-navy);color:#fff;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;cursor:pointer">/studio/solutions</button>
+                  <button onClick="{{ openConnections }}" style="padding:8px 12px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface-paper);color:var(--ink-primary);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;cursor:pointer">/studio/connections</button>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <div style="{{ layerStyle }}">
+            {{ edgeLayer }}
+            <sc-for list="{{ headers }}" as="h" hint-placeholder-count="6">
+              <div style="{{ h.style }}">{{ h.label }}</div>
+            </sc-for>
+            <sc-for list="{{ nodes }}" as="n" hint-placeholder-count="12">
+              <button ref="{{ n.ref }}" onMouseEnter="{{ n.hover }}" onFocus="{{ n.hover }}" onClick="{{ n.open }}" style="{{ n.style }}" style-hover="filter:brightness(1.02)" style-focus="outline:2px solid var(--focus-ring);outline-offset:2px">
+                <span style="{{ n.barStyle }}"></span>
+                <span style="display:flex;align-items:center;justify-content:space-between;gap:6px;width:100%">
+                  <span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8.5px;letter-spacing:.1em;color:var(--ink-muted)">{{ n.kindLabel }}</span>
+                  <span style="{{ n.glyphStyle }}">{{ n.glyph }}</span>
+                </span>
+                <span style="{{ n.titleStyle }}">{{ n.title }}</span>
+                <span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9px;line-height:1.25;color:var(--ink-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%">{{ n.sub }}</span>
+              </button>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ collapseNote }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;left:12px;top:12px;display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface-paper);box-shadow:0 2px 8px rgba(0,0,0,.06)">
+              <span style="font-size:11.5px;color:var(--ink-secondary)">{{ collapseNote }}</span>
+              <button onClick="{{ toggleExpand }}" style="padding:4px 8px;border:1px solid var(--border-default);border-radius:5px;background:var(--surface-cream);color:var(--ink-primary);font-size:11px;cursor:pointer">{{ expandLabel }}</button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ prov }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;left:12px;bottom:12px;width:330px;max-width:calc(100% - 24px);border:1px solid var(--border-strong);border-radius:9px;background:var(--surface-paper);box-shadow:0 6px 22px rgba(0,0,0,.10);padding:12px 13px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                <span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9px;letter-spacing:.12em;color:var(--ink-muted)">{{ prov.kind }}</span>
+                <span style="{{ prov.stateStyle }}">{{ prov.stateLabel }}</span>
+              </div>
+              <div style="margin-top:5px;font-family:Georgia,'Iowan Old Style','Times New Roman',serif;font-size:15px;font-weight:600;line-height:1.25">{{ prov.title }}</div>
+              <div style="margin-top:9px;display:grid;grid-template-columns:78px 1fr;gap:5px 10px;font-size:11.5px;line-height:1.45">
+                <span style="color:var(--ink-muted)">Derived from</span><span style="color:var(--ink-primary)">{{ prov.derived }}</span>
+                <span style="color:var(--ink-muted)">Last observed</span><span style="font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--ink-primary);font-variant-numeric:tabular-nums">{{ prov.lastObserved }}</span>
+                <span style="color:var(--ink-muted)">Not told</span><span style="color:var(--ink-secondary)">{{ prov.unknown }}</span>
+              </div>
+              <sc-if value="{{ prov.ended }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:8px;padding:7px 8px;border:1px dashed var(--border-strong);border-radius:6px;font-size:11px;line-height:1.45;color:var(--ink-secondary)">{{ prov.ended }}</div>
+              </sc-if>
+              <sc-if value="{{ prov.noRule }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:8px;font-size:11px;line-height:1.45;color:var(--ink-muted)">{{ prov.noRule }}</div>
+              </sc-if>
+              <sc-if value="{{ prov.incident }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:8px;display:flex;gap:7px;align-items:baseline">
+                  <span style="{{ prov.sevStyle }}">{{ prov.severity }}</span>
+                  <span style="font-size:11px;line-height:1.4;color:var(--ink-secondary)"><span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;color:var(--ink-primary)">{{ prov.incident }}</span> — {{ prov.incidentTitle }}</span>
+                </div>
+              </sc-if>
+              <div style="margin-top:10px;padding-top:9px;border-top:1px solid var(--border-default);display:flex;align-items:center;justify-content:space-between;gap:8px">
+                <span style="font-size:11px;color:var(--ink-secondary)">{{ prov.routeLabel }} <span style="font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--ink-muted)">{{ prov.route }}</span></span>
+                <span style="font-size:10.5px;color:var(--ink-muted)">Enter to open</span>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="{{ legendStyle }}">
+          <div style="display:flex;align-items:center;gap:7px;color:var(--ink-secondary)">
+            <svg width="15" height="15" viewBox="0 0 100 100" aria-hidden="true" focusable="false" style="flex:none;display:block"><path fill-rule="evenodd" fill="currentColor" d="M 47.5 10 Q 50 7 52.5 10 L 88 82 Q 90.5 87 85 87 L 15 87 Q 9.5 87 12 82 Z M 50 40 L 33 76 L 67 76 Z"></path></svg>
+            <span style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-muted)">State vocabulary</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:9px;margin-top:2px">
+            <div style="display:flex;gap:9px;align-items:flex-start">
+              <span style="flex:none;width:26px;height:20px;border-radius:5px;border:1.5px solid var(--st-good);background:var(--st-good-bg);display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10px;color:var(--st-good)">✓</span>
+              <span style="font-size:11px;line-height:1.4"><strong style="display:block;font-size:11.5px">Observed-good</strong><span style="color:var(--ink-muted)">A success was recorded.</span></span>
+            </div>
+            <div style="display:flex;gap:9px;align-items:flex-start">
+              <span style="flex:none;width:26px;height:20px;border-radius:5px;border:1.5px solid var(--st-bad);background:var(--st-bad-bg);box-shadow:inset 0 0 0 2px var(--surface-paper),inset 0 0 0 3.2px var(--st-bad);display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10px;color:var(--st-bad)">✕</span>
+              <span style="font-size:11px;line-height:1.4"><strong style="display:block;font-size:11.5px">Observed-bad</strong><span style="color:var(--ink-muted)">A failure was recorded — timeout, refusal, 4xx/5xx. Double stroke.</span></span>
+            </div>
+            <div style="display:flex;gap:9px;align-items:flex-start">
+              <span style="flex:none;width:26px;height:20px;border-radius:5px;border:1.5px dashed var(--st-never);background:transparent;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10px;color:var(--st-never)">∅</span>
+              <span style="font-size:11px;line-height:1.4"><strong style="display:block;font-size:11.5px">Never-observed</strong><span style="color:var(--ink-muted)">No call or probe recorded. Not “healthy”. Always still.</span></span>
+            </div>
+            <div style="display:flex;gap:9px;align-items:flex-start">
+              <span style="flex:none;width:26px;height:20px;border-radius:5px;border:1.5px dotted var(--st-unobs);background:var(--st-unobs-bg);display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:var(--st-unobs)">—</span>
+              <span style="font-size:11px;line-height:1.4"><strong style="display:block;font-size:11.5px">Unobservable</strong><span style="color:var(--ink-muted)">Cannot be known, permanently. Em-dash, never a zero.</span></span>
+            </div>
+            <div style="display:flex;gap:9px;align-items:flex-start">
+              <span style="flex:none;width:26px;height:20px;border-radius:5px;border:1.5px solid var(--st-defect);border-left-width:5px;background:var(--st-defect-bg);display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10px;color:var(--st-defect)">▲</span>
+              <span style="font-size:11px;line-height:1.4"><strong style="display:block;font-size:11.5px">Defect</strong><span style="color:var(--ink-muted)">Exactly four things, never more: a settled grant with no expiry (“a defect, not a state”), a solution with an empty owner slot, an interface with no entity set, a connection with no declared environment. A standing condition, not an alert — and never correct behaviour.</span></span>
+            </div>
+          </div>
+          <div style="height:1px;background:var(--border-default);margin:3px 0"></div>
+          <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-muted)">Ended — a modifier, not a state</div>
+          <div style="display:flex;gap:9px;align-items:flex-start">
+            <span style="flex:none;width:26px;height:20px;border-radius:5px;border:1.5px dashed var(--st-good);background:var(--st-good-bg);opacity:.62;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10px;color:var(--st-good);text-decoration:line-through">✓</span>
+            <span style="font-size:11px;line-height:1.4;color:var(--ink-muted)">Revoked, expired, rejected or superseded. The node keeps the colour and glyph of what was <em>observed</em> — struck through, dashed and inert. A revoked grant that carried traffic stays green; one that never did stays grey. Revocation is not a re-decision — the decision stands in the ledger and the withdrawal is recorded beside it.</span>
+          </div>
+          <div style="height:1px;background:var(--border-default);margin:3px 0"></div>
+          <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-muted)">Motion</div>
+          <p style="margin:0;font-size:11px;line-height:1.5;color:var(--ink-secondary);text-wrap:pretty">One travelling pulse per <em>recorded</em> call in the window, replayed once. Nothing loops. Nothing idles. The platform cannot assert that anything is alive, so nothing on this canvas pretends to be.</p>
+          <p style="margin:0;font-size:11px;line-height:1.5;color:var(--ink-muted)">Reduced motion: pulses are replaced by a static “≥ n” count on the edge.</p>
+        </div>
+      </div>
+
+      <div style="margin-top:26px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px">
+        <div style="border:1px solid var(--border-default);border-radius:10px;background:var(--surface-paper);padding:14px 16px">
+          <h3 style="margin:0 0 8px;font-family:Georgia,'Iowan Old Style','Times New Roman',serif;font-size:15px;font-weight:600">What this view deliberately does not show</h3>
+          <ul style="margin:0;padding-left:16px;font-size:12px;line-height:1.65;color:var(--ink-secondary)">
+            <li>No summary tiles, health score or “n% healthy”. A second copy of a number is a thing that disagrees with it — Broker traffic <span style="font-family:ui-monospace,Menlo,Consolas,monospace">/operations/traffic</span> is authoritative for volume.</li>
+            <li>No latency, error rate or uptime. This canvas carries structure, relationships and provenance only.</li>
+            <li>No 90-day window. The server clamps at 30 days; offering 90 would be a control that silently does nothing.</li>
+            <li>No sixth state for endings. Revoked, expired and rejected are a modifier on what was observed — a revoked grant that carried traffic must not be filed beside one that never did.</li>
+            <li>No count of throttled calls. IP-keyed buckets are not attributable to a tenant — em-dash, not zero.</li>
+            <li>No inferred environment for an <span style="font-family:ui-monospace,Menlo,Consolas,monospace">UNDECLARED</span> connection. A guess rendered in the same type as a fact becomes a fact.</li>
+            <li>No “last seen” on never-observed nodes. The field is blank because the record does not exist.</li>
+            <li>No arrows implying live flow. Direction here is authorisation and call direction, not a heartbeat.</li>
+          </ul>
+        </div>
+        <div style="border:1px solid var(--border-default);border-radius:10px;background:var(--surface-paper);padding:14px 16px">
+          <h3 style="margin:0 0 8px;font-family:Georgia,'Iowan Old Style','Times New Roman',serif;font-size:15px;font-weight:600">Tokens</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;line-height:1.5;color:var(--ink-secondary)">
+            <span>--brand-navy #002B5C</span><span>--st-good #1F7A5C</span>
+            <span>--cta-red #C8102E</span><span>--st-bad #B25E00</span>
+            <span>--surface-cream #FAF9F5</span><span>--st-never #7A756A</span>
+            <span>--surface-paper #FFFFFE</span><span>--st-unobs #5B5476</span>
+            <span>--ink-primary #1A1A1A</span><span>--st-defect #C8102E</span>
+            <span>--ink-secondary #4A4A4A</span><span>node 132×64 r8</span>
+            <span>--ink-muted #6B6B6B</span><span>col gutter 24 · row 16</span>
+            <span>--border-default #E5E1D6</span><span>edge 1.5px orthogonal r8</span>
+            <span>--border-strong #C4BFAE</span><span>rail 220 · topbar 56</span>
+            <span>--focus-ring #C8102E</span><span>legend 200 fixed</span>
+          </div>
+          <p style="margin:10px 0 0;font-size:11.5px;line-height:1.55;color:var(--ink-muted);text-wrap:pretty">Semantic state colours sit outside the accent ramp; <span style="font-family:ui-monospace,Menlo,Consolas,monospace">--cta-red</span> is spent only on refusal and defect. Every state also carries a glyph and a stroke treatment, so the encoding survives greyscale, colour-blindness and a screenshot pasted into a document.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+const NW=132,NH=64,CG=24,RG=16,PITCH=NH+RG,HEAD=36;
+const COLS=[["caller","CALLER APP"],["credential","CREDENTIAL"],["grant","GRANT"],["interface","INTERFACE"],["connection","CONNECTION"],["tenant","SAP TENANT"]];
+const ST={
+  good:{c:"--st-good",bg:"--st-good-bg",border:"solid",glyph:"✓",label:"OBSERVED-GOOD"},
+  bad:{c:"--st-bad",bg:"--st-bad-bg",border:"solid",glyph:"✕",label:"OBSERVED-BAD"},
+  never:{c:"--st-never",bg:"--st-never-bg",border:"dashed",glyph:"∅",label:"NEVER-OBSERVED"},
+  unobs:{c:"--st-unobs",bg:"--st-unobs-bg",border:"dotted",glyph:"—",label:"UNOBSERVABLE"},
+  defect:{c:"--st-defect",bg:"--st-defect-bg",border:"solid",glyph:"▲",label:"DEFECT"}
+};
+const LENSES={
+  studio:{name:"Developer Studio",route:"/studio",title:"Live Topology — what is built, and what is half-built",
+    blurb:"Developer Studio is where SAP integrations are configured, governed and tested. This lens reads for completeness: empty owner slots, interfaces with no entity set, connections with no declared environment. Traffic is muted — it is not this workspace's question.",
+    rail:[["Home","/studio"],["Discover","/studio/discover"],["Solutions","/studio/solutions"],["Connections","/studio/connections"],["API Access","/studio/access"],["Interfaces","/studio/interfaces"],["Test Console","/studio/test"]]},
+  operations:{name:"Operations Center",route:"/operations",title:"Live Topology — what moved, and what cannot be seen",
+    blurb:"The Operations Center shows whether live integrations are healthy right now — broker traffic, connection health and incidents. Edges replay only calls the audit feed recorded. What the feed cannot see is drawn on the canvas, not buried in a footnote.",
+    rail:[["Home","/operations"],["Broker traffic","/operations/traffic"],["Connections","/operations/connections"],["Incidents","/operations/incidents"],["Write ledger","/operations/writes"],["Throttle","/operations/throttle"],["Tokens","/operations/tokens"]]},
+  control:{name:"Control Tower",route:"/control-tower",title:"Live Topology — who authorised what, and when it ends",
+    blurb:"Control Tower shows whether the portfolio is governed — solution ownership, access decisions and the audit trail. A SANDBOX_ONLY decision on a PROD grant authorises nothing: the label is not the permission.",
+    rail:[["Home","/control-tower"],["Solution portfolio","/control-tower/portfolio"],["Access governance","/control-tower/grants"],["Governance audit","/control-tower/audit"],["Connection register","/control-tower/connections"],["Credential register","/control-tower/tokens"]]}
+};
+const ROUTES={
+  caller:{studio:["Discover","/studio/discover"],operations:["Broker traffic","/operations/traffic"],control:["Governance audit","/control-tower/audit"]},
+  throttle:{studio:["API Access","/studio/access"],operations:["Throttle","/operations/throttle"],control:["Governance audit","/control-tower/audit"]},
+  credential:{studio:["API Access","/studio/access"],operations:["Tokens","/operations/tokens"],control:["Credential register","/control-tower/tokens"]},
+  grant:{studio:["API Access","/studio/access"],operations:["Broker traffic","/operations/traffic"],control:["Access governance","/control-tower/grants"]},
+  interface:{studio:["Interfaces","/studio/interfaces"],operations:["Broker traffic","/operations/traffic"],control:["Governance audit","/control-tower/audit"]},
+  connection:{studio:["Connections","/studio/connections"],operations:["Connections","/operations/connections"],control:["Connection register","/control-tower/connections"]},
+  tenant:{studio:["Connections","/studio/connections"],operations:["Connections","/operations/connections"],control:["Connection register","/control-tower/connections"]}
+};
+const INCIDENTS={
+  "unbounded-grant":["critical","A grant authorises access with no end date"],
+  "binding-refused":["critical","A call could not be bound to a connection for its environment"],
+  "unaccountable-prod-grant":["critical","A production grant is held by a solution nobody owns"],
+  "connection-unhealthy":["major","A SAP connection's last probe did not succeed"],
+  "upstream-errors":["major","The upstream SAP system is returning errors"],
+  "credential-without-expiry":["major","A live credential has no expiry"],
+  "throttled":["minor","A credential is being rate limited repeatedly"],
+  "expiring-credential":["minor","A credential expires soon"],
+  "undeclared-environment":["minor","A connection has not declared its environment"]
+};
+const SOLUTIONS=[
+  {id:"s1",name:"Store Inventory Sync",status:"ACTIVE",kind:"CLIENT_APP",owners:{T:"Priya N.",B:"M. Okafor",S:"Desk 2"}},
+  {id:"s2",name:"Customer Master Bridge",status:"ACTIVE",kind:"CLIENT_APP",owners:{T:"J. Halvorsen",B:"M. Okafor",S:null}},
+  {id:"s3",name:"Returns Reconciliation",status:"RETIRED",kind:"EXPERIMENT",owners:{T:"Priya N.",B:null,S:null}},
+  {id:"s4",name:"Vendor Invoice Intake",status:"ACTIVE",kind:"REUSABLE",owners:{T:"R. Amin",B:"L. Tran",S:"Desk 1"}},
+  {id:"s5",name:"Loyalty Points Ledger",status:"RESTRICTED",kind:"PRESALES_DEMO",owners:{T:null,B:null,S:null}},
+  {id:"s6",name:"Warehouse Slotting Feed",status:"DRAFT",kind:"INTERNAL_ACCELERATOR",owners:{T:"R. Amin",B:"L. Tran",S:"Desk 4"}}
+];
+function n(id,col,kind,title,sub,state,route,prov,extra){return Object.assign({id,col,kind,title,sub,state,route,prov},extra||{});}
+function baseGraph(){
+  const N=[];
+  N.push(n("k1",0,"caller","POS Terminal Fleet",{studio:"312 devices",operations:"≥ 21,480 calls",control:"org: retail-ops"},"good","/operations/traffic",{derived:"Audited calls carrying credential ce_9f3a…",last:"2026-08-02 09:41 UTC",unknown:"Whether every terminal is calling — only the ones that reached the audit log appear."}));
+  N.push(n("k2",0,"caller","Partner Portal",{studio:"external",operations:"≥ 604 calls",control:"org: partner-ext"},"good","/operations/traffic",{derived:"Audited calls carrying ce_2b90…",last:"2026-08-02 07:12 UTC",unknown:"Which partner tenant made them; the portal presents one identity."}));
+  N.push(n("k3",0,"caller","Nightly ETL Job",{studio:"batch",operations:"no calls in window",control:"org: retail-ops"},"never","/operations/traffic",{derived:"Absence of any audited call in the selected window.",last:"—",unknown:"Whether the job ran and failed before reaching us, or never ran at all."}));
+  N.push(n("t1",0,"caller","Edge throttle buckets",{studio:"IP-keyed",operations:"— refused",control:"— refused"},"unobs","/operations/traffic",{derived:"Nothing. Throttling happens before the audit boundary.",last:"—",unknown:"Two throttle buckets are keyed by an address that cannot be enumerated: their limit is knowable, their usage never is. Em-dash, never zero."},{rkey:"throttle",noRule:"No incident rule watches this. Rate limiting is only reportable against a credential we can attribute; these buckets are keyed by an address that cannot be enumerated."}));
+
+  N.push(n("c1",1,"credential","POS runtime key",{studio:"ce_9f3a · PROD",operations:"used 11 min ago",control:"expires 2027-02-14"},"good","/operations/tokens",{derived:"lastUsedAt on SolutionClient ce_9f3a…",last:"2026-08-02 09:41 UTC",unknown:"Whether the key is held by one caller or shared across many."}));
+  N.push(n("c2",1,"credential","POS write key",{studio:"cew_4c1e · PROD",operations:"used 3 h ago",control:"expires in 9 d"},"good","/operations/tokens",{derived:"lastUsedAt + expiresAt on the write credential.",last:"2026-08-02 06:50 UTC",unknown:"Whether a rotation is scheduled. Expiry is a fact; renewal intent is not recorded."},{badge:"9d",incident:"expiring-credential"}));
+  N.push(n("c3",1,"credential","ETL sandbox key",{studio:"ce_e0c2 · TEST",operations:"never used",control:"expires 2026-12-01"},"never","/operations/tokens",{derived:"lastUsedAt is null since issue on 2026-05-04.",last:"—",unknown:"Whether the key was distributed. Issue ≠ delivery."}));
+  N.push(n("c4",1,"credential","Legacy batch key",{studio:"cew_77de · PROD",operations:"ended · carried traffic",control:"revoked 12 Jun · carried traffic"},"good","/control-tower/tokens",{derived:"lastUsedAt 2026-06-11 on SolutionClient cew_77de…, then revokedAt = 2026-06-12, reason “superseded by cew_4c1e”.",last:"2026-06-11 23:40 UTC",unknown:"Whether any holder still has the string. Revocation stops us, not them."},{badge:"REVOKED",ended:{kind:"revoked",at:"12 Jun 2026",carried:true,reason:"superseded by cew_4c1e"}}));
+  N.push(n("c5",1,"credential","Partner read key",{studio:"ce_2b90 · SANDBOX",operations:"used 6 d ago",control:"expires 2026-09-30"},"good","/operations/tokens",{derived:"lastUsedAt on SolutionClient ce_2b90…",last:"2026-07-27 14:02 UTC",unknown:"Whether the partner has other keys with other tenants."}));
+
+  const G=[
+    ["g1","Inventory read","APPROVED","PROD","exp 2026-11-01","good",null,null,null],
+    ["g2","Master data sync","APPROVED","PROD","UNBOUNDED","defect","UNBOUNDED",null,"unbounded-grant"],
+    ["g3","Address write","SANDBOX_ONLY","PROD","exp 2026-10-04","never","AUTHORISES NOTHING",null,null],
+    ["g4","Returns read","READ_ONLY","DEV","exp 2026-09-15","good",null,null,null],
+    ["g5","Loyalty read","REQUESTED","TEST","no decision","never",null,null,null],
+    ["g6","Legacy invoice","EXPIRED","PROD","expired 14 Jul","good","EXPIRED",{kind:"expired",at:"14 Jul 2026",carried:true},null],
+    ["g7","Partner write","REJECTED","SANDBOX","rejected 02 Mar","never","REJECTED",{kind:"rejected",at:"02 Mar 2026",carried:false},null],
+    ["g8","Slotting write","APPROVED","TEST","revoked 21 Jul","good","REVOKED",{kind:"revoked",at:"21 Jul 2026",carried:true,reason:"solution retired"},null],
+    ["g9","Invoice intake","APPROVED","SANDBOX","exp 2026-12-31","good",null,null,null]
+  ];
+  G.forEach(g=>{
+    const prov=g[2]==="SANDBOX_ONLY"?{derived:"decision = SANDBOX_ONLY recorded against an environment = PROD grant. The Authorises column is computed with the predicates the broker enforces with.",last:"decision 2026-04-04",unknown:"Nothing runs under this grant. The decision label and the environment contradict each other; the permission is the intersection, which is empty."}
+      :g[4]==="UNBOUNDED"?{derived:"expiresAt is null on a settled APPROVED PROD grant — a defect, not a state.",last:"decision 2026-01-19",unknown:"When this ends. Nothing in the record says it ever does."}
+      :g[7]?{derived:"ApiAccessGrant decision "+g[2]+", "+g[7].kind+" "+g[7].at+(g[7].reason?" — “"+g[7].reason+"”":"")+".",last:g[7].carried?"last audited call 2026-07-20":"—",unknown:"Revocation is not a re-decision — the decision stands in the ledger and the withdrawal is recorded beside it."}
+      :{derived:"ApiAccessGrant decision + environment + expiresAt.",last:"decision recorded",unknown:"Whether the decision is still the right one. Approval is a moment, not a state of the world."};
+    const carried=g[7]?(g[7].carried?"carried traffic":"never carried a call"):null;
+    N.push(n(g[0],2,"grant",g[1],{studio:g[3],operations:carried?"ended · "+carried:g[2],control:g[2]+" · "+g[4]},g[5],"/control-tower/grants",prov,{badge:g[6],decision:g[2],env:g[3],ended:g[7],incident:g[8],quiet:g[2]==="SANDBOX_ONLY",
+      noRule:g[2]==="SANDBOX_ONLY"?"No incident rule watches this condition. Calls under this grant are refused at the grant gate, before any connection is involved — there was no binding to agree or disagree with. Nothing is malfunctioning.":null}));
+  });
+
+  const I=[
+    ["i1","READ Products","A_Product","read","good","s1"],
+    ["i2","UPDATE StockLevels","A_StockLevel","write","good","s1"],
+    ["i3","READ StoreMaster","A_Store","read","never","s1"],
+    ["i4","READ BusinessPartner","A_BusinessPartner","read","good","s2"],
+    ["i5","CREATE BusinessPartner","A_BusinessPartner","write","bad","s2"],
+    ["i6","UPDATE Address",null,"write","defect","s2"],
+    ["i7","READ ReturnOrder","A_ReturnOrder","read","never","s3"],
+    ["i8","CREATE CreditMemo","A_CreditMemo","write","never","s3"],
+    ["i9","CREATE SupplierInvoice","A_SupplierInvoice","write","good","s4"],
+    ["i10","READ PurchaseOrder","A_PurchaseOrder","read","good","s4"],
+    ["i11","READ LoyaltyAccount","A_LoyaltyAcct","read","never","s5"],
+    ["i12","READ WarehouseTask","A_WarehouseTask","read","good","s6"],
+    ["i13","UPDATE WarehouseTask","A_WarehouseTask","write","bad","s6"],
+    ["i14","READ StorageBin","A_StorageBin","read","good","s6"]
+  ];
+  I.forEach(i=>{
+    const sol=SOLUTIONS.find(s=>s.id===i[5]);
+    N.push(n(i[0],3,"interface",i[1],{studio:i[2]||"NO ENTITY SET",operations:i[4]==="good"?"last 2xx":i[4]==="bad"?"last 5xx / timeout":"no call recorded",control:i[3]+" · "+sol.name.split(" ")[0]},i[4],"/studio/interfaces",
+      i[2]===null?{derived:"entitySet is null — the interface cannot resolve a target.",last:"—",unknown:"What it was meant to point at. The intent was never written down."}
+      :{derived:"Last audited response code for this operation.",last:i[4]==="never"?"—":"2026-08-02",unknown:"Whether callers exist that were refused before the audit boundary."},
+      {solution:sol.name,badge:i[2]===null?"NO ENTITY SET":null,incident:i[4]==="bad"?"upstream-errors":null}));
+  });
+
+  N.push(n("n1",4,"connection","S/4HANA Cloud",{studio:"PROD · oauth-cc",operations:"probe 2xx, 11 min ago",control:"oauth-client-credentials"},"good","/operations/connections",{derived:"lastValidationStatus = OK at lastValidatedAt.",last:"2026-08-02 09:33 UTC",unknown:"Whether it is reachable right now. A probe is a past tense."},{writeEnabled:true}));
+  N.push(n("n2",4,"connection","ECC 6.0",{studio:"TEST · basic",operations:"probe TIMEOUT, 3 h ago",control:"basic"},"bad","/operations/connections",{derived:"lastValidationStatus = TIMEOUT on SapConnection. Probe timestamps move only on a real success, so a TIMEOUT beside an old last-succeeded date is the truth, not an inconsistency.",last:"succeeded 2026-07-30 04:12 UTC",unknown:"Whether the host is down or the route is blocked. A timeout distinguishes neither."},{incident:"connection-unhealthy"}));
+  N.push(n("n3",4,"connection","S/4HANA Dev",{studio:"DEV · bearer",operations:"never probed",control:"bearer"},"never","/studio/connections",{derived:"lastValidatedAt is null.",last:"—",unknown:"Anything about reachability. Never probed is not the same as unreachable, and not the same as fine."}));
+  N.push(n("n4",4,"connection","BW/4HANA",{studio:"UNDECLARED env",operations:"probe 2xx, 1 d ago",control:"environment undeclared"},"defect","/studio/connections",{derived:"environment = UNDECLARED on an active connection.",last:"2026-08-01 22:10 UTC",unknown:"Which environment this actually reaches. We will not guess — a guess printed in the same type as a fact becomes a fact."},{badge:"UNDECLARED",incident:"undeclared-environment"}));
+
+  N.push(n("h1",5,"tenant","mrg-s4-prod",{studio:"S/4HANA Cloud 2508",operations:"reached 11 min ago",control:"productive"},"good","/operations/connections",{derived:"Successful probe response headers.",last:"2026-08-02 09:33 UTC",unknown:"Load, tenant health, or anything happening inside SAP."}));
+  N.push(n("h2",5,"tenant","mrg-ecc-test",{studio:"ECC 6.0 EhP8",operations:"no response",control:"non-productive"},"bad","/operations/connections",{derived:"Probe timed out at 30 s.",last:"2026-08-02 06:40 UTC",unknown:"Whether the tenant exists at that address any more."}));
+  N.push(n("h3",5,"tenant","mrg-s4-dev",{studio:"S/4HANA Cloud 2508",operations:"never contacted",control:"non-productive"},"never","/studio/connections",{derived:"No probe has ever been sent.",last:"—",unknown:"Everything. There is no record to read."}));
+  N.push(n("h4",5,"tenant","mrg-bw4",{studio:"BW/4HANA 2.0",operations:"reached 1 d ago",control:"environment unknown"},"defect","/studio/connections",{derived:"Reached, but the connection declares no environment.",last:"2026-08-01 22:10 UTC",unknown:"Whether production data crossed this link. Without a declared environment the audit trail cannot say."}));
+
+  const E=[];
+  const e=(a,b,obs,c24,c7,c30)=>E.push({a,b,obs,calls:{"24h":c24,"7d":c7,"30d":c30}});
+  e("k1","c1","good",1840,12900,21480); e("k1","c2","good",210,1490,5120);
+  e("k2","c5","good",42,318,604); e("k3","c3","never",0,0,0); e("k3","c4","never",0,0,0);
+  e("c1","g1","good",1620,11200,18400); e("c1","g2","good",180,1420,2600); e("c1","g4","never",0,0,0);
+  e("c2","g3","never",0,0,0); e("c2","g6","good",0,0,410);
+  e("c5","g9","good",40,300,580); e("c5","g7","never",0,0,0);
+  e("c3","g5","never",0,0,0); e("c4","g8","never",0,0,0);
+  e("g1","i1","good",1200,8400,13900); e("g1","i2","good",410,2700,4400); e("g1","i3","never",0,0,0);
+  e("g2","i4","good",170,1310,2380); e("g2","i5","bad",10,110,220);
+  e("g3","i6","never",0,0,0);
+  e("g4","i7","never",0,0,0); e("g4","i8","never",0,0,0);
+  e("g9","i9","good",22,160,300); e("g9","i10","good",18,140,280);
+  e("g5","i11","never",0,0,0);
+  e("g8","i12","good",0,0,90); e("g8","i13","bad",0,0,12); e("g6","i14","good",0,0,410);
+  e("i1","n1","good",1200,8400,13900); e("i2","n1","good",410,2700,4400); e("i3","n1","never",0,0,0);
+  e("i4","n1","good",170,1310,2380); e("i5","n1","bad",10,110,220); e("i6","n1","bad",0,4,11);
+  e("i7","n3","never",0,0,0); e("i8","n3","never",0,0,0);
+  e("i9","n4","good",22,160,300); e("i10","n4","good",18,140,280);
+  e("i11","n2","never",0,0,0); e("i12","n2","good",0,0,90); e("i13","n2","bad",0,0,12); e("i14","n2","never",0,0,0);
+  e("n1","h1","good",1790,12500,20800); e("n2","h2","bad",0,0,102); e("n3","h3","never",0,0,0); e("n4","h4","good",40,300,580);
+  return {nodes:N,edges:E};
+}
+function denseGraph(){
+  const g=baseGraph();
+  const ops=["READ","UPDATE","CREATE"],sets=["A_Delivery","A_BillingDoc","A_Batch","A_CostCenter","A_MatlDoc","A_Shipment","A_ProfitCtr","A_Equipment","A_MaintOrder","A_SalesOrder","A_Contract","A_Plant"];
+  sets.forEach((s,k)=>{
+    const st=k%4===0?"good":k%4===1?"never":k%4===2?"good":"bad";
+    const sol=SOLUTIONS[k%6];
+    g.nodes.push(n("d"+k,3,"interface",ops[k%3]+" "+s.slice(2),s,{studio:s,operations:st==="never"?"no call recorded":"last "+(st==="bad"?"5xx":"2xx"),control:(k%3===0?"read":"write")+" · "+sol.name.split(" ")[0]},st,"/studio/interfaces",{derived:"Last audited response code for this operation.",last:st==="never"?"—":"2026-08-01",unknown:"Whether callers exist that were refused before the audit boundary."},{solution:sol.name}));
+    g.edges.push({a:k%2?"g1":"g2",b:"d"+k,obs:st,calls:{"24h":st==="good"?40:0,"7d":st==="good"?280:0,"30d":st==="good"?900:0}});
+    g.edges.push({a:"d"+k,b:k%2?"n1":"n4",obs:st,calls:{"24h":st==="good"?40:0,"7d":st==="good"?280:0,"30d":st==="good"?900:0}});
+  });
+  return g;
+}
+function layout(nodes){
+  const per=COLS.map((_,c)=>nodes.filter(x=>x.col===c));
+  const maxRows=Math.max.apply(null,per.map(p=>p.length));
+  per.forEach((list,c)=>{
+    const top=HEAD+(maxRows-list.length)*PITCH/2;
+    list.forEach((node,i)=>{node.x=c*(NW+CG);node.y=top+i*PITCH;});
+  });
+  return {w:COLS.length*NW+(COLS.length-1)*CG,h:HEAD+maxRows*PITCH-RG,maxRows};
+}
+function ortho(x1,y1,x2,y2){
+  const r=8,mx=Math.round((x1+x2)/2);
+  if(Math.abs(y1-y2)<1) return `M ${x1} ${y1} L ${x2} ${y2}`;
+  const s=y2>y1?1:-1;
+  return `M ${x1} ${y1} L ${mx-r} ${y1} Q ${mx} ${y1} ${mx} ${y1+s*r} L ${mx} ${y2-s*r} Q ${mx} ${y2} ${mx+r} ${y2} L ${x2} ${y2}`;
+}
+class Component extends DCLogic{
+  constructor(p){super(p);
+    this.state={lens:"operations",win:"7d",scenario:"live",theme:"light",hoverId:null,opened:null,zoom:null,pan:null,replay:0,narrow:false,expandAll:false};
+    this.els={};this.vp=null;this.reduced=false;}
+  componentDidMount(){
+    try{
+      this.reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if(window.matchMedia("(prefers-color-scheme: dark)").matches)this.setState({theme:"dark"});
+    }catch(e){}
+    this._rs=()=>this.setState({narrow:window.innerWidth<1024});
+    window.addEventListener("resize",this._rs);this._rs();
+    if(window.ResizeObserver&&this.vp){
+      this._ro=new ResizeObserver(()=>{if(this.state.zoom==null)this.forceUpdate();});
+      this._ro.observe(this.vp);
+    }
+    [0,120,400].forEach(t=>setTimeout(()=>{if(this.state.zoom==null)this.forceUpdate();},t));
+    this._mm=e=>{if(!this.drag)return;const f=this.state.zoom==null?this.computeFit(this.dims):null;this.setState(Object.assign({},f?{zoom:f.zoom}:{},{pan:{x:this.drag.px+(e.clientX-this.drag.x),y:this.drag.py+(e.clientY-this.drag.y)}}));};
+    this._mu=()=>{this.drag=null;};
+    window.addEventListener("mousemove",this._mm);window.addEventListener("mouseup",this._mu);
+    setTimeout(()=>this.setState({replay:1}),400);
+  }
+  computeFit(d){
+    if(!this.vp||!d)return null;
+    const r=this.vp.getBoundingClientRect();
+    if(!r.width||r.width<50)return null;
+    const z=+Math.max(.6,Math.min(1.1,(r.width-28)/d.w)).toFixed(2);
+    const gw=d.w*z,gh=d.h*z;
+    return {zoom:z,pan:{x:Math.max(14,(r.width-gw)/2),y:gh<=r.height-28?(r.height-gh)/2:14}};
+  }
+  autoFit(){const f=this.computeFit(this.dims);if(f)this.setState(f);else this.setState({zoom:null,pan:null});}
+  componentWillUnmount(){if(this._ro)this._ro.disconnect();window.removeEventListener("resize",this._rs);window.removeEventListener("mousemove",this._mm);window.removeEventListener("mouseup",this._mu);}
+  graph(){
+    if(this.state.scenario==="empty")return{nodes:[],edges:[]};
+    const g=this.state.scenario==="dense"?denseGraph():baseGraph();
+    if(this.state.scenario==="dense"&&!this.state.expandAll){
+      const ifs=g.nodes.filter(x=>x.col===3);
+      const bySol={};ifs.forEach(x=>{(bySol[x.solution]=bySol[x.solution]||[]).push(x);});
+      const keep=g.nodes.filter(x=>x.col!==3);const map={};const groups=[];
+      Object.keys(bySol).forEach((sol,k)=>{
+        const list=bySol[sol];const id="grp"+k;
+        const states=list.map(x=>x.state);
+        const st=states.indexOf("defect")>=0?"defect":states.indexOf("bad")>=0?"bad":states.indexOf("good")>=0?"good":"never";
+        list.forEach(x=>map[x.id]=id);
+        groups.push(n(id,3,"interface",sol,{studio:list.length+" interfaces",operations:list.length+" interfaces",control:list.length+" interfaces"},st,"/studio/interfaces",
+          {derived:"Rolled up from "+list.length+" interfaces in this solution; worst structural state shown.",last:"varies per interface",unknown:"Per-interface detail while collapsed. Nothing is hidden — expand or open the list."},
+          {count:list.length,group:true,collapsed:list.map(x=>x.title)}));
+      });
+      const nodes=keep.concat(groups);
+      const seen={};const edges=[];
+      g.edges.forEach(e=>{
+        const a=map[e.a]||e.a,b=map[e.b]||e.b;if(a===b)return;
+        const k=a+">"+b;
+        if(seen[k]){const x=seen[k];["24h","7d","30d"].forEach(w=>x.calls[w]+=e.calls[w]);if(e.obs==="bad")x.obs="bad";return;}
+        const c={a,b,obs:e.obs,calls:Object.assign({},e.calls)};seen[k]=c;edges.push(c);
+      });
+      return {nodes,edges,collapsed:ifs.length,groups:groups.length};
+    }
+    return g;
+  }
+  dim(kind){const l=this.state.lens;
+    if(l==="studio")return kind==="caller"||kind==="credential"?.42:1;
+    if(l==="operations")return kind==="grant"?.45:1;
+    return kind==="interface"||kind==="tenant"?.5:1;}
+  edgeWeight(){return this.state.lens==="operations"?1:this.state.lens==="studio"?.22:.4;}
+  open(route){this.setState({opened:route});}
+  focusNode(id){const el=this.els[id];if(el)el.focus();}
+  ensure(node,zoom){
+    if(!this.vp)return;const r=this.vp.getBoundingClientRect();const p=Object.assign({x:0,y:0},this.state.pan);
+    const l=node.x*zoom+p.x,t=node.y*zoom+p.y,w=NW*zoom,h=NH*zoom;
+    if(l<20)p.x+=20-l; if(l+w>r.width-20)p.x-=(l+w)-(r.width-20);
+    if(t<20)p.y+=20-t; if(t+h>r.height-20)p.y-=(t+h)-(r.height-20);
+    this.setState({pan:p});
+  }
+  renderVals(){
+    const S=this.state,L=LENSES[S.lens],g=this.graph(),nodes=g.nodes;
+    const dims=layout(nodes);this.dims=dims;
+    const byId={};nodes.forEach(x=>byId[x.id]=x);
+    let zoom=S.zoom,pan=S.pan;
+    if(zoom==null){
+      const f=this.computeFit(dims);
+      if(f){zoom=f.zoom;pan=f.pan;if(!this._commit){this._commit=setTimeout(()=>{this._commit=null;if(this.state.zoom==null)this.setState(this.computeFit(this.dims)||{});},0);}}
+      else {zoom=.82;pan={x:14,y:14};}
+    }
+    const hover=byId[S.hoverId];
+    const rt=nd=>ROUTES[nd.rkey||nd.kind][S.lens];
+
+    const edgeEls=[];
+    g.edges.forEach((e,i)=>{
+      const a=byId[e.a],b=byId[e.b];if(!a||!b)return;
+      const d=ortho(a.x+NW,a.y+NH/2,b.x,b.y+NH/2);
+      const col=e.obs==="bad"?"var(--st-bad)":e.obs==="never"?"var(--st-never)":"var(--st-good)";
+      const calls=e.calls[S.win];
+      const emph=this.edgeWeight();
+      const inert=!!(a.ended||b.ended);
+      edgeEls.push(React.createElement("path",{key:"p"+i,d,fill:"none",stroke:e.obs==="never"?"var(--edge-line)":col,strokeWidth:1.5,strokeDasharray:(e.obs==="never"||inert)?"3 4":null,opacity:(e.obs==="never"?emph*.7:emph)*(inert?.55:1)}));
+      if(S.lens==="operations"&&calls>0){
+        const mx=(a.x+NW+b.x)/2,my=(a.y+b.y)/2+NH/2;
+        edgeEls.push(React.createElement("text",{key:"t"+i,x:mx,y:my-5,textAnchor:"middle",fontSize:9,fontFamily:"ui-monospace,Menlo,monospace",fill:"var(--ink-muted)",style:{fontVariantNumeric:"tabular-nums"}},"≥"+calls.toLocaleString()));
+        if(!this.reduced&&S.replay>0&&!inert){
+          const count=Math.min(8,Math.max(1,Math.round(Math.log10(calls+1)*3)));
+          for(let k=0;k<count;k++){
+            const delay=(k*.38+ (i%5)*.12).toFixed(2);
+            edgeEls.push(React.createElement("circle",{key:"c"+i+"_"+k+"_"+S.replay+S.win,r:2.8,fill:col,opacity:0},
+              React.createElement("animateMotion",{dur:"1.5s",begin:delay+"s",path:d,fill:"freeze",repeatCount:1}),
+              React.createElement("animate",{attributeName:"opacity",values:"0;1;1;0",dur:"1.5s",begin:delay+"s",fill:"freeze",repeatCount:1})));
+          }
+        }
+      }
+    });
+    const edgeLayer=React.createElement("svg",{width:dims.w,height:dims.h,style:{position:"absolute",left:0,top:0,overflow:"visible",pointerEvents:"none"}},edgeEls);
+
+    const nodeVals=nodes.map(node=>{
+      const st=ST[node.state],dim=this.dim(node.kind),ended=node.ended,quiet=node.quiet;
+      const stroke=ended?"dashed":st.border;
+      const col=quiet?"var(--border-strong)":"var("+st.c+")";
+      const ring=(node.state==="bad"&&!ended&&!quiet)?"inset 0 0 0 2.5px var(--surface-paper),inset 0 0 0 4px var("+st.c+")":ended?"none":"0 1px 2px rgba(0,0,0,.05)";
+      const bg=quiet?"var(--surface-paper)":node.state==="never"?"var(--surface-paper)":"var("+st.bg+")";
+      return {
+        ref:el=>{this.els[node.id]=el;},
+        hover:()=>this.setState({hoverId:node.id}),
+        open:()=>this.open(rt(node)[1]),
+        kindLabel:node.group?("GROUP · "+node.count):node.kind.toUpperCase(),
+        glyph:node.badge?node.badge:st.glyph,
+        title:node.title,
+        titleStyle:"font-size:11px;font-weight:600;line-height:1.2;color:var(--ink-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%"+(ended?";text-decoration:line-through;text-decoration-thickness:1px;color:var(--ink-secondary)":""),
+        sub:node.sub[S.lens],
+        glyphStyle:"font-family:ui-monospace,Menlo,Consolas,monospace;font-size:"+(node.badge?"7.5":"10")+"px;letter-spacing:.06em;color:"+col+";border:1px solid "+col+";border-radius:3px;padding:0 3px;line-height:1.4;white-space:nowrap"+(node.state==="defect"&&!quiet?";animation:ce-breathe 5s ease-in-out infinite":""),
+        barStyle:(node.state==="defect"&&!quiet)?"position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:8px 0 0 8px;background:var(--st-defect)":"display:none",
+        style:"position:absolute;left:"+node.x+"px;top:"+node.y+"px;width:"+NW+"px;height:"+NH+"px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:2px;padding:7px 9px 7px 12px;border-radius:8px;text-align:left;cursor:pointer;background:"+bg+";border:1.5px "+stroke+" "+col+";color:var(--ink-primary);opacity:"+Math.max(.55,dim*(ended?.72:1))+";box-shadow:"+ring+";transition:opacity .2s"
+      };
+    });
+
+    const headers=COLS.map((c,i)=>({label:c[1],style:"position:absolute;left:"+(i*(NW+CG))+"px;top:0;width:"+NW+"px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9px;letter-spacing:.14em;color:var(--ink-muted);padding-bottom:6px;border-bottom:1px solid var(--border-default)"}));
+
+    const pill=(on)=>"padding:5px 11px;border:1px solid "+(on?"var(--brand-navy)":"var(--border-default)")+";border-radius:7px;background:"+(on?"var(--brand-navy)":"var(--surface-paper)")+";color:"+(on?"#fff":"var(--ink-secondary)")+";font-size:11.5px;cursor:pointer";
+    const seg=(on)=>"padding:5px 12px;border:0;border-right:1px solid var(--border-default);background:"+(on?"var(--brand-navy)":"transparent")+";color:"+(on?"#fff":"var(--ink-secondary)")+";font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;cursor:pointer";
+    const ctlBtn="width:30px;height:28px;border:1px solid var(--border-default);border-radius:6px;background:var(--surface-paper);color:var(--ink-secondary);font-size:12px;cursor:pointer";
+
+    const missing=SOLUTIONS.filter(s=>!s.owners.T||!s.owners.B||!s.owners.S).length;
+
+    return {
+      tenantName:"Meridian Retail Group",
+      themeLabel:S.theme==="light"?"Dark":"Light",
+      toggleTheme:()=>{const t=S.theme==="light"?"dark":"light";document.documentElement.dataset.theme=t;this.setState({theme:t});},
+      routeCrumb:L.route+"  ·  home  ·  live topology",
+      opened:S.opened,clearOpened:()=>this.setState({opened:null}),
+      lensTitle:L.title,lensBlurb:L.blurb,
+      workspaces:Object.keys(LENSES).map(k=>({name:LENSES[k].name,route:LENSES[k].route,select:()=>this.setState({lens:k,hoverId:null,replay:S.replay+1}),
+        style:"display:block;width:100%;text-align:left;border:0;border-left:3px solid "+(k===S.lens?"#fff":"transparent")+";background:"+(k===S.lens?"var(--rail-sel)":"transparent")+";color:var(--rail-ink);padding:9px 13px;cursor:pointer"})),
+      railRoutes:L.rail.map(p=>({label:p[0],path:p[1],open:()=>this.open(p[1])})),
+      scenarios:[["live","Live tenant"],["dense","Dense (>40)"],["empty","New tenant"]].map(s=>({label:s[1],select:()=>this.setState({scenario:s[0],hoverId:null,replay:S.replay+1},()=>requestAnimationFrame(()=>this.autoFit())),style:pill(S.scenario===s[0])})),
+      windows:["24h","7d","30d"].map(w=>({label:w,select:()=>this.setState({win:w,replay:S.replay+1}),style:seg(S.win===w)})),
+      replayNow:()=>this.setState({replay:S.replay+1}),
+      replayLabel:this.reduced?"Motion off":(S.lens==="operations"?"Replay window":"Traffic muted"),
+      replayBtnStyle:"padding:6px 11px;border:1px solid var(--border-default);border-radius:6px;background:var(--surface-paper);color:"+(S.lens==="operations"&&!this.reduced?"var(--ink-primary)":"var(--ink-muted)")+";font-size:11.5px;cursor:pointer",
+      ctlBtn,zoomLabel:Math.round(zoom*100)+"%",
+      zoomIn:()=>this.setState({zoom:Math.min(1.6,+(zoom+.1).toFixed(2))}),
+      zoomOut:()=>this.setState({zoom:Math.max(.35,+(zoom-.1).toFixed(2))}),
+      fitAll:()=>this.autoFit(),
+      showSolutionStrip:S.lens!=="operations"&&S.scenario!=="empty",
+      ownerNote:missing+" of "+SOLUTIONS.length+" solutions have an empty owner slot. All three — technical, business, support — are required before ACTIVE, and before a credential can be issued.",
+      solutions:SOLUTIONS.map(s=>{
+        const miss=["T","B","S"].filter(k=>!s.owners[k]);
+        return {name:s.name,status:s.status,kind:s.kind,
+          style:"width:186px;border:1px "+(s.status==="RETIRED"?"dashed":"solid")+" "+(miss.length?"var(--st-defect)":"var(--border-default)")+";border-radius:8px;background:var(--surface-paper);padding:9px 10px;opacity:"+(s.status==="RETIRED"?".65":"1"),
+          statusStyle:"font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8.5px;letter-spacing:.08em;padding:1px 5px;border-radius:3px;white-space:nowrap;border:1px "+(s.status==="RETIRED"?"dashed":"solid")+" "+(s.status==="ACTIVE"?"var(--st-good)":"var(--border-strong)")+";color:"+(s.status==="ACTIVE"?"var(--st-good)":"var(--ink-muted)"),
+          owners:["T","B","S"].map(k=>({key:k,title:(k==="T"?"Technical":k==="B"?"Business":"Support")+": "+(s.owners[k]||"unassigned"),
+            style:"width:17px;height:17px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:9px;border:1px "+(s.owners[k]?"solid var(--st-good)":"dashed var(--st-defect)")+";background:"+(s.owners[k]?"var(--st-good-bg)":"transparent")+";color:"+(s.owners[k]?"var(--st-good)":"var(--st-defect)")})),
+          ownerNote:miss.length?miss.join("/")+" unassigned":"complete"};
+      }),
+      showCaveat:S.lens==="operations"&&S.scenario!=="empty",
+      isEmpty:S.scenario==="empty",
+      openSolutions:()=>this.open("/studio/solutions"),
+      openConnections:()=>this.open("/studio/connections"),
+      canvasRowStyle:"margin-top:14px;display:flex;flex-direction:"+(S.narrow?"column":"row")+";gap:16px;align-items:stretch",
+      legendStyle:"flex:none;"+(S.narrow?"width:auto;":"width:200px;")+"border:1px solid var(--border-default);border-radius:10px;background:var(--surface-paper);padding:13px 14px;display:flex;flex-direction:column;gap:11px",
+      viewportStyle:"position:relative;flex:1;min-width:0;height:min(68vh,620px);min-height:520px;overflow:hidden;border:1px solid var(--border-default);border-radius:10px;background:var(--surface-cream);background-image:radial-gradient(var(--grid) 1px,transparent 1px);background-size:22px 22px;cursor:grab",
+      viewportRef:el=>{this.vp=el;},
+      layerStyle:"position:absolute;left:0;top:0;width:"+dims.w+"px;height:"+dims.h+"px;transform:translate("+pan.x+"px,"+pan.y+"px) scale("+zoom+");transform-origin:0 0",
+      edgeLayer,headers,nodes:nodeVals,
+      onWheel:e=>{e.preventDefault();const d=e.deltaY>0?-.08:.08;this.setState({zoom:Math.max(.35,Math.min(1.6,+(zoom+d).toFixed(2)))});},
+      onDown:e=>{if(e.target.closest("button"))return;this.drag={x:e.clientX,y:e.clientY,px:pan.x,py:pan.y};},
+      onKey:e=>{
+        const cur=byId[S.hoverId]||nodes[0];if(!cur)return;
+        const k=e.key;
+        if(k==="Enter"||k===" "){e.preventDefault();this.open(rt(cur)[1]);return;}
+        let next=null;
+        if(k==="ArrowRight"||k==="ArrowLeft"){
+          const c=cur.col+(k==="ArrowRight"?1:-1);
+          const cand=nodes.filter(x=>x.col===c);
+          if(cand.length)next=cand.reduce((a,b)=>Math.abs(b.y-cur.y)<Math.abs(a.y-cur.y)?b:a);
+        }else if(k==="ArrowDown"||k==="ArrowUp"){
+          const cand=nodes.filter(x=>x.col===cur.col).sort((a,b)=>a.y-b.y);
+          const i=cand.indexOf(cur);next=cand[i+(k==="ArrowDown"?1:-1)];
+        }else return;
+        e.preventDefault();
+        if(next){this.setState({hoverId:next.id});this.focusNode(next.id);this.ensure(next,zoom);}
+      },
+      collapseNote:g.collapsed?(g.collapsed+" interfaces collapsed into "+g.groups+" solution groups — "+(nodes.length+g.collapsed-g.groups)+" nodes total, nothing truncated"):null,
+      toggleExpand:()=>this.setState({expandAll:!S.expandAll},()=>requestAnimationFrame(()=>this.autoFit())),
+      expandLabel:S.expandAll?"Collapse":"Expand all",
+      prov:hover?{
+        kind:(hover.rkey==="throttle"?"THROTTLE BUCKET":hover.kind==="tenant"?"SAP TENANT":hover.kind.toUpperCase())+(hover.group?" GROUP":""),
+        title:hover.title,
+        stateLabel:ST[hover.state].label+(hover.ended?" · ENDED":""),
+        stateStyle:"font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8.5px;letter-spacing:.1em;padding:2px 6px;border-radius:4px;border:1px "+(hover.ended?"dashed":ST[hover.state].border)+" var("+ST[hover.state].c+");color:var("+ST[hover.state].c+")",
+        derived:hover.prov.derived,lastObserved:hover.prov.last,unknown:hover.prov.unknown,
+        ended:hover.ended?(hover.ended.kind.charAt(0).toUpperCase()+hover.ended.kind.slice(1)+" "+hover.ended.at+" — "+(hover.ended.carried?"it carried recorded traffic before it ended; the history stands.":"nothing was ever observed under it.")):null,
+        incident:hover.incident||null,noRule:hover.incident?null:(hover.noRule||null),
+        severity:hover.incident?INCIDENTS[hover.incident][0]:null,
+        incidentTitle:hover.incident?INCIDENTS[hover.incident][1]:null,
+        sevStyle:"font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;padding:1px 5px;border-radius:3px;flex:none;border:1px solid "+(hover.incident&&INCIDENTS[hover.incident][0]==="critical"?"var(--st-defect);color:var(--st-defect)":hover.incident&&INCIDENTS[hover.incident][0]==="major"?"var(--st-bad);color:var(--st-bad)":"var(--border-strong);color:var(--ink-muted)"),
+        routeLabel:rt(hover)[0],route:rt(hover)[1]
+      }:null
+    };
+  }
+}
+</script>
+</body>
+</html>

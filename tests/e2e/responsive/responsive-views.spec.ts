@@ -76,6 +76,17 @@ const AUTH_VIEWS = [
    */
   { name: "manual-index", path: "/help" },
   { name: "manual-screen", path: "/help/control-tower/grants" },
+
+  /*
+   * THE CONSOLE HOME PAGES, which now carry the topology map.
+   *
+   * Six columns of fixed-width nodes in a horizontally scrolling container —
+   * the widest thing in the Console, and the newest. The container scrolls on
+   * purpose; the page body must not.
+   */
+  { name: "studio-home", path: "/studio" },
+  { name: "operations-home", path: "/operations" },
+  { name: "control-tower-home", path: "/control-tower" },
 ] as const;
 
 const UNAUTH_VIEWS = [

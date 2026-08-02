@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { TopologyMap } from "@/components/ops/TopologyMap";
+
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Home" };
 
@@ -62,7 +64,10 @@ const card: React.CSSProperties = {
 
 export default function ControlTowerHomePage() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 780 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 1080 }}>
+      {/* The graph the individual screens cannot show: what is wired to what.
+          It summarises nothing — every node links to the screen that owns it. */}
+      <TopologyMap lens="control-tower" />
       <div>
         <h1
           style={{

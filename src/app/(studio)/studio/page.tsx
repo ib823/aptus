@@ -10,6 +10,7 @@
 
 import type { ReactNode } from "react";
 
+import { TopologyMap } from "@/components/ops/TopologyMap";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { canMutateStudio } from "@/lib/studio/rbac";
@@ -67,6 +68,13 @@ export default async function StudioHomePage() {
         this client&apos;s SAP tenant. Your solution&apos;s own application code stays in
         your repository — Studio governs the integration edge.
       </p>
+
+      {/* The graph the individual screens cannot show: what is wired to what.
+          Mounted below the intro rather than above it, because a builder with
+          nothing registered needs the sentence before the empty canvas. */}
+      <div style={{ marginBottom: 24 }}>
+        <TopologyMap lens="developer-studio" />
+      </div>
 
       {solutionCount === 0 ? (
         <Card>
