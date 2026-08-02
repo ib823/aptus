@@ -20,7 +20,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
+import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
+import { discoveryEngagementScope } from "@/lib/discovery/authz";
 import { WorkbenchView } from "@/components/discovery/workbench/WorkbenchView";
 import { libraryHealth } from "@/lib/discovery/workbench/health";
 
@@ -43,10 +45,22 @@ function ago(d: Date, now: Date): string {
 
 export default async function DiscoveryHomePage() {
   const user = await getCurrentUser();
+  // The (workbench) layout already redirects an anonymous caller, so this is
+  // belt and braces — but the scope below is an authorization decision, and a
+  // `user!` there would be asserting the thing that matters most on the word of
+  // a component further up the tree.
+  if (!user) redirect("/presales/login");
   const h = libraryHealth();
   const now = new Date();
 
+  /*
+   * SCOPED TO THE CALLER. This listed every consultant's engagements — the
+   * client label, its state and what has been decided against it — to anyone
+   * with a session. Same rule the API already applied, expressed in the query so
+   * `take` pages over rows the reader can actually open.
+   */
   const engagements = await prisma.discoveryEngagement.findMany({
+    where: discoveryEngagementScope(user),
     orderBy: { updatedAt: "desc" },
     take: 25,
     select: {

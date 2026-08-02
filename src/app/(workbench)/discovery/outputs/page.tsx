@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 /**
  * C9 · Outputs index — /discovery/outputs.
  *
@@ -7,6 +8,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
+import { getCurrentUser } from "@/lib/auth/session";
+import { discoveryEngagementScope } from "@/lib/discovery/authz";
 import { WorkbenchView } from "@/components/discovery/workbench/WorkbenchView";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +17,17 @@ export const revalidate = 0;
 export const metadata: Metadata = { title: "Outputs" };
 
 export default async function OutputsIndexPage() {
+  const user = await getCurrentUser();
+  if (!user) redirect("/presales/login");
+
+  /*
+   * SCOPED TO THE CALLER. This listed every consultant's engagements — the
+   * client label, its state and what has been decided against it — to anyone
+   * with a session. Same rule the API already applied, expressed in the query so
+   * `take` pages over rows the reader can actually open.
+   */
   const engagements = await prisma.discoveryEngagement.findMany({
+    where: discoveryEngagementScope(user),
     orderBy: { updatedAt: "desc" },
     select: { id: true, client: true, state: true, _count: { select: { decisions: true } } },
   });

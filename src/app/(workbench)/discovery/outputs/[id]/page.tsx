@@ -6,8 +6,10 @@
  */
 
 import type { Metadata } from "next";
+import { getCurrentUser } from "@/lib/auth/session";
+import { discoveryEngagementReadable } from "@/lib/discovery/authz";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { SummaryBuckets } from "@/components/discovery/SummaryBuckets";
 import { TwoLaneExport } from "@/components/discovery/workbench/TwoLaneExport";
@@ -21,6 +23,11 @@ export const metadata: Metadata = { title: "Decisions & outputs" };
 
 export default async function OutputsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const user = await getCurrentUser();
+  if (!user) redirect("/presales/login");
+  // The engagement's own data. Same rule the API applies; notFound() rather
+  // than a redirect so it does not confirm the engagement exists.
+  if (!(await discoveryEngagementReadable(id, user))) notFound();
   // C9 reads the CLIENT pack: what the consultant reviews here is exactly what
   // the client would receive, not a parallel rendering of it.
   const pack = await buildClientPack(id);

@@ -7,7 +7,9 @@
 
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db/prisma";
+import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
+import { discoveryEngagementScope } from "@/lib/discovery/authz";
 import { CaptureWizard, type CaptureRow } from "@/components/discovery/workbench/CaptureWizard";
 import { WorkbenchView } from "@/components/discovery/workbench/WorkbenchView";
 import { findLibraryRow } from "@/lib/discovery/workbench/library";
@@ -24,10 +26,29 @@ export default async function SourcesPage({
 }) {
   const { engagement } = await searchParams;
   const user = await getCurrentUser();
+  if (!user) redirect("/presales/login");
+
+  /*
+   * THE MOST SENSITIVE READ IN THIS WORKSPACE, AND IT WAS UNSCOPED.
+   *
+   * A capture is raw harvested material — `rawText` verbatim plus a `clientRef`
+   * — captured BEFORE the generalize and anonymize steps that make it fit to
+   * promote. `engagementId` is required, so every capture belongs to somebody's
+   * client. This listed all of them, and the `?engagement=` parameter was
+   * applied without checking whether the caller may see that engagement, so it
+   * doubled as a way to read one deliberately.
+   *
+   * Scoped through the relation rather than by collecting ids first: one query,
+   * and the filter cannot be forgotten on a later branch.
+   */
+  const engagementScope = discoveryEngagementScope(user);
 
   const [captures, reviewers, promoted, engagements] = await Promise.all([
     prisma.discoveryCapture.findMany({
-      where: engagement ? { engagementId: engagement } : {},
+      where: {
+        engagement: engagementScope,
+        ...(engagement ? { engagementId: engagement } : {}),
+      },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -48,7 +69,10 @@ export default async function SourcesPage({
       select: { id: true, name: true, email: true },
     }),
     promotedEntries(),
+    // The engagement picker for the filter above — the caller's own, or it
+    // would offer other consultants' client names as options.
     prisma.discoveryEngagement.findMany({
+      where: engagementScope,
       orderBy: { updatedAt: "desc" },
       take: 10,
       select: { id: true, client: true },

@@ -6,8 +6,10 @@
  */
 
 import type { Metadata } from "next";
+import { getCurrentUser } from "@/lib/auth/session";
+import { discoveryEngagementReadable } from "@/lib/discovery/authz";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { SessionSetup } from "@/components/discovery/workbench/SessionSetup";
 import { WorkbenchView } from "@/components/discovery/workbench/WorkbenchView";
 import { clientValueStreams } from "@/lib/discovery/client-library";
@@ -24,6 +26,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function SessionSetupPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const user = await getCurrentUser();
+  if (!user) redirect("/presales/login");
+  // The engagement's own data. Same rule the API applies; notFound() rather
+  // than a redirect so it does not confirm the engagement exists.
+  if (!(await discoveryEngagementReadable(id, user))) notFound();
   const session = await getSession(id);
   if (!session) notFound();
 
