@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { countClientFacingQuestions } from "@/lib/affirm/queries";
+import { affirmBundleScope } from "@/lib/affirm/authz";
 import { ScreenGuide } from "@/components/affirm/learn/ScreenGuide";
 import { Term } from "@/components/affirm/learn/TermChip";
 import { SampleSandboxCard } from "@/components/affirm/learn/SampleSandboxCard";
@@ -67,8 +68,22 @@ export default async function AffirmIndexPage({ searchParams }: PageProps) {
     : null;
   const sort: SortKey = sp.sort && sp.sort in SORTS ? (sp.sort as SortKey) : "newest";
 
+  /*
+   * SCOPED TO THE CALLER. This listed every bundle from every consultant to any
+   * signed-in user — client names, states and counts — and the bundle pages it
+   * links to had no authorization either, so the list was a directory of other
+   * people's clients and a working set of links into their answers.
+   *
+   * The rule is the one `requireAffirmBundleAccess` already applied on the API:
+   * the consultant who created it, or a platform admin. Expressed here in the
+   * `where` rather than filtered afterwards, so the pagination and the totals
+   * below count the same set the reader can actually open.
+   */
+  const visibleToCaller = affirmBundleScope(user);
+
   const bundles = await prisma.affirmBundle.findMany({
     where: {
+      ...visibleToCaller,
       ...(stateFilter ? { state: stateFilter } : {}),
       // Case-insensitive so "acme" finds "Acme Corp".
       ...(q ? { client: { contains: q, mode: "insensitive" as const } } : {}),
@@ -79,7 +94,7 @@ export default async function AffirmIndexPage({ searchParams }: PageProps) {
       _count: { select: { scopeItems: true } },
     },
   });
-  const totalBundles = await prisma.affirmBundle.count();
+  const totalBundles = await prisma.affirmBundle.count({ where: visibleToCaller });
 
   // The "Questions" column must be the same number the bundle itself reports.
   // `_count.questions` counted override rows, not the affirm-set — see

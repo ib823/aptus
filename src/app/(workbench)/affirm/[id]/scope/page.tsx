@@ -10,6 +10,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/db/prisma";
 import { bundleMetadata } from "@/lib/affirm/page-metadata";
 import { getCurrentUser } from "@/lib/auth/session";
+import { affirmBundleReadableBy } from "@/lib/affirm/authz";
 import { getValueStreamTree } from "@/lib/affirm/queries";
 import { ValueStreamTreePicker } from "@/components/affirm/ValueStreamTreePicker";
 import { AffirmStepper } from "@/components/affirm/AffirmStepper";
@@ -35,6 +36,10 @@ export default async function EditScopePage({ params }: PageProps) {
     include: { scopeItems: { select: { scopeItemId: true } } },
   });
   if (!bundle) notFound();
+  // Same rule the API enforces. Without it this page rendered any consultant's
+  // bundle to any signed-in user; 404 rather than 403 so it does not confirm
+  // that a bundle with this id exists.
+  if (!affirmBundleReadableBy(bundle, user)) notFound();
   if (bundle.state !== "draft") redirect(`/affirm/${id}/review`);
 
   const tree = await getValueStreamTree();

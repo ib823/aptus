@@ -20,6 +20,7 @@ import { prisma } from "@/lib/db/prisma";
 import { bundleMetadata } from "@/lib/affirm/page-metadata";
 import { countOf, pluralise, verb } from "@/lib/format/plural";
 import { getCurrentUser } from "@/lib/auth/session";
+import { affirmBundleReadableBy } from "@/lib/affirm/authz";
 import {
   getAffirmSetForBundle,
   getCoverageForBundle,
@@ -69,6 +70,10 @@ export default async function ReviewPage({ params }: PageProps) {
     },
   });
   if (!bundle) notFound();
+  // Same rule the API enforces. Without it this page rendered any consultant's
+  // bundle to any signed-in user; 404 rather than 403 so it does not confirm
+  // that a bundle with this id exists.
+  if (!affirmBundleReadableBy(bundle, user)) notFound();
   if (bundle.state === "released") redirect(`/affirm/${id}/output`);
 
   const questions = await getAffirmSetForBundle(id, { forClient: false });

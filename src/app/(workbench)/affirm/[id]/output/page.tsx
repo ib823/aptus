@@ -16,6 +16,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/db/prisma";
 import { bundleMetadata } from "@/lib/affirm/page-metadata";
 import { getCurrentUser } from "@/lib/auth/session";
+import { affirmBundleReadableBy } from "@/lib/affirm/authz";
 import { AffirmStepper } from "@/components/affirm/AffirmStepper";
 import { ScreenGuide } from "@/components/affirm/learn/ScreenGuide";
 import type { AgendaJson, SignedRecordJson, AgendaItem } from "@/lib/affirm/types";
@@ -37,6 +38,10 @@ export default async function OutputPage({ params }: PageProps) {
 
   const bundle = await prisma.affirmBundle.findUnique({ where: { id } });
   if (!bundle) notFound();
+  // Same rule the API enforces. Without it this page rendered any consultant's
+  // bundle to any signed-in user; 404 rather than 403 so it does not confirm
+  // that a bundle with this id exists.
+  if (!affirmBundleReadableBy(bundle, user)) notFound();
   if (bundle.state !== "released") redirect(`/affirm/${id}/review`);
 
   const record = bundle.signedRecordJson as SignedRecordJson | null;

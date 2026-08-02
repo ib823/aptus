@@ -14,6 +14,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/db/prisma";
 import { bundleMetadata } from "@/lib/affirm/page-metadata";
 import { getCurrentUser } from "@/lib/auth/session";
+import { affirmBundleReadableBy } from "@/lib/affirm/authz";
 import { getAffirmSetForBundle } from "@/lib/affirm/queries";
 import { getProcessFlowsForBundle } from "@/lib/affirm/process-flow";
 import { AffirmCardList } from "@/components/affirm/AffirmCardList";
@@ -45,6 +46,10 @@ export default async function ClientAffirmPage({ params }: PageProps) {
     },
   });
   if (!bundle) notFound();
+  // Same rule the API enforces. Without it this page rendered any consultant's
+  // bundle to any signed-in user; 404 rather than 403 so it does not confirm
+  // that a bundle with this id exists.
+  if (!affirmBundleReadableBy(bundle, user)) notFound();
   if (bundle.state === "draft") redirect(`/affirm/${id}/scope`);
   if (bundle.state === "released") redirect(`/affirm/${id}/output`);
 
