@@ -20,7 +20,25 @@ import { SAP_GLOSSARY, SAP_GLOSSARY_ORDER } from "@/constants/sap-glossary";
 import { SAP_SCREEN_GUIDES, sapScreenGuideForPath } from "@/constants/sap-screen-guides";
 import { sapTourForPath } from "@/lib/sap/learn-tours";
 
-const isSapPath = (pathname: string): boolean => pathname.includes("/sap-explorer");
+/**
+ * Where the SAP catalogue is on screen — which is not only /sap-explorer.
+ *
+ * This matched `/sap-explorer` alone, but Studio's Discover screen renders the
+ * SAME catalogue components (SapCapabilityCatalogue, ContentTypeTiles,
+ * CapabilityDetail) — that is the stated reason the Studio layout mounts the
+ * learn provider at all. So the provider was mounted, the drawer opened, and it
+ * served the AFFIRM glossary: a builder looking at OData entity sets was offered
+ * definitions of "Fit-to-Standard", "affirm bundle" and "value stream", while
+ * `odata-v4`, `metadata` and `communication-arrangement` sat in the other
+ * glossary unreachable from the one screen that needed them.
+ *
+ * Keyed on the surfaces that render the catalogue, so adding a third one is a
+ * line here rather than a silent fallback to the wrong domain.
+ */
+const SAP_CATALOGUE_PATHS = ["/sap-explorer", "/studio/discover"] as const;
+
+const isSapPath = (pathname: string): boolean =>
+  SAP_CATALOGUE_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`) || pathname.includes(p));
 
 /** Merged lookup by id across all domains (used by <Term> + related chips). */
 const ALL_GLOSSARY: Record<string, GlossaryEntry> = { ...AFFIRM_GLOSSARY, ...SAP_GLOSSARY };
