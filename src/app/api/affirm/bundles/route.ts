@@ -8,6 +8,7 @@
  * creates a bundle (master prompt §2 — Manual scope intake).
  */
 import { NextResponse } from "next/server";
+import { canPerformAffirmAction } from "@/lib/workbench/rbac";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -20,6 +21,15 @@ const Body = z.object({
 export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  /*
+   * Starting a bundle is what the missing gate actually cost: without it a role
+   * with no other privilege could create one and issue it to an external party.
+   *
+   * Server-side, because a gate that only exists in the UI is a form hint.
+   */
+  if (!canPerformAffirmAction(user.role, "create_bundle")) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) {

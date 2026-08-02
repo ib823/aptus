@@ -9,6 +9,7 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { canPerformAffirmAction } from "@/lib/workbench/rbac";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -64,6 +65,15 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  /*
+   * POST only. The GET above lists existing grants and a read-only role may see
+   * them; minting one that emails an outsider a link is a different act.
+   *
+   * Server-side, because a gate that only exists in the UI is a form hint.
+   */
+  if (!canPerformAffirmAction(user.role, "invite_executive")) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   const { id } = await ctx.params;
   const access = await requireAffirmBundleAccess(id, user);
   if (!access.ok) return access.response;

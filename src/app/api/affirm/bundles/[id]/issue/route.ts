@@ -16,6 +16,7 @@
  * format toggles, disables — are preserved through issue.
  */
 import { NextResponse } from "next/server";
+import { canPerformAffirmAction } from "@/lib/workbench/rbac";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { assertTransition } from "@/lib/affirm/bundle";
@@ -27,6 +28,14 @@ export async function POST(
 ) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  /*
+   * Issuing sends the bundle to the client and mints external access.
+   *
+   * Server-side, because a gate that only exists in the UI is a form hint.
+   */
+  if (!canPerformAffirmAction(user.role, "issue_bundle")) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   const { id } = await ctx.params;
   const access = await requireAffirmBundleAccess(id, user);
   if (!access.ok) return access.response;

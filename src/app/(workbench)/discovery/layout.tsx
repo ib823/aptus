@@ -13,10 +13,12 @@
  */
 
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { DiscoverySiderail } from "@/components/discovery/workbench/DiscoverySiderail";
 import { isNeutralDiscoveryEnabled } from "@/lib/discovery/guards";
+import { getCurrentUser } from "@/lib/auth/session";
+import { canAccessDiscovery } from "@/lib/workbench/rbac";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -25,8 +27,19 @@ export const metadata: Metadata = {
   title: { default: "Process Discovery — ABeam Workbench", template: "%s — Process Discovery" },
 };
 
-export default function DiscoveryWorkbenchLayout({ children }: { children: ReactNode }) {
+/**
+ * Flag first, then role. The flag decides whether this section EXISTS on a
+ * deployment; the role decides whether this caller may see it. Checking the
+ * flag first keeps the 404 for a disabled section identical for every role,
+ * so the refusal does not leak which deployments have Discovery turned on.
+ */
+export default async function DiscoveryWorkbenchLayout({ children }: { children: ReactNode }) {
   if (!isNeutralDiscoveryEnabled()) notFound();
+
+  const user = await getCurrentUser();
+  if (!user) redirect("/presales/login");
+  if (!canAccessDiscovery(user.role)) notFound();
+
   return (
     <div className="flex min-h-[calc(100vh-56px)]">
       <DiscoverySiderail />

@@ -9,6 +9,7 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { canPerformDiscoveryAction } from "@/lib/workbench/rbac";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isNeutralDiscoveryEnabled } from "@/lib/discovery/guards";
 import {
@@ -44,6 +45,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!isNeutralDiscoveryEnabled()) return new NextResponse(null, { status: 404 });
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  /*
+   * Creating an engagement is what makes a client's name and decisions exist here.
+   *
+   * Server-side, because a gate that only exists in the UI is a form hint.
+   */
+  if (!canPerformDiscoveryAction(user.role, "create_engagement")) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const body: unknown = await req.json().catch(() => null);
   if (!body || typeof body !== "object") {

@@ -13,14 +13,16 @@
  * hand-written here is the part nothing can compute: what a screen is FOR, and
  * what it deliberately refuses to establish.
  *
- * ONE THING IS DIFFERENT, AND IT IS WORTH SAYING OUT LOUD. The Console computes
- * `openTo` from real RBAC predicates. Only Presales has one (`canAccessPresales`).
- * Affirm and Discovery are gated by the Workbench layout, which checks for a
- * session and nothing else — any signed-in user can open them. That is not a gap
- * in this file; it is the product's actual access model, and a manual that
- * printed a plausible role list beside those screens would be inventing a
- * control. So the access basis is carried explicitly and the pages say which of
- * the two a screen has.
+ * ALL THREE NOW COMPUTE `openTo` FROM A REAL PREDICATE. That was not true when
+ * these pages were written: Affirm and Discovery had no role gate at all, so
+ * this file carried `accessBasis: "session"` and the pages said "any signed-in
+ * user — no role gate", because printing a plausible role list beside a
+ * workspace that had none would have invented a control.
+ *
+ * Documenting the gap is what got it closed. `canAccessAffirm` and
+ * `canAccessDiscovery` now exist and the layouts enforce them, so the honest
+ * answer changed and this file changed with it — which is the whole reason the
+ * basis is carried explicitly rather than assumed.
  */
 
 import {
@@ -30,6 +32,7 @@ import {
   type WorkbenchSection,
 } from "@/lib/workbench/sections";
 import { canAccessPresales } from "@/lib/presales/rbac";
+import { canAccessAffirm, canAccessDiscovery } from "@/lib/workbench/rbac";
 import { ALL_USER_ROLES, ROLE_LABELS, type UserRole } from "@/types/assessment";
 
 export type WorkbenchWorkspace = "affirm" | "presales" | "discovery";
@@ -337,8 +340,6 @@ export interface WorkbenchWorkspaceDescriptor {
   openTo: readonly string[];
 }
 
-const allRoleLabels = (): string[] => ALL_USER_ROLES.map((r) => ROLE_LABELS[r as UserRole]);
-
 export const WORKBENCH_WORKSPACES: readonly WorkbenchWorkspaceDescriptor[] = [
   {
     key: "affirm",
@@ -347,8 +348,8 @@ export const WORKBENCH_WORKSPACES: readonly WorkbenchWorkspaceDescriptor[] = [
       "Affirm is where a client confirms, in writing, which SAP standard processes they adopt and where they deviate — the record a Fit-to-Standard workshop starts from.",
     sections: AFFIRM_SECTIONS,
     prose: AFFIRM_PROSE,
-    accessBasis: "session",
-    openTo: allRoleLabels(),
+    accessBasis: "role",
+    openTo: ALL_USER_ROLES.filter((r) => canAccessAffirm(r)).map((r) => ROLE_LABELS[r as UserRole]),
   },
   {
     key: "presales",
@@ -369,8 +370,8 @@ export const WORKBENCH_WORKSPACES: readonly WorkbenchWorkspaceDescriptor[] = [
       "Process Discovery is the process library and the sessions run against it — what the practice knows, how well it is covered, and what an engagement produced.",
     sections: DISCOVERY_SECTIONS,
     prose: DISCOVERY_PROSE,
-    accessBasis: "session",
-    openTo: allRoleLabels(),
+    accessBasis: "role",
+    openTo: ALL_USER_ROLES.filter((r) => canAccessDiscovery(r)).map((r) => ROLE_LABELS[r as UserRole]),
   },
 ] as const;
 

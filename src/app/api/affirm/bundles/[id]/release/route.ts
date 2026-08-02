@@ -8,6 +8,7 @@
  * no auto-send, ever").
  */
 import { NextResponse } from "next/server";
+import { canPerformAffirmAction } from "@/lib/workbench/rbac";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { assertTransition } from "@/lib/affirm/bundle";
@@ -21,6 +22,14 @@ export async function POST(
 ) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  /*
+   * Release is the act that turns the client's answers into the signed record.
+   *
+   * Server-side, because a gate that only exists in the UI is a form hint.
+   */
+  if (!canPerformAffirmAction(user.role, "release_bundle")) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   const { id } = await ctx.params;
   const access = await requireAffirmBundleAccess(id, user);
   if (!access.ok) return access.response;

@@ -12,6 +12,7 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { canPerformDiscoveryAction } from "@/lib/workbench/rbac";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import {
@@ -26,6 +27,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!isNeutralDiscoveryEnabled()) return new NextResponse(null, { status: 404 });
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  /*
+   * A capture records raw client material, before the anonymize step.
+   *
+   * Server-side, because a gate that only exists in the UI is a form hint.
+   */
+  if (!canPerformDiscoveryAction(user.role, "capture")) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const body: unknown = await req.json().catch(() => null);
   if (!body || typeof body !== "object") {
