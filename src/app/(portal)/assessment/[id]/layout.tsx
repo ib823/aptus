@@ -1,5 +1,7 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
+import { getCurrentUser } from "@/lib/auth/session";
+import { verifyAssessmentAccess } from "@/lib/auth/verify-assessment-access";
 import { calculateProfileCompleteness } from "@/lib/assessment/profile-completeness";
 import { PROFILE_COMPLETENESS_GATE } from "@/types/assessment";
 import { AptusAssessmentShell } from "@/components/aptus";
@@ -31,7 +33,7 @@ export default async function AssessmentLayout({
   const assessment = await prisma.assessment.findUnique({
     where: { id: assessmentId, deletedAt: null },
     select: {
-      id: true, status: true, companyName: true,
+      id: true, status: true, companyName: true, organizationId: true,
       industry: true, country: true, companySize: true,
       employeeCount: true, annualRevenue: true,
       deploymentModel: true, sapModules: true,
@@ -44,6 +46,33 @@ export default async function AssessmentLayout({
   });
 
   if (!assessment) {
+    notFound();
+  }
+
+  /*
+   * WHO IS ASKING. This layout resolved an assessment from the URL and rendered
+   * it — company name, industry, revenue, ERP landscape, and every child screen
+   * beneath it: scope, gaps, requirements, the report — with no check of any
+   * kind. The portal layout above supplies a session and nothing more, so any
+   * signed-in user could read any organization's assessment by id.
+   *
+   * `requireAssessmentAccess` has guarded the API routes for a long time and has
+   * its own coverage test. No page called it or its underlying predicate. That
+   * is the same split found this session in Affirm, Discovery and Presales: the
+   * mutation path locked, the path that RENDERS the data open.
+   *
+   * Gated here rather than on each of the ~20 child pages, for the reason the
+   * others taught: a per-page check is one forgotten page away from open.
+   *
+   * `verifyAssessmentAccess` is the rule the API uses — platform admin, same
+   * organization, or explicit stakeholder membership. The organizationId is
+   * passed in from the row already fetched, so this costs no extra query in the
+   * common case. notFound() rather than a 403: existence is not disclosed across
+   * tenants.
+   */
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  if (!(await verifyAssessmentAccess(user, assessment.id, assessment.organizationId))) {
     notFound();
   }
 

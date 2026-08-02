@@ -1,5 +1,6 @@
 import { redirect, notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
+import { verifyAssessmentAccess } from "@/lib/auth/verify-assessment-access";
 import { prisma } from "@/lib/db/prisma";
 import { WorkshopModeLayout } from "@/components/workshop/WorkshopModeLayout";
 import type { AgendaItem } from "@/types/workshop";
@@ -30,6 +31,15 @@ export default async function WorkshopPage({ params }: WorkshopPageProps) {
   });
 
   if (!session) notFound();
+
+  /*
+   * The session belongs to an assessment, so the assessment's rule decides who
+   * may watch it. This page had none: it resolved a session by id and rendered
+   * its title, agenda, current step and attendee list to any signed-in user.
+   * `isFacilitator` below reads like a guard and is not — it only decides which
+   * controls to draw.
+   */
+  if (!(await verifyAssessmentAccess(user, session.assessmentId))) notFound();
 
   const isFacilitator = session.facilitatorId === user.id || user.role === "platform_admin";
 

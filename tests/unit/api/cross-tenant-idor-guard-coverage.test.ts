@@ -24,17 +24,19 @@
  * these tests protect is that the routes actually CALL them.
  */
 
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-function collectRouteFiles(dir: string): string[] {
+function collectFiles(dir: string, filename: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const entryPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) return collectRouteFiles(entryPath);
-    return entry.isFile() && entry.name === "route.ts" ? [entryPath] : [];
+    if (entry.isDirectory()) return collectFiles(entryPath, filename);
+    return entry.isFile() && entry.name === filename ? [entryPath] : [];
   });
 }
+
+const collectRouteFiles = (dir: string) => collectFiles(dir, "route.ts");
 
 /** Matches the conditional org-drop idiom on one or across lines (\s covers \n). */
 const ORG_DROP_IDIOM = /user\.organizationId\s*\?/;
@@ -60,6 +62,53 @@ describe("presales cross-tenant IDOR guard coverage", () => {
       `These presales routes drop the org filter for null-org users but never ` +
         `reject them with lacksTenantScope (cross-tenant IDOR):\n${missingGuard.join("\n")}`,
     ).toEqual([]);
+  });
+});
+
+describe("presales PAGES are covered by the same rule as the routes", () => {
+  /*
+   * THE GAP THAT LET THIS THROUGH. The suite above walks `src/app/api/presales`
+   * for `route.ts`. Six PAGES use the identical org-drop idiom and none called
+   * `lacksTenantScope` — so the API was hardened and tested while the screens
+   * rendering the same rows stayed open.
+   *
+   * The gate now lives on the presales route-group LAYOUT, which every page
+   * inherits, rather than on each page: this is the second time these files
+   * have been fixed one at a time, and a per-page check is one forgotten page
+   * away from open again.
+   */
+  const pagesRoot = path.resolve(process.cwd(), "src/app/(workbench)/presales");
+  const layout = path.join(pagesRoot, "layout.tsx");
+
+  it("the pages really do use the org-drop idiom (guard against a dead detector)", () => {
+    const withIdiom = collectFiles(pagesRoot, "page.tsx").filter((f) =>
+      ORG_DROP_IDIOM.test(readFileSync(f, "utf8")),
+    );
+    expect(withIdiom.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("a layout exists to gate them all", () => {
+    expect(
+      existsSync(layout),
+      "src/app/(workbench)/presales/layout.tsx is the only place that can gate " +
+        "every presales page at once. Without it each page must guard itself.",
+    ).toBe(true);
+  });
+
+  it("the layout rejects a null-org caller before any page queries", () => {
+    const src = readFileSync(layout, "utf8");
+    expect(src).toContain("lacksTenantScope");
+    // And the role gate, so the two refusals are decided in one place.
+    expect(src).toContain("canAccessPresales");
+  });
+
+  it("does not redirect to a page inside its own gate", () => {
+    // `redirect("/presales")` from a layout that wraps /presales is an infinite
+    // loop. The refusals render instead; only the anonymous case redirects, and
+    // /presales/login lives in the (workbench-public) group, outside this layout.
+    const src = readFileSync(layout, "utf8");
+    const redirects = [...src.matchAll(/redirect\("([^"]+)"\)/g)].map((m) => m[1]!);
+    expect(redirects).toEqual(["/presales/login"]);
   });
 });
 
