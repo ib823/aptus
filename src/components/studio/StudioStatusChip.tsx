@@ -58,7 +58,17 @@ export function studioStatusLabel(status: HonestStatus): string {
   return LABELS[status];
 }
 
-export function StudioStatusChip({ status, label }: { status: HonestStatus; label?: string }) {
+// `label` is written `string | undefined` rather than plain optional because
+// `exactOptionalPropertyTypes` is on: callers that compute a label and pass
+// `undefined` to mean "use the vocabulary's own word" are the intended usage,
+// and a bare `label?: string` rejects exactly that.
+export function StudioStatusChip({
+  status,
+  label,
+}: {
+  status: HonestStatus;
+  label?: string | undefined;
+}) {
   const tone = TOKENS[status];
   const text = label ?? LABELS[status];
   return (

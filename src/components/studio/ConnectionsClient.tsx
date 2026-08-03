@@ -63,6 +63,34 @@ function healthToStatus(status: string | null): HonestStatus {
   }
 }
 
+/**
+ * What the health chip is CALLED in this table, which is not what the shared
+ * vocabulary calls it.
+ *
+ * The vocabulary's word for a live 200 is "Activated", and for a capability that
+ * is the right word — it means the service is activated on the tenant. This
+ * table has already spent that word on something else: the Active column and the
+ * Activate / Deactivate buttons say whether the connection is enabled to carry
+ * traffic. Two different facts, and the health chip does not move when you
+ * toggle the other one.
+ *
+ * So a connection you had just deactivated rendered as
+ *
+ *     ● Activated   |   no   |   [ Activate ]
+ *
+ * three adjacent cells, one word, two meanings — and the honest reading of that
+ * row is that the console has contradicted itself. StudioStatusChip's own header
+ * warns about exactly this ("overloading those names ... is a trap for the next
+ * reader"); the trap was simply sprung from the other direction.
+ *
+ * Only ACTIVATED collides. "Reachable" states what the probe established and
+ * pairs with "Not probeable", which is already in the vocabulary. Everything
+ * else keeps the shared label so the console still reads as one system.
+ */
+function healthLabel(status: HonestStatus): string | undefined {
+  return status === "ACTIVATED" ? "Reachable" : undefined;
+}
+
 export function ConnectionsClient({
   connections,
   canManage,
@@ -208,7 +236,10 @@ export function ConnectionsClient({
                 </Td>
                 <Td>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <StudioStatusChip status={healthToStatus(c.lastValidationStatus)} />
+                    {(() => {
+                      const health = healthToStatus(c.lastValidationStatus);
+                      return <StudioStatusChip status={health} label={healthLabel(health)} />;
+                    })()}
                     <span style={{ fontSize: 11, color: "var(--ink-muted)" }}>
                       {c.lastValidatedAt
                         ? `last 200 · ${new Date(c.lastValidatedAt).toLocaleString()}`
