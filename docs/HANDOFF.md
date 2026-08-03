@@ -251,7 +251,7 @@ None.
 ## V2 Enhancement Specifications
 
 > **Date**: 2026-02-21
-> **Source**: `enhancement210226/V2-MASTER-BRIEF (1).md`
+> **Source**: the V2 master brief (no longer held in this repo)
 > **Specs Directory**: `specs/v2/`
 > **Master Index**: `specs/V2-SPEC-INDEX.md`
 > **Cross-Verification**: `specs/V2-CROSS-VERIFICATION-REPORT.md`

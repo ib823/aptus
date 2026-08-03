@@ -51,6 +51,6 @@ instead.
 - **Write authorization** — human oversight sits at grant approval, not per call.
   Consequently grant expiry and segregation of duties carry real weight, and both
   are enforced per call.
-- **The KMS gap** — see `SAP-CONNECTION-KEYSTONE-RUNBOOK.md` at the repo root.
+- **The KMS gap** — see `SAP-CONNECTION-KEYSTONE-RUNBOOK.md` alongside this file.
 
 For how to actually use the platform, see `docs/coreedge-developer-guide.md`.

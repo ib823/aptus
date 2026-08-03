@@ -2,11 +2,17 @@
 
 Workflow rules for the Aptus repo. Concise on purpose.
 
+> **This is internal engineering documentation, not an invitation.** The project
+> is proprietary and all rights are reserved ([LICENSE](./LICENSE)); outside
+> contributions are not accepted, and this file is published only because the
+> people who work on the repo need it next to the code. For security issues, see
+> [SECURITY.md](./SECURITY.md) — do not open a public issue.
+
 ## The deploy promise
 
 **`main` is always deployable.** Every commit on `main` must produce a successful Vercel build. If a commit can't deploy, it's not done.
 
-The pre-push hook (`.githooks/pre-push`) runs `next build` before allowing a push, blocking broken commits before they reach Vercel. It auto-installs after `pnpm install`. Bypass only in emergencies via `SKIP_PRE_PUSH=1 git push`.
+The pre-push hook (`.githooks/pre-push`) runs `next build` before allowing a push, blocking broken commits before they reach Vercel. It auto-installs after `pnpm install`. A `SKIP_PRE_PUSH=1` escape hatch exists in the hook; the standing rule on this repo is **do not use it** (see below).
 
 ## Workflow
 
@@ -85,8 +91,13 @@ The pre-push hook handles `next build` (~80s on this repo). For faster iteration
 ```bash
 pnpm test:unit                        # ~6s — typed contract checks
 pnpm test:visual                      # ~30s — design package regression
-npx tsc --noEmit -p .                 # ~30s — strict type-check
+pnpm typecheck:strict                 # ~30s — strict type-check
 ```
+
+Use `pnpm typecheck:strict`, never a bare `npx tsc --noEmit`. The script sets
+`NODE_OPTIONS=--max-old-space-size=4096`; without it the checker exhausts the
+default heap on this repo and aborts — see the next section for how that hid a
+broken type check for an unknown period.
 
 If `next build` fails locally, **fix it before pushing**. Vercel runs the same command — if it fails locally it'll fail there, and you'll have polluted the deployment history.
 
@@ -113,18 +124,28 @@ CI was never affected — `.github/workflows/ci.yml` runs the script unpiped, so
 - One logical change per commit. If you can't summarize it in one line, it's probably two commits.
 - Body explains the *why*, not the *what* (the diff shows the what).
 
-## Hook bypass — when it's actually OK
+## Hook bypass — don't
 
-`SKIP_PRE_PUSH=1` exists because emergencies are real, not so you can ignore broken builds. Acceptable uses:
+`SKIP_PRE_PUSH=1` exists in the hook. **The standing rule is that it is not used.**
 
-- Pushing a docs-only change when you know the build is unrelated
-- Pushing a hotfix branch where you've already validated locally and the hook is too slow to wait
+Every argument for bypassing is an argument that the build is fine, which is
+exactly the claim the hook exists to check. The two that sound most reasonable
+are the two that have actually broken `main`:
 
-Not acceptable:
+- *"It's docs-only, the build is unrelated"* — until the change touches a path
+  a doc-adjacent import resolves through, or a `.md` file a test reads. Both
+  have happened here.
+- *"I already validated locally and the hook is slow"* — then the hook takes
+  ~80s to agree with you, which is cheaper than a red `main`.
 
-- "I'll fix the build in the next commit" — push a working commit instead
-- "It's just a small change" — small changes break builds too
-- Anything pushed to `main` directly (just don't)
+And these are never acceptable:
+
+- "I'll fix the build in the next commit" — push a working commit instead.
+- "It's just a small change" — small changes break builds too.
+- Anything pushed to `main` directly.
+
+If the hook is genuinely wrong — it fails on something unrelated to your change —
+fix the hook. Don't route around it and leave it wrong for the next person.
 
 ## Failure alerts — you have three signals, subscribe to at least one
 

@@ -1,39 +1,42 @@
+# Vercel-upload exclusions.
+#
+# READ THIS BEFORE ADDING A PATTERN: keep every pattern root-anchored (leading
+# "/"). These are gitignore-style globs, so an unanchored pattern matches at ANY
+# depth and matches DIRECTORIES as well as files. That is not theoretical:
+#
+#   - "coverage/" also matched src/app/(workbench)/discovery/coverage/,
+#     silently stripping that route from the upload so it 404'd in production
+#     while building fine locally (.vercelignore is Vercel-upload-only).
+#   - "*.csv" also matched src/app/api/presales/bundles/[bundleId]/audit.csv/,
+#     which is a route DIRECTORY, not a data file. The consultant audit export
+#     link rendered fine and 404'd on click, in production only.
+#
+# Anchoring is what makes the pattern mean the thing you meant.
+
 # Documentation & specs (not needed at runtime)
-docs/
-specs/
-fit-portal-transfer/
-enhancement210226/
+/docs/
+/specs/
+/fit-portal-transfer/
 
 # Reports and audit artifacts
-*.csv
-content-quality-audit-results.json
-BACKEND-E2E-TEST-REPORT.md
-BUILD-PHASES-STATUS.md
-DATA-FIXES-REPORT-GEN-REPORT.md
-FORENSIC-AUDIT-REPORT.md
-HANDOFF.md
-SECURITY_AUDIT.md
-content-quality-audit-report.md
-implications-panel-audit-report.md
+/logs/
+/*.csv
 
 # Test infrastructure
-# NOTE: keep these patterns root-anchored (leading "/"). An unanchored pattern
-# like "coverage/" also matches app-route directories at any depth — e.g.
-# src/app/(workbench)/discovery/coverage/ — which silently strips that route
-# from the Vercel upload and makes it 404 in production only (builds fine
-# locally, since .vercelignore is Vercel-upload-only). See discovery/coverage.
 /tests/
 /playwright.config.ts
+/playwright.visual.config.ts
+/playwright.visual-app.config.ts
 /vitest.config.ts
 /test-results/
 /coverage/
 /playwright-report/
 
 # Large binaries that should never ship
-*.zip
-*.tar.gz
-*.docx
-*.psd
-*.ai
-*.mov
-*.mp4
+/*.zip
+/*.tar.gz
+/*.docx
+/*.psd
+/*.ai
+/*.mov
+/*.mp4

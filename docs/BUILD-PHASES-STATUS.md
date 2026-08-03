@@ -181,7 +181,7 @@
 
 # V2 Enhancement Phases (10–31)
 
-> **Source**: `enhancement210226/V2-MASTER-BRIEF (1).md` (Parts A–D + Addendums 1–3)
+> **Source**: the V2 master brief, Parts A–D + Addendums 1–3 (no longer held in this repo)
 > **Specs**: `specs/v2/PHASE-10.md` through `specs/v2/PHASE-31.md`
 > **Index**: `specs/V2-SPEC-INDEX.md`
 

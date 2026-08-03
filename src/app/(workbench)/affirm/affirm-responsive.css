@@ -1,10 +1,12 @@
 /* ============================================================
    ABeam Workbench — Affirm responsive pass (CCC 2026-05-24)
    ============================================================
-   Ported verbatim from the design files at the repo root:
+   Ported verbatim from the design files that accompanied the 2026-05-24
+   responsive pass:
      - enhancement-v2.css  (the five-screen workbench responsive rules)
      - process-flow.css    (the .pf-strip scroll-snap rules)
-   See /workspaces/aptus/CCC-responsive-apply-prompt.txt.
+   Those source files and the pass's working brief are no longer in the
+   repo; this file is the surviving record of what they specified.
 
    Desktop ≥1024px must stay pixel-identical — this file adds rules
    only at <=1023px and <=767px (plus a couple of new base classes

@@ -16,7 +16,7 @@ const ROOT = process.cwd();
 const read = (p: string) => readFileSync(path.resolve(ROOT, p), "utf8");
 
 const GUIDE = read("docs/coreedge-developer-guide.md");
-const RUNBOOK = read("SAP-CONNECTION-KEYSTONE-RUNBOOK.md");
+const RUNBOOK = read("docs/coreedge/SAP-CONNECTION-KEYSTONE-RUNBOOK.md");
 const SCOPE_NOTE = read("src/components/studio/ScopeNote.tsx");
 const DISCOVER = read("src/app/(studio)/studio/discover/page.tsx");
 const TEST_PAGE = read("src/app/(studio)/studio/test/page.tsx");
