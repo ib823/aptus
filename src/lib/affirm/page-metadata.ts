@@ -13,6 +13,8 @@
  */
 import type { Metadata } from "next";
 
+import { affirmBundleReadableBy } from "@/lib/affirm/authz";
+import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 
 export async function bundleMetadata(
@@ -20,12 +22,20 @@ export async function bundleMetadata(
   screen: string,
 ): Promise<Metadata> {
   const { id } = await params;
+  // generateMetadata runs alongside the page, not behind its guard — the same
+  // access rule the page enforces applies here, or the client's name leaks
+  // through the <title> to anyone who enumerates bundle ids.
+  const user = await getCurrentUser();
+  if (!user) return { title: { absolute: `${screen} — ABeam Workbench` } };
   const bundle = await prisma.affirmBundle.findUnique({
     where: { id },
-    select: { client: true },
+    select: { client: true, createdById: true },
   });
   // A missing bundle renders notFound() anyway; title it honestly rather than
-  // inventing a client name for a page that is about to 404.
-  if (!bundle) return { title: { absolute: `${screen} — ABeam Workbench` } };
+  // inventing a client name for a page that is about to 404. An unreadable one
+  // gets the same title, so the two cases stay indistinguishable.
+  if (!bundle || !affirmBundleReadableBy(bundle, user)) {
+    return { title: { absolute: `${screen} — ABeam Workbench` } };
+  }
   return { title: { absolute: `${bundle.client} · ${screen} — ABeam Workbench` } };
 }

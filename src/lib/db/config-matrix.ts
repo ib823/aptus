@@ -112,44 +112,48 @@ export async function getConfigSummary(assessmentId: string) {
   });
   const selectedIds = selections.map((s) => s.scopeItemId);
 
-  const counts = await prisma.configActivity.groupBy({
-    by: ["category"],
-    where: { scopeItemId: { in: selectedIds } },
-    _count: { id: true },
-  });
+  // ConfigSelection carries no relation to ConfigActivity, so the excluded /
+  // included counts need the activity id lists first. Everything that only
+  // depends on selectedIds runs as one batch, the two dependent counts as a
+  // second — instead of six serial round trips.
+  const [counts, selfServiceCount, allRecommendedIds, allOptionalIds] = await Promise.all([
+    prisma.configActivity.groupBy({
+      by: ["category"],
+      where: { scopeItemId: { in: selectedIds } },
+      _count: { id: true },
+    }),
+    prisma.configActivity.count({
+      where: {
+        scopeItemId: { in: selectedIds },
+        selfService: true,
+      },
+    }),
+    prisma.configActivity.findMany({
+      where: { scopeItemId: { in: selectedIds }, category: "Recommended" },
+      select: { id: true },
+    }),
+    prisma.configActivity.findMany({
+      where: { scopeItemId: { in: selectedIds }, category: "Optional" },
+      select: { id: true },
+    }),
+  ]);
 
-  const selfServiceCount = await prisma.configActivity.count({
-    where: {
-      scopeItemId: { in: selectedIds },
-      selfService: true,
-    },
-  });
-
-  // Count excluded recommended configs
-  const allRecommendedIds = await prisma.configActivity.findMany({
-    where: { scopeItemId: { in: selectedIds }, category: "Recommended" },
-    select: { id: true },
-  });
-  const excludedRecommended = await prisma.configSelection.count({
-    where: {
-      assessmentId,
-      configActivityId: { in: allRecommendedIds.map((r) => r.id) },
-      included: false,
-    },
-  });
-
-  // Count included optional configs
-  const allOptionalIds = await prisma.configActivity.findMany({
-    where: { scopeItemId: { in: selectedIds }, category: "Optional" },
-    select: { id: true },
-  });
-  const includedOptional = await prisma.configSelection.count({
-    where: {
-      assessmentId,
-      configActivityId: { in: allOptionalIds.map((r) => r.id) },
-      included: true,
-    },
-  });
+  const [excludedRecommended, includedOptional] = await Promise.all([
+    prisma.configSelection.count({
+      where: {
+        assessmentId,
+        configActivityId: { in: allRecommendedIds.map((r) => r.id) },
+        included: false,
+      },
+    }),
+    prisma.configSelection.count({
+      where: {
+        assessmentId,
+        configActivityId: { in: allOptionalIds.map((r) => r.id) },
+        included: true,
+      },
+    }),
+  ]);
 
   const result = {
     mandatory: 0,
