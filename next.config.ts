@@ -3,6 +3,12 @@ import { getSecurityHeaders } from "./src/lib/pwa/security-headers";
 
 const nextConfig: NextConfig = {
   transpilePackages: [],
+  // /help/developer-guide reads this file at request time; without the trace
+  // it exists in the repo and not in the deployed function, and the page's
+  // fallback would report the document unreadable on every production request.
+  outputFileTracingIncludes: {
+    "/help/developer-guide": ["./docs/coreedge-developer-guide.md"],
+  },
   serverExternalPackages: [
     "exceljs",
     "mammoth",

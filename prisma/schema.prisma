@@ -636,8 +636,9 @@ model Interface {
   @@index([solutionId])
 }
 
-/// Scope request + decision — the governance ledger in v1. Runtime enforcement
-/// (the northbound broker) is a later phase; this table records the decision.
+/// Scope request + decision — the governance ledger, ENFORCED AT RUNTIME: the
+/// northbound broker matches a live, unexpired, unrevoked row on solutionId +
+/// externalId + operation + environment on every call a solution makes.
 model ApiAccessGrant {
   id             String @id @default(cuid())
   solutionId     String

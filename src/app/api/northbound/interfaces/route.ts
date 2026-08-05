@@ -51,21 +51,27 @@ export async function GET(request: NextRequest) {
         solutionId: client.solutionId,
         environment: client.environment,
       }),
-      select: { externalId: true, operation: true, decision: true, expiresAt: true },
+      select: { externalId: true, operation: true, decision: true, expiresAt: true, revokedAt: true },
     }),
   ]);
 
   const now = Date.now();
   // THE SAME PREDICATE THE DATA ROUTE ENFORCES WITH — deliberately, and this
-  // has been wrong.
+  // has been wrong TWICE.
   //
-  // This filter used `isGranting`, which asks only "is this decision one of the
+  // First with `isGranting`, which asks only "is this decision one of the
   // granting kinds?" and is display-only for exactly that reason. The read path
   // uses `grantsRead(decision, environment)`. They disagree on SANDBOX_ONLY
   // outside SANDBOX: `isGranting` says yes, `grantsRead` says no. So this
   // endpoint reported `callable: true` for a call that `access.ts` then refused
   // with 403 NO_APPROVED_GRANT — while the comment below promises the opposite.
-  // An advisory that contradicts the enforcement is worse than no advisory.
+  //
+  // Then with revocation: `access.ts` refuses a revoked grant with
+  // GRANT_REVOKED, and this filter never selected `revokedAt` — so a grant an
+  // admin had withdrawn in Control Tower was advertised as callable right up to
+  // the 403. The agreement test existed and its fixture never set `revokedAt`,
+  // which is how the disagreement stayed green. An advisory that contradicts
+  // the enforcement is worse than no advisory.
   //
   // `grantsRead` and not `grantsWrite`: write-mode interfaces are excluded from
   // `callable` outright a few lines down, so a read predicate is the whole of
@@ -77,6 +83,9 @@ export async function GET(request: NextRequest) {
       .filter(
         (g) =>
           grantsRead(g.decision as GrantDecision, environment) &&
+          // `== null` to match access.ts exactly — an unselected field must not
+          // read as revoked. Same predicate, same nullishness, or they drift.
+          g.revokedAt == null &&
           (g.expiresAt === null || g.expiresAt.getTime() > now),
       )
       .map((g) => `${g.externalId}::${g.operation}`),

@@ -66,13 +66,18 @@ interface GrantsPayload {
     pending: number;
     expiringSoon: number;
     lapsed: number;
+    revoked: number;
+    unbounded: number;
   };
+  /** True when `grants` is a page of a larger set — the counts above are not. */
+  truncated: boolean;
   provenance: {
     howAGrantEnds: string;
     whyExpiryIsStillRequired: string;
     restrictionsAreEnforced: string;
     emptyByDesign: string | null;
     decisionsAreAudited: string;
+    grantsAreAPage: { returned: number; limit: number; of: number };
   };
   grants: Grant[];
 }
@@ -84,7 +89,7 @@ export function GrantsClient({ canDecide }: { canDecide: boolean }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <OpsHeading
         title="Access governance"
-        lede="Every capability a solution has asked to reach, what was decided, and when that decision stops being true. There is no revocation control — an approved grant ends by lapsing, which is why a write cannot be approved without an expiry."
+        lede="Every capability a solution has asked to reach, what was decided, and when that decision stops being true. An approved grant ends by lapsing or by admin revocation below — expiry stays mandatory on writes because revocation requires someone to notice."
       />
 
       {feed.state === "loading" ? (
@@ -111,7 +116,10 @@ function GrantsBody({
   canDecide: boolean;
   onDecided: () => void;
 }) {
-  const { counts, grants, provenance, expiryRunwayDays } = data;
+  const { counts, grants, provenance, expiryRunwayDays, truncated } = data;
+  // The rows on this page that are unbounded. `counts.unbounded` is the
+  // portfolio truth — past the page limit these two can differ, and the panel
+  // below says so rather than letting the visible list stand in for the total.
   const unbounded = grants.filter((g) => g.unbounded);
 
   return (
@@ -131,6 +139,11 @@ function GrantsBody({
             tone={counts.expiringSoon > 0 ? "attention" : "default"}
           />
           <Stat label="Lapsed" value={count(counts.lapsed)} basis="ended on their own" />
+          <Stat
+            label="Revoked"
+            value={count(counts.revoked)}
+            basis="withdrawn by an admin"
+          />
         </div>
 
         {grants.length === 0 ? (
@@ -167,17 +180,26 @@ function GrantsBody({
           <div style={{ marginTop: 6 }}>{provenance.whyExpiryIsStillRequired}</div>
           <div style={{ marginTop: 6 }}>{provenance.restrictionsAreEnforced}</div>
           <div style={{ marginTop: 6 }}>
-            {provenance.decisionsAreAudited} Every grant in scope is listed — this is a complete
-            record, not a sample.
+            {provenance.decisionsAreAudited}{" "}
+            {truncated
+              ? `Showing ${provenance.grantsAreAPage.returned} of ${provenance.grantsAreAPage.of} grants — the counts above cover all of them; the rows are a page.`
+              : "Every grant in scope is listed — this is a complete record, not a sample."}
           </div>
         </ProvenanceStrip>
       </OpsCard>
 
-      {unbounded.length > 0 ? (
+      {counts.unbounded > 0 ? (
         <OpsCard>
           <div style={{ padding: "13px 16px", display: "flex", gap: 10, alignItems: "flex-start" }}>
             <span style={{ flex: "none", paddingTop: 1 }}>
-              <OpsChip tone="bad" label={`${unbounded.length} unbounded`} />
+              {/* The DATABASE count, never the page's — an unbounded grant past
+                  the page limit must still raise this panel, and used not to. */}
+              <OpsChip tone="bad" label={`${counts.unbounded} unbounded`} />
+              {counts.unbounded > unbounded.length ? (
+                <span style={{ display: "block", marginTop: 4, fontSize: 11, color: "var(--ink-muted)" }}>
+                  {unbounded.length} on this page
+                </span>
+              ) : null}
             </span>
             <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.55, color: "var(--ink-secondary)" }}>
               These settled grants have no expiry, so nothing will end them on its own. They predate

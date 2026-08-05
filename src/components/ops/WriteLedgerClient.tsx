@@ -161,7 +161,7 @@ function LedgerBody({
             }
             detail={
               provenance.emptyByDesign ??
-              "No write reached the reservation step in the last 24 hours."
+              `No write reached the reservation step in the last ${windowHours} hours.`
             }
           />
         ) : (

@@ -46,6 +46,13 @@ const STATUS_CHIP: Record<StudioInterface["status"], HonestStatus> = {
   DEPRECATED: "NOT_PROBEABLE",
 };
 
+/** Lifecycle meanings for assistive tech — see SolutionsClient.STATUS_MEANING. */
+const STATUS_MEANING: Record<StudioInterface["status"], string> = {
+  ACTIVE: "serving runtime calls",
+  DRAFT: "defined, not yet activated",
+  DEPRECATED: "kept for the record, not for new use",
+};
+
 /** Platform defaults — described, not configured. See the file header. */
 const RUNTIME_DEFAULTS = [
   ["Timeout", "10s (or the connection's override)"],
@@ -128,7 +135,7 @@ export function InterfacesClient({
                 <Td>{i.operation}</Td>
                 <Td>v{i.version}</Td>
                 <Td>
-                  <StudioStatusChip status={STATUS_CHIP[i.status]} label={i.status.toLowerCase()} />
+                  <StudioStatusChip status={STATUS_CHIP[i.status]} label={i.status.toLowerCase()} meaning={STATUS_MEANING[i.status]} />
                 </Td>
               </tr>
             ))}
@@ -191,7 +198,10 @@ export function InterfacesClient({
             <Row label="Access">
               Decided separately in the API Access ledger. Defining an interface grants nothing.
             </Row>
-            <Row label="Audit">Config changes are recorded. Per-call audit arrives with the runtime.</Row>
+            <Row label="Audit">
+              Config changes are recorded, and every runtime call this interface serves is
+              audited per call — solution, operation, status and which connection answered.
+            </Row>
             <Row label="Status">{selected.status}</Row>
           </DetailCard>
 

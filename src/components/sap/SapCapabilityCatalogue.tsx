@@ -490,6 +490,7 @@ export function SapCapabilityCatalogue({
               dataConfirmed={dataConfirmedCount}
               dataProbe={dataProbeOn}
               needsSetup={byStatus.NEEDS_SETUP}
+              notFound={byStatus.NOT_FOUND}
               notChecked={byStatus.NOT_CHECKED}
               notProbeable={byStatus.NOT_PROBEABLE}
               available={byStatus.AVAILABLE}

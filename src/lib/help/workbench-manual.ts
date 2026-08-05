@@ -49,7 +49,11 @@ export interface WorkbenchProse {
 const AFFIRM_PROSE: Record<string, WorkbenchProse> = {
   "affirm/list": {
     answers:
-      "Every affirm-bundle for this organization, newest first, with the state each one is sitting in.",
+      // NOT "for this organization" — AffirmBundle has no organizationId. The
+      // list is scoped to bundles YOU created (an admin sees all of them), and
+      // the manual saying "organization" invented a tenancy the table does not
+      // have. See src/lib/affirm/authz.ts.
+      "Every affirm-bundle you created (a platform admin sees every bundle), newest first, with the state each one is sitting in.",
     cannotTell: [
       "Whether a client has started answering. A bundle reads ISSUED from the moment it is sent until the moment it is submitted, however much of it has been filled in.",
     ],

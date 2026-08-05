@@ -33,7 +33,7 @@ import {
   opsMonoStyle,
   type OpsTone,
 } from "@/components/ops/OpsChrome";
-import { count, sinceLabel, useOpsFeed } from "@/components/ops/useOpsFeed";
+import { count, sinceLabel, useOpsFeed, OpsWindowPicker } from "@/components/ops/useOpsFeed";
 import { formatDateTime } from "@/lib/format/date";
 
 interface Entry {
@@ -62,19 +62,39 @@ interface AuditPayload {
   entries: Entry[];
 }
 
-/** A decision is the governance event; the rest are configuration changes. */
+/**
+ * A decision is the governance event; the rest are configuration changes.
+ * ISSUE and ROTATE are credential-lifecycle events — added to the audit
+ * vocabulary precisely so minting a live token is distinguishable from a
+ * rename, and given the attention tone here for the same reason. Leaving them
+ * out let them fall through to `muted`, visually demoting the one event class
+ * the vocabulary was extended to surface.
+ */
 const ACTION: Record<string, OpsTone> = {
   DECISION: "attention",
+  ISSUE: "attention",
+  ROTATE: "attention",
   PROMOTE: "good",
   CREATE: "info",
   UPDATE: "neutral",
   TEST_CONNECT: "muted",
 };
 
+/**
+ * A governance trail defaults to 30 days, not the Ops screens' 24 hours.
+ *
+ * The route has defaulted to 30 days since it shipped — and that default was
+ * dead code, because useOpsFeed always appended `hours=24` and this screen
+ * never offered a way to change it. "Who approved this last month?" — the
+ * question an audit trail exists for — was unanswerable from the UI.
+ */
+const AUDIT_DEFAULT_WINDOW_HOURS = 24 * 30;
+
 export function AuditClient() {
   const [entityType, setEntityType] = useState<string | null>(null);
+  const [windowHours, setWindowHours] = useState(AUDIT_DEFAULT_WINDOW_HOURS);
   const query = entityType ? `?entityType=${encodeURIComponent(entityType)}` : "";
-  const { feed } = useOpsFeed<AuditPayload>(`/api/control-tower/audit${query}`);
+  const { feed } = useOpsFeed<AuditPayload>(`/api/control-tower/audit${query}`, windowHours);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -92,7 +112,12 @@ export function AuditClient() {
           <OpsPlaceholder kind="error" title="The audit trail could not be read" detail={feed.message} />
         </OpsCard>
       ) : (
-        <AuditBody data={feed.data} entityType={entityType} onFilter={setEntityType} />
+        <AuditBody
+          data={feed.data}
+          entityType={entityType}
+          onFilter={setEntityType}
+          onWindowChange={setWindowHours}
+        />
       )}
     </div>
   );
@@ -102,10 +127,12 @@ function AuditBody({
   data,
   entityType,
   onFilter,
+  onWindowChange,
 }: {
   data: AuditPayload;
   entityType: string | null;
   onFilter: (v: string | null) => void;
+  onWindowChange: (hours: number) => void;
 }) {
   const { counts, entries, provenance, windowHours } = data;
   const page = provenance.entriesAreAPage;
@@ -124,11 +151,15 @@ function AuditBody({
 
   return (
     <OpsCard>
+      <div style={{ display: "flex", justifyContent: "flex-end", padding: "12px 16px 0" }}>
+        <OpsWindowPicker id="ct-window-audit" hours={windowHours} onChange={onWindowChange} />
+      </div>
       <div style={{ display: "flex", gap: 30, padding: "15px 16px", flexWrap: "wrap" }}>
         <Stat
           label="Entries"
           value={count(counts.total)}
-          basis={`last ${Math.round(windowHours / 24)} days`}
+          // Sub-day windows must not render "last 0 days".
+          basis={windowHours < 48 ? `last ${windowHours} hours` : `last ${Math.round(windowHours / 24)} days`}
         />
         <Stat
           label="Decisions"

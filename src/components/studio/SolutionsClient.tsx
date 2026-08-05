@@ -55,6 +55,19 @@ const STATUS_LABEL: Record<SolutionStatus, string> = {
   RETIRED: "Retired",
 };
 
+/**
+ * Lifecycle meanings for assistive tech. The chip reuses honest-status TONES;
+ * without this override a screen reader heard the probe vocabulary on a
+ * lifecycle state — "Restricted — 401 or 403, communication arrangement not set
+ * up" — the visible label fixed and the accessible one still lying.
+ */
+const STATUS_MEANING: Record<SolutionStatus, string> = {
+  ACTIVE: "registered and in use",
+  DRAFT: "registered, not yet promoted",
+  RESTRICTED: "governance-limited by an admin",
+  RETIRED: "no longer in use",
+};
+
 const TABS = ["Business", "Functional", "Operating", "Commercial"] as const;
 type Tab = (typeof TABS)[number];
 
@@ -162,7 +175,7 @@ export function SolutionsClient({
             >
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
                 <span style={{ fontWeight: 600, fontSize: 14 }}>{s.name}</span>
-                <StudioStatusChip status={STATUS_CHIP[s.status]} label={STATUS_LABEL[s.status]} />
+                <StudioStatusChip status={STATUS_CHIP[s.status]} label={STATUS_LABEL[s.status]} meaning={STATUS_MEANING[s.status]} />
               </div>
               <div style={{ ...muted, marginTop: 4 }}>{s.classification.replace(/_/g, " ").toLowerCase()}</div>
               <div style={{ ...muted, marginTop: 6 }}>
