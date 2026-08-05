@@ -14,7 +14,18 @@ interface AssessmentLayoutProps {
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  // generateMetadata runs ALONGSIDE the layout body, not after it — so the
+  // access check the body performs does not cover this fetch. Without its own
+  // gate, any signed-in (or anonymous) request could read another tenant's
+  // customer name out of the <title> by enumerating ids.
   const { id } = await params;
+  const user = await getCurrentUser();
+  if (!user) return { title: "Assessment" };
+  const allowed = await verifyAssessmentAccess(
+    { id: user.id, role: user.role, organizationId: user.organizationId },
+    id,
+  );
+  if (!allowed) return { title: "Assessment" };
   const assessment = await prisma.assessment.findUnique({
     where: { id, deletedAt: null },
     select: { companyName: true },
