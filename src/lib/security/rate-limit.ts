@@ -65,7 +65,11 @@ function getLimiter(config: RateLimitConfig): Ratelimit | null {
     redis,
     limiter: Ratelimit.slidingWindow(config.limit, toWindowDuration(config.windowMs)),
     analytics: false,
-    ephemeralCache: false,
+    // Caches identifiers that are already over the limit for the rest of their
+    // window, so a flooding caller is refused in-isolate instead of costing a
+    // Redis round trip per request. Allowed traffic still hits Redis — the
+    // shared sliding window stays authoritative.
+    ephemeralCache: new Map(),
     prefix: `abeam:ratelimit:${cacheKey}`,
   });
   limiterCache.set(cacheKey, limiter);

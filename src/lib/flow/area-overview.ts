@@ -25,36 +25,34 @@ export async function computeFunctionalAreaOverview(
     .filter((s) => s.selected)
     .map((s) => s.scopeItemId);
 
-  const scopeItems = await prisma.scopeItem.findMany({
-    where: { id: { in: selectedIds } },
-    select: {
-      id: true,
-      nameClean: true,
-      functionalArea: true,
-      totalSteps: true,
-    },
-  });
-
-  // 2. Load step responses
-  const stepResponses = await prisma.stepResponse.findMany({
-    where: { assessmentId },
-    select: {
-      fitStatus: true,
-      processStep: { select: { scopeItemId: true } },
-    },
-  });
-
-  // 3. Load gap resolutions
-  const gapResolutions = await prisma.gapResolution.findMany({
-    where: { assessmentId },
-    select: { scopeItemId: true, resolutionType: true },
-  });
-
-  // 4. Load integration points for cross-area dependencies
-  const integrations = await prisma.integrationPoint.findMany({
-    where: { assessmentId },
-    select: { sourceSystem: true, targetSystem: true, scopeItemId: true },
-  });
+  // 2–4. The remaining loads are independent of one another — only the scope
+  // item lookup needed the selection pass above.
+  const [scopeItems, stepResponses, gapResolutions, integrations] = await Promise.all([
+    prisma.scopeItem.findMany({
+      where: { id: { in: selectedIds } },
+      select: {
+        id: true,
+        nameClean: true,
+        functionalArea: true,
+        totalSteps: true,
+      },
+    }),
+    prisma.stepResponse.findMany({
+      where: { assessmentId },
+      select: {
+        fitStatus: true,
+        processStep: { select: { scopeItemId: true } },
+      },
+    }),
+    prisma.gapResolution.findMany({
+      where: { assessmentId },
+      select: { scopeItemId: true, resolutionType: true },
+    }),
+    prisma.integrationPoint.findMany({
+      where: { assessmentId },
+      select: { sourceSystem: true, targetSystem: true, scopeItemId: true },
+    }),
+  ]);
 
   // 5. Build per-area data
   const areaMap = new Map<string, FunctionalAreaOverviewData>();
