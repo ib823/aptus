@@ -30,6 +30,7 @@ export function ReadinessScorecard({
   dataConfirmed,
   dataProbe,
   needsSetup,
+  notFound,
   notChecked,
   notProbeable,
   available,
@@ -45,6 +46,8 @@ export function ReadinessScorecard({
   dataConfirmed: number;
   dataProbe: boolean;
   needsSetup: number;
+  /** A probe returned 404 — published, but the path is not on this tenant. */
+  notFound: number;
   notChecked: number;
   notProbeable: number;
   /** Published for this edition but not yet probed on this tenant. */
@@ -127,25 +130,31 @@ export function ReadinessScorecard({
       {/*
         EVERY BUCKET, so the row adds up to the browsable total.
 
-        This showed five of the six statuses — `available` was passed nowhere
-        and rendered nowhere — so the pills summed to 1,822 while the status
-        filter above them offered 1,973. A reader could subtract and get 151
-        items that exist, are filterable, and appear in no summary. On a screen
-        whose whole argument is "nothing is inferred, every number traces to a
-        probe", a silently missing bucket is the worst kind of error.
+        This has gone wrong twice, the same way each time. First `available`
+        was passed nowhere and rendered nowhere, so the pills summed to 1,822
+        while the status filter above them offered 1,973 — a reader could
+        subtract and get 151 items that exist, are filterable, and appear in no
+        summary. The fix added a comment saying "every bucket"… and the row was
+        still missing NOT_FOUND, so any 404 probe result made the stated sum
+        false all over again. The vocabulary has SEVEN members; this row now
+        renders all seven, and the reconciliation sentence below is only ever
+        computed over the same seven. On a screen whose whole argument is
+        "nothing is inferred, every number traces to a probe", a silently
+        missing bucket is the worst kind of error.
       */}
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
         <CountPill label="Authorized" value={activated} bg="var(--status-signed-bg)" fg="var(--status-signed-fg)" />
         <CountPill label="Needs setup" value={needsSetup} bg="var(--status-awaiting-bg)" fg="var(--status-awaiting-fg)" />
         <CountPill label="Available" value={available} bg="var(--status-sent-bg)" fg="var(--status-sent-fg)" />
+        <CountPill label="Not found" value={notFound} bg="var(--status-revoked-bg)" fg="var(--status-revoked-fg)" />
         <CountPill label="Not checked" value={notChecked} bg="var(--surface-ink-tint)" fg="var(--ink-secondary)" />
         <CountPill label="Not probeable" value={notProbeable} bg="var(--status-expired-bg)" fg="var(--status-expired-fg)" />
         <CountPill label="Reference" value={reference} bg="var(--status-draft-bg)" fg="var(--status-draft-fg)" />
       </div>
       <p className="mt-2 text-xs" style={{ color: "var(--ink-muted)" }}>
-        These six add up to{" "}
+        These seven add up to{" "}
         <strong style={{ color: "var(--ink-secondary)" }}>
-          {(activated + needsSetup + available + notChecked + notProbeable + reference).toLocaleString()}
+          {(activated + needsSetup + available + notFound + notChecked + notProbeable + reference).toLocaleString()}
         </strong>{" "}
         browsable items — the same number the status filter offers. Stated so the
         two can be checked against each other rather than taken on trust.

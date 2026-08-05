@@ -12,10 +12,12 @@
  * screen can render them as real restrictions rather than as labels that
  * described an intention nobody enforced.
  *
- * EXPIRY IS THE ONLY WAY A GRANT ENDS. Revocation is deferred by decision, and
- * a settled grant cannot be re-decided. So a write-granting decision cannot be
- * approved without an expiry, and time-remaining is a first-class property here
- * rather than a date in a cell — it is the entire lifecycle control.
+ * A GRANT ENDS BY EXPIRY OR BY REVOCATION. Revocation is live (the sibling
+ * [grantId]/revoke route, admin-only, mandatory reason) but requires someone to
+ * notice; a settled grant still cannot be re-decided. So a granting decision
+ * cannot be approved without an expiry, and time-remaining stays a first-class
+ * property here rather than a date in a cell — it is the lifecycle control
+ * that works unattended.
  */
 
 import type { NextRequest } from "next/server";
@@ -52,8 +54,48 @@ export async function GET(request: NextRequest) {
 
   const where = opsWhere(guard.actor, {});
 
-  const [total, rows, byDecision, solutions] = await Promise.all([
+  /*
+   * THE LIFECYCLE COUNTS ARE DATABASE AGGREGATES, NOT PAGE ARITHMETIC.
+   *
+   * They were `grants.filter(...)` over the 200-row page — the exact defect the
+   * broker-traffic screen was rewritten to fix, and the one `opsLimit`'s own
+   * comment forbids ("counts must come from the database, rows are a page").
+   * Past 200 grants, "Awaiting a decision" under-reported and an unbounded
+   * grant beyond the page never appeared anywhere — including in the client's
+   * critical unbounded panel, which reads these counts as its headline.
+   *
+   * Each WHERE below restates one arm of the row-mapper's `lifecycle` ladder
+   * (revoked → lapsed → expiring-soon → pending → live) in SQL, with the same
+   * precedence, so a row is counted in exactly one bucket.
+   */
+  const [total, pendingCount, expiringSoonCount, lapsedCount, revokedCount, unboundedCount, rows, byDecision, solutions] = await Promise.all([
     prisma.apiAccessGrant.count({ where }),
+    prisma.apiAccessGrant.count({
+      where: opsWhere(guard.actor, {
+        revokedAt: null,
+        decidedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: soon } }],
+      }),
+    }),
+    prisma.apiAccessGrant.count({
+      where: opsWhere(guard.actor, {
+        revokedAt: null,
+        expiresAt: { gt: now, lte: soon },
+      }),
+    }),
+    prisma.apiAccessGrant.count({
+      where: opsWhere(guard.actor, { revokedAt: null, expiresAt: { lte: now } }),
+    }),
+    prisma.apiAccessGrant.count({
+      where: opsWhere(guard.actor, { revokedAt: { not: null } }),
+    }),
+    prisma.apiAccessGrant.count({
+      where: opsWhere(guard.actor, {
+        revokedAt: null,
+        decidedAt: { not: null },
+        expiresAt: null,
+      }),
+    }),
     prisma.apiAccessGrant.findMany({
       where,
       select: {
@@ -155,11 +197,12 @@ export async function GET(request: NextRequest) {
     counts: {
       total,
       byDecision: decisionCounts,
-      pending: grants.filter((g) => g.lifecycle === "pending").length,
-      expiringSoon: grants.filter((g) => g.lifecycle === "expiring-soon").length,
-      lapsed: grants.filter((g) => g.lifecycle === "lapsed").length,
-      revoked: grants.filter((g) => g.lifecycle === "revoked").length,
-      unbounded: grants.filter((g) => g.unbounded).length,
+      // Portfolio-wide aggregates — see the comment on the Promise.all above.
+      pending: pendingCount,
+      expiringSoon: expiringSoonCount,
+      lapsed: lapsedCount,
+      revoked: revokedCount,
+      unbounded: unboundedCount,
     },
     truncated: total > rows.length,
     provenance: {

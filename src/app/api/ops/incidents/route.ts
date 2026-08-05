@@ -105,10 +105,23 @@ export async function GET(request: NextRequest) {
        * windowing it would hide it on every screen except the day it was
        * created.
        */
+      /*
+       * REVOKED GRANTS ARE NOT STANDING ACCESS. Both standing-access rules
+       * below filter `revokedAt: null`, because a revoked grant is refused by
+       * the broker on the next call — the condition the incident warns about
+       * has been ended by exactly the action its remediation asks for. Without
+       * the filter, a revoked unbounded grant kept firing a CRITICAL forever
+       * (the topology stopped counting it as a defect on revocation; the
+       * incident feed did not — two surfaces disagreeing about one fact), and
+       * the "unaccountable PROD grant" rule told an operator to remediate a
+       * grant an admin had already killed. Expiry is deliberately NOT filtered
+       * on `unbounded` — the rule is ABOUT the absence of expiry.
+       */
       prisma.apiAccessGrant.count({
         where: opsWhere(guard.actor, {
           decision: { in: GRANTING_DECISIONS },
           expiresAt: null,
+          revokedAt: null,
         }),
       }),
       // The case `expiring-credential` cannot see: no expiry means never
@@ -124,12 +137,19 @@ export async function GET(request: NextRequest) {
         where: opsWhere(guard.actor, {
           decision: { in: GRANTING_DECISIONS },
           environment: "PROD",
-          OR: [
-            { solution: { status: { not: "ACTIVE" as $Enums.SolutionStatus } } },
-            { solution: { technicalOwnerId: null } },
-            { solution: { businessOwnerId: null } },
-            { solution: { supportOwnerId: null } },
-          ],
+          revokedAt: null,
+          // A lapsed grant is refused at call time exactly like a revoked one;
+          // an expired PROD grant on an ownerless solution is history, not a
+          // firing condition.
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+          AND: {
+            OR: [
+              { solution: { status: { not: "ACTIVE" as $Enums.SolutionStatus } } },
+              { solution: { technicalOwnerId: null } },
+              { solution: { businessOwnerId: null } },
+              { solution: { supportOwnerId: null } },
+            ],
+          },
         }),
       }),
     ]);

@@ -218,7 +218,7 @@ function TrafficBody({
           <OpsPlaceholder
             kind="empty"
             title="No calls in this window"
-            detail="Nothing reached the broker in the last 24 hours. This is not the same as an outage — see below for what leaves no record at all."
+            detail={`Nothing reached the broker in the last ${windowHours} hours. This is not the same as an outage — see below for what leaves no record at all.`}
           />
         ) : (
           <OpsTable head={["Time", "Solution", "Call", "Outcome", "Binding", "Latency"]}>

@@ -136,8 +136,21 @@ describe("the scope notes sit where the assumption forms", () => {
     expect(TEST_PAGE).toContain('<ScopeNote topic="no-editor" />');
   });
 
-  it("links onward to the full guide rather than restating it", () => {
-    expect(SCOPE_NOTE).toContain("coreedge-developer-guide");
+  it("links onward to the full guide rather than restating it — at a route that exists", () => {
+    /*
+     * The href was /docs/coreedge-developer-guide.md, which no route and no
+     * public/ file has ever served — and this test passed, because it asserted
+     * only that the guide's NAME appeared somewhere in the component. A dead
+     * link and a live one both contain the name. So the assertion now pins the
+     * actual href, and a sibling asserts the page that serves it is on disk.
+     */
+    expect(SCOPE_NOTE).toContain('href="/help/developer-guide"');
+    expect(SCOPE_NOTE).not.toContain('href="/docs/');
+  });
+
+  it("the route the guide link points at exists on disk", () => {
+    const page = read("src/app/(help)/help/developer-guide/page.tsx");
+    expect(page).toContain("coreedge-developer-guide.md");
   });
 });
 
