@@ -9,6 +9,10 @@
     {
       "path": "/api/cron/northbound-reap",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/trials",
+      "schedule": "0 2 * * *"
     }
   ],
   "functions": {

@@ -33,6 +33,11 @@ export const WORKBENCH_PATHS = [
   '/control-tower',     // CoreEdge Console — Control Tower (auth + RBAC-gated under (control-tower))
   '/c/',                // presales guest token surface (under (external))
   '/a/',                // affirm external executive guest surface (under (external))
+  '/d/',                // discovery external guest journey (under (external)) — feature-gated by NEUTRAL_DISCOVERY_ENABLED
+  '/signup',            // self-service signup — the acquisition funnel must survive WORKBENCH_ONLY
+  '/pricing',           // plan tiers; CTAs link to /signup
+  '/terms',             // linked from signup and guest consent surfaces
+  '/privacy',           // linked from signup and guest consent surfaces
   '/api/auth/',         // NextAuth callbacks must work on WORKBENCH_HOST
   '/api/presales/',     // presales REST API
   '/api/affirm/',       // affirm-set REST API

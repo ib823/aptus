@@ -11,6 +11,7 @@ import { logDecision } from "@/lib/audit/decision-logger";
 import { sendEmail } from "@/lib/email/brevo";
 import { orgInvitationEmail } from "@/lib/email/templates";
 import { prisma } from "@/lib/db/prisma";
+import { checkUserLimit } from "@/lib/commercial/usage-metering";
 import { ERROR_CODES } from "@/types/api";
 import type { UserRole } from "@/types/assessment";
 import { z } from "zod";
@@ -147,6 +148,28 @@ export async function POST(
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Cannot invite a role above your own level" } },
       { status: 403 },
+    );
+  }
+
+  // Enforce the plan's seat limit before minting an invitation. checkUserLimit
+  // existed since Phase 29 but nothing called it, so seats were unlimited on
+  // every tier in practice.
+  const seatCheck = await checkUserLimit(orgId);
+  if (!seatCheck.allowed) {
+    console.warn("[API] POST /api/organizations/[orgId]/users rejected: seat limit reached", {
+      userId: user.id,
+      orgId,
+      current: seatCheck.current,
+      limit: seatCheck.limit,
+    });
+    return NextResponse.json(
+      {
+        error: {
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: `User seat limit reached (${seatCheck.current}/${seatCheck.limit}). Upgrade your plan.`,
+        },
+      },
+      { status: 400 },
     );
   }
 

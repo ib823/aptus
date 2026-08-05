@@ -105,23 +105,26 @@ export async function GET(
   ]);
   const currencyCode = assessmentMeta?.currencyCode ?? "USD";
 
-  const analyzedInt = await prisma.integrationPoint.count({
-    where: { assessmentId, status: { not: "identified" } },
-  });
-  const readyDm = await prisma.dataMigrationObject.count({
-    where: { assessmentId, status: { in: ["validated", "migrated", "completed"] } },
-  });
-  const mitigatedOcm = await prisma.ocmImpact.count({
-    where: { assessmentId, status: { in: ["mitigated", "accepted", "completed"] } },
-  });
-  const activeStakeholders = await prisma.assessmentStakeholder.count({
-    where: { assessmentId, role: { not: "observer" } },
-  });
   // A sign-off counts as completed only when the signatory has acknowledged.
   // The prior version mirrored the "total" half exactly, always reporting 100%.
-  const completedSignOffs = await prisma.assessmentSignOff.count({
-    where: { assessmentId, acknowledgement: true },
-  });
+  const [analyzedInt, readyDm, mitigatedOcm, activeStakeholders, completedSignOffs] =
+    await Promise.all([
+      prisma.integrationPoint.count({
+        where: { assessmentId, status: { not: "identified" } },
+      }),
+      prisma.dataMigrationObject.count({
+        where: { assessmentId, status: { in: ["validated", "migrated", "completed"] } },
+      }),
+      prisma.ocmImpact.count({
+        where: { assessmentId, status: { in: ["mitigated", "accepted", "completed"] } },
+      }),
+      prisma.assessmentStakeholder.count({
+        where: { assessmentId, role: { not: "observer" } },
+      }),
+      prisma.assessmentSignOff.count({
+        where: { assessmentId, acknowledgement: true },
+      }),
+    ]);
 
   const readinessInput: ReadinessInput = {
     totalScopeItems: summary.scope.total,

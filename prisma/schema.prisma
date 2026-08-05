@@ -687,6 +687,9 @@ model ApiAccessGrant {
   // The runtime access check filters on this on every call, and the common
   // case — not revoked — is the cheap half.
   @@index([revokedAt])
+  // FK side of the Solution cascade; [organizationId, solutionId] cannot serve
+  // a lookup that does not lead with the org.
+  @@index([solutionId])
 }
 
 /// A saved Test Console run.
@@ -711,6 +714,8 @@ model TestCase {
   interface Interface @relation(fields: [interfaceId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, interfaceId])
+  // FK side of the Interface cascade.
+  @@index([interfaceId])
 }
 
 /// Config-change audit — written on EVERY governance mutation, from day one.
@@ -2084,6 +2089,8 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  // NextAuth resolves accounts by user, and the user-delete cascade needs it.
+  @@index([userId])
 }
 
 /// NextAuth VerificationToken — required by PrismaAdapter for magic link email flow
@@ -4405,6 +4412,7 @@ model PresalesBundleDecision {
   // The mismatch causes drift on future migrate diff. Lock the name here.
   @@index([bundleId, scopeCode, decisionId, supersededAt], map: "PresalesBundleDecision_lookup_idx")
   @@index([bundleId, setAt])
+  @@index([setByGrantId])
 }
 
 /// Append-only event log. eventType is the canonical TS union in
@@ -4447,6 +4455,7 @@ model PresalesAuditEvent {
   @@index([bundleId, createdAt])
   @@index([grantId, createdAt])
   @@index([eventType, createdAt])
+  @@index([actorUserId])
 }
 
 // =============================================================
@@ -4759,6 +4768,9 @@ model AffirmResponse {
   @@unique([bundleId, questionId])
   @@index([bundleId])
   @@index([choice])
+  // FK side of the AffirmQuestion cascade — without this, deleting a question
+  // scans every response.
+  @@index([questionId])
 }
 
 /// Append-only audit log for the affirm flow. Lightweight by design;
@@ -5141,6 +5153,7 @@ model DiscoveryEvent {
 
   @@index([engagementId, createdAt])
   @@index([type, createdAt])
+  @@index([actorId])
 }
 
 /// One fit decision per process per engagement. processId is the client
@@ -5203,6 +5216,8 @@ model DiscoveryNote {
 
   @@index([engagementId, processId])
   @@index([engagementId, createdAt])
+  // FK side of the grant SetNull — revoking a grant scans notes without it.
+  @@index([grantId])
 }
 
 // =============================================================

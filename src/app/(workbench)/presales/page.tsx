@@ -77,6 +77,18 @@ export default async function PresalesIndexPage({ searchParams }: PageProps) {
     where: user.organizationId ? { organizationId: user.organizationId } : {},
     orderBy: { createdAt: 'desc' },
     take: 100,
+    // The list renders eight scalar fields; without a projection each row also
+    // drags contentSnapshotJson and the other snapshot blobs across the wire.
+    select: {
+      id: true,
+      name: true,
+      clientCompanyName: true,
+      scopeCodes: true,
+      expiresAt: true,
+      signedAt: true,
+      revokedAt: true,
+      createdAt: true,
+    },
   });
   const bundleIds = bundles.map((b) => b.id);
   const sentEvents = bundleIds.length
