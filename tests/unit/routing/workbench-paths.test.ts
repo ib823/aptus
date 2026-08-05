@@ -51,6 +51,24 @@ describe("isWorkbenchPath", () => {
     }
   });
 
+  it("admits every guest journey", () => {
+    // `/c/` and `/a/` were listed from the start; `/d/` was not — the Discovery
+    // guest journey shipped under (external) and redirected to /workbench on a
+    // Workbench host, the gate's third silent failure. (external) is skipped by
+    // the route-group guard below, so the guest surfaces are pinned here by hand.
+    for (const p of ["/c/token123", "/a/token123", "/d/token123", "/d/verify"]) {
+      expect(isWorkbenchPath(p), `${p} must be reachable`).toBe(true);
+    }
+  });
+
+  it("admits the acquisition funnel", () => {
+    // A prospect who cannot reach /signup or /pricing cannot become a customer.
+    // These live under (auth)/(public), which the route-group guard skips.
+    for (const p of ["/signup", "/pricing", "/terms", "/privacy"]) {
+      expect(isWorkbenchPath(p), `${p} must be reachable`).toBe(true);
+    }
+  });
+
   it("admits the APIs the surfaces call", () => {
     for (const p of [
       "/api/auth/callback/email",
