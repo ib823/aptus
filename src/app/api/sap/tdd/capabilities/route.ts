@@ -99,7 +99,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (services.length === 0) {
     return NextResponse.json({
       data: {
-        note: "No probeable OData services — import the catalogue (drop the api.sap.com export at sap-references/api-hub-catalog.json and run `pnpm sap:catalog:import`).",
+        note: "No probeable OData services — import the catalogue: Operations → Catalogue health → \"Import API reference + rebuild\" (or drop the api.sap.com export at sap-references/api-hub-catalog.json and run `pnpm sap:catalog:import` locally).",
         summary: null,
       },
     });
