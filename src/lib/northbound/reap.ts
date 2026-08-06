@@ -21,6 +21,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
+import { permitCrossTenantReads } from "@/lib/db/tenant-guard";
 
 /** One night's work. Steady state is far below this; the cap protects run one. */
 export const REAP_BATCH_LIMIT = 5_000;
@@ -41,6 +42,12 @@ export async function reapExpiredIdempotencyKeys(
   now: Date = new Date(),
   limit: number = REAP_BATCH_LIMIT,
 ): Promise<ReapResult> {
+  // The lookup below scans every tenant's expired keys — the reaper is a
+  // platform maintenance job with no caller organization. Declared so the
+  // attached tenant-scope guard permits it; the deletes still carry each
+  // row's own organizationId.
+  permitCrossTenantReads("northbound-reap: platform maintenance sweep");
+
   const doomed = await prisma.northboundIdempotencyKey.findMany({
     where: { expiresAt: { lt: now } },
     select: { id: true, organizationId: true },
