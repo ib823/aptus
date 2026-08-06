@@ -10,12 +10,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  orgFindUniqueOrThrow: vi.fn(),
+  orgFindUnique: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    organization: { findUniqueOrThrow: mocks.orgFindUniqueOrThrow },
+    organization: { findUnique: mocks.orgFindUnique },
   },
 }));
 
@@ -23,7 +23,7 @@ import { checkFeatureAccess, isOrgReadOnly } from "@/lib/commercial/feature-gate
 
 describe("checkFeatureAccess", () => {
   beforeEach(() => {
-    mocks.orgFindUniqueOrThrow.mockReset();
+    mocks.orgFindUnique.mockReset();
     delete process.env.INTERNAL_TEST_DEPLOYMENT;
   });
 
@@ -32,27 +32,27 @@ describe("checkFeatureAccess", () => {
   });
 
   it("denies a feature the org's tier does not include", async () => {
-    mocks.orgFindUniqueOrThrow.mockResolvedValue({ plan: "TRIAL" });
+    mocks.orgFindUnique.mockResolvedValue({ plan: "TRIAL", subscriptionStatus: "ACTIVE", trialEndsAt: null });
     const result = await checkFeatureAccess("org1", "analytics");
-    expect(result).toEqual({ allowed: false, plan: "TRIAL", feature: "analytics" });
+    expect(result).toEqual({ allowed: false, plan: "TRIAL", feature: "analytics", productLine: "WORKBENCH" });
   });
 
   it("allows a feature the org's tier includes", async () => {
-    mocks.orgFindUniqueOrThrow.mockResolvedValue({ plan: "PROFESSIONAL" });
+    mocks.orgFindUnique.mockResolvedValue({ plan: "PROFESSIONAL", subscriptionStatus: "ACTIVE", trialEndsAt: null });
     const result = await checkFeatureAccess("org1", "analytics");
     expect(result.allowed).toBe(true);
   });
 
   it("grants everything on an internal test deployment", async () => {
     process.env.INTERNAL_TEST_DEPLOYMENT = "true";
-    mocks.orgFindUniqueOrThrow.mockResolvedValue({ plan: "TRIAL" });
+    mocks.orgFindUnique.mockResolvedValue({ plan: "TRIAL", subscriptionStatus: "ACTIVE", trialEndsAt: null });
     const result = await checkFeatureAccess("org1", "sso_scim");
     expect(result.allowed).toBe(true);
   });
 
   it("does not treat a truthy-but-wrong flag value as internal", async () => {
     process.env.INTERNAL_TEST_DEPLOYMENT = "1";
-    mocks.orgFindUniqueOrThrow.mockResolvedValue({ plan: "TRIAL" });
+    mocks.orgFindUnique.mockResolvedValue({ plan: "TRIAL", subscriptionStatus: "ACTIVE", trialEndsAt: null });
     const result = await checkFeatureAccess("org1", "sso_scim");
     expect(result.allowed).toBe(false);
   });
