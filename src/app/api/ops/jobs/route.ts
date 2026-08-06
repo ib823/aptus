@@ -28,6 +28,8 @@ export const dynamic = "force-dynamic";
 const SCHEDULED_JOBS = [
   { job: "trials", schedule: "daily 02:00 UTC" },
   { job: "analytics", schedule: "daily 03:00 UTC" },
+  // Rides the analytics slot (daily-only cron plan); records its own runs.
+  { job: "coreedge-usage", schedule: "daily 03:00 UTC, after analytics" },
   { job: "northbound-reap", schedule: "daily 03:30 UTC" },
   { job: "connection-probes", schedule: "daily 04:00 UTC" },
 ] as const;

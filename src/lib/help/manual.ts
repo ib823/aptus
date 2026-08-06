@@ -343,6 +343,22 @@ const PROSE: Record<string, ScreenProse> = {
       },
     ],
   },
+
+  "control-tower/usage": {
+    answers:
+      "How much CoreEdge broker traffic each day carried, from the nightly rollups — the consumption record pricing will be chosen from.",
+    cannotTell: [
+      "True total traffic. The rollups inherit the audit feed's floor: calls throttled at the edge, timed out before the audit write, or whose audit write failed leave no row, so these numbers under-count in the customer's favour.",
+      "Anything about billing. No payment processor is wired; nothing on this screen charges anyone.",
+    ],
+    misreadings: [
+      {
+        seeing: "A missing day",
+        means:
+          "The nightly rollup has not covered it yet — nothing on this screen aggregates the audit table live, so absence means not-yet-rolled-up, never zero traffic.",
+      },
+    ],
+  },
 };
 
 export type ManualWorkspace = StudioWorkspace | WorkbenchWorkspace;

@@ -2186,6 +2186,55 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+/// One organization's subscription to ONE product line. The Workbench, the
+/// CoreEdge Console and Aptus are priced separately; `Organization.plan` was
+/// the whole story when there was one product, and it remains the compatibility
+/// read for WORKBENCH (see lib/commercial/subscriptions). No payment processor
+/// is wired — `externalRef` is a provider-agnostic pointer (contract number,
+/// invoice id) so choosing one later is a data migration, not a remodel.
+model Subscription {
+  id             String    @id @default(cuid())
+  organizationId String
+  /// WORKBENCH | COREEDGE | APTUS
+  productLine    String
+  plan           String    @default("TRIAL")
+  /// TRIALING | ACTIVE | PAST_DUE | CANCELED — same vocabulary as
+  /// Organization.subscriptionStatus, which stays the WORKBENCH source.
+  status         String    @default("TRIALING")
+  startedAt      DateTime  @default(now())
+  endsAt         DateTime?
+  /// Provider-agnostic commercial reference. Never a secret.
+  externalRef    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, productLine])
+  @@index([organizationId])
+}
+
+/// One organization-day of CoreEdge consumption, rolled up nightly from
+/// NorthboundAuditEvent — the substrate pricing will be chosen from. Reading
+/// screens NEVER aggregate the audit table live: the rollup is bounded, the
+/// audit table is not. A floor, not a census, for the same reasons the audit
+/// feed is one (throttled/timed-out/failed-write calls leave no row).
+model CoreEdgeUsageRollup {
+  id             String   @id @default(cuid())
+  organizationId String
+  /// UTC midnight of the day this row covers.
+  day            DateTime
+  calls          Int      @default(0)
+  rowsRead       Int      @default(0)
+  writes         Int      @default(0)
+  refusals       Int      @default(0)
+  distinctInterfaces  Int @default(0)
+  distinctCredentials Int @default(0)
+  computedAt     DateTime @default(now())
+
+  @@unique([organizationId, day])
+  @@index([day])
+}
+
 model Organization {
   id       String  @id @default(cuid())
   name     String
