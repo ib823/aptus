@@ -1,8 +1,10 @@
 /**
  * SAP Capability Catalogue — GET /api/sap/tdd/hub-content
  *
- * Serves every Business Accelerator Hub content type SAP publishes for S/4HANA
- * Cloud Public Edition, each with an honest status badge:
+ * Serves every Business Accelerator Hub content type SAP publishes FOR THE
+ * REQUESTED PRODUCT (edition column for S/4 editions, product tag for
+ * SuccessFactors/Ariba, deliberately nothing for ECC — see hubCatalogueScope),
+ * each with an honest status badge:
  *   ACTIVATED  — runtime endpoint probed live and returned 200
  *   AVAILABLE  — SAP publishes it, tenant hasn't activated it ("imagine activated")
  *   REFERENCE  — design-time content, not a tenant endpoint
@@ -23,7 +25,7 @@ import {
   isSapTddPublicAccessEnabled,
 } from "@/lib/sap-public/tdd-connector";
 import { probeTenantCapabilities } from "@/lib/sap-public/capability-probe";
-import { mergeProbeTargets } from "@/lib/sap-public/dynamic-catalog";
+import { hubCatalogueScope, mergeProbeTargets, type HubCatalogueScope } from "@/lib/sap-public/dynamic-catalog";
 import type { SapServiceDefinition } from "@/lib/sap-public/tdd-connector";
 import {
   HUB_CONTENT_TYPES,
@@ -66,6 +68,7 @@ async function probeActivatedApiIds(
   prefix: string,
   tenant: { key: string; label: string; baseUrl: string },
   product: { services: SapServiceDefinition[] },
+  scope: HubCatalogueScope,
   dataProbe: boolean,
 ): Promise<{
   outcomes: Map<string, number>;
@@ -74,22 +77,34 @@ async function probeActivatedApiIds(
   probed: number;
 }> {
   const select = { contentType: true, apiType: true, externalId: true, title: true, packageId: true, communicationScenarios: true } as const;
+  /*
+   * DYNAMIC SAMPLING IS EDITION-ONLY. `hubApiToService` derives S/4 path
+   * conventions (/sap/opu/odata/sap/<apiId>), which are correct for every S/4
+   * edition and wrong by construction for anything else — a SuccessFactors
+   * tenant probed with them collects a wall of 404s that read as "not found
+   * on this tenant" for services that were never at those paths. For a
+   * product-tag scope the CURATED services are the whole probeable surface
+   * (their paths are real); for "none" there is nothing to probe at all.
+   */
+  const editionWhere = scope.kind === "edition" ? scope.where : null;
   // Sample both V2 (reliable path) and V4 (best-effort path) so V4 rows can also
   // reach ACTIVATED — alphabetical ordering alone never reaches the CE_* (V4) set.
-  const [v2rows, v4rows] = await Promise.all([
-    prisma.sapHubContent.findMany({
-      where: { appliesToPublic: true, contentType: { in: ["API", "CDS_VIEW"] }, apiType: "ODATAV2" },
-      select,
-      orderBy: { externalId: "asc" },
-      take: 45,
-    }),
-    prisma.sapHubContent.findMany({
-      where: { appliesToPublic: true, contentType: { in: ["API", "CDS_VIEW"] }, apiType: "ODATAV4" },
-      select,
-      orderBy: { externalId: "asc" },
-      take: 25,
-    }),
-  ]);
+  const [v2rows, v4rows] = editionWhere
+    ? await Promise.all([
+        prisma.sapHubContent.findMany({
+          where: { ...editionWhere, contentType: { in: ["API", "CDS_VIEW"] }, apiType: "ODATAV2" },
+          select,
+          orderBy: { externalId: "asc" },
+          take: 45,
+        }),
+        prisma.sapHubContent.findMany({
+          where: { ...editionWhere, contentType: { in: ["API", "CDS_VIEW"] }, apiType: "ODATAV4" },
+          select,
+          orderBy: { externalId: "asc" },
+          take: 25,
+        }),
+      ])
+    : [[], []];
   const dynamic = [...v2rows, ...v4rows]
     .map((a) => hubApiToService({ ...a, contentType: a.contentType as HubContentType }))
     .filter((s): s is NonNullable<typeof s> => s !== null);
@@ -149,12 +164,47 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const page = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
   const limit = Math.min(200, Math.max(1, Number.parseInt(params.get("limit") ?? "50", 10) || 50));
 
+  /*
+   * THE PRODUCT DECIDES WHICH CATALOGUE — the fix this branch is named for.
+   * Every query below used to filter `appliesToPublic: true` regardless of
+   * `?product=`, so SuccessFactors, RISE, on-premise and ECC all rendered the
+   * S/4 Public list with identical counts. The scope resolver returns the
+   * edition column for S/4 editions, the product-tag filter for SF/Ariba, and
+   * an honest "none" for ECC — see hubCatalogueScope.
+   */
+  const scope = hubCatalogueScope(product);
+  if (scope.kind === "none") {
+    return NextResponse.json({
+      data: {
+        note: scope.reason,
+        items: [],
+        total: 0,
+        page,
+        limit,
+        counts: {
+          byType: Object.fromEntries(HUB_CONTENT_TYPES.map((t) => [t, 0])),
+          byStatus: emptyByStatus(),
+          byLob: {},
+        },
+        // The catalogue may well be imported — this product deliberately has
+        // no published list, which is a different statement than "not loaded".
+        catalogueImported: true,
+        tenant: null,
+        isAdmin,
+      },
+    }, { headers: NO_STORE });
+  }
+  const scopeWhere = scope.where;
+
   // ── empty-catalogue note ───────────────────────────────────────────────
-  const totalRows = await prisma.sapHubContent.count({ where: { appliesToPublic: true } });
+  const totalRows = await prisma.sapHubContent.count({ where: scopeWhere });
   if (totalRows === 0) {
     return NextResponse.json({
       data: {
-        note: "SapHubContent is empty — import the catalogue: `pnpm sap:hub:import` (ships an illustrative seed) or drop hub-content exports in sap-references/.",
+        note:
+          scope.kind === "product-tag"
+            ? `No ${product.label} rows are in the catalogue yet — rebuild from the API reference (the importer stamps product tags) or import a Hub export carrying them.`
+            : "SapHubContent is empty for this edition — import the catalogue: `pnpm sap:hub:import` (ships an illustrative seed) or drop hub-content exports in sap-references/.",
         items: [],
         total: 0,
         page,
@@ -206,11 +256,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     : null;
   const dataProbe = params.get("dataProbe") === "1"; // opt-in LIVE overlay (freshness + data-confirm)
 
-  // Load the persisted probe for the FULL catalogue (rawMetadataJson.probes is
-  // small). This is the source of truth — the admin Probe-all populates it PER
-  // TENANT; a row's status here is ONLY the requested tenant's stored result.
+  // Load the persisted probe for the FULL scoped catalogue (rawMetadataJson.
+  // probes is small). This is the source of truth — the admin Probe-all
+  // populates it PER TENANT; a row's status here is ONLY the requested
+  // tenant's stored result.
   const allRows = await prisma.sapHubContent.findMany({
-    where: { appliesToPublic: true },
+    where: scopeWhere,
     select: { externalId: true, contentType: true, apiType: true, itemCount: true, rawMetadataJson: true },
   });
   // Headline ITEM volume, not grouped-row count: a grouped row (BAdI, CDS LoB,
@@ -261,7 +312,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const probeRefusal = await refuseUnlessMayProbeTenant(product.envPrefix);
     if (probeRefusal) return probeRefusal;
     try {
-      const r = await probeActivatedApiIds(product.envPrefix, tenant, product, true);
+      const r = await probeActivatedApiIds(product.envPrefix, tenant, product, scope, true);
       for (const [k, v] of r.outcomes) outcomes.set(k, v);
       for (const [k, v] of r.capabilities) capabilities.set(k, v);
       dataConfirmed = r.dataConfirmed;
@@ -287,7 +338,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   // ── build the WHERE from filters (status pre-filters via the classified ids) ──
-  const and: Prisma.SapHubContentWhereInput[] = [{ appliesToPublic: true }];
+  const and: Prisma.SapHubContentWhereInput[] = [scopeWhere];
   if (contentType) and.push({ contentType });
   // SAP-only: exclude rows explicitly stamped partner (rawMetadataJson.raw.source).
   if (sourceFilter === "sap") {
@@ -369,14 +420,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     by: ["contentType"],
     where: q
       ? {
-          appliesToPublic: true,
-          OR: [
-            { title: { contains: q, mode: "insensitive" } },
-            { externalId: { contains: q, mode: "insensitive" } },
-            { description: { contains: q, mode: "insensitive" } },
+          AND: [
+            scopeWhere,
+            {
+              OR: [
+                { title: { contains: q, mode: "insensitive" } },
+                { externalId: { contains: q, mode: "insensitive" } },
+                { description: { contains: q, mode: "insensitive" } },
+              ],
+            },
           ],
         }
-      : { appliesToPublic: true },
+      : scopeWhere,
     _count: { _all: true },
   });
   // Emit ALL 12 type keys (0 allowed) so every tile renders with honest context,
@@ -387,16 +442,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // Honest scorecard denominator: discrete probeable runtime services (API + CDS
   // as OData V2 reliably, or V4 best-effort) — NOT events, NOT grouped CDS sums.
-  const probeableRuntime = await prisma.sapHubContent.count({
-    where: { appliesToPublic: true, contentType: { in: ["API", "CDS_VIEW"] }, apiType: { in: ["ODATAV2", "ODATAV4"] } },
-  });
+  // For a product-tag scope this is ZERO by construction: hubApiToService's
+  // paths are S/4 conventions, and manufacturing SF/Ariba URLs would count
+  // services as probeable that 404 by design (dynamic-catalog.ts's own rule).
+  const probeableRuntime =
+    scope.kind === "edition"
+      ? await prisma.sapHubContent.count({
+          where: { ...scopeWhere, contentType: { in: ["API", "CDS_VIEW"] }, apiType: { in: ["ODATAV2", "ODATAV4"] } },
+        })
+      : 0;
 
   // Line-of-business counts, so a business-domain lens can offer the domains that
   // ACTUALLY exist with their real sizes, instead of a hardcoded taxonomy that
   // would silently show empty buckets (or hide real ones) as the catalogue moves.
   const groupedByLob = await prisma.sapHubContent.groupBy({
     by: ["packageId"],
-    where: { appliesToPublic: true },
+    where: scopeWhere,
     _count: { _all: true },
   });
   const byLob: Record<string, number> = {};

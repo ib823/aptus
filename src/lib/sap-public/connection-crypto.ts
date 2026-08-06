@@ -141,14 +141,34 @@ export function sealSecrets(secrets: SapConnectionSecrets, aad?: string): string
   return encryptSecret(JSON.stringify(trimmed), aad);
 }
 
-/** Open a sealed blob back into a secrets object. Returns {} for an empty/absent blob. */
+/**
+ * Open a sealed blob back into a secrets object. Returns {} for an empty/absent blob.
+ *
+ * THE KEY LIST MUST COVER EVERY FIELD `SapConnectionSecrets` DECLARES. It once
+ * omitted `samlAssertion` and `companyId`: `sealSecrets` stored them (it walks
+ * Object.entries), and this function silently dropped them on the way out — so
+ * a SuccessFactors SAML connection sealed fine and then failed its token
+ * exchange with "missing companyId, samlAssertion" no matter what the operator
+ * typed. A seal/open round-trip test now pins every field, which is the only
+ * durable fix for an allow-list that has to track a type by hand.
+ */
 export function openSecrets(blob: string | null | undefined, aad?: string): SapConnectionSecrets {
   if (!blob) return {};
   const parsed = JSON.parse(decryptSecret(blob, aad)) as unknown;
   if (!parsed || typeof parsed !== "object") return {};
   const src = parsed as Record<string, unknown>;
   const out: SapConnectionSecrets = {};
-  for (const key of ["username", "password", "bearerToken", "clientId", "clientSecret", "writeSecret"] as const) {
+  const KEYS = [
+    "username",
+    "password",
+    "bearerToken",
+    "clientId",
+    "clientSecret",
+    "writeSecret",
+    "samlAssertion",
+    "companyId",
+  ] as const satisfies readonly (keyof SapConnectionSecrets)[];
+  for (const key of KEYS) {
     if (typeof src[key] === "string") out[key] = src[key] as string;
   }
   return out;

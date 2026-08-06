@@ -21,6 +21,7 @@
 
 import { useCallback, useState } from "react";
 
+import { ProductLabel } from "@/components/sap/ProductLabel";
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
 
 export interface StudioInterface {
@@ -147,7 +148,11 @@ export function InterfacesClient({
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <DetailCard title="Source">
             <Row label="Catalogue service" mono>{selected.externalId}</Row>
-            <Row label="Product">{selected.sapProduct}</Row>
+            <Row label="Product">
+              {/* The NAME via the one component, never the raw key — the sweep
+                  that guards this matched `product` and not `sapProduct`. */}
+              <ProductLabel product={selected.sapProduct} />
+            </Row>
             <Row label="Entity set" mono>
               {canAuthor ? (
                 <EntitySetEditor

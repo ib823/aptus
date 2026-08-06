@@ -34,7 +34,7 @@ function makeRequest(body: unknown): Parameters<typeof POST>[0] {
   return { json: async () => body } as Parameters<typeof POST>[0];
 }
 
-const PRODUCT = { key: "s4hana", label: "S/4HANA Cloud", envPrefix: "S4_TDD", services: [] };
+const PRODUCT = { key: "s4hana", label: "S/4HANA Cloud", envPrefix: "S4_TDD", edition: "PUBLIC", services: [] };
 const TENANT = { key: "default", label: "ABeam TDD", baseUrl: "https://x.example" };
 const PROBEABLE_ROWS = [
   { id: "1", externalId: "API_PO", contentType: "API", apiType: "ODATAV2", title: "PO", packageId: "Proc", communicationScenarios: [], rawMetadataJson: { source: "SapApiReference", apiId: "API_PO" } },

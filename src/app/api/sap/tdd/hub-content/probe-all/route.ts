@@ -22,6 +22,7 @@ import {
 } from "@/lib/sap-public/tdd-connector";
 import { probeService } from "@/lib/sap-public/capability-probe";
 import { hubApiToService, httpToRuntimeStatus, isProbeable, mergeStoredProbe, type HubContentType } from "@/lib/sap-public/hub-content";
+import { hubCatalogueScope } from "@/lib/sap-public/dynamic-catalog";
 import { logDecision } from "@/lib/audit/decision-logger";
 import type { UserRole } from "@/types/assessment";
 import { resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
@@ -66,10 +67,28 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
   const targetTenantKey: string = tenantKey; // narrowed; stable inside the worker closure
 
+  /*
+   * PROBE THE REQUESTED PRODUCT'S OWN CATALOGUE. This queried
+   * `appliesToPublic: true` regardless of `?product=`, so "Probe all" on a
+   * SuccessFactors or RISE tenant fired the S/4 PUBLIC list at it —
+   * manufactured URLs against SF (404 by construction), and the wrong
+   * published set against private/on-prem. Non-edition scopes have no
+   * dynamically-probeable rows at all (path derivation waits for a live
+   * system), and ECC has no list — both refuse honestly instead of storing
+   * hundreds of meaningless outcomes under the tenant's key.
+   */
+  const scope = hubCatalogueScope(product);
+  if (scope.kind !== "edition") {
+    const message =
+      scope.kind === "none"
+        ? scope.reason
+        : `${product.label} rows have no derivable OData paths to probe — only its curated services are probeable, from the Operations panel.`;
+    return NextResponse.json({ error: { code: ERROR_CODES.VALIDATION_ERROR, message } }, { status: 400 });
+  }
   // Every probeable row (API/CDS_VIEW on OData V2/V4). SOAP / null apiType are
   // NOT probeable — they stay NOT_PROBEABLE and are skipped here.
   const rows = await prisma.sapHubContent.findMany({
-    where: { appliesToPublic: true, contentType: { in: ["API", "CDS_VIEW"] }, apiType: { in: ["ODATAV2", "ODATAV4"] } },
+    where: { ...scope.where, contentType: { in: ["API", "CDS_VIEW"] }, apiType: { in: ["ODATAV2", "ODATAV4"] } },
     select: { id: true, externalId: true, contentType: true, apiType: true, title: true, packageId: true, communicationScenarios: true, rawMetadataJson: true },
   });
   // Guard: only genuinely-probeable rows (mirror of hubApiToService non-null).

@@ -83,3 +83,12 @@ The per-type tiles show `imported of ~published (indicative)`. Those published
 figures are an **indicative volume snapshot**, **not pinned to a release** — order
 of magnitude is stable across releases, exact figures are not. For release-accurate
 counts, refresh from a logged-in Hub check (a separate, manual follow-up).
+
+## Removed drop targets
+
+- `AI.json` (26 rows) was removed 2026-08: `"AI"` is not a `HubContentType`, so
+  no import path could ever read the file — committed data with no consumer.
+  The AI facet in the catalogue works differently: it counts API rows whose
+  `rawMetadataJson.raw.domain === "AI"`, stamped at API-catalogue import. If a
+  distinct AI content type is ever wanted, add it to `HubContentType` first;
+  a drop file without a type is unreachable by construction.

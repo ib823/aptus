@@ -61,12 +61,38 @@ export default async function StudioDiscoverPage() {
       {/* The likeliest place to assume CoreEdge builds ABAP: right where an
           ABAP-exposed OData service shows up alongside standard SAP APIs. */}
       <ScopeNote topic="abap" />
-      <DiscoverClient
-        solutions={solutions}
-        canAuthor={canMutateStudio(user.role)}
-        tenant={tenantKey}
-        product={activeTenant?.product ?? "s4hana"}
-      />
+      {activeTenant ? (
+        <DiscoverClient
+          solutions={solutions}
+          canAuthor={canMutateStudio(user.role)}
+          tenant={tenantKey}
+          product={activeTenant.product}
+        />
+      ) : (
+        /*
+         * NO TENANT → NO CATALOGUE, said plainly. The old fallback rendered the
+         * catalogue with product="s4hana" — on a deployment whose only product
+         * is SuccessFactors that mislabelled the whole page, the exact bug the
+         * tenant-scope test closed for the selected case, surviving in the
+         * fallback. A page that claims "what THIS tenant exposes" with no
+         * tenant has nothing true to show.
+         */
+        <section
+          style={{
+            background: "var(--surface-paper)",
+            border: "1px dashed var(--border-default)",
+            borderRadius: "var(--radius-card-warm, 12px)",
+            padding: 20,
+          }}
+        >
+          <h2 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 600 }}>No tenant connected</h2>
+          <p style={{ margin: 0, fontSize: 14, lineHeight: "22px", color: "var(--ink-secondary)" }}>
+            This page shows what a specific tenant exposes, and no SAP connection or
+            deployment tenant is configured yet. Add a connection in{" "}
+            <strong>Connections</strong> and the catalogue for its product appears here.
+          </p>
+        </section>
+      )}
     </div>
   );
 }

@@ -177,6 +177,28 @@ describe("the client-safe mirror agrees with the connector", () => {
     }
   });
 
+  it("the API accepts every product the picker offers — the other direction", () => {
+    /*
+     * This file checked only "every connector product has a mark", and the
+     * drift arrived from the other side: the picker offered six tiles
+     * (Object.keys(PRODUCT_MARKS)) while the connections API validated five
+     * (no ariba), so selecting the Ariba tile and saving failed the enum.
+     * A reconciliation that checks one direction is half a reconciliation.
+     */
+    const route = readFileSync(
+      resolve(ROOT, "src/app/api/studio/connections/route.ts"),
+      "utf8",
+    );
+    const marks = Object.keys(PRODUCT_MARKS);
+    // The route derives from SAP_ODATA_PRODUCTS + the literal "ariba"; assert
+    // the union covers every offered mark.
+    const accepted = new Set<string>([...SAP_ODATA_PRODUCTS.map((p) => p.key), "ariba"]);
+    for (const key of marks) {
+      expect(accepted.has(key), `picker offers "${key}" but the API rejects it`).toBe(true);
+    }
+    expect(route).toContain('"ariba"');
+  });
+
   it("shows the client field exactly where the API accepts one", () => {
     const client = readFileSync(
       resolve(ROOT, "src/components/studio/ConnectionsClient.tsx"),
@@ -251,11 +273,14 @@ describe("no surface renders the raw product key", () => {
         .replace(/\/\*[\s\S]*?\*\//g, "")         // block comments
         .replace(/\/\/[^\n]*/g, "");               // line comments
 
-      for (const m of src.matchAll(/>\s*\{\s*(?:[A-Za-z_$][\w$]*\.)?product\s*\}/g)) {
+      // `product` OR `sapProduct` — the sweep matched only the former, and
+      // InterfacesClient rendered `{selected.sapProduct}` (the raw "s4hana"
+      // key) straight through it. Same defect, one letter of naming apart.
+      for (const m of src.matchAll(/>\s*\{\s*(?:[A-Za-z_$][\w$]*\.)?(?:sapP|p)roduct\s*\}/g)) {
         violations.push(`${f}: ${m[0].trim()}`);
       }
       // `{x.product} · {x.key}` — rendered text that does not start right after '>'
-      for (const m of src.matchAll(/\{\s*[A-Za-z_$][\w$]*\.product\s*\}\s*(?:·|<\/)/g)) {
+      for (const m of src.matchAll(/\{\s*[A-Za-z_$][\w$]*\.(?:sapP|p)roduct\s*\}\s*(?:·|<\/)/g)) {
         violations.push(`${f}: ${m[0].trim()}`);
       }
     }

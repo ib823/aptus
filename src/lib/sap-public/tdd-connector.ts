@@ -570,11 +570,21 @@ export function getConfiguredSapTenants(prefix: string = "S4_TDD"): SapTenant[] 
         typeof record.environment === "string" && record.environment.trim()
           ? record.environment.trim().toUpperCase()
           : undefined;
+      // Optional: the SAP client, for on-prem/RISE landscapes where one system
+      // hosts several data containers. This field was never parsed, so a
+      // deployment tenant could not carry a client and every read built a URL
+      // with no sap-client — the "read one client's data thinking it is
+      // another's" hazard sap-url.ts documents.
+      const client =
+        typeof record.client === "string" && record.client.trim()
+          ? record.client.trim()
+          : undefined;
       return {
         key,
         label,
         baseUrl: normalizeBaseUrl(baseUrl),
         ...(environment ? { environment } : {}),
+        ...(client ? { client } : {}),
       };
     });
   }
@@ -582,12 +592,14 @@ export function getConfiguredSapTenants(prefix: string = "S4_TDD"): SapTenant[] 
   const baseUrl = env(prefix, "BASE_URL");
   if (!baseUrl) return [];
   const singleEnv = env(prefix, "TENANT_ENVIRONMENT");
+  const singleClient = env(prefix, "TENANT_CLIENT");
   return [
     {
       key: "default",
       label: env(prefix, "TENANT_LABEL") ?? "Configured Tenant",
       baseUrl: normalizeBaseUrl(baseUrl),
       ...(singleEnv ? { environment: singleEnv.trim().toUpperCase() } : {}),
+      ...(singleClient?.trim() ? { client: singleClient.trim() } : {}),
     },
   ];
 }

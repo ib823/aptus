@@ -160,7 +160,15 @@ export function CapabilityDetail({
     setError(null);
     setOpenEntity(null);
     setPreviews({});
-    fetch(`/api/sap/tdd/hub-content/${encodeURIComponent(id)}?product=${encodeURIComponent(product)}`)
+    // Forward the tenant ON SCREEN. Without it the detail route fell back to
+    // the deployment's first configured tenant, probed THAT, and the result
+    // was lifted into probedStatus to override the list badge — so on a
+    // multi-tenant deployment an expanded row showed tenant A's status under
+    // tenant B's caption, the exact hazard the list's `tenant` prop exists
+    // to prevent.
+    fetch(
+      `/api/sap/tdd/hub-content/${encodeURIComponent(id)}?product=${encodeURIComponent(product)}${tenant ? `&tenant=${encodeURIComponent(tenant)}` : ""}`,
+    )
       .then((r) => r.json())
       .then((j: { data?: DetailData; error?: { message?: string } }) => {
         if (cancelled) return;
@@ -173,7 +181,7 @@ export function CapabilityDetail({
     return () => {
       cancelled = true;
     };
-  }, [id, product]);
+  }, [id, product, tenant]);
 
   const reachedIndex = data?.ladder ? LADDER.indexOf(data.ladder as (typeof LADDER)[number]) : -1;
 

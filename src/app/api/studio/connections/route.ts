@@ -42,7 +42,17 @@ import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/
 
 export const dynamic = "force-dynamic";
 
-const PRODUCT_KEYS = SAP_ODATA_PRODUCTS.map((p) => p.key) as [string, ...string[]];
+/*
+ * EVERY CONNECTABLE PRODUCT — the OData registry PLUS Ariba. The picker offers
+ * six tiles (Object.keys(PRODUCT_MARKS)); this list held five, so selecting
+ * the Ariba tile and saving failed the enum with a validation error the form
+ * could not explain. Ariba is deliberately not in SAP_ODATA_PRODUCTS (it is
+ * REST, not OData, and must not be double-counted by listProductSummaries) —
+ * but a connection to it is real, which is why getSapProduct("ariba") answers.
+ * The reconciliation test now asserts BOTH directions: every mark is
+ * accepted here, and everything accepted here has a mark.
+ */
+const PRODUCT_KEYS = ["ariba", ...SAP_ODATA_PRODUCTS.map((p) => p.key)] as [string, ...string[]];
 
 /**
  * Products whose systems address an SAP client.

@@ -251,6 +251,15 @@ export const BINDING_REFUSAL_COVERAGE = {
    * counting it in both would double-report one estate problem.
    */
   UNDECLARED_ENVIRONMENT_WRITE: "excluded",
+  /**
+   * A stored connection row could not be resolved (secrets failed to open, or
+   * an authType outside the vocabulary). Counted: the credential is live, the
+   * grant may be approved, and every call fails on estate state an operator
+   * must fix — the same shape as NO_MATCH_FOR_CLIENT. Before this reason
+   * existed the failure was an unhandled 500 with no audit row, which no rule
+   * could ever see.
+   */
+  CONNECTION_UNREADABLE: "counted",
 } as const satisfies Record<ConnectionBindingFailure, "counted" | "excluded">;
 
 /** The reasons the ops query filters on. Derived, never hand-maintained. */

@@ -31,7 +31,7 @@ vi.mock("@/lib/sap-public/capability-probe", () => ({ probeTenantCapabilities: m
 
 const { GET } = await import("@/app/api/sap/tdd/hub-content/route");
 
-const PRODUCT = { key: "s4hana", label: "S/4HANA Cloud", envPrefix: "S4_TDD", services: [] };
+const PRODUCT = { key: "s4hana", label: "S/4HANA Cloud", envPrefix: "S4_TDD", edition: "PUBLIC", services: [] };
 const TENANT = { key: "default", label: "ABeam TDD", baseUrl: "https://x.example" };
 
 // Status now derives from the PERSISTED probe on rawMetadataJson.probe, read for
