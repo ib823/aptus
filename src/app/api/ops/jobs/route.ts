@@ -29,7 +29,7 @@ const SCHEDULED_JOBS = [
   { job: "trials", schedule: "daily 02:00 UTC" },
   { job: "analytics", schedule: "daily 03:00 UTC" },
   { job: "northbound-reap", schedule: "daily 03:30 UTC" },
-  { job: "connection-probes", schedule: "every 6 hours" },
+  { job: "connection-probes", schedule: "daily 04:00 UTC" },
 ] as const;
 
 const HISTORY_PER_JOB = 10;

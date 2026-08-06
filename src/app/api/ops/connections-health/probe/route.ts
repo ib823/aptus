@@ -3,7 +3,7 @@
  *
  * THE PERSONA WHO OWNS THE SCREEN CAN CAUSE THE FACT IT DISPLAYS. Before this,
  * `lastValidationStatus` was written by the Studio connection test (consultant-
- * gated, a different workspace) and the six-hourly sweep — so a support user
+ * gated, a different workspace) and the nightly sweep — so a support user
  * looking at a failing chip could neither confirm a fix had landed nor refresh
  * the fact, only wait for the next sweep or find a consultant. This is the
  * delegated-action pattern the Control Tower registers use: the same probe the
