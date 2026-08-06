@@ -103,6 +103,7 @@ describe("a SANDBOX_ONLY grant read from outside SANDBOX", () => {
     operation: "READ",
     decision: "SANDBOX_ONLY",
     expiresAt: null,
+    revokedAt: null,
   };
 
   it("is advertised as NOT callable, and is refused — the two agreeing", async () => {
@@ -139,7 +140,7 @@ describe("the rest of the decision set stays in step", () => {
   ])("%s → callable %s, and the read path agrees", async (decision, expected) => {
     authenticateAs("PROD");
     mocks.findManyGrants.mockResolvedValue([
-      { externalId: "API_BUSINESS_PARTNER", operation: "READ", decision, expiresAt: null },
+      { externalId: "API_BUSINESS_PARTNER", operation: "READ", decision, expiresAt: null, revokedAt: null },
     ]);
 
     expect((await listing())[0]?.callable).toBe(expected);
@@ -154,10 +155,55 @@ describe("the rest of the decision set stays in step", () => {
         operation: "READ",
         decision: "APPROVED",
         expiresAt: new Date("2026-01-01T00:00:00Z"),
+        revokedAt: null,
       },
     ]);
 
     expect((await listing())[0]?.callable).toBe(false);
     expect((await resolveReadableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW)).ok).toBe(false);
+  });
+
+  /*
+   * THE FIXTURE GAP THAT KEPT A LIVE DISAGREEMENT GREEN. This file existed to
+   * assert discovery == enforcement, and no fixture ever set `revokedAt` — so
+   * when access.ts learned to refuse revoked grants (GRANT_REVOKED), discovery
+   * went on advertising them as callable and every test here still passed.
+   * A revoked grant is the one state an admin created ON PURPOSE to end access;
+   * advertising it is the worst version of the surprising 403.
+   */
+  it("a revoked grant is neither advertised nor honoured — and the refusal names the revocation", async () => {
+    authenticateAs("PROD");
+    mocks.findManyGrants.mockResolvedValue([
+      {
+        externalId: "API_BUSINESS_PARTNER",
+        operation: "READ",
+        decision: "APPROVED",
+        expiresAt: null,
+        revokedAt: new Date("2026-07-01T00:00:00Z"),
+      },
+    ]);
+
+    expect((await listing())[0]?.callable, "discovery must not advertise a revoked grant").toBe(false);
+    const enforced = await resolveReadableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW);
+    expect(enforced.ok).toBe(false);
+    if (!enforced.ok) expect(enforced.reason).toBe("GRANT_REVOKED");
+  });
+
+  it("a grant both revoked and expired refuses as REVOKED — the deliberate act wins", async () => {
+    authenticateAs("PROD");
+    mocks.findManyGrants.mockResolvedValue([
+      {
+        externalId: "API_BUSINESS_PARTNER",
+        operation: "READ",
+        decision: "APPROVED",
+        expiresAt: new Date("2026-01-01T00:00:00Z"),
+        revokedAt: new Date("2025-12-01T00:00:00Z"),
+      },
+    ]);
+
+    expect((await listing())[0]?.callable).toBe(false);
+    const enforced = await resolveReadableInterface(SCOPE, "sol_1", "if_1", "PROD", NOW);
+    expect(enforced.ok).toBe(false);
+    if (!enforced.ok) expect(enforced.reason).toBe("GRANT_REVOKED");
   });
 });

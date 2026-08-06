@@ -48,6 +48,7 @@ const NONE = {
     unboundedGrants: 0,
     credentialsWithoutExpiry: 0,
     unaccountableProdGrants: 0,
+    driftingConnections: 0,
 } as const;
 
 describe("the replaced rule is gone, and its replacement is still critical", () => {
@@ -88,10 +89,11 @@ describe("the replaced rule is gone, and its replacement is still critical", () 
   });
 
   it("keeps every rule reachable from the exported map", () => {
-    // Six original rules plus the three standing-access rules. The count is
+    // Six original rules, the three standing-access rules, and the
+    // connection-drift rule the probe history made derivable. The count is
     // asserted so a rule cannot be dropped in a refactor without a test saying
     // so — the failure mode this whole file exists to prevent.
-    expect(Object.keys(INCIDENT_RULES)).toHaveLength(9);
+    expect(Object.keys(INCIDENT_RULES)).toHaveLength(10);
   });
 });
 

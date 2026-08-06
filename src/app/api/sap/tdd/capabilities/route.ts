@@ -54,7 +54,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * Found by an unauthenticated curl during a browser-agent audit — the same
    * way the earlier incident in that file was found.
    */
-  const refusal = await refuseUnlessMayProbeTenant(product.envPrefix);
+  const refusal = await refuseUnlessMayProbeTenant();
   if (refusal) return refusal;
 
   const user = await getCurrentUser();
@@ -84,7 +84,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // has wired up and the tenant is most likely to have activated — then top up
   // from the dynamic catalogue. Without curated-first, a naive alphabetical
   // take(60) samples only the API_A…/B… head and misses the activated services.
-  const dynamic = await getDynamicOdataServices({ edition: "PUBLIC", limit: 60 });
+  //
+  // THE TOP-UP IS THE PRODUCT'S OWN EDITION, and only for edition products.
+  // This hardcoded `edition: "PUBLIC"` — the field SAP_ODATA_PRODUCTS carries
+  // for exactly this call site went unread, so a RISE or on-prem tenant was
+  // probed with the PUBLIC published set, and a SuccessFactors tenant with
+  // manufactured /sap/opu/odata/sap/* URLs that 404 by construction
+  // (dynamic-catalog.ts's own warning). Non-edition products probe their
+  // curated services only.
+  const dynamic = product.edition
+    ? await getDynamicOdataServices({ edition: product.edition, limit: 60 })
+    : [];
   const services = mergeProbeTargets(product.services, dynamic, 60);
   if (services.length === 0) {
     return NextResponse.json({

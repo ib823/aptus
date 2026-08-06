@@ -278,13 +278,20 @@ export async function PATCH(request: NextRequest) {
     const revoked = await revokeClientToken(scope, clientId);
     if (!revoked) return studioError("NOT_FOUND", "Credential not found.");
 
+    /*
+     * ITS OWN ENTITY AND VERB, same as issuance. The POST path was fixed to
+     * ClientCredential/ISSUE precisely because "somebody edited a solution"
+     * hid a minting; this branch kept writing Solution/UPDATE, so a REVOCATION
+     * — the act an incident response needs to find fastest — stayed
+     * unenumerable while the routine acts became searchable.
+     */
     await writeConfigAudit({
       organizationId: scope.organizationId,
       actorId: user.id,
-      entityType: "Solution",
-      entityId: revoked.solutionId,
-      action: "UPDATE",
-      after: { event: "client_credential_revoked", clientId: revoked.id },
+      entityType: "ClientCredential",
+      entityId: revoked.id,
+      action: "REVOKE",
+      after: { event: "client_credential_revoked", clientId: revoked.id, solutionId: revoked.solutionId },
     });
     return studioOk({ ...revoked, revoked: true });
   }
@@ -333,13 +340,16 @@ export async function PATCH(request: NextRequest) {
   const rotated = await rotateClientToken(scope, clientId);
   if (!rotated) return studioError("NOT_FOUND", "Credential not found.");
 
+  // ClientCredential/ROTATE — the verb exists precisely so a rotation (which
+  // kills the live token) is distinguishable from a rename. The POST path was
+  // fixed; this branch had kept the old Solution/UPDATE shape.
   await writeConfigAudit({
     organizationId: scope.organizationId,
     actorId: user.id,
-    entityType: "Solution",
-    entityId: rotated.solutionId,
-    action: "UPDATE",
-    after: { event: "client_credential_rotated", clientId: rotated.id },
+    entityType: "ClientCredential",
+    entityId: rotated.id,
+    action: "ROTATE",
+    after: { event: "client_credential_rotated", clientId: rotated.id, solutionId: rotated.solutionId },
   });
 
   return studioOk({

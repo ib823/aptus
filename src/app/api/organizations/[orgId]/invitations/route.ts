@@ -116,7 +116,7 @@ export async function DELETE(
   });
 
   await logDecision({
-    assessmentId: "SYSTEM",
+    assessmentId: null,
     entityType: "invitation",
     entityId: invitationId,
     action: "INVITATION_REVOKED",

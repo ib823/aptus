@@ -37,12 +37,23 @@ import { normalizeEnvironment, upsertSapConnection } from "@/lib/sap-public/conn
 import { isValidSapClient } from "@/lib/sap-public/sap-url";
 import { sanitizeTenantKey, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
+import { isForbiddenBaseUrlHost } from "@/lib/studio/connection-url-guard";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 
 export const dynamic = "force-dynamic";
 
-const PRODUCT_KEYS = SAP_ODATA_PRODUCTS.map((p) => p.key) as [string, ...string[]];
+/*
+ * EVERY CONNECTABLE PRODUCT — the OData registry PLUS Ariba. The picker offers
+ * six tiles (Object.keys(PRODUCT_MARKS)); this list held five, so selecting
+ * the Ariba tile and saving failed the enum with a validation error the form
+ * could not explain. Ariba is deliberately not in SAP_ODATA_PRODUCTS (it is
+ * REST, not OData, and must not be double-counted by listProductSummaries) —
+ * but a connection to it is real, which is why getSapProduct("ariba") answers.
+ * The reconciliation test now asserts BOTH directions: every mark is
+ * accepted here, and everything accepted here has a mark.
+ */
+const PRODUCT_KEYS = ["ariba", ...SAP_ODATA_PRODUCTS.map((p) => p.key)] as [string, ...string[]];
 
 /**
  * Products whose systems address an SAP client.
@@ -65,7 +76,11 @@ const httpsUrl = z
   .string()
   .url()
   .max(500)
-  .refine((u) => u.startsWith("https://"), { message: "must be https" });
+  .refine((u) => u.startsWith("https://"), { message: "must be https" })
+  .refine((u) => !isForbiddenBaseUrlHost(u), {
+    message:
+      "must be a public hostname — IP literals, localhost and internal names are refused (the broker calls this URL with credentials attached)",
+  });
 
 const upsertSchema = z
   .object({

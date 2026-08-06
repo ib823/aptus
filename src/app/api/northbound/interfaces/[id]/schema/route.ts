@@ -14,6 +14,7 @@
 import type { NextRequest } from "next/server";
 
 import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/lib/northbound/auth";
+import { recordNorthboundCall } from "@/lib/northbound/audit";
 import {
   newCorrelationId,
   northboundError,
@@ -21,6 +22,7 @@ import {
   unauthenticated,
 } from "@/lib/northbound/respond";
 import { prisma } from "@/lib/db/prisma";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 import { scopedById } from "@/lib/studio/tenant-scope";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +39,25 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   void touchClientLastUsed(client.clientId, client.organizationId);
 
   const { id } = await ctx.params;
+
+  // Per-credential throttle + audit, like discovery — see that route's comment.
+  // A stolen token pulling every stored contract used to leave no trace.
+  const rate = await checkRateLimit(`northbound:${client.clientId}`, RATE_LIMITS.northbound);
+  if (!rate.allowed) {
+    await recordNorthboundCall({
+      organizationId: client.organizationId,
+      solutionId: client.solutionId,
+      interfaceId: id,
+      operation: "READ",
+      externalId: "-schema-",
+      environment: client.environment,
+      status: 429,
+      rowCount: null,
+      correlationId,
+      clientTokenId: client.clientId,
+    });
+    return northboundError("RATE_LIMITED", "Too many requests. Slow down and retry.", 429, correlationId);
+  }
 
   const iface = await prisma.interface.findFirst({
     where: scopedById(client.scope, id),
@@ -58,8 +79,33 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   // "Not yours" and "does not exist" are the same answer, so a client cannot
   // probe for interfaces outside its own solution.
   if (!iface || iface.solutionId !== client.solutionId) {
+    await recordNorthboundCall({
+      organizationId: client.organizationId,
+      solutionId: client.solutionId,
+      interfaceId: id,
+      operation: "READ",
+      externalId: "-schema-",
+      environment: client.environment,
+      status: 404,
+      rowCount: null,
+      correlationId,
+      clientTokenId: client.clientId,
+    });
     return northboundError("NOT_FOUND", "No such interface.", 404, correlationId);
   }
+
+  await recordNorthboundCall({
+    organizationId: client.organizationId,
+    solutionId: client.solutionId,
+    interfaceId: iface.id,
+    operation: "READ",
+    externalId: "-schema-",
+    environment: client.environment,
+    status: 200,
+    rowCount: null,
+    correlationId,
+    clientTokenId: client.clientId,
+  });
 
   return northboundOk(
     {

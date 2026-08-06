@@ -1,10 +1,13 @@
 /**
  * API Access — /studio/access
  *
- * The ledger of who asked for what and who agreed. Expiry is resolved for
- * display here rather than by a sweep job: a grant whose expiry has passed reads
- * as EXPIRED immediately, so the screen can never show a stale "approved" simply
- * because no background task has run yet. The stored row is left untouched.
+ * The ledger of who asked for what and who agreed. Expiry AND revocation are
+ * resolved for display here rather than by a sweep job: a grant whose expiry
+ * has passed reads as EXPIRED immediately, and one revoked in Control Tower
+ * reads as REVOKED — so this screen can never show "Approved" for a grant the
+ * broker refuses. That exact disagreement shipped once: revocation landed in
+ * Control Tower and this page went on rendering the stored decision, so the
+ * builder's own ledger contradicted the runtime. The stored row is untouched.
  */
 
 import type { Metadata } from "next";
@@ -50,6 +53,8 @@ export default async function StudioAccessPage() {
           decidedById: true,
           decidedAt: true,
           expiresAt: true,
+          revokedAt: true,
+          revokedReason: true,
           createdAt: true,
           solution: { select: { name: true } },
         },
@@ -65,10 +70,15 @@ export default async function StudioAccessPage() {
     operation: r.operation as LedgerGrant["operation"],
     environment: r.environment as GrantEnvironment,
     justification: r.justification,
-    decision: effectiveDecision({ decision: r.decision, expiresAt: r.expiresAt }, now),
+    decision: effectiveDecision(
+      { decision: r.decision, expiresAt: r.expiresAt, revokedAt: r.revokedAt },
+      now,
+    ),
     requestedById: r.requestedById,
     decidedById: r.decidedById,
     decidedAt: r.decidedAt ? r.decidedAt.toISOString() : null,
+    revokedAt: r.revokedAt ? r.revokedAt.toISOString() : null,
+    revokedReason: r.revokedReason,
     createdAt: r.createdAt.toISOString(),
   }));
 
@@ -87,6 +97,11 @@ export default async function StudioAccessPage() {
             solutionId: true,
             label: true,
             environment: true,
+            // The SAP client the credential binds to. Collected at issue,
+            // rendered as env/client by the table — and never selected here,
+            // so on a multi-client estate the one column that says WHICH data
+            // container a credential addresses was always blank.
+            sapClient: true,
             isActive: true,
             lastUsedAt: true,
             revokedAt: true,
@@ -144,6 +159,7 @@ export default async function StudioAccessPage() {
     solutionName: solutionNames.get(c.solutionId) ?? "(unknown solution)",
     label: c.label,
     environment: c.environment,
+    sapClient: c.sapClient,
     isActive: c.isActive,
     lastUsedAt: c.lastUsedAt ? c.lastUsedAt.toISOString() : null,
     revokedAt: c.revokedAt ? c.revokedAt.toISOString() : null,
@@ -165,8 +181,9 @@ export default async function StudioAccessPage() {
         </h1>
         <p style={{ margin: "4px 0 0", fontSize: 14, lineHeight: "22px", color: "var(--ink-secondary)", maxWidth: 760 }}>
           Which capabilities each solution is allowed to consume, and who agreed. These
-          decisions are enforced: the runtime checks a live, unexpired grant for this
-          capability, operation and environment on every call a solution makes.
+          decisions are enforced: the runtime checks a live, unexpired, unrevoked grant for
+          this capability, operation and environment on every call a solution makes. Expiry
+          and revocation both end access — and both are reflected here immediately.
         </p>
       </div>
 

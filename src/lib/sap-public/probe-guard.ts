@@ -67,9 +67,11 @@ import { ERROR_CODES } from "@/types/api";
  * requirement and it needs its own narrow affordance — a designated demo tenant
  * with its own quota — not the removal of this check for every tenant at once.
  */
-export async function refuseUnlessMayProbeTenant(
-  _envPrefix: string,
-): Promise<NextResponse | null> {
+export async function refuseUnlessMayProbeTenant(): Promise<NextResponse | null> {
+  // The old `_envPrefix` parameter was accepted and ignored — an argument that
+  // LOOKS like it scopes the guard per tenant but does nothing is worse than
+  // none, because a reader trusts the scoping it implies. The guard is
+  // deliberately tenant-agnostic: who may probe is a property of the caller.
   // EVERY REFUSAL CARRIES A CORRELATION ID. This guard originally returned
   // {code, message} only, while the auth layer's 401s and Control Tower's 403s
   // both carried one — so the single path most likely to be debugged under

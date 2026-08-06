@@ -1,8 +1,9 @@
 /**
  * /api/studio/test-cases — saved Test Console runs.
  *
- *   GET   list this organization's saved cases
- *   POST  save a run (name + request + last outcome)
+ *   GET    list this organization's saved cases
+ *   POST   save a run (name + request + last outcome)
+ *   DELETE remove a saved case (audited)
  *
  * A test case records WHAT WAS RUN and WHAT CAME BACK, so a developer can replay
  * the same read later and see whether the tenant still behaves the same way. The
@@ -123,4 +124,52 @@ export async function POST(request: NextRequest) {
   });
 
   return studioOk(created, 201);
+}
+
+const deleteSchema = z.object({ id: z.string().min(1) });
+
+/**
+ * DELETE — remove a saved case.
+ *
+ * Saved cases were WRITE-ONLY for their whole life: the console confirmed
+ * "Saved" and no screen in the product ever listed, replayed or deleted one —
+ * the same dead-end shape the solution-registration test was written to close
+ * ("a screen that names the next step and withholds it"). The Test Console now
+ * lists them; a list needs a way to prune, and pruning a governed record is
+ * audited like every other governance mutation.
+ */
+export async function DELETE(request: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) return studioError("UNAUTHENTICATED", "Sign in required.");
+  if (!canAccessStudio(user.role)) return studioError("FORBIDDEN", "Developer Studio is role-gated.");
+  if (!canMutateStudio(user.role)) {
+    return studioError("FORBIDDEN", "Your role can view test cases but not delete them.");
+  }
+  if (lacksStudioTenantScope(user) || !user.organizationId) {
+    return studioError("FORBIDDEN", "No organization scope.");
+  }
+  const organizationId = user.organizationId;
+
+  const parsed = deleteSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return studioError("VALIDATION_ERROR", "Invalid request.");
+
+  const existing = await prisma.testCase.findFirst({
+    where: { id: parsed.data.id, organizationId },
+    select: { id: true, name: true, interfaceId: true },
+  });
+  if (!existing) return studioError("NOT_FOUND", "Test case not found.");
+
+  await prisma.testCase.delete({ where: { id: existing.id, organizationId } });
+
+  await writeConfigAudit({
+    organizationId,
+    actorId: user.id,
+    entityType: "TestCase",
+    entityId: existing.id,
+    action: "UPDATE",
+    before: existing,
+    after: { deleted: true },
+  });
+
+  return studioOk({ id: existing.id, deleted: true });
 }

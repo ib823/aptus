@@ -1,6 +1,30 @@
 # `GET /api/ops/freshness` — not built as specified, and why
 
-**Status: blocked on a specification correction, not on effort.** Build Bible v3
+**Status: the respecification below is BUILT (2026-08).** It shipped as
+`GET /api/ops/catalogue-health` plus the Operations rail's "Catalogue health"
+screen (`/operations/catalogue`), platform_admin-gated and deployment-scoped,
+exactly per "The respecification". Deltas from this document, recorded rather
+than left to be discovered:
+
+- The staleness constant is `CATALOGUE_STALE_AFTER_DAYS` in
+  `src/lib/sap-public/catalogue-health.ts`, printed beside every verdict.
+- Refresh is guided from the screen but stays file-based end to end: export
+  from a logged-in Hub session → commit the drop file → deploy → run the
+  existing seed / harvest-import routes (typed confirmation phrase; the
+  server's own inserted/updated/skipped summary is what renders, and the same
+  summary is written to the append-only audit). There is no browser upload —
+  the drop files are the deployment's provenance record, and an upload that
+  bypassed the repository would leave the running catalogue unexplainable
+  from the commit history.
+- "Per-connection catalogue probing", named below as the real prerequisite for
+  an org-scoped view, now partially exists: `SapConnectionProbeEvent` records
+  per-connection probe history (connection-level, not per-capability). An
+  org-scoped freshness view remains unbuilt and the reasoning below stands.
+
+The original analysis is kept unedited beneath, because it is the reason the
+screen has the shape it has.
+
+**Original status: blocked on a specification correction, not on effort.** Build Bible v3
 §7 calls for an organization-scoped catalogue-freshness endpoint. It cannot be
 built that way, and building it anyway would produce an endpoint that returns
 empty for every organization on the platform while looking like it works.

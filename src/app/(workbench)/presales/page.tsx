@@ -39,6 +39,7 @@ interface BundleListRow {
   revokedAt: Date | null;
   createdAt: Date;
   bundleSent: boolean;
+  decisionCount: number;
 }
 
 function statusOf(row: BundleListRow, now: Date): FilterStatus {
@@ -46,9 +47,16 @@ function statusOf(row: BundleListRow, now: Date): FilterStatus {
   if (row.revokedAt) return 'expired';
   if (row.expiresAt <= now) return 'expired';
   if (!row.bundleSent) return 'draft';
-  // sent but not signed yet — distinguish awaiting from sent by whether
-  // any decisions have been recorded. Cheap heuristic for the index.
-  return row.bundleSent ? 'sent' : 'draft';
+  /*
+   * Sent but not signed: 'awaiting' once the client has recorded at least one
+   * decision, 'sent' until they have. The distinction the comment here always
+   * described — and never implemented: the last line read
+   * `row.bundleSent ? 'sent' : 'draft'`, so 'awaiting' was unreachable, the
+   * "Awaiting signoff" pill always filtered to an empty list, and the manual's
+   * claim that the list distinguishes these states was false. The decision
+   * count comes from a relation _count in the projection — no blobs.
+   */
+  return row.decisionCount > 0 ? 'awaiting' : 'sent';
 }
 
 const STATUS_LABEL: Record<FilterStatus, string> = {
@@ -88,6 +96,9 @@ export default async function PresalesIndexPage({ searchParams }: PageProps) {
       signedAt: true,
       revokedAt: true,
       createdAt: true,
+      // COUNT only — decision rows carry internal fields (effortDays) that the
+      // redaction layer strips on /c; the list needs how many, never what.
+      _count: { select: { decisions: true } },
     },
   });
   const bundleIds = bundles.map((b) => b.id);
@@ -111,6 +122,7 @@ export default async function PresalesIndexPage({ searchParams }: PageProps) {
     revokedAt: b.revokedAt,
     createdAt: b.createdAt,
     bundleSent: sentSet.has(b.id),
+    decisionCount: b._count.decisions,
   }));
 
   const filtered = rows.filter((r) => {

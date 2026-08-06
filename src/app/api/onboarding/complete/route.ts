@@ -56,7 +56,7 @@ export async function POST(): Promise<NextResponse> {
   });
 
   await logDecision({
-    assessmentId: "system",
+    assessmentId: null,
     entityType: "onboarding",
     entityId: user.id,
     action: "ONBOARDING_COMPLETED",

@@ -13,7 +13,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { isAssessmentAccessError, requireAssessmentAccess } from "@/lib/auth/assessment-guard";
 import { safeParseJsonBody } from "@/lib/http/safe-json-body";
-import { generateShareLinkToken } from "@/lib/auth/share-link";
+import { generateShareLinkToken, hashShareLinkToken } from "@/lib/auth/share-link";
 
 const POSITIVE_INT = z.number().int().positive();
 
@@ -68,7 +68,9 @@ export async function POST(
   const link = await prisma.assessmentShareLink.create({
     data: {
       assessmentId,
-      token,
+      // Hash only. The raw token appears exactly once, in this response — a
+      // database read can never become a usable share link.
+      tokenHash: hashShareLinkToken(token),
       createdBy: user.id,
       expiresAt,
       scopeJson: parsed.data.scope

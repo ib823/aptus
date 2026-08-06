@@ -90,9 +90,12 @@ describe("hub-content resolves no tenant without a session", () => {
 
   it("still reads the catalogue itself — browsing is the point of PUBLIC_ACCESS", () => {
     // The fix must not turn anonymous access off; that was the other option and
-    // it would have removed a deliberate capability.
+    // it would have removed a deliberate capability. The published-catalogue
+    // read is now product-scoped through hubCatalogueScope (edition column /
+    // product tag) rather than a hardcoded appliesToPublic filter — the
+    // anonymous/tenant boundary is unchanged.
     expect(src).toMatch(/isSapTddPublicAccessEnabled/);
-    expect(src).toMatch(/appliesToPublic:\s*true/);
+    expect(src).toMatch(/hubCatalogueScope\(product\)/);
   });
 });
 

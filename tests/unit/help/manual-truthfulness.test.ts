@@ -97,6 +97,37 @@ const CAPABILITIES: Capability[] = [
     ],
     fix: "src/lib/help/manual.ts — control-tower/portfolio",
   },
+  {
+    name: "runtime grant enforcement (the northbound broker)",
+    present: () => existsSync(repo("src/app/api/northbound/interfaces/[id]/data/route.ts")),
+    denials: [
+      /\bdoes not enforce anything at runtime\b/i,
+      /\bgrants nothing at runtime\b/i,
+      /\bruntime enforcement is a later phase\b/i,
+      /\bnothing calls SAP on a solution's behalf\b/i,
+      /\bnot .{0,20}enforced at runtime\b/i,
+    ],
+    fix: "src/lib/help/manual.ts — studio/access prose",
+  },
+  {
+    name: "write-credential issuance",
+    /*
+     * NOT PRESENT YET, DELIBERATELY. The write path is dead at the credential
+     * gate by decision, and the manual's "expect this to be empty" prose is
+     * currently TRUE. This entry exists so that the moment an issuance route
+     * ships (Phase 3 of the remediation plan), every "no write credential can
+     * be issued" sentence fails here by name instead of surviving as the next
+     * stale claim. The present() path is the route the issuance will live at.
+     */
+    present: () => existsSync(repo("src/app/api/studio/clients/write-credential/route.ts")),
+    denials: [
+      /\bno code path issues a write credential\b/i,
+      /\bno write credential can be issued\b/i,
+      /\bevery write is refused at (that|the credential) gate\b/i,
+      /\bwrite[- ]credential issuance .{0,30}(held back|does not exist|is not built)\b/i,
+    ],
+    fix: "src/lib/help/manual.ts (operations/writes prose) and src/app/api/ops/write-ledger/route.ts provenance",
+  },
 ];
 
 describe("no rendered help text denies a capability that shipped", () => {

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { JobsStrip } from "@/components/ops/JobsStrip";
 import { TopologyMap } from "@/components/ops/TopologyMap";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,10 @@ export const metadata: Metadata = { title: "Home" };
  * So the home page routes rather than summarises, and it is honest about what is
  * built and what is not. When there is a genuine cross-screen number worth
  * showing, it gets an endpoint and a provenance note like everything else.
+ *
+ * The jobs strip is exactly that exception, taken deliberately: scheduled-job
+ * outcomes have no screen of their own and are not a second copy of anything —
+ * CronRunLog is their only source, and /api/ops/jobs is its one reader.
  */
 
 const BUILT = [
@@ -105,6 +110,8 @@ export default function OperationsHomePage() {
         </p>
       </div>
 
+      <JobsStrip />
+
       <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {[...BUILT, ...BUILT_TOO].map((s) => (
           <Link key={s.href} href={s.href} style={{ ...card, color: "inherit" }}>
@@ -146,10 +153,10 @@ export default function OperationsHomePage() {
           }}
         >
           No secrets, tokens, hashes or SAP hostnames appear anywhere here — a sealed secret&apos;s
-          presence may be shown as a yes or no, never its value. There is no catalogue-freshness
-          view: the underlying table has no tenant column, so an organization-scoped version would
-          return nothing for every organization while appearing to work. It returns if a
-          deployment-scoped one is built.
+          presence may be shown as a yes or no, never its value. Catalogue health exists but is
+          deployment-scoped and platform-admin-gated: the catalogue is one table serving every
+          organization, so an organization-scoped version would return nothing for everyone while
+          appearing to work — which is why it appears on the rail only for platform administrators.
         </p>
       </section>
     </div>

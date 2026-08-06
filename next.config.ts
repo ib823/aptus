@@ -3,6 +3,24 @@ import { getSecurityHeaders } from "./src/lib/pwa/security-headers";
 
 const nextConfig: NextConfig = {
   transpilePackages: [],
+  // /help/developer-guide reads this file at request time; without the trace
+  // it exists in the repo and not in the deployed function, and the page's
+  // fallback would report the document unreadable on every production request.
+  outputFileTracingIncludes: {
+    "/help/developer-guide": ["./docs/coreedge-developer-guide.md"],
+  },
+  webpack(config, { isServer }) {
+    if (!isServer) {
+      // The tenant-scope guard (lib/db/tenant-guard) uses AsyncLocalStorage to
+      // carry declared cross-tenant contexts. Several client components import
+      // modules that transitively reach lib/db/prisma (a long-standing pattern
+      // that works because @prisma/client ships a browser stub); async_hooks
+      // has no browser build, so it resolves to an empty module on the client
+      // and the guard degrades to inert there — where no query ever runs.
+      config.resolve.fallback = { ...config.resolve.fallback, async_hooks: false };
+    }
+    return config;
+  },
   serverExternalPackages: [
     "exceljs",
     "mammoth",

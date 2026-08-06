@@ -62,19 +62,29 @@ export function studioStatusLabel(status: HonestStatus): string {
 // `exactOptionalPropertyTypes` is on: callers that compute a label and pass
 // `undefined` to mean "use the vocabulary's own word" are the intended usage,
 // and a bare `label?: string` rejects exactly that.
+//
+// `meaning` exists because callers reuse these TONES for vocabularies that are
+// not probe facts (grant decisions, solution/interface lifecycles). Overriding
+// the visible label while keeping the probe meaning made a screen reader hear
+// "Restricted — 401 or 403, communication arrangement not set up" on a solution
+// card: the visible layer was fixed and the accessible layer still lied. A
+// caller that overrides `label` for a non-probe vocabulary must override
+// `meaning` too.
 export function StudioStatusChip({
   status,
   label,
+  meaning,
 }: {
   status: HonestStatus;
   label?: string | undefined;
+  meaning?: string | undefined;
 }) {
   const tone = TOKENS[status];
   const text = label ?? LABELS[status];
   return (
     <span
       role="status"
-      aria-label={`${text} — ${MEANINGS[status]}`}
+      aria-label={`${text} — ${meaning ?? MEANINGS[status]}`}
       style={{
         display: "inline-flex",
         alignItems: "center",

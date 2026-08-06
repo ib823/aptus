@@ -29,6 +29,7 @@ import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
@@ -37,7 +38,19 @@ const bodySchema = z.object({
   solutionId: z.string().min(1),
   /** Catalogue apiId of the service being consumed. */
   externalId: z.string().min(1).max(200),
-  sapProduct: z.enum(["s4hana", "successfactors", "ariba"]),
+  /*
+   * EVERY PRODUCT THE CONNECTOR KNOWS, not a hand-kept three. The literal enum
+   * ["s4hana","successfactors","ariba"] predated the private-cloud/on-prem/ECC
+   * products and was never widened — so the three client-addressing products
+   * could be CONNECTED but no interface (and therefore no grant, credential,
+   * scaffold or broker call) could ever be defined against them: "Add to
+   * interface" on a RISE tenant 400'd with no field-level detail. Validated
+   * against getSapProduct so this list and the product registry cannot drift
+   * apart again.
+   */
+  sapProduct: z.string().min(1).refine((k) => getSapProduct(k) !== null, {
+    message: "Unknown SAP product",
+  }),
   name: z.string().min(1).max(200),
   operation: z.enum(["READ", "CREATE", "UPDATE"]).default("READ"),
   entitySet: z.string().max(200).optional(),
@@ -203,6 +216,32 @@ export async function PATCH(request: NextRequest) {
   const nextOperation = input.operation ?? (current.operation as "READ" | "CREATE" | "UPDATE");
   const nextEntitySet = input.entitySet === undefined ? current.entitySet : (input.entitySet ?? null);
 
+  /*
+   * ACTIVE IS LOAD-BEARING, SO PROMOTION HAS PRECONDITIONS.
+   *
+   * `status: ACTIVE` is the single precondition the write path checks
+   * (resolveWritableInterface) — and this handler used to apply it
+   * unconditionally, making it the only load-bearing gate in the product with
+   * no check of any kind. Two now apply:
+   *
+   *   1. An entity set must be configured. The broker refuses a call on an
+   *      interface with none ("This interface has no entity set configured"),
+   *      so promoting without one manufactures an ACTIVE interface whose every
+   *      call fails — the client component even documents the refusal thirty
+   *      lines from the button that caused it.
+   *   2. The promotion is audited as PROMOTE with the promoter named — the
+   *      second-person review lives in the grant decision (a write still needs
+   *      an approved grant from someone other than the requester), so the
+   *      audit record rather than a second approver is the proportionate
+   *      control here.
+   */
+  if (input.status === "ACTIVE" && current.status !== "ACTIVE" && nextEntitySet === null) {
+    return studioError(
+      "VALIDATION_ERROR",
+      "An interface cannot be activated without an entity set — the broker refuses every call on one. Set the entity set first.",
+    );
+  }
+
   // Bump the version only when the contract actually moved. A consumer pins a
   // version; inflating it for a rename would cry wolf, and NOT inflating it for
   // an operation change would hide a breaking edit behind an unchanged number.
@@ -240,7 +279,9 @@ export async function PATCH(request: NextRequest) {
     actorId: user.id,
     entityType: "Interface",
     entityId: current.id,
-    action: "UPDATE",
+    // A promotion to ACTIVE is the load-bearing act (it is the write path's
+    // precondition) and gets the PROMOTE verb; everything else is an edit.
+    action: input.status === "ACTIVE" && current.status !== "ACTIVE" ? "PROMOTE" : "UPDATE",
     before: current,
     after: { ...updated, contractChanged },
   });

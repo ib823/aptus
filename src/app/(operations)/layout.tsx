@@ -18,16 +18,18 @@
  */
 
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { RoleGatedEmptyState } from "@/components/studio/RoleGatedEmptyState";
+import { isMfaRequired, requiresMfaEnrollment } from "@/lib/auth/permissions";
 import { OPERATIONS_SECTIONS } from "@/lib/studio/sections";
 import { StudioShell } from "@/components/studio/StudioShell";
 import { type StudioTenantOption } from "@/components/studio/StudioTopBar";
 import { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenants";
 import { getCurrentUser } from "@/lib/auth/session";
+import { isAdminRole } from "@/lib/auth/permissions";
 import { accessibleWorkspaces, canAccessOperations, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { pickActiveTenant, resolveStudioTenants } from "@/lib/studio/tenants";
 import { ROLE_LABELS } from "@/types/assessment";
@@ -52,6 +54,19 @@ export default async function OperationsLayout({ children }: { children: ReactNo
     return <RoleGatedEmptyState roleLabel={roleLabel} activeWorkspace="operations-center" />;
   }
 
+  // MFA step-up, same gate as the portal layout. These screens read live
+  // customer SAP activity; an org that requires MFA must get it HERE, not only
+  // on the portal — a policy enforced on one door and not the other is not a
+  // policy. Enrollment-needed users go to enrollment instead of a verify loop.
+  if (isMfaRequired(user)) {
+    const next = encodeURIComponent((await headers()).get("x-pathname") ?? "/operations");
+    redirect(
+      requiresMfaEnrollment(user)
+        ? `/settings/security?mfa=required&next=${next}`
+        : `/verify-mfa?next=${next}`,
+    );
+  }
+
   const resolved = await resolveStudioTenants(user.organizationId);
   const tenants: StudioTenantOption[] = resolved.map((t) => ({
     key: t.key,
@@ -65,10 +80,17 @@ export default async function OperationsLayout({ children }: { children: ReactNo
   const remembered = cookieStore.get(STUDIO_TENANT_COOKIE)?.value ?? null;
   const activeTenantKey = pickActiveTenant(resolved, remembered);
 
+  // Admin-only sections (Catalogue health, deployment-scoped) are removed from
+  // the rail rather than rendered-and-refused: an org-scoped operator must not
+  // be shown an entry the screen will always turn away.
+  const sections = isAdminRole(user.role)
+    ? OPERATIONS_SECTIONS
+    : OPERATIONS_SECTIONS.filter((s) => !s.adminOnly);
+
   return (
     <StudioShell
       accessibleWorkspaces={accessibleWorkspaces(user.role)}
-      sections={OPERATIONS_SECTIONS}
+      sections={sections}
       activeWorkspace="operations-center"
       tenants={tenants}
       activeTenantKey={activeTenantKey}

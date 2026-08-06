@@ -107,7 +107,7 @@ export async function PUT(
     });
 
     await logDecision({
-      assessmentId: "SYSTEM",
+      assessmentId: null,
       entityType: "user",
       entityId: userId,
       action: "ROLE_CHANGED",
@@ -156,7 +156,7 @@ export async function PUT(
     });
 
     await logDecision({
-      assessmentId: "SYSTEM",
+      assessmentId: null,
       entityType: "user",
       entityId: userId,
       action: "USER_DEACTIVATED",
@@ -184,7 +184,7 @@ export async function PUT(
     });
 
     await logDecision({
-      assessmentId: "SYSTEM",
+      assessmentId: null,
       entityType: "user",
       entityId: userId,
       action: "USER_REACTIVATED",

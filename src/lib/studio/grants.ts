@@ -1,11 +1,13 @@
 /**
  * API access grants — the governance rules, as pure functions.
  *
- * v1 is a LEDGER: it records who asked for what, who decided, and why. It does
- * not enforce anything at runtime, because in v1 nothing calls SAP on a
- * solution's behalf. Saying that plainly matters — a developer who believes an
- * APPROVED row is granting them live access has misunderstood what they are
- * looking at, and the UI says so too.
+ * This ledger is ENFORCED AT RUNTIME. The northbound broker checks a live,
+ * unexpired, unrevoked grant for the capability, operation and environment on
+ * every call a solution makes (`grantsRead`/`grantsWrite` below are the runtime
+ * predicates it uses). An APPROVED row here IS a live permission until it
+ * expires or is revoked — and a revoked or expired row refuses the very next
+ * call. The header used to say the opposite ("v1 enforces nothing at runtime");
+ * that was true before the broker shipped and became a lie the day it did.
  *
  * The rules live here, separated from the route, because they are the part worth
  * testing exhaustively: a decision that skipped segregation of duties, or a WRITE
@@ -186,12 +188,14 @@ export function evaluateDecision(req: DecisionRequest): DecisionOutcome {
   /*
    * ANY GRANT THAT AUTHORISES ANYTHING MUST BE BOUNDED IN TIME.
    *
-   * This is the compensating control for the deliberate absence of revocation:
-   * a settled grant cannot be re-decided (NOT_PENDING above) and there is no
-   * withdrawal path, so an approved grant with no expiry is PERMANENT — reachable
-   * by simply not filling in a field. Expiry is evaluated on every call, which
-   * makes a bounded grant the one form of "ending" the runtime honours today,
-   * with no new state and no invariant broken.
+   * Revocation now exists (Control Tower, admin-only, with a mandatory reason)
+   * — but it is an emergency action that requires an admin to notice a problem,
+   * not a lifecycle. Expiry is the control that ends a grant whether or not
+   * anyone is watching, so it stays mandatory: a settled grant cannot be
+   * re-decided (NOT_PENDING above), and an approved grant with no expiry would
+   * stand until a human intervenes — reachable by simply not filling in a
+   * field. Expiry is evaluated on every call, which makes a bounded grant the
+   * form of "ending" that needs nobody's attention.
    *
    * IT USED TO ASK `authorisesWrite`, SO ONLY WRITES WERE BOUNDED. A read grant
    * approved with no expiry authorised reads of a client's SAP data forever, and
@@ -218,8 +222,8 @@ export function evaluateDecision(req: DecisionRequest): DecisionOutcome {
       ok: false,
       reason: "GRANT_REQUIRES_EXPIRY",
       message: authorisesWrite
-        ? "A write grant must have an expiry date. There is no way to revoke it afterwards, so it has to end on its own."
-        : "A grant must have an expiry date. There is no way to revoke one afterwards, so it has to end on its own — an approved request with no expiry would authorise access to the client's SAP system permanently.",
+        ? "A write grant must have an expiry date. Revocation exists only as an admin emergency action, so the grant has to end on its own."
+        : "A grant must have an expiry date. Revocation exists only as an admin emergency action in Control Tower, so an approved request has to end on its own — one with no expiry would authorise access to the client's SAP system until someone notices.",
     };
   }
 
@@ -259,13 +263,39 @@ export function isExpired(
 }
 
 /**
- * The decision as it should be DISPLAYED: a granting decision whose expiry has
- * passed reads as EXPIRED, without needing a sweep job to have run first. The
- * stored row is left alone; this is a view concern.
+ * The one vocabulary every surface displays. REVOKED is not a stored decision —
+ * revocation is a second fact recorded beside the decision (`revokedAt`), never
+ * a re-decision — but it IS an effective state, and a screen that cannot say it
+ * shows "Approved" for a grant the broker refuses. That disagreement is the
+ * defect this type exists to make unrepresentable.
+ */
+export type EffectiveGrantDecision = GrantDecision | "REVOKED";
+
+/** Has this grant been withdrawn? `!= null` so undefined and null read the same. */
+export function isRevoked(grant: { revokedAt?: Date | null }): boolean {
+  return grant.revokedAt != null;
+}
+
+/**
+ * The decision as it should be DISPLAYED — the SINGLE resolver every surface
+ * must use (Studio ledger, Control Tower, northbound discovery). Resolved from
+ * (decision, expiresAt, revokedAt) at read time, so no sweep job has to have
+ * run first and no screen can show a stale "approved". The stored row is left
+ * alone; this is a view concern.
+ *
+ * Precedence: REVOKED wins over EXPIRED. Revocation is a human act with an
+ * actor and a reason; where both apply, the ledger should surface the act.
+ *
+ * `revokedAt` is optional so legacy callers compile — but a caller that omits
+ * it is exactly the blind spot this resolver closes, so new call sites must
+ * select and pass it. The runtime predicates (`grantsRead`/`grantsWrite` plus
+ * the broker's own revocation/expiry checks) are asserted equivalent to this
+ * resolver by test.
  */
 export function effectiveDecision(
-  grant: { decision: string; expiresAt: Date | null },
+  grant: { decision: string; expiresAt: Date | null; revokedAt?: Date | null },
   now: Date,
-): GrantDecision {
+): EffectiveGrantDecision {
+  if (isGranting(grant.decision as GrantDecision) && isRevoked(grant)) return "REVOKED";
   return isExpired(grant, now) ? "EXPIRED" : (grant.decision as GrantDecision);
 }

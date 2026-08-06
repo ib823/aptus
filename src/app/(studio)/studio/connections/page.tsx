@@ -39,6 +39,11 @@ export default async function StudioConnectionsPage() {
           authType: true,
           // The binding-mismatch rule's left operand — see the Connections table.
           environment: true,
+          // The value that decides NO_PROBE_PATH. The health chip rendered its
+          // consequence while the projection hid the cause — an operator saw
+          // "Not probeable" with no way to see WHY from the same screen.
+          apiPath: true,
+          timeoutMs: true,
           writeEnabled: true,
           isActive: true,
           lastValidatedAt: true,

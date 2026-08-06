@@ -9,6 +9,8 @@
  * cell is therefore a statement of fact, not a mask over a value in memory.
  */
 
+import { useRouter } from "next/navigation";
+
 import { useCallback, useState } from "react";
 
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
@@ -24,6 +26,9 @@ export interface StudioConnection {
   authType: string;
   /** DEV | TEST | PROD | SANDBOX, or null when undeclared (a scored incident). */
   environment: string | null;
+  /** The probe path — the value that decides NO_PROBE_PATH on the health chip. */
+  apiPath: string | null;
+  timeoutMs: number | null;
   writeEnabled: boolean;
   isActive: boolean;
   lastValidatedAt: string | null;
@@ -100,6 +105,7 @@ export function ConnectionsClient({
    *  testing was the only thing this screen could do. */
   canManage: boolean;
 }) {
+  const router = useRouter();
   const [outcomes, setOutcomes] = useState<Record<string, TestOutcome | { error: string }>>({});
   const [testing, setTesting] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -117,12 +123,13 @@ export function ConnectionsClient({
       });
       const json = (await res.json()) as { error?: { message?: string } };
       if (!res.ok) throw new Error(json.error?.message ?? "The change could not be saved.");
-      window.location.reload();
+      router.refresh();
+      setToggling(null);
     } catch (err) {
       setToggleError(err instanceof Error ? err.message : "The change could not be saved.");
       setToggling(null);
     }
-  }, []);
+  }, [router]);
 
   const test = useCallback(async (id: string) => {
     setTesting(id);
@@ -227,7 +234,16 @@ export function ConnectionsClient({
                     </span>
                   )}
                 </Td>
-                <Td mono>{c.baseUrl}</Td>
+                <Td mono>
+                  {c.baseUrl}
+                  {/* The probe path, beside the URL it extends — so the health
+                      column's "Not probeable" has its cause on the same row. */}
+                  {c.apiPath ? (
+                    <span style={{ display: "block", fontSize: 11, color: "var(--ink-muted)" }}>
+                      probe: {c.apiPath}
+                    </span>
+                  ) : null}
+                </Td>
                 <Td>{c.authType}</Td>
                 <Td>
                   <span title="Sealed with AES-256-GCM and never returned to the console">
@@ -334,8 +350,24 @@ function ConnectionForm() {
   const [oauthTokenUrl, setOauthTokenUrl] = useState("");
   const [companyId, setCompanyId] = useState("");
   const [samlAssertion, setSamlAssertion] = useState("");
+  const [apiPath, setApiPath] = useState("");
+  const [timeoutMs, setTimeoutMs] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /*
+   * TWO ENVIRONMENT VOCABULARIES, RECONCILED ON SIGHT. The connection's
+   * environment is deliberately free text (a landscape called PREPROD should
+   * not be forced to pick the nearest wrong word) — but grants and credentials
+   * use a closed SANDBOX|DEV|TEST|PROD vocabulary, and the broker binds a call
+   * by EXACT match. A connection declared PREPROD can therefore never be
+   * matched by any credential, and until this warning existed nothing said so
+   * before the first refused call.
+   */
+  const GRANT_ENVIRONMENTS = ["SANDBOX", "DEV", "TEST", "PROD"];
+  const envOutsideGrantVocabulary =
+    environment.trim().length > 0 &&
+    !GRANT_ENVIRONMENTS.includes(environment.trim().toUpperCase());
 
   // Mirrors the server's superRefine. Reported as you type so the disabled
   // button is never a mystery.
@@ -375,6 +407,10 @@ function ConnectionForm() {
            */
           ...(PRODUCT_MARKS[product]?.addressesClient && client.trim()
             ? { client: client.trim() }
+            : {}),
+          ...(apiPath.trim() ? { apiPath: apiPath.trim() } : {}),
+          ...(timeoutMs.trim() && Number.isFinite(Number(timeoutMs))
+            ? { timeoutMs: Number(timeoutMs) }
             : {}),
           ...(authType === "basic" ? { username: username.trim(), password } : {}),
           ...(authType === "bearer" ? { bearerToken } : {}),
@@ -428,12 +464,15 @@ function ConnectionForm() {
               `with what you entered — report the status code to whoever operates it.`,
         );
       }
+      // A FULL reload, deliberately: the form holds typed SECRETS, and a
+      // router.refresh() keeps client state — leaving a password sitting in a
+      // React field after save. Reload is the reset that clears it.
       window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "The connection could not be saved.");
       setBusy(false);
     }
-  }, [product, client, key, label, baseUrl, environment, authType, username, password, bearerToken, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion]);
+  }, [product, client, key, label, baseUrl, environment, authType, username, password, bearerToken, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion, apiPath, timeoutMs]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
@@ -557,12 +596,48 @@ function ConnectionForm() {
         </Label>
         <Label text="Environment" hint="Optional. Blank shows no chip rather than a guess.">
           <input value={environment} onChange={(e) => setEnvironment(e.target.value)} placeholder="DEV" style={input} />
+          {envOutsideGrantVocabulary && (
+            <span style={{ fontSize: 11, lineHeight: "16px", color: "var(--status-awaiting-fg)" }}>
+              Grants and runtime credentials use SANDBOX, DEV, TEST or PROD — a credential can
+              only bind to a connection whose environment matches exactly, so “
+              {environment.trim().toUpperCase()}” will never serve a runtime call. Keep it if
+              this connection is for Studio browsing only.
+            </span>
+          )}
         </Label>
       </div>
 
       <Label text="Base URL" hint="https only — these carry credentials on every call.">
         <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://my123456-api.s4hana.cloud.sap" style={input} />
       </Label>
+
+      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
+        <Label
+          text="Probe path (optional)"
+          hint="The $metadata-capable service path used by the connection test. Without one, ECC and other custom landscapes stay “Not probeable”."
+        >
+          {/*
+            The API has always accepted apiPath; the form never offered it — so
+            an ECC connection's health chip was permanently "Not probeable" with
+            no way to fix it from the screen that showed the chip.
+          */}
+          <input
+            value={apiPath}
+            onChange={(e) => setApiPath(e.target.value)}
+            placeholder="/sap/opu/odata/sap/ZMY_SERVICE"
+            style={input}
+          />
+        </Label>
+        <Label text="Timeout ms (optional)" hint="1000–120000. Blank uses the platform default.">
+          <input
+            value={timeoutMs}
+            onChange={(e) => setTimeoutMs(e.target.value)}
+            placeholder="30000"
+            inputMode="numeric"
+            style={input}
+          />
+        </Label>
+      </div>
 
       <Label text="Auth type">
         <select value={authType} onChange={(e) => setAuthType(e.target.value as typeof authType)} style={input}>

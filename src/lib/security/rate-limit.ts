@@ -251,6 +251,27 @@ export function isLiveSapTenantRoute(pathname: string): boolean {
     pathname === "/api/sap/tdd/preview" ||
     pathname === "/api/sap/tdd/entities" ||
     pathname === "/api/sap/tdd/hub-content/probe-all" ||
+    /*
+     * THE CATALOGUE ROUTES CAN GO LIVE TOO, so they take the same bucket.
+     * The premise that kept them out — "hub-content reads Postgres, not the
+     * tenant" — was true of the default load and false of the surface: the
+     * list with ?dataProbe=1 fires up to 60 $metadata probes PLUS 60 one-row
+     * data reads, the detail live-probes on every expansion unless probe=0,
+     * and /capabilities probes ~60 services per call. Kept as a pure pathname
+     * predicate (no query-string dependence), same as /preview and /entities:
+     * a caller must not be able to slip the throttle by the param it omits.
+     */
+    pathname === "/api/sap/tdd/hub-content" ||
+    // The item-detail route (live-probes on expansion) — but NOT the admin
+    // import endpoints that share the path prefix: seed and harvest-import
+    // are DB-only, and harvest-import is driven as a rapid chunk loop from
+    // the client that a 20/min bucket would break mid-import.
+    (/^\/api\/sap\/tdd\/hub-content\/[^/]+$/.test(pathname) &&
+      !/\/(seed|harvest-import|probe-all|write-test)$/.test(pathname)) ||
+    pathname === "/api/sap/tdd/capabilities" ||
+    // Ariba's live REST read — an OAuth exchange plus a call against a
+    // customer realm. Different protocol, same amplification.
+    pathname === "/api/sap/ariba/call" ||
     // Studio's per-connection connectivity probe. It reaches a CLIENT's SAP
     // system with that client's own credentials, so it amplifies onto a tenant
     // exactly like the routes above and belongs in the same tight bucket — not

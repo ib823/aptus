@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic";
 // ISSUE and ROTATE exist because minting a runtime credential used to be filed
 // as "Solution / UPDATE" — a live SAP token indistinguishable from a rename, and
 // with no entity to filter on when asking what a departing consultant issued.
-const KNOWN_ACTIONS = ["CREATE", "UPDATE", "PROMOTE", "DECISION", "TEST_CONNECT", "ISSUE", "ROTATE"];
+const KNOWN_ACTIONS = ["CREATE", "UPDATE", "PROMOTE", "DECISION", "TEST_CONNECT", "ISSUE", "ROTATE", "REVOKE", "ISSUE_WRITE"];
 
 export async function GET(request: NextRequest) {
   const guard = await requireControlTower();

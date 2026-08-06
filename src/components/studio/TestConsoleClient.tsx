@@ -3,29 +3,45 @@
 /**
  * Test Console + Scaffold.
  *
+ * RUNS THROUGH THE BROKER. Every run goes to /api/studio/test/broker-run, which
+ * exercises the SAME pipeline the deployed application's call takes: the grant
+ * gate, the environment + SAP-client connection binding, the same read function
+ * against the BOUND connection, and a northbound audit row marked dryRun. A
+ * green result here is evidence the runtime call will succeed; a refusal here
+ * is the exact refusal the application would receive, and the card says so.
+ * (The console used to call the env-tenant /entities and /preview routes — no
+ * grant check, no binding, no audit — so a green console proved nothing and
+ * could read a DIFFERENT system than the one the app would reach.)
+ *
  * THE LAZY-READ RULE: nothing touches SAP until you press Run. Selecting an
- * interface, switching tabs, or opening this page fires no live call. Every read
- * goes through /entities and /preview, which sit in the tight live-SAP throttle —
- * a console that fanned out reads on render could quietly hammer a client's
- * production tenant just because someone left a tab open.
+ * interface, switching tabs, or opening this page fires no live call.
  *
  * Honest status is not re-implemented here. A 200 with zero rows renders as
  * "No records" — a successful read of something empty — and is visibly different
  * from 403 "not set up" and from a 5xx failure. Those three are different facts
- * and the console never blurs them.
+ * and the console never blurs them. A GOVERNANCE refusal renders no status chip
+ * at all: the chip vocabulary describes the tenant's capability, and a refusal
+ * that never reached the tenant has no tenant fact to report.
  *
  * Scaffold produces DOWNLOADS. There is no in-browser editor: the solution's code
  * lives in the developer's own repository.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { StudioStatusChip } from "@/components/studio/StudioStatusChip";
-import {
-  previewOutcome,
-  type HonestStatus,
-  type PreviewEnvelope,
-} from "@/lib/studio/honest-status";
+import { type HonestStatus } from "@/lib/studio/honest-status";
+
+/** A saved run, as the test-cases API returns it. */
+interface SavedCase {
+  id: string;
+  name: string;
+  interfaceId: string;
+  request: { entity?: string; limit?: number } | null;
+  lastOutcome: "PASS" | "FAIL" | "NOT_RUN";
+  httpStatus: number | null;
+  lastRunAt: string | null;
+}
 
 export interface TestableInterface {
   id: string;
@@ -40,15 +56,28 @@ export interface TestableInterface {
 interface RunState {
   phase: "idle" | "running" | "done";
   /**
-   * Absent when no probe reached the tenant — see previewOutcome. The chip is
-   * rendered only when this is set, because the vocabulary describes the
-   * tenant's capability and nothing else may borrow it.
+   * Absent when no read reached the tenant — including every governance
+   * refusal. The chip is rendered only when this is set, because the
+   * vocabulary describes the tenant's capability and nothing else may borrow it.
    */
   status?: HonestStatus | undefined;
   detail?: string;
   rows?: Record<string, unknown>[];
   entitySets?: string[];
   httpStatus?: number | undefined;
+  /** A governance refusal — the same one the deployed app would receive. */
+  refusal?: { kind: string; message: string } | undefined;
+  /** Which connection the binding chose — the fact the old console lacked. */
+  boundTo?:
+    | {
+        label: string;
+        environment: string | null;
+        sapClient: string | null;
+        bindingUnverified: boolean;
+      }
+    | undefined;
+  /** The interface is still DRAFT; served, and said. */
+  draft?: boolean;
 }
 
 export function TestConsoleClient({
@@ -72,6 +101,82 @@ export function TestConsoleClient({
   const selected = interfaces.find((i) => i.id === selectedId) ?? null;
 
   /*
+   * SAVED CASES, FINALLY READABLE. "Save as test case" confirmed "Saved" and no
+   * screen in the product ever listed, replayed or deleted one — a write-only
+   * record, the same dead-end shape the registration flow was cured of. This is
+   * a DB read, not a tenant read, so loading it on mount does not violate the
+   * lazy-read rule; replay goes through the same broker dry-run as Run.
+   */
+  const [cases, setCases] = useState<SavedCase[]>([]);
+  const [caseBusy, setCaseBusy] = useState<string | null>(null);
+  const [caseResult, setCaseResult] = useState<Record<string, string>>({});
+
+  const loadCases = useCallback(async () => {
+    try {
+      const res = await fetch("/api/studio/test-cases");
+      const json = (await res.json()) as { data?: { cases?: SavedCase[]; testCases?: SavedCase[] } };
+      setCases(json.data?.cases ?? json.data?.testCases ?? []);
+    } catch {
+      /* the panel simply stays empty; saving still works */
+    }
+  }, []);
+  useEffect(() => {
+    void loadCases();
+  }, [loadCases]);
+
+  const replayCase = useCallback(
+    async (c: SavedCase) => {
+      setCaseBusy(c.id);
+      try {
+        const res = await fetch("/api/studio/test/broker-run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            interfaceId: c.interfaceId,
+            ...(c.request?.entity ? { entity: c.request.entity } : {}),
+            limit: Math.min(c.request?.limit ?? 10, 50),
+          }),
+        });
+        const json = (await res.json()) as {
+          data?: { outcome: string; status?: string; httpStatus?: number; refusal?: { message: string } };
+          error?: { message?: string };
+        };
+        const d = json.data;
+        setCaseResult((m) => ({
+          ...m,
+          [c.id]: !res.ok || !d
+            ? json.error?.message ?? "replay failed"
+            : d.outcome === "refused"
+              ? `refused — ${d.refusal?.message ?? ""}`
+              : `${d.status} · HTTP ${d.httpStatus}`,
+        }));
+      } catch {
+        setCaseResult((m) => ({ ...m, [c.id]: "replay failed" }));
+      } finally {
+        setCaseBusy(null);
+      }
+    },
+    [],
+  );
+
+  const deleteCase = useCallback(
+    async (id: string) => {
+      setCaseBusy(id);
+      try {
+        const res = await fetch("/api/studio/test-cases", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
+        if (res.ok) setCases((cs) => cs.filter((c) => c.id !== id));
+      } finally {
+        setCaseBusy(null);
+      }
+    },
+    [],
+  );
+
+  /*
    * Entity sets this tenant actually exposed on the last run, unioned with the
    * one the Interfaces record declares. Read from `run` so the dropdown gets
    * richer after a probe without another request.
@@ -84,79 +189,78 @@ export function TestConsoleClient({
   }, [selected?.entitySet, run?.entitySets]);
 
 
-  /** The only place a live SAP read is triggered. */
+  /** The only place a live SAP read is triggered — through the broker pipeline. */
   const doRun = useCallback(async () => {
-    if (!selected || !tenantKey) return;
+    if (!selected) return;
     setRun({ phase: "running" });
     setSaved(null);
     try {
-      const common = `product=${encodeURIComponent(selected.sapProduct)}&tenant=${encodeURIComponent(tenantKey)}&service=${encodeURIComponent(selected.externalId)}`;
-
-      // 1. Schema first — what does this service expose on this tenant?
-      const schemaRes = await fetch(`/api/sap/tdd/entities?${common}`);
-      const schemaJson = (await schemaRes.json()) as {
-        data?: { entitySets?: { name: string }[] };
+      const res = await fetch("/api/studio/test/broker-run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          interfaceId: selected.id,
+          ...(entity ? { entity } : {}),
+          limit: Math.min(limit, 50),
+        }),
+      });
+      const json = (await res.json()) as {
+        data?:
+          | { outcome: "refused"; refusal: { kind: string; message: string } }
+          | {
+              outcome: "ran";
+              status: "OK" | "EMPTY" | "NEEDS_SETUP" | "NOT_FOUND" | "TIMEOUT" | "ERROR";
+              httpStatus: number;
+              records: Record<string, unknown>[];
+              note: string;
+              draft: boolean;
+              boundTo: {
+                label: string;
+                environment: string | null;
+                sapClient: string | null;
+                bindingUnverified: boolean;
+              };
+            };
         error?: { message?: string };
       };
-
-      if (schemaRes.status === 401 || schemaRes.status === 403) {
+      if (!res.ok || !json.data) {
         setRun({
           phase: "done",
-          status: "NEEDS_SETUP",
-          httpStatus: schemaRes.status,
-          detail: "The communication arrangement is not set up, or the credentials were rejected.",
+          detail: json.error?.message ?? `The run could not be started (HTTP ${res.status}).`,
         });
         return;
       }
-      if (!schemaRes.ok) {
-        setRun({
-          phase: "done",
-          status: "NOT_PROBEABLE",
-          httpStatus: schemaRes.status,
-          detail: schemaJson.error?.message ?? "The tenant could not be inspected.",
-        });
+      if (json.data.outcome === "refused") {
+        // A governance refusal, verbatim. No status chip: nothing reached the
+        // tenant, so there is no tenant fact to report — the refusal IS the
+        // result, and it is the same one the deployed application would get.
+        setRun({ phase: "done", refusal: json.data.refusal, detail: json.data.refusal.message });
         return;
       }
-
-      const entitySets = (schemaJson.data?.entitySets ?? []).map((e) => e.name);
-      const targetEntity = entity || selected.entitySet || entitySets[0] || "";
-      if (!targetEntity) {
-        setRun({
-          phase: "done",
-          status: "NOT_PROBEABLE",
-          entitySets,
-          detail: "This service exposes no entity set to read.",
-        });
-        return;
-      }
-
-      // 2. Rows — only now, and only for the chosen entity.
-      const rowsRes = await fetch(
-        `/api/sap/tdd/preview?${common}&entity=${encodeURIComponent(targetEntity)}&limit=${limit}`,
-      );
-      const rowsJson = (await rowsRes.json()) as {
-        data?: PreviewEnvelope;
-        error?: { message?: string };
-      };
-
-      // BOTH LAYERS, and neither speaks for the other: this route answers 200
-      // whether the tenant accepted the read or refused it, so `rowsRes.ok` only
-      // says CoreEdge replied. The upstream outcome is in data.ok/data.status.
-      // Reading the transport alone is what rendered a 403 as "Activated · HTTP
-      // 200 · the service answered successfully". See previewOutcome's header.
-      const outcome = previewOutcome({ ok: rowsRes.ok, status: rowsRes.status }, rowsJson);
+      const d = json.data;
+      // The broker's read statuses ARE tenant facts, mapped to the shared
+      // honest-status vocabulary the chip owns.
+      const status: HonestStatus =
+        d.status === "OK" || d.status === "EMPTY"
+          ? "ACTIVATED"
+          : d.status === "NEEDS_SETUP"
+            ? "NEEDS_SETUP"
+            : d.status === "NOT_FOUND"
+              ? "NOT_FOUND"
+              : "NOT_PROBEABLE";
       setRun({
         phase: "done",
-        status: outcome.status,
-        entitySets,
-        rows: outcome.rows,
-        httpStatus: outcome.httpStatus,
-        detail: outcome.detail,
+        status,
+        rows: d.records,
+        httpStatus: d.httpStatus,
+        detail: d.note,
+        draft: d.draft,
+        boundTo: d.boundTo,
       });
     } catch {
-      setRun({ phase: "done", status: "NOT_PROBEABLE", detail: "The read could not be completed." });
+      setRun({ phase: "done", detail: "The run could not be completed." });
     }
-  }, [selected, tenantKey, entity, limit]);
+  }, [selected, entity, limit]);
 
   const saveCase = useCallback(async () => {
     if (!selected || run.phase !== "done") return;
@@ -179,12 +283,13 @@ export function TestConsoleClient({
       const json = (await res.json()) as { data?: { name: string }; error?: { message?: string } };
       if (!res.ok || !json.data) throw new Error(json.error?.message ?? "Could not save.");
       setSaved(json.data.name);
+      void loadCases();
     } catch (err) {
       setSaved(err instanceof Error ? `Failed: ${err.message}` : "Failed to save.");
     } finally {
       setSaving(false);
     }
-  }, [selected, run, entity, limit, tenantKey]);
+  }, [selected, run, entity, limit, tenantKey, loadCases]);
 
   /**
    * Turn the rows we just saw into a described contract.
@@ -309,16 +414,12 @@ export function TestConsoleClient({
               A SELECT, not free text.
 
               This value is concatenated into an OData path aimed at a real
-              client tenant. The platform already KNOWS the valid entity sets
-              two ways — the Interfaces record declares one (`A_BankDetail`),
-              and the run itself reads $metadata — so accepting arbitrary
-              typing offered nothing except a way to send malformed paths
-              upstream and to mistype a name that then reads as "not probeable".
-
-              Before the first run the only known name is the declared one, so
-              that is the single option; after a run the list is whatever
-              $metadata actually exposed on this tenant. The server validates
-              regardless — this is the affordance, not the control.
+              client tenant, and the Interfaces record declares the valid name
+              (`A_BankDetail`) — accepting arbitrary typing offered nothing
+              except a way to send malformed paths upstream. The broker run
+              does not enumerate $metadata (that was the ungoverned /entities
+              route), so the declared entity set is the offer; the server
+              validates regardless — this is the affordance, not the control.
             */}
             <select
               value={entity}
@@ -352,32 +453,45 @@ export function TestConsoleClient({
           <button
             type="button"
             onClick={() => void doRun()}
-            disabled={run.phase === "running" || !tenantKey}
+            disabled={run.phase === "running" || !selected}
             style={btnPrimary}
-            title={tenantKey ? "Run a live read" : "No SAP tenant is connected"}
+            title="Run through the broker — the same pipeline the deployed app uses"
           >
             {run.phase === "running" ? "Running…" : "Run"}
           </button>
         </div>
-        {!tenantKey && (
-          <p style={{ ...muted, marginTop: 10 }}>
-            No SAP tenant is connected for this organization, so there is nothing to read.
-          </p>
-        )}
         <p style={{ ...muted, marginTop: 10 }}>
-          Nothing is read until you press Run — and every read goes through the rate-limited
-          live-SAP path.
+          Nothing is read until you press Run. The run goes through the broker: the same
+          grant check, the same environment binding, the same connection the deployed
+          application would reach — and it is recorded in the northbound trail as a dry run.
         </p>
       </section>
 
       {run.phase === "done" && (
         <section style={card}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
-            <h2 style={{ ...h2, margin: 0 }}>Result</h2>
+            <h2 style={{ ...h2, margin: 0 }}>{run.refusal ? "Refused by governance" : "Result"}</h2>
             {run.status && <StudioStatusChip status={run.status} />}
             {run.httpStatus && <span style={muted}>HTTP {run.httpStatus}</span>}
+            {run.draft && (
+              <span style={{ ...muted, color: "var(--status-awaiting-fg)" }} title="Served with x-coreedge-interface-status: DRAFT">
+                draft interface
+              </span>
+            )}
           </div>
           <p style={body}>{run.detail}</p>
+          {/* WHICH system answered — the binding's own facts, so a green run is
+              evidence about the connection the app will actually reach. */}
+          {run.boundTo && (
+            <p style={{ ...muted, marginTop: 6 }}>
+              Bound to <strong>{run.boundTo.label}</strong>
+              {run.boundTo.environment ? ` · ${run.boundTo.environment}` : ""}
+              {run.boundTo.sapClient ? `/${run.boundTo.sapClient}` : ""}
+              {run.boundTo.bindingUnverified
+                ? " · binding unverified (the connection has not declared its environment)"
+                : ""}
+            </p>
+          )}
 
           {run.rows && run.rows.length > 0 && (
             <div style={{ overflowX: "auto", marginTop: 12 }}>
@@ -442,6 +556,44 @@ export function TestConsoleClient({
               {saved && <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>{saved}</span>}
             </div>
           )}
+        </section>
+      )}
+
+      {cases.length > 0 && (
+        <section style={card}>
+          <h2 style={h2}>Saved test cases</h2>
+          <p style={body}>
+            Replays run through the broker — the same grant, binding and connection a fresh
+            Run uses — so a case that passed last month can be checked against today.
+          </p>
+          <ul style={{ margin: "12px 0 0", padding: 0, listStyle: "none" }}>
+            {cases.map((c) => (
+              <li
+                key={c.id}
+                style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: "1px solid var(--border-default)" }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{c.name}</span>
+                <span style={muted}>
+                  last: {c.lastOutcome}
+                  {c.httpStatus ? ` · HTTP ${c.httpStatus}` : ""}
+                  {c.lastRunAt ? ` · ${new Date(c.lastRunAt).toLocaleDateString()}` : ""}
+                </span>
+                {caseResult[c.id] && (
+                  <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>now: {caseResult[c.id]}</span>
+                )}
+                <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                  <button type="button" style={btnSmall} disabled={caseBusy === c.id} onClick={() => void replayCase(c)}>
+                    {caseBusy === c.id ? "…" : "Replay"}
+                  </button>
+                  {canSave && (
+                    <button type="button" style={btnSmall} disabled={caseBusy === c.id} onClick={() => void deleteCase(c.id)}>
+                      Delete
+                    </button>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

@@ -28,10 +28,12 @@
  * nothing having completed. Spelling out the mechanism is what makes the drift
  * comprehensible instead of alarming.
  *
- * EXPECT THIS TO BE EMPTY. No code path issues a write credential, so every
- * write is refused at that gate and no key is ever reserved. That is a settled
- * decision, and the empty state is a precise statement about a control that
- * works — not a gap.
+ * THE WRITE PATH IS LIVE. Write-credential issuance shipped
+ * (/api/studio/clients/write-credential, owner decision reversing the earlier
+ * hold), so an empty ledger now means what an empty ledger looks like it
+ * means: no solution in scope has performed a write in this window. The
+ * "expect this to be empty — no code path issues a write credential" era is
+ * over; prose claiming it survives only as history in this comment.
  */
 
 import type { NextRequest } from "next/server";
@@ -145,7 +147,7 @@ export async function GET(request: NextRequest) {
       ],
       emptyByDesign:
         keyTotal === 0
-          ? "No write credential can be issued yet, so every write is refused at the credential gate before a key is reserved."
+          ? "No write has reserved a key in this window. Writes require a write key (issued in Developer Studio against a live write grant), a matching grant, a declared-environment connection with writes enabled, and an Idempotency-Key — a refusal at any earlier gate appears in the audit feed, never here."
           : null,
       // The counts above are window-wide; these two arrays are pages of it.
       rowsAreAPage: {

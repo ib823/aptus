@@ -39,6 +39,14 @@ export interface AccessibleInterface {
   operation: string;
   mode: string;
   version: number;
+  /**
+   * TRUE when the interface is still DRAFT. Reads from a draft are served —
+   * "reads from one are merely premature" — but the caller is TOLD, via an
+   * x-coreedge-interface-status header, instead of the status being silently
+   * ignored. DEPRECATED refuses outright (see INTERFACE_DEPRECATED): an
+   * interface kept for the record must not quietly keep serving new traffic.
+   */
+  draft: boolean;
 }
 
 export type AccessRefusal =
@@ -50,7 +58,15 @@ export type AccessRefusal =
   | "GRANT_REVOKED"
   | "WRITE_NOT_SERVED"
   | "READ_ONLY_INTERFACE"
-  | "INTERFACE_NOT_ACTIVE";
+  | "INTERFACE_NOT_ACTIVE"
+  /**
+   * A read against a DEPRECATED interface. The read path never selected
+   * `status`, so a deprecated — or draft — interface served live customer
+   * data exactly like an ACTIVE one, while the write path checked. The
+   * asymmetry stays deliberate for DRAFT (premature ≠ wrong) and ends for
+   * DEPRECATED: deprecation is a statement that new traffic should stop.
+   */
+  | "INTERFACE_DEPRECATED";
 
 export type AccessResult =
   | { ok: true; iface: AccessibleInterface }
@@ -180,6 +196,8 @@ export async function resolveWritableInterface(
       operation: iface.operation,
       mode: iface.mode,
       version: iface.version,
+      // The write path only reaches here for ACTIVE interfaces.
+      draft: false,
     },
   };
 }
@@ -203,6 +221,7 @@ export async function resolveReadableInterface(
       operation: true,
       mode: true,
       version: true,
+      status: true,
       solutionId: true,
     },
   });
@@ -230,6 +249,16 @@ export async function resolveReadableInterface(
       ok: false,
       reason: "WRITE_NOT_SERVED",
       message: "This interface is configured for writes, which this API does not serve.",
+    };
+  }
+
+  // See INTERFACE_DEPRECATED on the refusal union. DRAFT continues below and
+  // is flagged on the result instead of refused.
+  if (iface.status === "DEPRECATED") {
+    return {
+      ok: false,
+      reason: "INTERFACE_DEPRECATED",
+      message: "This interface has been deprecated. Ask the solution's builder for its replacement.",
     };
   }
 
@@ -292,6 +321,7 @@ export async function resolveReadableInterface(
       operation: iface.operation,
       mode: iface.mode,
       version: iface.version,
+      draft: iface.status === "DRAFT",
     },
   };
 }

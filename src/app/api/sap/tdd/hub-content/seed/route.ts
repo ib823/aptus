@@ -43,8 +43,26 @@ interface ApiSliceStats {
 
 /** Project SapApiReference → SapHubContent(API) + inject curated services. */
 async function rebuildApiSlice(): Promise<ApiSliceStats> {
+  /*
+   * EVERY ADDRESSABLE ROW, NOT JUST PUBLIC. The projection filtered
+   * `appliesToPublic: true` and then stamped every projected row
+   * Public/false/false — so the private and on-prem catalogues SAP publishes
+   * (and the importer correctly flags) never existed in SapHubContent, and
+   * the SuccessFactors/Ariba rows (no edition flag, product tag only) were
+   * unreachable by construction. The per-product filtering now happens at
+   * READ time via hubCatalogueScope; the projection's job is to carry each
+   * row's real identity. A row with no edition flag and no product tag is
+   * addressable by no scope and is left out rather than stored dark.
+   */
   const apis = await prisma.sapApiReference.findMany({
-    where: { appliesToPublic: true },
+    where: {
+      OR: [
+        { appliesToPublic: true },
+        { appliesToPrivate: true },
+        { appliesToOnPrem: true },
+        { productTags: { not: null } },
+      ],
+    },
     select: {
       apiId: true,
       apiName: true,
@@ -54,6 +72,10 @@ async function rebuildApiSlice(): Promise<ApiSliceStats> {
       communicationScenarios: true,
       scopeItemCodes: true,
       apiHubUrl: true,
+      appliesToPublic: true,
+      appliesToPrivate: true,
+      appliesToOnPrem: true,
+      productTags: true,
     },
   });
 
@@ -98,9 +120,12 @@ async function rebuildApiSlice(): Promise<ApiSliceStats> {
       title: a.apiName,
       description: a.description ?? "",
       packageId: lob,
-      appliesToPublic: true,
-      appliesToPrivate: false,
-      appliesToOnPrem: false,
+      // The row's REAL identity, from the importer's classification — never a
+      // blanket Public stamp (see the projection comment above).
+      appliesToPublic: a.appliesToPublic,
+      appliesToPrivate: a.appliesToPrivate,
+      appliesToOnPrem: a.appliesToOnPrem,
+      productTags: a.productTags,
       status: a.status,
       apiType: a.apiType ?? classifyApiTypeById(a.apiId),
       communicationScenarios: a.communicationScenarios,
@@ -184,6 +209,7 @@ async function importBundledType(type: HubContentType, importedAt: string): Prom
       appliesToPublic: norm.appliesToPublic,
       appliesToPrivate: norm.appliesToPrivate,
       appliesToOnPrem: norm.appliesToOnPrem,
+      productTags: norm.productTags,
       status: norm.status,
       apiType: norm.apiType,
       communicationScenarios: norm.communicationScenarios,
@@ -247,7 +273,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   async function logImport(action: DecisionAction, newValue: Prisma.InputJsonValue): Promise<void> {
     try {
       await logDecision({
-        assessmentId: "system",
+        assessmentId: null,
         entityType: "sap_hub_seed",
         entityId: "hub-content-rebuild",
         action,

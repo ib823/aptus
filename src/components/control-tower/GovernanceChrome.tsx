@@ -27,9 +27,9 @@ import { formatDate } from "@/lib/format/date";
 /**
  * TIME REMAINING AS A RUNWAY, NOT A DATE.
  *
- * There is no revocation path in this release and a settled grant cannot be
- * re-decided, so an approved grant ends exactly one way: its expiry passes.
- * That makes time-remaining the entire lifecycle control rather than a field.
+ * A settled grant cannot be re-decided, and while an admin can revoke one in
+ * an emergency, expiry is the only ending that needs nobody's attention — so
+ * time-remaining stays the primary lifecycle control rather than a field.
  *
  * "Ends 8 Sep" requires arithmetic against today; "6 days" does not, and the bar
  * makes a short runway visible without reading either. It DEPLETES toward zero

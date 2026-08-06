@@ -18,10 +18,10 @@ export interface CapabilityAuditActor {
 }
 
 /**
- * Record a capability-probe run. Uses the `assessmentId: "system"` sentinel
- * (same convention as onboarding / dashboard-widget audits) since a probe has
- * no assessment context. `actor`/`actorRole` fall back to "system" on the
- * public (unauthenticated) path.
+ * Record a capability-probe run. `assessmentId` is null — a probe has no
+ * assessment context, and null is the recorded absence (the old "system"
+ * sentinel violated the FK and lost the audit). `actor`/`actorRole` fall back
+ * to "system" on the public (unauthenticated) path.
  */
 export async function auditCapabilityProbe(
   product: { key: string; label: string },
@@ -29,7 +29,7 @@ export async function auditCapabilityProbe(
   actor: CapabilityAuditActor,
 ): Promise<void> {
   await logDecision({
-    assessmentId: "system",
+    assessmentId: null,
     entityType: "sap_capability_probe",
     entityId: `${product.key}:${summary.tenant}`,
     action: "SAP_CAPABILITY_PROBED",

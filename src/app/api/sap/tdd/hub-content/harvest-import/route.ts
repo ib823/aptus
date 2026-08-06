@@ -148,6 +148,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       appliesToPublic: norm.appliesToPublic,
       appliesToPrivate: norm.appliesToPrivate,
       appliesToOnPrem: norm.appliesToOnPrem,
+      productTags: norm.productTags,
       status: norm.status,
       apiType: norm.apiType,
       communicationScenarios: norm.communicationScenarios,
@@ -210,7 +211,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     await logDecision({
-      assessmentId: "system",
+      assessmentId: null,
       entityType: "sap_hub_seed",
       entityId: "hub-harvest-import",
       action: "SAP_HUB_TYPE_IMPORTED" satisfies DecisionAction,

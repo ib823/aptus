@@ -18,7 +18,7 @@
  */
 
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
@@ -28,6 +28,7 @@ import { StudioShell } from "@/components/studio/StudioShell";
 import { type StudioTenantOption } from "@/components/studio/StudioTopBar";
 import { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenants";
 import { getCurrentUser } from "@/lib/auth/session";
+import { isMfaRequired, requiresMfaEnrollment } from "@/lib/auth/permissions";
 import { accessibleWorkspaces, canAccessControlTower, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { pickActiveTenant, resolveStudioTenants } from "@/lib/studio/tenants";
 import { ROLE_LABELS } from "@/types/assessment";
@@ -50,6 +51,19 @@ export default async function ControlTowerLayout({ children }: { children: React
   // non-admin with no organization has nothing to scope the feeds to.
   if (!canAccessControlTower(user.role) || lacksStudioTenantScope(user)) {
     return <RoleGatedEmptyState roleLabel={roleLabel} activeWorkspace="control-tower" />;
+  }
+
+  // MFA step-up, same gate as the portal layout. These screens reach live
+  // customer SAP systems; an org that requires MFA must get it HERE, not only
+  // on the portal — a policy enforced on one door and not the other is not a
+  // policy. Enrollment-needed users go to enrollment instead of a verify loop.
+  if (isMfaRequired(user)) {
+    const next = encodeURIComponent((await headers()).get("x-pathname") ?? "/control-tower");
+    redirect(
+      requiresMfaEnrollment(user)
+        ? `/settings/security?mfa=required&next=${next}`
+        : `/verify-mfa?next=${next}`,
+    );
   }
 
   const resolved = await resolveStudioTenants(user.organizationId);
