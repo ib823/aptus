@@ -129,7 +129,10 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
         "READ",
         client.sapClient,
       )
-    : ({ ok: false, reason: "NO_CONNECTION" } as const);
+    : // Its own reason, not NO_CONNECTION: an unknown product is an
+      // interface-config defect with a different fix, and NO_CONNECTION is
+      // excluded from the incident rule — this must not be.
+      ({ ok: false, reason: "UNKNOWN_PRODUCT" } as const);
 
   if (!binding.ok) {
     await recordNorthboundCall({
@@ -234,7 +237,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
 
   // 200 for OK *and* EMPTY. An empty resource is a successful read, and the
   // consumer is told so explicitly rather than left to infer it from a count.
-  return northboundOk(
+  const response = northboundOk(
     {
       records: result.records,
       count: result.records.length,
@@ -244,4 +247,10 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     },
     correlationId,
   );
+  // A draft interface is SERVED (premature is not wrong) and SAID: the status
+  // used to be ignored entirely, so a consumer could build against a contract
+  // its builder had not finished. Header rather than body so existing parsers
+  // are untouched.
+  if (iface.draft) response.headers.set("x-coreedge-interface-status", "DRAFT");
+  return response;
 }

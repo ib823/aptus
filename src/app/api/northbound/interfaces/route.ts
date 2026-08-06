@@ -12,8 +12,10 @@
 import type { NextRequest } from "next/server";
 
 import { authenticateClientToken, extractBearer, touchClientLastUsed } from "@/lib/northbound/auth";
-import { newCorrelationId, northboundOk, unauthenticated } from "@/lib/northbound/respond";
+import { recordNorthboundCall } from "@/lib/northbound/audit";
+import { newCorrelationId, northboundError, northboundOk, unauthenticated } from "@/lib/northbound/respond";
 import { prisma } from "@/lib/db/prisma";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 import { grantsRead, type GrantDecision, type GrantEnvironment } from "@/lib/studio/grants";
 import { scopedWhere } from "@/lib/studio/tenant-scope";
 
@@ -29,6 +31,32 @@ export async function GET(request: NextRequest) {
   }
   const client = auth.client;
   void touchClientLastUsed(client.clientId, client.organizationId);
+
+  /*
+   * PER-CREDENTIAL THROTTLE AND AN AUDIT ROW — the two things the data routes
+   * had and this one lacked. Discovery makes no SAP call, but it is a machine
+   * caller enumerating a solution's whole interface inventory: keyed by
+   * credential like every other northbound bucket (the IP-keyed edge bucket is
+   * the wrong shape for servers — see the data route), and recorded, because a
+   * stolen token mapping the surface used to leave NO trace at all while the
+   * manual claimed the traffic screen showed "every northbound call".
+   */
+  const rate = await checkRateLimit(`northbound:${client.clientId}`, RATE_LIMITS.northbound);
+  if (!rate.allowed) {
+    await recordNorthboundCall({
+      organizationId: client.organizationId,
+      solutionId: client.solutionId,
+      interfaceId: null,
+      operation: "READ",
+      externalId: "-discovery-",
+      environment: client.environment,
+      status: 429,
+      rowCount: null,
+      correlationId,
+      clientTokenId: client.clientId,
+    });
+    return northboundError("RATE_LIMITED", "Too many requests. Slow down and retry.", 429, correlationId);
+  }
 
   const [interfaces, grants] = await Promise.all([
     prisma.interface.findMany({
@@ -91,6 +119,20 @@ export async function GET(request: NextRequest) {
       .map((g) => `${g.externalId}::${g.operation}`),
   );
 
+  // Discovery is audited like the data routes: a 200 with the interface count.
+  await recordNorthboundCall({
+    organizationId: client.organizationId,
+    solutionId: client.solutionId,
+    interfaceId: null,
+    operation: "READ",
+    externalId: "-discovery-",
+    environment: client.environment,
+    status: 200,
+    rowCount: interfaces.length,
+    correlationId,
+    clientTokenId: client.clientId,
+  });
+
   return northboundOk(
     {
       environment: client.environment,
@@ -106,7 +148,13 @@ export async function GET(request: NextRequest) {
         status: i.status,
         // Stated per interface so a developer can see WHY a call would be
         // refused before making it, instead of discovering it as a 403.
-        callable: i.mode !== "WRITE" && liveGrants.has(`${i.externalId}::${i.operation}`),
+        // DEPRECATED is refused by the read path (INTERFACE_DEPRECATED), so it
+        // must not be advertised — same agreement rule as the grant predicates.
+        // DRAFT stays callable; the data route flags it in a header.
+        callable:
+          i.mode !== "WRITE" &&
+          i.status !== "DEPRECATED" &&
+          liveGrants.has(`${i.externalId}::${i.operation}`),
       })),
     },
     correlationId,

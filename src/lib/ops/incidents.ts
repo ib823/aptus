@@ -260,6 +260,14 @@ export const BINDING_REFUSAL_COVERAGE = {
    * could ever see.
    */
   CONNECTION_UNREADABLE: "counted",
+  /**
+   * The interface names an unknown product — an interface-config defect, not
+   * an estate state. Counted for the reason the vocabulary split it out of
+   * NO_CONNECTION: a permanently failing interface with live traffic must be
+   * visible to the rule, and its remediation (fix the interface) is different
+   * from "add a connection".
+   */
+  UNKNOWN_PRODUCT: "counted",
 } as const satisfies Record<ConnectionBindingFailure, "counted" | "excluded">;
 
 /** The reasons the ops query filters on. Derived, never hand-maintained. */

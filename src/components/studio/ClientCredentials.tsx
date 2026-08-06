@@ -13,6 +13,8 @@
  * knows to ask a colleague before they try.
  */
 
+import { useRouter } from "next/navigation";
+
 import { useCallback, useState } from "react";
 
 export interface CredentialSummary {
@@ -43,6 +45,7 @@ export function ClientCredentials({
   solutions: readonly CredentialSolution[];
   canIssue: boolean;
 }) {
+  const router = useRouter();
   const [solutionId, setSolutionId] = useState(solutions[0]?.id ?? "");
   const [environment, setEnvironment] = useState("SANDBOX");
   /*
@@ -74,14 +77,14 @@ export function ClientCredentials({
       if (json.data?.token) {
         setIssued({ token: json.data.token, warning: json.data.warning ?? "" });
       } else {
-        window.location.reload();
+        router.refresh();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "The request failed.");
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [router]);
 
   const selected = solutions.find((s) => s.id === solutionId);
 

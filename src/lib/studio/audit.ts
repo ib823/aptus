@@ -42,7 +42,21 @@ export type AuditAction =
    * issuance upserts, the second call invalidates the token in production, and a
    * trail that called both "ISSUE" would hide the outage inside the routine case.
    */
-  | "ROTATE";
+  | "ROTATE"
+  /**
+   * A credential deliberately ended. The verbs above were added so minting was
+   * enumerable; revocation stayed `Solution/UPDATE` — so the trail could say
+   * what was issued but not what was stopped, and "which credentials did this
+   * person kill" had no field to filter on.
+   */
+  | "REVOKE"
+  /**
+   * The per-solution WRITE key minted. Its own verb, not ISSUE: a write key is
+   * the second secret that lets a solution CREATE records in a customer's SAP
+   * ledger, and folding it into the read-token verb would hide the single most
+   * consequential issuance the product performs inside the routine one.
+   */
+  | "ISSUE_WRITE";
 
 export interface ConfigAuditInput {
   organizationId: string;

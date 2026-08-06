@@ -43,16 +43,35 @@ export async function reapExpiredIdempotencyKeys(
 ): Promise<ReapResult> {
   const doomed = await prisma.northboundIdempotencyKey.findMany({
     where: { expiresAt: { lt: now } },
-    select: { id: true },
+    select: { id: true, organizationId: true },
     orderBy: { expiresAt: "asc" },
     take: limit,
   });
 
   if (doomed.length === 0) return { deleted: 0, moreRemaining: false };
 
-  const result = await prisma.northboundIdempotencyKey.deleteMany({
-    where: { id: { in: doomed.map((d) => d.id) } },
-  });
+  /*
+   * DELETED PER TENANT, DELIBERATELY. The reaper is the one legitimate
+   * cross-tenant sweep (a platform maintenance job has no caller organization)
+   * — but the model is tenant-anchored, and the scope scan requires every
+   * mutation's where to carry the organization rather than trusting the lookup
+   * above it. Grouping by the org each doomed row belongs to satisfies the
+   * invariant without weakening the sweep: the same rows die, and each DELETE
+   * independently re-asserts whose rows it touches.
+   */
+  const byOrg = new Map<string, string[]>();
+  for (const d of doomed) {
+    const ids = byOrg.get(d.organizationId) ?? [];
+    ids.push(d.id);
+    byOrg.set(d.organizationId, ids);
+  }
+  let deleted = 0;
+  for (const [organizationId, ids] of byOrg) {
+    const result = await prisma.northboundIdempotencyKey.deleteMany({
+      where: { organizationId, id: { in: ids } },
+    });
+    deleted += result.count;
+  }
 
-  return { deleted: result.count, moreRemaining: doomed.length === limit };
+  return { deleted, moreRemaining: doomed.length === limit };
 }

@@ -19,6 +19,8 @@
  * imply a control that does not exist.
  */
 
+import { useRouter } from "next/navigation";
+
 import { useCallback, useState } from "react";
 
 import { ProductLabel } from "@/components/sap/ProductLabel";
@@ -69,6 +71,7 @@ export function InterfacesClient({
   interfaces: readonly StudioInterface[];
   canAuthor: boolean;
 }) {
+  const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(interfaces[0]?.id ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,13 +89,13 @@ export function InterfacesClient({
       });
       const json = (await res.json()) as { error?: { message?: string } };
       if (!res.ok) throw new Error(json.error?.message ?? "The change could not be saved.");
-      window.location.reload();
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "The change could not be saved.");
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [router]);
 
   if (interfaces.length === 0) {
     return (

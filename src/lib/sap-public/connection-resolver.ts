@@ -229,7 +229,16 @@ export type ConnectionBindingFailure =
    * the honest shape — the caller gets an actionable sentence, the audit gets
    * a countable reason.
    */
-  | "CONNECTION_UNREADABLE";
+  | "CONNECTION_UNREADABLE"
+  /**
+   * The INTERFACE names a product the connector registry does not know. Not an
+   * estate state at all — an interface-config defect — and it used to be
+   * audited as NO_CONNECTION, which the incident coverage deliberately
+   * excludes as "has not started": a permanently broken interface was
+   * invisible to every rule and its caller was told to configure a connection
+   * that would never have helped.
+   */
+  | "UNKNOWN_PRODUCT";
 
 export type ConnectionBinding =
   | { ok: true; connection: ResolvedSapConnection; bindingUnverified: boolean }
@@ -353,6 +362,8 @@ export function connectionRefusalMessage(
       return "This organization's SAP connection has not declared which environment it is, so a write cannot be authorised against it. Set the environment on the connection in Studio.";
     case "CONNECTION_UNREADABLE":
       return "A stored SAP connection for this organization could not be read (its credentials failed to open or its auth type is unrecognised). Re-save the connection's secrets in Studio, or deactivate the broken row.";
+    case "UNKNOWN_PRODUCT":
+      return "This interface names an SAP product the platform does not recognise, so no connection can ever serve it. Fix the interface's product in Studio — adding a connection will not help.";
   }
 }
 

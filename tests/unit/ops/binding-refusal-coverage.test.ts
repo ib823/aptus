@@ -63,13 +63,13 @@ describe("coverage is complete against the resolver's own union", () => {
     }
   });
 
-  it("counts the four that mean a live credential fails every call", () => {
+  it("counts the five that mean a live credential fails every call", () => {
     // CONNECTION_UNREADABLE joined when the resolver learned to refuse (rather
     // than crash on) a row whose secrets fail to open — same shape as the
     // other three: live credential, approved grant, every call fails on
     // estate state an operator must fix.
     expect(COUNTED_BINDING_REFUSALS.sort()).toEqual(
-      ["AMBIGUOUS", "CONNECTION_UNREADABLE", "NO_MATCH_FOR_CLIENT", "NO_MATCH_FOR_ENVIRONMENT"].sort(),
+      ["AMBIGUOUS", "CONNECTION_UNREADABLE", "NO_MATCH_FOR_CLIENT", "NO_MATCH_FOR_ENVIRONMENT", "UNKNOWN_PRODUCT"].sort(),
     );
   });
 

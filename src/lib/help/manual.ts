@@ -211,7 +211,7 @@ const PROSE: Record<string, ScreenProse> = {
       {
         seeing: "A completely empty ledger",
         means:
-          "By design in this release: no write credential can be issued yet, so every write is refused at the credential gate before a key is reserved. It is a control working, not a screen failing.",
+          "No solution in scope performed a write in this window. Writes are live — a write key issued in Developer Studio against an approved write grant, plus a mandatory Idempotency-Key — so an empty ledger is quiet, not disabled. A write refused at any gate before reservation appears in the audit feed, never here.",
       },
     ],
   },

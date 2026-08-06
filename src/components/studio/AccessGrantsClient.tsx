@@ -16,6 +16,8 @@
  *      hit, rather than arriving as a rejection.
  */
 
+import { useRouter } from "next/navigation";
+
 import { useCallback, useState } from "react";
 
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
@@ -123,6 +125,7 @@ export function AccessGrantsClient({
   canRequest: boolean;
   requestableInterfaces: readonly RequestableInterface[];
 }) {
+  const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
@@ -143,7 +146,7 @@ export function AccessGrantsClient({
         });
         const json = (await res.json()) as { error?: { message?: string } };
         if (!res.ok) throw new Error(json.error?.message ?? "The decision could not be recorded.");
-        window.location.reload();
+        router.refresh();
       } catch (err) {
         setErrors((e) => ({
           ...e,
@@ -153,7 +156,7 @@ export function AccessGrantsClient({
         setBusy(null);
       }
     },
-    [checklist],
+    [checklist, router],
   );
 
   return (
@@ -363,6 +366,7 @@ function Td({ children, mono }: { children: React.ReactNode; mono?: boolean }) {
  * and then be refused at the first call, long after anyone was looking.
  */
 function RequestAccess({ interfaces }: { interfaces: readonly RequestableInterface[] }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [interfaceId, setInterfaceId] = useState("");
   const [environment, setEnvironment] = useState<GrantEnvironment>("SANDBOX");
@@ -404,13 +408,14 @@ function RequestAccess({ interfaces }: { interfaces: readonly RequestableInterfa
       });
       const json = (await res.json()) as { error?: { message?: string } };
       if (!res.ok) throw new Error(json.error?.message ?? "The request could not be raised.");
-      window.location.reload();
+      setOpen(false);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "The request could not be raised.");
     } finally {
       setBusy(false);
     }
-  }, [selected, environment, justification, expiresAt]);
+  }, [selected, environment, justification, expiresAt, router]);
 
   if (interfaces.length === 0) {
     return (

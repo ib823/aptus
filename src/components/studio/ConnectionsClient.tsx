@@ -9,6 +9,8 @@
  * cell is therefore a statement of fact, not a mask over a value in memory.
  */
 
+import { useRouter } from "next/navigation";
+
 import { useCallback, useState } from "react";
 
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
@@ -103,6 +105,7 @@ export function ConnectionsClient({
    *  testing was the only thing this screen could do. */
   canManage: boolean;
 }) {
+  const router = useRouter();
   const [outcomes, setOutcomes] = useState<Record<string, TestOutcome | { error: string }>>({});
   const [testing, setTesting] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -120,12 +123,13 @@ export function ConnectionsClient({
       });
       const json = (await res.json()) as { error?: { message?: string } };
       if (!res.ok) throw new Error(json.error?.message ?? "The change could not be saved.");
-      window.location.reload();
+      router.refresh();
+      setToggling(null);
     } catch (err) {
       setToggleError(err instanceof Error ? err.message : "The change could not be saved.");
       setToggling(null);
     }
-  }, []);
+  }, [router]);
 
   const test = useCallback(async (id: string) => {
     setTesting(id);
@@ -460,6 +464,9 @@ function ConnectionForm() {
               `with what you entered — report the status code to whoever operates it.`,
         );
       }
+      // A FULL reload, deliberately: the form holds typed SECRETS, and a
+      // router.refresh() keeps client state — leaving a password sitting in a
+      // React field after save. Reload is the reset that clears it.
       window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "The connection could not be saved.");

@@ -878,6 +878,14 @@ model NorthboundAuditEvent {
   /// and a zero would read as "instant" rather than "unmeasured".
   durationMs Int?
 
+  /// TRUE when a builder ran this call from the Test Console's broker dry-run —
+  /// the SAME pipeline (grant, binding, sapClient, connection, read) exercised
+  /// on the same tenant, initiated from Studio rather than by the deployed app.
+  /// Recorded rather than omitted: it is real traffic on a real system, and a
+  /// trail that hid it would under-report exactly like the edge cases the
+  /// "floor, not census" strip names. Default false so history stays truthful.
+  dryRun Boolean @default(false)
+
   at DateTime @default(now())
 
   @@index([organizationId, solutionId, at])
