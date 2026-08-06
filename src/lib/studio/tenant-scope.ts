@@ -24,8 +24,6 @@
  * lookups where getting it wrong means one client reads another's data.
  */
 
-import type { Prisma } from "@prisma/client";
-
 import { isAdminRole } from "@/lib/auth/permissions";
 
 /**
@@ -133,127 +131,20 @@ export function scopedCreateData<T extends Record<string, unknown>>(
 }
 
 /**
- * A Prisma client extension that FAILS CLOSED on the tenant-anchored models.
- *
- * Belt to the braces above: if a query against one of these models somehow
- * reaches Prisma without an organizationId, it throws rather than returning
- * another tenant's rows. A loud failure in development is worth far more than a
- * silent cross-tenant read in production.
- *
- * Findable via `prisma.$extends(requireTenantScope())`. It is exported for the
- * app to opt into per-surface rather than applied globally, because several
- * legitimate callers (migrations, admin tooling, the seeder) operate across
- * tenants by design and should not be broken by a blanket rule.
+ * The Prisma-extension guard itself lives in `lib/db/tenant-guard` — where the
+ * live client can attach it without a circular import (this module pulls in
+ * the permissions module, which uses the client). IT IS ATTACHED NOW: every
+ * query through `lib/db/prisma` passes it, in the mode `tenantGuardMode()`
+ * resolves. These re-exports keep the public surface of tenant scoping in one
+ * place for callers and tests.
  */
-export const TENANT_ANCHORED_MODELS = [
-  "Solution",
-  "Interface",
-  "ApiAccessGrant",
-  "TestCase",
-  "ConfigAudit",
-  "SapConnection",
-  "SolutionClient",
-  "NorthboundAuditEvent",
-  "MockFixture",
-  // Carries organizationId in its unique key; was missing from this list, so
-  // the guard could not see it. complete/release address rows by server-derived
-  // id (safe), but the model is tenant-anchored and the roster should say so.
-  "NorthboundIdempotencyKey",
-] as const;
-
-export type TenantAnchoredModel = (typeof TENANT_ANCHORED_MODELS)[number];
-
-/** Operations whose `where` must carry a tenant. Creates are covered separately. */
-const SCOPED_OPERATIONS = new Set([
-  "findFirst",
-  "findMany",
-  "findUnique",
-  "count",
-  "aggregate",
-  "groupBy",
-  "update",
-  "updateMany",
-  "delete",
-  "deleteMany",
-]);
-
-function whereHasOrganization(args: unknown): boolean {
-  if (!args || typeof args !== "object") return false;
-  const where = (args as { where?: unknown }).where;
-  if (!where || typeof where !== "object") return false;
-  if ("organizationId" in (where as Record<string, unknown>)) return true;
-  // A nested relation filter (e.g. { bundle: { organizationId } }) also scopes.
-  return JSON.stringify(where).includes("organizationId");
-}
-
-/**
- * The ONE query that cannot carry a tenant, and why.
- *
- * `authenticateClientToken` looks a client up BY ITS TOKEN HASH. There is no
- * organization to scope it to, because the organization is the OUTPUT of this
- * lookup — it is how an unauthenticated bearer token becomes a tenant at all.
- * Requiring a scope here would be circular.
- *
- * It is safe for exactly one reason: `SolutionClient.tokenHash` is `@unique`, so
- * this can only ever return the single row whose hash was presented. It is not a
- * scan, and it cannot be widened into one — a caller who does not already hold
- * the token learns nothing.
- *
- * Deliberately narrow: model, operation AND the exact shape of the where-clause
- * must all match. A `findUnique` on SolutionClient by anything else, or a
- * `findFirst` that happens to mention tokenHash, is not exempt. Greppable on
- * purpose — this is the only hole in the guard and it should stay findable.
- */
-function isUnscopedByDesign(model: string, operation: string, args: unknown): boolean {
-  if (model !== "SolutionClient" || operation !== "findUnique") return false;
-  if (!args || typeof args !== "object") return false;
-  const where = (args as { where?: unknown }).where;
-  if (!where || typeof where !== "object") return false;
-  const keys = Object.keys(where as Record<string, unknown>);
-  return keys.length === 1 && keys[0] === "tokenHash";
-}
-
-export class MissingTenantScopeError extends Error {
-  constructor(model: string, operation: string) {
-    super(
-      `${model}.${operation} was called without an organizationId. Tenant-anchored models must be scoped — use lib/studio/tenant-scope helpers.`,
-    );
-    this.name = "MissingTenantScopeError";
-  }
-}
-
-/**
- * Build the extension. Kept as a factory so tests can construct it without a
- * live client.
- */
-export function tenantScopeGuard() {
-  return {
-    name: "requireTenantScope",
-    query: {
-      $allModels: {
-        async $allOperations({
-          model,
-          operation,
-          args,
-          query,
-        }: {
-          model?: string;
-          operation: string;
-          args: unknown;
-          query: (args: unknown) => Promise<unknown>;
-        }) {
-          if (
-            model &&
-            (TENANT_ANCHORED_MODELS as readonly string[]).includes(model) &&
-            SCOPED_OPERATIONS.has(operation) &&
-            !whereHasOrganization(args) &&
-            !isUnscopedByDesign(model, operation, args)
-          ) {
-            throw new MissingTenantScopeError(model, operation);
-          }
-          return query(args);
-        },
-      },
-    },
-  } satisfies Prisma.Extension | Record<string, unknown>;
-}
+export {
+  MissingTenantScopeError,
+  permitCrossTenantReads,
+  crossTenantPermission,
+  TENANT_ANCHORED_MODELS,
+  tenantGuardMode,
+  tenantScopeGuard,
+  type TenantAnchoredModel,
+  type TenantGuardMode,
+} from "@/lib/db/tenant-guard";

@@ -22,6 +22,7 @@
 import * as Sentry from "@sentry/nextjs";
 
 import { prisma } from "@/lib/db/prisma";
+import { permitCrossTenantReads } from "@/lib/db/tenant-guard";
 import { sendEmail } from "@/lib/email/brevo";
 import { isDriftTransition } from "@/lib/ops/incidents";
 import { probeConnection, resolveProbePath, type ConnectionHealthStatus } from "@/lib/studio/connection-health";
@@ -79,6 +80,11 @@ async function alertDrift(
 }
 
 export async function sweepConnectionProbes(): Promise<SweepResult> {
+  // The sweep serves every tenant in one run — the fleet query below is
+  // cross-tenant BY DESIGN, declared so the attached tenant-scope guard
+  // permits it instead of being weakened for it.
+  permitCrossTenantReads("connection-probe-sweep: fleet-wide scheduled probe");
+
   // Every active connection, grouped by (org, product) so secrets are opened
   // through the same resolver every other read path uses.
   const rows = await prisma.sapConnection.findMany({

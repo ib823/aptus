@@ -9,6 +9,18 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/help/developer-guide": ["./docs/coreedge-developer-guide.md"],
   },
+  webpack(config, { isServer }) {
+    if (!isServer) {
+      // The tenant-scope guard (lib/db/tenant-guard) uses AsyncLocalStorage to
+      // carry declared cross-tenant contexts. Several client components import
+      // modules that transitively reach lib/db/prisma (a long-standing pattern
+      // that works because @prisma/client ships a browser stub); async_hooks
+      // has no browser build, so it resolves to an empty module on the client
+      // and the guard degrades to inert there — where no query ever runs.
+      config.resolve.fallback = { ...config.resolve.fallback, async_hooks: false };
+    }
+    return config;
+  },
   serverExternalPackages: [
     "exceljs",
     "mammoth",
