@@ -28,6 +28,7 @@ import { StudioShell } from "@/components/studio/StudioShell";
 import { type StudioTenantOption } from "@/components/studio/StudioTopBar";
 import { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenants";
 import { getCurrentUser } from "@/lib/auth/session";
+import { isAdminRole } from "@/lib/auth/permissions";
 import { accessibleWorkspaces, canAccessOperations, lacksStudioTenantScope } from "@/lib/studio/rbac";
 import { pickActiveTenant, resolveStudioTenants } from "@/lib/studio/tenants";
 import { ROLE_LABELS } from "@/types/assessment";
@@ -65,10 +66,17 @@ export default async function OperationsLayout({ children }: { children: ReactNo
   const remembered = cookieStore.get(STUDIO_TENANT_COOKIE)?.value ?? null;
   const activeTenantKey = pickActiveTenant(resolved, remembered);
 
+  // Admin-only sections (Catalogue health, deployment-scoped) are removed from
+  // the rail rather than rendered-and-refused: an org-scoped operator must not
+  // be shown an entry the screen will always turn away.
+  const sections = isAdminRole(user.role)
+    ? OPERATIONS_SECTIONS
+    : OPERATIONS_SECTIONS.filter((s) => !s.adminOnly);
+
   return (
     <StudioShell
       accessibleWorkspaces={accessibleWorkspaces(user.role)}
-      sections={OPERATIONS_SECTIONS}
+      sections={sections}
       activeWorkspace="operations-center"
       tenants={tenants}
       activeTenantKey={activeTenantKey}

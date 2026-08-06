@@ -242,6 +242,27 @@ const PROSE: Record<string, ScreenProse> = {
     ],
   },
 
+  "operations-center/catalogue": {
+    answers:
+      "How current the deployment's shared SAP catalogue is, per content type, with each import's provenance — and the guided, file-based path to refresh it.",
+    cannotTell: [
+      "Anything about one organization's estate. The catalogue is one table serving every organization, which is why this screen is platform-admin-gated rather than tenant-scoped.",
+      "Whether any catalogue item is active on a tenant. Loaded counts are import facts; activation is established only by a probe against a tenant, recorded elsewhere.",
+    ],
+    misreadings: [
+      {
+        seeing: "A loaded count below the published reference",
+        means:
+          "Expected, not a defect. Every harvest is self-declared a floor — it counts what the anonymous catalogue walk could reach — and the reference figures move with each SAP release.",
+      },
+      {
+        seeing: '"Stale"',
+        means:
+          "The newest row write is older than the printed staleness constant — one SAP half-yearly release cycle — so the snapshot is at least one release behind by construction. It says nothing about whether the rows it does hold are wrong.",
+      },
+    ],
+  },
+
   /* ─────────────────────────── Control Tower ────────────────────────────── */
 
   "control-tower/home": {
