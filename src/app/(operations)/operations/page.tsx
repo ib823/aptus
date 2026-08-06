@@ -153,10 +153,10 @@ export default function OperationsHomePage() {
           }}
         >
           No secrets, tokens, hashes or SAP hostnames appear anywhere here — a sealed secret&apos;s
-          presence may be shown as a yes or no, never its value. There is no catalogue-freshness
-          view: the underlying table has no tenant column, so an organization-scoped version would
-          return nothing for every organization while appearing to work. It returns if a
-          deployment-scoped one is built.
+          presence may be shown as a yes or no, never its value. Catalogue health exists but is
+          deployment-scoped and platform-admin-gated: the catalogue is one table serving every
+          organization, so an organization-scoped version would return nothing for everyone while
+          appearing to work — which is why it appears on the rail only for platform administrators.
         </p>
       </section>
     </div>

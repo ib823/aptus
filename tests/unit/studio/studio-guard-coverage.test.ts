@@ -93,6 +93,11 @@ const DEPLOYMENT_SCOPED_ALLOWANCES: ReadonlyArray<{ file: string; models: string
       models: ["cronRunLog"],
       why: "Reads the job log for the Operations jobs strip. Summaries are aggregate counts and never name a tenant.",
     },
+    {
+      file: "src/app/api/ops/catalogue-health/route.ts",
+      models: ["sapHubContent", "cronRunLog"],
+      why: "SapHubContent is the deployment-wide catalogue (no organization column — see FRESHNESS-RESPEC.md); the route is platform_admin-gated via requireAdmin rather than tenant-scoped.",
+    },
   ];
 
 /** Every balanced `select: { … }` in a source file. */
