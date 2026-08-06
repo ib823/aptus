@@ -150,10 +150,17 @@ model VerdictScopeItem {
 // Buyer-side stakeholders access a filtered view of an assessment without
 // needing a full account. Auth is via signed share-link token.
 model AssessmentShareLink {
-  id             String    @id @default(cuid())
-  assessmentId   String
-  token          String    @unique // urlsafe base64; the share URL slug
-  createdBy      String
+  id           String @id @default(cuid())
+  assessmentId String
+  /// LEGACY plaintext slug — null for links issued after token hashing landed.
+  /// Kept for the dual-read window only: a legacy row upgrades (hash written,
+  /// plaintext nulled) on its first successful use, and revocation retires the
+  /// rest. A readable token column was a database that could leak usable links.
+  token        String? @unique
+  /// SHA-256 hex of the raw token. The raw value lives only in the URL the
+  /// issuer copied; a database read cannot become a share link.
+  tokenHash    String? @unique
+  createdBy    String
   createdAt      DateTime  @default(now())
   expiresAt      DateTime?
   revokedAt      DateTime?
