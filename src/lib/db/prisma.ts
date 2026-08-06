@@ -30,6 +30,13 @@ function buildClient(): PrismaClient {
   const base = new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
+  // SERVER ONLY. Client bundles reach this module through long-standing
+  // value-import chains (e.g. ProductMapTable → product-map → prisma), where
+  // @prisma/client resolves to a browser stub whose constructor tolerates
+  // being bundled but which has no $extends — calling it crashed every page
+  // whose client chunk pulled this module in. No query can run in a browser
+  // bundle, so there is nothing for the guard to guard there.
+  if (typeof window !== "undefined") return base;
   return base.$extends(tenantScopeGuard()) as unknown as PrismaClient;
 }
 
