@@ -21,6 +21,7 @@ import type { $Enums } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { opsWhere, opsWindowHours, requireOperations } from "@/lib/ops/guard";
 import {
+  countDriftingConnections,
   COUNTED_BINDING_REFUSALS,
   deriveIncidents,
   INCIDENT_RULES,
@@ -61,6 +62,7 @@ export async function GET(request: NextRequest) {
     unboundedGrants,
     credentialsWithoutExpiry,
     unaccountableProdGrants,
+    probeEventsInWindow,
   ] = await Promise.all([
       // Calls the broker REFUSED because it could not bind them to a connection
       // for their environment. This replaces a comparison of two columns that the
@@ -152,7 +154,31 @@ export async function GET(request: NextRequest) {
           },
         }),
       }),
+      // The probe HISTORY, oldest first — the substrate for connection-drift.
+      // The standing state (`connection-unhealthy`) reads the summary column;
+      // the transition can only be read from the event sequence.
+      prisma.sapConnectionProbeEvent.findMany({
+        where: opsWhere(guard.actor, { at: { gte: since } }),
+        select: { connectionId: true, status: true },
+        orderBy: { at: "asc" },
+      }),
     ]);
+
+  // Each drifted connection's latest probe BEFORE the window, so a transition
+  // straddling the window edge is not missed. `distinct` after `orderBy: desc`
+  // keeps exactly the newest prior event per connection.
+  const priorProbeEvents =
+    probeEventsInWindow.length > 0
+      ? await prisma.sapConnectionProbeEvent.findMany({
+          where: opsWhere(guard.actor, {
+            at: { lt: since },
+            connectionId: { in: [...new Set(probeEventsInWindow.map((e) => e.connectionId))] },
+          }),
+          select: { connectionId: true, status: true },
+          orderBy: { at: "desc" },
+          distinct: ["connectionId"],
+        })
+      : [];
 
   const incidents = deriveIncidents({
     bindingRefusals,
@@ -164,6 +190,7 @@ export async function GET(request: NextRequest) {
     unboundedGrants,
     credentialsWithoutExpiry,
     unaccountableProdGrants,
+    driftingConnections: countDriftingConnections(probeEventsInWindow, priorProbeEvents),
   });
 
   return studioOk({

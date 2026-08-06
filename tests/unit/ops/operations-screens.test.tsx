@@ -81,7 +81,8 @@ const NO_INCIDENTS = {
 
 const EMPTY_TRAFFIC = {
   windowHours: 24,
-  counts: { total: 0, byStatus: {} },
+  filters: { solutionId: null, environment: null, connectionId: null },
+  counts: { total: 0, byStatus: {}, bySolution: {} },
   latency: { medianMs: null, measured: 0, unmeasured: 0, basis: "returnedPage", sampleSize: 0 },
   environmentBinding: { agreed: 0, unverified: 0, mismatch: 0, notApplicable: 0 },
   truncated: false,
@@ -296,7 +297,7 @@ describe("broker traffic — the counts and the page are different things", () =
     serve({
       "/api/ops/broker-traffic": {
         ...EMPTY_TRAFFIC,
-        counts: { total: 5000, byStatus: { ok: 5000 } },
+        counts: { total: 5000, byStatus: { ok: 5000 }, bySolution: {} },
         provenance: { ...EMPTY_TRAFFIC.provenance, eventsAreAPage: { returned: 2, limit: 100, of: 5000 } },
         events: [1, 2].map((n) => ({
           id: `e${n}`,
@@ -325,7 +326,7 @@ describe("broker traffic — the counts and the page are different things", () =
     serve({
       "/api/ops/broker-traffic": {
         ...EMPTY_TRAFFIC,
-        counts: { total: 4182, byStatus: { ok: 4182 } },
+        counts: { total: 4182, byStatus: { ok: 4182 }, bySolution: {} },
         latency: { medianMs: 412, measured: 100, unmeasured: 0, basis: "returnedPage", sampleSize: 100 },
         provenance: { ...EMPTY_TRAFFIC.provenance, eventsAreAPage: { returned: 100, limit: 100, of: 4182 } },
       },
@@ -353,7 +354,7 @@ describe("broker traffic — the counts and the page are different things", () =
     serve({
       "/api/ops/broker-traffic": {
         ...EMPTY_TRAFFIC,
-        counts: { total: 12, byStatus: { needs_setup: 12 } },
+        counts: { total: 12, byStatus: { needs_setup: 12 }, bySolution: {} },
         environmentBinding: { agreed: 0, unverified: 0, mismatch: 0, notApplicable: 12 },
         provenance: { ...EMPTY_TRAFFIC.provenance, eventsAreAPage: { returned: 0, limit: 100, of: 12 } },
       },

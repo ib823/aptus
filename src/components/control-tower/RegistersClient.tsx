@@ -30,7 +30,7 @@ import {
   opsMonoStyle,
   type OpsTone,
 } from "@/components/ops/OpsChrome";
-import { count, sinceLabel, useOpsFeed } from "@/components/ops/useOpsFeed";
+import { count, FeedAsAt, sinceLabel, useOpsFeed } from "@/components/ops/useOpsFeed";
 import { ProductLabel } from "@/components/sap/ProductLabel";
 import {
   DelegatedAction,
@@ -88,7 +88,7 @@ const CRED_STATE: Record<RegisterCredential["state"], OpsTone> = {
 };
 
 export function CredentialRegisterClient() {
-  const { feed } = useOpsFeed<CredentialsPayload>("/api/control-tower/tokens");
+  const { feed, fetchedAt } = useOpsFeed<CredentialsPayload>("/api/control-tower/tokens");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -96,6 +96,7 @@ export function CredentialRegisterClient() {
         title="Credential register"
         lede="Every runtime credential ever issued, and whether issuing it was accountable. Issuance requires all three owners and refuses anyone who is themselves an owner — this is where a reviewer confirms that held."
       />
+      <FeedAsAt fetchedAt={fetchedAt} />
 
       {feed.state === "loading" ? (
         <OpsCard>
@@ -263,7 +264,7 @@ interface ConnectionsPayload {
 }
 
 export function ConnectionRegisterClient() {
-  const { feed } = useOpsFeed<ConnectionsPayload>("/api/control-tower/connections");
+  const { feed, fetchedAt } = useOpsFeed<ConnectionsPayload>("/api/control-tower/connections");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -271,6 +272,7 @@ export function ConnectionRegisterClient() {
         title="Connection register"
         lede="Every SAP connection in the estate, active or not — which landscape it claims to be, and who may write through it. This is the governance view; live probe health is in the Operations Center."
       />
+      <FeedAsAt fetchedAt={fetchedAt} />
 
       {feed.state === "loading" ? (
         <OpsCard>

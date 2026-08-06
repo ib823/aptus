@@ -33,7 +33,7 @@ import {
   opsMonoStyle,
   type OpsTone,
 } from "@/components/ops/OpsChrome";
-import { count, sinceLabel, useOpsFeed, OpsWindowPicker } from "@/components/ops/useOpsFeed";
+import { count, FeedAsAt, OpsWindowPicker, sinceLabel, useOpsFeed } from "@/components/ops/useOpsFeed";
 import { formatDateTime } from "@/lib/format/date";
 
 interface Entry {
@@ -96,7 +96,7 @@ export function AuditClient() {
   const [entityType, setEntityType] = useState<string | null>(null);
   const [windowHours, setWindowHours] = useState(AUDIT_DEFAULT_WINDOW_HOURS);
   const query = entityType ? `?entityType=${encodeURIComponent(entityType)}` : "";
-  const { feed } = useOpsFeed<AuditPayload>(`/api/control-tower/audit${query}`, windowHours);
+  const { feed, fetchedAt } = useOpsFeed<AuditPayload>(`/api/control-tower/audit${query}`, windowHours);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -104,6 +104,7 @@ export function AuditClient() {
         title="Governance audit"
         lede="Every change to governed configuration — who made it and when. Append-only: no entry can be amended, including from here."
       />
+      <FeedAsAt fetchedAt={fetchedAt} />
 
       {feed.state === "loading" ? (
         <OpsCard>

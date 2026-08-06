@@ -30,13 +30,7 @@ import {
   opsMonoStyle,
   type OpsTone,
 } from "@/components/ops/OpsChrome";
-import {
-  DEFAULT_OPS_WINDOW_HOURS,
-  OpsWindowPicker,
-  count,
-  sinceLabel,
-  useOpsFeed,
-} from "@/components/ops/useOpsFeed";
+import { count, DEFAULT_OPS_WINDOW_HOURS, FeedAsAt, OpsWindowPicker, sinceLabel, useOpsFeed } from "@/components/ops/useOpsFeed";
 
 interface ReservationRow {
   id: string;
@@ -98,7 +92,7 @@ const RESERVATION: Record<ReservationRow["state"], { tone: OpsTone; label: strin
 
 export function WriteLedgerClient() {
   const [windowHours, setWindowHours] = useState(DEFAULT_OPS_WINDOW_HOURS);
-  const { feed } = useOpsFeed<LedgerPayload>("/api/ops/write-ledger", windowHours);
+  const { feed, fetchedAt } = useOpsFeed<LedgerPayload>("/api/ops/write-ledger", windowHours);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -106,6 +100,7 @@ export function WriteLedgerClient() {
         title="Write ledger"
         lede="Idempotency reservations, and the writes refused before one was made. These are two different records of two different things — they will not add up, and the reason is stated below rather than left to be discovered."
       />
+      <FeedAsAt fetchedAt={fetchedAt} />
 
       {feed.state === "loading" ? (
         <OpsCard>

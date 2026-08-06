@@ -38,6 +38,7 @@ import {
 } from "@/components/ops/OpsChrome";
 import {
   DEFAULT_OPS_WINDOW_HOURS,
+  FeedAsAt,
   OpsWindowPicker,
   count,
   useOpsFeed,
@@ -61,7 +62,12 @@ interface TrafficEvent {
 
 interface TrafficPayload {
   windowHours: number;
-  counts: { total: number; byStatus: Record<string, number> };
+  filters: {
+    solutionId: string | null;
+    environment: string | null;
+    connectionId: string | null;
+  };
+  counts: { total: number; byStatus: Record<string, number>; bySolution: Record<string, number> };
   latency: {
     medianMs: number | null;
     measured: number;
@@ -98,9 +104,30 @@ const OUTCOME: Record<string, { tone: OpsTone; label: string; meaning: string }>
   error: { tone: "bad", label: "error", meaning: "5xx from the tenant or the broker" },
 };
 
-export function BrokerTrafficClient() {
-    const [windowHours, setWindowHours] = useState(DEFAULT_OPS_WINDOW_HOURS);
-const { feed } = useOpsFeed<TrafficPayload>("/api/ops/broker-traffic", windowHours);
+/** The closed credential-environment vocabulary, as the grant/credential forms use it. */
+const FILTER_ENVIRONMENTS = ["SANDBOX", "DEV", "TEST", "PROD"] as const;
+
+export function BrokerTrafficClient({
+  initialConnectionId = null,
+}: {
+  /** From the URL — the cross-link a failing connection row carries. */
+  initialConnectionId?: string | null;
+}) {
+  const [windowHours, setWindowHours] = useState(DEFAULT_OPS_WINDOW_HOURS);
+  // The filters the endpoint always accepted and the screen never offered:
+  // during an investigation "just this solution's calls" and "just this
+  // environment" were expressible only by hand-editing the API URL.
+  const [solutionId, setSolutionId] = useState<string>("");
+  const [environment, setEnvironment] = useState<string>("");
+  const [connectionId, setConnectionId] = useState<string | null>(initialConnectionId);
+
+  const query = new URLSearchParams();
+  if (solutionId) query.set("solutionId", solutionId);
+  if (environment) query.set("environment", environment);
+  if (connectionId) query.set("connectionId", connectionId);
+  const path = query.size > 0 ? `/api/ops/broker-traffic?${query.toString()}` : "/api/ops/broker-traffic";
+
+  const { feed, fetchedAt } = useOpsFeed<TrafficPayload>(path, windowHours);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -108,6 +135,7 @@ const { feed } = useOpsFeed<TrafficPayload>("/api/ops/broker-traffic", windowHou
         title="Broker traffic"
         lede="Every northbound call this organization made, as the audit trail recorded it. The counts are for the whole window; the list below is the newest page of it."
       />
+      <FeedAsAt fetchedAt={fetchedAt} />
 
       {feed.state === "loading" ? (
         <OpsCard>
@@ -122,7 +150,16 @@ const { feed } = useOpsFeed<TrafficPayload>("/api/ops/broker-traffic", windowHou
           />
         </OpsCard>
       ) : (
-        <TrafficBody data={feed.data} onWindowChange={setWindowHours} />
+        <TrafficBody
+          data={feed.data}
+          onWindowChange={setWindowHours}
+          solutionId={solutionId}
+          onSolutionChange={setSolutionId}
+          environment={environment}
+          onEnvironmentChange={setEnvironment}
+          connectionId={connectionId}
+          onClearConnection={() => setConnectionId(null)}
+        />
       )}
     </div>
   );
@@ -131,19 +168,112 @@ const { feed } = useOpsFeed<TrafficPayload>("/api/ops/broker-traffic", windowHou
 function TrafficBody({
   data,
   onWindowChange,
+  solutionId,
+  onSolutionChange,
+  environment,
+  onEnvironmentChange,
+  connectionId,
+  onClearConnection,
 }: {
   data: TrafficPayload;
   onWindowChange: (hours: number) => void;
+  solutionId: string;
+  onSolutionChange: (v: string) => void;
+  environment: string;
+  onEnvironmentChange: (v: string) => void;
+  connectionId: string | null;
+  onClearConnection: () => void;
 }) {
   const { counts, latency, environmentBinding: eb, provenance, events, windowHours } = data;
   const page = provenance.eventsAreAPage;
 
+  // The selected solution stays listed even when the filtered window no longer
+  // contains it — otherwise selecting a quiet solution would delete the only
+  // control that could unselect it.
+  const solutionOptions = [
+    ...new Set([...Object.keys(counts.bySolution), ...(solutionId ? [solutionId] : [])]),
+  ].sort();
+
+  const selectStyle: React.CSSProperties = {
+    fontSize: 12.5,
+    padding: "3px 7px",
+    borderRadius: 6,
+    border: "1px solid var(--border-default)",
+    background: "var(--surface-paper)",
+    color: "var(--ink-primary)",
+  };
+
   return (
     <>
-      {/* The window control. Every ops feed accepted ?hours= and clamped it;
-          the screens simply never sent one, so all four were hard-wired to 24
-          hours with no way to widen during an investigation. */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+      {/* The window and filter controls. Every ops feed accepted ?hours=,
+          ?solutionId= and ?environment= and clamped them; the screens simply
+          never sent them, so an investigation could not narrow the view without
+          hand-editing the API URL. */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          gap: 14,
+          marginBottom: 8,
+          flexWrap: "wrap",
+        }}
+      >
+        {connectionId ? (
+          // The cross-link's fact, stated and clearable: these counts are ONE
+          // connection's traffic, not the organization's.
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5 }}>
+            <OpsChip
+              tone="info"
+              label={`connection ${connectionId.slice(0, 10)}…`}
+              meaning="only calls served through this connection are counted and listed"
+            />
+            <button
+              type="button"
+              onClick={onClearConnection}
+              style={{
+                fontSize: 12,
+                border: "none",
+                background: "none",
+                color: "var(--brand-navy)",
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              clear
+            </button>
+          </span>
+        ) : null}
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5 }}>
+          <span style={{ color: "var(--ink-secondary)" }}>Solution</span>
+          <select
+            value={solutionId}
+            onChange={(e) => onSolutionChange(e.target.value)}
+            style={selectStyle}
+          >
+            <option value="">all</option>
+            {solutionOptions.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5 }}>
+          <span style={{ color: "var(--ink-secondary)" }}>Environment</span>
+          <select
+            value={environment}
+            onChange={(e) => onEnvironmentChange(e.target.value)}
+            style={selectStyle}
+          >
+            <option value="">all</option>
+            {FILTER_ENVIRONMENTS.map((e) => (
+              <option key={e} value={e}>
+                {e}
+              </option>
+            ))}
+          </select>
+        </label>
         <OpsWindowPicker id="ops-window-traffic" hours={windowHours} onChange={onWindowChange} />
       </div>
       <OpsCard>
@@ -202,10 +332,16 @@ function TrafficBody({
             label={`unverified · ${count(eb.unverified)}`}
             meaning="the connection had not declared its landscape"
           />
+          {/* HISTORICAL ROWS ONLY, and the label says so. The binding guarantee
+              made a fresh mismatch impossible — the resolver refuses instead of
+              serving across landscapes — so a non-zero here is rows written
+              BEFORE that fix, not something happening now. Retiring the chip
+              would hide those rows; showing it uncaveated would imply a live
+              defect. */}
           <OpsChip
-            tone="bad"
-            label={`mismatch · ${count(eb.mismatch)}`}
-            meaning="served from a landscape other than the credential declared"
+            tone={eb.mismatch > 0 ? "bad" : "muted"}
+            label={`mismatch · ${count(eb.mismatch)} (historical rows only)`}
+            meaning="served from a landscape other than the credential declared — only possible in rows written before the binding guarantee; the broker now refuses instead"
           />
           <OpsChip
             tone="muted"
