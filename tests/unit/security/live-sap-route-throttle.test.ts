@@ -24,10 +24,28 @@ describe("isLiveSapTenantRoute — throttles everything that hits the tenant", (
     expect(isLiveSapTenantRoute("/api/sap/tdd/preview")).toBe(true);
   });
 
-  it("does NOT throttle stored-only catalogue reads (no tenant amplification)", () => {
-    // hub-content list/detail read Postgres, not the tenant → normal apiRead bucket.
-    expect(isLiveSapTenantRoute("/api/sap/tdd/hub-content")).toBe(false);
-    expect(isLiveSapTenantRoute("/api/sap/tdd/hub-content/hc_1")).toBe(false);
+  it("throttles the catalogue routes that CAN go live", () => {
+    /*
+     * THE OLD PREMISE HERE WAS FALSE AND THIS TEST PINNED IT. "hub-content
+     * list/detail read Postgres, not the tenant" was true of the default load
+     * and not of the surface: ?dataProbe=1 on the list fires up to 60 live
+     * $metadata probes plus 60 one-row data reads, the detail live-probes on
+     * every expansion unless probe=0, and /capabilities probes ~60 services
+     * per call. The predicate is pathname-only by design, so a route that can
+     * go live takes the bucket on every call — a caller must not dodge the
+     * throttle by the param it omits.
+     */
+    expect(isLiveSapTenantRoute("/api/sap/tdd/hub-content")).toBe(true);
+    expect(isLiveSapTenantRoute("/api/sap/tdd/hub-content/hc_1")).toBe(true);
+    expect(isLiveSapTenantRoute("/api/sap/tdd/capabilities")).toBe(true);
+    expect(isLiveSapTenantRoute("/api/sap/ariba/call")).toBe(true);
+  });
+
+  it("does NOT throttle the admin import endpoints under the same prefix", () => {
+    // seed/harvest-import are DB-only, and harvest-import is a rapid client-
+    // driven chunk loop that a 20/min bucket would break mid-import.
+    expect(isLiveSapTenantRoute("/api/sap/tdd/hub-content/seed")).toBe(false);
+    expect(isLiveSapTenantRoute("/api/sap/tdd/hub-content/harvest-import")).toBe(false);
     expect(isLiveSapTenantRoute("/api/assessments")).toBe(false);
   });
 });

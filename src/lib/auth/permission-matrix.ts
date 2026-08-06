@@ -70,21 +70,31 @@ const ALL_ACTIONS: PermissionAction[] = [
   "admin.accessPanel",
 ];
 
-/** Permission sets for each role */
+/**
+ * Permission sets for each role.
+ *
+ * RECONCILED WITH ROLE_CAPABILITIES (lib/auth/role-permissions), which is the
+ * matrix most guards actually enforce. The two grew independently and
+ * contradicted each other on most roles — partner_lead held every register
+ * and sign-off action here while the capabilities file denied all of them;
+ * executive_sponsor could transition an assessment on one path and not the
+ * other. Two authorization sources that disagree means the answer depends on
+ * which door you knock on. Where both speak to the same question the
+ * CAPABILITIES file won (it is the enforced one), and
+ * tests/unit/auth/permission-source-reconciliation.test.ts fails the build on
+ * the next divergence. Actions with no capability axis (scope, notes,
+ * workshops, reports, profile) keep their original grants.
+ */
 export const PERMISSION_MATRIX: Record<UserRole, Set<PermissionAction>> = {
   platform_admin: new Set(ALL_ACTIONS),
 
   partner_lead: new Set([
-    "assessment.create", "assessment.view", "assessment.edit", "assessment.transition",
+    "assessment.create", "assessment.view", "assessment.edit", "assessment.delete", "assessment.transition",
     "profile.edit", "scope.edit", "scope.bulkSelect",
-    "step.classify", "step.addNote",
-    "gap.create", "gap.edit", "gap.approve", "gap.addAlternative",
-    "integration.create", "integration.edit", "integration.delete", "integration.approve",
-    "dataMigration.create", "dataMigration.edit", "dataMigration.delete", "dataMigration.approve",
-    "ocm.create", "ocm.edit", "ocm.delete", "ocm.approve",
+    "step.addNote",
+    "org.manage",
     "user.invite", "user.deactivate", "user.changeRole",
     "report.view", "report.export",
-    "signoff.execute",
     "workshop.create", "workshop.facilitate",
   ]),
 
@@ -93,28 +103,26 @@ export const PERMISSION_MATRIX: Record<UserRole, Set<PermissionAction>> = {
     "profile.edit", "scope.edit", "scope.bulkSelect",
     "step.classify", "step.addNote",
     "gap.create", "gap.edit", "gap.approve", "gap.addAlternative",
-    "integration.create", "integration.edit", "integration.delete", "integration.approve",
+    "integration.create", "integration.edit", "integration.approve",
     "dataMigration.create", "dataMigration.edit", "dataMigration.delete", "dataMigration.approve",
     "ocm.create", "ocm.edit", "ocm.delete", "ocm.approve",
     "report.view", "report.export",
+    "signoff.execute",
     "workshop.create", "workshop.facilitate",
   ]),
 
   project_manager: new Set([
-    "assessment.view", "assessment.transition",
+    "assessment.view",
     "scope.edit",
     "step.addNote",
-    "gap.approve",
-    "ocm.create", "ocm.edit",
     "report.view", "report.export",
     "workshop.create",
   ]),
 
   solution_architect: new Set([
     "assessment.view",
-    "step.addNote",
-    "gap.addAlternative",
-    "integration.create", "integration.edit",
+    "step.classify", "step.addNote",
+    "gap.create", "gap.edit", "gap.addAlternative",
     "report.view", "report.export",
     "workshop.create", "workshop.facilitate",
   ]),
@@ -123,15 +131,12 @@ export const PERMISSION_MATRIX: Record<UserRole, Set<PermissionAction>> = {
     "assessment.view",
     "step.classify",
     "step.addNote",
-    "gap.approve",
-    "ocm.create",
-    "ocm.edit",
     "report.view",
   ]),
 
   it_lead: new Set([
     "assessment.view",
-    "step.addNote",
+    "step.classify", "step.addNote",
     "integration.create", "integration.edit",
     "dataMigration.create", "dataMigration.edit",
     "report.view", "report.export",
@@ -144,8 +149,7 @@ export const PERMISSION_MATRIX: Record<UserRole, Set<PermissionAction>> = {
   ]),
 
   executive_sponsor: new Set([
-    "assessment.view",
-    "gap.approve",
+    "assessment.view", "assessment.transition",
     "report.view", "report.export",
     "signoff.execute",
   ]),
@@ -157,6 +161,7 @@ export const PERMISSION_MATRIX: Record<UserRole, Set<PermissionAction>> = {
 
   client_admin: new Set([
     "assessment.view",
+    "org.manage",
     "user.invite", "user.deactivate",
     "report.view",
   ]),

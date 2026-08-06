@@ -20,7 +20,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // A preview is a LIVE READ of a customer tenant, not a catalogue lookup, so
   // the gate is a role and not merely a session. See refuseUnlessMayProbeTenant.
-  const refusal = await refuseUnlessMayProbeTenant(product.envPrefix);
+  const refusal = await refuseUnlessMayProbeTenant();
   if (refusal) return refusal;
 
   const tenantKey = request.nextUrl.searchParams.get("tenant") ?? "";

@@ -211,7 +211,7 @@ const PROSE: Record<string, ScreenProse> = {
       {
         seeing: "A completely empty ledger",
         means:
-          "By design in this release: no write credential can be issued yet, so every write is refused at the credential gate before a key is reserved. It is a control working, not a screen failing.",
+          "No solution in scope performed a write in this window. Writes are live — a write key issued in Developer Studio against an approved write grant, plus a mandatory Idempotency-Key — so an empty ledger is quiet, not disabled. A write refused at any gate before reservation appears in the audit feed, never here.",
       },
     ],
   },
@@ -238,6 +238,27 @@ const PROSE: Record<string, ScreenProse> = {
         seeing: "Counts that do not sum",
         means:
           "Revoked is counted over every credential; the rest are counted over the rows listed, which exclude revoked ones by default. The response says so rather than reconciling them into one wrong number.",
+      },
+    ],
+  },
+
+  "operations-center/catalogue": {
+    answers:
+      "How current the deployment's shared SAP catalogue is, per content type, with each import's provenance — and the guided, file-based path to refresh it.",
+    cannotTell: [
+      "Anything about one organization's estate. The catalogue is one table serving every organization, which is why this screen is platform-admin-gated rather than tenant-scoped.",
+      "Whether any catalogue item is active on a tenant. Loaded counts are import facts; activation is established only by a probe against a tenant, recorded elsewhere.",
+    ],
+    misreadings: [
+      {
+        seeing: "A loaded count below the published reference",
+        means:
+          "Expected, not a defect. Every harvest is self-declared a floor — it counts what the anonymous catalogue walk could reach — and the reference figures move with each SAP release.",
+      },
+      {
+        seeing: '"Stale"',
+        means:
+          "The newest row write is older than the printed staleness constant — one SAP half-yearly release cycle — so the snapshot is at least one release behind by construction. It says nothing about whether the rows it does hold are wrong.",
       },
     ],
   },
@@ -319,6 +340,22 @@ const PROSE: Record<string, ScreenProse> = {
         seeing: "Issued by an owner, non-zero",
         means:
           "A control that did not hold for that row. Issuance refuses an owner, so this should be zero and a non-zero is worth investigating rather than dismissing.",
+      },
+    ],
+  },
+
+  "control-tower/usage": {
+    answers:
+      "How much CoreEdge broker traffic each day carried, from the nightly rollups — the consumption record pricing will be chosen from.",
+    cannotTell: [
+      "True total traffic. The rollups inherit the audit feed's floor: calls throttled at the edge, timed out before the audit write, or whose audit write failed leave no row, so these numbers under-count in the customer's favour.",
+      "Anything about billing. No payment processor is wired; nothing on this screen charges anyone.",
+    ],
+    misreadings: [
+      {
+        seeing: "A missing day",
+        means:
+          "The nightly rollup has not covered it yet — nothing on this screen aggregates the audit table live, so absence means not-yet-rolled-up, never zero traffic.",
       },
     ],
   },

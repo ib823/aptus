@@ -121,6 +121,7 @@ describe("a genuine retry", () => {
   it("replays the recorded outcome instead of writing again", async () => {
     // The whole point: SAP is not touched a second time.
     mocks.findUnique.mockResolvedValue({
+      interfaceId: "if_1",
       id: "idem_1",
       requestHash: hashRequest(PAYLOAD),
       status: 201,
@@ -141,6 +142,7 @@ describe("a genuine retry", () => {
     // tenant already refused.
     mocks.findUnique.mockResolvedValue({
       id: "idem_1",
+      interfaceId: "if_1",
       requestHash: hashRequest(PAYLOAD),
       status: 403,
       responseBody: { error: { code: "FORBIDDEN" } },
@@ -170,6 +172,7 @@ describe("misuse of a key", () => {
 
   it("reports a still-running request rather than starting a second write", async () => {
     mocks.findUnique.mockResolvedValue({
+      interfaceId: "if_1",
       id: "idem_1",
       requestHash: hashRequest(PAYLOAD),
       status: null,
@@ -194,6 +197,7 @@ describe("misuse of a key", () => {
 describe("expiry", () => {
   it("treats an expired key as fresh — it is not a retry of anything", async () => {
     mocks.findUnique.mockResolvedValue({
+      interfaceId: "if_1",
       id: "idem_1",
       requestHash: hashRequest({ old: true }),
       status: 201,
@@ -209,6 +213,7 @@ describe("expiry", () => {
     // different request. `undefined` would have done exactly that, because to
     // Prisma it means "leave the column alone".
     mocks.findUnique.mockResolvedValue({
+      interfaceId: "if_1",
       id: "idem_1",
       requestHash: hashRequest({ old: true }),
       status: 201,
@@ -225,7 +230,7 @@ describe("expiry", () => {
 
 describe("recording the outcome", () => {
   it("stores the status and body for a later replay", async () => {
-    await completeIdempotencyKey("idem_1", 201, { created: true });
+    await completeIdempotencyKey(SCOPE, "idem_1", 201, { created: true });
     const data = mocks.update.mock.calls[0]?.[0]?.data as Record<string, unknown>;
     expect(data.status).toBe(201);
     expect(data.responseBody).toEqual({ created: true });
@@ -236,7 +241,7 @@ describe("recording the outcome", () => {
     // outcome. Failing here degrades to IN_FLIGHT on retry, which fails SAFE:
     // it does not write twice.
     mocks.update.mockRejectedValue(new Error("db down"));
-    await expect(completeIdempotencyKey("idem_1", 201, {})).resolves.toBeUndefined();
+    await expect(completeIdempotencyKey(SCOPE, "idem_1", 201, {})).resolves.toBeUndefined();
   });
 });
 
@@ -244,12 +249,13 @@ describe("releasing a reservation", () => {
   it("removes a key whose request never reached SAP", async () => {
     // Otherwise a client that fixed their payload and retried with the same key
     // would be told it is in flight forever.
-    await releaseIdempotencyKey("idem_1");
-    expect(mocks.del).toHaveBeenCalledWith({ where: { id: "idem_1" } });
+    await releaseIdempotencyKey(SCOPE, "idem_1");
+    // The tenant travels with the mutation — the model is tenant-anchored.
+    expect(mocks.del).toHaveBeenCalledWith({ where: { id: "idem_1", organizationId: "org_a" } });
   });
 
   it("never throws", async () => {
     mocks.del.mockRejectedValue(new Error("gone"));
-    await expect(releaseIdempotencyKey("idem_1")).resolves.toBeUndefined();
+    await expect(releaseIdempotencyKey(SCOPE, "idem_1")).resolves.toBeUndefined();
   });
 });

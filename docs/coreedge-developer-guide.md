@@ -132,6 +132,21 @@ carried all the way from the probe to the generated client.
 
 ---
 
+## Interface status and reads
+
+Reads check the interface's status too, asymmetrically and on purpose:
+
+- **`DRAFT`** is served. A draft read is merely premature — but you are told:
+  the response carries `x-coreedge-interface-status: DRAFT`, and discovery
+  returns the status per interface, so building against an unfinished contract
+  is a choice you make knowingly, never a fact you were denied.
+- **`DEPRECATED`** is refused (`INTERFACE_DEPRECATED`). Deprecation is the
+  builder's statement that new traffic should stop; an interface kept for the
+  record must not quietly keep serving it. Discovery agrees: a deprecated
+  interface is never advertised as callable.
+
+---
+
 ## Writing to SAP
 
 Writes are supported, and deliberately harder to reach than reads. Five things

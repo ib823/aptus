@@ -134,12 +134,13 @@ export default function ControlTowerHomePage() {
             color: "var(--ink-secondary)",
           }}
         >
-          One thing: settling an access request, and only a platform admin may do it. Everything else
-          is observation. Rotating a credential and enabling write on a connection are real
-          capabilities that belong to the builder in Developer Studio — the registers show those
-          controls disabled rather than hiding them, because a reviewer needs to know the capability
-          exists and who holds it. There is no way to revoke an access grant in this release; an
-          approved grant ends by lapsing, which is why a write cannot be approved without an expiry.
+          Two things: settling an access request, and revoking a granted one — both admin-only.
+          Everything else is observation. Rotating a credential and enabling write on a connection
+          are real capabilities that belong to the builder in Developer Studio — the registers show
+          those controls disabled rather than hiding them, because a reviewer needs to know the
+          capability exists and who holds it. Revocation requires a written reason and takes effect
+          on the very next call; expiry stays mandatory because revocation requires someone to
+          notice, and a grant must be able to end with nobody watching.
         </p>
       </section>
     </div>

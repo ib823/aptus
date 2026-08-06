@@ -125,7 +125,11 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     );
   }
 
-  // 3 — throttle. Writes get the same per-credential bucket as reads.
+  // 3 — throttle. Writes get their OWN per-credential bucket, deliberately
+  // separate from the read bucket (`northbound:`): a read burst must not be
+  // able to starve a write, nor a write burst reads. The comment here used to
+  // claim "the same bucket as reads" while the key said otherwise — one
+  // credential genuinely holds two independent 60/min budgets.
   const rate = await checkRateLimit(`northbound-write:${client.clientId}`, RATE_LIMITS.northbound);
   if (!rate.allowed) {
     await audit(429, id, "-");
@@ -214,10 +218,11 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
         "WRITE",
         client.sapClient,
       )
-    : ({ ok: false, reason: "NO_CONNECTION" } as const);
+    : // Its own reason, not NO_CONNECTION — see the read route.
+      ({ ok: false, reason: "UNKNOWN_PRODUCT" } as const);
 
   if (!binding.ok) {
-    await releaseIdempotencyKey(reservation.recordId);
+    await releaseIdempotencyKey(client.scope, reservation.recordId);
     await audit(403, iface.id, iface.externalId, undefined, undefined, binding.reason);
     return northboundError(
       "CONNECTION_NOT_CONFIGURED",
@@ -229,7 +234,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const connection = binding.connection;
 
   if (!connection.writeEnabled) {
-    await releaseIdempotencyKey(reservation.recordId);
+    await releaseIdempotencyKey(client.scope, reservation.recordId);
     await audit(403, iface.id, iface.externalId, connection);
     return northboundError(
       "FORBIDDEN",
@@ -244,7 +249,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   if (!service || !entitySet) {
     // Released, so a client that supplies the missing entity can retry with the
     // same key rather than being told it is forever in flight.
-    await releaseIdempotencyKey(reservation.recordId);
+    await releaseIdempotencyKey(client.scope, reservation.recordId);
     await audit(400, iface.id, iface.externalId, connection);
     return northboundError(
       "VALIDATION_ERROR",
@@ -272,7 +277,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
 
   // Record the outcome — including failures, so a retry replays the same refusal
   // rather than attempting the write again.
-  await completeIdempotencyKey(reservation.recordId, status, responseBody);
+  await completeIdempotencyKey(client.scope, reservation.recordId, status, responseBody);
   await audit(status, iface.id, iface.externalId, connection, durationMs);
 
   if (status >= 400) {

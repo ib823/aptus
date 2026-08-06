@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { AlertTriangle, RefreshCw, Search } from "lucide-react";
 import { HUB_CONTENT_TYPE_META, type HubContentType, type HubStatus } from "@/lib/sap-public/hub-content";
+import { PRODUCT_MARKS } from "@/lib/studio/product-marks";
 import { HARVEST_TYPES } from "@/lib/sap-public/hub-harvest-types";
 import { useAffirmLearn } from "@/components/affirm/learn/context";
 import { glossaryIdForStatus } from "@/constants/sap-glossary";
@@ -50,7 +51,15 @@ interface HubData {
   limit: number;
   counts: { byType: Record<string, number>; byTypeItems?: Record<string, number>; aiApis?: number; byStatus: Record<HubStatus, number>; byLob?: Record<string, number>; probeableRuntime: number; probed: number; lastProbedAt?: string | null; dataConfirmed?: number; dataProbe?: boolean };
   catalogueImported: boolean;
+  /** The tenant's display LABEL — for captions, never for query params. */
   tenant: string | null;
+  /**
+   * The tenant's sanitized KEY — what stored probes are keyed by and what the
+   * probe/preview routes resolve. The detail panel passed the LABEL here once
+   * ("Customizing X5M/100" straight into ?tenant=), and every "View rows"
+   * 400'd with an unknown-tenant message. Two fields, two jobs.
+   */
+  tenantKey?: string | null;
   isAdmin?: boolean;
 }
 
@@ -116,6 +125,13 @@ function groupByLoB(items: HubItem[]): Array<[string, HubItem[]]> {
     (map.get(key) ?? map.set(key, []).get(key)!).push(it);
   }
   return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+/** Product key → display name + edition, from the client-safe marks registry. */
+function productDisplayName(key: string): string {
+  const mark = PRODUCT_MARKS[key];
+  if (!mark) return key;
+  return mark.edition ? `${mark.name} (${mark.edition})` : mark.name;
 }
 
 /** The subset of a catalogue row a caller needs to seed governance from it. */
@@ -418,7 +434,10 @@ export function SapCapabilityCatalogue({
             Capability Catalogue
           </h2>
           <p className="text-sm" style={{ color: "var(--ink-secondary)" }}>
-            Every SAP Business Accelerator Hub content type for S/4HANA Cloud Public on {data?.tenant ?? "no tenant"}. Two independent axes: <strong>coverage</strong> — whether we&apos;ve imported SAP&apos;s published list for a type (the tiles) — and <strong>tenant status</strong> — whether a specific item is live on this tenant (the row badges). A badge only asserts what a probe established; nothing is inferred.
+            {/* The product NAMED, never hardcoded: this line read "for S/4HANA
+                Cloud Public" for every product — a SuccessFactors connection
+                was captioned as an S/4 catalogue. */}
+            Every SAP Business Accelerator Hub content type for {productDisplayName(product)} on {data?.tenant ?? "no tenant"}. Two independent axes: <strong>coverage</strong> — whether we&apos;ve imported SAP&apos;s published list for a type (the tiles) — and <strong>tenant status</strong> — whether a specific item is live on this tenant (the row badges). A badge only asserts what a probe established; nothing is inferred.
           </p>
         </div>
         {/* Always-available admin controls (server still enforces the guard). */}
@@ -490,6 +509,7 @@ export function SapCapabilityCatalogue({
               dataConfirmed={dataConfirmedCount}
               dataProbe={dataProbeOn}
               needsSetup={byStatus.NEEDS_SETUP}
+              notFound={byStatus.NOT_FOUND}
               notChecked={byStatus.NOT_CHECKED}
               notProbeable={byStatus.NOT_PROBEABLE}
               available={byStatus.AVAILABLE}
@@ -803,7 +823,8 @@ export function SapCapabilityCatalogue({
                             <CapabilityDetail
                               id={item.id}
                               product={product}
-                              tenant={data?.tenant ?? null}
+                              // The KEY, not the label — see HubData.tenantKey.
+                              tenant={data?.tenantKey ?? null}
                               onClose={() => setExpandedId(null)}
                               onResolved={(s, cap) => {
                                 setProbedStatus((m) => (m[item.id] === s ? m : { ...m, [item.id]: s }));

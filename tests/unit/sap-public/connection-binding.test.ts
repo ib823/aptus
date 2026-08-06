@@ -19,9 +19,13 @@ vi.mock("@/lib/db/prisma", () => ({
 }));
 
 // The resolver decrypts each row's secrets; the seal is not what is under test.
+// `openSecretsImpl` is swappable so one test can make a row unreadable.
+const cryptoMocks = vi.hoisted(() => ({
+  openSecretsImpl: (() => ({ username: "u", password: "p" })) as () => Record<string, string>,
+}));
 vi.mock("@/lib/sap-public/connection-crypto", () => ({
   connectionAad: () => "aad",
-  openSecrets: () => ({ username: "u", password: "p" }),
+  openSecrets: () => cryptoMocks.openSecretsImpl(),
   sealSecrets: () => "sealed",
 }));
 
@@ -264,5 +268,58 @@ describe("the SAP client completes the binding", () => {
     expect(omitted.ok).toBe(true);
     expect(explicitNull).toEqual(omitted);
     expect(blank).toEqual(omitted);
+  });
+});
+
+describe("one fact, one representation", () => {
+  /*
+   * The audit trail infers "binding unverified" from connectionEnvironment
+   * being null on a served call, while the resolver ALSO returns a
+   * bindingUnverified flag — two representations of one fact, the exact shape
+   * the schema warns about. This pins their equivalence: the flag is true
+   * exactly when the bound connection's environment is undeclared. If the
+   * resolver ever gains a second way to be unverified, this test forces the
+   * audit inference to be revisited at the same time.
+   */
+  it("bindingUnverified ⇔ the bound connection's environment is null", async () => {
+    mocks.findMany.mockResolvedValue([row({ id: "only", environment: null })]);
+    const unverified = await resolveSapConnectionForEnvironment("org_a", "s4hana", "DEV", "READ");
+    expect(unverified.ok).toBe(true);
+    if (unverified.ok) {
+      expect(unverified.bindingUnverified).toBe(true);
+      expect(unverified.connection.environment).toBeNull();
+    }
+
+    mocks.findMany.mockResolvedValue([row({ id: "dev", environment: "DEV" })]);
+    const verified = await resolveSapConnectionForEnvironment("org_a", "s4hana", "DEV", "READ");
+    expect(verified.ok).toBe(true);
+    if (verified.ok) {
+      expect(verified.bindingUnverified).toBe(false);
+      expect(verified.connection.environment).not.toBeNull();
+    }
+  });
+});
+
+describe("a row that cannot be resolved refuses, never crashes", () => {
+  it("returns CONNECTION_UNREADABLE when secrets fail to open", async () => {
+    /*
+     * The throw used to escape the northbound routes as an unhandled 500 with
+     * no audit row — an organization whose row went bad (key rotation, AAD
+     * mismatch, an authType outside the vocabulary) lost its whole northbound
+     * surface invisibly. Fail-closed on the whole set, deliberately: skipping
+     * just the bad row could bind the call to a DIFFERENT connection than the
+     * estate intended.
+     */
+    mocks.findMany.mockResolvedValue([row({ id: "bad", environment: "DEV" })]);
+    cryptoMocks.openSecretsImpl = () => {
+      throw new Error("unsupported state or unable to authenticate data");
+    };
+    try {
+      const result = await resolveSapConnectionForEnvironment("org_a", "s4hana", "DEV", "READ");
+      expect(result).toEqual({ ok: false, reason: "CONNECTION_UNREADABLE" });
+      expect(connectionRefusalMessage("CONNECTION_UNREADABLE", "DEV")).toContain("Re-save");
+    } finally {
+      cryptoMocks.openSecretsImpl = () => ({ username: "u", password: "p" });
+    }
   });
 });

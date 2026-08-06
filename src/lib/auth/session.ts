@@ -27,7 +27,16 @@ export function hashSessionToken(token: string): string {
 }
 
 /**
- * Create a new session for a user, revoking any existing sessions.
+ * Create a new session for a user, revoking whatever exceeds the
+ * organization's concurrent-session limit.
+ *
+ * THE LIMIT IS THE ORGANIZATION'S SETTING, NOT A HARDCODED 1. The org form has
+ * offered `maxConcurrentSessions` (1–10, default 3) since it shipped, and this
+ * function ignored it — every login revoked every other session, so the
+ * setting was a lie on the settings screen. An org-less user keeps the old
+ * single-session behavior: with no organization there is no setting to honor,
+ * and the strictest reading is the safe one.
+ *
  * Returns the raw token (caller sets it in the cookie) and whether an
  * existing session was displaced.
  */
@@ -36,18 +45,31 @@ export async function createSession(
   ipAddress: string | null,
   userAgent: string | null,
 ): Promise<{ token: string; hadExistingSession: boolean }> {
-  // Revoke existing sessions (concurrent session limit = 1)
-  const revoked = await prisma.session.updateMany({
-    where: {
-      userId,
-      isRevoked: false,
-    },
-    data: {
-      isRevoked: true,
-      revokedAt: new Date(),
-      revokedReason: "concurrent_login",
-    },
+  const owner = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { organization: { select: { maxConcurrentSessions: true } } },
   });
+  const maxSessions = Math.max(1, owner?.organization?.maxConcurrentSessions ?? 1);
+
+  // Keep the newest (max - 1) live sessions beside the one being minted;
+  // displace the rest, oldest first.
+  const active = await prisma.session.findMany({
+    where: { userId, isRevoked: false, expiresAt: { gt: new Date() } },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+  const displaceIds = active.slice(Math.max(0, maxSessions - 1)).map((s) => s.id);
+  const revoked =
+    displaceIds.length > 0
+      ? await prisma.session.updateMany({
+          where: { id: { in: displaceIds } },
+          data: {
+            isRevoked: true,
+            revokedAt: new Date(),
+            revokedReason: "concurrent_login",
+          },
+        })
+      : { count: 0 };
 
   const token = generateSessionToken();
   const tokenHash = hashSessionToken(token);

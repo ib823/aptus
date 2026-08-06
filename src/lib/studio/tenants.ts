@@ -41,8 +41,12 @@
  * This is the same defect that broke the build in #192, where the manual read
  * the rail's section arrays out of a client module. A guard was added then and
  * scoped to `src/lib` — a route handler in `src/app/api` was outside it.
+ *
+ * NOW RE-EXPORTED from lib/studio/tenant-cookie: the constant is shared with
+ * client components, and a client re-export of THIS module dragged Prisma (and
+ * the tenant-scope guard's node:async_hooks) into the browser bundle.
  */
-export const STUDIO_TENANT_COOKIE = "studio-tenant";
+export { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenant-cookie";
 
 import { prisma } from "@/lib/db/prisma";
 import { getConfiguredSapTenants, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";

@@ -201,7 +201,7 @@ export async function POST(
   });
 
   await logDecision({
-    assessmentId: "SYSTEM",
+    assessmentId: null,
     entityType: "invitation",
     entityId: invitation.id,
     action: "USER_INVITED",

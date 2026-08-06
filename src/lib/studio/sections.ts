@@ -27,6 +27,13 @@ export interface StudioSection {
   href: string;
   /** False → shipped in a later PR; render disabled instead of linking to a 404. */
   available: boolean;
+  /**
+   * True → the screen is deployment-scoped and platform_admin-gated, so the
+   * layout removes it from the rail for everyone else. An org-scoped user must
+   * never see the entry at all: a rail item that always refuses them is a
+   * promise the product has decided not to keep for that persona.
+   */
+  adminOnly?: boolean;
 }
 
 /**
@@ -56,17 +63,21 @@ export const OPERATIONS_SECTIONS: readonly StudioSection[] = [
   { key: "writes", label: "Write ledger", href: "/operations/writes", available: true },
   { key: "throttle", label: "Throttle", href: "/operations/throttle", available: true },
   { key: "tokens", label: "Tokens", href: "/operations/tokens", available: true },
-  // Catalogue freshness is deliberately absent, not merely unavailable.
+  // Catalogue health — built per the RESPECIFICATION, not the original spec.
   //
-  // It was specified and is not being built: `SapHubContent` has no
-  // organizationId, probes are keyed by env tenant, so an organization-scoped
-  // freshness view would return empty for every organization while looking like
-  // it worked. A rail entry that can never unlock is a promise the product has
-  // decided not to keep, and a rail with a permanent dead item teaches people
-  // the rail is decorative.
-  //
-  // It returns if the deployment-scoped respecification is built — see
-  // docs/coreedge/ops-control-tower/FRESHNESS-RESPEC.md.
+  // The org-scoped version was refused: `SapHubContent` has no organizationId
+  // and probes are keyed by tenant, so it would have returned empty for every
+  // organization while looking like it worked. This entry is the
+  // deployment-scoped, platform_admin-gated panel FRESHNESS-RESPEC.md called
+  // for instead; `adminOnly` keeps it off every other persona's rail entirely
+  // — see docs/coreedge/ops-control-tower/FRESHNESS-RESPEC.md.
+  {
+    key: "catalogue",
+    label: "Catalogue health",
+    href: "/operations/catalogue",
+    available: true,
+    adminOnly: true,
+  },
 ] as const;
 
 /** Control Tower sections, same discipline. */
@@ -77,4 +88,5 @@ export const CONTROL_TOWER_SECTIONS: readonly StudioSection[] = [
   { key: "audit", label: "Governance audit", href: "/control-tower/audit", available: true },
   { key: "connections", label: "Connection register", href: "/control-tower/connections", available: true },
   { key: "tokens", label: "Credential register", href: "/control-tower/tokens", available: true },
+  { key: "usage", label: "CoreEdge usage", href: "/control-tower/usage", available: true },
 ] as const;

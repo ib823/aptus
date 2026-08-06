@@ -29,7 +29,7 @@ import {
   opsCellStyle,
   type OpsTone,
 } from "@/components/ops/OpsChrome";
-import { count, useOpsFeed } from "@/components/ops/useOpsFeed";
+import { count, FeedAsAt, useOpsFeed } from "@/components/ops/useOpsFeed";
 
 interface Solution {
   id: string;
@@ -69,7 +69,7 @@ const STATUS: Record<string, OpsTone> = {
 };
 
 export function PortfolioClient() {
-  const { feed } = useOpsFeed<PortfolioPayload>("/api/control-tower/portfolio");
+  const { feed, fetchedAt } = useOpsFeed<PortfolioPayload>("/api/control-tower/portfolio");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -77,6 +77,7 @@ export function PortfolioClient() {
         title="Solution portfolio"
         lede="Every registered solution, and whether it is accountable. A solution cannot be promoted to ACTIVE or issued a runtime credential until all three owner slots are filled."
       />
+      <FeedAsAt fetchedAt={fetchedAt} />
 
       {feed.state === "loading" ? (
         <OpsCard>

@@ -52,6 +52,12 @@ export async function GET(request: NextRequest) {
   const limit = opsLimit(params.get("limit"));
   const solutionId = params.get("solutionId");
   const environment = params.get("environment");
+  // The cross-link from a failing connection row: this connection's calls,
+  // nothing else. Matches the audit column the binding writes, so a call
+  // refused before a connection was reached (connectionId null) never appears
+  // in a connection-filtered view — correctly, since it was not that
+  // connection's traffic.
+  const connectionId = params.get("connectionId");
 
   const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
@@ -70,6 +76,7 @@ export async function GET(request: NextRequest) {
     at: { gte: since },
     ...(solutionId ? { solutionId } : {}),
     ...(environment ? { environment } : {}),
+    ...(connectionId ? { connectionId } : {}),
   });
 
   const rows = await prisma.northboundAuditEvent.findMany({
@@ -159,6 +166,13 @@ export async function GET(request: NextRequest) {
     windowHours: hours,
     since: since.toISOString(),
     scope: guard.actor.kind,
+    // Echoed back so the screen states what the counts are OVER — a filtered
+    // total rendered without its filter would read as the whole window's.
+    filters: {
+      solutionId: solutionId ?? null,
+      environment: environment ?? null,
+      connectionId: connectionId ?? null,
+    },
     // Every count below is over the WINDOW, not over `events`. `events` is a
     // page; `total` is the real number of calls the window holds.
     counts: { total, byStatus, bySolution, byToken },

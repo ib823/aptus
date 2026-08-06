@@ -49,7 +49,11 @@ export function ScopeNote({ topic }: { topic: ScopeTopic }) {
       </p>
       <p style={{ margin: 0, fontSize: 13, lineHeight: "20px", color: "var(--ink-secondary)" }}>
         {note.body}{" "}
-        <a href="/docs/coreedge-developer-guide.md" style={{ color: "var(--brand-navy)" }}>
+        {/* Served by /help/developer-guide (session-gated, renders the repo's
+            docs/coreedge-developer-guide.md). The old href pointed at
+            /docs/…md, which no route has ever served — a dead link on the two
+            screens where the misreading it exists to prevent begins. */}
+        <a href="/help/developer-guide" style={{ color: "var(--brand-navy)" }}>
           Developer guide
         </a>
       </p>

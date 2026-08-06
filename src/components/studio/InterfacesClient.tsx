@@ -19,8 +19,11 @@
  * imply a control that does not exist.
  */
 
+import { useRouter } from "next/navigation";
+
 import { useCallback, useState } from "react";
 
+import { ProductLabel } from "@/components/sap/ProductLabel";
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
 
 export interface StudioInterface {
@@ -46,6 +49,13 @@ const STATUS_CHIP: Record<StudioInterface["status"], HonestStatus> = {
   DEPRECATED: "NOT_PROBEABLE",
 };
 
+/** Lifecycle meanings for assistive tech — see SolutionsClient.STATUS_MEANING. */
+const STATUS_MEANING: Record<StudioInterface["status"], string> = {
+  ACTIVE: "serving runtime calls",
+  DRAFT: "defined, not yet activated",
+  DEPRECATED: "kept for the record, not for new use",
+};
+
 /** Platform defaults — described, not configured. See the file header. */
 const RUNTIME_DEFAULTS = [
   ["Timeout", "10s (or the connection's override)"],
@@ -61,6 +71,7 @@ export function InterfacesClient({
   interfaces: readonly StudioInterface[];
   canAuthor: boolean;
 }) {
+  const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(interfaces[0]?.id ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,13 +89,13 @@ export function InterfacesClient({
       });
       const json = (await res.json()) as { error?: { message?: string } };
       if (!res.ok) throw new Error(json.error?.message ?? "The change could not be saved.");
-      window.location.reload();
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "The change could not be saved.");
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [router]);
 
   if (interfaces.length === 0) {
     return (
@@ -128,7 +139,7 @@ export function InterfacesClient({
                 <Td>{i.operation}</Td>
                 <Td>v{i.version}</Td>
                 <Td>
-                  <StudioStatusChip status={STATUS_CHIP[i.status]} label={i.status.toLowerCase()} />
+                  <StudioStatusChip status={STATUS_CHIP[i.status]} label={i.status.toLowerCase()} meaning={STATUS_MEANING[i.status]} />
                 </Td>
               </tr>
             ))}
@@ -140,7 +151,11 @@ export function InterfacesClient({
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <DetailCard title="Source">
             <Row label="Catalogue service" mono>{selected.externalId}</Row>
-            <Row label="Product">{selected.sapProduct}</Row>
+            <Row label="Product">
+              {/* The NAME via the one component, never the raw key — the sweep
+                  that guards this matched `product` and not `sapProduct`. */}
+              <ProductLabel product={selected.sapProduct} />
+            </Row>
             <Row label="Entity set" mono>
               {canAuthor ? (
                 <EntitySetEditor
@@ -191,7 +206,10 @@ export function InterfacesClient({
             <Row label="Access">
               Decided separately in the API Access ledger. Defining an interface grants nothing.
             </Row>
-            <Row label="Audit">Config changes are recorded. Per-call audit arrives with the runtime.</Row>
+            <Row label="Audit">
+              Config changes are recorded, and every runtime call this interface serves is
+              audited per call — solution, operation, status and which connection answered.
+            </Row>
             <Row label="Status">{selected.status}</Row>
           </DetailCard>
 

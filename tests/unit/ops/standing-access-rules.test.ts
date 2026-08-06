@@ -32,6 +32,7 @@ const NONE: IncidentSignals = {
   unboundedGrants: 0,
   credentialsWithoutExpiry: 0,
   unaccountableProdGrants: 0,
+  driftingConnections: 0,
 };
 
 function idsFrom(signals: Partial<IncidentSignals>): string[] {

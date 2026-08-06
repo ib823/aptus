@@ -131,6 +131,7 @@ async function main(): Promise<void> {
         appliesToPublic: norm.appliesToPublic,
         appliesToPrivate: norm.appliesToPrivate,
         appliesToOnPrem: norm.appliesToOnPrem,
+        productTags: norm.productTags,
         status: norm.status,
         apiType: norm.apiType,
         communicationScenarios: norm.communicationScenarios,

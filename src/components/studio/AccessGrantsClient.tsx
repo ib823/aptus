@@ -5,14 +5,18 @@
  *
  * Two things this screen is careful to say out loud:
  *
- *   1. An APPROVED row grants nothing at runtime in v1. Nothing calls SAP on a
- *      solution's behalf yet, so this is a record of a decision, not a live
- *      permission. A developer who reads "APPROVED" as "my app can now call
- *      production" has misunderstood the screen, so the screen says so.
+ *   1. An APPROVED row IS a live permission. The northbound broker checks a
+ *      live, unexpired, unrevoked grant on every call a solution makes, so
+ *      what this ledger shows is what the runtime does — including EXPIRED
+ *      and REVOKED, which are resolved for display so the ledger can never
+ *      contradict the broker. (This screen used to claim the opposite, from
+ *      before the broker shipped.)
  *   2. You cannot decide your own request. The control is enforced server-side;
  *      the UI disables the buttons as well so the rule is visible before it is
  *      hit, rather than arriving as a rejection.
  */
+
+import { useRouter } from "next/navigation";
 
 import { useCallback, useState } from "react";
 
@@ -46,15 +50,22 @@ export interface LedgerGrant {
   operation: "READ" | "CREATE" | "UPDATE";
   environment: GrantEnvironment;
   justification: string;
-  /** Already resolved for display (an elapsed expiry reads as EXPIRED). */
+  /**
+   * Already resolved for display via `effectiveDecision` — an elapsed expiry
+   * reads as EXPIRED and a Control Tower revocation reads as REVOKED, so this
+   * ledger and the broker can never disagree about the same grant.
+   */
   decision: string;
   requestedById: string | null;
   decidedById: string | null;
   decidedAt: string | null;
+  /** Revocation is a second fact beside the decision, never a re-decision. */
+  revokedAt: string | null;
+  revokedReason: string | null;
   createdAt: string;
 }
 
-/** Ledger decision → the console's shared status vocabulary. */
+/** Ledger decision → the console's shared status vocabulary (tones only). */
 function decisionToStatus(decision: string): HonestStatus {
   switch (decision) {
     case "APPROVED":
@@ -63,6 +74,7 @@ function decisionToStatus(decision: string): HonestStatus {
     case "READ_ONLY":
       return "AVAILABLE";
     case "REJECTED":
+    case "REVOKED":
       return "NOT_FOUND";
     case "EXPIRED":
       return "NOT_PROBEABLE";
@@ -78,6 +90,23 @@ const DECISION_LABEL: Record<string, string> = {
   READ_ONLY: "Read only",
   REJECTED: "Rejected",
   EXPIRED: "Expired",
+  REVOKED: "Revoked",
+};
+
+/**
+ * What each ledger state MEANS, in the ledger's own vocabulary — passed to the
+ * chip so assistive tech never hears a probe fact ("a live probe returned 200")
+ * on a governance decision. The chip reuses honest-status TONES; it must not
+ * reuse honest-status MEANINGS here.
+ */
+const DECISION_MEANING: Record<string, string> = {
+  REQUESTED: "awaiting a second person's decision",
+  APPROVED: "a live permission — the broker honours it until expiry or revocation",
+  SANDBOX_ONLY: "authorises calls in SANDBOX only",
+  READ_ONLY: "authorises reads, never writes",
+  REJECTED: "refused — authorises nothing",
+  EXPIRED: "lapsed — the broker refuses it",
+  REVOKED: "withdrawn by an admin — the broker refuses it",
 };
 
 export function AccessGrantsClient({
@@ -96,6 +125,7 @@ export function AccessGrantsClient({
   canRequest: boolean;
   requestableInterfaces: readonly RequestableInterface[];
 }) {
+  const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
@@ -116,7 +146,7 @@ export function AccessGrantsClient({
         });
         const json = (await res.json()) as { error?: { message?: string } };
         if (!res.ok) throw new Error(json.error?.message ?? "The decision could not be recorded.");
-        window.location.reload();
+        router.refresh();
       } catch (err) {
         setErrors((e) => ({
           ...e,
@@ -126,7 +156,7 @@ export function AccessGrantsClient({
         setBusy(null);
       }
     },
-    [checklist],
+    [checklist, router],
   );
 
   return (
@@ -182,7 +212,18 @@ export function AccessGrantsClient({
                       <StudioStatusChip
                         status={decisionToStatus(g.decision)}
                         label={DECISION_LABEL[g.decision] ?? g.decision}
+                        meaning={DECISION_MEANING[g.decision] ?? "ledger state"}
                       />
+                      {/* Revocation is a second fact recorded beside the decision.
+                          The reason is shown because an admin was required to give
+                          one — hiding it would waste the one sentence that tells
+                          the builder why their access ended. */}
+                      {g.decision === "REVOKED" && (
+                        <span style={{ display: "block", marginTop: 4, fontSize: 11, color: "var(--ink-muted)", maxWidth: 240 }}>
+                          {g.revokedAt ? `revoked ${formatDate(g.revokedAt)}` : "revoked"}
+                          {g.revokedReason ? ` — ${g.revokedReason}` : ""}
+                        </span>
+                      )}
                     </Td>
                     <Td>
                       <span style={{ display: "block", maxWidth: 320, color: "var(--ink-secondary)" }}>
@@ -286,8 +327,9 @@ function ProgressiveTrust({ highest }: { highest: GrantEnvironment | null }) {
         })}
       </ol>
       <p style={{ ...muted, marginTop: 12, marginBottom: 0 }}>
-        This describes what has been approved. It does not enforce an order, and an approved
-        grant does not make anything callable — runtime enforcement is a later phase.
+        This describes what has been approved. It does not enforce an order between
+        environments — but each approved grant is enforced: the runtime honours it on every
+        call until it expires or is revoked.
       </p>
     </section>
   );
@@ -324,6 +366,7 @@ function Td({ children, mono }: { children: React.ReactNode; mono?: boolean }) {
  * and then be refused at the first call, long after anyone was looking.
  */
 function RequestAccess({ interfaces }: { interfaces: readonly RequestableInterface[] }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [interfaceId, setInterfaceId] = useState("");
   const [environment, setEnvironment] = useState<GrantEnvironment>("SANDBOX");
@@ -365,13 +408,14 @@ function RequestAccess({ interfaces }: { interfaces: readonly RequestableInterfa
       });
       const json = (await res.json()) as { error?: { message?: string } };
       if (!res.ok) throw new Error(json.error?.message ?? "The request could not be raised.");
-      window.location.reload();
+      setOpen(false);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "The request could not be raised.");
     } finally {
       setBusy(false);
     }
-  }, [selected, environment, justification, expiresAt]);
+  }, [selected, environment, justification, expiresAt, router]);
 
   if (interfaces.length === 0) {
     return (
@@ -460,8 +504,8 @@ function RequestAccess({ interfaces }: { interfaces: readonly RequestableInterfa
           />
           {isWrite && (
             <span style={muted}>
-              A write grant cannot be approved without an expiry — there is no way to revoke
-              one afterwards, so it has to end on its own.
+              A write grant cannot be approved without an expiry. Revocation exists only as
+              an admin emergency action, so the grant has to end on its own.
             </span>
           )}
         </label>

@@ -38,13 +38,17 @@ const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString(
 
 const GRANTS = {
   expiryRunwayDays: 14,
-  counts: { total: 3, byDecision: {}, pending: 1, expiringSoon: 1, lapsed: 1 },
+  // The lifecycle counts are DATABASE aggregates, not page arithmetic — the
+  // payload carries revoked/unbounded and the page-vs-total provenance too.
+  counts: { total: 3, byDecision: {}, pending: 1, expiringSoon: 1, lapsed: 1, revoked: 0, unbounded: 0 },
+  truncated: false,
   provenance: {
     howAGrantEnds: "A grant lapses at its expiry, or an admin revokes it.",
     whyExpiryIsStillRequired: "Expiry remains mandatory on any granting decision.",
     restrictionsAreEnforced: "READ_ONLY and SANDBOX_ONLY are enforced at runtime.",
     emptyByDesign: null,
     decisionsAreAudited: "Every decision writes a ConfigAudit entry.",
+    grantsAreAPage: { returned: 3, limit: 200, of: 3 },
   },
   grants: [
     {
@@ -189,6 +193,9 @@ describe("grants — a decision label is not a permission", () => {
   it("flags an unbounded settled grant as a defect, not a variation", async () => {
     serve({
       ...GRANTS,
+      // The panel keys off the DATABASE count, not the page's rows — an
+      // unbounded grant past the page limit must still raise it.
+      counts: { ...GRANTS.counts, unbounded: 1 },
       grants: [{ ...GRANTS.grants[2], id: "g_unb", lifecycle: "live", expiresAt: null, unbounded: true, operation: "CREATE", authorises: { read: true, write: true } }],
     });
     render(<GrantsClient canDecide={false} />);

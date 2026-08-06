@@ -65,6 +65,12 @@ export const INCIDENT_THRESHOLDS = {
   credentialWithoutExpiry: 1,
   /** Any PROD grant whose solution is unowned or not ACTIVE. */
   unaccountableProdGrant: 1,
+  /**
+   * One healthy→failing transition is one integration that just broke. The
+   * standing state is `connection-unhealthy`'s business; the CHANGE is this
+   * rule's, because the change is when investigation is cheapest.
+   */
+  connectionDrift: 1,
 } as const;
 
 export interface IncidentRule {
@@ -201,6 +207,16 @@ export const INCIDENT_RULES = {
     remediation:
       "Rotate the credential in Studio with an expiry set. Rotation replaces the token immediately and has no overlap window.",
   },
+  connectionDrift: {
+    id: "connection-drift",
+    severity: "major",
+    title: "A connection that probed healthy has started failing",
+    firesWhen: `at least ${INCIDENT_THRESHOLDS.connectionDrift} connection recorded a healthy-to-failing probe transition inside the window`,
+    whyThisSeverity:
+      "Distinct from 'a SAP connection's last probe did not succeed', which reports the standing state: this rule reports the CHANGE. Something that worked stopped working, which is when investigation is cheapest and when the drift alert email was sent. Major rather than critical because the probe is read-only — nothing incorrect has been written, traffic is simply failing.",
+    remediation:
+      "The alert email named the connection. UNAUTHORIZED usually means the SAP credentials were rotated on the tenant side; TIMEOUT on a private or on-premise connection is usually reachability. Probe again from Operations → Connections once fixed — recovery is recorded in the history but deliberately not alerted.",
+  },
   unaccountableProdGrant: {
     id: "unaccountable-prod-grant",
     severity: "critical",
@@ -251,12 +267,95 @@ export const BINDING_REFUSAL_COVERAGE = {
    * counting it in both would double-report one estate problem.
    */
   UNDECLARED_ENVIRONMENT_WRITE: "excluded",
+  /**
+   * A stored connection row could not be resolved (secrets failed to open, or
+   * an authType outside the vocabulary). Counted: the credential is live, the
+   * grant may be approved, and every call fails on estate state an operator
+   * must fix — the same shape as NO_MATCH_FOR_CLIENT. Before this reason
+   * existed the failure was an unhandled 500 with no audit row, which no rule
+   * could ever see.
+   */
+  CONNECTION_UNREADABLE: "counted",
+  /**
+   * The interface names an unknown product — an interface-config defect, not
+   * an estate state. Counted for the reason the vocabulary split it out of
+   * NO_CONNECTION: a permanently failing interface with live traffic must be
+   * visible to the rule, and its remediation (fix the interface) is different
+   * from "add a connection".
+   */
+  UNKNOWN_PRODUCT: "counted",
 } as const satisfies Record<ConnectionBindingFailure, "counted" | "excluded">;
 
 /** The reasons the ops query filters on. Derived, never hand-maintained. */
 export const COUNTED_BINDING_REFUSALS = Object.entries(BINDING_REFUSAL_COVERAGE)
   .filter(([, v]) => v === "counted")
   .map(([k]) => k);
+
+/**
+ * Probe outcomes that mean the connection is not working. The same set the
+ * connections-health endpoint rolls up as NEEDS ATTENTION — kept here, in the
+ * pure module, so the sweep, the incident rule and the screen cannot each keep
+ * a private copy that drifts.
+ */
+export const PROBE_FAILING_STATUSES: ReadonlySet<string> = new Set([
+  "UNAUTHORIZED",
+  "NOT_FOUND",
+  "TIMEOUT",
+  "ERROR",
+]);
+
+/**
+ * healthy→failing is the alertable move; anything else is history.
+ *
+ * Never-probed → failing is a first observation, not a drift: it renders as
+ * needs-attention on the screen but nobody's integration just broke. And
+ * failing→failing stays silent so a connection that is down for a week alerts
+ * once, when it went down — the transition IS the dedupe.
+ */
+export function isDriftTransition(previous: string | null, next: string): boolean {
+  if (!PROBE_FAILING_STATUSES.has(next)) return false;
+  if (previous === null) return false;
+  return !PROBE_FAILING_STATUSES.has(previous);
+}
+
+/**
+ * How many connections drifted healthy→failing across a window of probe events.
+ *
+ * `windowEventsAsc` is every probe event in the window, oldest first;
+ * `priorByConnection` is each connection's latest event BEFORE the window, so a
+ * transition straddling the window edge is not missed. A connection counts at
+ * most once however many times it flapped — the question is "how many
+ * integrations broke", not "how noisy was the estate".
+ */
+export function countDriftingConnections(
+  windowEventsAsc: ReadonlyArray<{ connectionId: string; status: string }>,
+  priorByConnection: ReadonlyArray<{ connectionId: string; status: string }>,
+): number {
+  const previous = new Map<string, string | null>(
+    priorByConnection.map((p) => [p.connectionId, p.status]),
+  );
+  const drifted = new Set<string>();
+  for (const event of windowEventsAsc) {
+    const before = previous.has(event.connectionId)
+      ? (previous.get(event.connectionId) ?? null)
+      : null;
+    if (isDriftTransition(before, event.status)) drifted.add(event.connectionId);
+    previous.set(event.connectionId, event.status);
+  }
+  return drifted.size;
+}
+
+/*
+ * WHY THERE IS NO `capability-drift` RULE YET, though the probe history above
+ * makes the connection-level one derivable. Capability probes are stored as the
+ * LATEST result per tenant inside SapHubContent.rawMetadataJson.probes — the
+ * overwrite in mergeStoredProbe destroys the previous outcome, so "previously
+ * 200, now 403/404" is a fact this deployment does not record. Deriving the
+ * rule from what exists would mean guessing the "previously", and a fabricated
+ * signal is the one thing this module must never emit. It becomes derivable
+ * when capability probes gain history (the Catalogue Health work), and the
+ * rule should be added in the same change.
+ */
 
 /** Every signal a rule can fire on. Counts this deployment actually records. */
 export interface IncidentSignals {
@@ -272,6 +371,8 @@ export interface IncidentSignals {
   credentialsWithoutExpiry: number;
   /** PROD grants whose solution is not ACTIVE or has an empty owner slot. */
   unaccountableProdGrants: number;
+  /** Connections whose probe history shows healthy→failing inside the window. */
+  driftingConnections: number;
 }
 
 export interface Incident {
@@ -326,6 +427,11 @@ export function deriveIncidents(signals: IncidentSignals): Incident[] {
       INCIDENT_RULES.unaccountableProdGrant,
       signals.unaccountableProdGrants,
       INCIDENT_THRESHOLDS.unaccountableProdGrant,
+    ],
+    [
+      INCIDENT_RULES.connectionDrift,
+      signals.driftingConnections,
+      INCIDENT_THRESHOLDS.connectionDrift,
     ],
   ];
 

@@ -25,12 +25,7 @@ import {
   ProvenanceStrip,
   type OpsTone,
 } from "@/components/ops/OpsChrome";
-import {
-  DEFAULT_OPS_WINDOW_HOURS,
-  OpsWindowPicker,
-  count,
-  useOpsFeed,
-} from "@/components/ops/useOpsFeed";
+import { count, DEFAULT_OPS_WINDOW_HOURS, FeedAsAt, OpsWindowPicker, useOpsFeed } from "@/components/ops/useOpsFeed";
 
 type Severity = "critical" | "major" | "minor";
 
@@ -63,7 +58,7 @@ const TONE: Record<Severity, OpsTone> = {
 
 export function IncidentsClient() {
     const [windowHours, setWindowHours] = useState(DEFAULT_OPS_WINDOW_HOURS);
-const { feed } = useOpsFeed<IncidentsPayload>("/api/ops/incidents", windowHours);
+const { feed, fetchedAt } = useOpsFeed<IncidentsPayload>("/api/ops/incidents", windowHours);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -71,6 +66,7 @@ const { feed } = useOpsFeed<IncidentsPayload>("/api/ops/incidents", windowHours)
         title="Incidents"
         lede="Derived from the feeds this deployment already records. Every severity comes from a named rule with its threshold attached — nothing here is scored at request time."
       />
+      <FeedAsAt fetchedAt={fetchedAt} />
 
       {feed.state === "loading" ? (
         <OpsCard>

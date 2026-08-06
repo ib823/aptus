@@ -105,11 +105,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       verification.authenticationInfo.newCounter,
     );
 
-    // Create session (same as bridge route)
-    const forwardedFor = request.headers.get("x-forwarded-for");
-    const ipAddress = forwardedFor
-      ? (forwardedFor.split(",")[0]?.trim() ?? null)
-      : (request.headers.get("x-real-ip") ?? null);
+    // Create session (same as bridge route) — IP via the trusted extraction,
+    // never the spoofable leftmost XFF hop.
+    const clientIp = getClientIp(request.headers);
+    const ipAddress = clientIp === "unknown" ? null : clientIp;
     const userAgent = request.headers.get("user-agent") ?? null;
     const { token, hadExistingSession } = await createSession(user.id, ipAddress, userAgent);
 

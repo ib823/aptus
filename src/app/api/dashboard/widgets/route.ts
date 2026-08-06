@@ -57,7 +57,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   );
 
   await logDecision({
-    assessmentId: "system",
+    assessmentId: null,
     entityType: "dashboard_widget",
     entityId: user.id,
     action: "DASHBOARD_WIDGET_UPDATED",

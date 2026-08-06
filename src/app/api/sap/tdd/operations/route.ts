@@ -123,7 +123,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // the same role gate. It was found by checking the siblings of the two routes
   // where the gap was reported, which is the only reliable way to close a
   // per-route omission: the omission is never in the route you were told about.
-  const refusal = await refuseUnlessMayProbeTenant(product.envPrefix);
+  const refusal = await refuseUnlessMayProbeTenant();
   if (refusal) return refusal;
 
   const viewer = await getCurrentUser();

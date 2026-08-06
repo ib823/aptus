@@ -176,7 +176,7 @@ export async function PUT(
   });
 
   await logDecision({
-    assessmentId: "SYSTEM",
+    assessmentId: null,
     entityType: "organization",
     entityId: orgId,
     action: "ORG_UPDATED",

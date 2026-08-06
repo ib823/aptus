@@ -10,6 +10,8 @@
  * V4 service-group paths are NOT reliably derivable from the apiId alone
  * (they need the service-group $metadata), so V4 is opt-in and best-effort.
  */
+import type { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/db/prisma";
 import type { SapServiceDefinition } from "@/lib/sap-public/tdd-connector";
 
@@ -62,6 +64,64 @@ export function productTagFilter(product: SapNonEditionProduct): {
 /** How many catalogue rows this repository holds for a non-edition product. */
 export async function countByProduct(product: SapNonEditionProduct): Promise<number> {
   return prisma.sapApiReference.count({ where: productTagFilter(product) });
+}
+
+/**
+ * THE PRODUCT-AWARE CATALOGUE SCOPE — one resolver for every read path.
+ *
+ * Until this existed, every SapHubContent query hardcoded
+ * `appliesToPublic: true` (eight sites in the hub-content route alone, plus
+ * probe-all, resolve-hub-service and the seed), so `?product=` selected which
+ * TENANT to probe and never which CATALOGUE to show: SuccessFactors, RISE,
+ * on-premise and ECC all rendered the S/4 Public list with the same counts.
+ * That is the defect this branch is named for.
+ *
+ * Three kinds, because the products genuinely differ in what "their published
+ * catalogue" means:
+ *
+ *   edition      S/4 editions — filter on the row's edition flag. The paths
+ *                are shared across editions (tdd-connector documents why);
+ *                the PUBLISHED SET is what differs, and it is these flags.
+ *   product-tag  SuccessFactors / Ariba — not editions of anything; their
+ *                rows are selected by SAP's verbatim product tag, and they are
+ *                NOT probeable from here (path derivation waits for a live
+ *                system — see productTagFilter's RETRIEVAL ONLY note). Only
+ *                the curated services carry real, probeable paths.
+ *   none         ECC — deliberately no published list. Its OData surface is
+ *                whatever the customer activated in their own Gateway, which
+ *                only discovery from that Gateway's catalogue can say
+ *                (spec §3.1). An empty catalogue is the honest answer; the
+ *                S/4 on-prem list would be a confident wrong one.
+ */
+export type HubCatalogueScope =
+  | { kind: "edition"; edition: SapEdition; where: Prisma.SapHubContentWhereInput }
+  | { kind: "product-tag"; product: SapNonEditionProduct; where: Prisma.SapHubContentWhereInput }
+  | { kind: "none"; reason: string };
+
+export function hubCatalogueScope(product: {
+  key: string;
+  edition: SapEdition | null;
+}): HubCatalogueScope {
+  if (product.key === "ecc") {
+    return {
+      kind: "none",
+      reason:
+        "ECC has no published service list — its OData surface is whatever the customer activated in their own NetWeaver Gateway. Discovery from the tenant's Gateway catalogue is the honest source, and it is not built yet.",
+    };
+  }
+  if (product.edition) {
+    const field = EDITION_FIELD[product.edition];
+    return { kind: "edition", edition: product.edition, where: { [field]: true } };
+  }
+  if (product.key === "successfactors" || product.key === "ariba") {
+    return { kind: "product-tag", product: product.key, where: productTagFilter(product.key) };
+  }
+  // An unknown non-edition product must not silently inherit another
+  // product's catalogue — nothing is the honest default.
+  return {
+    kind: "none",
+    reason: `No published catalogue mapping exists for "${product.key}".`,
+  };
 }
 
 export interface DynamicCatalogOpts {

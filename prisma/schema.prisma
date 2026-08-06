@@ -150,10 +150,17 @@ model VerdictScopeItem {
 // Buyer-side stakeholders access a filtered view of an assessment without
 // needing a full account. Auth is via signed share-link token.
 model AssessmentShareLink {
-  id             String    @id @default(cuid())
-  assessmentId   String
-  token          String    @unique // urlsafe base64; the share URL slug
-  createdBy      String
+  id           String @id @default(cuid())
+  assessmentId String
+  /// LEGACY plaintext slug — null for links issued after token hashing landed.
+  /// Kept for the dual-read window only: a legacy row upgrades (hash written,
+  /// plaintext nulled) on its first successful use, and revocation retires the
+  /// rest. A readable token column was a database that could leak usable links.
+  token        String? @unique
+  /// SHA-256 hex of the raw token. The raw value lives only in the URL the
+  /// issuer copied; a database read cannot become a share link.
+  tokenHash    String? @unique
+  createdBy    String
   createdAt      DateTime  @default(now())
   expiresAt      DateTime?
   revokedAt      DateTime?
@@ -457,6 +464,17 @@ model SapHubContent {
   /// not recorded; a re-import (idempotent) fills it with the truth.
   illustrative Boolean?
 
+  /// SAP's product tag string, verbatim (e.g. "SAPSuccessFactors",
+  /// "SAPS4HANACloudPrivateEdition") — same convention as
+  /// SapApiReference.productTags, and queried the same way (case-insensitive
+  /// substring, see productTagFilter). NULL = the row predates the column or
+  /// its source carried no tag. This is what makes non-edition products
+  /// (SuccessFactors, Ariba) addressable by a catalogue read at all: they
+  /// correctly carry no edition flag, so an edition filter can never return
+  /// them, and until this column existed every row was stamped
+  /// appliesToPublic=true at import regardless of its real product.
+  productTags String?
+
   hubUrl          String // canonical link back to api.sap.com
   rawMetadataJson Json?
 
@@ -466,6 +484,8 @@ model SapHubContent {
   @@unique([contentType, externalId])
   @@index([contentType])
   @@index([appliesToPublic])
+  @@index([appliesToPrivate])
+  @@index([appliesToOnPrem])
   @@index([status])
 }
 
@@ -608,7 +628,11 @@ model Interface {
   /// Bumped on every change.
   version Int    @default(1)
 
-  /// "s4hana" | "successfactors" | "ariba"
+  /// Any product key the connector registry knows (s4hana, successfactors,
+  /// cloud-erp-private, s4hana-onprem, ecc, ariba) — validated against
+  /// getSapProduct at the API boundary, never a hand-kept enum: the literal
+  /// three-product list here once meant no interface could exist for a RISE
+  /// or on-premise connection at all.
   sapProduct String
   /// The catalogue apiId of the service being consumed.
   externalId String
@@ -636,8 +660,54 @@ model Interface {
   @@index([solutionId])
 }
 
-/// Scope request + decision — the governance ledger in v1. Runtime enforcement
-/// (the northbound broker) is a later phase; this table records the decision.
+/// One probe of one SAP connection — append-only history, so health has a
+/// TREND instead of a single mutable pair of columns. `lastValidationStatus`
+/// on SapConnection stays the fast-read summary; these rows are how "was this
+/// failing last week?" and "did it drift since the last sweep?" become
+/// answerable, and the drift incident rule reads consecutive rows to see a
+/// healthy→failing transition. Written by the probe cron, the Studio
+/// connection test, and the Ops probe-now action — `source` says which.
+model SapConnectionProbeEvent {
+  id             String @id @default(cuid())
+  organizationId String
+  connectionId   String
+
+  /// The connection-health vocabulary (OK | AUTH_FAILED | NOT_FOUND | TIMEOUT
+  /// | ERROR | NO_PROBE_PATH ...), same as lastValidationStatus.
+  status     String
+  httpStatus Int?
+  durationMs Int?
+  /// cron | manual | test — who caused this probe.
+  source String
+
+  at DateTime @default(now())
+
+  @@index([organizationId, connectionId, at])
+  @@index([connectionId, at])
+}
+
+/// One scheduled-job run — the record that a sweep happened at all. Cron
+/// outcomes used to live only in the HTTP response nobody stored, so "did the
+/// reaper run last night?" and "did the probe sweep hit its cap?" had no
+/// answer anywhere in the product. Append-only; surfaced on the Operations
+/// home as the jobs strip.
+model CronRunLog {
+  id  String @id @default(cuid())
+  /// northbound-reap | connection-probes | analytics | trials
+  job String
+
+  startedAt  DateTime
+  finishedAt DateTime
+  ok         Boolean
+  /// Job-shaped summary: counts, caps hit, error strings. Never secrets.
+  summaryJson Json?
+
+  @@index([job, startedAt])
+}
+
+/// Scope request + decision — the governance ledger, ENFORCED AT RUNTIME: the
+/// northbound broker matches a live, unexpired, unrevoked row on solutionId +
+/// externalId + operation + environment on every call a solution makes.
 model ApiAccessGrant {
   id             String @id @default(cuid())
   solutionId     String
@@ -859,6 +929,14 @@ model NorthboundAuditEvent {
   /// Nullable because rows written before this column genuinely do not know —
   /// and a zero would read as "instant" rather than "unmeasured".
   durationMs Int?
+
+  /// TRUE when a builder ran this call from the Test Console's broker dry-run —
+  /// the SAME pipeline (grant, binding, sapClient, connection, read) exercised
+  /// on the same tenant, initiated from Studio rather than by the deployed app.
+  /// Recorded rather than omitted: it is real traffic on a real system, and a
+  /// trail that hid it would under-report exactly like the edge cases the
+  /// "floor, not census" strip names. Default false so history stays truthful.
+  dryRun Boolean @default(false)
 
   at DateTime @default(now())
 
@@ -1659,7 +1737,13 @@ model GapAlternative {
 
 model DecisionLogEntry {
   id           String   @id @default(cuid())
-  assessmentId String
+  /// NULL = a system-level event with no assessment (org governance, catalogue
+  /// imports, onboarding). These used to be written with the sentinel string
+  /// "system"/"SYSTEM", which violated the FK on every call — no Assessment
+  /// with that id has ever existed — so every such audit either threw or was
+  /// silently swallowed by a caller's try/catch. An absent assessment is an
+  /// absence; it is recorded as one.
+  assessmentId String?
   entityType   String
   entityId     String
   action       String
@@ -1670,7 +1754,7 @@ model DecisionLogEntry {
   timestamp    DateTime @default(now())
   reason       String?  @db.Text
 
-  assessment Assessment @relation(fields: [assessmentId], references: [id])
+  assessment Assessment? @relation(fields: [assessmentId], references: [id])
 
   @@index([assessmentId])
   @@index([assessmentId, entityType])
@@ -2100,6 +2184,55 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+/// One organization's subscription to ONE product line. The Workbench, the
+/// CoreEdge Console and Aptus are priced separately; `Organization.plan` was
+/// the whole story when there was one product, and it remains the compatibility
+/// read for WORKBENCH (see lib/commercial/subscriptions). No payment processor
+/// is wired — `externalRef` is a provider-agnostic pointer (contract number,
+/// invoice id) so choosing one later is a data migration, not a remodel.
+model Subscription {
+  id             String    @id @default(cuid())
+  organizationId String
+  /// WORKBENCH | COREEDGE | APTUS
+  productLine    String
+  plan           String    @default("TRIAL")
+  /// TRIALING | ACTIVE | PAST_DUE | CANCELED — same vocabulary as
+  /// Organization.subscriptionStatus, which stays the WORKBENCH source.
+  status         String    @default("TRIALING")
+  startedAt      DateTime  @default(now())
+  endsAt         DateTime?
+  /// Provider-agnostic commercial reference. Never a secret.
+  externalRef    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, productLine])
+  @@index([organizationId])
+}
+
+/// One organization-day of CoreEdge consumption, rolled up nightly from
+/// NorthboundAuditEvent — the substrate pricing will be chosen from. Reading
+/// screens NEVER aggregate the audit table live: the rollup is bounded, the
+/// audit table is not. A floor, not a census, for the same reasons the audit
+/// feed is one (throttled/timed-out/failed-write calls leave no row).
+model CoreEdgeUsageRollup {
+  id             String   @id @default(cuid())
+  organizationId String
+  /// UTC midnight of the day this row covers.
+  day            DateTime
+  calls          Int      @default(0)
+  rowsRead       Int      @default(0)
+  writes         Int      @default(0)
+  refusals       Int      @default(0)
+  distinctInterfaces  Int @default(0)
+  distinctCredentials Int @default(0)
+  computedAt     DateTime @default(now())
+
+  @@unique([organizationId, day])
+  @@index([day])
 }
 
 model Organization {

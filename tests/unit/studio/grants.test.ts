@@ -123,7 +123,7 @@ describe("the write gate", () => {
     ).toBe(true);
   });
 
-  it("refuses a write grant with no expiry — there is no revocation to fall back on", () => {
+  it("refuses a write grant with no expiry — revocation is an emergency action, not a lifecycle", () => {
     const r = evaluateDecision(
       base({ operation: "UPDATE", writeChecklistAcknowledged: true, expiresAt: null }),
     );
@@ -150,10 +150,11 @@ describe("the write gate", () => {
      * The first half is not true, and the second follows from it. Revoking a
      * credential does not revoke a grant — it SUSPENDS the only means of using
      * one. The grant row stays APPROVED with no expiry, and the next credential
-     * issued for that solution and environment reactivates it. Nothing in the
-     * product ever ends it, which is why the grants API has always returned an
-     * `unbounded` flag for exactly this shape and the manual calls it "a defect,
-     * not a state".
+     * issued for that solution and environment reactivates it. The only other
+     * ending is an admin noticing and revoking it in Control Tower — a control
+     * that depends on attention, which is why the grants API has always
+     * returned an `unbounded` flag for exactly this shape and the manual calls
+     * it "a defect, not a state".
      *
      * Credential revocation is also the wrong instrument: it is scoped to the
      * SOLUTION, so using it to end one over-broad read grant takes down every
@@ -288,6 +289,75 @@ describe("expiry", () => {
     // task has caught up yet.
     expect(effectiveDecision({ decision: "APPROVED", expiresAt: past }, now)).toBe("EXPIRED");
     expect(effectiveDecision({ decision: "APPROVED", expiresAt: future }, now)).toBe("APPROVED");
+  });
+
+  /*
+   * REVOKED is part of the ONE display vocabulary. Revocation shipped in
+   * Control Tower and the Studio ledger went on rendering the stored decision —
+   * so the builder's own screen said "Approved" for a grant the broker refused
+   * with GRANT_REVOKED. The resolver is where that class of disagreement dies:
+   * every surface displays effectiveDecision, and effectiveDecision knows about
+   * revokedAt.
+   */
+  it("reads as REVOKED once revokedAt is set, regardless of expiry", () => {
+    const revoked = new Date("2026-07-01T00:00:00Z");
+    expect(
+      effectiveDecision({ decision: "APPROVED", expiresAt: null, revokedAt: revoked }, now),
+    ).toBe("REVOKED");
+    expect(
+      effectiveDecision({ decision: "READ_ONLY", expiresAt: future, revokedAt: revoked }, now),
+    ).toBe("REVOKED");
+    // Both revoked and expired: the deliberate human act wins the label.
+    expect(
+      effectiveDecision({ decision: "APPROVED", expiresAt: past, revokedAt: revoked }, now),
+    ).toBe("REVOKED");
+  });
+
+  it("a non-granting decision never reads as REVOKED — there was nothing to withdraw", () => {
+    const revoked = new Date("2026-07-01T00:00:00Z");
+    expect(
+      effectiveDecision({ decision: "REJECTED", expiresAt: null, revokedAt: revoked }, now),
+    ).toBe("REJECTED");
+  });
+
+  it("an omitted revokedAt reads exactly like null — legacy callers stay correct", () => {
+    expect(effectiveDecision({ decision: "APPROVED", expiresAt: future }, now)).toBe("APPROVED");
+    expect(
+      effectiveDecision({ decision: "APPROVED", expiresAt: future, revokedAt: null }, now),
+    ).toBe("APPROVED");
+  });
+
+  /*
+   * THE RESOLVER AND THE RUNTIME MUST AGREE. effectiveDecision is the display
+   * truth; grantsRead + the broker's revocation/expiry checks are the wire
+   * truth. This sweeps the whole (decision × revoked × expired) space and
+   * asserts: the runtime honours a grant for READ exactly when the resolver
+   * displays a granting label. If someone adds a state to one side and not the
+   * other, this is the test that goes red.
+   */
+  it("displays a granting label exactly when the runtime would honour the grant", () => {
+    const decisions = ["REQUESTED", "APPROVED", "SANDBOX_ONLY", "READ_ONLY", "REJECTED"] as const;
+    const revokedAts = [null, new Date("2026-07-01T00:00:00Z")];
+    const expiries = [null, past, future];
+    for (const decision of decisions) {
+      for (const revokedAt of revokedAts) {
+        for (const expiresAt of expiries) {
+          const grant = { decision, expiresAt, revokedAt };
+          const displayed = effectiveDecision(grant, now);
+          const displaysAsLive = isGranting(displayed as never) === true;
+          // Mirror of the broker's read pipeline (access.ts): granting decision,
+          // then unrevoked, then unexpired — in an environment the decision covers.
+          const runtimeHonours =
+            grantsRead(decision, "SANDBOX") &&
+            revokedAt == null &&
+            (expiresAt === null || expiresAt.getTime() > now.getTime());
+          expect(
+            displaysAsLive,
+            `decision=${decision} revoked=${revokedAt !== null} expired=${expiresAt === past} — display and runtime disagree`,
+          ).toBe(runtimeHonours);
+        }
+      }
+    }
   });
 });
 

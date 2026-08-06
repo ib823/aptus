@@ -20,7 +20,7 @@
  * integration is quiet" and "we cannot see your integration".
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type OpsFeed<T> =
   | { state: "loading" }
@@ -50,18 +50,39 @@ export const OPS_WINDOWS = [
 
 export const DEFAULT_OPS_WINDOW_HOURS = 24;
 
+/**
+ * How often a mounted feed re-reads itself. One minute: fast enough that a
+ * monitoring screen left open on a wall does not show yesterday, slow enough
+ * that the deployment is not paying for a dashboard nobody is watching.
+ * Every screen renders the interval beside its "as at" (see FeedAsAt) — an
+ * auto-refresh the reader does not know about is indistinguishable from data
+ * that never goes stale.
+ */
+export const OPS_REFRESH_MS = 60_000;
+
 export function useOpsFeed<T>(
   path: string,
   hours: number = DEFAULT_OPS_WINDOW_HOURS,
-): { feed: OpsFeed<T>; reload: () => void } {
+): { feed: OpsFeed<T>; reload: () => void; fetchedAt: Date | null } {
   const [feed, setFeed] = useState<OpsFeed<T>>({ state: "loading" });
+  const [fetchedAt, setFetchedAt] = useState<Date | null>(null);
   const [nonce, setNonce] = useState(0);
+  // Which (path, hours) the current data belongs to. A CHANGED key must show
+  // loading — keeping the old feed up would render another query's answer under
+  // this query's controls. A refresh of the SAME key keeps the data on screen:
+  // flashing a monitoring wall to "Loading…" once a minute reads as an outage.
+  const keyRef = useRef<string | null>(null);
 
   const reload = useCallback(() => setNonce((n) => n + 1), []);
 
   useEffect(() => {
     let live = true;
-    setFeed({ state: "loading" });
+    const key = `${path}|${hours}`;
+    if (keyRef.current !== key) {
+      keyRef.current = key;
+      setFeed({ state: "loading" });
+      setFetchedAt(null);
+    }
 
     void (async () => {
       try {
@@ -83,6 +104,7 @@ export function useOpsFeed<T>(
           return;
         }
         setFeed({ state: "ready", data: body.data });
+        setFetchedAt(new Date());
       } catch {
         if (!live) return;
         setFeed({
@@ -97,7 +119,37 @@ export function useOpsFeed<T>(
     };
   }, [path, nonce, hours]);
 
-  return { feed, reload };
+  // The auto-refresh itself. A failed refresh renders the error state rather
+  // than silently keeping stale data up — on a monitoring screen, "we cannot
+  // see the integration" and "the integration is quiet" must never look alike.
+  useEffect(() => {
+    const timer = setInterval(() => setNonce((n) => n + 1), OPS_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  return { feed, reload, fetchedAt };
+}
+
+/**
+ * The freshness line every Ops screen renders: when the feed was last read and
+ * how often it re-reads itself. The pairing is deliberate — a timestamp alone
+ * invites "is that stale?", an interval alone invites "since when?".
+ */
+export function FeedAsAt({ fetchedAt }: { fetchedAt: Date | null }) {
+  if (!fetchedAt) return null;
+  return (
+    <div
+      style={{
+        fontFamily: "var(--font-mono, monospace)",
+        fontSize: 11.5,
+        color: "var(--ink-muted)",
+        fontVariantNumeric: "tabular-nums",
+        textAlign: "right",
+      }}
+    >
+      as at {fetchedAt.toLocaleTimeString("en-GB")} · refreshes every minute
+    </div>
+  );
 }
 
 /** Relative time that never rounds a real gap away. */

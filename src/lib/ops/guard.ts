@@ -22,6 +22,7 @@
  */
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { permitCrossTenantReads } from "@/lib/db/tenant-guard";
 import { studioError } from "@/lib/studio/api";
 import { canAccessControlTower, canAccessOperations, canAccessStudio } from "@/lib/studio/rbac";
 import { scopedWhere, tenantScopeFor, type TenantScope } from "@/lib/studio/tenant-scope";
@@ -73,6 +74,10 @@ async function requireWorkspace(
   // Only an admin may read without a tenant. Everyone else is refused here,
   // BEFORE a query runs — never allowed to fall through to an unscoped read.
   if (scoped.reason === "ADMIN_WITHOUT_ORGANIZATION") {
+    // Declare the deliberate cross-tenant context for the rest of this
+    // request, so the attached tenant-scope guard permits the unscoped reads
+    // this branch exists for — visibly, not by weakening the guard.
+    permitCrossTenantReads("ops-guard: platform admin without organization");
     return { ok: true, actor: { kind: "global", scope: null, organizationId: null, userId: user.id } };
   }
 

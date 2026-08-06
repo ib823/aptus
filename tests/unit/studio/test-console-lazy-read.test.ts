@@ -23,74 +23,59 @@ describe("no live SAP read happens on render", () => {
     expect(PAGE).not.toContain("/api/sap/tdd/preview");
   });
 
-  it("the client's live calls live inside the Run handler, not an effect", () => {
-    // useEffect + fetch would fire on mount or on every selection change — the
-    // exact fan-out this rule exists to prevent.
-    expect(CLIENT).not.toMatch(/useEffect\([\s\S]{0,400}?\/api\/sap\/tdd\//);
+  it("the client's live call lives inside the Run handler, not an effect", () => {
+    // useEffect + a live-run fetch would fire on mount or on every selection
+    // change — the exact fan-out this rule exists to prevent. (The saved-cases
+    // list IS loaded in an effect, deliberately: it is a Postgres read of this
+    // org's own rows, not a tenant read.) A proximity regex cannot tell "an
+    // effect that fetches" from "an effect NEAR a fetch", so the assertion is
+    // exact: the component has one effect, and its body only loads cases.
+    const effects = CLIENT.match(/useEffect\(/g) ?? [];
+    expect(effects.length).toBe(1);
+    expect(CLIENT).toMatch(/useEffect\(\(\) => \{\s*void loadCases\(\);\s*\}, \[loadCases\]\)/);
     const runHandler = CLIENT.slice(CLIENT.indexOf("const doRun"), CLIENT.indexOf("const saveCase"));
-    expect(runHandler).toContain("/api/sap/tdd/entities");
-    expect(runHandler).toContain("/api/sap/tdd/preview");
+    expect(runHandler).toContain("/api/studio/test/broker-run");
   });
 
-  it("reads rows only after the schema call succeeds", () => {
-    // The preview call must sit after the 401/403 and !ok branches, so a
-    // needs-setup service never triggers a second live call.
+  it("the run goes THROUGH THE BROKER, not the env-tenant explorer routes", () => {
+    /*
+     * The console used to call /api/sap/tdd/entities and /preview — role-gated
+     * env-tenant reads with no grant check, no environment binding, no
+     * northbound audit. A green console proved nothing about the deployed
+     * app's call, and the manual claimed otherwise. The run handler must not
+     * reach for those routes again.
+     */
     const runHandler = CLIENT.slice(CLIENT.indexOf("const doRun"), CLIENT.indexOf("const saveCase"));
-    expect(runHandler.indexOf("/api/sap/tdd/entities")).toBeLessThan(
-      runHandler.indexOf("/api/sap/tdd/preview"),
-    );
+    expect(runHandler).not.toContain("/api/sap/tdd/entities");
+    expect(runHandler).not.toContain("/api/sap/tdd/preview");
   });
 });
 
 /**
- * WHAT THIS BLOCK USED TO DO, AND WHY IT IS DIFFERENT NOW.
+ * WHAT THIS BLOCK USED TO GUARD, AND WHAT IT GUARDS NOW.
  *
- * It was titled "honest status is preserved, not re-invented" and it asserted
- * that the source text of `doRun` CONTAINED the strings "ACTIVATED", "no
- * records" and "not an error". Those words were present, so it passed — for as
- * long as the handler set `status: "ACTIVATED"` and `httpStatus: 200` as
- * literals on every path, including when the tenant had answered 403 or 404.
- *
- * A test that greps for the vocabulary cannot tell correct usage from incorrect
- * usage. It guarded the APPEARANCE of honest status while the behaviour was the
- * exact conflation the doctrine forbids, and it would have gone on passing
- * indefinitely.
- *
- * The mapping is now a pure function and is tested as behaviour, over the real
- * observed payloads, in tests/unit/studio/preview-honest-status.test.ts. What
- * remains here is the part a source scan is genuinely the right tool for: that
- * the component DELEGATES rather than keeping a second copy of the rule — which
- * is what the block's title claimed all along.
+ * Two eras of the same lesson. First a grep-for-vocabulary test passed while
+ * the handler set ACTIVATED unconditionally; it was replaced by a delegation
+ * check on `previewOutcome`. Then the run moved to the broker dry-run, whose
+ * server-side statuses (OK/EMPTY/NEEDS_SETUP/NOT_FOUND/TIMEOUT/ERROR) come
+ * from the same `classify` the runtime uses — the delegation now lives on the
+ * server, and the client's only job is a 1:1 mapping onto the chip vocabulary
+ * plus the rule that a GOVERNANCE refusal renders no chip at all.
  */
-describe("honest status is delegated, not re-invented here", () => {
+describe("broker outcomes are mapped, refusals render no chip", () => {
   const runHandler = CLIENT.slice(CLIENT.indexOf("const doRun"), CLIENT.indexOf("const saveCase"));
 
-  it("hands the preview response to the shared mapping", () => {
-    expect(runHandler).toContain("previewOutcome(");
-    // Both layers must reach the mapping: the transport result AND the body.
-    // Passing only one is how the original defect read the wrong one.
-    expect(runHandler).toMatch(/previewOutcome\(\s*\{\s*ok:\s*\w+\.ok,\s*status:\s*\w+\.status\s*\}/);
+  it("a refusal sets no status — the chip vocabulary is tenant facts only", () => {
+    const refusalArm = runHandler.slice(
+      runHandler.indexOf('outcome === "refused"'),
+      runHandler.indexOf("const d = json.data"),
+    );
+    expect(refusalArm).toContain("refusal: json.data.refusal");
+    expect(refusalArm).not.toContain("status:");
   });
 
-  it("keeps no second copy of the status rule in the component", () => {
-    // The literals are the tell. If a status word or one of the phrases comes
-    // back into this handler, someone has started deciding here again, and the
-    // two copies will diverge exactly as they did before.
-    const rowsSection = runHandler.slice(runHandler.indexOf("/api/sap/tdd/preview"));
-    for (const literal of ['"ACTIVATED"', '"NOT_FOUND"', "no records", "not an error"]) {
-      expect(
-        rowsSection.toLowerCase(),
-        `"${literal}" is back in doRun — the mapping belongs in previewOutcome`,
-      ).not.toContain(literal.toLowerCase());
-    }
-  });
-
-  it("still maps a transport 401/403 on the SCHEMA call to NEEDS_SETUP", () => {
-    // The schema call is a separate branch and legitimately reads its own
-    // transport status: /entities does not wrap an upstream refusal in a 200.
-    const schemaSection = runHandler.slice(0, runHandler.indexOf("/api/sap/tdd/preview"));
-    expect(schemaSection).toContain("NEEDS_SETUP");
-    expect(schemaSection).toMatch(/status === 401 \|\| \w+\.status === 403/);
+  it("OK and EMPTY both map to ACTIVATED — emptiness is a successful read", () => {
+    expect(runHandler).toMatch(/d\.status === "OK" \|\| d\.status === "EMPTY"/);
   });
 });
 

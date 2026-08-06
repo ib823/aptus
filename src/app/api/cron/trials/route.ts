@@ -6,24 +6,20 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { timingSafeEqual } from "crypto";
-import { checkAndExpireTrials } from "@/lib/commercial/trial-manager";
 
-function safeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
-}
+import { checkAndExpireTrials } from "@/lib/commercial/trial-manager";
+import { authorizeCron, recordCronRun } from "@/lib/ops/cron";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  // Protect with CRON_SECRET — always required in production
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (!cronSecret || !authHeader || !safeCompare(authHeader, `Bearer ${cronSecret}`)) {
+  if (!authorizeCron(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const startedAt = new Date();
   const expired = await checkAndExpireTrials();
+  await recordCronRun("trials", startedAt, true, { trialsExpired: expired });
 
   return NextResponse.json({
     data: {

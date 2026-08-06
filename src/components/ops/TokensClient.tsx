@@ -20,6 +20,8 @@
  * make a correct set of numbers look like an arithmetic error.
  */
 
+import { useState } from "react";
+
 import {
   AbsencePill,
   OpsCard,
@@ -33,7 +35,7 @@ import {
   opsMonoStyle,
   type OpsTone,
 } from "@/components/ops/OpsChrome";
-import { count, sinceLabel, useOpsFeed } from "@/components/ops/useOpsFeed";
+import { count, FeedAsAt, sinceLabel, useOpsFeed } from "@/components/ops/useOpsFeed";
 import { formatDate } from "@/lib/format/date";
 
 type CredentialState = "active" | "expiring-soon" | "expired" | "revoked";
@@ -84,7 +86,13 @@ const STATE: Record<CredentialState, { tone: OpsTone; label: string; meaning: st
 };
 
 export function TokensClient() {
-  const { feed } = useOpsFeed<TokensPayload>("/api/ops/tokens");
+  // The endpoint always honored includeRevoked=1; the screen simply never sent
+  // it, so the row a revocation investigation needs was unreachable from the
+  // one place an operator would look for it.
+  const [includeRevoked, setIncludeRevoked] = useState(false);
+  const { feed, fetchedAt } = useOpsFeed<TokensPayload>(
+    includeRevoked ? "/api/ops/tokens?includeRevoked=1" : "/api/ops/tokens",
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -92,6 +100,17 @@ export function TokensClient() {
         title="Tokens"
         lede="The runtime credentials issued for this organization. Metadata only — the token hash and the sealed write secret are not read by the endpoint, so nothing on this page could become a credential."
       />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, color: "var(--ink-secondary)" }}>
+          <input
+            type="checkbox"
+            checked={includeRevoked}
+            onChange={(e) => setIncludeRevoked(e.target.checked)}
+          />
+          Include revoked credentials
+        </label>
+        <FeedAsAt fetchedAt={fetchedAt} />
+      </div>
 
       {feed.state === "loading" ? (
         <OpsCard>
@@ -132,6 +151,13 @@ function TokensBody({ data }: { data: TokensPayload }) {
           label="With write secret"
           value={count(counts.withWriteCredential)}
           basis="counted by presence, never read"
+        />
+        <Stat
+          label="Never observed in use"
+          value={count(counts.neverObservedInUse)}
+          // The under-reporting caveat travels WITH the number: the feed misses
+          // uses, so this is not a list of dormant credentials to revoke.
+          basis="no use recorded — the feed under-reports"
         />
       </div>
 

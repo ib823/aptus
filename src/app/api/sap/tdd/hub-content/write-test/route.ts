@@ -125,7 +125,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     try {
       const user = isAdminError(auth) ? null : auth.user;
       await logDecision({
-        assessmentId: "system",
+        assessmentId: null,
         entityType: "sap_write_test",
         entityId: `${prefix}:${service.key}:${entity}`,
         action: "SAP_WRITE_TEST_PERFORMED",

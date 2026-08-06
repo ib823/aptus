@@ -5,8 +5,10 @@
  *   POST  raise a request  (any builder)
  *   PATCH record a decision (a DIFFERENT builder — see segregation of duties)
  *
- * v1 records governance; it does not enforce it at runtime, because in v1 nothing
- * calls SAP on a solution's behalf. The rules that decide whether a decision may
+ * This ledger is enforced at runtime: the northbound broker checks a live,
+ * unexpired, unrevoked grant on every call a solution makes. The GET therefore
+ * returns the revocation fields too — a reader that omits them shows "Approved"
+ * for a grant the broker refuses. The rules that decide whether a decision may
  * be recorded live in lib/studio/grants.ts, deliberately separate from this
  * transport layer so they can be tested exhaustively.
  */
@@ -86,6 +88,8 @@ export async function GET() {
       decidedById: true,
       decidedAt: true,
       expiresAt: true,
+      revokedAt: true,
+      revokedReason: true,
       createdAt: true,
       solution: { select: { name: true } },
     },
