@@ -227,33 +227,90 @@ function CatalogueBody({ data }: { data: CataloguePayload }) {
 function GuidedRefresh({ onImported }: { onImported: () => void }) {
   const [phrase, setPhrase] = useState("");
   const [harvestType, setHarvestType] = useState<(typeof HARVEST_TYPES)[number]>("EVENT");
-  const [running, setRunning] = useState<"seed" | "harvest" | null>(null);
+  const [running, setRunning] = useState<"seed" | "harvest" | "api-reference" | null>(null);
   const [outcome, setOutcome] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const armed = phrase === CONFIRMATION;
+
+  /** The rebuild call alone — shared by the button and the api-ref chain. */
+  const rebuildOnce = async (): Promise<string> => {
+    const res = await fetch("/api/sap/tdd/hub-content/seed", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmation: phrase }),
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      data?: Record<string, unknown>;
+      error?: { message?: string };
+    };
+    if (!res.ok || !body.data) {
+      throw new Error(body.error?.message ?? `Rebuild failed (HTTP ${res.status}).`);
+    }
+    return `Rebuild complete: ${JSON.stringify(body.data)}`;
+  };
 
   const runSeed = async () => {
     setRunning("seed");
     setOutcome(null);
     setFailure(null);
     try {
-      const res = await fetch("/api/sap/tdd/hub-content/seed", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmation: phrase }),
-      });
-      const body = (await res.json().catch(() => ({}))) as {
-        data?: Record<string, unknown>;
-        error?: { message?: string };
-      };
-      if (!res.ok || !body.data) {
-        setFailure(body.error?.message ?? `Rebuild failed (HTTP ${res.status}).`);
-      } else {
-        setOutcome(`Rebuild complete: ${JSON.stringify(body.data)}`);
-        onImported();
+      setOutcome(await rebuildOnce());
+      onImported();
+    } catch (err) {
+      setFailure(err instanceof Error ? err.message : "The rebuild request could not be sent.");
+    } finally {
+      setRunning(null);
+    }
+  };
+
+  /**
+   * The API reference import, then the rebuild, as ONE action. The reference
+   * table is what the API tile projects FROM — refreshing it without
+   * re-projecting would leave the screen unchanged and the operator concluding
+   * the import did nothing. Chunked like the harvest imports (~4,600 rows).
+   */
+  const runApiReference = async () => {
+    setRunning("api-reference");
+    setOutcome(null);
+    setFailure(null);
+    let offset = 0;
+    let inserted = 0;
+    let updated = 0;
+    let skipped = 0;
+    try {
+      for (;;) {
+        const res = await fetch("/api/sap/tdd/hub-content/api-reference-import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirmation: phrase, offset }),
+        });
+        const body = (await res.json().catch(() => ({}))) as {
+          data?: { inserted: number; updated: number; skipped: number; nextOffset: number | null };
+          error?: { message?: string };
+        };
+        if (!res.ok || !body.data) {
+          setFailure(body.error?.message ?? `API reference import failed at offset ${offset} (HTTP ${res.status}).`);
+          return;
+        }
+        inserted += body.data.inserted;
+        updated += body.data.updated;
+        skipped += body.data.skipped;
+        if (body.data.nextOffset === null) break;
+        offset = body.data.nextOffset;
       }
-    } catch {
-      setFailure("The rebuild request could not be sent.");
+      // Chain the rebuild so the refreshed reference is re-projected into the
+      // catalogue rows the console actually reads.
+      const rebuildSummary = await rebuildOnce();
+      setOutcome(
+        `API reference import complete: ${count(inserted)} inserted, ${count(updated)} updated, ${count(skipped)} skipped. ${rebuildSummary}`,
+      );
+      onImported();
+    } catch (err) {
+      setFailure(
+        err instanceof Error
+          ? `${err.message} The import itself is idempotent — re-running resumes safely.`
+          : `The import stopped at offset ${offset}. Re-running resumes safely — it is idempotent.`,
+      );
     } finally {
       setRunning(null);
     }
@@ -313,9 +370,10 @@ function GuidedRefresh({ onImported }: { onImported: () => void }) {
           </li>
           <li>Type the confirmation phrase, exactly.</li>
           <li>
-            Run the rebuild (bundled drops + the API slice) or a harvested-type import. The summary
-            shown afterwards is the server&apos;s own, and the same numbers are written to the
-            append-only audit.
+            Run the rebuild (bundled drops + the API slice), a harvested-type import, or the API
+            reference import (which refreshes the table the API tile projects from, then chains the
+            rebuild automatically). The summary shown afterwards is the server&apos;s own, and the
+            same numbers are written to the append-only audit.
           </li>
         </ol>
 
@@ -358,6 +416,25 @@ function GuidedRefresh({ onImported }: { onImported: () => void }) {
             }}
           >
             {running === "seed" ? "Rebuilding…" : "Rebuild from bundled drops"}
+          </button>
+
+          <button
+            type="button"
+            onClick={runApiReference}
+            disabled={!armed || running !== null}
+            style={{
+              fontSize: 12.5,
+              fontWeight: 600,
+              padding: "6px 12px",
+              borderRadius: 6,
+              border: "1px solid var(--border-strong)",
+              background: "var(--surface-paper)",
+              color: "var(--ink-primary)",
+              cursor: armed && running === null ? "pointer" : "default",
+              opacity: armed ? 1 : 0.5,
+            }}
+          >
+            {running === "api-reference" ? "Importing API reference…" : "Import API reference + rebuild"}
           </button>
 
           <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
