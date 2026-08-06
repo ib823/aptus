@@ -91,3 +91,25 @@ compares that to these totals.
 | ANALYTICS | 6 | reference |
 
 Source of truth is `S4_PUBLIC_PUBLISHED_COUNTS` in `src/lib/sap-public/hub-content.ts`.
+
+## Product identity (2026-08 change)
+
+`SapHubContent` rows now carry their real product identity instead of a blanket
+`appliesToPublic: true`:
+
+- The importers derive `appliesToPublic/Private/OnPrem` from each row's
+  `product` tag (same classifier as the API-catalogue importer,
+  `src/lib/sap-public/edition-tags.ts`) and persist the verbatim tag string on
+  `SapHubContent.productTags`.
+- The admin **Rebuild from API reference** projects every addressable
+  `SapApiReference` row (any edition flag, or a SuccessFactors/Ariba product
+  tag) and copies its flags + tags — no longer Public-only.
+- Read paths filter per product via `hubCatalogueScope`
+  (`src/lib/sap-public/dynamic-catalog.ts`): edition column for S/4 editions,
+  product-tag match for SuccessFactors/Ariba, deliberately nothing for ECC.
+
+**Operator step after deploying this change:** re-run the imports once
+(Rebuild from API reference + Import harvested artifacts, or
+`pnpm sap:hub:import` on a dev DB) so existing rows get their edition flags and
+product tags re-stamped. The upserts are idempotent; stored probe results are
+preserved (`rawMetadataJson.probes` is merged, never clobbered).

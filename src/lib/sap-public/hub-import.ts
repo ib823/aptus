@@ -13,6 +13,7 @@
  * NEVER fabricates: a row without a usable externalId returns null and is skipped.
  */
 import { isHubContentType, type HubContentType } from "@/lib/sap-public/hub-content";
+import { mapEditionFromProductTags } from "@/lib/sap-public/edition-tags";
 
 export interface NormalizedHubContent {
   contentType: HubContentType;
@@ -23,6 +24,8 @@ export interface NormalizedHubContent {
   appliesToPublic: boolean;
   appliesToPrivate: boolean;
   appliesToOnPrem: boolean;
+  /** SAP's verbatim product tag string (SapApiReference convention), or null. */
+  productTags: string | null;
   status: string;
   apiType: string | null;
   communicationScenarios: string[];
@@ -133,16 +136,48 @@ export function normalizeHubRowForType(
     asString(pickField(row, "hubUrl", "url", "link")) ||
     `https://api.sap.com/${contentType === "API" ? "api" : "content"}/${encodeURIComponent(idRaw)}`;
 
+  /*
+   * PRODUCT IDENTITY IS DERIVED FROM THE ROW'S OWN TAG, NEVER DEFAULTED.
+   *
+   * The old rule was "Scope is S/4 Public — default Public true unless the
+   * file says otherwise", and the harvested files never say otherwise: they
+   * carry a `product` tag ("SAPS4HANACloudPrivateEdition",
+   * "SAPDigitalManufacturingCloud") and no appliesTo* fields. So 500
+   * Private-edition BAdIs and every cross-product integration imported as
+   * S/4 Public, and the per-product read filter had nothing true to read.
+   *
+   * Precedence: an explicit appliesTo* field wins (the drop-target shape may
+   * declare it); else the product tag is classified with the same mapper the
+   * API-catalogue importer has always used; else — no tag, no explicit flag —
+   * the row keeps the historical Public default, because the curated
+   * drop-target exports are S/4 Public by construction (the README's export
+   * instructions filter on that package) and stamping them unknown would
+   * evict them from every edition.
+   */
+  const productTagsRaw = asArray(pickField(row, "product", "products", "productTags"));
+  const productTags = productTagsRaw.length > 0 ? productTagsRaw.join(",") : null;
+  const explicitPublic = pickField(row, "appliesToPublic", "public");
+  const explicitPrivate = pickField(row, "appliesToPrivate", "private");
+  const explicitOnPrem = pickField(row, "appliesToOnPrem", "onPrem");
+  const hasExplicitEdition =
+    explicitPublic !== null || explicitPrivate !== null || explicitOnPrem !== null;
+  const derived = productTags !== null ? mapEditionFromProductTags(productTagsRaw) : null;
+  const editions = hasExplicitEdition
+    ? {
+        appliesToPublic: asBool(explicitPublic, true),
+        appliesToPrivate: asBool(explicitPrivate, false),
+        appliesToOnPrem: asBool(explicitOnPrem, false),
+      }
+    : derived ?? { appliesToPublic: true, appliesToPrivate: false, appliesToOnPrem: false };
+
   return {
     contentType,
     externalId,
     title,
     description,
     packageId,
-    // Scope is S/4 Public — default Public true unless the file says otherwise.
-    appliesToPublic: asBool(pickField(row, "appliesToPublic", "public"), true),
-    appliesToPrivate: asBool(pickField(row, "appliesToPrivate", "private"), false),
-    appliesToOnPrem: asBool(pickField(row, "appliesToOnPrem", "onPrem"), false),
+    ...editions,
+    productTags,
     status: asString(pickField(row, "status", "releaseStatus", "state")) || "Released",
     apiType,
     communicationScenarios: asArray(pickField(row, "communicationScenarios", "scenarios")),

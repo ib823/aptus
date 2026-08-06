@@ -457,6 +457,17 @@ model SapHubContent {
   /// not recorded; a re-import (idempotent) fills it with the truth.
   illustrative Boolean?
 
+  /// SAP's product tag string, verbatim (e.g. "SAPSuccessFactors",
+  /// "SAPS4HANACloudPrivateEdition") — same convention as
+  /// SapApiReference.productTags, and queried the same way (case-insensitive
+  /// substring, see productTagFilter). NULL = the row predates the column or
+  /// its source carried no tag. This is what makes non-edition products
+  /// (SuccessFactors, Ariba) addressable by a catalogue read at all: they
+  /// correctly carry no edition flag, so an edition filter can never return
+  /// them, and until this column existed every row was stamped
+  /// appliesToPublic=true at import regardless of its real product.
+  productTags String?
+
   hubUrl          String // canonical link back to api.sap.com
   rawMetadataJson Json?
 
@@ -466,6 +477,8 @@ model SapHubContent {
   @@unique([contentType, externalId])
   @@index([contentType])
   @@index([appliesToPublic])
+  @@index([appliesToPrivate])
+  @@index([appliesToOnPrem])
   @@index([status])
 }
 
@@ -608,7 +621,11 @@ model Interface {
   /// Bumped on every change.
   version Int    @default(1)
 
-  /// "s4hana" | "successfactors" | "ariba"
+  /// Any product key the connector registry knows (s4hana, successfactors,
+  /// cloud-erp-private, s4hana-onprem, ecc, ariba) — validated against
+  /// getSapProduct at the API boundary, never a hand-kept enum: the literal
+  /// three-product list here once meant no interface could exist for a RISE
+  /// or on-premise connection at all.
   sapProduct String
   /// The catalogue apiId of the service being consumed.
   externalId String

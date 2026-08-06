@@ -165,19 +165,28 @@ export function pathToApiId(path: string): string {
  * Values move with each SAP release, so the report compares "within drift", not
  * for exact equality. CDS/BAdI/BO are stored as grouped rows carrying itemCount,
  * so the report compares the summed itemCount against these totals.
- * (PROCESS_BLUEPRINT + LIVEPROCESS are ~15 combined; assigned to the former.)
+ *
+ * RECONCILED WITH THE COMMITTED ARTIFACTS (2026-07 snapshot). The previous
+ * values contradicted both the drop files this repo ships and the tiles' own
+ * help text: SCENARIO said 16 while SCENARIO.json holds 308 and NA_HELP says
+ * "Scenarios (308)"; LIVEPROCESS said 0 while 43 were loaded — a tile showing
+ * 43 loaded of ~0 published; PROCESS_BLUEPRINT said 15 while its NA_NOTE says
+ * it is not a separate content type at all. A drift REFERENCE that disagrees
+ * with the data on the same screen measures nothing.
  */
 export const S4_PUBLIC_PUBLISHED_COUNTS: Record<HubContentType, number> = {
   API: 862,
-  EVENT: 147,
+  EVENT: 151,
   CDS_VIEW: 8983,
   BADI: 1665,
-  BO_INTERFACE: 207,
+  BO_INTERFACE: 221,
   INTEGRATION: 158,
-  BUILD: 78,
-  PROCESS_BLUEPRINT: 15,
-  LIVEPROCESS: 0,
-  SCENARIO: 16,
+  BUILD: 77,
+  // Not a separate published type — covered under Scenarios & Live Processes
+  // (see ContentTypeTiles.NA_NOTE). Zero here, "n/a by design" on the tile.
+  PROCESS_BLUEPRINT: 0,
+  LIVEPROCESS: 43,
+  SCENARIO: 308,
   VPUC: 5,
   ANALYTICS: 6,
 };

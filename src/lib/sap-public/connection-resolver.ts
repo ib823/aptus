@@ -92,8 +92,28 @@ function normalizeBaseUrl(raw: string): string {
 }
 
 function coerceAuthType(raw: string): SapAuthType {
-  if (raw === "basic" || raw === "bearer" || raw === "oauth-client-credentials") return raw;
-  throw new Error(`SapConnection.authType must be basic | bearer | oauth-client-credentials (got "${raw}")`);
+  /*
+   * ALL FOUR TYPES. This function refused `oauth-saml-bearer` while everything
+   * around it accepted the type: the connections route validated and persisted
+   * it, `buildAuthHeaderFromConnection` dispatched it, and SAP's 20 Nov 2026
+   * Basic-auth removal is the whole reason it exists. The result: storing a
+   * SuccessFactors SAML connection made `resolveSapConnections` — and through
+   * it the connections LIST and every northbound read for that organization —
+   * throw on a row the product had just accepted. The auth path that could
+   * never be reached was also "unverified against a live tenant", which is a
+   * strange thing for code to be when calling it was impossible.
+   */
+  if (
+    raw === "basic" ||
+    raw === "bearer" ||
+    raw === "oauth-client-credentials" ||
+    raw === "oauth-saml-bearer"
+  ) {
+    return raw;
+  }
+  throw new Error(
+    `SapConnection.authType must be basic | bearer | oauth-client-credentials | oauth-saml-bearer (got "${raw}")`,
+  );
 }
 
 /**
@@ -198,7 +218,18 @@ export type ConnectionBindingFailure =
   /** Several candidates and no way to choose — refuse rather than guess. */
   | "AMBIGUOUS"
   /** A write against a connection that has not declared its landscape. */
-  | "UNDECLARED_ENVIRONMENT_WRITE";
+  | "UNDECLARED_ENVIRONMENT_WRITE"
+  /**
+   * A stored connection row could not be resolved at all — an authType outside
+   * the vocabulary, or secrets that failed to open (key rotation, AAD
+   * mismatch, corruption). Before this reason existed the resolver's throw
+   * escaped the northbound routes as an unhandled 500 with NO audit row and no
+   * correlation id: an organization whose row went bad lost its whole
+   * northbound surface and the trail showed nothing. A refusal with a name is
+   * the honest shape — the caller gets an actionable sentence, the audit gets
+   * a countable reason.
+   */
+  | "CONNECTION_UNREADABLE";
 
 export type ConnectionBinding =
   | { ok: true; connection: ResolvedSapConnection; bindingUnverified: boolean }
@@ -221,7 +252,22 @@ export async function resolveSapConnectionForEnvironment(
    */
   sapClient?: string | null,
 ): Promise<ConnectionBinding> {
-  const all = await resolveSapConnections(organizationId, product);
+  /*
+   * A ROW THAT CANNOT BE RESOLVED IS A REFUSAL, NOT A CRASH. `resolveSapConnections`
+   * throws on an unrecognised authType or secrets that fail to open — and that
+   * throw used to escape the northbound routes as an unhandled 500 with no
+   * audit row. It is caught HERE and not per-caller so every binding path gets
+   * the same behaviour. Fail-closed on the whole set, deliberately: skipping
+   * just the bad row could bind the call to a DIFFERENT connection than the
+   * estate intended, which is the cross-landscape routing this module exists
+   * to prevent.
+   */
+  let all: ResolvedSapConnection[];
+  try {
+    all = await resolveSapConnections(organizationId, product);
+  } catch {
+    return { ok: false, reason: "CONNECTION_UNREADABLE" };
+  }
   if (all.length === 0) return { ok: false, reason: "NO_CONNECTION" };
 
   const target = environment.trim().toUpperCase();
@@ -305,12 +351,31 @@ export function connectionRefusalMessage(
       return `More than one SAP connection could serve the ${environment} environment, so none was chosen. Declare a distinct environment on each connection in Studio — or, where one system hosts several SAP clients, set the client on each connection and on this credential so the pair identifies exactly one.`;
     case "UNDECLARED_ENVIRONMENT_WRITE":
       return "This organization's SAP connection has not declared which environment it is, so a write cannot be authorised against it. Set the environment on the connection in Studio.";
+    case "CONNECTION_UNREADABLE":
+      return "A stored SAP connection for this organization could not be read (its credentials failed to open or its auth type is unrecognised). Re-save the connection's secrets in Studio, or deactivate the broken row.";
   }
 }
 
-/** Project a resolved connection to the SapTenant shape the catalogue code uses. */
+/**
+ * Project a resolved connection to the SapTenant shape the catalogue code uses.
+ *
+ * CARRIES `client` AND `environment`. This projection dropped both, and it sits
+ * on EVERY read path that resolves a stored connection (entities, preview,
+ * operations, capabilities, hub-content, probe-all, via resolveReadTenant) —
+ * so `serviceUrl` never received a client and `sap-client` was never appended
+ * to a read URL, on exactly the two products (`cloud-erp-private`,
+ * `s4hana-onprem`) whose `addressesClient: true` exists for it. That is the
+ * "read one client, write to another, and the request would succeed" hazard
+ * sap-url.ts was written to prevent, reintroduced by a lossy projection.
+ */
 export function toSapTenant(conn: ResolvedSapConnection): SapTenant {
-  return { key: conn.key, label: conn.label, baseUrl: conn.baseUrl };
+  return {
+    key: conn.key,
+    label: conn.label,
+    baseUrl: conn.baseUrl,
+    ...(conn.environment ? { environment: conn.environment } : {}),
+    ...(conn.client ? { client: conn.client } : {}),
+  };
 }
 
 /**

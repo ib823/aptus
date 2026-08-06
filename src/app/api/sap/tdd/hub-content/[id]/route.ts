@@ -18,6 +18,7 @@ import { probeService } from "@/lib/sap-public/capability-probe";
 import {
   hubApiToService,
   hubAvailabilityQualifier,
+  readStoredProbe,
   resolveHubStatus,
   type HubContentType,
 } from "@/lib/sap-public/hub-content";
@@ -83,6 +84,27 @@ export async function GET(
       if (result.entities && result.entities.length > 0) capability = deriveReadWrite(result.entities);
     } catch {
       probeStatus = null;
+    }
+  }
+  /*
+   * FALL BACK TO THE STORED PROBE the list itself renders from. With ?probe=0
+   * (or a live probe that failed) this route reported "status unknown" for a
+   * row whose Probe-all result sat in rawMetadataJson — so the detail said
+   * "not probed" under a list badge that said ACTIVATED. Same tenant scoping
+   * as the list read: this tenant's entry, or the legacy singular slot for
+   * the default tenant only, never another tenant's data.
+   */
+  if (probeStatus == null && tenantKey) {
+    const stored = readStoredProbe(
+      item.rawMetadataJson,
+      tenantKey,
+      getConfiguredSapTenants(product.envPrefix)[0]?.key,
+    );
+    if (stored && typeof stored.http === "number") {
+      probeStatus = stored.http;
+      if (typeof stored.read === "boolean") {
+        capability = { read: stored.read, write: stored.write === true };
+      }
     }
   }
 

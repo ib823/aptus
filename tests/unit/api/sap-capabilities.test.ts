@@ -36,7 +36,7 @@ vi.mock("@/lib/sap-public/capability-audit", () => ({
 const { GET } = await import("@/app/api/sap/tdd/capabilities/route");
 
 const CURATED = { key: "po", label: "Purchase Orders", scenario: "SAP_COM_0053", path: "/sap/opu/odata/sap/API_PURCHASEORDER_PROCESS_SRV", domain: "" };
-const PRODUCT = { key: "s4hana", label: "S/4HANA Cloud", envPrefix: "S4_TDD", services: [CURATED] };
+const PRODUCT = { key: "s4hana", label: "S/4HANA Cloud", envPrefix: "S4_TDD", edition: "PUBLIC", services: [CURATED] };
 const TENANT = { key: "default", label: "ABeam TDD", baseUrl: "https://x.example" };
 
 function makeRequest(query = "product=s4hana"): Parameters<typeof GET>[0] {

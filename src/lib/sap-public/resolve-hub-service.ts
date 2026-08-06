@@ -10,6 +10,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { getSapService, type SapOdataProduct, type SapServiceDefinition } from "@/lib/sap-public/tdd-connector";
 import { hubApiToService, type HubContentType } from "@/lib/sap-public/hub-content";
+import { hubCatalogueScope } from "@/lib/sap-public/dynamic-catalog";
 
 export async function resolveHubService(
   product: SapOdataProduct,
@@ -19,9 +20,19 @@ export async function resolveHubService(
   // Curated first — keeps the known-good V2/V4 paths authoritative.
   const curated = getSapService(product, key);
   if (curated) return curated;
-  // Fall back to the full catalogue: externalId == apiId (last path segment).
+  /*
+   * Catalogue fallback is EDITION-ONLY, in the requested product's own scope.
+   * This filtered `appliesToPublic: true` regardless of product, so an
+   * on-prem product resolved a PUBLIC-edition row — and a non-edition product
+   * (SuccessFactors) would have resolved an S/4 row whose derived path is
+   * wrong for its host by construction. Non-edition products have exactly
+   * their curated services; anything else resolves null and the caller 400s
+   * honestly.
+   */
+  const scope = hubCatalogueScope(product);
+  if (scope.kind !== "edition") return null;
   const row = await prisma.sapHubContent.findFirst({
-    where: { externalId: key, appliesToPublic: true },
+    where: { ...scope.where, externalId: key },
     select: { contentType: true, apiType: true, externalId: true, title: true, packageId: true, communicationScenarios: true },
   });
   if (!row) return null;

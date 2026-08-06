@@ -97,6 +97,11 @@ export default async function StudioAccessPage() {
             solutionId: true,
             label: true,
             environment: true,
+            // The SAP client the credential binds to. Collected at issue,
+            // rendered as env/client by the table — and never selected here,
+            // so on a multi-client estate the one column that says WHICH data
+            // container a credential addresses was always blank.
+            sapClient: true,
             isActive: true,
             lastUsedAt: true,
             revokedAt: true,
@@ -154,6 +159,7 @@ export default async function StudioAccessPage() {
     solutionName: solutionNames.get(c.solutionId) ?? "(unknown solution)",
     label: c.label,
     environment: c.environment,
+    sapClient: c.sapClient,
     isActive: c.isActive,
     lastUsedAt: c.lastUsedAt ? c.lastUsedAt.toISOString() : null,
     revokedAt: c.revokedAt ? c.revokedAt.toISOString() : null,

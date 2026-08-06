@@ -29,6 +29,7 @@ import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
@@ -37,7 +38,19 @@ const bodySchema = z.object({
   solutionId: z.string().min(1),
   /** Catalogue apiId of the service being consumed. */
   externalId: z.string().min(1).max(200),
-  sapProduct: z.enum(["s4hana", "successfactors", "ariba"]),
+  /*
+   * EVERY PRODUCT THE CONNECTOR KNOWS, not a hand-kept three. The literal enum
+   * ["s4hana","successfactors","ariba"] predated the private-cloud/on-prem/ECC
+   * products and was never widened — so the three client-addressing products
+   * could be CONNECTED but no interface (and therefore no grant, credential,
+   * scaffold or broker call) could ever be defined against them: "Add to
+   * interface" on a RISE tenant 400'd with no field-level detail. Validated
+   * against getSapProduct so this list and the product registry cannot drift
+   * apart again.
+   */
+  sapProduct: z.string().min(1).refine((k) => getSapProduct(k) !== null, {
+    message: "Unknown SAP product",
+  }),
   name: z.string().min(1).max(200),
   operation: z.enum(["READ", "CREATE", "UPDATE"]).default("READ"),
   entitySet: z.string().max(200).optional(),
