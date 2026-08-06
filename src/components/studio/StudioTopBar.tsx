@@ -340,27 +340,34 @@ export function StudioTopBar({
               {userEmail}
             </div>
             {/*
-              A plain link to the GET logout route, not next-auth's signOut(): that
+              A form POST to the logout route, not next-auth's signOut(): that
               route also revokes the server-side session row and clears the
               secure-prefixed NextAuth cookies. Clearing only the latter would let
               the middleware re-mint a session from the surviving JWT — signing the
-              user straight back in.
+              user straight back in. POST because logout mutates state, and a
+              GET that mutates is CSRF-able.
             */}
-            <a
-              role="menuitem"
-              href="/api/auth/logout"
-              style={{
-                display: "block",
-                padding: 8,
-                borderRadius: 8,
-                fontSize: 13,
-                fontWeight: 600,
-                color: "var(--ink-primary)",
-                textDecoration: "none",
-              }}
-            >
-              Sign out
-            </a>
+            <form method="post" action="/api/auth/logout" style={{ margin: 0 }}>
+              <button
+                type="submit"
+                role="menuitem"
+                style={{
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  padding: 8,
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--ink-primary)",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                Sign out
+              </button>
+            </form>
           </div>
         )}
       </div>

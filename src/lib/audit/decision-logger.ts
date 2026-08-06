@@ -6,7 +6,12 @@ import type { DecisionAction, UserRole } from "@/types/assessment";
 import type { JsonValue, InputJsonValue } from "@prisma/client/runtime/library";
 
 interface LogEntryInput {
-  assessmentId: string;
+  /**
+   * NULL for system-level events (org governance, catalogue imports,
+   * onboarding) — never a sentinel string. "system"/"SYSTEM" used to be passed
+   * here and violated the FK on every call, so those audits were lost.
+   */
+  assessmentId: string | null;
   entityType: string;
   entityId: string;
   action: DecisionAction;

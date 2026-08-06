@@ -309,7 +309,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * parameter, which is the 403 branch of the guard, not the 401 one.
    */
   if (tenant && dataProbe) {
-    const probeRefusal = await refuseUnlessMayProbeTenant(product.envPrefix);
+    const probeRefusal = await refuseUnlessMayProbeTenant();
     if (probeRefusal) return probeRefusal;
     try {
       const r = await probeActivatedApiIds(product.envPrefix, tenant, product, scope, true);

@@ -37,6 +37,7 @@ import { normalizeEnvironment, upsertSapConnection } from "@/lib/sap-public/conn
 import { isValidSapClient } from "@/lib/sap-public/sap-url";
 import { sanitizeTenantKey, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
+import { isForbiddenBaseUrlHost } from "@/lib/studio/connection-url-guard";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
 
@@ -75,7 +76,11 @@ const httpsUrl = z
   .string()
   .url()
   .max(500)
-  .refine((u) => u.startsWith("https://"), { message: "must be https" });
+  .refine((u) => u.startsWith("https://"), { message: "must be https" })
+  .refine((u) => !isForbiddenBaseUrlHost(u), {
+    message:
+      "must be a public hostname — IP literals, localhost and internal names are refused (the broker calls this URL with credentials attached)",
+  });
 
 const upsertSchema = z
   .object({

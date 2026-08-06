@@ -1,8 +1,25 @@
-/** GET: Sign out — revokes custom session, clears all auth cookies, redirects to login */
+/**
+ * POST: Sign out — revokes custom session, clears all auth cookies, redirects
+ * to login.
+ *
+ * POST-ONLY BECAUSE A GET THAT MUTATES IS CSRF-ABLE. As a GET, any page on the
+ * internet could sign a user out with an <img src> — a nuisance attack, but
+ * also a primitive for session-fixation setups. The session cookie is SameSite,
+ * so a cross-site POST does not carry it and cannot revoke anything. The GET
+ * handler remains as a compat redirect for old bookmarks and mutates nothing.
+ */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { revokeSession, SESSION_COOKIE_NAME, getSessionCookieOptions } from "@/lib/auth/session";
-export async function GET(request: NextRequest): Promise<NextResponse> {
+
+/** Compat for old bookmarks/links: redirect to the sign-in page, mutate nothing. */
+export function GET(request: NextRequest): NextResponse {
+  const host = request.headers.get("host")?.toLowerCase() ?? "";
+  const isWorkbench = !!process.env.WORKBENCH_HOST && host === process.env.WORKBENCH_HOST;
+  return NextResponse.redirect(new URL(isWorkbench ? "/presales/login" : "/login", request.url));
+}
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
   // Revoke the custom session in the database
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   if (token) {
@@ -22,7 +39,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const isWorkbench =
     !!process.env.WORKBENCH_HOST && host === process.env.WORKBENCH_HOST;
   const target = isWorkbench ? "/presales/login" : "/login";
-  const response = NextResponse.redirect(new URL(target, request.url));
+  // 303: the redirect after a POST must become a GET — a 307 would re-POST
+  // the login page and 405.
+  const response = NextResponse.redirect(new URL(target, request.url), 303);
 
   // Clear the custom session cookie
   response.cookies.set(SESSION_COOKIE_NAME, "", {

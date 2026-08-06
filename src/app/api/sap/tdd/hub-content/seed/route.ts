@@ -273,7 +273,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   async function logImport(action: DecisionAction, newValue: Prisma.InputJsonValue): Promise<void> {
     try {
       await logDecision({
-        assessmentId: "system",
+        assessmentId: null,
         entityType: "sap_hub_seed",
         entityId: "hub-content-rebuild",
         action,

@@ -211,7 +211,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     await logDecision({
-      assessmentId: "system",
+      assessmentId: null,
       entityType: "sap_hub_seed",
       entityId: "hub-harvest-import",
       action: "SAP_HUB_TYPE_IMPORTED" satisfies DecisionAction,

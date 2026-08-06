@@ -96,7 +96,7 @@ describe("a route that reads a customer tenant is gated on a role", () => {
         "only that SOMEBODY is signed in. Every authenticated role — executive " +
         "sponsor, project manager, support — can make them fire real outbound " +
         "traffic at a client's production system.\n" +
-        "Add `refuseUnlessMayProbeTenant(product.envPrefix)`:\n" +
+        "Add `refuseUnlessMayProbeTenant()`:\n" +
         ungated.join("\n"),
     ).toEqual([]);
   });
@@ -145,7 +145,7 @@ describe("refuseUnlessMayProbeTenant refuses", () => {
     vi.doMock("@/lib/auth/session", () => ({ getCurrentUser: async () => null }));
     const { refuseUnlessMayProbeTenant } = await import("@/lib/sap-public/probe-guard");
 
-    const res = await refuseUnlessMayProbeTenant("S4_TDD");
+    const res = await refuseUnlessMayProbeTenant();
     expect(res, "an anonymous caller must never reach a live tenant read").not.toBeNull();
     expect(res!.status).toBe(401);
     vi.doUnmock("@/lib/auth/session");
@@ -163,7 +163,7 @@ describe("refuseUnlessMayProbeTenant refuses", () => {
     }));
     const { refuseUnlessMayProbeTenant } = await import("@/lib/sap-public/probe-guard");
 
-    const res = await refuseUnlessMayProbeTenant("S4_TDD");
+    const res = await refuseUnlessMayProbeTenant();
     expect(res, `${role} must not be able to cause a tenant read`).not.toBeNull();
     expect(res!.status).toBe(status);
     vi.doUnmock("@/lib/auth/session");
@@ -176,7 +176,7 @@ describe("refuseUnlessMayProbeTenant refuses", () => {
     }));
     const { refuseUnlessMayProbeTenant } = await import("@/lib/sap-public/probe-guard");
 
-    expect(await refuseUnlessMayProbeTenant("S4_TDD"), `${role} builds interfaces and must probe`).toBeNull();
+    expect(await refuseUnlessMayProbeTenant(), `${role} builds interfaces and must probe`).toBeNull();
     vi.doUnmock("@/lib/auth/session");
   });
 });

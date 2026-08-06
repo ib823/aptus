@@ -132,7 +132,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     await logDecision({
-      assessmentId: "system",
+      assessmentId: null,
       entityType: "sap_hub_probe",
       entityId: "hub-content-probe-all",
       action: "SAP_HUB_PROBED_ALL",

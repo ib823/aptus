@@ -100,7 +100,11 @@ export function PortalNav({ user }: PortalNavProps) {
       setConfirmLogout(true);
       return;
     }
-    window.location.href = "/api/auth/logout";
+    // POST — the logout route's mutation is POST-only (a GET that mutates is
+    // CSRF-able). Follow the server's host-aware redirect to the login page.
+    void fetch("/api/auth/logout", { method: "POST" })
+      .then((res) => window.location.assign(res.redirected ? res.url : "/login"))
+      .catch(() => window.location.assign("/login"));
   };
 
   return (

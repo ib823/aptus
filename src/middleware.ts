@@ -5,7 +5,7 @@ import { checkRateLimit, getClientIp, isLiveSapTenantRoute, RATE_LIMITS } from "
 import { getCspWithNonce } from "@/lib/pwa/security-headers";
 // The Workbench route allow-list lives in lib so it can be tested. Anything
 // missing from it is redirected away before auth or RBAC ever run.
-import { isWorkbenchPath } from "@/lib/routing/workbench-paths";
+import { isWorkbenchOnlyPage, isWorkbenchPath } from "@/lib/routing/workbench-paths";
 
 /** Per-request CSP nonce: 16 random bytes, base64. Edge-runtime safe. */
 function generateNonce(): string {
@@ -226,16 +226,11 @@ async function handleRequest(
         !pathname.startsWith('/_next') &&
         !pathname.startsWith('/icons/') &&
         !pathname.includes('.');
-      const isWorkbenchPage =
-        pathname === '/presales' ||
-        pathname.startsWith('/presales/') ||
-        pathname === '/affirm' ||
-        pathname.startsWith('/affirm/') ||
-        pathname === '/c' ||
-        pathname.startsWith('/c/') ||
-        pathname === '/a' ||
-        pathname.startsWith('/a/');
-      if (isPageRoute && isWorkbenchPage) {
+      // DERIVED from the same allow-list the Workbench host enforces — the
+      // inline copy this used to be drifted, so Studio/Operations/Control
+      // Tower pages served the portal's 404 instead of converging on the
+      // canonical Workbench URL.
+      if (isPageRoute && isWorkbenchOnlyPage(pathname)) {
         const target = new URL(request.url);
         target.host = WORKBENCH_HOST;
         target.protocol = 'https:';
