@@ -18,11 +18,12 @@
  */
 
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { RoleGatedEmptyState } from "@/components/studio/RoleGatedEmptyState";
+import { isMfaRequired, requiresMfaEnrollment } from "@/lib/auth/permissions";
 import { OPERATIONS_SECTIONS } from "@/lib/studio/sections";
 import { StudioShell } from "@/components/studio/StudioShell";
 import { type StudioTenantOption } from "@/components/studio/StudioTopBar";
@@ -51,6 +52,19 @@ export default async function OperationsLayout({ children }: { children: ReactNo
   // non-admin with no organization has nothing to scope the feeds to.
   if (!canAccessOperations(user.role) || lacksStudioTenantScope(user)) {
     return <RoleGatedEmptyState roleLabel={roleLabel} activeWorkspace="operations-center" />;
+  }
+
+  // MFA step-up, same gate as the portal layout. These screens read live
+  // customer SAP activity; an org that requires MFA must get it HERE, not only
+  // on the portal — a policy enforced on one door and not the other is not a
+  // policy. Enrollment-needed users go to enrollment instead of a verify loop.
+  if (isMfaRequired(user)) {
+    const next = encodeURIComponent((await headers()).get("x-pathname") ?? "/operations");
+    redirect(
+      requiresMfaEnrollment(user)
+        ? `/settings/security?mfa=required&next=${next}`
+        : `/verify-mfa?next=${next}`,
+    );
   }
 
   const resolved = await resolveStudioTenants(user.organizationId);

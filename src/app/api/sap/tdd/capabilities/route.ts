@@ -54,7 +54,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * Found by an unauthenticated curl during a browser-agent audit — the same
    * way the earlier incident in that file was found.
    */
-  const refusal = await refuseUnlessMayProbeTenant(product.envPrefix);
+  const refusal = await refuseUnlessMayProbeTenant();
   if (refusal) return refusal;
 
   const user = await getCurrentUser();

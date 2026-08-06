@@ -45,7 +45,14 @@ export function AptusUserMenu({ user }: AptusUserMenuProps) {
     } catch (err) {
       console.warn("[client-cache] Failed to clear client session caches", err);
     } finally {
-      window.location.assign("/api/auth/logout");
+      // POST — the logout route's mutation is POST-only (a GET that mutates is
+      // CSRF-able). Follow the server's host-aware redirect to the login page.
+      try {
+        const res = await fetch("/api/auth/logout", { method: "POST" });
+        window.location.assign(res.redirected ? res.url : "/login");
+      } catch {
+        window.location.assign("/login");
+      }
     }
   }
 

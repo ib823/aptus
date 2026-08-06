@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/db/prisma";
+import { getClientIp } from "@/lib/security/client-ip";
 import { createSession, SESSION_COOKIE_NAME, getSessionCookieOptions } from "@/lib/auth/session";
 import { isIpAllowed, logBackdoorAttempt } from "@/lib/auth/test-backdoor-guards";
 
@@ -93,7 +94,8 @@ export async function POST(request: NextRequest) {
     select: { id: true },
   });
 
-  const ipAddress = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "127.0.0.1";
+  const trustedIp = getClientIp(request.headers);
+  const ipAddress = trustedIp === "unknown" ? "127.0.0.1" : trustedIp;
   const userAgent = request.headers.get("user-agent") ?? "Simulation Bridge";
   const { token } = await createSession(user.id, ipAddress, userAgent);
 

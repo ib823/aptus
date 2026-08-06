@@ -51,7 +51,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // Inspecting a service is a LIVE READ of a customer tenant — and with
   // ?probe=1 it is many of them — so the gate is a role, not merely a session.
   // Same guard as /preview, deliberately shared: see refuseUnlessMayProbeTenant.
-  const refusal = await refuseUnlessMayProbeTenant(product.envPrefix);
+  const refusal = await refuseUnlessMayProbeTenant();
   if (refusal) return refusal;
 
   // Standardized with /operations: omitted tenant → the first configured tenant;

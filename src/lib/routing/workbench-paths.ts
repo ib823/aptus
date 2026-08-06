@@ -59,3 +59,33 @@ export function isWorkbenchPath(pathname: string): boolean {
   if (pathname === '/affirm') return true;
   return WORKBENCH_PATHS.some((p) => pathname.startsWith(p));
 }
+
+/**
+ * Pages BOTH hosts serve — never cross-host redirected. Marketing and legal
+ * pages exist on the portal too; redirecting them off-host would break the
+ * portal's own funnel.
+ */
+const SHARED_HOST_PAGES = ['/signup', '/pricing', '/terms', '/privacy'] as const;
+
+/**
+ * True when a PAGE request on the portal host should converge on the
+ * Workbench host.
+ *
+ * DERIVED from `isWorkbenchPath`, one fact one place. The middleware used to
+ * keep its own inline list here — presales, affirm, /c/, /a/ — and it
+ * drifted exactly like the allow-list above once did: Studio, Operations
+ * Center and Control Tower pages opened on the portal host served the portal's
+ * 404 instead of converging on the canonical Workbench URL, because the second
+ * copy of the fact was not updated when the first was.
+ *
+ * API routes and assets are the caller's business to exclude (they stay on
+ * whichever host the request arrived on); this function answers only for pages.
+ */
+export function isWorkbenchOnlyPage(pathname: string): boolean {
+  // Bare guest-surface segments: startsWith('/c/') misses exactly '/c'.
+  if (pathname === '/c' || pathname === '/a' || pathname === '/d') return true;
+  if (!isWorkbenchPath(pathname)) return false;
+  if (pathname.startsWith('/api/')) return false;
+  if (SHARED_HOST_PAGES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return false;
+  return true;
+}

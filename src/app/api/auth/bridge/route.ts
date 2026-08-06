@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth/auth-options";
 import { createSession, SESSION_COOKIE_NAME, getSessionCookieOptions } from "@/lib/auth/session";
 import { notifyNewLogin, notifySessionDisplaced } from "@/lib/auth/login-notify";
 import { prisma } from "@/lib/db/prisma";
+import { getClientIp } from "@/lib/security/client-ip";
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rawCallback = request.nextUrl.searchParams.get("callbackUrl") ?? "/assessments";
   // Prevent open redirect — only allow relative paths
@@ -64,11 +65,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
   }
 
-  // Create a custom session — use first IP from X-Forwarded-For (leftmost = client)
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  const ipAddress = forwardedFor
-    ? (forwardedFor.split(",")[0]?.trim() ?? null)
-    : (request.headers.get("x-real-ip") ?? null);
+  // The IP recorded on a freshly minted session must come from the trusted
+  // extraction — the leftmost XFF hop is client-supplied and spoofable, and
+  // this value feeds login notifications and the session audit trail.
+  const clientIp = getClientIp(request.headers);
+  const ipAddress = clientIp === "unknown" ? null : clientIp;
   const userAgent = request.headers.get("user-agent") ?? null;
   const { token, hadExistingSession } = await createSession(user.id, ipAddress, userAgent);
 

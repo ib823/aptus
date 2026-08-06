@@ -89,9 +89,14 @@ export function WorkbenchUserMenu({ email }: Props) {
 
             /api/auth/logout revokes the session row AND expires every cookie
             variant, including the secure-prefixed and chunked NextAuth names.
+
+            A FORM POST, not a link: logout mutates state, and a GET that
+            mutates is CSRF-able (any page could sign the user out with an
+            <img src>). The route is POST-only for the mutation now.
           */}
-          <a
-            href="/api/auth/logout"
+          <form method="post" action="/api/auth/logout" style={{ margin: 0 }}>
+          <button
+            type="submit"
             role="menuitem"
             style={{
               display: 'block',
@@ -110,7 +115,8 @@ export function WorkbenchUserMenu({ email }: Props) {
             onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           >
             Sign out
-          </a>
+          </button>
+          </form>
         </div>
       ) : null}
     </div>

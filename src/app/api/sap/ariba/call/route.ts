@@ -23,7 +23,7 @@ import { ERROR_CODES } from "@/types/api";
  * covers it via isLiveSapTenantRoute.
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const refusal = await refuseUnlessMayProbeTenant("ARIBA");
+  const refusal = await refuseUnlessMayProbeTenant();
   if (refusal) return refusal;
 
   if (!isAribaConfigured()) {
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     try {
       const user = await getCurrentUser();
       await logDecision({
-        assessmentId: "system",
+        assessmentId: null,
         entityType: "sap_ariba_call",
         entityId: endpoint,
         action: "SAP_CAPABILITY_PROBED",

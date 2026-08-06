@@ -1730,7 +1730,13 @@ model GapAlternative {
 
 model DecisionLogEntry {
   id           String   @id @default(cuid())
-  assessmentId String
+  /// NULL = a system-level event with no assessment (org governance, catalogue
+  /// imports, onboarding). These used to be written with the sentinel string
+  /// "system"/"SYSTEM", which violated the FK on every call — no Assessment
+  /// with that id has ever existed — so every such audit either threw or was
+  /// silently swallowed by a caller's try/catch. An absent assessment is an
+  /// absence; it is recorded as one.
+  assessmentId String?
   entityType   String
   entityId     String
   action       String
@@ -1741,7 +1747,7 @@ model DecisionLogEntry {
   timestamp    DateTime @default(now())
   reason       String?  @db.Text
 
-  assessment Assessment @relation(fields: [assessmentId], references: [id])
+  assessment Assessment? @relation(fields: [assessmentId], references: [id])
 
   @@index([assessmentId])
   @@index([assessmentId, entityType])
