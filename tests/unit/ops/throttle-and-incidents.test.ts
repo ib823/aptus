@@ -72,6 +72,7 @@ describe("incident severities come from named rules, not from request-time scori
     unboundedGrants: 0,
     credentialsWithoutExpiry: 0,
     unaccountableProdGrants: 0,
+    driftingConnections: 0,
   };
 
   it("reports nothing when every signal is below its threshold", () => {
@@ -113,9 +114,10 @@ describe("incident severities come from named rules, not from request-time scori
       throttled: 99,
       expiringCredentials: 3,
       undeclaredEnvironmentConnections: 4,
-    unboundedGrants: 0,
-    credentialsWithoutExpiry: 0,
-    unaccountableProdGrants: 0,
+      unboundedGrants: 0,
+      credentialsWithoutExpiry: 0,
+      unaccountableProdGrants: 0,
+      driftingConnections: 0,
     });
     expect(incidents.map((i) => i.severity)).toEqual([
       "critical",

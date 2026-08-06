@@ -29,7 +29,7 @@ import {
   Stat,
   opsCellStyle,
 } from "@/components/ops/OpsChrome";
-import { count, useOpsFeed } from "@/components/ops/useOpsFeed";
+import { count, FeedAsAt, useOpsFeed } from "@/components/ops/useOpsFeed";
 import {
   Authorises,
   ExpiryRunway,
@@ -83,7 +83,7 @@ interface GrantsPayload {
 }
 
 export function GrantsClient({ canDecide }: { canDecide: boolean }) {
-  const { feed, reload } = useOpsFeed<GrantsPayload>("/api/control-tower/grants");
+  const { feed, reload, fetchedAt } = useOpsFeed<GrantsPayload>("/api/control-tower/grants");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -91,6 +91,7 @@ export function GrantsClient({ canDecide }: { canDecide: boolean }) {
         title="Access governance"
         lede="Every capability a solution has asked to reach, what was decided, and when that decision stops being true. An approved grant ends by lapsing or by admin revocation below — expiry stays mandatory on writes because revocation requires someone to notice."
       />
+      <FeedAsAt fetchedAt={fetchedAt} />
 
       {feed.state === "loading" ? (
         <OpsCard>

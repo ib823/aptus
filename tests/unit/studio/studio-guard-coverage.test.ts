@@ -70,6 +70,31 @@ const SECRET_REFERENCE_ALLOWANCES: ReadonlyArray<{ file: string; symbol: string;
   },
 ];
 
+/**
+ * Files permitted to query Prisma with NO tenant scope, because the model they
+ * read is deliberately deployment-wide.
+ *
+ * CronRunLog records scheduled-job runs. A sweep serves every tenant in one
+ * run, so the model has no organization column — scoping it would return
+ * nothing for every organization while appearing to work (the exact failure
+ * the absent catalogue-freshness view was refused over). The assertion below
+ * proves each allowed file touches ONLY its named models, so the allowance
+ * cannot silently widen into an unscoped read of tenant data.
+ */
+const DEPLOYMENT_SCOPED_ALLOWANCES: ReadonlyArray<{ file: string; models: string[]; why: string }> =
+  [
+    {
+      file: "src/lib/ops/cron.ts",
+      models: ["cronRunLog"],
+      why: "Appends one row per scheduled-job run. The log is deployment-wide by design.",
+    },
+    {
+      file: "src/app/api/ops/jobs/route.ts",
+      models: ["cronRunLog"],
+      why: "Reads the job log for the Operations jobs strip. Summaries are aggregate counts and never name a tenant.",
+    },
+  ];
+
 /** Every balanced `select: { … }` in a source file. */
 function selectBlocks(src: string): string[] {
   const blocks: string[] = [];
@@ -186,6 +211,7 @@ describe("studio surface", () => {
     const offenders = studioFiles
       .filter((f) => {
         const src = code(f);
+        if (DEPLOYMENT_SCOPED_ALLOWANCES.some((a) => a.file === rel(f))) return false;
         // Only files that actually query need a tenant filter.
         if (!/\bprisma\s*\.\s*\w+\s*\.\s*(findMany|findFirst|findUnique|count|create|update|delete|upsert|aggregate|groupBy)/.test(src)) {
           return false;
@@ -198,6 +224,35 @@ describe("studio surface", () => {
       offenders,
       `These files query Prisma with no tenant scope — use scopedWhere/opsWhere, or name organizationId in the where:\n${offenders.join("\n")}`,
     ).toEqual([]);
+  });
+
+  it("every deployment-scope allowance is real, and touches only its named models", () => {
+    // The mirror of the secret-reference allowances: an exception is only safe
+    // because of the assertion beside it. Each allowed file must still query
+    // Prisma (else the allowance is stale), and every model it reaches must be
+    // one the allowance names — so "this file reads the tenant-less job log"
+    // cannot quietly widen into "this file reads anything unscoped".
+    expect(DEPLOYMENT_SCOPED_ALLOWANCES.length).toBeGreaterThan(0);
+
+    for (const allowance of DEPLOYMENT_SCOPED_ALLOWANCES) {
+      const src = code(path.resolve(ROOT, allowance.file));
+      const touched = [
+        ...src.matchAll(
+          /\bprisma\s*\.\s*(\w+)\s*\.\s*(?:findMany|findFirst|findUnique|count|create|update|delete|deleteMany|upsert|aggregate|groupBy)/g,
+        ),
+      ].map((m) => m[1]!);
+
+      expect(
+        touched.length,
+        `${allowance.file} no longer queries Prisma — drop the allowance`,
+      ).toBeGreaterThan(0);
+
+      const outside = touched.filter((model) => !allowance.models.includes(model));
+      expect(
+        outside,
+        `${allowance.file} reaches models its allowance does not cover: ${outside.join(", ")}`,
+      ).toEqual([]);
+    }
   });
 
   it("resolves tenant context from the session, never from request input", () => {

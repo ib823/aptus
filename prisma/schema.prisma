@@ -653,6 +653,51 @@ model Interface {
   @@index([solutionId])
 }
 
+/// One probe of one SAP connection — append-only history, so health has a
+/// TREND instead of a single mutable pair of columns. `lastValidationStatus`
+/// on SapConnection stays the fast-read summary; these rows are how "was this
+/// failing last week?" and "did it drift since the last sweep?" become
+/// answerable, and the drift incident rule reads consecutive rows to see a
+/// healthy→failing transition. Written by the probe cron, the Studio
+/// connection test, and the Ops probe-now action — `source` says which.
+model SapConnectionProbeEvent {
+  id             String @id @default(cuid())
+  organizationId String
+  connectionId   String
+
+  /// The connection-health vocabulary (OK | AUTH_FAILED | NOT_FOUND | TIMEOUT
+  /// | ERROR | NO_PROBE_PATH ...), same as lastValidationStatus.
+  status     String
+  httpStatus Int?
+  durationMs Int?
+  /// cron | manual | test — who caused this probe.
+  source String
+
+  at DateTime @default(now())
+
+  @@index([organizationId, connectionId, at])
+  @@index([connectionId, at])
+}
+
+/// One scheduled-job run — the record that a sweep happened at all. Cron
+/// outcomes used to live only in the HTTP response nobody stored, so "did the
+/// reaper run last night?" and "did the probe sweep hit its cap?" had no
+/// answer anywhere in the product. Append-only; surfaced on the Operations
+/// home as the jobs strip.
+model CronRunLog {
+  id  String @id @default(cuid())
+  /// northbound-reap | connection-probes | analytics | trials
+  job String
+
+  startedAt  DateTime
+  finishedAt DateTime
+  ok         Boolean
+  /// Job-shaped summary: counts, caps hit, error strings. Never secrets.
+  summaryJson Json?
+
+  @@index([job, startedAt])
+}
+
 /// Scope request + decision — the governance ledger, ENFORCED AT RUNTIME: the
 /// northbound broker matches a live, unexpired, unrevoked row on solutionId +
 /// externalId + operation + environment on every call a solution makes.

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { JobsStrip } from "@/components/ops/JobsStrip";
 import { TopologyMap } from "@/components/ops/TopologyMap";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,10 @@ export const metadata: Metadata = { title: "Home" };
  * So the home page routes rather than summarises, and it is honest about what is
  * built and what is not. When there is a genuine cross-screen number worth
  * showing, it gets an endpoint and a provenance note like everything else.
+ *
+ * The jobs strip is exactly that exception, taken deliberately: scheduled-job
+ * outcomes have no screen of their own and are not a second copy of anything —
+ * CronRunLog is their only source, and /api/ops/jobs is its one reader.
  */
 
 const BUILT = [
@@ -104,6 +109,8 @@ export default function OperationsHomePage() {
           see.
         </p>
       </div>
+
+      <JobsStrip />
 
       <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {[...BUILT, ...BUILT_TOO].map((s) => (

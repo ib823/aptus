@@ -22,6 +22,9 @@
  * record of when the connection last actually worked.
  */
 
+import Link from "next/link";
+import { useState } from "react";
+
 import {
   AbsencePill,
   OpsCard,
@@ -30,11 +33,12 @@ import {
   OpsPlaceholder,
   OpsTable,
   ProvenanceStrip,
+  Stat,
   opsCellStyle,
   opsMonoStyle,
   type OpsTone,
 } from "@/components/ops/OpsChrome";
-import { count, sinceLabel, useOpsFeed } from "@/components/ops/useOpsFeed";
+import { count, FeedAsAt, sinceLabel, useOpsFeed } from "@/components/ops/useOpsFeed";
 import { ProductLabel } from "@/components/sap/ProductLabel";
 
 interface Connection {
@@ -102,7 +106,37 @@ const PROBE: Record<string, { tone: OpsTone; label: string; meaning: string }> =
 };
 
 export function ConnectionsHealthClient() {
-  const { feed } = useOpsFeed<ConnectionsPayload>("/api/ops/connections-health");
+  const { feed, reload, fetchedAt } = useOpsFeed<ConnectionsPayload>("/api/ops/connections-health");
+  const [probingId, setProbingId] = useState<string | null>(null);
+  const [probeError, setProbeError] = useState<string | null>(null);
+
+  // The delegated action: the same read-only $metadata probe the cron runs, on
+  // demand, so the persona who owns this screen can cause the fact it shows.
+  const probeNow = async (connectionId: string) => {
+    setProbingId(connectionId);
+    setProbeError(null);
+    try {
+      const res = await fetch("/api/ops/connections-health/probe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ connectionId }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: { message?: string };
+      };
+      if (!res.ok) {
+        setProbeError(body.error?.message ?? `The probe could not be run (HTTP ${res.status}).`);
+      } else {
+        // The probe wrote the summary columns and the history row; re-reading
+        // the feed is how the screen shows them — never a locally-patched chip.
+        reload();
+      }
+    } catch {
+      setProbeError("The probe request could not be sent. This says nothing about the connection itself.");
+    } finally {
+      setProbingId(null);
+    }
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -110,6 +144,7 @@ export function ConnectionsHealthClient() {
         title="Connections"
         lede="Probe health and environment binding for every active SAP connection. Health and binding are separate questions — a connection can answer perfectly and still not have declared which landscape it is."
       />
+      <FeedAsAt fetchedAt={fetchedAt} />
 
       {feed.state === "loading" ? (
         <OpsCard>
@@ -124,18 +159,62 @@ export function ConnectionsHealthClient() {
           />
         </OpsCard>
       ) : (
-        <ConnectionsBody data={feed.data} />
+        <ConnectionsBody
+          data={feed.data}
+          probingId={probingId}
+          probeError={probeError}
+          onProbe={probeNow}
+        />
       )}
     </div>
   );
 }
 
-function ConnectionsBody({ data }: { data: ConnectionsPayload }) {
+function ConnectionsBody({
+  data,
+  probingId,
+  probeError,
+  onProbe,
+}: {
+  data: ConnectionsPayload;
+  probingId: string | null;
+  probeError: string | null;
+  onProbe: (connectionId: string) => void;
+}) {
   const { counts, connections, provenance, bindingBacklog } = data;
   const declared = counts.total - bindingBacklog.undeclaredEnvironment;
 
   return (
     <>
+      {/* THE FLEET, ROLLED UP — the counts the endpoint always computed and no
+          screen rendered. Four buckets plus the total; NEVER_TESTED stays its
+          own tile because it is the absence of a result, not a member of the
+          scale of outcomes. */}
+      {counts.total > 0 ? (
+        <OpsCard>
+          <div style={{ display: "flex", gap: 30, padding: "15px 16px", flexWrap: "wrap" }}>
+            <Stat label="Active connections" value={count(counts.total)} />
+            <Stat label="Healthy" value={count(counts.healthy)} basis="last probe returned 200" />
+            <Stat
+              label="Needs attention"
+              value={count(counts.needsAttention)}
+              tone={counts.needsAttention > 0 ? "attention" : "default"}
+              basis="UNAUTHORIZED · NOT_FOUND · TIMEOUT · ERROR"
+            />
+            <Stat
+              label="Unknown"
+              value={count(counts.unknown)}
+              basis="no probe path — our gap, not the tenant's"
+            />
+            <Stat
+              label="Never tested"
+              value={count(counts.neverTested)}
+              basis="no probe has run — an absence, not a result"
+            />
+          </div>
+        </OpsCard>
+      ) : null}
+
       {bindingBacklog.undeclaredEnvironment > 0 ? (
         <BindingBacklog
           undeclared={bindingBacklog.undeclaredEnvironment}
@@ -172,7 +251,7 @@ function ConnectionsBody({ data }: { data: ConnectionsPayload }) {
             }
           />
         ) : (
-          <OpsTable head={["Connection", "Environment", "Health", "Last succeeded"]}>
+          <OpsTable head={["Connection", "Environment", "Health", "Last succeeded", "Actions"]}>
             {connections.map((c) => (
               <tr key={c.id}>
                 <td style={opsCellStyle}>
@@ -216,10 +295,55 @@ function ConnectionsBody({ data }: { data: ConnectionsPayload }) {
                   )}
                 </td>
                 <td style={opsMonoStyle}>{sinceLabel(c.lastValidatedAt)}</td>
+                <td style={opsCellStyle}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", whiteSpace: "nowrap" }}>
+                    <button
+                      type="button"
+                      onClick={() => onProbe(c.id)}
+                      disabled={probingId !== null}
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        padding: "3px 10px",
+                        borderRadius: 6,
+                        border: "1px solid var(--border-strong)",
+                        background: "var(--surface-paper)",
+                        color: "var(--ink-primary)",
+                        cursor: probingId !== null ? "default" : "pointer",
+                        opacity: probingId !== null && probingId !== c.id ? 0.5 : 1,
+                      }}
+                    >
+                      {probingId === c.id ? "Probing…" : "Probe now"}
+                    </button>
+                    {/* The investigation path: this connection's calls, on the
+                        screen that owns them, already filtered to it. */}
+                    <Link
+                      href={`/operations/traffic?connectionId=${encodeURIComponent(c.id)}`}
+                      style={{ fontSize: 12, color: "var(--brand-navy)" }}
+                    >
+                      Traffic →
+                    </Link>
+                  </div>
+                </td>
               </tr>
             ))}
           </OpsTable>
         )}
+
+        {probeError ? (
+          <div
+            role="alert"
+            style={{
+              padding: "10px 16px",
+              fontSize: 12.5,
+              color: "var(--status-revoked-fg)",
+              background: "var(--status-revoked-bg)",
+              borderTop: "1px solid var(--border-default)",
+            }}
+          >
+            {probeError}
+          </div>
+        ) : null}
 
         <ProvenanceStrip claim="Active connections only">
           {provenance.excludedInactive > 0

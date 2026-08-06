@@ -29,12 +29,7 @@ import {
   opsCellStyle,
   opsMonoStyle,
 } from "@/components/ops/OpsChrome";
-import {
-  DEFAULT_OPS_WINDOW_HOURS,
-  OpsWindowPicker,
-  count,
-  useOpsFeed,
-} from "@/components/ops/useOpsFeed";
+import { count, DEFAULT_OPS_WINDOW_HOURS, FeedAsAt, OpsWindowPicker, useOpsFeed } from "@/components/ops/useOpsFeed";
 
 interface Bucket {
   id: string;
@@ -82,7 +77,7 @@ interface ThrottlePayload {
 
 export function ThrottleClient() {
     const [windowHours, setWindowHours] = useState(DEFAULT_OPS_WINDOW_HOURS);
-const { feed } = useOpsFeed<ThrottlePayload>("/api/ops/throttle", windowHours);
+const { feed, fetchedAt } = useOpsFeed<ThrottlePayload>("/api/ops/throttle", windowHours);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -90,6 +85,7 @@ const { feed } = useOpsFeed<ThrottlePayload>("/api/ops/throttle", windowHours);
         title="Throttle"
         lede="How much of each rate-limit budget is left. Reading this page does not spend any of it — the headroom below is queried, never consumed."
       />
+      <FeedAsAt fetchedAt={fetchedAt} />
 
       {feed.state === "loading" ? (
         <OpsCard>

@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   clientCount: vi.fn(),
   solutionFindMany: vi.fn(),
   grantCount: vi.fn(),
+  probeEventFindMany: vi.fn(),
   fallbackTenants: vi.fn(),
 }));
 
@@ -46,6 +47,8 @@ vi.mock("@/lib/db/prisma", () => ({
     solutionClient: { findMany: mocks.clientFindMany, count: mocks.clientCount },
     // Standing-access incident rules count grants that never end.
     apiAccessGrant: { count: mocks.grantCount },
+    // The connection-drift rule reads the probe history.
+    sapConnectionProbeEvent: { findMany: mocks.probeEventFindMany },
   },
 }));
 
@@ -102,6 +105,7 @@ beforeEach(() => {
   mocks.clientFindMany.mockResolvedValue([]);
   mocks.clientCount.mockResolvedValue(0);
   mocks.grantCount.mockResolvedValue(0);
+  mocks.probeEventFindMany.mockResolvedValue([]);
   mocks.solutionFindMany.mockResolvedValue([]);
   mocks.fallbackTenants.mockReturnValue([]);
 });
