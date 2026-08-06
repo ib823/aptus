@@ -63,6 +63,11 @@ export interface NorthboundAuditInput {
    * that could never be unequal instead.
    */
   bindingRefusal?: string | null;
+  /**
+   * TRUE for a Test Console broker dry-run — the same pipeline exercised from
+   * Studio. Recorded, never omitted: it is real traffic on a real tenant.
+   */
+  dryRun?: boolean;
 }
 
 export async function recordNorthboundCall(input: NorthboundAuditInput): Promise<void> {
@@ -70,6 +75,7 @@ export async function recordNorthboundCall(input: NorthboundAuditInput): Promise
     await prisma.northboundAuditEvent.create({
       data: {
         bindingRefusal: input.bindingRefusal ?? null,
+        dryRun: input.dryRun ?? false,
         organizationId: input.organizationId,
         solutionId: input.solutionId,
         interfaceId: input.interfaceId,

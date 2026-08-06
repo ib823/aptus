@@ -73,7 +73,9 @@ interface AuditPayload {
 const ACTION: Record<string, OpsTone> = {
   DECISION: "attention",
   ISSUE: "attention",
+  ISSUE_WRITE: "attention",
   ROTATE: "attention",
+  REVOKE: "attention",
   PROMOTE: "good",
   CREATE: "info",
   UPDATE: "neutral",

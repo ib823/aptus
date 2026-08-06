@@ -17,6 +17,8 @@
  * server is what actually holds the line.
  */
 
+import { useRouter } from "next/navigation";
+
 import { useCallback, useState } from "react";
 
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
@@ -80,6 +82,7 @@ export function SolutionsClient({
   canAuthor: boolean;
   currentUserId: string;
 }) {
+  const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(solutions[0]?.id ?? null);
   const [tab, setTab] = useState<Tab>("Business");
   const [registering, setRegistering] = useState(false);
@@ -105,10 +108,10 @@ export function SolutionsClient({
       if (json.data?.autoDropped) {
         setMessage({ kind: "info", text: json.data.autoDropReason ?? "Moved to RESTRICTED." });
         // Let the operator read why before the list refreshes under them.
-        setTimeout(() => window.location.reload(), 2500);
+        setTimeout(() => router.refresh(), 2500);
         return;
       }
-      window.location.reload();
+      router.refresh();
     } catch (err) {
       setMessage({
         kind: "error",
@@ -117,7 +120,7 @@ export function SolutionsClient({
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [router]);
 
   if (solutions.length === 0) {
     return (

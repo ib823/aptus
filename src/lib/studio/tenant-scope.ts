@@ -155,6 +155,10 @@ export const TENANT_ANCHORED_MODELS = [
   "SolutionClient",
   "NorthboundAuditEvent",
   "MockFixture",
+  // Carries organizationId in its unique key; was missing from this list, so
+  // the guard could not see it. complete/release address rows by server-derived
+  // id (safe), but the model is tenant-anchored and the roster should say so.
+  "NorthboundIdempotencyKey",
 ] as const;
 
 export type TenantAnchoredModel = (typeof TENANT_ANCHORED_MODELS)[number];

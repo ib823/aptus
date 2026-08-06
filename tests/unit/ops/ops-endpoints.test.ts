@@ -413,10 +413,15 @@ describe("the write ledger explains why its two sources disagree", () => {
     expect(body.data.provenance.why.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("names the empty state as designed rather than leaving it blank", async () => {
+  it("names the empty state honestly — quiet, not disabled", async () => {
+    // The prose used to claim "no write credential can be issued yet". Write-
+    // credential issuance shipped, so an empty ledger now means nothing wrote
+    // in this window — and the sentence names the gates and where refusals go.
     mocks.getCurrentUser.mockResolvedValue(SUPPORT);
     const body = await (await writeLedger(req("https://x.test/api/ops/write-ledger"))).json();
-    expect(body.data.provenance.emptyByDesign).toContain("write credential");
+    expect(body.data.provenance.emptyByDesign).toContain("write key");
+    expect(body.data.provenance.emptyByDesign).toContain("audit feed");
+    expect(body.data.provenance.emptyByDesign).not.toContain("can be issued yet");
   });
 
   it("distinguishes a stale reservation from one still in flight", async () => {

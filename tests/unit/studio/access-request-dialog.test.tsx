@@ -18,6 +18,11 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+}));
+
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import {

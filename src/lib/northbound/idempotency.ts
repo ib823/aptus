@@ -97,7 +97,7 @@ export async function reserveIdempotencyKey(
         key: input.key,
       },
     },
-    select: { id: true, requestHash: true, status: true, responseBody: true, expiresAt: true },
+    select: { id: true, interfaceId: true, requestHash: true, status: true, responseBody: true, expiresAt: true },
   });
 
   if (existing) {
@@ -105,9 +105,15 @@ export async function reserveIdempotencyKey(
     // long after any reasonable retry window, so treat the key as fresh.
     if (existing.expiresAt.getTime() <= now.getTime()) {
       await prisma.northboundIdempotencyKey.update({
-        where: { id: existing.id },
+        // organizationId alongside the id: the model is tenant-anchored and the
+        // scope guard requires every mutation's where to carry the tenant.
+        where: { id: existing.id, organizationId },
         data: {
           requestHash,
+          // The interface too — the reset re-opens the key for THIS request,
+          // and leaving the old interfaceId stranded the row's attribution on
+          // whatever interface used the key last time.
+          interfaceId: input.interfaceId,
           status: null,
           // Prisma.DbNull, not `undefined` — `undefined` means "leave the column
           // alone", which would strand the OLD response on a key we have just
@@ -119,6 +125,21 @@ export async function reserveIdempotencyKey(
         },
       });
       return { outcome: "proceed", recordId: existing.id };
+    }
+
+    /*
+     * THE INTERFACE IS PART OF THE IDENTITY. The key is unique per
+     * (organization, solution, key) and this comparison used to check only the
+     * payload hash — so an IDENTICAL {entity, record} posted with one key to
+     * interface A and then to interface B replayed A's stored response and
+     * NEVER WROTE B. Same bytes, different destination, silently swallowed:
+     * exactly the "second write disappears without a trace" failure the
+     * PAYLOAD_MISMATCH arm below exists to prevent, arriving through the field
+     * the comparison forgot. A different interface is a different request,
+     * whatever the payload says.
+     */
+    if (existing.interfaceId !== input.interfaceId) {
+      return { outcome: "conflict", reason: "PAYLOAD_MISMATCH" };
     }
 
     if (existing.requestHash !== requestHash) {
@@ -161,13 +182,16 @@ export async function reserveIdempotencyKey(
  * than re-attempting a write the tenant already refused.
  */
 export async function completeIdempotencyKey(
+  scope: TenantScope,
   recordId: string,
   status: number,
   body: unknown,
 ): Promise<void> {
   try {
     await prisma.northboundIdempotencyKey.update({
-      where: { id: recordId },
+      // The id is server-derived, but the model is tenant-anchored: every
+      // mutation's where carries the tenant so the scope guard can see it.
+      where: { id: recordId, organizationId: scope.organizationId },
       data: { status, responseBody: body as never },
     });
   } catch (err) {
@@ -186,9 +210,11 @@ export async function completeIdempotencyKey(
  * failed gate). Without this, a client that fixed their payload and retried with
  * the same key would be told the request is still in flight forever.
  */
-export async function releaseIdempotencyKey(recordId: string): Promise<void> {
+export async function releaseIdempotencyKey(scope: TenantScope, recordId: string): Promise<void> {
   try {
-    await prisma.northboundIdempotencyKey.delete({ where: { id: recordId } });
+    await prisma.northboundIdempotencyKey.delete({
+      where: { id: recordId, organizationId: scope.organizationId },
+    });
   } catch (err) {
     console.warn("[northbound-idempotency] failed to release reservation", { recordId, err });
   }
