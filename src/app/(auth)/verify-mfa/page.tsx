@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { isMfaRequired, requiresMfaEnrollment } from "@/lib/auth/permissions";
 import { VerifyMfaForm } from "@/components/auth/VerifyMfaForm";
+import { safeRelativePath } from "@/lib/http/safe-relative-path";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -25,11 +26,11 @@ function safeNext(raw: string | string[] | undefined): string {
     return DEFAULT_NEXT;
   }
 
-  if (!decoded.startsWith("/")) return DEFAULT_NEXT;
-  if (decoded.startsWith("//")) return DEFAULT_NEXT;
-  if (decoded.startsWith("/login") || decoded.startsWith("/verify-mfa")) return DEFAULT_NEXT;
-  if (/[\x00-\x1f]/.test(decoded)) return DEFAULT_NEXT;
-  return decoded;
+  // Same-origin only, via the shared sanitizer (which also refuses control
+  // characters and the backslash forms the parser folds into a host).
+  const safe = safeRelativePath(decoded, DEFAULT_NEXT);
+  if (safe.startsWith("/login") || safe.startsWith("/verify-mfa")) return DEFAULT_NEXT;
+  return safe;
 }
 
 export default async function VerifyMfaPage({

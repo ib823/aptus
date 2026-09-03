@@ -23,6 +23,7 @@ import {
   type HubContentType,
 } from "@/lib/sap-public/hub-content";
 import { resolveHubItemDependencies } from "@/lib/sap-public/hub-dependencies";
+import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import { resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
@@ -56,9 +57,21 @@ export async function GET(
   // — the tenant switcher offers connection keys and this route used to accept
   // only deployment ones.
   const viewer = await getCurrentUser();
-  const tenant = tenantKey
-    ? (await resolveReadTenant(product.envPrefix, product.key, viewer?.organizationId ?? null, tenantKey))?.tenant ?? null
-    : null;
+  /*
+   * THE LIVE PROBE IS GATED LIKE EVERY OTHER LIVE READ. This route accepted
+   * "catalogue may be browsed" (PUBLIC_ACCESS) as permission to open a
+   * connection to the tenant and issue a real $metadata request — the exact
+   * pattern probe-guard.ts records being found and closed twice on its
+   * siblings (/entities, /preview, /operations, /capabilities). Browsing the
+   * stored row stays open to whoever may browse; CAUSING a new read of a
+   * customer's system is limited to Studio roles, and everyone else falls
+   * through to the stored probe below, which is what the list renders from.
+   */
+  const mayProbe = (await refuseUnlessMayProbeTenant()) === null;
+  const tenant =
+    mayProbe && tenantKey
+      ? (await resolveReadTenant(product.envPrefix, product.key, viewer?.organizationId ?? null, tenantKey))?.tenant ?? null
+      : null;
   const service = hubApiToService({
     contentType,
     apiType: item.apiType,

@@ -73,14 +73,15 @@ describe("the switch route refuses what it should", () => {
     expect(ROUTE).toMatch(/allowed\.some\(/);
   });
 
-  it("refuses a protocol-relative next, which would be an open redirect", () => {
-    // `//evil.example` is a valid URL to a browser. On a console holding SAP
-    // credentials that is not a theoretical concern.
-    expect(ROUTE).toContain('startsWith("//")');
-  });
-
-  it("only accepts a relative next", () => {
-    expect(ROUTE).toContain('startsWith("/")');
+  it("sanitizes next through the shared same-origin helper", () => {
+    // `//evil.example` is a valid URL to a browser, and so is `/\evil.example`
+    // — the WHATWG parser folds the backslash into a slash. On a console
+    // holding SAP credentials that is not a theoretical concern. The route
+    // used to carry its own two-line rule that caught only the first form;
+    // it now goes through safeRelativePath, which is pinned separately in
+    // tests/unit/http/safe-relative-path.test.ts.
+    expect(ROUTE).toContain("safeRelativePath(");
+    expect(ROUTE).not.toContain('startsWith("//")');
   });
 
   it("sets the cookie server-side, scoped to the whole console", () => {

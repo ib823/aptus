@@ -1,5 +1,14 @@
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
-type SapAuthType = "basic" | "bearer" | "oauth-client-credentials";
+import { exchangeSamlBearerAssertion } from "@/lib/sap-public/oauth-saml-bearer";
+
+/**
+ * The env tenant's auth types — the SAME four the stored-connection path
+ * accepts (connection-resolver's SapAuthType). `oauth-saml-bearer` is the
+ * SuccessFactors flow: SAP removes HTTP Basic for SuccessFactors APIs on
+ * 20 November 2026, and until this list carried it the deployment's own
+ * `SF_TDD_*` tenant — what /sap-explorer runs on — had no way off Basic.
+ */
+type SapAuthType = "basic" | "bearer" | "oauth-client-credentials" | "oauth-saml-bearer";
 
 export interface SapTenant {
   key: string;
@@ -16,6 +25,25 @@ export interface SapTenant {
    * which are one tenant per host — see src/lib/sap-public/sap-url.ts.
    */
   client?: string;
+  /**
+   * THE CREDENTIALS TRAVEL WITH THE TENANT.
+   *
+   * Absent on a deployment tenant, whose Authorization header is built from
+   * the `{PREFIX}_*` env vars as it always was. Present on a tenant projected
+   * from a stored `SapConnection` (`toSapTenant`), where it opens THAT row's
+   * sealed secrets.
+   *
+   * Before this field existed, `resolveReadTenant` could hand every `/api/sap/
+   * tdd/*` route a customer's declared baseUrl while the connector kept
+   * building its header from the deployment's shared env credentials — so the
+   * demo tenant's username and password were sent to the customer's host. The
+   * broker (northbound/read.ts), the connection probe (connection-health.ts)
+   * and broker-run all refused to reuse this connector for exactly that
+   * reason; the read routes were the remaining callers where it still
+   * happened. A function rather than a value so the secret is opened only
+   * when a request is actually built, and never serialised with the tenant.
+   */
+  authorization?: () => Promise<string>;
 }
 
 export interface SapServiceDefinition {
@@ -614,10 +642,17 @@ export function getSapService(product: SapOdataProduct, key: string): SapService
 
 function getAuthType(prefix: string): SapAuthType {
   const raw = env(prefix, "AUTH_TYPE") ?? "basic";
-  if (raw === "basic" || raw === "bearer" || raw === "oauth-client-credentials") {
+  if (
+    raw === "basic" ||
+    raw === "bearer" ||
+    raw === "oauth-client-credentials" ||
+    raw === "oauth-saml-bearer"
+  ) {
     return raw;
   }
-  throw new Error(`${prefix}_AUTH_TYPE must be basic, bearer, or oauth-client-credentials`);
+  throw new Error(
+    `${prefix}_AUTH_TYPE must be basic, bearer, oauth-client-credentials, or oauth-saml-bearer`,
+  );
 }
 
 function requiredEnv(prefix: string, name: string): string {
@@ -646,6 +681,63 @@ async function fetchOAuthToken(prefix: string): Promise<string> {
   return json.access_token;
 }
 
+/**
+ * SAML bearer tokens for env tenants, cached per prefix.
+ *
+ * The exchange is the shared one in oauth-saml-bearer.ts; only the cache key
+ * differs from the stored-connection path. In-process only, for the same
+ * reason the resolver's cache is: an access token for a customer's SAP system
+ * does not belong in Redis.
+ */
+const envSamlTokenCache = new Map<string, { token: string; expiresAt: number }>();
+const ENV_TOKEN_EXPIRY_MARGIN_MS = 60_000;
+const ENV_DEFAULT_TOKEN_TTL_MS = 10 * 60 * 1000;
+
+async function fetchSamlBearerTokenFromEnv(prefix: string): Promise<string> {
+  const now = Date.now();
+  const cached = envSamlTokenCache.get(prefix);
+  if (cached && cached.expiresAt > now) return cached.token;
+
+  // Each variable is required by its OWN name, so a half-configured tenant
+  // fails as "Missing required env var: SF_TDD_COMPANY_ID" rather than as a
+  // generic 400 from SAP's token endpoint.
+  const { accessToken, ttlMs } = await exchangeSamlBearerAssertion(
+    {
+      tokenUrl: requiredEnv(prefix, "OAUTH_TOKEN_URL"),
+      clientId: requiredEnv(prefix, "CLIENT_ID"),
+      companyId: requiredEnv(prefix, "COMPANY_ID"),
+      samlAssertion: requiredEnv(prefix, "SAML_ASSERTION"),
+    },
+    `${prefix} tenant`,
+    { timeoutMs: getRequestTimeoutMs(prefix) },
+  );
+
+  envSamlTokenCache.set(prefix, {
+    token: accessToken,
+    expiresAt: now + Math.max((ttlMs ?? ENV_DEFAULT_TOKEN_TTL_MS) - ENV_TOKEN_EXPIRY_MARGIN_MS, 0),
+  });
+  return accessToken;
+}
+
+/** Test seam: drop cached env-tenant tokens between cases. */
+export function clearEnvSamlTokenCache(): void {
+  envSamlTokenCache.clear();
+}
+
+/**
+ * The Authorization header for a request to THIS tenant.
+ *
+ * A tenant projected from a stored connection carries its own credential
+ * provider; a deployment tenant does not, and falls back to the env-derived
+ * header. Every connector function that takes a tenant builds its header here,
+ * so the host a request goes to and the credential it carries can no longer
+ * come from two different places.
+ */
+async function authHeaderFor(prefix: string, tenant: SapTenant): Promise<string> {
+  if (tenant.authorization) return tenant.authorization();
+  return buildAuthHeader(prefix);
+}
+
 async function buildAuthHeader(prefix: string): Promise<string> {
   const authType = getAuthType(prefix);
   if (authType === "basic") {
@@ -655,6 +747,9 @@ async function buildAuthHeader(prefix: string): Promise<string> {
   }
   if (authType === "bearer") {
     return `Bearer ${requiredEnv(prefix, "BEARER_TOKEN")}`;
+  }
+  if (authType === "oauth-saml-bearer") {
+    return `Bearer ${await fetchSamlBearerTokenFromEnv(prefix)}`;
   }
   return `Bearer ${await fetchOAuthToken(prefix)}`;
 }
@@ -807,7 +902,7 @@ export async function inspectSapService(
 ): Promise<{ entitySets: SapEntitySet[] }> {
   const response = await sapFetch(`${serviceUrl(tenant, service)}/$metadata`, {
     headers: {
-      Authorization: await buildAuthHeader(prefix),
+      Authorization: await authHeaderFor(prefix, tenant),
       Accept: "application/xml, text/xml, */*",
     },
   }, getRequestTimeoutMs(prefix));
@@ -829,7 +924,7 @@ export async function inspectSapServiceMetadata(
 ): Promise<{ entitySets: SapEntitySet[]; entityCapabilities: EntityCapability[]; flavor: MetadataFlavor }> {
   const response = await sapFetch(`${serviceUrl(tenant, service)}/$metadata`, {
     headers: {
-      Authorization: await buildAuthHeader(prefix),
+      Authorization: await authHeaderFor(prefix, tenant),
       Accept: "application/xml, text/xml, */*",
     },
   }, getRequestTimeoutMs(prefix));
@@ -855,7 +950,7 @@ export async function probeSapEntitySet(
     `${serviceUrl(tenant, service)}/${encodeURIComponent(entitySetName)}?$top=1&$format=json`,
     {
       headers: {
-        Authorization: await buildAuthHeader(prefix),
+        Authorization: await authHeaderFor(prefix, tenant),
         Accept: "application/json",
       },
     },
@@ -905,7 +1000,7 @@ export async function previewSapEntitySet(
     `${serviceUrl(tenant, service)}/${encodeURIComponent(entitySetName)}?$top=${safeLimit}&$format=json`,
     {
       headers: {
-        Authorization: await buildAuthHeader(prefix),
+        Authorization: await authHeaderFor(prefix, tenant),
         Accept: "application/json",
       },
     },
@@ -938,7 +1033,7 @@ async function fetchCsrfSession(
 ): Promise<{ token: string; cookie: string }> {
   const response = await sapFetch(`${serviceUrl(tenant, service)}/`, {
     headers: {
-      Authorization: await buildAuthHeader(prefix),
+      Authorization: await authHeaderFor(prefix, tenant),
       Accept: "application/json",
       "X-CSRF-Token": "Fetch",
     },
@@ -968,7 +1063,7 @@ export async function createSapEntitySetRecord(
   const { token, cookie } = await fetchCsrfSession(prefix, tenant, service);
   const startedAt = Date.now();
   const headers: HeadersInit = {
-    Authorization: await buildAuthHeader(prefix),
+    Authorization: await authHeaderFor(prefix, tenant),
     Accept: "application/json",
     "Content-Type": "application/json",
     "X-CSRF-Token": token,
@@ -1020,7 +1115,7 @@ export async function deleteSapEntityByLocation(
         client: tenant.client,
       });
   const headers: HeadersInit = {
-    Authorization: await buildAuthHeader(prefix),
+    Authorization: await authHeaderFor(prefix, tenant),
     Accept: "application/json",
     "X-CSRF-Token": token,
   };

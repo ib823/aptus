@@ -25,6 +25,7 @@ import {
   sealSecrets,
   type SapConnectionSecrets,
 } from "@/lib/sap-public/connection-crypto";
+import { exchangeSamlBearerAssertion } from "@/lib/sap-public/oauth-saml-bearer";
 
 export type SapAuthType =
   | "basic"
@@ -386,6 +387,15 @@ export function toSapTenant(conn: ResolvedSapConnection): SapTenant {
     baseUrl: conn.baseUrl,
     ...(conn.environment ? { environment: conn.environment } : {}),
     ...(conn.client ? { client: conn.client } : {}),
+    /*
+     * AND THE CREDENTIALS. This projection carried the customer's host and
+     * nothing to authenticate to it with, so every `/api/sap/tdd/*` read that
+     * resolved a stored connection sent the DEPLOYMENT's env credentials to the
+     * CUSTOMER's baseUrl — the mirror image of the cross-tenant read the
+     * broker was written to prevent. The provider opens this row's own sealed
+     * secrets, lazily, only when a request is built.
+     */
+    authorization: () => buildAuthHeaderFromConnection(conn),
   };
 }
 
@@ -435,64 +445,23 @@ async function fetchSamlBearerToken(
   if (cached && cached.expiresAt > now) return cached.token;
 
   const { clientId, samlAssertion, companyId } = conn.secrets;
-  const url = conn.oauthTokenUrl;
 
-  // Named individually. "oauth is misconfigured" on a five-field flow is a
-  // guessing game, and this one is being set up against a deadline.
-  const missing = [
-    !url && "oauthTokenUrl",
-    !clientId && "clientId (the SuccessFactors API key)",
-    !companyId && "companyId",
-    !samlAssertion && "samlAssertion",
-  ].filter(Boolean);
-  if (missing.length > 0) {
-    throw new Error(
-      `Connection ${conn.key} is SAML bearer auth but missing ${missing.join(", ")}.`,
-    );
-  }
+  // THE EXCHANGE ITSELF LIVES IN oauth-saml-bearer.ts, shared with the env
+  // tenant path in tdd-connector. Validation (each missing field named), the
+  // request shape and the no-echo rule for the assertion are all there; this
+  // function owns only the cache, which is the one thing that differs between
+  // a stored connection (keyed by row id) and an env tenant (keyed by prefix).
+  const { accessToken, ttlMs } = await exchangeSamlBearerAssertion(
+    { tokenUrl: conn.oauthTokenUrl, clientId, companyId, samlAssertion },
+    `Connection ${conn.key}`,
+    { fetchImpl, timeoutMs: TOKEN_REQUEST_TIMEOUT_MS },
+  );
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TOKEN_REQUEST_TIMEOUT_MS);
-
-  try {
-    const res = await fetchImpl(url!, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Accept: "application/json",
-      },
-      // No Authorization header: the assertion IS the credential. Sending Basic
-      // as well would be a second, weaker credential on the same request.
-      body: new URLSearchParams({
-        grant_type: "urn:ietf:params:oauth:grant-type:saml2-bearer",
-        client_id: clientId!,
-        company_id: companyId!,
-        assertion: samlAssertion!,
-      }),
-      signal: controller.signal,
-    });
-    const json = (await res.json()) as OAuthTokenResponse;
-    if (!res.ok || typeof json.access_token !== "string") {
-      // The assertion is not echoed. It is a signed credential and a failed
-      // exchange is exactly when someone copies the error into a ticket.
-      throw new Error(
-        `SAML bearer token request failed for ${conn.key}: HTTP ${res.status}. ` +
-          "An expired or unregistered assertion is the usual cause.",
-      );
-    }
-
-    const ttlMs =
-      typeof json.expires_in === "number" && json.expires_in > 0
-        ? json.expires_in * 1000
-        : DEFAULT_TOKEN_TTL_MS;
-    oauthTokenCache.set(conn.id, {
-      token: json.access_token,
-      expiresAt: now + Math.max(ttlMs - TOKEN_EXPIRY_MARGIN_MS, 0),
-    });
-    return json.access_token;
-  } finally {
-    clearTimeout(timer);
-  }
+  oauthTokenCache.set(conn.id, {
+    token: accessToken,
+    expiresAt: now + Math.max((ttlMs ?? DEFAULT_TOKEN_TTL_MS) - TOKEN_EXPIRY_MARGIN_MS, 0),
+  });
+  return accessToken;
 }
 
 interface OAuthTokenResponse {
