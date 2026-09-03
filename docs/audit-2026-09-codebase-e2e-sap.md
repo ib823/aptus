@@ -79,6 +79,21 @@ The first attempt in this session returned 404 with `outcome=denied:env` in the 
 because the production build was started without `ALLOW_TEST_LOGIN_IN_PROD` and an IP allow-list.
 Once both were set the flow passed. That log line is the fastest way to diagnose a refused login.
 
+**This bit the live deployment, and the page now explains it.** `aptus-sandy.vercel.app/dev-login`
+rendered a normal-looking form while every persona returned `404 Not available`; the runtime log
+showed three consecutive `outcome=denied:ip`, the fail-closed IP gate. The page could not have said
+so: `isDevLoginEnabled()` checks three env gates and the endpoint checks two more — the production
+24-character minimum and the IP allow-list — so the form rendered as available and refused everyone.
+Worse, the raw API error surfaced as the words "Not available" directly under a password box, which
+reads as a rejected secret. It is not: a rejected secret is a `403 Invalid secret`.
+
+`devLoginBlocker()` (`src/lib/auth/dev-login.ts`) now evaluates those last two gates in the page and
+names the one that will fire, before anyone types anything. It calls the endpoint's own `isIpAllowed`
+rather than restating the rule, so the two cannot drift. It shows the caller their own address and
+the env change that clears it, and it never echoes the secret or the allow-list — a caller who can
+load this page already knows the backdoor is enabled, and naming which gate refuses them adds nothing
+they would not learn by clicking once. The endpoint's response is unchanged: still a bare 404.
+
 ### 3.3 Env block to paste
 
 Local `.env.local` (gitignored):
@@ -310,6 +325,7 @@ design and listed in the agent report).
 | Probe guard on the catalogue detail route | `src/app/api/sap/tdd/hub-content/[id]/route.ts` |
 | Live-SAP throttle coverage | `src/lib/security/rate-limit.ts`, `tests/unit/security/live-sap-route-throttle.test.ts` |
 | Open redirect | `src/lib/http/safe-relative-path.ts` (new), `src/lib/auth/auth-options.ts`, `src/app/api/auth/bridge/route.ts`, `src/app/(auth)/dev-login/page.tsx`, `src/app/(auth)/verify-mfa/page.tsx`, `src/app/api/studio/tenant/route.ts`, `tests/unit/http/safe-relative-path.test.ts`, `tests/unit/studio/tenant-switch-navigation.test.ts` |
+| `/dev-login` names the gate that refuses (§3.2) | `src/lib/auth/dev-login.ts`, `src/app/(auth)/dev-login/page.tsx`, `src/app/(auth)/dev-login/DevLoginForm.tsx`, `tests/unit/auth/dev-login-blocker.test.ts` |
 | Register role gate | six routes under `src/app/api/assessments/[id]/{integrations,data-migration,ocm}/`, `tests/unit/api/register-role-gate.test.ts` |
 | Routing allow-list | `src/lib/routing/workbench-paths.ts`, `tests/unit/routing/workbench-prerequisite-paths.test.ts` |
 | Housekeeping | `scripts/probe-tenant-capabilities.ts`, `src/app/api/admin/overview/route.ts`, `docs/runbooks/sap-hub-content-ingest.md`, `.env.example` |
