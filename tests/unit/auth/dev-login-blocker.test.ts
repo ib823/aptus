@@ -79,6 +79,46 @@ describe("it names the gate the endpoint will actually fire", () => {
     expect(blocker?.fix).toContain(CALLER_IP);
   });
 
+  it("offers the escape too, for an address that keeps moving", () => {
+    /*
+     * Only "add your address" is the wrong advice on a rotating connection —
+     * it was given to a tester who arrived from three addresses in two hours.
+     * Both routes are named so the operator can choose.
+     */
+    enabledInProduction({ TEST_LOGIN_ALLOWED_IPS: "203.0.113.7" });
+    const fix = devLoginBlocker(callerHeaders())?.fix ?? "";
+    expect(fix).toContain("TEST_LOGIN_ALLOWED_IPS");
+    expect(fix).toContain("ALLOW_BACKDOOR_WITHOUT_IP_ALLOWLIST");
+  });
+
+  it("warns that the override is inert until the list is REMOVED", () => {
+    // The trap: setting the flag while the list holds a value reads as a fix
+    // and does nothing, costing a redeploy to discover.
+    enabledInProduction({ TEST_LOGIN_ALLOWED_IPS: "203.0.113.7" });
+    const fix = devLoginBlocker(callerHeaders())?.fix ?? "";
+    expect(fix).toMatch(/REMOVE TEST_LOGIN_ALLOWED_IPS/);
+    expect(fix).toMatch(/matched first|never read|changes nothing/);
+  });
+
+  it("and that warning is TRUE — the flag really is ignored beside a list", () => {
+    /*
+     * The banner's claim is only worth printing if it matches the guard. This
+     * pins the precedence itself: with BOTH the list and the override set, the
+     * caller is still refused, because isIpAllowed consults the override only
+     * when the list is empty. Reorder those checks and this fails, which is
+     * the point — the explanation must not outlive the behaviour.
+     */
+    enabledInProduction({
+      TEST_LOGIN_ALLOWED_IPS: "203.0.113.7",
+      ALLOW_BACKDOOR_WITHOUT_IP_ALLOWLIST: "true",
+    });
+    expect(devLoginBlocker(callerHeaders())?.code).toBe("IP_NOT_ON_ALLOWLIST");
+
+    // Clearing the list is what makes the override take effect.
+    vi.stubEnv("TEST_LOGIN_ALLOWED_IPS", "");
+    expect(devLoginBlocker(callerHeaders())).toBeNull();
+  });
+
   it("reports the short secret FIRST, matching the route's gate order", () => {
     // Both gates would refuse. The route checks length (2.5) before the IP
     // (2.6), so naming the IP here would send an operator to fix the gate
