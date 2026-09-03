@@ -3,6 +3,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, isAdminError } from "@/lib/auth/admin-guard";
 import { prisma } from "@/lib/db/prisma";
+import { APP_CONFIG } from "@/constants/config";
 export async function GET(): Promise<NextResponse> {
   const auth = await requireAdmin();
   if (isAdminError(auth)) return auth;
@@ -44,7 +45,8 @@ export async function GET(): Promise<NextResponse> {
         scopeItems: scopeItemCount,
         processSteps: processStepCount,
         configActivities: configActivityCount,
-        sapVersion: "2602",
+        // The one canonical release label — a literal here drifted from it once.
+        sapVersion: APP_CONFIG.sapVersion,
       },
       intelligence: {
         industries: industryCount,

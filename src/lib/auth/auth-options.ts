@@ -9,6 +9,7 @@ import { magicLinkEmail, workbenchSigninEmail } from "@/lib/email/templates";
 import type { Adapter } from "next-auth/adapters";
 import { canRegister } from "@/lib/auth/auth-config";
 import { buildConfirmUrl } from "@/lib/auth/magic-link-confirm";
+import { safeRelativePath } from "@/lib/http/safe-relative-path";
 
 /**
  * Custom adapter that wraps Prisma for NextAuth compatibility.
@@ -155,7 +156,13 @@ export const authOptions: NextAuthOptions = {
      * "same baseUrl host only" rule.
      */
     async redirect({ url, baseUrl }) {
-      if (url.startsWith("/") && !url.startsWith("//")) return url;
+      // A relative target is returned verbatim ONLY after the shared sanitizer
+      // has proven it stays on-origin. `callbackUrl` is attacker-suppliable on
+      // the sign-in form, and `/\evil.example` passed the old two-line check.
+      if (url.startsWith("/")) {
+        const safe = safeRelativePath(url, baseUrl);
+        return safe === baseUrl ? baseUrl : safe;
+      }
       const workbenchHost = process.env.WORKBENCH_HOST;
       if (workbenchHost) {
         try {

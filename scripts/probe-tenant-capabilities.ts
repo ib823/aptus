@@ -24,8 +24,14 @@ async function main(): Promise<void> {
   }
 
   const limit = Number(process.env.PROBE_LIMIT ?? 60);
-  const curated = getSapProduct(productKey)?.services ?? [];
-  const dynamic = await getDynamicOdataServices({ edition: "PUBLIC", limit });
+  const product = getSapProduct(productKey);
+  const curated = product?.services ?? [];
+  // The PRODUCT decides the catalogue edition — the same rule the
+  // /capabilities route applies. A hardcoded "PUBLIC" here meant
+  // PROBE_PRODUCT=cloud-erp-private still probed the Public published set.
+  const dynamic = product?.edition
+    ? await getDynamicOdataServices({ edition: product.edition, limit })
+    : [];
   // Curated (known-configured) services first, then top up from the catalogue.
   const services = mergeProbeTargets(curated, dynamic, limit);
   if (services.length === 0) {

@@ -32,6 +32,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { safeRelativePath } from "@/lib/http/safe-relative-path";
 import { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenants";
 import { resolveStudioTenants } from "@/lib/studio/tenants";
 
@@ -45,8 +46,10 @@ export const dynamic = "force-dynamic";
  * SAP credentials.
  */
 function safeNext(raw: string | null): string {
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/studio";
-  return raw;
+  // The shared sanitizer: this route resolves the result with
+  // `new URL(next, request.url)`, the exact resolution under which the old
+  // two-line check let `/\evil.example` through.
+  return safeRelativePath(raw, "/studio");
 }
 
 export async function GET(request: NextRequest) {

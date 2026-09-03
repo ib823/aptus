@@ -42,10 +42,32 @@ describe("isLiveSapTenantRoute — throttles everything that hits the tenant", (
   });
 
   it("does NOT throttle the admin import endpoints under the same prefix", () => {
-    // seed/harvest-import are DB-only, and harvest-import is a rapid client-
-    // driven chunk loop that a 20/min bucket would break mid-import.
+    // seed/harvest-import/api-reference-import are DB-only (they fetch GitHub,
+    // never the tenant), and the two imports are rapid client-driven chunk
+    // loops that a 20/min bucket would break mid-import. api-reference-import
+    // WAS caught by the detail-route pattern: the client drives ~12 chunks in
+    // quick succession, so the throttle broke the import it was never meant to
+    // touch.
     expect(isLiveSapTenantRoute("/api/sap/tdd/hub-content/seed")).toBe(false);
     expect(isLiveSapTenantRoute("/api/sap/tdd/hub-content/harvest-import")).toBe(false);
+    expect(isLiveSapTenantRoute("/api/sap/tdd/hub-content/api-reference-import")).toBe(false);
     expect(isLiveSapTenantRoute("/api/assessments")).toBe(false);
+  });
+
+  it("throttles every route that WRITES to, or probes, a tenant", () => {
+    /*
+     * These reached the tenant and sat in the generous default buckets:
+     *   - write-test performs $metadata + create + delete — the most amplifying
+     *     call under the hub-content prefix, and it was on the EXCLUSION list;
+     *   - /write is a CSRF handshake plus a POST to a customer's system;
+     *   - the Operations "Probe now" is the identical $metadata probe the
+     *     Studio connection test is throttled for;
+     *   - broker-run is a full entity-set read through the client's connection.
+     */
+    expect(isLiveSapTenantRoute("/api/sap/tdd/hub-content/write-test")).toBe(true);
+    expect(isLiveSapTenantRoute("/api/sap/tdd/write")).toBe(true);
+    expect(isLiveSapTenantRoute("/api/ops/connections-health/probe")).toBe(true);
+    expect(isLiveSapTenantRoute("/api/studio/test/broker-run")).toBe(true);
+    expect(isLiveSapTenantRoute("/api/studio/connections/conn_1/test")).toBe(true);
   });
 });

@@ -79,18 +79,21 @@ compares that to these totals.
 | contentType | ~published | kind |
 |---|--:|---|
 | API | 862 | runtime |
-| EVENT | 147 | runtime |
+| EVENT | 151 | runtime |
 | CDS_VIEW | 8,983 | runtime |
 | BADI | 1,665 | reference |
-| BO_INTERFACE | 207 | reference |
+| BO_INTERFACE | 221 | reference |
 | INTEGRATION | 158 | reference |
-| BUILD | 78 | reference |
-| PROCESS_BLUEPRINT + LIVEPROCESS | ~15 | reference |
-| SCENARIO | 16 | reference |
+| BUILD | 77 | reference |
+| PROCESS_BLUEPRINT | 0 — not a separate published type | reference |
+| LIVEPROCESS | 43 | reference |
+| SCENARIO | 308 | reference |
 | VPUC | 5 | reference |
 | ANALYTICS | 6 | reference |
 
-Source of truth is `S4_PUBLIC_PUBLISHED_COUNTS` in `src/lib/sap-public/hub-content.ts`.
+Source of truth is `S4_PUBLIC_PUBLISHED_COUNTS` in `src/lib/sap-public/hub-content.ts`
+(2026-07 snapshot, reconciled with the committed drop files). This table is a
+copy for readers; when the constant moves, move this table with it.
 
 ## Product identity (2026-08 change)
 

@@ -263,12 +263,20 @@ export function isLiveSapTenantRoute(pathname: string): boolean {
      */
     pathname === "/api/sap/tdd/hub-content" ||
     // The item-detail route (live-probes on expansion) — but NOT the admin
-    // import endpoints that share the path prefix: seed and harvest-import
-    // are DB-only, and harvest-import is driven as a rapid chunk loop from
-    // the client that a 20/min bucket would break mid-import.
+    // import endpoints that share the path prefix: seed, harvest-import and
+    // api-reference-import are DB-only (they fetch GitHub, never the tenant),
+    // and the two imports are driven as rapid chunk loops from the client that
+    // a 20/min bucket would break mid-import. `write-test` is deliberately NOT
+    // in this exclusion any more: it performs $metadata + create + delete
+    // against the tenant, which is the most amplifying call under this prefix.
+    // probe-all is listed by name above.
     (/^\/api\/sap\/tdd\/hub-content\/[^/]+$/.test(pathname) &&
-      !/\/(seed|harvest-import|probe-all|write-test)$/.test(pathname)) ||
+      !/\/(seed|harvest-import|api-reference-import|probe-all)$/.test(pathname)) ||
     pathname === "/api/sap/tdd/capabilities" ||
+    // The guarded write-back: a CSRF handshake plus a POST against the tenant.
+    // Its GET returns feature flags only and is cheap, but the predicate is
+    // pathname-only by design, so the whole path takes the bucket.
+    pathname === "/api/sap/tdd/write" ||
     // Ariba's live REST read — an OAuth exchange plus a call against a
     // customer realm. Different protocol, same amplification.
     pathname === "/api/sap/ariba/call" ||
@@ -277,7 +285,14 @@ export function isLiveSapTenantRoute(pathname: string): boolean {
     // exactly like the routes above and belongs in the same tight bucket — not
     // the generous default API ceiling. Matched by shape because the id is
     // dynamic; anchored at both ends so no other path can slip in.
-    /^\/api\/studio\/connections\/[^/]+\/test$/.test(pathname)
+    /^\/api\/studio\/connections\/[^/]+\/test$/.test(pathname) ||
+    // The same $metadata probe, fired from the Operations "Probe now" action.
+    // Identical upstream call to the Studio test above; it sat in the
+    // generous mutation bucket only because it was added later.
+    pathname === "/api/ops/connections-health/probe" ||
+    // Studio's Test Console dry run: a full entity-set read through the
+    // client's own connection — the broker's read, minus the audit row.
+    pathname === "/api/studio/test/broker-run"
   );
 }
 

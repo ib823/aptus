@@ -12,6 +12,7 @@ import { logDecision } from "@/lib/db/decision-log";
 import { ERROR_CODES } from "@/types/api";
 import type { DecisionAction, UserRole } from "@/types/assessment";
 import { safeParseJsonBody } from "@/lib/http/safe-json-body";
+import { getRegisterPermissions } from "@/lib/register/register-helpers";
 
 const CreateDataMigrationSchema = z.object({
   objectName: z.string().min(1).max(200),
@@ -70,6 +71,17 @@ export async function POST(
   if (assessment.status === "signed_off") {
     return NextResponse.json(
       { error: { code: ERROR_CODES.FORBIDDEN, message: "Assessment is locked after sign-off" } },
+      { status: 403 },
+    );
+  }
+  // ROLE GATE. Membership (requireAssessmentAccess) says who may SEE the
+  // register; the role capability says who may CHANGE it. This route checked
+  // only the first, so a viewer, executive sponsor or support user in the same
+  // organization could write register rows — contradicting PERMISSION_MATRIX
+  // and ROLE_CAPABILITIES.canEditRegisters, which no route had ever consulted.
+  if (!getRegisterPermissions(user.role).canEdit) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.FORBIDDEN, message: "Your role can view this register but not change it" } },
       { status: 403 },
     );
   }

@@ -7,9 +7,44 @@ import type { TestUser } from "@/lib/auth/dev-login";
 interface Props {
   users: readonly TestUser[];
   redirectTo?: string;
+  /**
+   * The gate the server already knows will refuse this caller, if any. Used
+   * only to keep the failure message consistent with the banner above the
+   * form — the server decides, this just avoids contradicting it.
+   */
+  knownBlocker?: string | null;
 }
 
-export function DevLoginForm({ users, redirectTo = "/assessments" }: Props) {
+/**
+ * WHAT A FAILURE ACTUALLY MEANS, WHICH THIS USED TO GET WRONG.
+ *
+ * The endpoint has two shapes of refusal and they need opposite responses:
+ *
+ *   403 "Invalid secret"  — the secret was compared and did not match. Retype it.
+ *   404 "Not available"   — a gate BEFORE the comparison refused the request.
+ *                           Nothing typed here can change the outcome.
+ *
+ * This rendered `data.error` verbatim, so a 404 surfaced as the words "Not
+ * available" directly beneath a password box. Every reader takes that to mean
+ * the password was rejected, and on the live deployment three people in a row
+ * retyped a secret that was never read. The distinction is the whole message.
+ */
+function explainFailure(status: number, apiError: string | undefined, knownBlocker: string | null): string {
+  if (status === 404) {
+    return (
+      "Refused before the secret was checked — so this is a deployment setting, not the value you " +
+      (knownBlocker
+        ? "entered. See the explanation above the form."
+        : "entered. Check ENABLE_TEST_LOGIN_ENDPOINT, ALLOW_TEST_LOGIN_IN_PROD and the IP allow-list on this deployment.")
+    );
+  }
+  if (status === 403) {
+    return "That secret does not match the one configured on this deployment.";
+  }
+  return apiError ?? `Login failed (${status})`;
+}
+
+export function DevLoginForm({ users, redirectTo = "/assessments", knownBlocker = null }: Props) {
   const [secret, setSecret] = useState("");
   const [loadingFor, setLoadingFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +68,7 @@ export function DevLoginForm({ users, redirectTo = "/assessments" }: Props) {
         error?: string;
       };
       if (!res.ok || !data.ok) {
-        setError(data.error ?? `Login failed (${res.status})`);
+        setError(explainFailure(res.status, data.error, knownBlocker));
         setLoadingFor(null);
         return;
       }
