@@ -36,7 +36,7 @@ Run with `SKIP_NODE_VERSION_CHECK=1` because the sandbox ships Node 22.22.2 and 
 | Strict lint | `pnpm lint:strict` | pass, 0 warnings | pass, 0 warnings |
 | Unit + integration | `pnpm test --run` | 317 files, 4,738 tests, all pass | 321 files, 4,797 tests, all pass |
 | Production build | `pnpm build` | pass, 510 routes | pass, 510 routes |
-| Playwright smoke | `CI=1 pnpm test:e2e:smoke` | — | see §3.6 |
+| Playwright smoke | `CI=1 pnpm test:e2e:smoke` | — | 15 passed (login, portal, accessibility × unauthenticated + authenticated), against the production build |
 
 ---
 
@@ -148,6 +148,12 @@ CI=1 pnpm test:e2e:smoke     # boots `pnpm start` instead of `pnpm dev`
 Journeys j02/j05/j06/j09 and `edge-cases` self-skip without seeded data; set `REQUIRE_SEED=1` to turn
 those skips into failures and run the seeds under `tests/seed/` first (nothing in `package.json` runs
 them today — §5, M-6).
+
+Result in this session: the smoke suite passed 15/15 against `pnpm build` + `pnpm start`. One
+environment note for anyone running it on a machine that pre-installs Chromium rather than letting
+Playwright download it: `@playwright/test@1.58.2` looks for headless-shell revision 1208, so point
+`use.launchOptions.executablePath` at the installed binary (a throwaway config that spreads the repo
+config and adds that one key) instead of running `playwright install`.
 
 ---
 
