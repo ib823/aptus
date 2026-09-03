@@ -37,6 +37,7 @@ Run with `SKIP_NODE_VERSION_CHECK=1` because the sandbox ships Node 22.22.2 and 
 | Unit + integration | `pnpm test --run` | 317 files, 4,738 tests, all pass | 321 files, 4,797 tests, all pass |
 | Production build | `pnpm build` | pass, 510 routes | pass, 510 routes |
 | Playwright smoke | `CI=1 pnpm test:e2e:smoke` | — | 15 passed (login, portal, accessibility × unauthenticated + authenticated), against the production build |
+| Dependency security gate (CI's first step) | `node scripts/ci-audit-gate.mjs` | **fails**: 8 fixable transitive high advisories (nanoid, deepmerge-ts, browserslist, fast-uri) published since the last lockfile refresh | pass, 0 blocking — pnpm overrides added per CONTRIBUTING (nanoid pinned to the patched 3.x line because 5.x is ESM-only and would break postcss) |
 
 ---
 
