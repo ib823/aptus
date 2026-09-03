@@ -37,9 +37,12 @@ const ROOT = resolve(__dirname, "../../..");
 const read = (p: string) => stripSource(readFileSync(resolve(ROOT, p), "utf8"), "comments");
 
 const RESOLVER = read("src/lib/sap-public/connection-resolver.ts");
+const CONNECTOR = read("src/lib/sap-public/tdd-connector.ts");
+const EXCHANGE = read("src/lib/sap-public/oauth-saml-bearer.ts");
 const ROUTE = read("src/app/api/studio/connections/route.ts");
 const FORM = read("src/components/studio/ConnectionsClient.tsx");
 const CRYPTO = read("src/lib/sap-public/connection-crypto.ts");
+const ENV_EXAMPLE = readFileSync(resolve(ROOT, ".env.example"), "utf8");
 
 /**
  * The function BODY, not the first mention of its name.
@@ -50,14 +53,22 @@ const CRYPTO = read("src/lib/sap-public/connection-crypto.ts");
  * function that does use the cache.
  */
 const SAML_FLOW = RESOLVER.slice(RESOLVER.indexOf("async function fetchSamlBearerToken"));
+const ENV_SAML_FLOW = CONNECTOR.slice(CONNECTOR.indexOf("async function fetchSamlBearerTokenFromEnv"));
+const EXCHANGE_FLOW = EXCHANGE.slice(EXCHANGE.indexOf("export async function exchangeSamlBearerAssertion"));
 
-describe("the four enumerations of auth type agree", () => {
+describe("the five enumerations of auth type agree", () => {
   /*
-   * ONE CONCEPT, FOUR COPIES. The auth type is declared in the resolver's union,
-   * the route's zod enum, the form's useState generic and the form's <select>.
-   * Adding SAML bearer required editing all four, and nothing would have failed
-   * if one had been missed — the connection would simply have been unselectable,
-   * or accepted by the API and rejected by the form, depending on which.
+   * ONE CONCEPT, FIVE COPIES. The auth type is declared in the resolver's union,
+   * the env connector's union, the route's zod enum, the form's useState generic
+   * and the form's <select>. Adding SAML bearer required editing all of them,
+   * and nothing would have failed if one had been missed — the connection would
+   * simply have been unselectable, or accepted by the API and rejected by the
+   * form, depending on which.
+   *
+   * The env connector is the copy that WAS missed: for a release the stored
+   * connection path accepted `oauth-saml-bearer` while `SF_TDD_AUTH_TYPE` still
+   * refused it, so the deployment's own SuccessFactors tenant — what
+   * /sap-explorer runs on — had no way off Basic before SAP removes it.
    *
    * This is the shape that produced the two-registry defect and the five routes
    * that knew one registry. A list repeated is a list that drifts.
@@ -66,6 +77,11 @@ describe("the four enumerations of auth type agree", () => {
 
   it.each(EXPECTED)("%s is in the resolver union", (t) => {
     expect(RESOLVER).toContain(`"${t}"`);
+  });
+
+  it.each(EXPECTED)("%s is accepted by the env connector", (t) => {
+    const fn = CONNECTOR.slice(CONNECTOR.indexOf("function getAuthType("));
+    expect(fn.slice(0, 500)).toContain(`"${t}"`);
   });
 
   it.each(EXPECTED)("%s is accepted by the API schema", (t) => {
@@ -80,29 +96,60 @@ describe("the four enumerations of auth type agree", () => {
 
 describe("SAML bearer is wired as its own flow, not a variant of client-credentials", () => {
   it("uses the saml2-bearer grant type", () => {
-    expect(RESOLVER).toContain("urn:ietf:params:oauth:grant-type:saml2-bearer");
+    expect(EXCHANGE).toContain("urn:ietf:params:oauth:grant-type:saml2-bearer");
   });
 
   it("sends company_id, which the SuccessFactors token endpoint requires", () => {
-    expect(RESOLVER).toContain("company_id");
+    expect(EXCHANGE).toContain("company_id");
   });
 
   it("does NOT send a Basic Authorization header on the token request", () => {
     // The assertion is the credential. Sending Basic as well would put a second,
     // weaker credential on the same request.
-    const body = SAML_FLOW.slice(0, SAML_FLOW.indexOf("finally"));
+    const body = EXCHANGE_FLOW.slice(0, EXCHANGE_FLOW.indexOf("finally"));
     expect(body).not.toContain("Basic ");
+    expect(body).not.toContain("Authorization");
+  });
+
+  it("is ONE exchange, called from both credential sources", () => {
+    /*
+     * The request shape is from SAP's documentation and unverified against a
+     * live tenant. Two copies of it would be two places for the first live test
+     * to find a difference; the stored-connection path and the env path must
+     * send the same bytes.
+     */
+    expect(SAML_FLOW.slice(0, 900)).toContain("exchangeSamlBearerAssertion(");
+    expect(ENV_SAML_FLOW.slice(0, 900)).toContain("exchangeSamlBearerAssertion(");
   });
 
   it("shares the token cache, so a call does not exchange twice per request", () => {
     expect(SAML_FLOW.slice(0, 600)).toContain("oauthTokenCache");
+    expect(ENV_SAML_FLOW.slice(0, 600)).toContain("envSamlTokenCache");
+  });
+});
+
+describe("the env tenant can be configured for it", () => {
+  it("reads COMPANY_ID and SAML_ASSERTION from the prefix, by their own names", () => {
+    for (const v of ["OAUTH_TOKEN_URL", "CLIENT_ID", "COMPANY_ID", "SAML_ASSERTION"]) {
+      expect(ENV_SAML_FLOW.slice(0, 1200)).toContain(`requiredEnv(prefix, "${v}")`);
+    }
+  });
+
+  it(".env.example documents the SuccessFactors variables and the removal date", () => {
+    for (const v of ["SF_TDD_COMPANY_ID", "SF_TDD_SAML_ASSERTION", "SF_TDD_OAUTH_TOKEN_URL"]) {
+      expect(ENV_EXAMPLE).toContain(v);
+    }
+    expect(ENV_EXAMPLE).toContain("20 NOVEMBER 2026");
+    // The documented default must be the flow that survives the removal date.
+    expect(ENV_EXAMPLE).toMatch(/SF_TDD_AUTH_TYPE="oauth-saml-bearer"/);
   });
 });
 
 describe("it fails legibly, and never leaks the assertion", () => {
   it("names each missing field rather than saying 'oauth is misconfigured'", () => {
+    const validator = EXCHANGE.slice(EXCHANGE.indexOf("export function missingSamlBearerFields"));
     for (const field of ["oauthTokenUrl", "clientId", "companyId", "samlAssertion"]) {
-      expect(SAML_FLOW.slice(0, 1600), `${field} must be named when missing`).toContain(field);
+      expect(validator.slice(0, 600), `${field} must be named when missing`).toContain(field);
     }
   });
 
@@ -113,7 +160,11 @@ describe("it fails legibly, and never leaks the assertion", () => {
      * issue tracker, which is how the SAP password in this project's own history
      * ended up somewhere it should not have been.
      */
-    const errors = SAML_FLOW.match(/throw new Error\([\s\S]*?\);/g) ?? [];
+    const errors = [
+      ...(EXCHANGE_FLOW.match(/throw new Error\([\s\S]*?\);/g) ?? []),
+      ...(SAML_FLOW.match(/throw new Error\([\s\S]*?\);/g) ?? []),
+      ...(ENV_SAML_FLOW.match(/throw new Error\([\s\S]*?\);/g) ?? []),
+    ];
     expect(errors.length).toBeGreaterThan(0);
     for (const e of errors) {
       expect(e, "an error interpolates the assertion").not.toMatch(/\$\{[^}]*[sS]amlAssertion/);

@@ -7,12 +7,12 @@ import { createSession, SESSION_COOKIE_NAME, getSessionCookieOptions } from "@/l
 import { notifyNewLogin, notifySessionDisplaced } from "@/lib/auth/login-notify";
 import { prisma } from "@/lib/db/prisma";
 import { getClientIp } from "@/lib/security/client-ip";
+import { safeRelativePath } from "@/lib/http/safe-relative-path";
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const rawCallback = request.nextUrl.searchParams.get("callbackUrl") ?? "/assessments";
-  // Prevent open redirect — only allow relative paths
-  const redirectTo = rawCallback.startsWith("/") && !rawCallback.startsWith("//")
-    ? rawCallback
-    : "/assessments";
+  // Prevent open redirect — same-origin paths only. Resolved below with
+  // `new URL(redirectTo, request.url)`, which is exactly the resolution that
+  // turned `/\evil.example` into https://evil.example/ under the old check.
+  const redirectTo = safeRelativePath(request.nextUrl.searchParams.get("callbackUrl"), "/assessments");
 
   // Host-aware login redirect. On the Workbench host (ab-workbench.vercel.app)
   // sending users to /login bounces off middleware host-routing (/login is not

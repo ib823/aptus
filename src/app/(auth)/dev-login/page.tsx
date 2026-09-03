@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { isDevLoginEnabled, TEST_USERS } from "@/lib/auth/dev-login";
+import { safeRelativePath } from "@/lib/http/safe-relative-path";
 import { DevLoginForm } from "./DevLoginForm";
 
 export const metadata: Metadata = { title: "Dev Login" };
@@ -13,10 +14,9 @@ const DEFAULT_LANDING =
 
 function safeCallbackUrl(raw: string | string[] | undefined): string {
   const value = Array.isArray(raw) ? raw[0] : raw;
-  if (!value) return DEFAULT_LANDING;
-  // Only allow same-origin absolute paths; reject protocol-relative and external URLs.
-  if (!value.startsWith("/") || value.startsWith("//")) return DEFAULT_LANDING;
-  return value;
+  // Same-origin paths only — the shared sanitizer, so this page cannot drift
+  // from the rule the auth callbacks enforce.
+  return safeRelativePath(value, DEFAULT_LANDING);
 }
 
 export default async function DevLoginPage({

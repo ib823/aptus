@@ -38,6 +38,22 @@ export const WORKBENCH_PATHS = [
   '/pricing',           // plan tiers; CTAs link to /signup
   '/terms',             // linked from signup and guest consent surfaces
   '/privacy',           // linked from signup and guest consent surfaces
+  /*
+   * THE PAGES THE WORKBENCH SURFACES SEND PEOPLE TO. Each of these lives
+   * outside the Workbench route groups and was redirected to /workbench on a
+   * Workbench host — the gate's fourth silent failure:
+   *   - /verify-mfa: the Studio, Operations and Control Tower layouts redirect
+   *     an MFA-required user here, so any organization with mfaPolicy=required
+   *     was locked out of the whole Console;
+   *   - /settings/security: the same layouts send a user who must enrol a
+   *     passkey here, and the login-notify emails link to it;
+   *   - /invitations/: every invitation email links here;
+   *   - /verify/: the sign-off verification link in the presales journey.
+   */
+  '/verify-mfa',        // MFA step-up target of the Console layouts (under (auth))
+  '/settings/security', // passkey enrolment target of the Console layouts + security emails
+  '/invitations/',      // invitation-email landing (under (auth))
+  '/verify/',           // sign-off verification link (under (public))
   '/api/auth/',         // NextAuth callbacks must work on WORKBENCH_HOST
   '/api/presales/',     // presales REST API
   '/api/affirm/',       // affirm-set REST API
