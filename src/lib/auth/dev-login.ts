@@ -120,14 +120,35 @@ export function devLoginBlocker(headers: Headers): DevLoginBlocker | null {
       };
     }
 
+    /*
+     * BOTH ROUTES, AND THE ORDER THAT MAKES ONE OF THEM A TRAP.
+     *
+     * This branch used to offer only "add your address", because an allow-list
+     * exists and the operator presumably meant it. On a connection whose
+     * address rotates that is the wrong advice: it was given to a tester who
+     * arrived from three different addresses inside two hours, each one a fresh
+     * env edit and redeploy.
+     *
+     * The escape is to drop the list and set the override — but
+     * `isIpAllowed` only consults ALLOW_BACKDOOR_WITHOUT_IP_ALLOWLIST when the
+     * list is EMPTY. Setting the flag while the list still holds a value reads
+     * as a fix and changes nothing, costing another redeploy to discover. So
+     * the precedence is stated here rather than left to be found.
+     */
     return {
       code: "IP_NOT_ON_ALLOWLIST",
       title: "Your sign-in will be refused: this address is not on the allow-list.",
       detail:
         "An allow-list is configured and your address is not in it, so the endpoint refuses the " +
         "request before it compares the secret. Addresses are matched exactly, with no ranges, so " +
-        "a new address from the same network still has to be added.",
-      fix: `Add ${callerIp} to TEST_LOGIN_ALLOWED_IPS on this deployment and redeploy.`,
+        "every new address — including a later one from the same network — has to be added by hand.",
+      fix:
+        `Add ${callerIp} to TEST_LOGIN_ALLOWED_IPS and redeploy. Or, if addresses change too often ` +
+        "to keep pinning, REMOVE TEST_LOGIN_ALLOWED_IPS entirely and set " +
+        "ALLOW_BACKDOOR_WITHOUT_IP_ALLOWLIST=true, accepting that the secret alone then guards a " +
+        "platform_admin session. Removing the list is not optional in that second route: while it " +
+        "holds any value it is matched first and the flag is never read, so setting the flag " +
+        "alone changes nothing.",
       callerIp,
     };
   }
