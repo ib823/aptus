@@ -11,6 +11,12 @@ env:
   DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fit_portal_test
   NEXTAUTH_SECRET: ci-test-secret-key-minimum-32-characters-long
   NEXTAUTH_URL: http://localhost:3003
+  # The guest journeys (/a/*, /c/*, /d/*) mint CSRF nonces with a dedicated
+  # secret and REFUSE to fall back to NEXTAUTH_SECRET in production — and the
+  # e2e job serves the app with `pnpm start`, i.e. NODE_ENV=production. The
+  # first guest-route spec to run in CI (discovery-seam) 500'd on every landing
+  # for exactly this reason. Not a credential: CI-only, like NEXTAUTH_SECRET above.
+  PRESALES_CSRF_SECRET: ci-presales-csrf-secret-minimum-16-chars
 
 jobs:
   quality-gates:
