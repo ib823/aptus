@@ -152,7 +152,7 @@ Thomas is invited by Marcus to manage NovaTech's side.
 ```
 Action:    Marcus invites thomas.braun@novatech.de as client_admin
 Auth:      Thomas receives magic link → authenticates
-MFA:       Required (client-facing role) → enrolls TOTP
+MFA:       Required (client-facing role) → registers a passkey
 Onboard:   Welcome → Team setup → Dashboard → Deadlines → /dashboard
 ```
 

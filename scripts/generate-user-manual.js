@@ -128,9 +128,8 @@ c.push(sp());
 
 c.push(h2("2.2 Mandatory Passkey Registration"));
 c.push(p("All new users must register a passkey before accessing the platform. This applies regardless of how you first signed in (magic link or invite code)."));
-c.push(p("On your first login, you will see the \"Secure Your Account\" page with two options:"));
-c.push(bp("Passkey (Recommended) — ", "Use your fingerprint, face, or device PIN. One-tap future logins."));
-c.push(bp("Authenticator App (Fallback) — ", "Use Google Authenticator or Authy for 6-digit TOTP codes. Only if your browser doesn't support passkeys."));
+c.push(p("On your first login, you will see the \"Secure Your Account\" page:"));
+c.push(bp("Passkey — ", "Use your fingerprint, face, or device PIN. One-tap future logins. Passkeys are the only second factor; there is no authenticator-app fallback, so use a browser and device that support them."));
 c.push(p("After registering, future logins via passkey go straight to the portal — no additional verification step."));
 c.push(sp());
 
@@ -153,7 +152,7 @@ c.push(p("ABeam uses an 11-role access control system. Each role has specific pe
 c.push(tbl(["Role", "Description", "MFA Required"], [
   ["Platform Admin", "Full platform access. Manage users, organizations, SAP catalog, all assessments.", "Optional"],
   ["Partner Lead", "Manage assessments across organizations. Subscription management.", "Optional"],
-  ["Consultant", "Create and run assessments. Primary assessment workflow role.", "Yes (passkey or TOTP)"],
+  ["Consultant", "Create and run assessments. Primary assessment workflow role.", "Yes (passkey)"],
   ["Solution Architect", "Technical review of process steps, configurations, and integrations.", "Yes"],
   ["Project Manager", "Oversight of assessment progress, workshops, and change management.", "Yes"],
   ["Process Owner", "Review and validate process steps for their assigned functional area.", "Yes"],

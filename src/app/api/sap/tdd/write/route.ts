@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isAdminError, requireAdmin } from "@/lib/auth/admin-guard";
 import {
   createSapEntitySetRecord,
+  deploymentOnlyTenantMessage,
   getSapProduct,
   getSapService,
   getSapTddWriteSecret,
@@ -110,16 +111,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const tenant = getSapTenant(product.envPrefix, readString(body.tenant));
+  // DEPLOYMENT REGISTRY ONLY, never the connection registry. The write ring is
+  // a deployment facility (env flag, env secret, env tenants); a stored
+  // connection is written through the northbound broker, never from here. See
+  // deploymentOnlyTenantMessage for the reasoning, and the scan in
+  // tests/unit/studio/tenant-registries.test.ts that pins it.
+  const tenantKey = readString(body.tenant);
+  const tenant = getSapTenant(product.envPrefix, tenantKey);
+  if (!tenant) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: deploymentOnlyTenantMessage(tenantKey) } },
+      { status: 400 },
+    );
+  }
+
   const service = getSapService(product, readString(body.service));
   const entity = readString(body.entity);
 
-  if (!tenant || !service || !entity || !isRecord(body.payload)) {
+  if (!service || !entity || !isRecord(body.payload)) {
     return NextResponse.json(
       {
         error: {
           code: ERROR_CODES.VALIDATION_ERROR,
-          message: "Valid tenant, service, entity, and object payload are required",
+          message: "Valid service, entity, and object payload are required",
         },
       },
       { status: 400 },

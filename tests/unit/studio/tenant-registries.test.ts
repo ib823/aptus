@@ -27,6 +27,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import type * as Connector from "@/lib/sap-public/tdd-connector";
 
 const mocks = vi.hoisted(() => ({
   getSapTenant: vi.fn(),
@@ -216,5 +217,65 @@ describe("no route resolves a tenant key from one registry only", () => {
         "fixed in /preview and /entities and left in place everywhere else:\n" +
         offenders.join("\n"),
     ).toEqual([]);
+  });
+});
+
+/**
+ * THE EXEMPTION ABOVE IS A DECISION, AND A DECISION PINNED ONLY IN A COMMENT
+ * IS ONE REFACTOR FROM BEING UNMADE.
+ *
+ * An audit read the two exempted routes as the read-route defect left in place
+ * and proposed resolving stored connections there too. It is not that defect:
+ * the write panel's tenant list comes from /api/sap/tdd/catalog, which lists
+ * deployment tenants only, so no screen ever offers a connection key to the
+ * write ring; and a stored connection is written through the northbound
+ * broker, which binds the write to a declared environment and a grant. Wiring
+ * the env-secret-protected ring to a customer's connection would be a second
+ * write path into a customer system with none of that. So the scan above
+ * leaves the direction open, and this closes it — in BOTH directions: the
+ * routes must not resolve connections, and they must say why when refused.
+ */
+describe("the write ring stays deployment-scoped", () => {
+  const WRITE_RING = [
+    "src/app/api/sap/tdd/write/route.ts",
+    "src/app/api/sap/tdd/hub-content/write-test/route.ts",
+  ];
+
+  it("neither write route consults the connection registry", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const { stripSource } = await import("../../helpers/source");
+    const root = resolve(__dirname, "../../..");
+    for (const f of WRITE_RING) {
+      const src = stripSource(readFileSync(resolve(root, f), "utf8"), "comments");
+      expect(src, `${f} resolves stored connections on the write ring`).not.toContain("resolveReadTenant");
+      expect(src, `${f} resolves stored connections on the write ring`).not.toContain("connection-resolver");
+      expect(src, `${f} reads the deployment registry`).toContain("getSapTenant(");
+    }
+  });
+
+  it("and both refuse an unknown key with the deployment-only explanation", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const { stripSource } = await import("../../helpers/source");
+    const root = resolve(__dirname, "../../..");
+    for (const f of WRITE_RING) {
+      const src = stripSource(readFileSync(resolve(root, f), "utf8"), "comments");
+      expect(src, `${f} must explain the refusal`).toContain("deploymentOnlyTenantMessage(");
+    }
+  });
+
+  it("the explanation names the key, the registry, and where a connection IS written", async () => {
+    // This file mocks the connector down to getSapTenant; reach past the mock
+    // for the real sentence, since the sentence is what is under test.
+    const { deploymentOnlyTenantMessage } = await vi.importActual<typeof Connector>(
+      "@/lib/sap-public/tdd-connector",
+    );
+    const msg = deploymentOnlyTenantMessage("qa-conn-verify");
+    expect(msg).toContain('"qa-conn-verify"');
+    expect(msg).toMatch(/deployment/);
+    expect(msg).toMatch(/northbound/);
+    // An empty key is a different mistake and gets a different sentence.
+    expect(deploymentOnlyTenantMessage("")).toMatch(/tenant is required/i);
   });
 });

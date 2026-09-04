@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type * as Connector from "@/lib/sap-public/tdd-connector";
 
 const mocks = vi.hoisted(() => ({
   isSapTddWriteEnabled: vi.fn(),
@@ -19,7 +20,10 @@ const mocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
 }));
 
-vi.mock("@/lib/sap-public/tdd-connector", () => ({
+// The real module is kept underneath so the refusal text the route sends is
+// the real one (deploymentOnlyTenantMessage), not a stand-in.
+vi.mock("@/lib/sap-public/tdd-connector", async (importActual) => ({
+  ...(await importActual<typeof Connector>()),
   isSapTddWriteEnabled: mocks.isSapTddWriteEnabled,
   getSapTddWriteSecretRequired: mocks.getSapTddWriteSecretRequired,
   getSapTddWriteSecret: mocks.getSapTddWriteSecret,
@@ -111,6 +115,42 @@ describe("POST /api/sap/tdd/write", () => {
     const res = await POST(makeRequest({ ...VALID_BODY, writeSecret: "secret-value" }));
     expect(res.status).toBe(200);
     expect(mocks.createSapEntitySetRecord).toHaveBeenCalledOnce();
+  });
+
+  /*
+   * THE WRITE RING IS DEPLOYMENT-SCOPED, AND THE REFUSAL SAYS SO.
+   *
+   * A connection key from the Studio switcher resolves on every read route and
+   * not here — by design (tenant-registries.test.ts). Until now the refusal was
+   * "Valid tenant, service, entity, and object payload are required": four
+   * things named, none of them the problem. The message must name the key, the
+   * registry writes use, and where a stored connection IS written.
+   */
+  it("refuses a key that is not a deployment tenant, and says which registry writes use", async () => {
+    process.env.S4_TDD_WRITE_SECRET = "secret-value";
+    mocks.getSapTenant.mockReturnValueOnce(null);
+    const res = await POST(
+      makeRequest({ ...VALID_BODY, tenant: "qa-conn-verify", writeSecret: "secret-value" }),
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.message).toContain('"qa-conn-verify"');
+    expect(body.error.message).toMatch(/deployment/);
+    expect(body.error.message).toMatch(/northbound/);
+    expect(mocks.createSapEntitySetRecord).not.toHaveBeenCalled();
+  });
+
+  it("keeps the tenant refusal BEHIND the admin and secret gates", async () => {
+    // Otherwise an unauthenticated caller could enumerate deployment tenant
+    // keys by watching which ones get the "unknown tenant" sentence.
+    mocks.requireAdmin.mockResolvedValue({ status: 401 });
+    process.env.S4_TDD_WRITE_SECRET = "secret-value";
+    mocks.getSapTenant.mockReturnValueOnce(null);
+    const res = await POST(
+      makeRequest({ ...VALID_BODY, tenant: "qa-conn-verify", writeSecret: "secret-value" }),
+    );
+    expect(res.status).toBe(401);
+    expect(mocks.getSapTenant).not.toHaveBeenCalled();
   });
 });
 

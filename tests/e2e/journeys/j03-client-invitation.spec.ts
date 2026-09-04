@@ -148,8 +148,8 @@ test.describe("T-E2E-J03 — Client Stakeholder Invitation", () => {
     await context.close();
   });
 
-  // Step 7: Invitee verifies TOTP
-  test("Step 07 — Invitee verifies TOTP code", async ({ browser }) => {
+  // Step 7: Invitee verifies with a passkey (the only second factor)
+  test("Step 07 — Invitee reaches passkey verification", async ({ browser }) => {
     const context = await browser.newContext();
     const page = await context.newPage();
 
@@ -157,7 +157,7 @@ test.describe("T-E2E-J03 — Client Stakeholder Invitation", () => {
     await auth.goToMfaVerify();
     await auth.waitForPageLoad();
 
-    // MFA verify page should have input for TOTP code
+    // The verify page offers a single passkey action; there is no code input.
     const url = page.url();
     expect(url).toMatch(/mfa|login|verify/);
 
