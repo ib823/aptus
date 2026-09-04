@@ -93,12 +93,11 @@ The build phases below are still substantially complete (V1 phases 0–9 plus V2
 - Area-locked permissions enforce functional area boundaries
 - CSRF protection via NextAuth session tokens
 
-**MFA UX Polish** (9.9):
-- TOTP countdown timer with 30-second window
-- Auto-focus on code input field
-- Clear error messages for invalid codes
-- 6-digit numeric validation
-- Recovery code flow support
+**MFA UX** (9.9):
+- Second factor is a passkey (WebAuthn) only — there is no TOTP, no authenticator app, no recovery codes
+- `/verify-mfa` is a single "Verify with passkey" action; it redirects to `/settings/security?mfa=required` when enrolment is still needed, and straight on when MFA is no longer required
+- Distinct error messages for "couldn't start verification" and "verification failed"
+- `next` is restricted to a same-origin path and never a login/verify loop
 
 **Permission Denied UX** (9.10):
 - `PermissionDenied` shared component with ShieldAlert icon

@@ -73,7 +73,7 @@ Platform Admin (100)        Partner Lead (90)              Client Admin (65)
 | **Magic Link** | All users | Email-based, expires in 15 minutes |
 | **SSO (SAML/OIDC)** | Enterprise plan | Federated identity |
 | **SCIM Provisioning** | Enterprise plan | Automated user lifecycle |
-| **TOTP MFA** | All users | Required for client-facing roles, optional for internal |
+| **Passkey (WebAuthn) MFA** | All users | Required for client-facing roles, optional for internal. Passkey only — no TOTP |
 
 **Session rules:** 24-hour max age, 1 concurrent session limit, new login revokes existing sessions.
 

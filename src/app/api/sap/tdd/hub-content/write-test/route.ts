@@ -9,6 +9,7 @@ import { timingSafeEqual } from "crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { isAdminError, requireAdmin } from "@/lib/auth/admin-guard";
 import {
+  deploymentOnlyTenantMessage,
   getSapProduct,
   getSapService,
   getSapTddWriteSecret,
@@ -92,11 +93,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: { code, message: decision.message } }, { status: decision.status });
   }
 
-  const tenant = getSapTenant(prefix, readString(body.tenant));
-  const service = getSapService(product, readString(body.service));
-  if (!tenant || !service || !isRecord(body.payload)) {
+  // Deployment registry only, by design — a write-test is a write. See
+  // deploymentOnlyTenantMessage and the scan in tenant-registries.test.ts.
+  const tenantKey = readString(body.tenant);
+  const tenant = getSapTenant(prefix, tenantKey);
+  if (!tenant) {
     return NextResponse.json(
-      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Valid tenant, service, and object payload are required" } },
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: deploymentOnlyTenantMessage(tenantKey) } },
+      { status: 400 },
+    );
+  }
+  const service = getSapService(product, readString(body.service));
+  if (!service || !isRecord(body.payload)) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Valid service and object payload are required" } },
       { status: 400 },
     );
   }

@@ -11,8 +11,6 @@ env:
   DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fit_portal_test
   NEXTAUTH_SECRET: ci-test-secret-key-minimum-32-characters-long
   NEXTAUTH_URL: http://localhost:3003
-  TOTP_ENCRYPTION_KEY: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
-  TOTP_ISSUER: ABeam
 
 jobs:
   quality-gates:
@@ -149,6 +147,9 @@ jobs:
       # step boots the app with the flag on and DISCOVERY_E2E=1 so the C7
       # "New session" spec actually executes — the PR-5 gap where the entry
       # point to the client workflow shipped without a route and no CI ran it.
+      # The seam spec (consultant drives, client follows; facilitator notes never
+      # reach the client) runs here too: it shipped without a project suffix and
+      # was never collected anywhere until it was renamed.
       - name: Run discovery session e2e
         run: pnpm test:e2e:discovery-session
         env:
