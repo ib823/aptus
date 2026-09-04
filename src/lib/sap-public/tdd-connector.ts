@@ -636,6 +636,36 @@ export function getSapTenant(prefix: string, key: string): SapTenant | null {
   return getConfiguredSapTenants(prefix).find((tenant) => tenant.key === key) ?? null;
 }
 
+/**
+ * The refusal for a WRITE against a key that is not a deployment tenant.
+ *
+ * THE WRITE RING IS DEPLOYMENT-SCOPED, ON PURPOSE. `/api/sap/tdd/write` and
+ * `hub-content/write-test` are gated by `{PREFIX}_WRITE_ENABLED`, a
+ * `{PREFIX}_WRITE_SECRET` and (for the write-test) a `{PREFIX}_WRITE_TEST_
+ * ENTITYSETS` allow-list — every one of them a DEPLOYMENT setting describing
+ * the deployment's own test ring. The read routes resolve a caller's stored
+ * connections as well (tenant-for-read.ts); the write routes deliberately do
+ * not, because pointing an env-secret-protected ring at a customer's declared
+ * connection would be a second write path into a customer system that skips
+ * the environment binding, the grant and the audit row the northbound broker
+ * exists to enforce. A connection is written through its northbound interface.
+ *
+ * Until this message existed the refusal read "Valid tenant, service, entity,
+ * and object payload are required" — four things named, none of them the
+ * problem, on a key the product's own tenant switcher had just offered. The
+ * key is echoed because the caller supplied it; nothing else is disclosed.
+ */
+export function deploymentOnlyTenantMessage(key: string): string {
+  return key
+    ? `No tenant named "${key}" is configured on this deployment. Write-back and ` +
+        `write-tests run only against the deployment's own configured tenants ` +
+        `({PREFIX}_TENANTS_JSON), never against a connection declared in Studio — ` +
+        `a declared connection is written through its northbound interface, which ` +
+        `binds the write to a declared environment and a grant.`
+    : `A tenant is required. Write-back and write-tests run only against the ` +
+        `deployment's own configured tenants ({PREFIX}_TENANTS_JSON).`;
+}
+
 export function getSapService(product: SapOdataProduct, key: string): SapServiceDefinition | null {
   return product.services.find((service) => service.key === key) ?? null;
 }

@@ -9,14 +9,20 @@
  * REQUIREMENTS: server with NEUTRAL_DISCOVERY_ENABLED=true; DISCOVERY_E2E=1; a
  * consultant storage state (the `consultant` project).
  *
- * NOTE: never executed here — no Postgres, and global-setup opens Prisma before
- * any spec. Gates in preview.
+ * THE FILE NAME IS THE SWITCH. Every playwright project selects specs by
+ * suffix (`*.consultant.spec.ts` → the consultant project). This spec shipped
+ * as `discovery-seam.spec.ts`, which matched NO project, so for its whole life
+ * it was never collected — not skipped, not run, simply invisible — while the
+ * "gates in preview" note above it read as if it were waiting on
+ * infrastructure. It self-skips unless DISCOVERY_E2E=1, exactly like the
+ * new-session spec that CI does run.
  */
 
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 import { hashToken, mintRawToken } from "../../src/lib/affirm/external/tokens";
 import { hashUserAgent } from "../../src/lib/security/ua-fingerprint";
+import { TEST_USERS } from "./global-setup";
 
 const RUN = process.env.DISCOVERY_E2E === "1";
 const UA = "DiscoverySeamE2E/1.0 (Playwright) Chrome/142.0.0.0";
@@ -33,17 +39,51 @@ async function clientLands(browser: Browser): Promise<Page> {
   // A separate context: the client is a different browser in a different room.
   const ctx = await browser.newContext({ userAgent: UA });
   const page = await ctx.newPage();
-  await page.goto(`/d/${token}`);
+  const landing = await page.goto(`/d/${token}`);
+  // Say WHY the landing did not render, up front. In CI the production server
+  // 500'd this page (PRESALES_CSRF_SECRET unset) and the only symptom was a
+  // 45-second wait for a checkbox that was never coming, seven times over.
+  expect(landing?.status(), "guest landing page must render").toBe(200);
   await page.getByRole("checkbox", { name: /named recipient/i }).check();
   await page.getByRole("button", { name: /^Begin$/ }).click();
   await expect(page).toHaveURL(/\/d\/home$/);
   return page;
 }
 
+/**
+ * Put the client's browser on a process page in Present mode — the only place
+ * the follower is mounted.
+ *
+ * Pressing "p" the instant a page lands is a race the spec lost every time: the
+ * mode switch attaches its keydown listener during hydration, so a keystroke
+ * fired on load can land on nothing and the cookie is never written. The spec
+ * then navigated in Explore mode and waited twenty seconds for a follower that
+ * was not on the page. Retry the key until the switch itself says Present is
+ * current, which is the only signal that the cookie AND the re-render happened.
+ */
+async function enterPresent(client: Page, processId: string): Promise<void> {
+  await client.goto(`/d/process/${processId}`);
+  const present = client.getByRole("button", { name: /^Present/ });
+  await expect(async () => {
+    await client.keyboard.press("p");
+    await expect(present).toHaveAttribute("aria-current", "page", { timeout: 1_500 });
+  }).toPass({ timeout: 15_000 });
+}
+
 test.describe("the seam · consultant drives, client follows", () => {
   test.skip(!RUN, "Set DISCOVERY_E2E=1 and boot with NEUTRAL_DISCOVERY_ENABLED=true");
 
   test.beforeAll(async () => {
+    // OWNED BY THE CONSULTANT WHO DRIVES IT. The facilitate page and every
+    // /api/discovery/sessions/[id]/* route are scoped to the engagement's
+    // createdById (src/lib/discovery/authz.ts); any other consultant gets a 404
+    // that does not confirm the engagement exists. This spec predates that
+    // guard and had never run, so its engagement had no owner and the console
+    // answered "Session not found" to every test the first time it was run.
+    const owner = await prisma.user.findUniqueOrThrow({
+      where: { email: TEST_USERS.consultant.email },
+      select: { id: true },
+    });
     // Scope to Source-to-Pay so the scoping assertions have something to bite on.
     const e = await prisma.discoveryEngagement.create({
       data: {
@@ -51,6 +91,7 @@ test.describe("the seam · consultant drives, client follows", () => {
         state: "issued",
         issuedAt: new Date(),
         valueStreamIds: ["VS2"],
+        createdById: owner.id,
       },
     });
     engagementId = e.id;
@@ -65,9 +106,12 @@ test.describe("the seam · consultant drives, client follows", () => {
         otpVerifiedUaHashes: [hashUserAgent(UA)],
       },
     });
-    // Two real Source-to-Pay processes to drive between.
-    firstId = "31G";
-    secondId = "18J";
+    // Two real Source-to-Pay processes to drive between. Both MUST sit in VS2:
+    // the guest process page redirects an out-of-scope id to /d/home rather
+    // than 404 it, and the spec shipped with "31G", which is Concept-to-Market
+    // — so every client-side assertion below was looking at the home page.
+    firstId = "J45"; // Procurement of Direct Materials
+    secondId = "18J"; // Requisitioning
   });
 
   test.afterAll(async () => {
@@ -79,8 +123,7 @@ test.describe("the seam · consultant drives, client follows", () => {
 
   test("the client's Present view follows the consultant's driving", async ({ page, browser }) => {
     const client = await clientLands(browser);
-    await client.keyboard.press("p"); // Present mode
-    await client.goto(`/d/process/${firstId}`);
+    await enterPresent(client, firstId);
 
     // Consultant starts projecting and drives to another process.
     await page.goto(`/discovery/sessions/${engagementId}/facilitate`);
@@ -127,8 +170,7 @@ test.describe("the seam · consultant drives, client follows", () => {
       }
     });
 
-    await client.keyboard.press("p");
-    await client.goto(`/d/process/${firstId}`);
+    await enterPresent(client, firstId);
     await client.goto("/d/home");
     await client.goto("/d/summary");
     await client.goto("/d/export");
@@ -172,7 +214,11 @@ test.describe("the seam · consultant drives, client follows", () => {
     await expect(client.locator('a[href^="/d/stream/"]')).toHaveCount(1);
     // ...and the client is TOLD the review is scoped, so "every stream reviewed"
     // can never read as "your whole business was looked at".
-    await expect(client.getByText(/covers 1 of your 10 value streams/)).toBeVisible();
+    // `.first()`: under CI's parallel workers this once resolved to TWO identical
+    // <p>s — one inside #main-content, one outside — for the length of a render
+    // transition, and strict mode refused. The claim is "the client is told",
+    // not "exactly once in the DOM at every instant".
+    await expect(client.getByText(/covers 1 of your 10 value streams/).first()).toBeVisible();
 
     // An out-of-scope stream is unreachable by URL, not merely unlinked.
     await client.goto("/d/stream/VS7");
@@ -191,6 +237,15 @@ test.describe("the seam · consultant drives, client follows", () => {
   });
 
   test("End session stops projecting but does NOT seal", async ({ page, browser }) => {
+    // A PRECONDITION, NOT AN INHERITANCE. The first test in this file leaves
+    // the room projecting, so on a straight run this console shows "End
+    // session" and no "Start projecting" to click — and a retry lands in a
+    // fresh worker with a fresh engagement, which is why it passed on retry and
+    // failed first time. Start from "not projecting" explicitly.
+    await prisma.discoveryEngagement.update({
+      where: { id: engagementId },
+      data: { liveAt: null, drivenProcessId: null, drivenAt: null },
+    });
     await page.goto(`/discovery/sessions/${engagementId}/facilitate`);
     await page.getByRole("button", { name: /Start projecting/ }).click();
     await page.getByRole("button", { name: /End session/ }).click();

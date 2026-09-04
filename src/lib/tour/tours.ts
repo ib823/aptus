@@ -465,12 +465,6 @@ export const TOURS: TourDefinition[] = [
         description: "Register passkeys for fast, secure sign-in. Use your fingerprint, face, or device PIN instead of email codes.",
         side: "bottom",
       },
-      {
-        element: '[data-tour="mfa-section"]',
-        title: "Two-Factor Authentication",
-        description: "Set up an authenticator app as an alternative MFA method. Either passkey or TOTP satisfies the security requirement.",
-        side: "top",
-      },
     ],
   },
 ];

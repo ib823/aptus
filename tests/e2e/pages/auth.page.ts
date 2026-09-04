@@ -62,16 +62,6 @@ export class AuthPage extends BasePage {
     return this.page.getByText(/check your email|magic link|verification/i);
   }
 
-  get totpInput(): Locator {
-    return this.page.locator(
-      "[data-testid='totp-input'], input[name='code'], input[name='totp']"
-    );
-  }
-
-  get totpSubmitButton(): Locator {
-    return this.page.getByRole("button", { name: /verify|confirm|submit/i });
-  }
-
   get qrCode(): Locator {
     return this.page.locator("[data-testid='qr-code'], canvas, img[alt*='QR']");
   }
@@ -108,14 +98,6 @@ export class AuthPage extends BasePage {
 
   async submitSignup() {
     await this.signUpButton.click();
-  }
-
-  async fillTotp(code: string) {
-    await this.totpInput.fill(code);
-  }
-
-  async submitTotp() {
-    await this.totpSubmitButton.click();
   }
 
   async clickSsoButton() {

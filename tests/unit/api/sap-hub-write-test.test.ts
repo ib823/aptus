@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as WriteTestModule from "@/lib/sap-public/capability-write-test";
+import type * as Connector from "@/lib/sap-public/tdd-connector";
 
 const mocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
@@ -17,7 +18,9 @@ vi.mock("@/lib/auth/admin-guard", () => ({
   requireAdmin: mocks.requireAdmin,
   isAdminError: (r: unknown) => typeof r === "object" && r !== null && "status" in (r as Record<string, unknown>),
 }));
-vi.mock("@/lib/sap-public/tdd-connector", () => ({
+// Real module underneath so the tenant refusal text is the real one.
+vi.mock("@/lib/sap-public/tdd-connector", async (importActual) => ({
+  ...(await importActual<typeof Connector>()),
   getSapProduct: mocks.getSapProduct,
   isSapTddWriteEnabled: mocks.isSapTddWriteEnabled,
   getSapTddWriteSecret: mocks.getSapTddWriteSecret,
@@ -107,6 +110,19 @@ describe("POST /api/sap/tdd/hub-content/write-test (opt-in, fail-closed)", () =>
       entityCapabilities: [{ name: "A_TestEntity", readable: true, creatable: true, updatable: true, deletable: false, pageable: true }],
     });
     expect((await POST(makeRequest(VALID))).status).toBe(403);
+    expect(mocks.runCapabilityWriteTest).not.toHaveBeenCalled();
+  });
+
+  it("400 with the deployment-only explanation when the key is not a deployment tenant", async () => {
+    // A write-test is a write: it reads the deployment registry only, and the
+    // refusal has to say so rather than "valid tenant ... required".
+    mocks.getSapTenant.mockReturnValue(null);
+    const res = await POST(makeRequest({ ...VALID, tenant: "qa-conn-verify" }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.message).toContain('"qa-conn-verify"');
+    expect(body.error.message).toMatch(/deployment/);
+    expect(mocks.inspectSapServiceMetadata).not.toHaveBeenCalled();
     expect(mocks.runCapabilityWriteTest).not.toHaveBeenCalled();
   });
 
