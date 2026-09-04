@@ -39,7 +39,11 @@ async function clientLands(browser: Browser): Promise<Page> {
   // A separate context: the client is a different browser in a different room.
   const ctx = await browser.newContext({ userAgent: UA });
   const page = await ctx.newPage();
-  await page.goto(`/d/${token}`);
+  const landing = await page.goto(`/d/${token}`);
+  // Say WHY the landing did not render, up front. In CI the production server
+  // 500'd this page (PRESALES_CSRF_SECRET unset) and the only symptom was a
+  // 45-second wait for a checkbox that was never coming, seven times over.
+  expect(landing?.status(), "guest landing page must render").toBe(200);
   await page.getByRole("checkbox", { name: /named recipient/i }).check();
   await page.getByRole("button", { name: /^Begin$/ }).click();
   await expect(page).toHaveURL(/\/d\/home$/);
@@ -210,7 +214,11 @@ test.describe("the seam · consultant drives, client follows", () => {
     await expect(client.locator('a[href^="/d/stream/"]')).toHaveCount(1);
     // ...and the client is TOLD the review is scoped, so "every stream reviewed"
     // can never read as "your whole business was looked at".
-    await expect(client.getByText(/covers 1 of your 10 value streams/)).toBeVisible();
+    // `.first()`: under CI's parallel workers this once resolved to TWO identical
+    // <p>s — one inside #main-content, one outside — for the length of a render
+    // transition, and strict mode refused. The claim is "the client is told",
+    // not "exactly once in the DOM at every instant".
+    await expect(client.getByText(/covers 1 of your 10 value streams/).first()).toBeVisible();
 
     // An out-of-scope stream is unreachable by URL, not merely unlinked.
     await client.goto("/d/stream/VS7");
