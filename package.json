@@ -51,6 +51,7 @@
     "sap:tdd:smoke": "tsx scripts/smoke-s4-public-api.ts",
     "sap:tdd:inspect": "tsx scripts/inspect-s4-public-service.ts",
     "sap:tdd:capabilities": "tsx scripts/probe-tenant-capabilities.ts",
+    "sap:tdd:po-parity": "tsx scripts/po-v4-parity.ts",
     "sap:catalog:import": "tsx scripts/import-sap-api-catalog.ts",
     "sap:catalog:refresh-types": "tsx scripts/ingest/refresh-api-types.ts",
     "sap:catalog:report": "tsx scripts/report-sap-catalog.ts",

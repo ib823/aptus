@@ -19,8 +19,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Prisma, SapHubContentType } from "@prisma/client";
 import { isAdminError, requireAdmin } from "@/lib/auth/admin-guard";
 import { prisma } from "@/lib/db/prisma";
-import { getSapProduct } from "@/lib/sap-public/tdd-connector";
-import { classifyApiTypeById, isHubContentType, pathToApiId, type HubContentType } from "@/lib/sap-public/hub-content";
+import { getSapProduct, getSapServices } from "@/lib/sap-public/tdd-connector";
+import { classifyApiTypeById, isHubContentType, serviceApiId, type HubContentType } from "@/lib/sap-public/hub-content";
 import { BUNDLED_HUB_CONTENT, BUNDLED_HUB_TYPES, COUNT_ONLY_HUB_TYPES } from "@/lib/sap-public/hub-content-bundled";
 import { normalizeHubRowForType } from "@/lib/sap-public/hub-import";
 import { hubLifecycleFields } from "@/lib/sap-public/hub-import";
@@ -150,10 +150,14 @@ async function rebuildApiSlice(): Promise<ApiSliceStats> {
   }
 
   // Inject the curated known-exposed services (S4HANA_SERVICES) as API rows.
-  const curated = getSapProduct("s4hana")?.services ?? [];
+  const s4 = getSapProduct("s4hana");
+  const curated = s4 ? getSapServices(s4) : [];
   let injected = 0;
   for (const svc of curated) {
-    const apiId = pathToApiId(svc.path);
+    // 2608 WS4: a V4 path ends in a version segment, so the apiId is the
+    // declared hubApiId (CE_PURCHASEORDER_0001), and apiType follows protocol.
+    const apiId = serviceApiId(svc);
+    const apiType = svc.protocol ?? "ODATAV2";
     const lob = svc.domain || resolveLineOfBusiness([], svc.label);
     await prisma.sapHubContent.upsert({
       where: { contentType_externalId: { contentType: API, externalId: apiId } },
@@ -165,7 +169,7 @@ async function rebuildApiSlice(): Promise<ApiSliceStats> {
         packageId: lob,
         appliesToPublic: true,
         status: "Active",
-        apiType: "ODATAV2",
+        apiType,
         communicationScenarios: svc.scenario ? [svc.scenario] : [],
         scopeItemCodes: [],
         // Curated = services this repo has really called, not placeholders.
@@ -173,7 +177,7 @@ async function rebuildApiSlice(): Promise<ApiSliceStats> {
         hubUrl: `https://api.sap.com/api/${apiId}`,
         rawMetadataJson: { source: "curated", key: svc.key } as Prisma.InputJsonValue,
       },
-      update: { apiType: "ODATAV2", packageId: lob },
+      update: { apiType, packageId: lob },
     });
     injected++;
   }

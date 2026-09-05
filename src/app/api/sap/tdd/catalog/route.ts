@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import {
   getConfiguredSapTenants,
   getSapProduct,
+  getSapServices,
   isSapTddPublicAccessEnabled,
 } from "@/lib/sap-public/tdd-connector";
 import { listProductSummaries } from "@/lib/sap-public/products";
@@ -36,7 +37,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       })),
       // Only what the UI renders — the full OData `path` stays server-side (the
       // client addresses a service by its key; the server resolves the path).
-      services: product.services.map((s) => ({ key: s.key, label: s.label, scenario: s.scenario, domain: s.domain })),
+      // 2608 WS4: resolved through getSapServices so the PO legacy flag is
+      // honoured; protocol / lifecycle / note are facts the UI may render.
+      services: getSapServices(product).map((s) => ({
+        key: s.key,
+        label: s.label,
+        scenario: s.scenario,
+        domain: s.domain,
+        protocol: s.protocol ?? "ODATAV2",
+        ...(s.lifecycle ? { lifecycle: s.lifecycle } : {}),
+        ...(s.authorisationNote ? { note: s.authorisationNote } : {}),
+      })),
     },
   });
 }
