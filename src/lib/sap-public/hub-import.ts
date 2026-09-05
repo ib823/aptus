@@ -14,6 +14,7 @@
  */
 import { isHubContentType, type HubContentType } from "@/lib/sap-public/hub-content";
 import { mapEditionFromProductTags } from "@/lib/sap-public/edition-tags";
+import { successorFor } from "@/lib/sap-public/hub-successors";
 
 export interface NormalizedHubContent {
   contentType: HubContentType;
@@ -40,6 +41,49 @@ export interface NormalizedHubContent {
   illustrative: boolean;
   hubUrl: string;
   rawJson: Record<string, unknown>;
+  /**
+   * 2608 WS2 — the Hub's own lifecycle fields, verbatim from catalog.svc
+   * (harvest rows carry them as hubState / hubVersion / hubModifiedAt /
+   * hubSubType / catalogueRelease). Null when the source file predates them.
+   */
+  hubState: string | null;
+  hubVersion: string | null;
+  hubModifiedAt: Date | null;
+  hubSubType: string | null;
+  /** The owning Hub package's Version, e.g. "2608" — the Hub content release. */
+  catalogueRelease: string | null;
+  /** SAP-named successor (sap-references/api-successors.json), never inferred. */
+  successorExternalId: string | null;
+}
+
+/** The lifecycle columns, ready to spread into a SapHubContent create/update. */
+export type HubLifecycleFields = Pick<
+  NormalizedHubContent,
+  "hubState" | "hubVersion" | "hubModifiedAt" | "hubSubType" | "catalogueRelease" | "successorExternalId"
+>;
+export function hubLifecycleFields(norm: NormalizedHubContent): HubLifecycleFields {
+  return {
+    hubState: norm.hubState,
+    hubVersion: norm.hubVersion,
+    hubModifiedAt: norm.hubModifiedAt,
+    hubSubType: norm.hubSubType,
+    catalogueRelease: norm.catalogueRelease,
+    successorExternalId: norm.successorExternalId,
+  };
+}
+
+/** "ACTIVE" | "DEPRECATED" | … as published, upper-cased; null when absent. */
+export function normalizeHubState(raw: unknown): string | null {
+  const s = typeof raw === "string" ? raw.trim().toUpperCase() : "";
+  return s || null;
+}
+
+function asDateOrNull(v: unknown): Date | null {
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v;
+  if (typeof v !== "string" || !v.trim()) return null;
+  const m = /\/Date\((-?\d+)\)\//.exec(v);
+  const d = m ? new Date(Number(m[1])) : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 // ── tolerant field access ────────────────────────────────────────────────────
@@ -186,6 +230,14 @@ export function normalizeHubRowForType(
     illustrative: asBool(pickField(row, "illustrative"), false),
     hubUrl,
     rawJson: row,
+    // 2608 WS2 — lifecycle, verbatim. `state`/`status` feed hubState only when the
+    // row has no explicit hubState (the harvest writes both; curated drops neither).
+    hubState: normalizeHubState(pickField(row, "hubState", "state", "status")),
+    hubVersion: asString(pickField(row, "hubVersion", "version")) || null,
+    hubModifiedAt: asDateOrNull(pickField(row, "hubModifiedAt", "modifiedAt")),
+    hubSubType: asString(pickField(row, "hubSubType", "subType")) || null,
+    catalogueRelease: asString(pickField(row, "catalogueRelease", "packageVersion")) || null,
+    successorExternalId: asString(pickField(row, "successorExternalId", "successor")) || successorFor(externalId),
   };
 }
 
