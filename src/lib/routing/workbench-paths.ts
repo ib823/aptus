@@ -28,6 +28,7 @@ export const WORKBENCH_PATHS = [
   '/presales',          // consultant surface (auth-gated under (workbench))
   '/affirm',            // value-stream affirm-set workbench
   '/discovery',         // neutral (APQC) process-discovery workbench — feature-gated by NEUTRAL_DISCOVERY_ENABLED
+  '/tobe',              // To-Be Process Pack (2608 WS6) — feature-gated by TOBE_PACK_ENABLED
   '/studio',            // CoreEdge Console — Developer Studio (auth + RBAC-gated under (studio))
   '/operations',        // CoreEdge Console — Operations Center (auth + RBAC-gated under (operations))
   '/control-tower',     // CoreEdge Console — Control Tower (auth + RBAC-gated under (control-tower))
@@ -58,6 +59,7 @@ export const WORKBENCH_PATHS = [
   '/api/presales/',     // presales REST API
   '/api/affirm/',       // affirm-set REST API
   '/api/discovery/',    // neutral-discovery REST API
+  '/api/tobe/',         // To-Be Process Pack REST API (generate / export)
   '/api/studio/',       // CoreEdge Console REST API
   '/help',              // CoreEdge Console manual — not role-gated, see (help)/layout
   '/api/ops/',          // CoreEdge Console — Operations Center read endpoints
