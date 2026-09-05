@@ -97,9 +97,9 @@ RECON 2608 — sap-references/2608/
 2. **Hardcoded "2602" strings on existing pages** (admin stats "SAP Version" tile,
    auth/affirm/discovery copy, `/a` process attribution, `lib/fts/data/*`) are
    untouched — WS7 owns the naming pass. The footer is additive to them.
-3. **`next build` and Playwright smoke on a preview** were not run in this session
-   (no Vercel preview from the container). Typecheck, lint and the unit suite are
-   the evidence; CI's Quality Gates job runs the build.
+3. **Playwright smoke on a preview** was not run from the container. `next build`
+   (the pre-push hook's gate) WAS run locally after the push: compiled in 106 s,
+   109/109 static pages generated, exit 0. CI's Quality Gates job repeats it.
 4. **`README-DROP.md`** from the zip was not committed (instructions for the unzip,
    now superseded by this entry and `sap-references/2608/README.md`).
 5. **Row counts in `MANIFEST.json` are structural** (`<row>` elements per sheet
