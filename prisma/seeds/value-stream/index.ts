@@ -196,13 +196,20 @@ export async function seedValueStream(
   }
 
   // ── Verification — guard against drift ─────────────────────────────
+  // Counted over THIS dataset's ids, not the whole table: the 2608 delta seed
+  // (./dataset-2608.ts) adds a stream and questions of its own beside these
+  // rows, and a whole-table count would report them as drift here.
+  const streamIds = data.valueStreams.map((s) => s.id);
+  const subIds = data.subProcesses.map((s) => s.id);
+  const itemIds = data.scopeItems.map((s) => s.id);
+  const questionIds = data.questions.map((q) => q.id);
   const [streams, subs, items, questions, excluded, flagged] = await Promise.all([
-    prisma.affirmValueStream.count(),
-    prisma.affirmSubProcess.count(),
-    prisma.affirmScopeItem.count(),
-    prisma.affirmQuestion.count(),
-    prisma.affirmQuestion.count({ where: { status: "excluded" } }),
-    prisma.affirmQuestion.count({ where: { flag: "config-how-to" } }),
+    prisma.affirmValueStream.count({ where: { id: { in: streamIds } } }),
+    prisma.affirmSubProcess.count({ where: { id: { in: subIds } } }),
+    prisma.affirmScopeItem.count({ where: { id: { in: itemIds } } }),
+    prisma.affirmQuestion.count({ where: { id: { in: questionIds } } }),
+    prisma.affirmQuestion.count({ where: { id: { in: questionIds }, status: "excluded" } }),
+    prisma.affirmQuestion.count({ where: { id: { in: questionIds }, flag: "config-how-to" } }),
   ]);
 
   const expected = data.meta.counts;
