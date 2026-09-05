@@ -92,3 +92,29 @@ counts, refresh from a logged-in Hub check (a separate, manual follow-up).
   `rawMetadataJson.raw.domain === "AI"`, stamped at API-catalogue import. If a
   distinct AI content type is ever wanted, add it to `HubContentType` first;
   a drop file without a type is unreachable by construction.
+
+## 2608 WS2 — lifecycle fields, the package list, successors
+
+Rows may now carry the Hub's own lifecycle fields, persisted verbatim on
+`SapHubContent` / `SapApiReference` (all optional; the harvest writes them,
+curated drops may omit them):
+
+| Row key | Column | Meaning |
+|---|---|---|
+| `hubState` (fallback `state`/`status`) | `hubState` | `ACTIVE` · `DEPRECATED` · `BETA` · `RELEASED` · `DECOMMISSIONED`, as published |
+| `hubVersion` (fallback `version`) | `hubVersion` | artefact version, e.g. `1.1.0` |
+| `hubModifiedAt` (fallback `modifiedAt`) | `hubModifiedAt` | ISO or OData `/Date(ms)/` |
+| `hubSubType` (fallback `subType`) | `hubSubType` | `ODATAV4` · `ODATA` · `SOAP` · … |
+| `catalogueRelease` (fallback `packageVersion`) | `catalogueRelease` | the OWNING PACKAGE's version — `2608` for S/4HANA Cloud Public packages |
+| `successorExternalId` | `successorExternalId` | SAP-named successor; when absent, looked up in `sap-references/api-successors.json` — never inferred |
+
+`status` / `apiType` are untouched, so the console's ACTIVATED / NEEDS_SETUP
+buckets (a function of type, protocol and probe) do not move.
+
+- **`sap-references/hub-packages.s4public.json`** — the named S/4HANA Cloud
+  Public package set (235 packages, `Category` per package, artefact tallies by
+  Type and State, provenance). Regenerate: `pnpm sap:hub:discover-packages`.
+  The harvest reads these packages first, then the hub-wide walk.
+- **`pnpm sap:hub:recon-2608 [--db]`** — the Hub RECON: 859 APIs ±5 in
+  `SAPS4HANACloud` with ≥ 50 deprecated, 147 events, 9,288 CDS, 1,715 BAdIs,
+  221 BO interfaces, 16 scenario packages, 6 analytics packages.
