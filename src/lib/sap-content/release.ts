@@ -26,12 +26,27 @@ export type SapContentRelease = {
   localisation: typeof SAP_CONTENT_LOCALISATION;
   /** "SAP content release 2608 · MY" — the footer string, verbatim. */
   label: string;
+  /** "SAP Cloud ERP (SAP S/4HANA Cloud Public Edition) · content release 2608" — first-mention product label. */
+  productLabel: string;
   /** True when the env var selected the release; false when the default applied. */
   fromEnv: boolean;
 };
 
 export function isSapContentReleaseCode(value: unknown): value is SapContentReleaseCode {
   return typeof value === "string" && (SAP_CONTENT_RELEASES as readonly string[]).includes(value);
+}
+
+/** SAP's marketing name and the technical/contractual name it still carries in catalogue rows. */
+export const SAP_PRODUCT_MARKETING_NAME = "SAP Cloud ERP";
+export const SAP_PRODUCT_TECHNICAL_NAME = "SAP S/4HANA Cloud Public Edition";
+
+/**
+ * "SAP Cloud ERP (SAP S/4HANA Cloud Public Edition) · content release 2608" —
+ * the first-mention product label (CCC PR-4.4 / WS7.2). Technical names in
+ * catalogue rows are never rewritten.
+ */
+export function formatSapProductReleaseLabel(release: string): string {
+  return `${SAP_PRODUCT_MARKETING_NAME} (${SAP_PRODUCT_TECHNICAL_NAME}) · content release ${release}`;
 }
 
 export function formatSapContentReleaseLabel(release: string, localisation: string = SAP_CONTENT_LOCALISATION): string {
@@ -52,6 +67,7 @@ export function resolveSapContentRelease(env: EnvLike = process.env): SapContent
     release,
     localisation: SAP_CONTENT_LOCALISATION,
     label: formatSapContentReleaseLabel(release),
+    productLabel: formatSapProductReleaseLabel(release),
     fromEnv,
   };
 }
