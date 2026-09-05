@@ -162,35 +162,36 @@ describe("byStatus is independent of lifecycle fields", () => {
     "ANALYTICS",
   ];
 
-  it("resolveHubStatus gives the same bucket with hubState DEPRECATED, ACTIVE or absent", () => {
+  it("resolveHubStatus gives the same bucket with hubState ACTIVE or absent; DEPRECATED is its own bucket (WS3)", () => {
     for (const contentType of types) {
       for (const apiType of ["ODATAV2", "ODATAV4", "SOAP", null]) {
         for (const probes of [undefined, new Map([["X", 200]]), new Map([["X", 403]]), new Map([["X", 404]])]) {
           const base = { externalId: "X", contentType, apiType };
           const plain = resolveHubStatus(base, probes);
-          for (const extra of [
-            { hubState: "DEPRECATED" },
-            { hubState: "ACTIVE" },
-            { hubState: null, catalogueRelease: "2608" },
-          ]) {
+          for (const extra of [{ hubState: "ACTIVE" }, { hubState: null, catalogueRelease: "2608" }]) {
             expect(resolveHubStatus({ ...base, ...extra } as typeof base, probes), `${contentType}/${apiType}`).toBe(
               plain,
             );
           }
+          // 2608 WS3: SAP's retirement is tenant-independent — every type, every probe outcome.
+          expect(resolveHubStatus({ ...base, hubState: "DEPRECATED" }, probes), `${contentType}/${apiType}`).toBe(
+            "DEPRECATED",
+          );
         }
       }
     }
   });
 
-  it("a probed 200 stays ACTIVATED and a 403 stays NEEDS_SETUP for a DEPRECATED API", () => {
+  it("a probed 200 on a DEPRECATED API is DEPRECATED, never ACTIVATED (WS3); the HTTP mapping itself is unchanged", () => {
     const item = {
       externalId: "API_PURCHASEORDER_PROCESS_SRV",
       contentType: "API" as HubContentType,
       apiType: "ODATAV2",
       hubState: "DEPRECATED",
     };
-    expect(resolveHubStatus(item, new Map([[item.externalId, 200]]))).toBe("ACTIVATED");
-    expect(resolveHubStatus(item, new Map([[item.externalId, 403]]))).toBe("NEEDS_SETUP");
+    expect(resolveHubStatus(item, new Map([[item.externalId, 200]]))).toBe("DEPRECATED");
+    expect(resolveHubStatus(item, new Map([[item.externalId, 403]]))).toBe("DEPRECATED");
+    expect(resolveHubStatus({ ...item, hubState: "ACTIVE" }, new Map([[item.externalId, 200]]))).toBe("ACTIVATED");
     expect(httpToRuntimeStatus(200)).toBe("ACTIVATED");
   });
 

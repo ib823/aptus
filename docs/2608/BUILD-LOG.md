@@ -7,6 +7,122 @@ verified in the session.
 
 ---
 
+## WS3 — Deprecation surfaced in /sap-explorer (2026-09-05)
+
+**Branch:** `feat/hub-deprecation-ui` (from `main` at the WS2 squash merge, #235).
+**Instruction:** master prompt WS3 = CCC PR-2: a tenant-independent `DEPRECATED`
+badge (grey-red) with tooltip "Deprecated by SAP — successor: <name>" from the
+checked-in successor map; coverage tiles headline itemCount and show "of which
+N deprecated"; "Probe all" skips DEPRECATED unless `includeDeprecated=true`;
+deprecated never counts as ACTIVATED in the summary chips; placeholder tiles
+read "Not loaded · N published (2608)" with the 2608 figures.
+
+### What the code map established first
+
+- Every status consumer (scorecard pills, facet tabs, `byStatus`, `idsByStatus`,
+  the legend, the glossary) enumerated the seven buckets by hand, so an eighth
+  bucket added in one place would silently vanish from the others — the exact
+  defect the scorecard's "every bucket" test documents having shipped twice.
+- `resolveHubStatus` is the single classifier the list route, the detail route
+  and the probe overlay all call. Putting the deprecation rule there, ahead of
+  the probe outcome, is what makes "deprecated never ACTIVATED" true in every
+  view at once instead of per view.
+- `S4_PUBLIC_PUBLISHED_COUNTS` still carried the 2026-07 snapshot (862 / 151 /
+  8,983 / 1,665 / 77 / 0 / 43), and the tiles labelled it "indicative, not
+  pinned to a release". The WS2 package list gives release-pinned figures.
+
+### Decisions
+
+| # | Decision | Why |
+|---|---|---|
+| 1 | **`DEPRECATED` is an eighth `HubStatus`**, resolved by `resolveHubStatus` from `hubState` BEFORE any probe outcome, for every content type. | One mechanism, tenant-independent, so a deprecated API that still answers 200 on the tenant is DEPRECATED — never ACTIVATED — in the list, the detail, the scorecard and `byStatus`; the sum of the pills stays the browsable total. |
+| 2 | **`HUB_STATUSES` is the one display-order list**; `emptyByStatus()`, `idsByStatus`, the client's `byStatus` default, the facet tabs and the scorecard iterate it. | Adding the bucket in eight hand-written places is how the last two omissions shipped. The client merges its default over the server payload, so an older payload without the key still renders. |
+| 3 | **Badge + tooltip**: `StatusBadge` gains the `DEPRECATED` tone (`--status-revoked-*` tokens, label "Deprecated") and an optional `tip`; the row passes `deprecationTooltip(successorExternalId)` — "Deprecated by SAP — successor: X", or "…no successor named yet". | The wording from CCC PR-2 §1 verbatim, and an honest fallback for the 50 of 56 deprecated APIs with no recorded successor — the tooltip never invents one. |
+| 4 | **Successor on the row**: the list and detail routes emit `hubState`, `hubVersion`, `successorExternalId` (column first, then `successorFor()` from `sap-references/api-successors.json`). The detail panel shows the same sentence as a revoked-tone note. | The map is the only source of successors (the anonymous feed has none — WS2 finding 3); the column wins when a logged-in export ever provides one. |
+| 5 | **Tiles**: `byTypeDeprecated` (itemCount-weighted, same arithmetic as `byTypeItems`) → a loaded tile reads "loaded · runtime · of which N deprecated"; an empty tile reads "Not loaded · N published (2608)" from `S4_PUBLIC_PUBLISHED_COUNTS` at `S4_PUBLIC_PUBLISHED_RELEASE = "2608"`. | CCC PR-2 §2 and §4. The headline stays the full item count — deprecated rows are IN it, not subtracted — so the tile and the status facets reconcile. |
+| 6 | **2608 published counts**: API 859 · EVENT 147 · CDS 9,288 · BAdI 1,715 · BO 221 · INTEGRATION 158 · BUILD 91 · PROCESS_BLUEPRINT 16 · LIVEPROCESS 41 · SCENARIO 308 · VPUC 5 · ANALYTICS 6; `S4_PUBLIC_PUBLISHED_DEPRECATED` API 56 · EVENT 8 · CDS 424 · BAdI 24 as a drift reference. | The first seven reproduce from the checked-in package list (RECON gates); INTEGRATION / BUILD / VPUC / ANALYTICS / PROCESS_BLUEPRINT are the logged-in product page (CCC note), recorded as such in the source comment. PROCESS_BLUEPRINT is therefore no longer "n/a by design" — its `NA_NOTE` is retired (mechanism kept). |
+| 7 | **Probe-all** excludes `hubState = 'DEPRECATED'` from its `where` unless the body carries the literal boolean `includeDeprecated: true`; the response echoes the flag. | CCC PR-2 §3. Probing retired services spends the run and would write ACTIVATED-looking probes; opting in stays explicit. |
+| 8 | **Glossary** entry `status-deprecated` (tap-to-define on the badge) and the catalogue-health note now cite release 2608 (`publishedRelease` added to its `reference` block). | The catalogue must always display the SAP content release it grounds on (CCC invariant). |
+| 9 | **No schema change, no data write.** WS3 reads the WS2 columns only. | Migration-drift gate: "No difference detected"; `prisma migrate deploy`: nothing pending. |
+
+### What landed
+
+- `src/lib/sap-public/hub-content.ts` — `HubStatus` + `DEPRECATED`, `HUB_STATUSES`,
+  `deprecationTooltip`, `HubItemForStatus.hubState`, `resolveHubStatus` rule,
+  `S4_PUBLIC_PUBLISHED_RELEASE`, 2608 `S4_PUBLIC_PUBLISHED_COUNTS`,
+  `S4_PUBLIC_PUBLISHED_DEPRECATED`.
+- `src/app/api/sap/tdd/hub-content/route.ts` — `hubState` read on the
+  classification set; `byTypeDeprecated` in `counts`; rows carry `hubState`,
+  `hubVersion`, `successorExternalId`. `…/[id]/route.ts` — same three fields,
+  status resolved with `hubState`. `…/probe-all/route.ts` — `includeDeprecated`.
+- `src/components/sap/SapCapabilityCatalogue.tsx` — "Deprecated" facet, badge
+  tooltip, row hint ("deprecated by SAP — build on the successor, not on this"),
+  legend swatch, `deprecated` pill, `byTypeDeprecated` to the tiles.
+  `capability/StatusBadge.tsx`, `capability/ReadinessScorecard.tsx` (eight
+  pills, "These eight add up to"), `capability/ContentTypeTiles.tsx`,
+  `capability/CapabilityDetail.tsx` (deprecation note).
+- `src/constants/sap-glossary.ts` — `status-deprecated`;
+  `src/app/api/ops/catalogue-health/route.ts` — 2608 note + `publishedRelease`.
+- Tests: net +10 (4,855 → 4,865). New: `resolveHubStatus` DEPRECATED wins over
+  every probe outcome and type, other states leave the bucket untouched,
+  `deprecationTooltip` / `HUB_STATUSES` shape; list route classifies a stored-200
+  deprecated row as DEPRECATED (byStatus sums to the set, `byTypeDeprecated`),
+  probe-all `where.NOT` with and without the flag (a string `"true"` stays
+  opted out); tiles "of which 56 deprecated", no clause at 0, never on an empty
+  tile, "147 published (2608)", Process Blueprints as a real type; scorecard
+  eight buckets (139+349+151+7+11+515+819+24 = 2,015) and the badge tooltip;
+  catalogue client renders a DEPRECATED row's badge/tooltip from an older
+  payload lacking the key. Updated: the WS2 invariance test now asserts
+  DEPRECATED → "DEPRECATED" for all 12 types × 4 protocols × 4 outcomes and
+  ACTIVE/null invariance; "probed 200 stays ACTIVATED for a DEPRECATED API"
+  flipped to DEPRECATED by design.
+
+### Gates (this session)
+
+- `tsc --noEmit --strict`: clean. `eslint --max-warnings 0 .`: clean.
+- `vitest run`: 328 files, 4,865 tests, all passing (124 s) — includes the
+  product-agnostic vendor-term guard, the consultant wall and the D1 guard.
+- `scripts/check-migration-drift.sh`: "No difference detected"; `prisma migrate
+  deploy`: "No pending migrations to apply".
+- `pnpm sap:hub:recon-2608`: **GREEN** — unchanged from WS2 (859 / 56 / 147 / 8 /
+  9,288 / 1,715 / 221 / 16 / 6 OK; Integration 142, Build 29, VPUC 0 INFO).
+- `next build`: compiled, all static pages generated, exit 0.
+
+### Observed on the local database (hub-wide import from WS2, not the deployed one)
+
+```
+contentType   rows   items  deprecated rows  successor recorded
+EVENT          496      —        10                0
+BADI          3216   3380        28                0
+BO_INTERFACE   479    207         8                0
+SapApiReference · SAPS4HANACloud @ 2608: 56 DEPRECATED, 6 with a successor
+```
+
+So on this database the tiles read "of which 10 / 28 / 8 deprecated" for
+Events / BAdIs / BO interfaces and the six mapped APIs get a named successor;
+the other 50 deprecated APIs get "no successor named yet".
+
+### What was NOT verified
+
+1. **The deployed Vercel database was not touched or read.** The counts above
+   are the local Postgres after the WS2 imports; the product-scoped "Events
+   147 (8 deprecated)" of CCC PR-2 §2 is asserted by the RECON on the files and
+   by unit tests on the route arithmetic, not by a rendered page against prod
+   data. That needs the admin Rebuild on the deployment after merge.
+2. **No browser run.** The badge, tooltip, facet, pills, tiles and detail note
+   are verified by Testing Library (jsdom) and `next build`, not visually; the
+   E2E Smoke / Visual Regression checks on the PR are the first render.
+3. **Successors remain the six checked-in pairs.** 50 of 56 deprecated APIs
+   show the honest fallback. The tooltip never infers a successor.
+4. **`hub-artifact-counts.json` still not regenerated** (catalogue-health's
+   `artifactCountsProvenance()` still reads it); the tiles no longer depend on
+   it. Retire or regenerate when the health page is next touched.
+5. INTEGRATION 158 · BUILD 91 · VPUC 5 · ANALYTICS 6 · PROCESS_BLUEPRINT 16 are
+   the logged-in product page's figures (CCC note), not reproduced anonymously
+   (142 / 29 / 0 / 6 / 16 exact-tag packages) — the source comment says so.
+
+---
+
 ## WS2 — Hub loader: State / Version / Successors (2026-09-05)
 
 **Branch:** `feat/hub-2608-state` (from `main` at the WS1 squash merge, #234).

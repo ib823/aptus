@@ -23,6 +23,7 @@ import {
   type HubContentType,
 } from "@/lib/sap-public/hub-content";
 import { resolveHubItemDependencies } from "@/lib/sap-public/hub-dependencies";
+import { successorFor } from "@/lib/sap-public/hub-successors";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import { resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
@@ -131,7 +132,10 @@ export async function GET(
   // code (200/403/404) is authoritative here, so detail and list can't disagree.
   const outcomes = new Map<string, number>();
   if (probeStatus != null) outcomes.set(item.externalId, probeStatus);
-  const status = resolveHubStatus({ contentType, apiType: item.apiType, externalId: item.externalId }, outcomes);
+  const status = resolveHubStatus(
+    { contentType, apiType: item.apiType, externalId: item.externalId, hubState: item.hubState },
+    outcomes,
+  );
 
   // Blueprint steps, if the export carried any (PROCESS_BLUEPRINT / SCENARIO).
   const raw = item.rawMetadataJson as { steps?: unknown } | null;
@@ -155,6 +159,9 @@ export async function GET(
         scopeItemCodes: item.scopeItemCodes,
         itemCount: item.itemCount,
         hubUrl: item.hubUrl,
+        hubState: item.hubState,
+        hubVersion: item.hubVersion,
+        successorExternalId: item.successorExternalId ?? successorFor(item.externalId),
       },
       status,
       availabilityNote: hubAvailabilityQualifier(contentType),
