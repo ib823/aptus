@@ -32,6 +32,7 @@ import type { Prisma, SapHubContentType } from "@prisma/client";
 import { isAdminError, requireAdmin } from "@/lib/auth/admin-guard";
 import { prisma } from "@/lib/db/prisma";
 import { normalizeHubRowForType } from "@/lib/sap-public/hub-import";
+import { hubLifecycleFields } from "@/lib/sap-public/hub-import";
 import {
   HARVEST_CHUNK_DEFAULT,
   HARVEST_TYPES,
@@ -156,6 +157,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       itemCount: norm.itemCount,
       illustrative: norm.illustrative,
       hubUrl: norm.hubUrl,
+      ...hubLifecycleFields(norm),
       // Which harvest, at which commit. "Is the catalogue current?" stays answerable
       // from the row itself rather than from whoever last ran the import.
       rawMetadataJson: {
@@ -163,7 +165,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         repo: source.repo,
         ref: source.ref,
         refSource: source.refSource,
-        release: null,
+        release: norm.catalogueRelease,
         importedAt,
         raw: norm.rawJson,
       } as Prisma.InputJsonValue,

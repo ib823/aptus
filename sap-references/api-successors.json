@@ -1,0 +1,30 @@
+{
+  "_provenance": {
+    "purpose": "SAP-named successors for deprecated SAP S/4HANA Cloud Public Edition APIs and communication scenarios. The anonymous Hub catalogue exposes State but no Successors field, so this map is the only successor source until a logged-in export provides one. A successor is recorded ONLY where SAP names it; nothing is inferred from names.",
+    "verified": "2026-09-05",
+    "sources": [
+      "docs/2608/CCC-2608-catalogue-refresh.md (context, verified live 2026-09-05)",
+      "docs/2608/aptus-SAP-Inventory-Currency-Assessment-2026-09-05.xlsx · tab \"Hub Catalogue Live\" rows 24–32",
+      "SAP KBA 3365110 (API_PURCHASEORDER_PROCESS_SRV deprecation, started CE 2308)",
+      "SAP S/4HANA Cloud Public Edition What's New 2608 (fixed-asset SOAP deprecation, SAP_COM_0563 → SAP_COM_0A93/0A95/0A96; Joule SAP_COM_0882)"
+    ],
+    "how_applied": "scripts/import-sap-api-catalog.ts and the Hub content importers stamp successorExternalId on the deprecated row; the successor row itself is untouched."
+  },
+  "apis": [
+    { "externalId": "API_PURCHASEORDER_PROCESS_SRV", "successor": "CE_PURCHASEORDER_0001", "successorProtocol": "ODATAV4", "communicationScenario": "SAP_COM_0053", "note": "Wired in aptus (src/lib/sap-public). Deprecation started CE 2308 (KBA 3365110); WS4 migrates the PO connector." },
+    { "externalId": "API_PURCHASEREQ_PROCESS_SRV", "successor": "CE_PURCHASEREQUISITION_0001", "successorProtocol": "ODATAV4", "note": "catalog.svc 2026-09-05" },
+    { "externalId": "API_OUTBOUND_DELIVERY_SRV", "successor": "API_OUTBOUND_DELIVERY_SRV_0002", "successorProtocol": "ODATAV2", "note": "catalog.svc 2026-09-05" },
+    { "externalId": "API_INBOUND_DELIVERY_SRV", "successor": "API_INBOUND_DELIVERY_SRV_0002", "successorProtocol": "ODATAV2", "note": "catalog.svc 2026-09-05" },
+    { "externalId": "API_CUSTOMER_RETURNS_DELIVERY_SRV", "successor": "API_CUSTOMER_RETURNS_DELIVERY_SRV_0002", "successorProtocol": "ODATAV2", "note": "catalog.svc 2026-09-05" },
+    { "externalId": "API_MAINTENANCEORDER", "successor": "CE_API_MAINTENANCEORDER_0002", "successorProtocol": "ODATAV4", "note": "catalog.svc 2026-09-05 (successor ACTIVE 2.3.2)" }
+  ],
+  "communicationScenarios": [
+    { "externalId": "SAP_COM_0563", "successor": "SAP_COM_0A93", "also": ["SAP_COM_0A95", "SAP_COM_0A96"], "note": "Fixed-asset SOAP (FAA_FIXED_ASSET_CREATE_MAIN/SUB/CHANGE_WEBI + confirmations) deprecated as of 2608 → OData V4 API_FIXEDASSET_G4BA via SAP_COM_0A93; acquisition/retirement/revaluation SAP_COM_0A95; usage object SAP_COM_0A96 (What's New 2608; scope items J62, 1GB, 1GF, BFH, 33F, 33G)." }
+  ],
+  "new": [
+    { "externalId": "SAP_COM_0882", "kind": "communicationScenario", "note": "Joule integration with FLP — new in 2608; additional entitlement may be required." }
+  ],
+  "authorisationChanges": [
+    { "externalId": "API_CV_ATTACHMENT_SRV", "note": "ACTIVE; additional authorisations required in 2608 (What's New 2608). Wired in aptus — re-test after the tenant's 2608 upgrade (WS4)." }
+  ]
+}

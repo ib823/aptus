@@ -23,6 +23,7 @@ import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { classifyApiTypeById, isHubContentType, pathToApiId, type HubContentType } from "@/lib/sap-public/hub-content";
 import { BUNDLED_HUB_CONTENT, BUNDLED_HUB_TYPES, COUNT_ONLY_HUB_TYPES } from "@/lib/sap-public/hub-content-bundled";
 import { normalizeHubRowForType } from "@/lib/sap-public/hub-import";
+import { hubLifecycleFields } from "@/lib/sap-public/hub-import";
 import { resolveLineOfBusiness } from "@/lib/sap-public/hub-lob";
 import { resolveActivePublicCatalogVersionId } from "@/lib/sap-public/hub-dependencies";
 import { logDecision } from "@/lib/audit/decision-logger";
@@ -217,8 +218,9 @@ async function importBundledType(type: HubContentType, importedAt: string): Prom
       itemCount: norm.itemCount,
       illustrative: norm.illustrative,
       hubUrl: norm.hubUrl,
-      // Provenance; release intentionally NOT pinned (counts are indicative).
-      rawMetadataJson: { source: `bundled:${type}`, release: null, importedAt, raw: norm.rawJson } as Prisma.InputJsonValue,
+      ...hubLifecycleFields(norm),
+      // Provenance; release = the Hub package release when the row carries it.
+      rawMetadataJson: { source: `bundled:${type}`, release: norm.catalogueRelease, importedAt, raw: norm.rawJson } as Prisma.InputJsonValue,
     };
     const existing = await prisma.sapHubContent.findUnique({
       where: { contentType_externalId: { contentType: ct, externalId: norm.externalId } },

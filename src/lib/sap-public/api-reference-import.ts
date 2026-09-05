@@ -1,3 +1,4 @@
+import { successorFor } from "@/lib/sap-public/hub-successors";
 /**
  * API-reference import normalization — the pure half of
  * scripts/import-sap-api-catalog.ts, extracted so a deployed instance can run
@@ -41,6 +42,36 @@ export interface NormalizedApi {
   communicationScenarios: string[];
   apiHubUrl: string;
   rawJson: Record<string, unknown>;
+  /** 2608 WS2 — the Hub's lifecycle fields, verbatim (null when the file predates them). */
+  hubState: string | null;
+  hubVersion: string | null;
+  hubModifiedAt: Date | null;
+  hubSubType: string | null;
+  catalogueRelease: string | null;
+  successorExternalId: string | null;
+}
+
+export type ApiLifecycleFields = Pick<
+  NormalizedApi,
+  "hubState" | "hubVersion" | "hubModifiedAt" | "hubSubType" | "catalogueRelease" | "successorExternalId"
+>;
+export function apiLifecycleFields(norm: NormalizedApi): ApiLifecycleFields {
+  return {
+    hubState: norm.hubState,
+    hubVersion: norm.hubVersion,
+    hubModifiedAt: norm.hubModifiedAt,
+    hubSubType: norm.hubSubType,
+    catalogueRelease: norm.catalogueRelease,
+    successorExternalId: norm.successorExternalId,
+  };
+}
+
+function asDateOrNull(v: unknown): Date | null {
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v;
+  if (typeof v !== "string" || !v.trim()) return null;
+  const m = /\/Date\((-?\d+)\)\//.exec(v);
+  const d = m ? new Date(Number(m[1])) : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 // ── Tolerant column-name lookup ─────────────────────────────────────────────
@@ -172,5 +203,13 @@ export function normalizeRow(row: Record<string, unknown>): NormalizedApi | null
     communicationScenarios,
     apiHubUrl,
     rawJson: row,
+    // 2608 WS2 — lifecycle, verbatim; the raw State ("ACTIVE"/"DEPRECATED") is kept
+    // here even though `status` above is normalised to Released/Beta/Deprecated.
+    hubState: asString(pickField(row, "hubState", "state", "status")).trim().toUpperCase() || null,
+    hubVersion: asString(pickField(row, "hubVersion", "version")) || null,
+    hubModifiedAt: asDateOrNull(pickField(row, "hubModifiedAt", "modifiedAt")),
+    hubSubType: asString(pickField(row, "hubSubType", "subType")) || null,
+    catalogueRelease: asString(pickField(row, "catalogueRelease", "packageVersion")) || null,
+    successorExternalId: asString(pickField(row, "successorExternalId", "successor")) || successorFor(apiId),
   };
 }

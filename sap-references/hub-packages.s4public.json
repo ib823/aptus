@@ -1,0 +1,5730 @@
+{
+ "_provenance": {
+  "source": "https://api.sap.com/odata/1.0/catalog.svc",
+  "method": "anonymous ContentPackages (paged) filtered to Products tag \"SAPS4HANACloud\" → ContentPackages('<name>')/Artifacts tallied by Type and State",
+  "product": "SAPS4HANACloud",
+  "harvestedAt": "2026-09-05T11:35:40.533Z",
+  "finishedAt": "2026-09-05T11:35:50.990Z",
+  "packagesScanned": 1963,
+  "packagesSelected": 235,
+  "completeness": "floor",
+  "note": "The named package set for one product. Counts are what SAP publishes in these packages — NOT evidence that anything is available on a tenant. Regenerate with pnpm sap:hub:discover-packages; review the diff of `packages[]` before committing."
+ },
+ "byCategory": {
+  "Analytics": {
+   "packages": 6,
+   "artifacts": 0,
+   "byType": {},
+   "byState": {}
+  },
+  "APIs": {
+   "packages": 7,
+   "artifacts": 909,
+   "byType": {
+    "API": 909
+   },
+   "byState": {
+    "ACTIVE": 850,
+    "BETA": 3,
+    "DEPRECATED": 56
+   }
+  },
+  "Build": {
+   "packages": 29,
+   "artifacts": 565,
+   "byType": {
+    "Build": 565
+   },
+   "byState": {
+    "NULL": 565
+   }
+  },
+  "CDSViews": {
+   "packages": 18,
+   "artifacts": 9288,
+   "byType": {
+    "CDSVIEW": 9288
+   },
+   "byState": {
+    "RELEASED": 8864,
+    "DEPRECATED": 424
+   }
+  },
+  "Events": {
+   "packages": 1,
+   "artifacts": 147,
+   "byType": {
+    "Event": 147
+   },
+   "byState": {
+    "ACTIVE": 139,
+    "DEPRECATED": 8
+   }
+  },
+  "Integration": {
+   "packages": 142,
+   "artifacts": 1103,
+   "byType": {
+    "IFlow": 952,
+    "ScriptCollection": 14,
+    "ValueMapping": 50,
+    "MessageMapping": 85,
+    "ICD": 2
+   },
+   "byState": {
+    "NULL": 1103
+   }
+  },
+  "LiveProcess": {
+   "packages": 14,
+   "artifacts": 41,
+   "byType": {
+    "BRProject": 18,
+    "Process": 11,
+    "VisibilityScenario": 12
+   },
+   "byState": {
+    "NULL": 41
+   }
+  },
+  "Scenarios": {
+   "packages": 16,
+   "artifacts": 308,
+   "byType": {
+    "Scenario": 308
+   },
+   "byState": {
+    "NULL": 308
+   }
+  },
+  "SteamPunk": {
+   "packages": 2,
+   "artifacts": 1936,
+   "byType": {
+    "BADI": 1715,
+    "BOInterface": 221
+   },
+   "byState": {
+    "DEPRECATED": 24,
+    "RELEASED": 1912
+   }
+  }
+ },
+ "packages": [
+  {
+   "technicalName": "CommercialPlanning",
+   "displayName": "Commercial Planning",
+   "version": "1.0.0",
+   "category": "Analytics",
+   "products": [
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPAnalyticsCloud",
+    "SAPS4HANACloudPrivateEdition"
+   ],
+   "lineOfBusiness": "Commerce,Sales,Finance,Marketing",
+   "modifiedAt": "2024-09-27T10:54:15.456Z",
+   "artifacts": 0,
+   "byType": {},
+   "byState": {},
+   "byTypeState": {}
+  },
+  {
+   "technicalName": "ConsensusNetRevenue",
+   "displayName": "Consensus Net Revenue Planning",
+   "version": "1.0.0",
+   "category": "Analytics",
+   "products": [
+    "SAPS4HANACloudPrivateEdition",
+    "SAPS4HANA",
+    "SAPAnalyticsCloud",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Supply Chain,Commerce,Sales,Finance,Marketing",
+   "modifiedAt": "2024-09-27T10:57:28.643Z",
+   "artifacts": 0,
+   "byType": {},
+   "byState": {},
+   "byTypeState": {}
+  },
+  {
+   "technicalName": "GroupFinancialPlanning",
+   "displayName": "Group Financial Planning",
+   "version": "1.0.0",
+   "category": "Analytics",
+   "products": [
+    "SAPS4HANA",
+    "SAPS4HANACloudPrivateEdition",
+    "SAPAnalyticsCloud",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2024-09-27T11:00:11.903Z",
+   "artifacts": 0,
+   "byType": {},
+   "byState": {},
+   "byTypeState": {}
+  },
+  {
+   "technicalName": "IFPCrossModelAddOn",
+   "displayName": "Cross Model Add-On for Integrated Financial Planning",
+   "version": "1.0.0",
+   "category": "Analytics",
+   "products": [
+    "SAPS4HANACloudPrivateEdition",
+    "SAPAnalyticsCloud",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Marketing,Human Resources,Sustainability,Sales,Finance",
+   "modifiedAt": "2024-09-27T10:58:21.473Z",
+   "artifacts": 0,
+   "byType": {},
+   "byState": {},
+   "byTypeState": {}
+  },
+  {
+   "technicalName": "IntegratedFinancialPlanning",
+   "displayName": "Integrated Financial Planning",
+   "version": "1.0.0",
+   "category": "Analytics",
+   "products": [
+    "SAPS4HANACloudPrivateEdition",
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "SAPAnalyticsCloud"
+   ],
+   "lineOfBusiness": "Sales,Sustainability,Finance,Marketing",
+   "modifiedAt": "2024-09-27T10:56:34.686Z",
+   "artifacts": 0,
+   "byType": {},
+   "byState": {},
+   "byTypeState": {}
+  },
+  {
+   "technicalName": "RapidFinancialPlanningSuite",
+   "displayName": "Rapid Financial Planning Analysis Suite",
+   "version": "1.0.0",
+   "category": "Analytics",
+   "products": [
+    "SAPS4HANACloudPrivateEdition",
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPAnalyticsCloud"
+   ],
+   "lineOfBusiness": "Finance,Commerce,Marketing,Human Resources,Sales",
+   "modifiedAt": "2024-09-27T10:59:14.026Z",
+   "artifacts": 0,
+   "byType": {},
+   "byState": {},
+   "byTypeState": {}
+  },
+  {
+   "technicalName": "CentralInvoiceManagement",
+   "displayName": "SAP Ariba Invoicing",
+   "version": "1.0.0",
+   "category": "APIs",
+   "products": [
+    "SAPCentralInvoiceManagement",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sourcing and Procurement",
+   "modifiedAt": "2026-07-17T16:24:48.075Z",
+   "artifacts": 9,
+   "byType": {
+    "API": 9
+   },
+   "byState": {
+    "ACTIVE": 9
+   },
+   "byTypeState": {
+    "API|ACTIVE": 9
+   }
+  },
+  {
+   "technicalName": "PiLogAutoClassification",
+   "displayName": "PiLog Auto Classification",
+   "version": "1.0",
+   "category": "APIs",
+   "products": [
+    "PiLogMasterDataManagement",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Maintenance and Engineering,Manufacturing,Plant Operations and Maintenance",
+   "modifiedAt": "2025-08-14T16:29:18.116Z",
+   "artifacts": 3,
+   "byType": {
+    "API": 3
+   },
+   "byState": {
+    "ACTIVE": 3
+   },
+   "byTypeState": {
+    "API|ACTIVE": 3
+   }
+  },
+  {
+   "technicalName": "S4HANACloudABAPPlatform",
+   "displayName": "SAP S/4HANA Cloud Public Edition for ABAP Platform",
+   "version": "2608",
+   "category": "APIs",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-07-15T05:54:39.581Z",
+   "artifacts": 17,
+   "byType": {
+    "API": 17
+   },
+   "byState": {
+    "ACTIVE": 17
+   },
+   "byTypeState": {
+    "API|ACTIVE": 17
+   }
+  },
+  {
+   "technicalName": "SAPRevenueGrowthManagement",
+   "displayName": "SAP Revenue Growth Management",
+   "version": "Beta",
+   "category": "APIs",
+   "products": [
+    "SAPRevenueGrowthManagement",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Commerce,Sales",
+   "modifiedAt": "2026-03-03T16:33:16.439Z",
+   "artifacts": 3,
+   "byType": {
+    "API": 3
+   },
+   "byState": {
+    "BETA": 3
+   },
+   "byTypeState": {
+    "API|BETA": 3
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloud",
+   "displayName": "SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "APIs",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-07-15T05:54:06.654Z",
+   "artifacts": 859,
+   "byType": {
+    "API": 859
+   },
+   "byState": {
+    "ACTIVE": 803,
+    "DEPRECATED": 56
+   },
+   "byTypeState": {
+    "API|ACTIVE": 803,
+    "API|DEPRECATED": 56
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACLOUDPSM",
+   "displayName": "Public Sector Management for SAP S/4HANA Cloud Public Edition",
+   "version": "1.0.0",
+   "category": "APIs",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-05-13T15:08:18.301Z",
+   "artifacts": 16,
+   "byType": {
+    "API": 16
+   },
+   "byState": {
+    "ACTIVE": 16
+   },
+   "byTypeState": {
+    "API|ACTIVE": 16
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAIntegrationWithExternalTaxCalculationEngineAPIs",
+   "displayName": "SAP S/4HANA Integration with External Tax Calculation Engine",
+   "version": "2",
+   "category": "APIs",
+   "products": [
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPS4HANACloudPrivateEdition"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-07-27T16:58:56.872Z",
+   "artifacts": 2,
+   "byType": {
+    "API": 2
+   },
+   "byState": {
+    "ACTIVE": 2
+   },
+   "byTypeState": {
+    "API|ACTIVE": 2
+   }
+  },
+  {
+   "technicalName": "11bfc65dd84a48e499f7eb33018b2f3f",
+   "displayName": "Mass Download of Billing Documents Output for Commercial Projects (5BP)",
+   "version": "1.0.0",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "MicrosoftOutlook",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Service",
+   "modifiedAt": "2025-04-25T04:19:06.550Z",
+   "artifacts": 16,
+   "byType": {
+    "Build": 16
+   },
+   "byState": {
+    "NULL": 16
+   },
+   "byTypeState": {
+    "Build|NULL": 16
+   }
+  },
+  {
+   "technicalName": "1bf712197cc54c41b4c5f2496341a6ce",
+   "displayName": "Creation of Inbound Delivery (4QK)",
+   "version": "1.2.0",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "MicrosoftOutlook",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Manufacturing",
+   "modifiedAt": "2026-05-26T14:09:27.490Z",
+   "artifacts": 18,
+   "byType": {
+    "Build": 18
+   },
+   "byState": {
+    "NULL": 18
+   },
+   "byTypeState": {
+    "Build|NULL": 18
+   }
+  },
+  {
+   "technicalName": "4cf34f5d2ab043b8b64d741851349b91",
+   "displayName": "Create Purchase Requisitions from Excel (48M)",
+   "version": "1.0.3",
+   "category": "Build",
+   "products": [
+    "SAPS4HANACloud",
+    "MicrosoftOutlook",
+    "MicrosoftExcel"
+   ],
+   "lineOfBusiness": "Sourcing and Procurement",
+   "modifiedAt": "2025-04-25T04:21:11.276Z",
+   "artifacts": 13,
+   "byType": {
+    "Build": 13
+   },
+   "byState": {
+    "NULL": 13
+   },
+   "byTypeState": {
+    "Build|NULL": 13
+   }
+  },
+  {
+   "technicalName": "51a829d04a9947128a9a71299b64ff34",
+   "displayName": "Mass Maintenance of Work Packages and Work Items for Projects (4J1)",
+   "version": "2.0.1",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "MicrosoftOutlook",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance,Service,Commerce,Human Resources,Supply Chain,Marketing,Sourcing and Procurement,Technology Area Enterprise Technology,Sales,Sustainability,Asset Management,Manufacturing,R&D Engineering",
+   "modifiedAt": "2026-05-26T14:13:41.289Z",
+   "artifacts": 14,
+   "byType": {
+    "Build": 14
+   },
+   "byState": {
+    "NULL": 14
+   },
+   "byTypeState": {
+    "Build|NULL": 14
+   }
+  },
+  {
+   "technicalName": "5884a7db8c82462a97d92a73a25f9378",
+   "displayName": "Collection and Update of Dispute Case Information  (5JL)",
+   "version": "1.1.9",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "MicrosoftOutlook",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2025-04-25T04:20:23.213Z",
+   "artifacts": 30,
+   "byType": {
+    "Build": 30
+   },
+   "byState": {
+    "NULL": 30
+   },
+   "byTypeState": {
+    "Build|NULL": 30
+   }
+  },
+  {
+   "technicalName": "6c738824f0f84ec78baca723c39b6b76",
+   "displayName": "Create Product Master Data with Reference (4N1)",
+   "version": "1.1.0",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Manufacturing",
+   "modifiedAt": "2026-05-26T14:16:01.390Z",
+   "artifacts": 14,
+   "byType": {
+    "Build": 14
+   },
+   "byState": {
+    "NULL": 14
+   },
+   "byTypeState": {
+    "Build|NULL": 14
+   }
+  },
+  {
+   "technicalName": "6fe0659dc8af4671b93d7960f69a919e",
+   "displayName": "List Open Activities of Terminated Employees (4JF)",
+   "version": "1.0.0",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "MicrosoftOutlook",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance,Service,Commerce,Human Resources,Supply Chain,Marketing,Sourcing and Procurement,Technology Area Enterprise Technology,Sales,Sustainability,Asset Management,Manufacturing,R&D Engineering",
+   "modifiedAt": "2026-05-26T14:18:23.350Z",
+   "artifacts": 18,
+   "byType": {
+    "Build": 18
+   },
+   "byState": {
+    "NULL": 18
+   },
+   "byTypeState": {
+    "Build|NULL": 18
+   }
+  },
+  {
+   "technicalName": "71c6c8c899dc4e5fb128fcb5236cad0d",
+   "displayName": "Mass Upload of Payment Advices (48Q)",
+   "version": "1.2.6",
+   "category": "Build",
+   "products": [
+    "MicrosoftOutlook",
+    "MicrosoftExcel",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2025-04-25T04:20:16.490Z",
+   "artifacts": 33,
+   "byType": {
+    "Build": 33
+   },
+   "byState": {
+    "NULL": 33
+   },
+   "byTypeState": {
+    "Build|NULL": 33
+   }
+  },
+  {
+   "technicalName": "7242dad18faf45dbac16c2a6bb000588",
+   "displayName": "Outbound Delivery - Post Goods Issue for Non-Warehouse Management (4HV)",
+   "version": "1.0.0",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Manufacturing",
+   "modifiedAt": "2026-05-26T14:16:46.792Z",
+   "artifacts": 13,
+   "byType": {
+    "Build": 13
+   },
+   "byState": {
+    "NULL": 13
+   },
+   "byTypeState": {
+    "Build|NULL": 13
+   }
+  },
+  {
+   "technicalName": "72b0f6f429464c6ea085ce66404549ee",
+   "displayName": "Mass Creation of Customer Returns (4HT)",
+   "version": "2.0.0",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "MicrosoftOutlook",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sales",
+   "modifiedAt": "2026-05-26T14:10:36.021Z",
+   "artifacts": 14,
+   "byType": {
+    "Build": 14
+   },
+   "byState": {
+    "NULL": 14
+   },
+   "byTypeState": {
+    "Build|NULL": 14
+   }
+  },
+  {
+   "technicalName": "7c29cee95f544422929a760b547ed943",
+   "displayName": "Answering GDPR requests with SAP Intelligent RPA",
+   "version": "1.0.0",
+   "category": "Build",
+   "products": [
+    "SAPS4HANACloud",
+    "MicrosoftOutlook",
+    "MicrosoftWord",
+    "MicrosoftExcel"
+   ],
+   "lineOfBusiness": "Technology Area Enterprise Technology,Service,Commerce",
+   "modifiedAt": "2025-04-25T04:24:39.506Z",
+   "artifacts": 11,
+   "byType": {
+    "Build": 11
+   },
+   "byState": {
+    "NULL": 11
+   },
+   "byTypeState": {
+    "Build|NULL": 11
+   }
+  },
+  {
+   "technicalName": "85cef3ad9a2f4273adfc1c830121e284",
+   "displayName": "Mass Creation and Update of Timesheet Entries for Commercial Projects (4JJ)",
+   "version": "1.0.2",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Service",
+   "modifiedAt": "2025-11-21T16:13:37.803Z",
+   "artifacts": 16,
+   "byType": {
+    "Build": 16
+   },
+   "byState": {
+    "NULL": 16
+   },
+   "byTypeState": {
+    "Build|NULL": 16
+   }
+  },
+  {
+   "technicalName": "89464492ed48434aa75bb50785095f81",
+   "displayName": "Supplier Invoice File Extraction from Email and Upload to SAP Ariba Central Invoice Management (6JX)",
+   "version": "1.4.1",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "MicrosoftOutlook",
+    "SAPS4HANACloud",
+    "SAPAriba"
+   ],
+   "lineOfBusiness": "Finance,Sourcing and Procurement",
+   "modifiedAt": "2025-12-19T14:55:59.416Z",
+   "artifacts": 51,
+   "byType": {
+    "Build": 51
+   },
+   "byState": {
+    "NULL": 51
+   },
+   "byTypeState": {
+    "Build|NULL": 51
+   }
+  },
+  {
+   "technicalName": "915c07981b1748a789c253012c0b393e",
+   "displayName": "Extracts Ticket Notes History from Service Provide Cockpit (SPC) and Cloud Reporting Tool (CRT)",
+   "version": "1.0.0",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Technology Area Enterprise Technology,R&D Engineering",
+   "modifiedAt": "2025-04-25T04:20:56.160Z",
+   "artifacts": 15,
+   "byType": {
+    "Build": 15
+   },
+   "byState": {
+    "NULL": 15
+   },
+   "byTypeState": {
+    "Build|NULL": 15
+   }
+  },
+  {
+   "technicalName": "9afc607a9e294f08864dd3398b77196a",
+   "displayName": "Automated Release of Supplier Invoice upon Customer Payment (6PA)",
+   "version": "1.0.13",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "MicrosoftOutlook",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sales,Finance,Service,Sourcing and Procurement",
+   "modifiedAt": "2026-05-26T14:20:40.188Z",
+   "artifacts": 42,
+   "byType": {
+    "Build": 42
+   },
+   "byState": {
+    "NULL": 42
+   },
+   "byTypeState": {
+    "Build|NULL": 42
+   }
+  },
+  {
+   "technicalName": "9ed5191e751c497e8efd6b7a253fa61f",
+   "displayName": "Automated Upload of General Ledger Entries (48I)",
+   "version": "1.1.0",
+   "category": "Build",
+   "products": [
+    "MicrosoftOutlook",
+    "SAPS4HANACloud",
+    "MicrosoftExcel"
+   ],
+   "lineOfBusiness": "Service,Commerce,Supply Chain,Technology Area Enterprise Technology,Sales,Marketing,Sustainability,Asset Management,Sourcing and Procurement,Finance,R&D Engineering,Human Resources,Manufacturing",
+   "modifiedAt": "2025-04-25T04:21:18.370Z",
+   "artifacts": 45,
+   "byType": {
+    "Build": 45
+   },
+   "byState": {
+    "NULL": 45
+   },
+   "byTypeState": {
+    "Build|NULL": 45
+   }
+  },
+  {
+   "technicalName": "b03882f3a1d04b5b9a2aeb0066e33b7c",
+   "displayName": "Mass Transfer of Time and Expenses from One WBS to Another for Internal Projects (4W1)",
+   "version": "2.0.0",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "MicrosoftOutlook",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Service",
+   "modifiedAt": "2026-05-26T14:19:24.826Z",
+   "artifacts": 21,
+   "byType": {
+    "Build": 21
+   },
+   "byState": {
+    "NULL": 21
+   },
+   "byTypeState": {
+    "Build|NULL": 21
+   }
+  },
+  {
+   "technicalName": "c94a3da47c1644b7aff4a3363a554b5e",
+   "displayName": "Export Project Financial Plan Data (4HP)",
+   "version": "1.0.14",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "MicrosoftOutlook",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance,Service",
+   "modifiedAt": "2025-04-25T04:18:43.083Z",
+   "artifacts": 28,
+   "byType": {
+    "Build": 28
+   },
+   "byState": {
+    "NULL": 28
+   },
+   "byTypeState": {
+    "Build|NULL": 28
+   }
+  },
+  {
+   "technicalName": "d6a7908114dd495e960c6b4ba3ea5e96",
+   "displayName": "Mass Maintenance of Quality Info Records (6NX)",
+   "version": "1.0.0",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "MicrosoftOutlook",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance,Service,Commerce,Human Resources,Supply Chain,Marketing,Sourcing and Procurement,Technology Area Enterprise Technology,Sales,Sustainability,Asset Management,Manufacturing,R&D Engineering",
+   "modifiedAt": "2026-05-26T14:11:31.773Z",
+   "artifacts": 14,
+   "byType": {
+    "Build": 14
+   },
+   "byState": {
+    "NULL": 14
+   },
+   "byTypeState": {
+    "Build|NULL": 14
+   }
+  },
+  {
+   "technicalName": "de992cc4fb9e4dfc867e97be3ab6064d",
+   "displayName": "Proposed Reclassification of G/L Account Entries (5AK)",
+   "version": "1.0.14",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "MicrosoftOutlook",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2026-05-26T14:12:33.364Z",
+   "artifacts": 29,
+   "byType": {
+    "Build": 29
+   },
+   "byState": {
+    "NULL": 29
+   },
+   "byTypeState": {
+    "Build|NULL": 29
+   }
+  },
+  {
+   "technicalName": "f2d25b4d77c64ae1adf56ae6ff85a8e2",
+   "displayName": "Maintain Planned Independent Requirements (4FL)",
+   "version": "1.0.6",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Manufacturing",
+   "modifiedAt": "2026-05-26T14:14:28.491Z",
+   "artifacts": 8,
+   "byType": {
+    "Build": 8
+   },
+   "byState": {
+    "NULL": 8
+   },
+   "byTypeState": {
+    "Build|NULL": 8
+   }
+  },
+  {
+   "technicalName": "f5cd5ab09d2649a1aeef224d67411d72",
+   "displayName": "Mass Update Asset Master Data (57O)",
+   "version": "1.0.4",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "MicrosoftOutlook",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance,Asset Management",
+   "modifiedAt": "2026-05-26T14:15:11.785Z",
+   "artifacts": 11,
+   "byType": {
+    "Build": 11
+   },
+   "byState": {
+    "NULL": 11
+   },
+   "byTypeState": {
+    "Build|NULL": 11
+   }
+  },
+  {
+   "technicalName": "fa533c3adabd487b80a74aaab5512a2f",
+   "displayName": "Mass Copying of G/L Account Master Data and Assignment of Company Codes (6FJ)",
+   "version": "1.0.1",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "MicrosoftOutlook",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2026-05-26T14:21:57.794Z",
+   "artifacts": 14,
+   "byType": {
+    "Build": 14
+   },
+   "byState": {
+    "NULL": 14
+   },
+   "byTypeState": {
+    "Build|NULL": 14
+   }
+  },
+  {
+   "technicalName": "ffe656ae48c9480cbcbafe2393f0b446",
+   "displayName": "Mass Upload of Bank Statement Files (4X2)",
+   "version": "1.4.0",
+   "category": "Build",
+   "products": [
+    "MicrosoftExcel",
+    "MicrosoftOutlook",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2025-10-08T17:44:48.306Z",
+   "artifacts": 25,
+   "byType": {
+    "Build": 25
+   },
+   "byState": {
+    "NULL": 25
+   },
+   "byTypeState": {
+    "Build|NULL": 25
+   }
+  },
+  {
+   "technicalName": "sap.build.pa.content.insightstoactionprocess",
+   "displayName": "Insight To Action Process",
+   "version": "1.0.0",
+   "category": "Build",
+   "products": [
+    "SAPS4HANACloudPrivateEdition",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Supply Chain,Sourcing and Procurement",
+   "modifiedAt": "2026-07-23T06:29:49.609Z",
+   "artifacts": 5,
+   "byType": {
+    "Build": 5
+   },
+   "byState": {
+    "NULL": 5
+   },
+   "byTypeState": {
+    "Build|NULL": 5
+   }
+  },
+  {
+   "technicalName": "sap.build.pa.content.massprojectchange",
+   "displayName": "Mass Project Change",
+   "version": "1.0.0",
+   "category": "Build",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Maintenance and Engineering,Manufacturing,R&D Engineering,Service",
+   "modifiedAt": "2025-08-07T10:36:51.396Z",
+   "artifacts": 15,
+   "byType": {
+    "Build": 15
+   },
+   "byState": {
+    "NULL": 15
+   },
+   "byTypeState": {
+    "Build|NULL": 15
+   }
+  },
+  {
+   "technicalName": "sap.build.pa.content.massprojectchangebusinesspartnera2xaction",
+   "displayName": "Mass Project Change - Business Partner (A2X) Action",
+   "version": "1.0.0",
+   "category": "Build",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Maintenance and Engineering,Service",
+   "modifiedAt": "2025-08-07T10:31:58.280Z",
+   "artifacts": 4,
+   "byType": {
+    "Build": 4
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "Build|NULL": 4
+   }
+  },
+  {
+   "technicalName": "sap.build.pa.content.massprojectchangeenterpriseprojects",
+   "displayName": "Mass Project Change - Enterprise Projects",
+   "version": "1.0.0",
+   "category": "Build",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Maintenance and Engineering,Manufacturing,Service",
+   "modifiedAt": "2025-08-07T10:31:32.763Z",
+   "artifacts": 14,
+   "byType": {
+    "Build": 14
+   },
+   "byState": {
+    "NULL": 14
+   },
+   "byTypeState": {
+    "Build|NULL": 14
+   }
+  },
+  {
+   "technicalName": "sap.build.pa.content.massprojectchangeenterpriseprojectsaction",
+   "displayName": "Mass Project Change - Enterprise Projects Action",
+   "version": "1.0.0",
+   "category": "Build",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Maintenance and Engineering,Manufacturing,Service",
+   "modifiedAt": "2025-08-07T10:32:25.863Z",
+   "artifacts": 14,
+   "byType": {
+    "Build": 14
+   },
+   "byState": {
+    "NULL": 14
+   },
+   "byTypeState": {
+    "Build|NULL": 14
+   }
+  },
+  {
+   "technicalName": "AssetManagementforSAPS4HANACloudPublicEdition",
+   "displayName": "Asset Management for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Asset Management",
+   "modifiedAt": "2026-07-15T06:03:25.338Z",
+   "artifacts": 186,
+   "byType": {
+    "CDSVIEW": 186
+   },
+   "byState": {
+    "RELEASED": 186
+   },
+   "byTypeState": {
+    "CDSVIEW|RELEASED": 186
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudCDSViewsforCrossApplications",
+   "displayName": "Cross Applications for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-07-15T06:09:45.320Z",
+   "artifacts": 1924,
+   "byType": {
+    "CDSVIEW": 1924
+   },
+   "byState": {
+    "DEPRECATED": 76,
+    "RELEASED": 1848
+   },
+   "byTypeState": {
+    "CDSVIEW|DEPRECATED": 76,
+    "CDSVIEW|RELEASED": 1848
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudCDSViewsforDatabaseDataManagement",
+   "displayName": "Database and Data Management for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-07-15T06:03:04.877Z",
+   "artifacts": 397,
+   "byType": {
+    "CDSVIEW": 397
+   },
+   "byState": {
+    "DEPRECATED": 1,
+    "RELEASED": 396
+   },
+   "byTypeState": {
+    "CDSVIEW|DEPRECATED": 1,
+    "CDSVIEW|RELEASED": 396
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudCDSViewsforHumanResources",
+   "displayName": "Human Resources for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Human Resources",
+   "modifiedAt": "2026-07-15T05:58:03.418Z",
+   "artifacts": 57,
+   "byType": {
+    "CDSVIEW": 57
+   },
+   "byState": {
+    "DEPRECATED": 1,
+    "RELEASED": 56
+   },
+   "byTypeState": {
+    "CDSVIEW|DEPRECATED": 1,
+    "CDSVIEW|RELEASED": 56
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudCDSViewsforManufacturing",
+   "displayName": "Manufacturing for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Manufacturing",
+   "modifiedAt": "2026-07-15T05:59:46.636Z",
+   "artifacts": 761,
+   "byType": {
+    "CDSVIEW": 761
+   },
+   "byState": {
+    "RELEASED": 761
+   },
+   "byTypeState": {
+    "CDSVIEW|RELEASED": 761
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudCDSViewsforRDEngineering",
+   "displayName": "R&D/Engineering for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "R&D Engineering",
+   "modifiedAt": "2026-07-15T06:02:29.874Z",
+   "artifacts": 371,
+   "byType": {
+    "CDSVIEW": 371
+   },
+   "byState": {
+    "DEPRECATED": 14,
+    "RELEASED": 357
+   },
+   "byTypeState": {
+    "CDSVIEW|DEPRECATED": 14,
+    "CDSVIEW|RELEASED": 357
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudCDSViewsforSales",
+   "displayName": "Sales for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sales",
+   "modifiedAt": "2026-07-15T06:01:46.214Z",
+   "artifacts": 1255,
+   "byType": {
+    "CDSVIEW": 1255
+   },
+   "byState": {
+    "DEPRECATED": 23,
+    "RELEASED": 1232
+   },
+   "byTypeState": {
+    "CDSVIEW|DEPRECATED": 23,
+    "CDSVIEW|RELEASED": 1232
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudCDSViewsforSourcingProcurement",
+   "displayName": "Sourcing and Procurement for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sourcing and Procurement",
+   "modifiedAt": "2026-07-15T06:04:49.415Z",
+   "artifacts": 513,
+   "byType": {
+    "CDSVIEW": 513
+   },
+   "byState": {
+    "DEPRECATED": 76,
+    "RELEASED": 437
+   },
+   "byTypeState": {
+    "CDSVIEW|DEPRECATED": 76,
+    "CDSVIEW|RELEASED": 437
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudforAccountingandFinancialClose",
+   "displayName": "Accounting and Financial Close for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-07-15T06:11:03.165Z",
+   "artifacts": 888,
+   "byType": {
+    "CDSVIEW": 888
+   },
+   "byState": {
+    "DEPRECATED": 29,
+    "RELEASED": 859
+   },
+   "byTypeState": {
+    "CDSVIEW|DEPRECATED": 29,
+    "CDSVIEW|RELEASED": 859
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudforContractAccounting",
+   "displayName": "Contract Accounting for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2026-07-15T06:03:54.901Z",
+   "artifacts": 477,
+   "byType": {
+    "CDSVIEW": 477
+   },
+   "byState": {
+    "DEPRECATED": 29,
+    "RELEASED": 448
+   },
+   "byTypeState": {
+    "CDSVIEW|DEPRECATED": 29,
+    "CDSVIEW|RELEASED": 448
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudforCountryRegionSpecificFunctionsforFinance",
+   "displayName": "Country/Region-Specific Functions for Finance for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2026-07-15T06:06:12.815Z",
+   "artifacts": 276,
+   "byType": {
+    "CDSVIEW": 276
+   },
+   "byState": {
+    "DEPRECATED": 6,
+    "RELEASED": 270
+   },
+   "byTypeState": {
+    "CDSVIEW|DEPRECATED": 6,
+    "CDSVIEW|RELEASED": 270
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudforFinancialOperations",
+   "displayName": "Financial Operations for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2026-07-15T06:12:08.355Z",
+   "artifacts": 729,
+   "byType": {
+    "CDSVIEW": 729
+   },
+   "byState": {
+    "DEPRECATED": 11,
+    "RELEASED": 718
+   },
+   "byTypeState": {
+    "CDSVIEW|DEPRECATED": 11,
+    "CDSVIEW|RELEASED": 718
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudforFinancialServices",
+   "displayName": "Financial Services for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2026-07-15T06:02:03.174Z",
+   "artifacts": 28,
+   "byType": {
+    "CDSVIEW": 28
+   },
+   "byState": {
+    "RELEASED": 28
+   },
+   "byTypeState": {
+    "CDSVIEW|RELEASED": 28
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudforGroupReporting",
+   "displayName": "Group Reporting for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2026-07-15T05:58:43.828Z",
+   "artifacts": 558,
+   "byType": {
+    "CDSVIEW": 558
+   },
+   "byState": {
+    "DEPRECATED": 4,
+    "RELEASED": 554
+   },
+   "byTypeState": {
+    "CDSVIEW|DEPRECATED": 4,
+    "CDSVIEW|RELEASED": 554
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudforInternationalTrade",
+   "displayName": "International Trade for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2026-07-15T06:02:44.769Z",
+   "artifacts": 21,
+   "byType": {
+    "CDSVIEW": 21
+   },
+   "byState": {
+    "RELEASED": 21
+   },
+   "byTypeState": {
+    "CDSVIEW|RELEASED": 21
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudforProductLifecycleManagement",
+   "displayName": "Product Lifecycle Management for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-07-15T06:03:13.720Z",
+   "artifacts": 28,
+   "byType": {
+    "CDSVIEW": 28
+   },
+   "byState": {
+    "DEPRECATED": 7,
+    "RELEASED": 21
+   },
+   "byTypeState": {
+    "CDSVIEW|DEPRECATED": 7,
+    "CDSVIEW|RELEASED": 21
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudforSupplyChain",
+   "displayName": "Supply Chain for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Supply Chain",
+   "modifiedAt": "2026-07-15T06:05:50.817Z",
+   "artifacts": 787,
+   "byType": {
+    "CDSVIEW": 787
+   },
+   "byState": {
+    "DEPRECATED": 147,
+    "RELEASED": 640
+   },
+   "byTypeState": {
+    "CDSVIEW|DEPRECATED": 147,
+    "CDSVIEW|RELEASED": 640
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudforWarrantyManagement",
+   "displayName": "Warranty Management for SAP S/4HANA Cloud Public Edition",
+   "version": "2608",
+   "category": "CDSViews",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-07-15T05:57:54.592Z",
+   "artifacts": 32,
+   "byType": {
+    "CDSVIEW": 32
+   },
+   "byState": {
+    "RELEASED": 32
+   },
+   "byTypeState": {
+    "CDSVIEW|RELEASED": 32
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudBusinessEvents",
+   "displayName": "SAP S/4HANA Cloud Public Edition for Business Events",
+   "version": "2608",
+   "category": "Events",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-07-15T05:55:01.847Z",
+   "artifacts": 147,
+   "byType": {
+    "Event": 147
+   },
+   "byState": {
+    "ACTIVE": 139,
+    "DEPRECATED": 8
+   },
+   "byTypeState": {
+    "Event|ACTIVE": 139,
+    "Event|DEPRECATED": 8
+   }
+  },
+  {
+   "technicalName": "BuyerCE2SupplierCE",
+   "displayName": "Integration of SAP S/4HANA Cloud with Sales and Procurement",
+   "version": "1.0.1",
+   "category": "Integration",
+   "products": [
+    "SAPERP",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sales,Sourcing and Procurement",
+   "modifiedAt": "2023-02-21T15:15:58.516Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 4
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 4
+   }
+  },
+  {
+   "technicalName": "C4CS4IntegrationFlow",
+   "displayName": "SAP Service Cloud Integration with SAP S/4HANA Cloud",
+   "version": "2302",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "SAPServiceCloud",
+    "SAPCloudforCustomer"
+   ],
+   "lineOfBusiness": "Service",
+   "modifiedAt": "2023-04-11T14:58:10.026Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "CCHSureTaxIntegrationwithSAPS4HC",
+   "displayName": "CCH® SureTax® Integration for SAP S/4HANA Cloud",
+   "version": "2.0.13",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "CCHSureTax"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2025-11-20T16:40:23.246Z",
+   "artifacts": 7,
+   "byType": {
+    "IFlow": 6,
+    "ScriptCollection": 1
+   },
+   "byState": {
+    "NULL": 7
+   },
+   "byTypeState": {
+    "IFlow|NULL": 6,
+    "ScriptCollection|NULL": 1
+   }
+  },
+  {
+   "technicalName": "CentralOrderIntegrationwithSAPS4HANACloud",
+   "displayName": "SAP Order Management Foundation Integration with SAP S/4HANA Cloud",
+   "version": "8.3.2",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPOrderManagementfoundation",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": "Sales,Sourcing and Procurement,Commerce,Service",
+   "modifiedAt": "2026-08-22T13:46:41.469Z",
+   "artifacts": 10,
+   "byType": {
+    "IFlow": 8,
+    "ValueMapping": 2
+   },
+   "byState": {
+    "NULL": 10
+   },
+   "byTypeState": {
+    "IFlow|NULL": 8,
+    "ValueMapping|NULL": 2
+   }
+  },
+  {
+   "technicalName": "ConcurIntegrationDataExportandFIPosting",
+   "displayName": "SAP Financials Integration with SAP Concur",
+   "version": "1.1.3",
+   "category": "Integration",
+   "products": [
+    "SAPConcur",
+    "SAPConcurExpense",
+    "SAPERP",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2025-08-06T15:31:14.380Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "CorevistCloudCommerceIntegrationwithSAPS4HANA",
+   "displayName": "Corevist Cloud Commerce Integration with SAP S/4HANA",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "Corevist",
+    "SAP S/4HANA",
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPS4HANACloudPrivateEdition"
+   ],
+   "lineOfBusiness": "Sales,Supply Chain,Commerce",
+   "modifiedAt": "2025-06-13T15:49:14.163Z",
+   "artifacts": 13,
+   "byType": {
+    "IFlow": 11,
+    "ScriptCollection": 1,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 13
+   },
+   "byTypeState": {
+    "IFlow|NULL": 11,
+    "ScriptCollection|NULL": 1,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "CRMIntegrationwithSAPS4HANACloudandSAPERP",
+   "displayName": "Microsoft Dynamics CRM Integration with SAP S/4HANA Cloud and SAP ERP",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPERP",
+    "MicrosoftDynamicsCRM"
+   ],
+   "lineOfBusiness": "Manufacturing",
+   "modifiedAt": "2023-04-13T05:28:44.693Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "DMEIntTemplates",
+   "displayName": "SAP S/4HANA Integration with SAP Digital Manufacturing Cloud Templates",
+   "version": "1.14.1",
+   "category": "Integration",
+   "products": [
+    "SAPExtendedWarehouseManagement",
+    "SAPS4HANA",
+    "SAPDigitalManufacturingCloud",
+    "SAPERPCentralComponent",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Plant Operations and Maintenance,Manufacturing,Supply Chain,R&D Engineering",
+   "modifiedAt": "2024-05-17T13:42:05.906Z",
+   "artifacts": 77,
+   "byType": {
+    "IFlow": 77
+   },
+   "byState": {
+    "NULL": 77
+   },
+   "byTypeState": {
+    "IFlow|NULL": 77
+   }
+  },
+  {
+   "technicalName": "eDocumenteInvoiceandDeliveryNoteforTurkey",
+   "displayName": "SAP Document and Reporting Compliance: Electronic Invoices and Delivery Notes for Turkey",
+   "version": "1.0.18",
+   "category": "Integration",
+   "products": [
+    "SAPDocumentCompliance",
+    "SAPERP",
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "GovernmentTurkey",
+    "SAPDocumentandReportingCompliance"
+   ],
+   "lineOfBusiness": "Sales",
+   "modifiedAt": "2026-05-08T16:18:10.273Z",
+   "artifacts": 5,
+   "byType": {
+    "IFlow": 5
+   },
+   "byState": {
+    "NULL": 5
+   },
+   "byTypeState": {
+    "IFlow|NULL": 5
+   }
+  },
+  {
+   "technicalName": "eDocumentElectronicInvoicingforChile",
+   "displayName": "SAP Document and Reporting Compliance: Electronic Documents for Chile",
+   "version": "2.6.0",
+   "category": "Integration",
+   "products": [
+    "SAPERP",
+    "SAPS4HANA",
+    "GovernmentChile",
+    "SAPDocumentCompliance",
+    "SAPS4HANACloud",
+    "SAPDocumentandReportingCompliance"
+   ],
+   "lineOfBusiness": "Finance,Sales",
+   "modifiedAt": "2026-07-16T15:40:43.966Z",
+   "artifacts": 33,
+   "byType": {
+    "IFlow": 32,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 33
+   },
+   "byTypeState": {
+    "IFlow|NULL": 32,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "eDocumentElectronicInvoicingforColombia",
+   "displayName": "SAP Document and Reporting Compliance: Electronic Invoicing for Colombia",
+   "version": "2.0.15",
+   "category": "Integration",
+   "products": [
+    "SAPERP",
+    "DIANColombia",
+    "SAPS4HANA",
+    "SAPDocumentComplianceonpremiseedition",
+    "SAPS4HANACloudPrivateEdition",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance,Sales",
+   "modifiedAt": "2026-01-21T14:55:38.133Z",
+   "artifacts": 5,
+   "byType": {
+    "IFlow": 5
+   },
+   "byState": {
+    "NULL": 5
+   },
+   "byTypeState": {
+    "IFlow|NULL": 5
+   }
+  },
+  {
+   "technicalName": "eDocumentElectronicInvoicingforSouthKorea",
+   "displayName": "SAP Document and Reporting Compliance: Electronic Invoicing for South Korea",
+   "version": "1.4.6",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": "Sales,Finance",
+   "modifiedAt": "2026-04-30T15:33:49.363Z",
+   "artifacts": 10,
+   "byType": {
+    "IFlow": 10
+   },
+   "byState": {
+    "NULL": 10
+   },
+   "byTypeState": {
+    "IFlow|NULL": 10
+   }
+  },
+  {
+   "technicalName": "eDocumentElectronicPaymentsforMexico",
+   "displayName": "SAP Document and Reporting Compliance: Electronic Documents for Mexico",
+   "version": "1.0.45",
+   "category": "Integration",
+   "products": [
+    "SAP ERP",
+    "SAPERP",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2026-07-09T16:59:02.292Z",
+   "artifacts": 9,
+   "byType": {
+    "IFlow": 9
+   },
+   "byState": {
+    "NULL": 9
+   },
+   "byTypeState": {
+    "IFlow|NULL": 9
+   }
+  },
+  {
+   "technicalName": "eDocumentElectronicTransportRegistrationforPortugal",
+   "displayName": "SAP Document and Reporting Compliance: Transport Registration for Portugal",
+   "version": "1.0.6",
+   "category": "Integration",
+   "products": [
+    "SAPERP",
+    "SAPERPoptionforedocumentprocessing",
+    "GovernmentPortugal",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sales",
+   "modifiedAt": "2025-06-24T15:33:53.813Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "eDocumentVATRegisterBooksforSpain",
+   "displayName": "SAP Document and Reporting Compliance: Electronic Tax Register Books for Spain",
+   "version": "4.0.7",
+   "category": "Integration",
+   "products": [
+    "SAPDocumentCompliance",
+    "SAPDocumentComplianceonpremiseedition",
+    "GovernmentSpainSII",
+    "SAPS4HANACloud",
+    "SAPERP",
+    "SAPDocumentandReportingCompliance"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2024-03-21T05:21:26.526Z",
+   "artifacts": 3,
+   "byType": {
+    "IFlow": 3
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "IFlow|NULL": 3
+   }
+  },
+  {
+   "technicalName": "EmailIntegrationwithS4HANACloudCustomBusinessObject",
+   "displayName": "Email Integration with S/4HANA Cloud Custom Business Object",
+   "version": "1.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "ThirdParty"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2023-01-31T09:52:17.800Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "EnterpriseServiceIntegrationwithS4HanaCloud",
+   "displayName": "SAP Enterprise Service Management Integration with SAP S/4HANA Cloud",
+   "version": "1.00",
+   "category": "Integration",
+   "products": [
+    "SAPSalesCloudandSAPServiceCloudVersion2",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2023-08-10T13:21:41.476Z",
+   "artifacts": 6,
+   "byType": {
+    "IFlow": 4,
+    "ScriptCollection": 1,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 6
+   },
+   "byTypeState": {
+    "IFlow|NULL": 4,
+    "ScriptCollection|NULL": 1,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "ExtensionMappingIntegrationofSAPS4HANACloudforSalesSchedulingAgreementwithSAPERP.OPBuyerS4CESupplier",
+   "displayName": "SAP S/4HANA Cloud for Sales Integration with SAP S/4HANA - Extension Mapping",
+   "version": "1908",
+   "category": "Integration",
+   "products": [
+    "SAP S/4HANA",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sourcing and Procurement,Sales",
+   "modifiedAt": "2023-10-18T16:31:24.143Z",
+   "artifacts": 3,
+   "byType": {
+    "IFlow": 3
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "IFlow|NULL": 3
+   }
+  },
+  {
+   "technicalName": "IntegrationofSAPS4HANACloudforProcurementwithSAPS4HANAorSAPERPMappingExtension",
+   "displayName": "Integration of SAP S/4HANA Cloud for Procurement with SAP S/4HANA or SAP ERP: Mapping Extension",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPERP"
+   ],
+   "lineOfBusiness": "Sales,Sourcing and Procurement",
+   "modifiedAt": "2021-12-13T11:13:28.500Z",
+   "artifacts": 5,
+   "byType": {
+    "IFlow": 5
+   },
+   "byState": {
+    "NULL": 5
+   },
+   "byTypeState": {
+    "IFlow|NULL": 5
+   }
+  },
+  {
+   "technicalName": "IntegrationofSAPS4HANACloudforSalesSchedulingAgreementwithSAPS4HANACloudProcurement",
+   "displayName": "SAP S/4HANA Cloud for Sales Integration with SAP S/4HANA Cloud for Procurement",
+   "version": "1905",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sourcing and Procurement,Sales",
+   "modifiedAt": "2021-12-13T11:24:16.750Z",
+   "artifacts": 3,
+   "byType": {
+    "IFlow": 3
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "IFlow|NULL": 3
+   }
+  },
+  {
+   "technicalName": "IntegrationofSAPS4HANACloudforSaleswithSAPS4HANAorSAPERPMappingExtension",
+   "displayName": "Integration of SAP S/4HANA Cloud for Sales with SAP S/4HANA or SAP ERP: Mapping Extension",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPERP",
+    "SAPS4HANACloud",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": "Sourcing and Procurement,Sales",
+   "modifiedAt": "2021-12-13T11:13:29.196Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 4
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 4
+   }
+  },
+  {
+   "technicalName": "IntegrationofSAPS4HANACloudProcurementwithOnPremiseSuppliersS4HANAorERP",
+   "displayName": "SAP S/4HANA Cloud for Procurement Integration with SAP S/4HANA Cloud for Sales or SAP ERP",
+   "version": "2403",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "SAPERP"
+   ],
+   "lineOfBusiness": "Sales,Sourcing and Procurement",
+   "modifiedAt": "2024-02-05T14:52:57.843Z",
+   "artifacts": 5,
+   "byType": {
+    "IFlow": 4,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 5
+   },
+   "byTypeState": {
+    "IFlow|NULL": 4,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "IntegrationofSAPS4HANACloudSaleswithSAPS4HANAOnPremiseorSAPERPProcurement",
+   "displayName": "SAP S/4HANA Cloud for Sales Integration with SAP S/4HANA Cloud for Procurement or SAP ERP",
+   "version": "2403",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "SAPERP"
+   ],
+   "lineOfBusiness": "Sourcing and Procurement,Sales",
+   "modifiedAt": "2024-02-05T14:54:05.096Z",
+   "artifacts": 5,
+   "byType": {
+    "IFlow": 4,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 5
+   },
+   "byTypeState": {
+    "IFlow|NULL": 4,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "IntegrationwithSAPHybrisRevenueCloudConvergentInvoicing",
+   "displayName": "[DEPRECATED] SAP Subscription Billing Integration with SAP S/4HANA Cloud - Convergent Invoicing",
+   "version": "1.5.8",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPSubscriptionBilling"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2021-12-13T11:05:37.943Z",
+   "artifacts": 0,
+   "byType": {},
+   "byState": {},
+   "byTypeState": {}
+  },
+  {
+   "technicalName": "KTern.AIDigitalMaps",
+   "displayName": "KTern.AI Digital Maps Integration with SAP ECC and SAP S/4HANA",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPCloudALM",
+    "SAPS4HANACloud",
+    "SAPCRM",
+    "AmazonWebServices",
+    "SAPBusinessSuite",
+    "SAPS4HANA",
+    "SAPS4HANACloudPrivateEdition",
+    "SAPERP",
+    "SAPSRM",
+    "SAPCloudPlatform",
+    "SAPERPCentralComponent",
+    "SAPEWM",
+    "SAPHCM",
+    "KTernAI",
+    "SAPSolutionManager"
+   ],
+   "lineOfBusiness": "Finance,Sales,Sourcing and Procurement,Sustainability,Plant Operations and Maintenance,Asset Management,Human Resources,Service,Manufacturing,Commerce,R&D Engineering,Supply Chain,Maintenance and Engineering",
+   "modifiedAt": "2024-08-19T15:23:18.566Z",
+   "artifacts": 0,
+   "byType": {},
+   "byState": {},
+   "byTypeState": {}
+  },
+  {
+   "technicalName": "OEMSAPS4HANACloudIntegraionwithWorkday",
+   "displayName": "SAP S/4HANA Cloud Integration with Workday",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAP S/4HANA Cloud",
+    "Workday",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2021-12-13T11:07:39.650Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 3,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 3,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "OpenTextSupplierInvoiceIntegrationwithSAPS4HANACloud",
+   "displayName": "OpenText Supplier Invoice Integration with SAP S/4HANA Cloud by Deloitte",
+   "version": "1.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2021-12-13T10:55:18.040Z",
+   "artifacts": 0,
+   "byType": {},
+   "byState": {},
+   "byTypeState": {}
+  },
+  {
+   "technicalName": "PIMToSAPProductSynchAccelerator",
+   "displayName": "Akeneo PIM Event Platform integration with SAP ERP",
+   "version": "1.0",
+   "category": "Integration",
+   "products": [
+    "AkeneoPIM",
+    "SAPCloudPlatformIntegrationSuite",
+    "SAPERP",
+    "SAPS4HANA",
+    "SAPS4HANACloudPrivateEdition",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-04-14T14:51:10.591Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 4
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 4
+   }
+  },
+  {
+   "technicalName": "PlanonFinancialCollectionIntegrationforPurchaseRequisitionwithSAPS4HANAProcurement",
+   "displayName": "Planon Financial Collection Integration for Purchase Requisition with SAP S/4HANA Procurement",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "Planon Financial Collection",
+    "SAPS4HANACloud",
+    "SAPS4HANACloudPrivateEdition"
+   ],
+   "lineOfBusiness": "Asset Management,Finance,Sales,Service,Sourcing and Procurement,Supply Chain,Maintenance and Engineering",
+   "modifiedAt": "2026-04-22T15:24:47.131Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "PricefxPriceManagementwithSAPS4HANA",
+   "displayName": "Pricefx Price Management with SAP S/4HANA",
+   "version": "2.2.1",
+   "category": "Integration",
+   "products": [
+    "SAPCloudPlatformIntegrationSuite",
+    "Pricefx",
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPEventMesh",
+    "SAPS4HANACloudPrivateEdition"
+   ],
+   "lineOfBusiness": "Marketing,Sales,Commerce",
+   "modifiedAt": "2026-04-21T15:27:54.461Z",
+   "artifacts": 36,
+   "byType": {
+    "IFlow": 32,
+    "MessageMapping": 3,
+    "ScriptCollection": 1
+   },
+   "byState": {
+    "NULL": 36
+   },
+   "byTypeState": {
+    "IFlow|NULL": 32,
+    "MessageMapping|NULL": 3,
+    "ScriptCollection|NULL": 1
+   }
+  },
+  {
+   "technicalName": "ReplicationofMasterDatabetweenSAPS4HANAPublicCloudEditionandS4HANA",
+   "displayName": "Replication of Master Data between SAP S/4HANA Public Cloud Edition and S/4HANA",
+   "version": "1.0.1",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloudPrivateEdition",
+    "SAPS4HANACloud",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2025-02-28T05:12:41.340Z",
+   "artifacts": 7,
+   "byType": {
+    "IFlow": 6,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 7
+   },
+   "byTypeState": {
+    "IFlow|NULL": 6,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "RepliconIntegrationwithSAPS4HANACloudSAPSuccessFactors",
+   "displayName": "Replicon Integration with SAP S/4HANA Cloud & SAP SuccessFactors",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAP S/4HANA Cloud",
+    "SAP SuccessFactors",
+    "Replicon",
+    "Replicon TimeBill Plus",
+    "SAPS4HANACloud",
+    "SAPSuccessFactors"
+   ],
+   "lineOfBusiness": "R&D Engineering,Finance,Service,Marketing",
+   "modifiedAt": "2021-12-13T11:18:50.286Z",
+   "artifacts": 6,
+   "byType": {
+    "IFlow": 5,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 6
+   },
+   "byTypeState": {
+    "IFlow|NULL": 5,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "ReusableartifactsforSAPS4HANAIntegrationwithPricefx",
+   "displayName": "Reusable Artifacts for SAP S/4HANA Integration with Pricefx",
+   "version": "6.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPCloudPlatformIntegrationSuite",
+    "Pricefx",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Marketing,Commerce,Sales",
+   "modifiedAt": "2026-02-05T15:54:25.882Z",
+   "artifacts": 22,
+   "byType": {
+    "IFlow": 18,
+    "MessageMapping": 3,
+    "ScriptCollection": 1
+   },
+   "byState": {
+    "NULL": 22
+   },
+   "byTypeState": {
+    "IFlow|NULL": 18,
+    "MessageMapping|NULL": 3,
+    "ScriptCollection|NULL": 1
+   }
+  },
+  {
+   "technicalName": "RojointegrationforSAPS4HANAonCloudwithSalesforce",
+   "displayName": "SAP S/4HANA Cloud Integration with Salesforce",
+   "version": "1.0.1",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "Salesforce"
+   ],
+   "lineOfBusiness": "Sales",
+   "modifiedAt": "2023-12-18T14:22:17.083Z",
+   "artifacts": 11,
+   "byType": {
+    "IFlow": 9,
+    "ValueMapping": 2
+   },
+   "byState": {
+    "NULL": 11
+   },
+   "byTypeState": {
+    "IFlow|NULL": 9,
+    "ValueMapping|NULL": 2
+   }
+  },
+  {
+   "technicalName": "S4HanaPFXIntegrationCommons",
+   "displayName": "Sample Artifacts for SAP S/4HANA Integration with Pricefx",
+   "version": "7.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPCloudPlatformIntegrationSuite",
+    "Pricefx",
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPEventMesh"
+   ],
+   "lineOfBusiness": "Commerce,Marketing,Sales",
+   "modifiedAt": "2026-02-05T10:03:49.531Z",
+   "artifacts": 27,
+   "byType": {
+    "IFlow": 23,
+    "MessageMapping": 2,
+    "ValueMapping": 2
+   },
+   "byState": {
+    "NULL": 27
+   },
+   "byTypeState": {
+    "IFlow|NULL": 23,
+    "MessageMapping|NULL": 2,
+    "ValueMapping|NULL": 2
+   }
+  },
+  {
+   "technicalName": "S4HanatoPricefx",
+   "displayName": "SAP S/4HANA Product Master Integration with Pricefx",
+   "version": "6.0.0",
+   "category": "Integration",
+   "products": [
+    "Pricefx",
+    "SAPCloudPlatformIntegrationSuite",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Commerce,Marketing,Sales",
+   "modifiedAt": "2025-09-18T15:53:22.986Z",
+   "artifacts": 29,
+   "byType": {
+    "IFlow": 29
+   },
+   "byState": {
+    "NULL": 29
+   },
+   "byTypeState": {
+    "IFlow|NULL": 29
+   }
+  },
+  {
+   "technicalName": "SalesCloudVersion2CustomerInsightsIntegrationwithSAPS4HANA",
+   "displayName": "Sales Cloud Version 2 - Customer Insights Integration with SAP S/4HANA",
+   "version": "1.3",
+   "category": "Integration",
+   "products": [
+    "SAPSalesCloud",
+    "SAPS4HANACloud",
+    "SAPCloudforCustomer",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": "Sales",
+   "modifiedAt": "2024-07-17T15:43:39.790Z",
+   "artifacts": 6,
+   "byType": {
+    "IFlow": 6
+   },
+   "byState": {
+    "NULL": 6
+   },
+   "byTypeState": {
+    "IFlow|NULL": 6
+   }
+  },
+  {
+   "technicalName": "SAPAribaBuyingIntegrationSAPS4HANA",
+   "displayName": "SAP Ariba Buying Integration with SAP S/4HANA",
+   "version": "1.5.1",
+   "category": "Integration",
+   "products": [
+    "SAPAribaBuying",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sourcing and Procurement",
+   "modifiedAt": "2026-06-30T05:47:35.213Z",
+   "artifacts": 13,
+   "byType": {
+    "IFlow": 13
+   },
+   "byState": {
+    "NULL": 13
+   },
+   "byTypeState": {
+    "IFlow|NULL": 13
+   }
+  },
+  {
+   "technicalName": "SAPAribaBuyingMasterDataNativeIntegrationSAPS4HANA",
+   "displayName": "SAP Ariba - Master Data Integration with SAP S/4HANA",
+   "version": "1.1",
+   "category": "Integration",
+   "products": [
+    "SAP S/4HANA",
+    "SAP S/4HANA Cloud",
+    "SAP Ariba Buying",
+    "SAPAriba",
+    "SAPCloudPlatformMasterDataIntegration",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sourcing and Procurement",
+   "modifiedAt": "2021-12-13T11:23:52.293Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPAribaCentralSourcingIntegrationSAPS4HANA",
+   "displayName": "SAP Ariba - Central Sourcing integration with SAP S/4HANA",
+   "version": "1.0",
+   "category": "Integration",
+   "products": [
+    "SAPAriba",
+    "SAPS4HANACloud",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": "Sourcing and Procurement",
+   "modifiedAt": "2021-12-13T11:18:30.973Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPAribaContractsIntegration",
+   "displayName": "SAP Ariba - Contracts integration with SAP S/4HANA",
+   "version": "1.0",
+   "category": "Integration",
+   "products": [
+    "SAPAriba",
+    "SAPS4HANACloud",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": "Sourcing and Procurement",
+   "modifiedAt": "2021-12-13T11:18:30.380Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPAribaSourcingintegrationwithSAPS4HANA",
+   "displayName": "SAP Ariba Sourcing integration with SAP S/4HANA",
+   "version": "1.0",
+   "category": "Integration",
+   "products": [
+    "SAPAribaSourcing",
+    "SAPAriba",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sourcing and Procurement",
+   "modifiedAt": "2021-12-13T11:18:19.706Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 4
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 4
+   }
+  },
+  {
+   "technicalName": "SAPBusinessByDesignAccountingDataTransformationtoSAPS4HANACloudPublicEdition",
+   "displayName": "SAP Business ByDesign Accounting Data Transformation to SAP S/4HANA Cloud Public Edition",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPBusinessByDesign",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2025-11-06T15:20:45.953Z",
+   "artifacts": 3,
+   "byType": {
+    "IFlow": 3
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "IFlow|NULL": 3
+   }
+  },
+  {
+   "technicalName": "SAPBusinessByDesignMasterDatatoSAPS4HANACloudPublicEdition",
+   "displayName": "SAP Business ByDesign Master Data to SAP S/4HANA Cloud Public Edition",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPBusinessByDesign",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2025-10-07T09:32:06.770Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 4
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 4
+   }
+  },
+  {
+   "technicalName": "SAPBusinessByDesignTransactionalDataTransformationtoSAPS4HANACloudPublicEdition",
+   "displayName": "SAP Business ByDesign Transactional Data Transformation to SAP S/4HANA Cloud Public Edition",
+   "version": "1.0",
+   "category": "Integration",
+   "products": [
+    "SAPBusinessByDesign",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2025-10-07T09:37:09.710Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPBusinessOneAccountingDataTransformationtoSAPS4HANACloudPublicEdition",
+   "displayName": "SAP Business One Accounting Data Transformation to SAP S/4HANA Cloud Public Edition",
+   "version": "1.0.2",
+   "category": "Integration",
+   "products": [
+    "SAPBusinessOne",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-01-07T05:48:07.386Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPBusinessOneMasterDataTransformationtoSAPS4HANACloudPublicEdition",
+   "displayName": "SAP Business One Master Data Transformation to SAP S/4HANA Cloud Public Edition",
+   "version": "1.0.3",
+   "category": "Integration",
+   "products": [
+    "SAPBusinessOne",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-01-22T11:06:05.920Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 4
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 4
+   }
+  },
+  {
+   "technicalName": "SAPBusinessOneTransactionalDataTransformationtoSAPS4HANACloudPublicEdition",
+   "displayName": "SAP Business One Transactional Data Transformation to SAP S/4HANA Cloud Public Edition",
+   "version": "1.0.1",
+   "category": "Integration",
+   "products": [
+    "SAPBusinessOne",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-01-07T07:42:20.270Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPCCOtoOSTA",
+   "displayName": "SAP Customer Checkout to SAP Omnichannel Sales Transfer and Audit",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPCustomerCheckout",
+    "SAPCloudPlatformIntegrationSuite",
+    "SAPOmnichannelPointofSalebyGK",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sales",
+   "modifiedAt": "2026-07-09T17:04:33.136Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPCloudForCustomerCustomerInsightsIntegrationWithSAPS4HANA",
+   "displayName": "SAP Cloud for Customer - Customer Insights Integration with SAP S/4HANA",
+   "version": "2308",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPCloudforCustomer"
+   ],
+   "lineOfBusiness": "Sales",
+   "modifiedAt": "2023-07-28T04:20:35.043Z",
+   "artifacts": 7,
+   "byType": {
+    "IFlow": 7
+   },
+   "byState": {
+    "NULL": 7
+   },
+   "byTypeState": {
+    "IFlow|NULL": 7
+   }
+  },
+  {
+   "technicalName": "SAPCloudPlatformMasterDataIntegrationwithSAPSuccessFactorsEmployeeCentralCostCenter",
+   "displayName": "Master Data Integration with SAP SuccessFactors Employee Central - Cost Center",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPCloudPlatformMasterDataIntegration",
+    "SAPS4HANA",
+    "SAPSuccessFactorsEmployeeCentral",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance,Human Resources",
+   "modifiedAt": "2021-12-13T11:13:51.676Z",
+   "artifacts": 1,
+   "byType": {
+    "ICD": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "ICD|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPCommerceCloudintegrationwithSAPFieldServiceManagement",
+   "displayName": "SAP Commerce Cloud Integration with SAP Field Service Management",
+   "version": "1.0.3",
+   "category": "Integration",
+   "products": [
+    "SAPCommerceCloud",
+    "SAPFieldServiceManagement",
+    "SAPS4HANACloud",
+    "SAPCloudPlatformIntegration"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2024-07-17T15:24:32.826Z",
+   "artifacts": 10,
+   "byType": {
+    "IFlow": 9,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 10
+   },
+   "byTypeState": {
+    "IFlow|NULL": 9,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPCommerceCloudIntegrationwithSAPS4HANACloud",
+   "displayName": "SAP Commerce Cloud Integration with SAP S/4HANA Cloud",
+   "version": "1.20.4",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPCommerceCloud",
+    "SAPCloudPlatformIntegration"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-07-14T17:08:07.635Z",
+   "artifacts": 17,
+   "byType": {
+    "IFlow": 16,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 17
+   },
+   "byTypeState": {
+    "IFlow|NULL": 16,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPCommerceCloudIntegrationwithSAPS4HANAService",
+   "displayName": "SAP Commerce Cloud Integration with SAP S/4HANA Cloud - Service",
+   "version": "2.1.7",
+   "category": "Integration",
+   "products": [
+    "SAPCommerceCloud",
+    "SAPS4HANACloud",
+    "SAPS4HANAService",
+    "SAPCommerce"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-05-14T15:52:37.985Z",
+   "artifacts": 6,
+   "byType": {
+    "IFlow": 6
+   },
+   "byState": {
+    "NULL": 6
+   },
+   "byTypeState": {
+    "IFlow|NULL": 6
+   }
+  },
+  {
+   "technicalName": "SAPCustomerCheckoutIntegrationwithSAPS4HANACloud",
+   "displayName": "SAP Customer Checkout Integration with SAP S/4HANA Cloud",
+   "version": "1.0.1",
+   "category": "Integration",
+   "products": [
+    "SAPCustomerCheckout",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sales",
+   "modifiedAt": "2025-10-02T11:26:22.276Z",
+   "artifacts": 5,
+   "byType": {
+    "IFlow": 5
+   },
+   "byState": {
+    "NULL": 5
+   },
+   "byTypeState": {
+    "IFlow|NULL": 5
+   }
+  },
+  {
+   "technicalName": "SAPCustomerDataCloudIntegrationwithSAPS4HANACloud",
+   "displayName": "SAP Customer Data Cloud Integration with SAP S/4HANA Cloud",
+   "version": "1.1.5",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPCloudPlatformIntegration",
+    "SAPCustomerDataCloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2024-07-12T15:46:11.820Z",
+   "artifacts": 3,
+   "byType": {
+    "IFlow": 3
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "IFlow|NULL": 3
+   }
+  },
+  {
+   "technicalName": "SAPDocumentandReportingComplianceDirectConnectionforChinaIncomingVATInvoiceGenericTemplates",
+   "displayName": "SAP Document and Reporting Compliance: API Integration for China Incoming VAT Invoice - Generic Templates",
+   "version": "1.2.1",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPCloudPlatformIntegration",
+    "SAPS4HANACloudPrivateEdition",
+    "ThirdParty",
+    "SAPDocumentandReportingCompliance"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2026-05-06T15:39:50.984Z",
+   "artifacts": 3,
+   "byType": {
+    "IFlow": 2,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPDocumentandReportingComplianceDirectConnectionforChinaOutgoingVATInvoiceGenericTemplates",
+   "displayName": "SAP Document and Reporting Compliance: Direct Connection for China Outgoing VAT Invoice - Generic Templates",
+   "version": "1.0.5",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANA",
+    "Government",
+    "SAPDocumentandReportingCompliance",
+    "SAPS4HANACloud",
+    "SAPCloudPlatformIntegrationSuite",
+    "SAPS4HANACloudPrivateEdition"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2026-07-06T16:49:39.074Z",
+   "artifacts": 7,
+   "byType": {
+    "IFlow": 4,
+    "MessageMapping": 2,
+    "ScriptCollection": 1
+   },
+   "byState": {
+    "NULL": 7
+   },
+   "byTypeState": {
+    "IFlow|NULL": 4,
+    "MessageMapping|NULL": 2,
+    "ScriptCollection|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPDocumentandReportingComplianceElectronicInvoicingforChina",
+   "displayName": "[DEPRECATED] SAP Document and Reporting Compliance: Direct Connection for China Outgoing VAT Invoice - Baiwang Templates",
+   "version": "2.2.4",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPCloudPlatformIntegration",
+    "SAPDocumentComplianceinvoicingoptionforChina",
+    "ThirdParty"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2025-04-23T16:39:12.146Z",
+   "artifacts": 5,
+   "byType": {
+    "IFlow": 4,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 5
+   },
+   "byTypeState": {
+    "IFlow|NULL": 4,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPDocumentandReportingComplianceVATInvoiceforChinaIncoming",
+   "displayName": "[Deprecated]SAP Document and Reporting Compliance: Electronic Submission for China Incoming VAT Invoice",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "ThirdParty",
+    "SAPS4HANACloudPrivateEdition",
+    "SAPCloudPlatformIntegration",
+    "SAPDocumentandReportingCompliance"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2024-12-23T15:55:21.243Z",
+   "artifacts": 0,
+   "byType": {},
+   "byState": {},
+   "byTypeState": {}
+  },
+  {
+   "technicalName": "SAPDocumentComplianceElectronicInvoicingoptionforChina6.0",
+   "displayName": "[DEPRECATED] SAP Document Compliance:Electronic Invoicing option for China 6.0",
+   "version": "1.8.0",
+   "category": "Integration",
+   "products": [
+    "ThirdParty",
+    "SAPCloudPlatformIntegration",
+    "SAPDocumentComplianceinvoicingoptionforChina",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2025-04-23T16:36:52.153Z",
+   "artifacts": 7,
+   "byType": {
+    "IFlow": 5,
+    "ValueMapping": 2
+   },
+   "byState": {
+    "NULL": 7
+   },
+   "byTypeState": {
+    "IFlow|NULL": 5,
+    "ValueMapping|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPeInvoiceIndia",
+   "displayName": "SAP ERP Integration with GST Suvidha Provider for India e-Invoice",
+   "version": "1.0.7",
+   "category": "Integration",
+   "products": [
+    "SAPERPoptionforedocumentprocessing",
+    "SAPERP",
+    "GovernmentIndiaGSTSuvidhaProvider",
+    "SAPS4HANACloud",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": "Supply Chain,Service,Sales,Manufacturing",
+   "modifiedAt": "2021-12-13T11:06:26.576Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPEntitlementManagementIntegrationwithSAPS4HANACloud",
+   "displayName": "SAP Entitlement Management Integration with SAP S/4HANA Cloud",
+   "version": "1.0.1",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPEntitlementManagement"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2021-12-13T09:57:25.100Z",
+   "artifacts": 6,
+   "byType": {
+    "IFlow": 5,
+    "ScriptCollection": 1
+   },
+   "byState": {
+    "NULL": 6
+   },
+   "byTypeState": {
+    "IFlow|NULL": 5,
+    "ScriptCollection|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPERPMasterDataIntegrationWithSAPS4HANACloud",
+   "displayName": "SAP ERP Master Data Integration with SAP S/4HANA Cloud",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPERP",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Manufacturing",
+   "modifiedAt": "2023-01-31T10:55:03.653Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPERPorSAPS4HANAforbankkeyandaddressIntegrationwithSAPS4HANACloud",
+   "displayName": "SAP ERP or SAP S/4HANA for Bank keys and Address Integration with SAP S/4HANA Cloud",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPERP",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2023-02-14T12:49:42.093Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 1,
+    "ScriptCollection": 1
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1,
+    "ScriptCollection|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPeWayBillIndia",
+   "displayName": "SAP ERP Integration with GST Suvidha Provider for India e-Way Bill",
+   "version": "1.0.7",
+   "category": "Integration",
+   "products": [
+    "GovernmentIndiaGSTSuvidhaProvider",
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPERPoptionforedocumentprocessing"
+   ],
+   "lineOfBusiness": "Sales,Manufacturing,Supply Chain,Sourcing and Procurement,Service",
+   "modifiedAt": "2021-12-13T11:13:34.103Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPHybrisCloudforCustomerIntegrationwithSAPS4HANACloud",
+   "displayName": "SAP Cloud for Customer Integration with SAP S/4HANA Cloud",
+   "version": "2411",
+   "category": "Integration",
+   "products": [
+    "SAPCloudforCustomer",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sales",
+   "modifiedAt": "2025-06-19T15:30:41.940Z",
+   "artifacts": 37,
+   "byType": {
+    "IFlow": 36,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 37
+   },
+   "byTypeState": {
+    "IFlow|NULL": 36,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPHybrisMarketingCloudSAPS4HANAEnterpriseCloudIntegration",
+   "displayName": "SAP S/4HANA Cloud Integration with SAP Marketing Cloud",
+   "version": "1.12",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPMarketingCloud"
+   ],
+   "lineOfBusiness": "Marketing",
+   "modifiedAt": "2023-10-04T14:54:54.823Z",
+   "artifacts": 5,
+   "byType": {
+    "IFlow": 3,
+    "ValueMapping": 2
+   },
+   "byState": {
+    "NULL": 5
+   },
+   "byTypeState": {
+    "IFlow|NULL": 3,
+    "ValueMapping|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPHybrisServiceEngagementCenterIntegrationwithSAPS4HANACloud",
+   "displayName": "SAP Customer Engagement Center Integration with SAP ERP, SAP S/4HANA, or SAP S/4HANA Cloud",
+   "version": "1902",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "SAPBusinessSuite",
+    "SAPCustomerEngagementCenter"
+   ],
+   "lineOfBusiness": "Service",
+   "modifiedAt": "2023-02-17T13:49:25.920Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPIBPIntegrationwithSAPS4HANACloud",
+   "displayName": "SAP IBP - Integration with SAP S/4HANA Cloud Public Edition",
+   "version": "1.0.6",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPIntegratedBusinessPlanningforSupplyChain",
+    "SAPIntegratedBusinessPlanning"
+   ],
+   "lineOfBusiness": "Supply Chain",
+   "modifiedAt": "2026-07-31T15:50:07.070Z",
+   "artifacts": 6,
+   "byType": {
+    "IFlow": 6
+   },
+   "byState": {
+    "NULL": 6
+   },
+   "byTypeState": {
+    "IFlow|NULL": 6
+   }
+  },
+  {
+   "technicalName": "SAPJustinTimeProcessforSuppliersIntegrationwithSAPS4HANACloud",
+   "displayName": "SAP S/4HANA Cloud Integration with SAP ERP or SAP S/4HANA - Just-In-Time Supply",
+   "version": "1.0.2",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPERP"
+   ],
+   "lineOfBusiness": "Supply Chain,Manufacturing",
+   "modifiedAt": "2021-12-13T11:24:24.096Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPMasterDataGovernanceonSAPS4HANACloudPublicEditionIntegrationwithCorporateDataQuality",
+   "displayName": "SAP Master Data Governance on SAP S/4HANA Cloud Public Edition Integration with Corporate Data Quality",
+   "version": "1.1.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPMasterDataGovernance",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-07-15T07:34:45.254Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPPrismIntegrationwithDataProducers",
+   "displayName": "Procurement Data Warehouse Integration with Data Products",
+   "version": "1.0.3",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANA",
+    "SAPERP",
+    "SAPS4HANACloud",
+    "SAPHANA"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2025-12-02T15:50:22.670Z",
+   "artifacts": 3,
+   "byType": {
+    "IFlow": 2,
+    "ScriptCollection": 1
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2,
+    "ScriptCollection|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPProcessAutomationIntegrationwithSAPS4HANACloudSampleContent",
+   "displayName": "Sample Content for SAP Process Automation Integration with SAP S/4HANA Cloud",
+   "version": "1.0.1",
+   "category": "Integration",
+   "products": [
+    "SAPProcessAutomation",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2022-02-21T09:05:08.186Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 4
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 4
+   }
+  },
+  {
+   "technicalName": "SAPProductToPIMSynchAcceleratorBatch",
+   "displayName": "SAP ERP integration with Akeneo PIM",
+   "version": "1.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANA",
+    "AkeneoPIM",
+    "SAPERP",
+    "SAPS4HANACloudPrivateEdition",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-04-13T15:27:57.375Z",
+   "artifacts": 3,
+   "byType": {
+    "IFlow": 3
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "IFlow|NULL": 3
+   }
+  },
+  {
+   "technicalName": "SAPProjectIntelligenceNetworkforConstructionIntegrationwithSAPS4HANA",
+   "displayName": "Project Management Capability in SAP Project and Resource Management Integration with SAP S/4HANA Cloud",
+   "version": "1.1.3",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAP Project and Resource Management",
+    "SAPS4HANA",
+    "SAPProjectandResourceManagement"
+   ],
+   "lineOfBusiness": "Grid Operations and Maintenance,R&D Engineering,Plant Operations and Maintenance,Sourcing and Procurement,Service,Manufacturing,Supply Chain,Asset Management,Maintenance and Engineering,Finance",
+   "modifiedAt": "2024-07-19T16:06:40.706Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPReturnablePackagingManagementIntegrationWithSAPS4HANACloud",
+   "displayName": "SAP Returnable Packaging Management Integration with SAP S/4HANA Cloud",
+   "version": "1.10.19",
+   "category": "Integration",
+   "products": [
+    "SAPReturnablePackagingManagement",
+    "SAPS4HANACloud",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": "Supply Chain",
+   "modifiedAt": "2026-07-20T19:12:19.219Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAAgreementsandPromotionsIntegrationwithPricefx",
+   "displayName": "SAP S/4HANA Agreements and Promotions Integration with Pricefx",
+   "version": "2.0.0",
+   "category": "Integration",
+   "products": [
+    "Pricefx",
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPCloudPlatformIntegrationSuite"
+   ],
+   "lineOfBusiness": "Sales,Marketing,Commerce",
+   "modifiedAt": "2025-01-31T16:12:30.730Z",
+   "artifacts": 6,
+   "byType": {
+    "IFlow": 6
+   },
+   "byState": {
+    "NULL": 6
+   },
+   "byTypeState": {
+    "IFlow|NULL": 6
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAAgreementsandPromotionsMappingwithPricefx",
+   "displayName": "SAP S/4HANA Agreements and Promotions Mapping with Pricefx",
+   "version": "1.1.0",
+   "category": "Integration",
+   "products": [
+    "SAPCloudPlatformIntegrationSuite",
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "Pricefx"
+   ],
+   "lineOfBusiness": "Marketing,Sales,Commerce",
+   "modifiedAt": "2025-01-22T15:58:50.043Z",
+   "artifacts": 9,
+   "byType": {
+    "IFlow": 2,
+    "MessageMapping": 7
+   },
+   "byState": {
+    "NULL": 9
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2,
+    "MessageMapping|NULL": 7
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAandSAPS4HANACloudIntegrationwithSAPCloudPlatformProcessVisibility",
+   "displayName": "SAP S/4HANA and SAP S/4HANA Cloud Integration with SAP Process Visibility service.",
+   "version": "1.0.1",
+   "category": "Integration",
+   "products": [
+    "SAPCloudPlatformProcessVisibility",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2021-12-13T11:24:13.136Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPS4HANABillingDocumentIntegrationwithPricefx",
+   "displayName": "SAP S/4HANA Billing Document Integration with Pricefx",
+   "version": "2.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPCloudPlatformIntegrationSuite",
+    "Pricefx",
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "SAPS4HANACloudPrivateEdition"
+   ],
+   "lineOfBusiness": "Commerce,Marketing,Sales",
+   "modifiedAt": "2026-02-05T16:03:30.405Z",
+   "artifacts": 3,
+   "byType": {
+    "IFlow": 3
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "IFlow|NULL": 3
+   }
+  },
+  {
+   "technicalName": "SAPS4HANABillingDocumentMappingwithPricefx",
+   "displayName": "SAP S/4HANA Billing Document Mapping with Pricefx",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "Pricefx",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": "Sales,Commerce,Marketing",
+   "modifiedAt": "2023-11-07T17:03:47.053Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 1,
+    "MessageMapping": 1
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1,
+    "MessageMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudBankStatementImportfromFileServer",
+   "displayName": "SAP S/4HANA Cloud Integration with File Server for Bank Statement Import",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "ThirdParty"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2022-05-09T09:42:50.826Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudIntegrationwithSAPFieldServiceManagement",
+   "displayName": "Integration of SAP S/4HANA Cloud with SAP Field Service Management",
+   "version": "2608",
+   "category": "Integration",
+   "products": [
+    "SAPFieldServiceManagement",
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "SAPCloudPlatformIntegration",
+    "SAPCloudPlatformIntegrationSuite",
+    "SAPAssetIntelligenceNetwork"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-08-18T18:47:43.734Z",
+   "artifacts": 27,
+   "byType": {
+    "IFlow": 25,
+    "ValueMapping": 2
+   },
+   "byState": {
+    "NULL": 27
+   },
+   "byTypeState": {
+    "IFlow|NULL": 25,
+    "ValueMapping|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudIntegrationwithSAPSuccessFactorsEmployeeCentralCurrencyExchangeratesreplication",
+   "displayName": "SAP S/4HANA Cloud Integration with SAP SuccessFactors Employee Central",
+   "version": "1.1.0",
+   "category": "Integration",
+   "products": [
+    "SAP S/4HANA Cloud",
+    "SAP SuccessFactors Employee Central",
+    "SAPSuccessFactorsEmployeeCentral",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Human Resources",
+   "modifiedAt": "2021-12-13T11:24:52.920Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudIntegrationwithServiceNow",
+   "displayName": "SAP S/4HANA Cloud Integration with ServiceNow",
+   "version": "1.0.1",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "ServiceNow"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2023-12-18T14:23:27.000Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudIntegrationwithShopify",
+   "displayName": "SAP S/4HANA Cloud Public Edition Integration with Shopify",
+   "version": "1.1.3",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "Shopify",
+    "SAPCloudPlatformIntegrationSuite"
+   ],
+   "lineOfBusiness": "Commerce",
+   "modifiedAt": "2026-08-24T14:14:13.073Z",
+   "artifacts": 11,
+   "byType": {
+    "IFlow": 11
+   },
+   "byState": {
+    "NULL": 11
+   },
+   "byTypeState": {
+    "IFlow|NULL": 11
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudPublicEditionIntegrationwithBigCommerce",
+   "displayName": "SAP S/4HANA Cloud Public Edition Integration with BigCommerce",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "BigCommerce",
+    "SAPCloudPlatformIntegration",
+    "SAPCloudPlatformIntegrationSuite",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Commerce",
+   "modifiedAt": "2025-09-01T09:33:24.903Z",
+   "artifacts": 10,
+   "byType": {
+    "IFlow": 10
+   },
+   "byState": {
+    "NULL": 10
+   },
+   "byTypeState": {
+    "IFlow|NULL": 10
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACloudPublicEditionIntegrationwithJira",
+   "displayName": "SAP S/4HANA Cloud Public Edition Integration with Jira",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "JIRA",
+    "AtlassianJira",
+    "SAPCloudPlatformIntegration"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-04-07T16:06:10.862Z",
+   "artifacts": 6,
+   "byType": {
+    "IFlow": 5,
+    "MessageMapping": 1
+   },
+   "byState": {
+    "NULL": 6
+   },
+   "byTypeState": {
+    "IFlow|NULL": 5,
+    "MessageMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACustomerMasterIntegrationwithPricefx",
+   "displayName": "SAP S/4HANA Customer Master Integration with Pricefx",
+   "version": "4.0.0",
+   "category": "Integration",
+   "products": [
+    "Pricefx",
+    "SAPCloudPlatformIntegrationSuite",
+    "SAPEventMesh",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Commerce,Marketing,Sales",
+   "modifiedAt": "2025-09-18T15:51:58.436Z",
+   "artifacts": 32,
+   "byType": {
+    "IFlow": 32
+   },
+   "byState": {
+    "NULL": 32
+   },
+   "byTypeState": {
+    "IFlow|NULL": 32
+   }
+  },
+  {
+   "technicalName": "SAPS4HANACustomerMasterMappingwithPricefx",
+   "displayName": "SAP S/4HANA Customer Master Mapping with Pricefx",
+   "version": "1.1.0",
+   "category": "Integration",
+   "products": [
+    "SAPCloudPlatformIntegrationSuite",
+    "SAPS4HANA",
+    "Pricefx",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Commerce,Marketing,Sales",
+   "modifiedAt": "2024-07-05T10:38:49.556Z",
+   "artifacts": 14,
+   "byType": {
+    "MessageMapping": 9,
+    "ValueMapping": 5
+   },
+   "byState": {
+    "NULL": 14
+   },
+   "byTypeState": {
+    "MessageMapping|NULL": 9,
+    "ValueMapping|NULL": 5
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAExchangeRateIntegrationwithPricefx",
+   "displayName": "SAP S/4HANA Exchange Rate Integration with Pricefx",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "Pricefx",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Commerce,Marketing,Sales",
+   "modifiedAt": "2025-09-15T14:54:52.053Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 4
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 4
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAExchangeRateMappingwithPricefx",
+   "displayName": "SAP S/4HANA Exchange Rate Mapping with Pricefx",
+   "version": "1.0.1",
+   "category": "Integration",
+   "products": [
+    "Pricefx",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Commerce,Marketing,Sales",
+   "modifiedAt": "2026-02-05T16:03:01.516Z",
+   "artifacts": 4,
+   "byType": {
+    "MessageMapping": 4
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "MessageMapping|NULL": 4
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAforcentralprocurementCentralContractDistributionAndConsumptionwithThirdPartySystem",
+   "displayName": "SAP S/4HANA Central Purchase Contract Integration with Third Party System",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "ThirdParty",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sourcing and Procurement",
+   "modifiedAt": "2022-03-03T13:13:51.286Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAforcentralprocurementCentralPurchasingIntegrationwithThirdPartySystem",
+   "displayName": "SAP S/4HANA for central procurement – Central Purchasing Integration with Third Party System",
+   "version": "1.0.3",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPS4HANAforcentralprocurement",
+    "ThirdParty"
+   ],
+   "lineOfBusiness": "Sourcing and Procurement",
+   "modifiedAt": "2023-05-11T09:34:06.710Z",
+   "artifacts": 6,
+   "byType": {
+    "IFlow": 6
+   },
+   "byState": {
+    "NULL": 6
+   },
+   "byTypeState": {
+    "IFlow|NULL": 6
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAforEHSWorkplaceSafetyIntegrationwithSAPSuccessFactorsLearning",
+   "displayName": "SAP S/4HANA for EHS Workplace Safety Integration with SAP SuccessFactors Learning",
+   "version": "1.0.1",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "SAPS4HANACloudPrivateEdition",
+    "SAPSuccessFactorsLearning"
+   ],
+   "lineOfBusiness": "Manufacturing,Asset Management,Sustainability",
+   "modifiedAt": "2026-03-20T15:36:24.628Z",
+   "artifacts": 5,
+   "byType": {
+    "IFlow": 5
+   },
+   "byState": {
+    "NULL": 5
+   },
+   "byTypeState": {
+    "IFlow|NULL": 5
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAforEHSWorkplaceSafetyIntegrationwithThirdPartySystems",
+   "displayName": "SAP S/4HANA for EHS Workplace Safety Integration with Third-Party Systems",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "ThirdParty",
+    "SAPS4HANACloudPrivateEdition",
+    "SAPS4HANACloud",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": "Manufacturing,Asset Management,Sustainability",
+   "modifiedAt": "2024-03-21T15:25:37.926Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAIntegrationwithAvalaraAvataxSalesandUseTax",
+   "displayName": "SAP S/4HANA Integration with Avalara Avatax Sales and Use Tax",
+   "version": "1.7.2",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANA",
+    "AvalaraAvaTax",
+    "AvalaraConnector",
+    "AvalaraLogger",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Commerce,Finance,Sales",
+   "modifiedAt": "2026-02-27T17:00:50.706Z",
+   "artifacts": 9,
+   "byType": {
+    "IFlow": 8,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 9
+   },
+   "byTypeState": {
+    "IFlow|NULL": 8,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAIntegrationwithAvalaraSolutionSuite",
+   "displayName": "SAP S/4HANA Integration with Avalara Solution Suite",
+   "version": "1.4.0",
+   "category": "Integration",
+   "products": [
+    "AvalaraConnector",
+    "SAPS4HANA",
+    "AvalaraLogger",
+    "SAPS4HANACloudPrivateEdition",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-01-14T16:26:14.106Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 3,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 3,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAIntegrationwithExternalTaxCalculationEngines",
+   "displayName": "SAP S/4HANA Integration with External Tax Calculation Engines",
+   "version": "1.0.2",
+   "category": "Integration",
+   "products": [
+    "ThirdParty",
+    "SAPS4HANACloud",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2022-06-24T12:43:11.416Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAIntegrationwithPortugalTaxAuthority",
+   "displayName": "SAP S/4HANA Integration with Portugal Tax Authority Web Service",
+   "version": "1.0.2",
+   "category": "Integration",
+   "products": [
+    "GovernmentPortugal",
+    "SAPERP",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Finance,Sales",
+   "modifiedAt": "2025-10-09T17:25:06.846Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAintegrationwithSAPFieldglass",
+   "displayName": "SAP S/4HANA Integration with SAP Fieldglass",
+   "version": "3.0.31",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPFieldglass"
+   ],
+   "lineOfBusiness": "Sourcing and Procurement,Finance",
+   "modifiedAt": "2026-05-06T15:29:45.794Z",
+   "artifacts": 27,
+   "byType": {
+    "IFlow": 25,
+    "ValueMapping": 2
+   },
+   "byState": {
+    "NULL": 27
+   },
+   "byTypeState": {
+    "IFlow|NULL": 25,
+    "ValueMapping|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAIntegrationwithSAPFieldglassExtensions",
+   "displayName": "SAP S/4HANA Integration with SAP Fieldglass - Extension Sub-flows",
+   "version": "1.0.1",
+   "category": "Integration",
+   "products": [
+    "SAPCloudPlatformIntegration",
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPFieldglass"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-05-07T16:44:42.280Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 4
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 4
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAIntegrationwithSAPSuccessFactorsIncentiveManagement",
+   "displayName": "SAP S/4HANA Integration with SAP SuccessFactors Incentive Management",
+   "version": "1.0.8",
+   "category": "Integration",
+   "products": [
+    "SAPCommissions",
+    "SAPS4HANACloud",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2024-10-24T15:14:11.350Z",
+   "artifacts": 9,
+   "byType": {
+    "IFlow": 9
+   },
+   "byState": {
+    "NULL": 9
+   },
+   "byTypeState": {
+    "IFlow|NULL": 9
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAIntegrationwithSAPWorkflowManagementAssetCreationandConfirmation",
+   "displayName": "SAP Build Process Automation Integration with SAP S/4HANA to manage Asset Creation Requests",
+   "version": "1.1.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANAAssetManagement",
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPProcessAutomation"
+   ],
+   "lineOfBusiness": "Asset Management",
+   "modifiedAt": "2022-11-28T11:10:31.260Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAIntegrationwithSAPWorkflowManagementCreditMemo",
+   "displayName": "SAP S/4HANA Integration with SAP Build Process Automation for Credit Memo",
+   "version": "1.1.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPProcessAutomation",
+    "SAPS4HANA",
+    "SAPCloudPlatformWorkflowManagement"
+   ],
+   "lineOfBusiness": "Sales",
+   "modifiedAt": "2022-11-28T09:19:46.033Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAIntegrationwithSAPWorkflowManagementManageSalesOrder",
+   "displayName": "SAP S/4HANA Integration with SAP Build Process Automation for Sales Order",
+   "version": "1.1.1",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPProcessAutomation"
+   ],
+   "lineOfBusiness": "Sales",
+   "modifiedAt": "2026-01-20T16:16:58.676Z",
+   "artifacts": 5,
+   "byType": {
+    "IFlow": 5
+   },
+   "byState": {
+    "NULL": 5
+   },
+   "byTypeState": {
+    "IFlow|NULL": 5
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAPriceConditionIntegrationwithPricefx",
+   "displayName": "SAP S/4HANA Price Condition Integration with Pricefx",
+   "version": "9.0.2",
+   "category": "Integration",
+   "products": [
+    "SAPCloudPlatformIntegrationSuite",
+    "Pricefx",
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "SAPS4HANACloudPrivateEdition",
+    "SAPEventMesh"
+   ],
+   "lineOfBusiness": "Marketing,Commerce,Sales",
+   "modifiedAt": "2026-06-17T16:04:55.153Z",
+   "artifacts": 62,
+   "byType": {
+    "IFlow": 62
+   },
+   "byState": {
+    "NULL": 62
+   },
+   "byTypeState": {
+    "IFlow|NULL": 62
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAPriceConditionMappingwithPricefx",
+   "displayName": "SAP S/4HANA Price Condition Mapping with Pricefx",
+   "version": "5.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPCloudPlatformIntegrationSuite",
+    "Pricefx",
+    "SAPS4HANACloud",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": "Marketing,Sales,Commerce",
+   "modifiedAt": "2026-02-05T15:51:11.490Z",
+   "artifacts": 38,
+   "byType": {
+    "IFlow": 6,
+    "MessageMapping": 31,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 38
+   },
+   "byTypeState": {
+    "IFlow|NULL": 6,
+    "MessageMapping|NULL": 31,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAPricingProcedureIntegrationwithPricefx",
+   "displayName": "SAP S/4HANA Pricing Procedure Integration with Pricefx",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "Pricefx",
+    "SAPCloudPlatformIntegrationSuite",
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPS4HANACloudPrivateEdition"
+   ],
+   "lineOfBusiness": "Commerce,Marketing,Sales",
+   "modifiedAt": "2026-02-06T15:23:27.889Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAPricingProcedureMappingwithPricefx",
+   "displayName": "SAP S/4HANA Pricing Procedure Mapping with Pricefx",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "Pricefx",
+    "SAPS4HANA",
+    "SAPS4HANACloudPrivateEdition",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Commerce,Marketing,Sales",
+   "modifiedAt": "2026-02-05T15:53:52.002Z",
+   "artifacts": 2,
+   "byType": {
+    "MessageMapping": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "MessageMapping|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAProductMasterMappingwithPricefx",
+   "displayName": "SAP S/4HANA Product Master Mapping with Pricefx",
+   "version": "3.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "Pricefx"
+   ],
+   "lineOfBusiness": "Commerce,Sales,Marketing",
+   "modifiedAt": "2024-08-06T17:16:38.786Z",
+   "artifacts": 19,
+   "byType": {
+    "MessageMapping": 16,
+    "ValueMapping": 3
+   },
+   "byState": {
+    "NULL": 19
+   },
+   "byTypeState": {
+    "MessageMapping|NULL": 16,
+    "ValueMapping|NULL": 3
+   }
+  },
+  {
+   "technicalName": "SAPS4HANASalescontractIntegrationwithPricefx",
+   "displayName": "SAP S/4HANA Sales Contract Integration with Pricefx",
+   "version": "1.1.0",
+   "category": "Integration",
+   "products": [
+    "Pricefx",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Marketing,Sales,Commerce",
+   "modifiedAt": "2025-08-20T16:22:56.186Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPS4HANASalescontractMappingwithPricefx",
+   "displayName": "SAP S/4HANA Sales contract Mapping with Pricefx",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "Pricefx",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Commerce,Sales,Marketing",
+   "modifiedAt": "2023-11-07T17:03:20.530Z",
+   "artifacts": 3,
+   "byType": {
+    "IFlow": 1,
+    "MessageMapping": 2
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1,
+    "MessageMapping|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPS4HANASalesorderIntegrationwithPricefx",
+   "displayName": "SAP S/4HANA Sales Order Integration with Pricefx",
+   "version": "3.0.0",
+   "category": "Integration",
+   "products": [
+    "Pricefx",
+    "SAPCloudPlatformIntegrationSuite",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Marketing,Sales,Commerce",
+   "modifiedAt": "2025-10-09T14:52:38.230Z",
+   "artifacts": 8,
+   "byType": {
+    "IFlow": 8
+   },
+   "byState": {
+    "NULL": 8
+   },
+   "byTypeState": {
+    "IFlow|NULL": 8
+   }
+  },
+  {
+   "technicalName": "SAPS4HANASalesorderMappingwithPricefx",
+   "displayName": "SAP S/4HANA Sales order Mapping with Pricefx",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "Pricefx",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": "Marketing,Sales,Commerce",
+   "modifiedAt": "2023-01-24T11:54:20.560Z",
+   "artifacts": 2,
+   "byType": {
+    "MessageMapping": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "MessageMapping|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAtoSAPWorkflowManagementSalesOrders",
+   "displayName": "SAP S/4HANA Integration with SAP Workflow Management – Sales Order",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sales",
+   "modifiedAt": "2021-12-13T11:13:06.766Z",
+   "artifacts": 3,
+   "byType": {
+    "IFlow": 3
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "IFlow|NULL": 3
+   }
+  },
+  {
+   "technicalName": "SAPS4HANAtoSAPWorkflowManagementSalesQuotations",
+   "displayName": "SAP S/4HANA Integration with SAP Build Process Automation for Sales Quotation",
+   "version": "1.1.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPProcessAutomation"
+   ],
+   "lineOfBusiness": "Sales",
+   "modifiedAt": "2022-11-28T09:45:21.063Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "SAPSalesCloudandSAPServiceCloudVersion2IntegrationforMasterDatawithSAPS4HANACloud",
+   "displayName": "SAP Sales Cloud and SAP Service Cloud Version 2 Integration for Master Data with SAP S/4HANA Cloud Public Edition",
+   "version": "1.0.48",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPSalesCloudandSAPServiceCloudVersion2",
+    "SAPSalesCloudVersion2",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-08-19T17:19:21.405Z",
+   "artifacts": 48,
+   "byType": {
+    "IFlow": 46,
+    "ScriptCollection": 1,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 48
+   },
+   "byTypeState": {
+    "IFlow|NULL": 46,
+    "ScriptCollection|NULL": 1,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPSalesCloudVersion2IntegrationforSalesProcesseswithSAPS4HANACloudPublicEdition",
+   "displayName": "SAP Sales Cloud Version 2 Integration for Sales Processes with SAP S/4HANA Cloud Public Edition",
+   "version": "1.0.17",
+   "category": "Integration",
+   "products": [
+    "SAPSalesCloudVersion2",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-08-24T14:03:33.139Z",
+   "artifacts": 13,
+   "byType": {
+    "IFlow": 12,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 13
+   },
+   "byTypeState": {
+    "IFlow|NULL": 12,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPServiceCloudIntegrationwithSAPS4HANAOnPremise",
+   "displayName": "SAP Service Cloud Version 2 Integration with SAP S/4HANA",
+   "version": "2608",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANA",
+    "SAPSalesCloudandSAPServiceCloudVersion2",
+    "SAPServiceCloud",
+    "SAPHANA",
+    "SAPS4HANACloud",
+    "SAPCloudforCustomer"
+   ],
+   "lineOfBusiness": "Service",
+   "modifiedAt": "2026-08-24T14:04:32.420Z",
+   "artifacts": 11,
+   "byType": {
+    "IFlow": 10,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 11
+   },
+   "byTypeState": {
+    "IFlow|NULL": 10,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPServiceCloudVersion2IntegrationforMasterDatawithSAPERP",
+   "displayName": "SAP Sales Cloud and SAP Service Cloud Version 2 Integration for Master Data with SAP ERP",
+   "version": "1.0.71",
+   "category": "Integration",
+   "products": [
+    "SAPERP",
+    "SAPSalesCloudandSAPServiceCloudVersion2",
+    "SAPERPCentralComponent",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Service,Sales",
+   "modifiedAt": "2026-08-20T19:22:53.542Z",
+   "artifacts": 50,
+   "byType": {
+    "IFlow": 48,
+    "ScriptCollection": 1,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 50
+   },
+   "byTypeState": {
+    "IFlow|NULL": 48,
+    "ScriptCollection|NULL": 1,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPSubscriptionBillingIntegrationwithSAPS4HANACloudConvergentInvoicing",
+   "displayName": "SAP Subscription Billing Integration with SAP S/4HANA Cloud Public Edition - Subscription Management with Convergent Invoicing (5IK)",
+   "version": "1.2.25",
+   "category": "Integration",
+   "products": [
+    "SAPSubscriptionBilling",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-03-16T19:44:16.037Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 3,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 3,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPSubscriptionBillingIntegrationwithSAPS4HANACloudProduct",
+   "displayName": "[DEPRECATED] SAP Subscription Billing Integration with SAP S/4HANA Cloud - Product",
+   "version": "1.0.3",
+   "category": "Integration",
+   "products": [
+    "SAPSubscriptionBilling",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2025-05-13T19:05:09.786Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 3,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 3,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPSubscriptionBillingIntegrationwithSAPS4HANACloudSubscriptionBDR",
+   "displayName": "[DEPRECATED] SAP Subscription Billing Integration with SAP S/4HANA Cloud Public Edition - Subscription Management with Sales Billing (57Z)",
+   "version": "1.1.23",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPSubscriptionBilling"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2025-09-17T15:29:33.216Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 3,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 3,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPSuccessFactorsEmployeeCentralIntegrationwithSAPCloudPlatformMasterDataIntegrationWorkforce",
+   "displayName": "SAP SuccessFactors Employee Central Integration with Master Data Integration - Workforce",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPCloudPlatformMasterDataIntegration",
+    "SAPS4HANA",
+    "SAPSuccessFactorsEmployeeCentral",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Human Resources",
+   "modifiedAt": "2021-12-13T11:13:51.186Z",
+   "artifacts": 1,
+   "byType": {
+    "ICD": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "ICD|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPSuccessFactorsEmployeeCentralIntegrationwithSAPS4HANACloudEmployeeavailabilitydatareplication",
+   "displayName": "SAP SuccessFactors - Employee Availability Integration with SAP S/4HANA Cloud",
+   "version": "2.5.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPSuccessFactorsEmployeeCentral"
+   ],
+   "lineOfBusiness": "Human Resources",
+   "modifiedAt": "2023-07-07T09:38:35.480Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPSuccessFactorsEmployeeCentralIntegrationwithSAPS4HANAEmployeeData",
+   "displayName": "SAP SuccessFactors Employee Central Integration with SAP S/4HANA Cloud: Employee Data",
+   "version": "3.2.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPSuccessFactorsEmployeeCentral"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2023-06-14T16:16:15.920Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPSuccessFactorsIntegrationwithThirdPartyEmpJobDeltaChange",
+   "displayName": "SAP SuccessFactors Integration with Third Party - Employee Job Delta Change",
+   "version": "1.0.1",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPSuccessFactorsEmployeeCentral",
+    "ThirdParty"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2023-04-04T14:25:59.843Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 4
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 4
+   }
+  },
+  {
+   "technicalName": "SAPSuccessFactorsWorkforceAvailabilityIntegrationwithSAPS4HANA",
+   "displayName": "SAP SuccessFactors Workforce Availability Integration with SAP S/4HANA",
+   "version": "2.1.1",
+   "category": "Integration",
+   "products": [
+    "SAPCloudPlatformIntegration",
+    "SAPS4HANACloud",
+    "SAPSuccessFactors"
+   ],
+   "lineOfBusiness": "Human Resources",
+   "modifiedAt": "2025-07-25T14:48:17.946Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 3,
+    "ScriptCollection": 1
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 3,
+    "ScriptCollection|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPWorkflowManagementIntegrationwithS4HANADownpaymentCreationandConfirmation",
+   "displayName": "SAP Build Process Automation Integration with SAP S/4HANA for Direct Supplier Down Payment Request",
+   "version": "1.1.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANA",
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPS4HANACloud",
+    "SAPProcessAutomation"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2022-11-28T11:09:44.890Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SAPWorkflowManagementIntegrationwithSAPS4HANABusinessPartnerLock",
+   "displayName": "SAP Build Process Automation Integration with SAP S/4HANA for Supplier Locks",
+   "version": "1.1.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANA",
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPS4HANACloud",
+    "SAPProcessAutomation"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2022-11-28T13:23:32.003Z",
+   "artifacts": 2,
+   "byType": {
+    "IFlow": 2
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "IFlow|NULL": 2
+   }
+  },
+  {
+   "technicalName": "ShopifyIntegrationwithSAPS4HANACloud",
+   "displayName": "Shopify Integration with SAP S/4HANA Cloud",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "Shopify",
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "SAPS4HANACloudPrivateEdition"
+   ],
+   "lineOfBusiness": "Commerce",
+   "modifiedAt": "2024-03-20T15:24:55.073Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SNIsElectronicInvoicing",
+   "displayName": "SNI's Electronic Invoicing for Turkey with SAP S/4HANA & SAP S/4HANA Cloud",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "GovernmentTurkey",
+    "SNIeInvoicingCloud",
+    "SAPS4HANACloud",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2022-03-17T12:37:14.693Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "SPSCommerceSupplierIntegrationwithSAPS4HANAPublicCloud",
+   "displayName": "SPS Commerce Supplier Integration with SAP S/4HANA Public Cloud",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPCloudPlatformIntegrationSuite",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Supply Chain,Sourcing and Procurement,Commerce",
+   "modifiedAt": "2025-09-09T15:40:18.100Z",
+   "artifacts": 13,
+   "byType": {
+    "IFlow": 8,
+    "ScriptCollection": 1,
+    "ValueMapping": 4
+   },
+   "byState": {
+    "NULL": 13
+   },
+   "byTypeState": {
+    "IFlow|NULL": 8,
+    "ScriptCollection|NULL": 1,
+    "ValueMapping|NULL": 4
+   }
+  },
+  {
+   "technicalName": "SuccessFactorsEmployeeCentralIntegrationwithSAPS4HANAcloudedition",
+   "displayName": "SAP SuccessFactors Employee Central Integration with SAP S/4HANA Cloud",
+   "version": "2.3.0",
+   "category": "Integration",
+   "products": [
+    "SAP SuccessFactors Employee Central",
+    "SAP S/4HANA Cloud",
+    "SAPSuccessFactorsEmployeeCentral",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Human Resources",
+   "modifiedAt": "2021-12-13T11:24:27.176Z",
+   "artifacts": 3,
+   "byType": {
+    "IFlow": 3
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "IFlow|NULL": 3
+   }
+  },
+  {
+   "technicalName": "ThirdPartyIntegrationforCostAllocationwithSAPRealEstateManagement",
+   "displayName": "Third Party Integration for Cost Allocation with SAP Real Estate Management",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "ThirdParty"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2025-01-16T16:04:44.696Z",
+   "artifacts": 1,
+   "byType": {
+    "IFlow": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1
+   }
+  },
+  {
+   "technicalName": "ThirdpartyintegrationwithSAPDocumentManagementService",
+   "displayName": "Third party integration with SAP Document Management Service",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "SAPDocumentManagementservice",
+    "ThirdParty",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2024-07-29T15:17:46.006Z",
+   "artifacts": 3,
+   "byType": {
+    "IFlow": 3
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "IFlow|NULL": 3
+   }
+  },
+  {
+   "technicalName": "ThomsonReutersONESOURCEIndirectTaxIntegrationwithSAPS4HANACloudforU.S.",
+   "displayName": "Thomson Reuters ONESOURCE Indirect Tax Integration with SAP S/4HANA Cloud for U.S.",
+   "version": "1.0",
+   "category": "Integration",
+   "products": [
+    "ONESOURCE Determination",
+    "SAPS4HANACloud",
+    "ONESOURCE"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2023-09-25T13:52:24.716Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 4
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 4
+   }
+  },
+  {
+   "technicalName": "Twenty5IntegrationwithSAPS4HANACloud",
+   "displayName": "Twenty5 Integration with SAP S/4HANA Cloud",
+   "version": "1.0.0",
+   "category": "Integration",
+   "products": [
+    "Twenty5",
+    "SAPS4HANACloud",
+    "SAPS4HANA"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2024-06-11T15:05:47.696Z",
+   "artifacts": 3,
+   "byType": {
+    "IFlow": 1,
+    "ScriptCollection": 1,
+    "ValueMapping": 1
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "IFlow|NULL": 1,
+    "ScriptCollection|NULL": 1,
+    "ValueMapping|NULL": 1
+   }
+  },
+  {
+   "technicalName": "VATNumberValidation",
+   "displayName": "Integrate Online Validation",
+   "version": "1.1.6",
+   "category": "Integration",
+   "products": [
+    "SAPCloudPlatformIntegrationSuite",
+    "SAPCloudPlatform",
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "ThirdParty",
+    "SAPERP",
+    "SAPS4HANACloudPrivateEdition",
+    "SAPS4HANAFinance"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-01-30T15:46:39.576Z",
+   "artifacts": 4,
+   "byType": {
+    "IFlow": 4
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "IFlow|NULL": 4
+   }
+  },
+  {
+   "technicalName": "VertexTaxIntegrationFlows",
+   "displayName": "Tax integration with SAP S/4HANA Cloud for USA by Vertex",
+   "version": "2607",
+   "category": "Integration",
+   "products": [
+    "SAPS4HANACloud",
+    "VertexCloud"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2026-07-29T17:51:26.111Z",
+   "artifacts": 12,
+   "byType": {
+    "IFlow": 12
+   },
+   "byState": {
+    "NULL": 12
+   },
+   "byTypeState": {
+    "IFlow|NULL": 12
+   }
+  },
+  {
+   "technicalName": "assetcreation.assetcreation",
+   "displayName": "Manage Asset Creation Requests",
+   "version": "2111 (3.0.0)",
+   "category": "LiveProcess",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPS4HANAAssetManagement",
+    "SAPProcessAutomation"
+   ],
+   "lineOfBusiness": "Asset Management,Finance,Manufacturing,R&D Engineering",
+   "modifiedAt": "2025-03-12T17:35:37.553Z",
+   "artifacts": 4,
+   "byType": {
+    "BRProject": 2,
+    "Process": 1,
+    "VisibilityScenario": 1
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "BRProject|NULL": 2,
+    "Process|NULL": 1,
+    "VisibilityScenario|NULL": 1
+   }
+  },
+  {
+   "technicalName": "businesspartnercreationapprovalprocess",
+   "displayName": "Business Partner Creation Approval Process",
+   "version": "2104 (3.0.1)",
+   "category": "LiveProcess",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPProcessAutomation"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2025-02-13T15:39:33.536Z",
+   "artifacts": 3,
+   "byType": {
+    "BRProject": 1,
+    "Process": 1,
+    "VisibilityScenario": 1
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "BRProject|NULL": 1,
+    "Process|NULL": 1,
+    "VisibilityScenario|NULL": 1
+   }
+  },
+  {
+   "technicalName": "businesspartnerpaymentdatachangeapproval",
+   "displayName": "Business Partner Payment Data Change Approval",
+   "version": "2006 (3.0.0)",
+   "category": "LiveProcess",
+   "products": [
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPUI5",
+    "SAPS4HANACloud",
+    "SAPProcessAutomation"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2025-02-13T16:10:18.630Z",
+   "artifacts": 3,
+   "byType": {
+    "BRProject": 1,
+    "Process": 1,
+    "VisibilityScenario": 1
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "BRProject|NULL": 1,
+    "Process|NULL": 1,
+    "VisibilityScenario|NULL": 1
+   }
+  },
+  {
+   "technicalName": "com.sap.content.arcrr.managecustomerrefundrequest",
+   "displayName": "Manage Customer Refund Request",
+   "version": "2201 (3.0.0)",
+   "category": "LiveProcess",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPProcessAutomation"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2025-03-12T16:10:14.060Z",
+   "artifacts": 4,
+   "byType": {
+    "BRProject": 2,
+    "Process": 1,
+    "VisibilityScenario": 1
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "BRProject|NULL": 2,
+    "Process|NULL": 1,
+    "VisibilityScenario|NULL": 1
+   }
+  },
+  {
+   "technicalName": "com.sap.content.cnclinv.cancelcustomerinvoice",
+   "displayName": "Cancel Customer Invoice",
+   "version": "2202 (3.0.0)",
+   "category": "LiveProcess",
+   "products": [
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPS4HANACloud",
+    "SAPS4HANA",
+    "SAPProcessAutomation"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2025-02-13T16:02:29.766Z",
+   "artifacts": 4,
+   "byType": {
+    "BRProject": 2,
+    "Process": 1,
+    "VisibilityScenario": 1
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "BRProject|NULL": 2,
+    "Process|NULL": 1,
+    "VisibilityScenario|NULL": 1
+   }
+  },
+  {
+   "technicalName": "com.sap.content.custcontrchng",
+   "displayName": "Customer Contract Change",
+   "version": "2203 (3.0.0)",
+   "category": "LiveProcess",
+   "products": [
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPS4HANACloud",
+    "SAPProcessAutomation"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-02-06T16:04:57.486Z",
+   "artifacts": 3,
+   "byType": {
+    "BRProject": 1,
+    "Process": 1,
+    "VisibilityScenario": 1
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "BRProject|NULL": 1,
+    "Process|NULL": 1,
+    "VisibilityScenario|NULL": 1
+   }
+  },
+  {
+   "technicalName": "com.sap.content.overtimesplit",
+   "displayName": "Automatic Overtime Split",
+   "version": "2203 (3.0.0)",
+   "category": "LiveProcess",
+   "products": [
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPS4HANACloud",
+    "SAPProcessAutomation"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-02-06T16:03:18.574Z",
+   "artifacts": 3,
+   "byType": {
+    "BRProject": 1,
+    "Process": 1,
+    "VisibilityScenario": 1
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "BRProject|NULL": 1,
+    "Process|NULL": 1,
+    "VisibilityScenario|NULL": 1
+   }
+  },
+  {
+   "technicalName": "com.sap.content.pmordersdatechangenotif",
+   "displayName": "Plant Maintenance Order Date Change Notification",
+   "version": "2109 (3.0.0)",
+   "category": "LiveProcess",
+   "products": [
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPProcessAutomation",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Plant Operations and Maintenance",
+   "modifiedAt": "2025-08-11T11:11:34.296Z",
+   "artifacts": 3,
+   "byType": {
+    "BRProject": 1,
+    "Process": 1,
+    "VisibilityScenario": 1
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "BRProject|NULL": 1,
+    "Process|NULL": 1,
+    "VisibilityScenario|NULL": 1
+   }
+  },
+  {
+   "technicalName": "com.sap.content.s4hanabudgetapproval",
+   "displayName": "Project Budget Approval",
+   "version": "2105 (3.0.2)",
+   "category": "LiveProcess",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPS4HANAforprocurementplanning",
+    "SAPS4HANAFinance",
+    "SAPS4HANAUtilities",
+    "SAPS4HANA",
+    "SAPS4HANAAssetManagementforresourcescheduling",
+    "SAPS4HANAAssetManagement"
+   ],
+   "lineOfBusiness": "Finance,Maintenance and Engineering,Manufacturing",
+   "modifiedAt": "2025-02-13T16:07:12.306Z",
+   "artifacts": 2,
+   "byType": {
+    "BRProject": 1,
+    "VisibilityScenario": 1
+   },
+   "byState": {
+    "NULL": 2
+   },
+   "byTypeState": {
+    "BRProject|NULL": 1,
+    "VisibilityScenario|NULL": 1
+   }
+  },
+  {
+   "technicalName": "com.sap.content.servconnotif",
+   "displayName": "Service Confirmation Notification",
+   "version": "2109 (3.0.0)",
+   "category": "LiveProcess",
+   "products": [
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPProcessAutomation",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Service",
+   "modifiedAt": "2025-08-11T11:07:02.916Z",
+   "artifacts": 3,
+   "byType": {
+    "BRProject": 1,
+    "Process": 1,
+    "VisibilityScenario": 1
+   },
+   "byState": {
+    "NULL": 3
+   },
+   "byTypeState": {
+    "BRProject|NULL": 1,
+    "Process|NULL": 1,
+    "VisibilityScenario|NULL": 1
+   }
+  },
+  {
+   "technicalName": "com.sap.content.sobillblk.managedeliveryandbillingblockinsalesorder",
+   "displayName": "Manage Delivery and Billing Block in Sales Order",
+   "version": "2202 (3.0.1)",
+   "category": "LiveProcess",
+   "products": [
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPProcessAutomation",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2025-08-11T10:58:48.273Z",
+   "artifacts": 4,
+   "byType": {
+    "BRProject": 2,
+    "Process": 1,
+    "VisibilityScenario": 1
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "BRProject|NULL": 2,
+    "Process|NULL": 1,
+    "VisibilityScenario|NULL": 1
+   }
+  },
+  {
+   "technicalName": "com.sap.content.supplierdownpayment.directsupplierdownpaymentrequest",
+   "displayName": "Direct Supplier Down Payment Request",
+   "version": "2112 (3.0.0)",
+   "category": "LiveProcess",
+   "products": [
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPProcessAutomation"
+   ],
+   "lineOfBusiness": "Finance",
+   "modifiedAt": "2025-03-12T16:46:09.806Z",
+   "artifacts": 4,
+   "byType": {
+    "BRProject": 2,
+    "Process": 1,
+    "VisibilityScenario": 1
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "BRProject|NULL": 2,
+    "Process|NULL": 1,
+    "VisibilityScenario|NULL": 1
+   }
+  },
+  {
+   "technicalName": "sap.com.cf.aif.workflowintegrationsample",
+   "displayName": "SAP Application Interface Framework: SAP Workflow Service Integration Sample",
+   "version": "2105 (1.0.0)",
+   "category": "LiveProcess",
+   "products": [
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPS4HANA",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Service",
+   "modifiedAt": "2025-04-15T14:45:55.600Z",
+   "artifacts": 0,
+   "byType": {},
+   "byState": {},
+   "byTypeState": {}
+  },
+  {
+   "technicalName": "sapeventacquisitionforprocessvisibility",
+   "displayName": "SAP S/4HANA and SAP S/4HANA Cloud Event Consumption in SAP Process Visibility service",
+   "version": "1.0 (1.0.1)",
+   "category": "LiveProcess",
+   "products": [
+    "SAPCloudPlatformBusinessRules",
+    "SAPS4HANA",
+    "SAPS4HANACloud",
+    "SAPCloudPlatformWorkflowManagement",
+    "SAPCloudPlatformProcessVisibility"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-02-12T06:06:41.887Z",
+   "artifacts": 1,
+   "byType": {
+    "BRProject": 1
+   },
+   "byState": {
+    "NULL": 1
+   },
+   "byTypeState": {
+    "BRProject|NULL": 1
+   }
+  },
+  {
+   "technicalName": "AssembletoOrderforCloudDeployment",
+   "displayName": "Assemble to Order (Discrete Industries) for Cloud Deployment",
+   "version": "3.0",
+   "category": "Scenarios",
+   "products": [
+    "SAPCommerceCloud",
+    "SAPCommerceCloudsolutionsalesconfiguration",
+    "SAPS4HANACloud",
+    "SAPBusinessNetwork",
+    "SAPDigitalManufacturing",
+    "SAPCloudPlatform",
+    "SAPSuccessFactorsEmployeeCentral"
+   ],
+   "lineOfBusiness": "Manufacturing,Supply Chain",
+   "modifiedAt": "2024-12-20T05:26:27.480Z",
+   "artifacts": 41,
+   "byType": {
+    "Scenario": 41
+   },
+   "byState": {
+    "NULL": 41
+   },
+   "byTypeState": {
+    "Scenario|NULL": 41
+   }
+  },
+  {
+   "technicalName": "CustomerServicetoFieldServiceCloud",
+   "displayName": "Customer Service to Field Service for Cloud Deployment",
+   "version": "2.0",
+   "category": "Scenarios",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPFieldServiceManagement"
+   ],
+   "lineOfBusiness": "Service",
+   "modifiedAt": "2021-12-13T11:06:40.673Z",
+   "artifacts": 7,
+   "byType": {
+    "Scenario": 7
+   },
+   "byState": {
+    "NULL": 7
+   },
+   "byTypeState": {
+    "Scenario|NULL": 7
+   }
+  },
+  {
+   "technicalName": "LeadtoCash",
+   "displayName": "Lead to Cash for Cloud Deployment",
+   "version": "9.0.6",
+   "category": "Scenarios",
+   "products": [
+    "SAPCloudPlatformIntegrationSuite",
+    "SAPS4HANACloud",
+    "SAPFieldServiceManagement",
+    "SAPCommerceCloud",
+    "SAPCloudforCustomer",
+    "SAPSubscriptionBilling",
+    "SAPCPQ",
+    "SAPCustomerDataCloud",
+    "SAPCustomerExperience",
+    "SAPCloudPlatformMasterDataforbusinesspartners",
+    "SAPEmarsysCustomerEngagement"
+   ],
+   "lineOfBusiness": "Commerce,Service,Marketing,Sales",
+   "modifiedAt": "2026-03-23T08:08:32.835Z",
+   "artifacts": 25,
+   "byType": {
+    "Scenario": 25
+   },
+   "byState": {
+    "NULL": 25
+   },
+   "byTypeState": {
+    "Scenario|NULL": 25
+   }
+  },
+  {
+   "technicalName": "MaketoStockforCloudDeployment",
+   "displayName": "Make to Stock (Discrete Industries) for Cloud Deployment",
+   "version": "4.0",
+   "category": "Scenarios",
+   "products": [
+    "SAPSuccessFactorsEmployeeCentral",
+    "SAPBusinessNetwork",
+    "SAPIntegratedBusinessPlanningforSupplyChain",
+    "SAPCloudPlatform",
+    "SAPDigitalManufacturing",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Manufacturing,Supply Chain",
+   "modifiedAt": "2024-12-20T05:24:13.643Z",
+   "artifacts": 36,
+   "byType": {
+    "Scenario": 36
+   },
+   "byState": {
+    "NULL": 36
+   },
+   "byTypeState": {
+    "Scenario|NULL": 36
+   }
+  },
+  {
+   "technicalName": "MaketoStockProcessIndustriesforCloudDeployment",
+   "displayName": "Make to Stock (Process Industries) for Cloud Deployment",
+   "version": "1.0",
+   "category": "Scenarios",
+   "products": [
+    "SAPCloudPlatform",
+    "SAPBusinessNetwork",
+    "SAPDigitalManufacturing",
+    "SAPIntegratedBusinessPlanning",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Supply Chain,Manufacturing",
+   "modifiedAt": "2025-06-25T16:09:42.443Z",
+   "artifacts": 33,
+   "byType": {
+    "Scenario": 33
+   },
+   "byState": {
+    "NULL": 33
+   },
+   "byTypeState": {
+    "Scenario|NULL": 33
+   }
+  },
+  {
+   "technicalName": "NetworkBasedSalesProcessingCloud",
+   "displayName": "Network-Based Sales Processing for Cloud Deployment",
+   "version": "4.0",
+   "category": "Scenarios",
+   "products": [
+    "SAPAriba",
+    "SAPS4HANACloud",
+    "SAPAribaCloudIntegrationGateway"
+   ],
+   "lineOfBusiness": "Sales,Supply Chain",
+   "modifiedAt": "2023-03-10T03:28:05.023Z",
+   "artifacts": 4,
+   "byType": {
+    "Scenario": 4
+   },
+   "byState": {
+    "NULL": 4
+   },
+   "byTypeState": {
+    "Scenario|NULL": 4
+   }
+  },
+  {
+   "technicalName": "SolutionBusinessforCloudDeployment",
+   "displayName": "Solution Business for Cloud Deployment",
+   "version": "5.0",
+   "category": "Scenarios",
+   "products": [
+    "SAPEventMesh",
+    "SAPCPQ",
+    "SAPS4HANACloud",
+    "SAPSubscriptionBilling",
+    "SAPCloudPlatformIntegrationSuite"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2025-01-09T15:20:19.706Z",
+   "artifacts": 13,
+   "byType": {
+    "Scenario": 13
+   },
+   "byState": {
+    "NULL": 13
+   },
+   "byTypeState": {
+    "Scenario|NULL": 13
+   }
+  },
+  {
+   "technicalName": "SourcetoPay",
+   "displayName": "Source to Pay for Cloud Deployment",
+   "version": "6.0",
+   "category": "Scenarios",
+   "products": [
+    "SAPAribaCloudIntegrationGateway",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Sourcing and Procurement",
+   "modifiedAt": "2023-08-17T07:15:30.926Z",
+   "artifacts": 16,
+   "byType": {
+    "Scenario": 16
+   },
+   "byState": {
+    "NULL": 16
+   },
+   "byTypeState": {
+    "Scenario|NULL": 16
+   }
+  },
+  {
+   "technicalName": "SourcetoPaywithCentralProcurement",
+   "displayName": "Source to Pay with Central Procurement for Cloud Deployment",
+   "version": "4.0",
+   "category": "Scenarios",
+   "products": [
+    "SAPAriba",
+    "SAPS4HANAforcentralprocurement",
+    "SAPS4HANACloud",
+    "SAPAribaCloudIntegrationGateway"
+   ],
+   "lineOfBusiness": "Sourcing and Procurement",
+   "modifiedAt": "2023-08-22T12:13:46.780Z",
+   "artifacts": 9,
+   "byType": {
+    "Scenario": 9
+   },
+   "byState": {
+    "NULL": 9
+   },
+   "byTypeState": {
+    "Scenario|NULL": 9
+   }
+  },
+  {
+   "technicalName": "StandardEngineeringDiscreteIndustriesforPublicCloudDeployment",
+   "displayName": "Standard Engineering (Discrete Industries) for Public Cloud Deployment",
+   "version": "2.0",
+   "category": "Scenarios",
+   "products": [
+    "SAPProductLifecycleManagement",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Manufacturing,Supply Chain,R&D Engineering",
+   "modifiedAt": "2025-12-18T15:26:41.633Z",
+   "artifacts": 8,
+   "byType": {
+    "Scenario": 8
+   },
+   "byState": {
+    "NULL": 8
+   },
+   "byTypeState": {
+    "Scenario|NULL": 8
+   }
+  },
+  {
+   "technicalName": "StandardEngineeringProcessIndustriesforPublicCloudDeployment",
+   "displayName": "Standard Engineering (Process Industries) for Public Cloud Deployment",
+   "version": "2.0",
+   "category": "Scenarios",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPProductLifecycleManagement"
+   ],
+   "lineOfBusiness": "R&D Engineering",
+   "modifiedAt": "2025-12-18T15:23:48.253Z",
+   "artifacts": 11,
+   "byType": {
+    "Scenario": 11
+   },
+   "byState": {
+    "NULL": 11
+   },
+   "byTypeState": {
+    "Scenario|NULL": 11
+   }
+  },
+  {
+   "technicalName": "SubscriptionandUsageBusinessforCloudDeployment",
+   "displayName": "Subscription and Usage Business for Cloud Deployment",
+   "version": "4.0",
+   "category": "Scenarios",
+   "products": [
+    "SAPCloudPlatformIntegrationSuite",
+    "SAPCloudPlatformMasterDataIntegration",
+    "SAPEventMesh",
+    "SAPSubscriptionBilling",
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": "Grid Operations and Maintenance,Commerce,Human Resources,Asset Management,Manufacturing,Plant Operations and Maintenance,Marketing,Service,Metering,Sourcing and Procurement,R&D Engineering,Finance,Sales,Supply Chain,Maintenance and Engineering",
+   "modifiedAt": "2024-04-23T16:43:55.196Z",
+   "artifacts": 9,
+   "byType": {
+    "Scenario": 9
+   },
+   "byState": {
+    "NULL": 9
+   },
+   "byTypeState": {
+    "Scenario|NULL": 9
+   }
+  },
+  {
+   "technicalName": "TraveltoReimburseforPublicSectorforCloudDeployment",
+   "displayName": "Travel to Reimburse for Public Sector for Cloud Deployment",
+   "version": "2.0",
+   "category": "Scenarios",
+   "products": [
+    "SAPCloudPlatformMasterDataIntegration",
+    "SAPConcur",
+    "SAPS4HANACloud",
+    "SAPSuccessFactorsEmployeeCentral",
+    "SAPSuccessFactorsEmployeeCentralPayroll"
+   ],
+   "lineOfBusiness": "Finance,Human Resources",
+   "modifiedAt": "2025-07-31T15:30:23.406Z",
+   "artifacts": 15,
+   "byType": {
+    "Scenario": 15
+   },
+   "byState": {
+    "NULL": 15
+   },
+   "byTypeState": {
+    "Scenario|NULL": 15
+   }
+  },
+  {
+   "technicalName": "TWMExternalWorkforce",
+   "displayName": "External Workforce for Cloud Deployment",
+   "version": "4.0.3",
+   "category": "Scenarios",
+   "products": [
+    "SAPCloudPlatformIntegration",
+    "SAPSuccessFactors",
+    "SAPFieldglass",
+    "SAPCloudPlatformMasterDataIntegration",
+    "SAPCloudPlatform",
+    "SAPS4HANACloud",
+    "SAPSuccessFactorsEmployeeCentral"
+   ],
+   "lineOfBusiness": "Human Resources,Service,Sourcing and Procurement",
+   "modifiedAt": "2024-08-08T14:49:00.076Z",
+   "artifacts": 34,
+   "byType": {
+    "Scenario": 34
+   },
+   "byState": {
+    "NULL": 34
+   },
+   "byTypeState": {
+    "Scenario|NULL": 34
+   }
+  },
+  {
+   "technicalName": "TWMHiretoRetire",
+   "displayName": "Hire to Retire for Cloud Deployment",
+   "version": "12.0",
+   "category": "Scenarios",
+   "products": [
+    "SAPSuccessFactors",
+    "SAPCloudPlatform",
+    "SAPS4HANAFinance",
+    "SAPS4HANACloud",
+    "SAPSuccessFactorsEmployeeCentral",
+    "SAPCloudPlatformIntegration"
+   ],
+   "lineOfBusiness": "Finance,Human Resources",
+   "modifiedAt": "2023-04-27T10:46:32.373Z",
+   "artifacts": 35,
+   "byType": {
+    "Scenario": 35
+   },
+   "byState": {
+    "NULL": 35
+   },
+   "byTypeState": {
+    "Scenario|NULL": 35
+   }
+  },
+  {
+   "technicalName": "TWMTraveltoReimburse",
+   "displayName": "Travel to Reimburse for Cloud Deployment",
+   "version": "12.0",
+   "category": "Scenarios",
+   "products": [
+    "SAPS4HANACloud",
+    "SAPSuccessFactorsEmployeeCentralPayroll",
+    "SAPSuccessFactorsEmployeeCentral",
+    "SAPCloudPlatformMasterDataIntegration",
+    "SAPConcur"
+   ],
+   "lineOfBusiness": "Finance,Human Resources",
+   "modifiedAt": "2024-07-31T15:14:29.166Z",
+   "artifacts": 12,
+   "byType": {
+    "Scenario": 12
+   },
+   "byState": {
+    "NULL": 12
+   },
+   "byTypeState": {
+    "Scenario|NULL": 12
+   }
+  },
+  {
+   "technicalName": "S4HANACloudBADI",
+   "displayName": "SAP S/4HANA Cloud Public Edition Business Add-Ins",
+   "version": "2608",
+   "category": "SteamPunk",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-07-15T05:57:32.091Z",
+   "artifacts": 1715,
+   "byType": {
+    "BADI": 1715
+   },
+   "byState": {
+    "DEPRECATED": 17,
+    "RELEASED": 1698
+   },
+   "byTypeState": {
+    "BADI|DEPRECATED": 17,
+    "BADI|RELEASED": 1698
+   }
+  },
+  {
+   "technicalName": "S4HANACloudBOInterface",
+   "displayName": "SAP S/4HANA Cloud Public Edition Business Object Interfaces",
+   "version": "2608",
+   "category": "SteamPunk",
+   "products": [
+    "SAPS4HANACloud"
+   ],
+   "lineOfBusiness": null,
+   "modifiedAt": "2026-07-15T05:55:21.218Z",
+   "artifacts": 221,
+   "byType": {
+    "BOInterface": 221
+   },
+   "byState": {
+    "DEPRECATED": 7,
+    "RELEASED": 214
+   },
+   "byTypeState": {
+    "BOInterface|DEPRECATED": 7,
+    "BOInterface|RELEASED": 214
+   }
+  }
+ ]
+}
