@@ -8,8 +8,14 @@
  */
 
 import type { ReactNode } from "react";
+import { SapContentReleaseFooter } from "@/components/sap-content/SapContentReleaseFooter";
 import "./affirm-external.css";
 
 export default function AffirmExternalLayout({ children }: { children: ReactNode }) {
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <SapContentReleaseFooter />
+    </>
+  );
 }

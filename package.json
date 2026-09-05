@@ -56,6 +56,8 @@
     "sap:catalog:report": "tsx scripts/report-sap-catalog.ts",
     "sap:hub:import": "tsx scripts/import-sap-hub-content.ts",
     "sap:hub:report": "tsx scripts/report-sap-hub-content.ts",
+    "sap:2608:recon": "tsx scripts/recon-2608.ts",
+    "sap:2608:seed-release": "tsx scripts/seed-sap-content-release.ts",
     "ingest": "tsx scripts/ingest-sap-zip.ts",
     "catalog:snapshot": "tsx scripts/snapshot-catalog.ts",
     "fixtures:classifier:refresh": "tsx scripts/snapshot-classifier-fixture.ts",
