@@ -23,6 +23,7 @@ import { AptusCmdKProvider, useAptusCmdK } from "./AptusCmdK";
 import { AptusSideRail } from "./AptusSideRail";
 import { AptusTopbar } from "./AptusTopbar";
 import type { AptusUserMenuUser } from "./AptusUserMenu";
+import { SapContentReleaseFooter } from "@/components/sap-content/SapContentReleaseFooter";
 
 interface AptusShellProps {
   user: AptusUserMenuUser;
@@ -94,6 +95,7 @@ function ShellInner({ user, banner, children }: AptusShellProps) {
           >
             {children}
           </div>
+          <SapContentReleaseFooter className="mx-auto max-w-[1280px]" />
         </main>
       </div>
     </div>
