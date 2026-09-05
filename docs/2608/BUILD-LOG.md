@@ -7,6 +7,116 @@ verified in the session.
 
 ---
 
+## WS4 — PO connector → OData V4 (2026-09-05)
+
+**Branch:** `feat/po-v4` (from `main` at the WS3 squash merge, #236).
+**Instruction:** master prompt WS4 = CCC PR-3: replace `API_PURCHASEORDER_PROCESS_SRV`
+with `CE_PURCHASEORDER_0001` (`/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001`,
+SAP_COM_0053), keep V2 behind a flag for one release; discover/probe/preview/write
+parity tests against the TDD tenant (read-only by default, write fail-closed);
+re-test `API_CV_ATTACHMENT_SRV` after the tenant's 2608 upgrade and note the new
+authorisation requirement.
+
+### What the code map established first
+
+- The PO service is one entry (`key: "purchase-orders"`) in a static list shared
+  by three products (S/4 Public, Private, on-prem) and read directly by seven
+  callers: the catalog, capabilities, operations and hub-content routes, the
+  seed route, `connection-health` (first service = default probe path) and
+  the `probe-tenant-capabilities` script. The dashboard card addresses entity
+  set `A_PurchaseOrder`.
+- The connector already handles both response shapes (`d.results`/`__next` and
+  `value`/`@odata.nextLink`), V4 `$metadata` (flavor `v4-best-effort`, nulls
+  never writable) and CSRF-then-POST. Two V4 gaps remained: rows kept
+  `@odata.etag`/`@odata.context` as fields, and every apiId was taken from the
+  last path segment — for the V4 binding that is `0001`, which would have made
+  the seed row and the probe key wrong.
+- `hubApiToService` derives V4 paths as `<id>/srvd_a2x/sap/<id>/<ver>`; for
+  CE_PURCHASEORDER_0001 that guess is wrong (group `api_purchaseorder_2`,
+  definition `purchaseorder`), so a catalogue probe of the successor would
+  have 404'd and read AVAILABLE, never ACTIVATED.
+- **No `S4_TDD_*` credentials exist in this environment**, and the Hub's
+  `APIContent.APIs(...)`/`Resources` endpoints redirect to login anonymously
+  — so neither a live tenant run nor a downloaded V4 `$metadata` was available.
+
+### Decisions
+
+| # | Decision | Why |
+|---|---|---|
+| 1 | **Two definitions, one key.** `PO_SERVICE_V4` (default) and `PO_SERVICE_V2_LEGACY` both carry `key: "purchase-orders"`; `getSapServices(product)` / `getSapOperations(product)` / `getSapService()` resolve which one the key means. | Every caller keeps addressing "the PO service"; the flag is honoured in one place instead of seven. The static registry is never mutated. |
+| 2 | **Flag `{PREFIX}_PO_ODATA_V2=true`** (literal "true" only; per env prefix) swaps the PO service back to V2 and the dashboard card's entity set to `A_PurchaseOrder`. Documented in `.env.example` as kept for ONE release (until 2702). | CCC PR-3 §1. A tenant whose SAP_COM_0053 arrangement does not expose the V4 service yet can stay on V2 without a code change; S4_TDD's flag does not flip the private-cloud product. |
+| 3 | **`SapServiceDefinition` gains `protocol`, `hubApiId`, `lifecycle`, `authorisationNote`** (all optional). `serviceApiId()` = `hubApiId ?? pathToApiId(path)`; the seed and hub-content routes use it, and the seed writes `apiType` from `protocol`. | Without it the V4 service would have been seeded as `externalId "0001", apiType ODATAV2`. |
+| 4 | **`KNOWN_V4_SERVICE_PATHS`** (verified bindings only, with source) consulted before `deriveV4Path`; the resulting definition carries `protocol` + `hubApiId`. | The catalogue row for CE_PURCHASEORDER_0001 now probes the real path — and it is the same path as the curated definition, so `mergeProbeTargets` dedupes them. |
+| 5 | **Rows strip `@odata.*` keys** as they already stripped `__metadata`. | Preview `fields` for V4 are the same business properties V2 shows (parity test). |
+| 6 | **Attachments** definition carries the 2608 authorisation note; `probeService` copies `note` and `protocol` onto its rows; the Tenant Capabilities panel renders the note under the service and "· OData V4" on V4 rows. | CCC PR-3 §3: a 403 after the tenant's upgrade must read as "the communication user needs the new authorisations", not "not activated". The re-test itself is not possible from here (no credentials). |
+| 7 | **`scripts/po-v4-parity.ts`** (`pnpm sap:tdd:po-parity`, `--json`): discover / probe / preview on V2 and V4 side by side against the configured tenant; write is reported as guard state only, never executed. Exit 2 without a tenant. | CCC PR-3 §2 asks for parity against the TDD tenant; the tool is checked in so the run can happen where the credentials are. |
+| 8 | **Write path unchanged.** Same admin + confirmation phrase + `WRITE_SECRET` + `WRITE_ENABLED` guard; `createSapEntitySetRecord` is exercised against the V4 service only in the unit test with a stubbed fetch. | "Write stays fail-closed" — verified by the real guard functions with an empty env. |
+| 9 | No schema change, no data write. | Drift gate: no difference; `migrate deploy`: nothing pending; Hub RECON unchanged, GREEN. |
+
+### What landed
+
+- `src/lib/sap-public/tdd-connector.ts` — `SapODataProtocol`, `SapServiceLifecycle`,
+  extended `SapServiceDefinition`, `PO_SERVICE_V4`, `PO_SERVICE_V2_LEGACY`,
+  `isLegacyPoV2Enabled`, `getSapServices`, `getSapOperations`, flag-aware
+  `getSapService`, `@odata.*` stripping; PO card entity set `PurchaseOrder`;
+  attachments `authorisationNote`.
+- `src/lib/sap-public/hub-content.ts` — `KNOWN_V4_SERVICE_PATHS`, `serviceApiId`,
+  `hubApiToService` protocol/hubApiId. `capability-probe.ts` — `protocol`/`note`
+  on rows. `SapCapabilityPanel.tsx` — note + V4 marker.
+- Routes: catalog (services via `getSapServices`, emits `protocol`/`lifecycle`/`note`),
+  capabilities, operations (`getSapOperations`), hub-content (`serviceApiId`
+  probe keys), seed (`serviceApiId` + protocol-derived `apiType`);
+  `connection-health.resolveProbePath`; `scripts/probe-tenant-capabilities.ts`.
+- `scripts/po-v4-parity.ts` + `sap:tdd:po-parity`; `.env.example`
+  `S4_TDD_PO_ODATA_V2`; `inspect-s4-public-service.ts` header points at the V4 path.
+- Tests: `tests/unit/lib/sap-public/po-v4-connector.test.ts` (14): V4 by default,
+  flag semantics (literal "true", per prefix, only the PO service and its card
+  swap, registry untouched), `serviceApiId`, verified V4 binding vs derived
+  guess, and parity with a stubbed SAP — discover (URLs, entity sets, flavor
+  v2 vs v4-best-effort, read/write, un-annotated V4 set stays null), probe
+  (same status/count/business keys, no `@odata.*`), preview (identical rows,
+  fields, nextLink from `__next` and `@odata.nextLink`), write (CSRF fetch at
+  the V4 root, POST to `…/0001/PurchaseOrder` with token + cookie), fail-closed
+  with empty env, and `probeService` carrying `protocol`/`note`. Route mocks
+  gained `getSapServices`.
+
+### Gates (this session)
+
+- `tsc --noEmit --strict`: clean. `eslint --max-warnings 0`: clean on every
+  touched file.
+- `vitest run`: 329 files, 4,879 tests, all passing (118 s) — net +14 (the new
+  parity file); vendor-term guard, consultant wall and D1 guard included.
+- `scripts/check-migration-drift.sh`: "No difference detected"; `prisma migrate
+  deploy`: nothing pending. `pnpm sap:hub:recon-2608`: GREEN.
+- `next build`: compiled, 109/109 static pages, exit 0.
+- `pnpm sap:tdd:po-parity` without credentials: "No tenant configured for
+  S4_TDD", exit 2 — as designed.
+
+### What was NOT verified
+
+1. **Nothing was run against the TDD tenant.** No `S4_TDD_*` credentials are
+   present here, so discover / probe / preview parity is proven against
+   recorded response shapes in unit tests, not against SAP. Run
+   `pnpm sap:tdd:po-parity` where the credentials live; the table it prints
+   is the CCC PR-3 §2 evidence.
+2. **The V4 entity-set name `PurchaseOrder` and the binding
+   `api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001`** come from the CCC
+   note and SAP's API reference, not from a `$metadata` this repo fetched (the
+   Hub's resource download requires login). If the tenant disagrees, the
+   dashboard card reports its HTTP status honestly rather than showing data.
+3. **`API_CV_ATTACHMENT_SRV` was not re-tested.** The authorisation note is
+   recorded on the definition and shown on the probe row; the re-test needs the
+   tenant after its 2608 upgrade.
+4. **Stored connections without an `apiPath`** are now health-probed with the
+   V4 PO path (first curated service). A tenant without the V4 service in its
+   arrangement will report that probe as not found; set the connection's
+   `apiPath` or the legacy flag.
+5. The `resolveHubService` catalogue fallback still resolves
+   `API_PURCHASEORDER_PROCESS_SRV` to its V2 path on request — an explicit
+   spot-read of a deprecated service is allowed and badged DEPRECATED (WS3).
+
+---
+
 ## WS3 — Deprecation surfaced in /sap-explorer (2026-09-05)
 
 **Branch:** `feat/hub-deprecation-ui` (from `main` at the WS2 squash merge, #235).

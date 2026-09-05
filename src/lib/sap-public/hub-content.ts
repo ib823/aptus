@@ -412,6 +412,25 @@ export function deriveV4Path(externalId: string): string {
 }
 
 /**
+ * 2608 WS4 — V4 service bindings this repo has VERIFIED (the derived candidate
+ * above is wrong for them: the service group and definition differ from the
+ * apiId). Consulted before deriveV4Path. Add a row only with its source.
+ *   CE_PURCHASEORDER_0001 — CCC-2608-catalogue-refresh.md PR-3 §1 (SAP_COM_0053).
+ */
+export const KNOWN_V4_SERVICE_PATHS: Readonly<Record<string, string>> = {
+  CE_PURCHASEORDER_0001: "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+};
+
+/**
+ * The Hub apiId (== SapHubContent.externalId) a curated service stands for.
+ * V4 paths end in a version segment, so the declared hubApiId wins; a V2
+ * path's last segment IS the apiId.
+ */
+export function serviceApiId(service: Pick<SapServiceDefinition, "path" | "hubApiId">): string {
+  return service.hubApiId ?? pathToApiId(service.path);
+}
+
+/**
  * Derive a probeable OData service from a runtime row, or null if it has no
  * probeable endpoint. OData V2 uses the reliable /sap/opu/odata/sap/<id> path;
  * OData V4 uses a BEST-EFFORT derived path (deriveV4Path) so a tenant-exposed V4
@@ -429,7 +448,7 @@ export function hubApiToService(item: {
   if (item.contentType !== "API" && item.contentType !== "CDS_VIEW") return null;
   let path: string | null = null;
   if (item.apiType === "ODATAV2") path = `/sap/opu/odata/sap/${item.externalId}`;
-  else if (item.apiType === "ODATAV4") path = deriveV4Path(item.externalId); // best-effort
+  else if (item.apiType === "ODATAV4") path = KNOWN_V4_SERVICE_PATHS[item.externalId] ?? deriveV4Path(item.externalId); // verified, else best-effort
   if (!path) return null;
   return {
     key: item.externalId,
@@ -437,5 +456,7 @@ export function hubApiToService(item: {
     scenario: item.communicationScenarios[0] ?? "",
     path,
     domain: item.packageId ?? "",
+    protocol: item.apiType === "ODATAV2" ? "ODATAV2" : "ODATAV4",
+    hubApiId: item.externalId,
   };
 }

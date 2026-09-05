@@ -26,6 +26,8 @@ interface CapabilityRow {
   exposed: boolean;
   status: number;
   entitySetCount?: number;
+  protocol?: string;
+  note?: string;
   error?: string;
 }
 
@@ -230,7 +232,16 @@ export function SapCapabilityPanel({ product = "s4hana" }: { product?: string })
                     <td className="px-3 py-2">
                       <div className="min-w-0">
                         <div className="truncate font-medium">{row.label}</div>
-                        <div className="truncate text-xs text-muted-foreground">{row.service}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {row.service}
+                          {row.protocol === "ODATAV4" ? " · OData V4" : ""}
+                        </div>
+                        {/* 2608 WS4: SAP changed authorisations for some services — say so where the status is read. */}
+                        {row.note && (
+                          <div className="mt-0.5 whitespace-normal text-xs text-muted-foreground" data-testid="capability-note">
+                            {row.note}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-3 py-2">
