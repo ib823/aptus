@@ -4916,6 +4916,11 @@ model AffirmQuestion {
   releaseId      String?
   contentRelease SapContentRelease? @relation(fields: [releaseId], references: [id])
 
+  // 2608 WS5 — SAP's BDC Level as read from the questionnaire ("L1" | "L2" | "L3").
+  // Null = SAP's sheet carries no Level for the row (S4H_706) or the row was
+  // never matched to a 2608 sheet. Read from the file, never inferred.
+  bdcLevel       String?
+
   @@index([streamId])
   @@index([subProcessId])
   @@index([isCustom])

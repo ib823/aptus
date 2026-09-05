@@ -1,0 +1,124 @@
+{
+  "_provenance": {
+    "purpose": "2602 baseline of the Fit-to-Standard data files, frozen for the 2602→2608 BPD delta (docs/2608/bpd-delta.md). Captured from src/lib/fts/data/{1IQ,BD9,BDG}.ts at commit e010b48 (main, 2026-09-05), which scripts/emit_ts.py had generated from the 2602 BPD docx. The six other 2608 BPD items had no 2602 data file.",
+    "release": "S/4HANA Cloud Public Edition 2602 — MY",
+    "capturedAt": "2026-09-05",
+    "sourceCommit": "e010b48690a6007331f1e9357e44b7f4e6c5211c"
+  },
+  "1IQ": {
+    "title": "Sales Inquiry",
+    "steps": [
+      "Create Sales Inquiry",
+      "Change Sales Inquiry",
+      "Reject Sales Inquiry"
+    ],
+    "roles": [
+      "Internal Sales Representative"
+    ],
+    "apps": [
+      "Manage Sales Inquiries (F2370)"
+    ],
+    "decisions": 7,
+    "sscuiRefs": 0
+  },
+  "BD9": {
+    "title": "Sell from Stock",
+    "steps": [
+      "Set Credit Limit (Optional)",
+      "Complete Sales Quotation (Optional)",
+      "Create Sales Order",
+      "Create Sales Order Using IFRS15 Bundling Functionality (Optional)",
+      "Create Attachment for Sales Order (Optional)",
+      "Review Blocked Sales Orders (Optional)",
+      "Process Sales Order Approval (Optional)",
+      "Withdraw from Approval",
+      "Approve/Reject/Rework Sales Order",
+      "Rework Sales Order",
+      "Check the Notifications",
+      "Change Sales Order",
+      "Advanced Available-to-Promise Processing (Optional)",
+      "Create Delivery",
+      "Create Attachment for Delivery (Optional)",
+      "Execute Picking",
+      "Check Batches (Optional)",
+      "Maintain Serial Numbers (Optional)",
+      "Split Outbound Delivery (Optional)",
+      "Add Freight Costs (Optional)",
+      "Post Goods Issue",
+      "Proof of Delivery (Optional)",
+      "Create Preliminary Billing Document (Optional)",
+      "Finalize the Preliminary Billing Document",
+      "Rework from Approval",
+      "Approve/Reject/Rework Preliminary Billing Document",
+      "Rework Preliminary Billing Document",
+      "Check the Notifications",
+      "Change Preliminary Billing Document",
+      "Create Partial Billing Document (Optional)",
+      "Create Billing Document",
+      "Create Attachment for Billing (Optional)"
+    ],
+    "roles": [
+      "Configuration Expert - Business Process Configuration",
+      "Configuration Expert - Business Network Integration",
+      "Internal Sales Representative",
+      "Shipping Specialist",
+      "Warehouse Clerk",
+      "Billing Clerk",
+      "Credit Controller",
+      "Master Data Specialist - Business Partner Data",
+      "Sales Manager",
+      "Business Process Specialist",
+      "Administrator",
+      "Pricing Specialist",
+      "Master Data Specialist - Product Data",
+      "Extensibility Specialist"
+    ],
+    "apps": [
+      "Manage Sales Orders (F1873)",
+      "My Inbox- All Items",
+      "Create Outbound Deliveries - From Sales Orders (F0869A)",
+      "Display Outbound Delivery (VL03N)",
+      "Manage Outbound Deliveries - VL06O (VL06O_CLOUD)",
+      "Change Outbound Delivery (VL02N)",
+      "Split Outbound Delivery (VLSP)",
+      "POD - Change Outbound Delivery",
+      "Create Preliminary Billing Documents (F2876)",
+      "Manage Preliminary Billing Documents (F2875)",
+      "My Inbox - All Items (F2097)",
+      "Create Billing Documents - VF01 (VF01)",
+      "Create Billing Documents (F0798)",
+      "Display Billing Documents (VF03)"
+    ],
+    "decisions": 8,
+    "sscuiRefs": 50
+  },
+  "BDG": {
+    "title": "Sales Quotation",
+    "steps": [
+      "Create Sales Quotation",
+      "Process Sales Quotation Approval (Optional)",
+      "Withdraw from Approval",
+      "Approve/Reject/Rework Quotation",
+      "Rework Sales Quotation",
+      "Change Quotation (Optional)",
+      "Set Quotation as Rework not Required",
+      "Release the Reworked Quotation",
+      "Change Quotation",
+      "Reject Sales Quotation"
+    ],
+    "roles": [
+      "Business Process Specialist",
+      "Configuration Expert - Business Process Configuration",
+      "Administrator",
+      "Internal Sales Representative",
+      "Sales Manager",
+      "Extensibility Specialist"
+    ],
+    "apps": [
+      "Manage Sales Quotations (F1852)",
+      "My Inbox - All Items (F0862)"
+    ],
+    "decisions": 7,
+    "sscuiRefs": 0
+  }
+}

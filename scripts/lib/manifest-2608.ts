@@ -55,6 +55,7 @@ export const REPO_AUTHORED_SIDECARS = [
   "RELEASE.json",
   "README.md",
   "scope-lifecycle-2608.json",
+  "bdc-questionnaires.json",
 ] as const;
 const SKIP_IN_DROP = new Set<string>(REPO_AUTHORED_SIDECARS);
 
