@@ -44,7 +44,19 @@ export type IntegrityResult = {
   findings: string[];
 };
 
-const SKIP_IN_DROP = new Set(["MANIFEST.json", "RELEASE.json", "README.md"]);
+/**
+ * Repo-authored files that live in the drop folder but are NOT SAP downloads and
+ * so are not in MANIFEST.json: the manifest itself, the release record, the
+ * README, and the transcribed lifecycle list (WS1). Anything else in the folder
+ * must be in the manifest.
+ */
+export const REPO_AUTHORED_SIDECARS = [
+  "MANIFEST.json",
+  "RELEASE.json",
+  "README.md",
+  "scope-lifecycle-2608.json",
+] as const;
+const SKIP_IN_DROP = new Set<string>(REPO_AUTHORED_SIDECARS);
 
 export function sha256File(abs: string): string {
   return createHash("sha256").update(fs.readFileSync(abs)).digest("hex");

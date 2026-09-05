@@ -26,6 +26,26 @@ the rest of `sap-references/` (carve-out in `.gitignore`).
   `scripts/lib/sap-content-sources.ts` (paths, sheets, header rows per release)
   behind `SAP_CONTENT_RELEASE` (`src/lib/sap-content/release.ts`, default 2602).
 
+## Loading the catalogue (WS1)
+
+The 2608 rows live NEXT TO the 2602 rows, never over them (AD-3): a new
+`ScopeCatalogVersion` PUBLIC/2608 (inactive until WS7), `releaseId` on every
+row, and the app's reads scoped to `SAP_CONTENT_RELEASE`
+(`src/lib/db/content-release-scope.ts`). Each loader refuses to run on a red
+manifest and is idempotent.
+
+```bash
+pnpm sap:2608:load-scope            # A&D → ScopeItem: 679 ACTIVE/DEPRECATION_PLANNED + 6 OBSOLETE + 137 RETIRED (+ ANOMALY from Process-Steps, 0 today)
+pnpm sap:2608:load-sscui            # SSCUI_List sheet 2608 → ConfigActivity (4,328 rows, releaseId = 2608)
+pnpm sap:2608:load-process-steps    # Process-Steps → SapProcessStep (19,158 rows / 661 items)
+pnpm sap:2608:recon --db            # reconcile what was written against the facts
+pnpm sap:2608:revalidate-sscui      # every SSCUI citation in the FTS content vs the 2608 list
+```
+
+`scope-lifecycle-2608.json` is the checked-in transcription of the assessment's
+Scope Delta tab (obsolete + deprecation-planned codes with SAP's named
+successors). The loader applies it; it never invents a successor.
+
 ## Recon
 
 ```bash

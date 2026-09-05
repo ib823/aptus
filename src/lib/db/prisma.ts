@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 
+import { contentReleaseScope } from "@/lib/db/content-release-scope";
 import { tenantScopeGuard } from "@/lib/db/tenant-guard";
 
 /**
@@ -37,7 +38,10 @@ function buildClient(): PrismaClient {
   // whose client chunk pulled this module in. No query can run in a browser
   // bundle, so there is nothing for the guard to guard there.
   if (typeof window !== "undefined") return base;
-  return base.$extends(tenantScopeGuard()) as unknown as PrismaClient;
+  // Content-release scoping (2608 WS1) sits INSIDE the tenant guard: the guard
+  // inspects the caller's where as written; the scope then narrows SAP-content
+  // reads to the active release before they reach the engine.
+  return base.$extends(contentReleaseScope()).$extends(tenantScopeGuard()) as unknown as PrismaClient;
 }
 
 export const prisma = globalForPrisma.prisma ?? buildClient();

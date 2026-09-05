@@ -77,9 +77,50 @@ model SapContentRelease {
   affirmProcessSteps AffirmProcessStep[]
   hubContent         SapHubContent[]
   apiReferences      SapApiReference[]
+  processStepMaster  SapProcessStep[]
 
   @@unique([release, localisation])
   @@index([release])
+}
+
+/// 2608 WS1 — the SAP "Process Steps, Business Roles" master, per content release.
+///
+/// One row per line of BP_CLD_ENTPR_<release>_Process-Steps_EN_XX.xlsx (19,158 for
+/// 2608): the solution activity, its Fiori app / transaction, the business role and
+/// the countries the step is delivered for. This is the raw, release-scoped source
+/// the MY process flows (AffirmProcessFlow/AffirmProcessStep) are cut from — those
+/// stay the 2602 snapshot until WS5 re-derives them from this table. Never mutated
+/// in place: a re-load deletes and re-creates the release's rows.
+model SapProcessStep {
+  id        String @id @default(cuid())
+  releaseId String
+
+  scopeItemCode String
+  scopeItemName String
+  lob           String
+  businessArea  String
+  /// 1-based position of the row within its scope item, in file order.
+  sequence      Int
+  /// "Solution Activity (Hierarchy)" — SAP-verbatim, never edited.
+  activity      String  @db.Text
+  fioriAppTitle String?
+  fioriAppId    String?
+  fioriSemanticObject String?
+  fioriSemanticAction String?
+  businessRoleDescription String?
+  businessRoleId          String?
+  /// ISO country codes whose column carries an "X" for this step.
+  countries     String[] @default([])
+  availableInMy Boolean  @default(false)
+  isGlobal      Boolean  @default(false)
+
+  contentRelease SapContentRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@unique([releaseId, scopeItemCode, sequence])
+  @@index([releaseId, scopeItemCode])
+  @@index([scopeItemCode])
+  @@index([fioriAppId])
+  @@index([businessRoleId])
 }
 
 // Phase 2 — AD-4: SAP best-practice classification protocol as DB config.
@@ -1124,6 +1165,26 @@ model ScopeItem {
   gapAreaMemberships GapProneAreaItem[]
   processChainSteps  ProcessChainItem[]
 
+  // 2608 WS1 — lifecycle + Availability & Dependencies attributes (docs/2608/BUILD-LOG.md).
+  // lifecycleStatus: ACTIVE | DEPRECATION_PLANNED | OBSOLETE | RETIRED | ANOMALY.
+  //   ACTIVE               in the release's A&D Scope sheet
+  //   DEPRECATION_PLANNED  in A&D, on SAP's What's New "Deprecated Scope Items" list (successors below)
+  //   OBSOLETE             removed from A&D in this release (was in the previous one)
+  //   RETIRED              on the A&D "Retired Scope Items" sheet (historical)
+  //   ANOMALY              in Process-Steps but not in A&D — needs a human look
+  // All 2602-era rows keep the default ACTIVE; nothing is backfilled.
+  lifecycleStatus     String   @default("ACTIVE")
+  successorScopeCodes String[] @default([])
+  lifecycleNote       String?  @db.Text
+  provisioning        String? // A&D "Provisioning": Default | Optional | Optional (only with …)
+  availableInMy       Boolean? // A&D "MY" column != "No"
+  myAvailableSince    String? // A&D "MY" column value, e.g. "2402" (release it became available in MY)
+  lobs                String[] @default([]) // every A&D LOB row for the item (133 items span several)
+  businessAreas       String[] @default([])
+  requiredScopeCodes  String[] @default([]) // A&D "Required Scope Items and Business Conditions"
+  sapComponent        String? // A&D "Component", e.g. "SD-SLS"
+  licenseRequired     String? // A&D "Additional … License Required"
+
   // 2608 WS0 — nullable content-release pointer; null = pre-tracking (2602-era) row.
   releaseId      String?
   contentRelease SapContentRelease? @relation(fields: [releaseId], references: [id])
@@ -1135,6 +1196,7 @@ model ScopeItem {
   @@index([country])
   @@index([catalogVersionId])
   @@index([releaseId])
+  @@index([lifecycleStatus])
 }
 
 // Phase M1: Hierarchy Entities — extracted from flat ProcessStep columns
