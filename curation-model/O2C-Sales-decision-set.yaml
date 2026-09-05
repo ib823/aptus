@@ -327,10 +327,10 @@ tier2_deferred:
     sscui: "102819 - Define Number Ranges for Sales Documents"
     reason: "Routine config; a key user settles the numbering pattern in minutes."
   - item: "Reasons for rejection"
-    sscui: "OVAG - Define Reasons for Rejection"
+    sscui: "102494 - Define Reasons for Rejection"
     reason: "The standard list covers near-universal cases; a one-click pick in the BPD."
   - item: "Requested delivery date default formula"
-    sscui: "103827 - Requested Delivery Date (parameters and rules)"
+    sscui: "103827 - Define Parameter Catalog for Requested Delivery Date"
     reason: "Workshop-level tuning; not surfaced as an executive decision."
 
 # =============================================================================

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
+import { formatSapProductReleaseLabel } from "@/lib/sap-content/release";
 
 export const metadata: Metadata = { title: "Catalog Version Detail" };
 
@@ -113,8 +114,11 @@ export default async function CatalogVersionDetailPage({ params }: PageProps) {
       <h1 className="text-3xl font-semibold text-foreground tracking-tight mt-2 mb-1">
         {EDITION_LABELS[version.edition] ?? version.edition} — {version.version}
       </h1>
+      {version.edition === "PUBLIC" && (
+        <p className="text-sm text-muted-foreground mb-1">{formatSapProductReleaseLabel(version.version)}</p>
+      )}
       <p className="text-base text-muted-foreground mb-8">
-        {version.isActive ? "● Active" : "○ Deprecated"} · ingested{" "}
+        {version.isActive ? "● Active" : "○ Inactive — not the default for new assessments"} · ingested{" "}
         {version.ingestedAt.toISOString().slice(0, 10)}
         {version.sourceArchiveHash ? ` · sha256 ${version.sourceArchiveHash.slice(0, 12)}…` : ""}
       </p>
