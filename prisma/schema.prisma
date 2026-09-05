@@ -72,6 +72,8 @@ model SapContentRelease {
 
   scopeItems         ScopeItem[]
   processSteps       ProcessStep[]
+  tobeRules          TobeRule[]
+  tobePacks          TobePack[]
   configActivities   ConfigActivity[]
   affirmQuestions    AffirmQuestion[]
   affirmProcessSteps AffirmProcessStep[]
@@ -2295,6 +2297,7 @@ model User {
   // ABeam Workbench — Value-Stream Affirm-Set (CCC build, 2026-05-22)
   affirmBundlesCreated   AffirmBundle[]         @relation("AffirmBundlesCreated")
   affirmBundlesReleased  AffirmBundle[]         @relation("AffirmBundlesReleased")
+  tobePacksGenerated     TobePack[]             @relation("TobePacksGenerated")
   affirmEventsByUser     AffirmEvent[]          @relation("AffirmEventsByUser")
   affirmQuestionsCreated AffirmQuestion[]       @relation("AffirmQuestionsCreated")
   affirmGrantsRevoked    AffirmAccessGrant[]    @relation("AffirmGrantsRevoked")
@@ -4911,6 +4914,7 @@ model AffirmQuestion {
   createdBy   User?                  @relation("AffirmQuestionsCreated", fields: [createdById], references: [id])
   responses   AffirmResponse[]
   bundleItems AffirmBundleQuestion[]
+  tobeRules   TobeRule[]
 
   // 2608 WS0 — nullable content-release pointer; null = pre-tracking (2602-era) row.
   releaseId      String?
@@ -4926,6 +4930,91 @@ model AffirmQuestion {
   @@index([isCustom])
   @@index([status])
   @@index([flag])
+  @@index([releaseId])
+}
+
+// ─── 2608 WS6 — Client To-Be Process Pack ──────────────────────────────────
+//
+// From (a) the scope items of an affirm bundle and (b) the client's BDC
+// answers on it, the pack marks every BPD 2608 step with one state and keeps
+// the evidence (scope ID · BPD 2608 · SSCUI · BDC question). Additive: nothing
+// here alters the affirm tables; the generated document is frozen as JSON with
+// the hashes of its inputs.
+
+/// State of one to-be process step in a pack.
+enum ProcessStepState {
+  STANDARD
+  CONFIGURED
+  VARIANT
+  GAP
+  NOT_IN_SCOPE
+}
+
+/// Why a GAP step is a gap. Null on a GAP the client has not classified yet.
+enum TobeGapType {
+  EXTENSION
+  WORKAROUND
+  INTEGRATION
+  OUT_OF_SCOPE
+}
+
+/// bdcQuestionId → effect. Seeded from the BDC L2/L3 ↔ SSCUI cross-reference
+/// (bdc-questionnaires.json ↔ the affirm question bank) plus a small curated
+/// set; the engine applies a rule only when the client's answer equals its
+/// trigger. Never invented: a question with no rule leaves its steps STANDARD
+/// with "confirm in workshop".
+model TobeRule {
+  id         String @id
+  questionId String
+  /// SAP scope item the effect applies to (a question can name several).
+  scopeCode  String
+  /// The affirm choice that fires the rule: "standard" | "discuss" | "deviate".
+  trigger    String
+  state      ProcessStepState
+  /// Real SSCUI id from the 2608 list when state = CONFIGURED.
+  sscuiId    String?
+  sscuiName  String?
+  gapType    TobeGapType?
+  alternatePathId String?
+  /// BPD step names the rule targets; EMPTY = the whole scope item (scope-wide
+  /// configuration, shown on the L2 header and every step's evidence footer).
+  stepNames  String[] @default([])
+  /// "bdc-sscui-xref-2608" | "curated" — where the rule came from.
+  source     String
+  note       String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  question AffirmQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  // 2608 WS0 convention — nullable content-release pointer.
+  releaseId      String?
+  contentRelease SapContentRelease? @relation(fields: [releaseId], references: [id])
+
+  @@index([questionId])
+  @@index([scopeCode])
+  @@index([releaseId])
+}
+
+/// One generated pack for one affirm bundle ("engagement"). Frozen: the
+/// document and the hashes of the inputs it was generated from.
+model TobePack {
+  id          String   @id @default(cuid())
+  bundleId    String
+  releaseId   String?
+  scopeCodes  String[] @default([])
+  scopeHash   String
+  answerHash  String
+  rulesHash   String
+  inputsHash  String
+  packJson    Json
+  generatedAt DateTime @default(now())
+  generatedById String?
+
+  bundle         AffirmBundle       @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  contentRelease SapContentRelease? @relation(fields: [releaseId], references: [id])
+  generatedBy    User?              @relation("TobePacksGenerated", fields: [generatedById], references: [id])
+
+  @@index([bundleId, generatedAt])
   @@index([releaseId])
 }
 
@@ -4983,6 +5072,7 @@ model AffirmBundle {
   questions  AffirmBundleQuestion[]
   responses  AffirmResponse[]
   events     AffirmEvent[]
+  tobePacks  TobePack[]
 
   // External executive journey (PR-1 guest infrastructure). Per-executive
   // token grants scoped to value streams. Guest sessions hang off the grant,

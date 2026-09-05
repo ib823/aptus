@@ -1,0 +1,26 @@
+{
+  "_provenance": {
+    "purpose": "End-to-end chains of SAP scope items per value stream, used by the To-Be Process Pack's L1 diagram (2608 WS6). Repo-authored — not an SAP download.",
+    "release": "2608",
+    "source": "WS6 pilot definition in docs/2608/CLAUDE-CODE-MASTER-PROMPT-2608-and-tobe-process-pack.md (Order-to-Cash: 1IQ → BDG → BD9 → J59, plus 2ET). SAP's Process Navigator business-process hierarchy is not in the 2608 content drop and was NOT read for this file; add chains only with their source.",
+    "generatedAt": "2026-09-05"
+  },
+  "chains": [
+    {
+      "id": "o2c-sales",
+      "name": "Order to Cash — Sales",
+      "valueStreamId": "lead-to-cash",
+      "path": ["1IQ", "BDG", "BD9", "J59"],
+      "alternates": [
+        {
+          "id": "o2c-non-stock",
+          "from": "BDG",
+          "via": ["2ET"],
+          "to": "J59",
+          "note": "Sales Order Processing for Non-Stock Material (2ET) replaces Sell from Stock (BD9) for non-stock material."
+        }
+      ],
+      "source": "WS6 pilot definition (master prompt)"
+    }
+  ]
+}
