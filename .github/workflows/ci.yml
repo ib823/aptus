@@ -51,7 +51,7 @@ jobs:
       # in this workflow was fully cold. Restoring .next/cache lets Next.js
       # reuse compilation output across runs.
       - name: Restore Next.js build cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .next/cache
           key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('src/**/*.ts', 'src/**/*.tsx', 'prisma/schema.prisma', 'next.config.ts') }}
@@ -125,7 +125,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Restore Next.js build cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .next/cache
           key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('src/**/*.ts', 'src/**/*.tsx', 'prisma/schema.prisma', 'next.config.ts') }}
@@ -273,7 +273,7 @@ jobs:
 
       - name: Restore Next.js build cache
         if: steps.check-baselines.outputs.have_baselines == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .next/cache
           key: ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('src/**/*.ts', 'src/**/*.tsx', 'prisma/schema.prisma', 'next.config.ts') }}
