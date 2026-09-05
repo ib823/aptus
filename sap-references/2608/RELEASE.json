@@ -2,18 +2,54 @@
   "release": "2608",
   "releaseVersion": "2608.0",
   "supersedes": "2602",
-  "status": "PENDING",
-  "statusNote": "WS0 scaffold only. No 2608 files have been landed yet: the source folder (AB Workbench\\2608\\) was not reachable from the build session. Drop the unpacked files here, then run `pnpm sap:2608:recon --write` to record them.",
+  "localisation": "MY",
+  "status": "LANDED",
+  "landedAt": "2026-09-05T08:12:00.663Z",
   "source": {
     "folder": "AB Workbench\\2608\\",
     "packaging": "unpacked — zips are refused by recon and ignored by git"
   },
-  "landedAt": null,
+  "manifest": {
+    "path": "sap-references/2608/MANIFEST.json",
+    "sha256": "8d910bf77e4ddec525ed7d19edf2aae3b5533af4811098a2067fcc8e1cfda050",
+    "fileCount": 48,
+    "totalBytes": 32789248
+  },
   "recon": {
     "script": "scripts/recon-2608.ts",
-    "lastRunAt": null,
-    "fileCount": 0,
-    "totalBytes": 0
-  },
-  "files": []
+    "lastRunAt": "2026-09-05T08:12:00.663Z",
+    "ok": true,
+    "facts": {
+      "scopeItems": 679,
+      "scopeItemsNewPresent": [
+        "5RP",
+        "7ED",
+        "7Z1",
+        "82X",
+        "830",
+        "839",
+        "83B",
+        "83D",
+        "83I",
+        "83S",
+        "85O",
+        "86C",
+        "88K"
+      ],
+      "scopeItemsObsoletePresent": [],
+      "retiredScopeItems": 143,
+      "scopeItem1NN": {
+        "inScopeSheet": true,
+        "inProcessSteps": true
+      },
+      "sscuiActivityIds": 4328,
+      "sscuiRows": 4328,
+      "processStepRows": 19158,
+      "processStepItems": 661,
+      "bdcQuestionnaires": 16,
+      "bdcNewPresent": true,
+      "twoTierPresent": true,
+      "bpdPairs": 9
+    }
+  }
 }

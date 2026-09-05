@@ -1,0 +1,608 @@
+{
+ "release": "2608",
+ "localisation": "MY",
+ "generated": "2026-09-05",
+ "files": [
+  {
+   "file": "sap-references/2608/2608_Master_Data_CO_EN_XX.xlsx",
+   "bytes": 146896,
+   "sha256": "7f02c408be868534ea2923884bf732566f41845694b9c409d14336bd3335fbfd",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 2678,
+   "sheets": {
+    "Start": 26,
+    "Copyright": 13,
+    "Cost Centers": 1303,
+    "Cost Center Groups": 91,
+    "Activity Types": 40,
+    "Activity Type Groups": 53,
+    "Secondary Cost Elements": 792,
+    "Cost Element Groups": 356,
+    "Statistical Key Figures": 4
+   }
+  },
+  {
+   "file": "sap-references/2608/2608_Master_Data_FI_EN_XX.xlsx",
+   "bytes": 42758,
+   "sha256": "71bf3f83a089534f111de84bf004ecec5802d4908353cc6d146581fe535bff23",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 81,
+   "sheets": {
+    "Start": 15,
+    "Copyright": 13,
+    "YCOA": 9,
+    "Profit Centers": 18,
+    "Functional Areas": 22,
+    "Segments": 4
+   }
+  },
+  {
+   "file": "sap-references/2608/2608_Master_Data_Overview_EN_XX.xlsx",
+   "bytes": 1788099,
+   "sha256": "76a6a8eb7f8cd8d70719d1b49887f6e3e90e48f43739c6bf5d8f0225eebf9c19",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 1379,
+   "sheets": {
+    "Intro": 53,
+    "Material Master": 549,
+    "BP-Suppliers": 82,
+    "BP-Customers": 74,
+    "BP-Contacts": 13,
+    "Work Centers": 44,
+    "Retail Article": 155,
+    "Retail Supplier": 124,
+    "Retail Merchandise categories": 162,
+    "Retail Customer": 123
+   }
+  },
+  {
+   "file": "sap-references/2608/2608_Org_Data_Overview_EN_XX.xlsx",
+   "bytes": 1316259,
+   "sha256": "d1b90b78cc44a57714937434a6e1f99f0fe5958639106354073d4174945b4275",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 566,
+   "sheets": {
+    "Global_Enterprise_Structure": 182,
+    "Basic_Enterprise_Structure": 0,
+    "Retail_Enterprise_Structure": 221,
+    "Basic_Enterprise_Struct_Retail": 0,
+    "Enterprise_Structure_Data": 163
+   }
+  },
+  {
+   "file": "sap-references/2608/2608_Pre-configured_Tax_Codes_EN_MY.xlsx",
+   "bytes": 19186,
+   "sha256": "826eecdeec8a0d142834699727fb60b33b5d80c8aa4e80c458360be74082f72e",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 406,
+   "sheets": {
+    "About": 257,
+    "Tax Codes": 33,
+    "Time Dependent Tax Rates": 33,
+    "T2 Mapping Tax Group-Tax Code": 32,
+    "T2 Mapping Tax Box-Tax Group": 51
+   }
+  },
+  {
+   "file": "sap-references/2608/2608_predelivered_FYV.xlsx",
+   "bytes": 18256,
+   "sha256": "02d2d67040cb6e0d694a453b9d7e5b9556787afba88a5b2f70ed9b65ce23c0d6",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 30,
+   "sheets": {
+    "Fiscal Year Variants": 29,
+    "Sheet2": 1
+   }
+  },
+  {
+   "file": "sap-references/2608/Availability_Dependencies_EN_XX.xlsx",
+   "bytes": 510418,
+   "sha256": "2eee149bbb1fe6d2aaae553dab45e0b983dfd00133e34a94cc53d71cea67c9c2",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 1113,
+   "sheets": {
+    "Availability and Dependencies": 12,
+    "Copyright": 13,
+    "Scope": 944,
+    "Retired Scope Items": 144
+   }
+  },
+  {
+   "file": "sap-references/2608/BP_CLD_ENTPR_2608_Account_Master_Data_for_YCOA.xlsx",
+   "bytes": 910769,
+   "sha256": "834c9750f017bdd73a884a17bfec08e4ca87399672aee68f6a69542d820d19e4",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 10942,
+   "sheets": {
+    "Template CoA YCOA": 870,
+    "Acct in YCOA for addit. SIs": 210,
+    "Acct Structure Overview": 1094,
+    "T030H": 85,
+    "T030K": 3150,
+    "T030S": 5,
+    "T030U": 154,
+    "T030": 4436,
+    "T095": 92,
+    "T095B": 89,
+    "T074": 77,
+    "Transactions I": 357,
+    "Transactions II": 302,
+    "Valuation Classes": 21
+   }
+  },
+  {
+   "file": "sap-references/2608/BP_CLD_ENTPR_2608_Account_Master_Data_for_YCOA_MY.xlsx",
+   "bytes": 90653,
+   "sha256": "b9c4556a2b588b080e0a86f56843079427486005dbcc2a7e4c4e0238e0cd5f97",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 1151,
+   "sheets": {
+    "YCOA_local": 874,
+    "C001": 84,
+    "C002": 12,
+    "C003": 6,
+    "C004": 5,
+    "C005": 11,
+    "C016": 12,
+    "TKA3A": 110,
+    "T030K": 37
+   }
+  },
+  {
+   "file": "sap-references/2608/BP_CLD_ENTPR_2608_Forms_List_EN_MY.xlsx",
+   "bytes": 29306,
+   "sha256": "a8a16773f0183d6a6ac127597fa3a7f2b3eab34d5c8f61e70cae54cd59be0c73",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 273,
+   "sheets": {
+    "FormList": 273
+   }
+  },
+  {
+   "file": "sap-references/2608/BP_CLD_ENTPR_2608_Process-Steps_EN_XX.xlsx",
+   "bytes": 5057233,
+   "sha256": "bc2466a5c15da61cd7dcb102c0b707ccab117ac1beef25cabd22e0a3a577e554",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 19191,
+   "sheets": {
+    "Process Steps, Business Rol...": 15,
+    "Copyright": 17,
+    "Scope": 19159
+   }
+  },
+  {
+   "file": "sap-references/2608/README.rtf",
+   "bytes": 867,
+   "sha256": "8c9fc2f5c52caf61114b53ec3aecc6b70989c2c740b6feb5179302a52b82e351",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": null
+  },
+  {
+   "file": "sap-references/2608/S4H_1041 BDC Questionnaire - Treasury.xlsx",
+   "bytes": 279765,
+   "sha256": "39184fe0740a658fbfb75c439cb3fbf8a1e7548ff548aab08abbab98066396f1",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 273,
+   "sheets": {
+    "Template Overview": 7,
+    "Accelerator": 266
+   }
+  },
+  {
+   "file": "sap-references/2608/S4H_1060 BDC Questionnaire - Asset Management.xlsx",
+   "bytes": 219528,
+   "sha256": "04858a0076ca5712ce03fdf5a1786ad196e3f2ca74ca833ede714751ea83ec96",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 83,
+   "sheets": {
+    "Template Overview": 8,
+    "Content Details": 57,
+    "Change History": 18
+   }
+  },
+  {
+   "file": "sap-references/2608/S4H_1061 BDC Questionnaire - Manufacturing.xlsx",
+   "bytes": 227352,
+   "sha256": "848c72f2424726faaaa87c082a8aaaa7e5ae09b3f7666084b6706f197f7bae04",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 103,
+   "sheets": {
+    "Template Overview": 7,
+    "Accelerator": 96
+   }
+  },
+  {
+   "file": "sap-references/2608/S4H_1613 Business Process Scope Questionnaire for Two Tier.xlsx",
+   "bytes": 24622,
+   "sha256": "913aafb6463405a379869a756711306890a68136d6d9571a8ae813730af3e908",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 49,
+   "sheets": {
+    "Please update here": 49
+   }
+  },
+  {
+   "file": "sap-references/2608/S4H_1754 BDC Questionnaire - EPPM.xlsx",
+   "bytes": 31612,
+   "sha256": "0c3ffb8eb5dd44e00d6ed388876478fb615170fcf531b0d14472f7c31b7cf433",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 100,
+   "sheets": {
+    "Template Overview": 7,
+    "Accelerator": 93
+   }
+  },
+  {
+   "file": "sap-references/2608/S4H_1767 BDC Questionnaire - Retail.xlsx",
+   "bytes": 239460,
+   "sha256": "6c26bfde93feed9720e0b5205119cb39396ed1b5662b0edbf29d920352ec5542",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 106,
+   "sheets": {
+    "Template Overview": 8,
+    "Accelerator 2608": 98
+   }
+  },
+  {
+   "file": "sap-references/2608/S4H_2132 Business Driven Configuration Questionnaire - Public Sector.xlsx",
+   "bytes": 225674,
+   "sha256": "0e29bf9a9dcd5544caf51c0af4912704406ff8fbd92ed392e9d01c9201cd131c",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 260,
+   "sheets": {
+    "Template Overview": 7,
+    "Accelerator": 252,
+    "Change History": 1
+   }
+  },
+  {
+   "file": "sap-references/2608/S4H_2236 Business Driven Configuration Questionnaire - Quality Management.xlsx",
+   "bytes": 38795,
+   "sha256": "9e80c6170bc794fda90997c60abc5ceb28522220f0a2b5c2c2eb8621e2f0d91e",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 96,
+   "sheets": {
+    "Template Overview": 8,
+    "Content Details": 73,
+    "Change History": 15
+   }
+  },
+  {
+   "file": "sap-references/2608/S4H_405 BDC Questionnaire - Finance.xlsx",
+   "bytes": 268098,
+   "sha256": "980275af2c203beee94c38251191cfbae32406c0f023ab0c17cdf902374d0ce1",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 273,
+   "sheets": {
+    "Template Overview": 7,
+    "Accelerator": 259,
+    "Status": 2,
+    "Change History": 5
+   }
+  },
+  {
+   "file": "sap-references/2608/S4H_407 BDC Questionnaire - Professional Services.xlsx",
+   "bytes": 933680,
+   "sha256": "71d2b0f0c3de7798a68ecf77ee8b30eb1966bf350ad20f0323ebc764a842f49d",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 27,
+   "sheets": {
+    "Template Overview": 8,
+    "Accelerator": 15,
+    "Change History": 4
+   }
+  },
+  {
+   "file": "sap-references/2608/S4H_420 BDC Questionnaire - Sourcing and Procurement.xlsx",
+   "bytes": 5397059,
+   "sha256": "b98b73a47d74d14df1a039acc04ec1452fda5745b6630461effe286ba03000b7",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 119,
+   "sheets": {
+    "Template Overview": 6,
+    "Accelerator": 110,
+    "Change History": 3
+   }
+  },
+  {
+   "file": "sap-references/2608/S4H_433 BDC Questionnaire - Sales.xlsx",
+   "bytes": 9777886,
+   "sha256": "d70d468446852b52f52bb32553bf4de86caf056567ef137a849174cd39dd3845",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 188,
+   "sheets": {
+    "Template Overview": 8,
+    "Accelerator": 177,
+    "Change History": 3
+   }
+  },
+  {
+   "file": "sap-references/2608/S4H_434 BDC Questionnaire - HR.xlsx",
+   "bytes": 210916,
+   "sha256": "d1bc27f9c953706bf850e6026a668e5136e63c76762276b4410511b35327e878",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 26,
+   "sheets": {
+    "Template Overview": 7,
+    "Accelerator": 16,
+    "Change History": 3
+   }
+  },
+  {
+   "file": "sap-references/2608/S4H_435 BDC Questionnaire - Supply Chain.xlsx",
+   "bytes": 225087,
+   "sha256": "b90870ba561dca36bd8580f85a17fca5da154685c223a0edc2cc658d2119ed63",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 94,
+   "sheets": {
+    "Template Overview": 8,
+    "Accelerator": 83,
+    "Change History": 3
+   }
+  },
+  {
+   "file": "sap-references/2608/S4H_491 BDC Questionnaire - R and D Engineering.xlsx",
+   "bytes": 208468,
+   "sha256": "bf0a7232b9e4e715f82a6295a03a43fae2377af39ce374ebe6a01c433106a6eb",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 48,
+   "sheets": {
+    "Template Overview": 6,
+    "Accelerator": 39,
+    "Change History": 3
+   }
+  },
+  {
+   "file": "sap-references/2608/S4H_695 BDC Questionnaire - Service.xlsx",
+   "bytes": 211331,
+   "sha256": "fb97b9a43335887fd42c3557d55ab7764828105c9d29f4a1b256a3fdab42b7a4",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 27,
+   "sheets": {
+    "Template Overview": 8,
+    "Accelerator": 19
+   }
+  },
+  {
+   "file": "sap-references/2608/S4H_706 BDC Questionnaire - Process Automation.xlsx",
+   "bytes": 38613,
+   "sha256": "1a49e3bc4b4cfaff14374f3e55a6cf1bc880c781089655c3cc356b46a2ef4035",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 75,
+   "sheets": {
+    "Template Overview": 10,
+    "Questionnaire": 59,
+    "Glossary": 6
+   }
+  },
+  {
+   "file": "sap-references/2608/SSCUI_List_EN_XX.xlsm",
+   "bytes": 2317619,
+   "sha256": "e577807256a76dba1ebb99c632620e847f195df5c7bb3cd9e4605b7ef275433b",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 13440,
+   "sheets": {
+    "61": 6,
+    "73": 23,
+    "519": 31,
+    "619": 105,
+    "699": 34,
+    "983": 26,
+    "2608": 4332,
+    "IMG Activity TRAN in BC": 8578,
+    "5D2": 42,
+    "5MQ": 21,
+    "J87": 28,
+    "4KL": 28,
+    "J90": 49,
+    "DPK": 32,
+    "64E": 25,
+    "REV": 33,
+    "7DM": 21,
+    "ABCOI": 26,
+    "Doc. Info": 0
+   }
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/1IQ_S4CLD2608_BPD_EN_MY.docx",
+   "bytes": 73499,
+   "sha256": "5b437105da415f3198bcb4e013c22cf5862623c06a65d2bf3dfa7c713dda5718",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": null
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/1IQ_S4CLD2608_BPD_EN_MY.xlsx",
+   "bytes": 16655,
+   "sha256": "eebae2b8825330d56c3a1738c3349f143cfd9f74956d11959670bbb214263e1a",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 28,
+   "sheets": {
+    "Test Cases": 28
+   }
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/1NT_S4CLD2608_BPD_EN_MY.docx",
+   "bytes": 124918,
+   "sha256": "447ec6f2b045a2721e5b8df423884d488ee819eaa0217733893429863b1584a4",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": null
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/1NT_S4CLD2608_BPD_EN_MY.xlsx",
+   "bytes": 43392,
+   "sha256": "b018d9639de7d7691121896a76d5327343269a78133f8007588418b5c316c03d",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 173,
+   "sheets": {
+    "Test Cases": 173
+   }
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/2ET_S4CLD2608_BPD_EN_MY.docx",
+   "bytes": 92161,
+   "sha256": "6f3020a6d4bbbb32c943a7dc4627e4beab4938df2f3c859e558fd396eaeb8137",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": null
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/2ET_S4CLD2608_BPD_EN_MY.xlsx",
+   "bytes": 26840,
+   "sha256": "62f86695c296ec9181ee3df320e95153f1b9bb5f7a126f15ffcf1b93fc9ddd2e",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 113,
+   "sheets": {
+    "Test Cases": 113
+   }
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/BD9_S4CLD2608_BPD_EN_MY.docx",
+   "bytes": 227923,
+   "sha256": "a390be2dd596552eed80d81352adef02cf94beff20ff032f87f622154c79934b",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": null
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/BD9_S4CLD2608_BPD_EN_MY.xlsx",
+   "bytes": 69945,
+   "sha256": "04c5d4423ddb92b895f311ddcf5484bc84e701c9d2382a1d817f83cc19ca2f19",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 422,
+   "sheets": {
+    "Test Cases": 422
+   }
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/BDG_S4CLD2608_BPD_EN_MY.docx",
+   "bytes": 92429,
+   "sha256": "f9527146ee453e09cb852f6a3c1ea0cb4ac84c508bf0157d50e6aaa67bc05a2f",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": null
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/BDG_S4CLD2608_BPD_EN_MY.xlsx",
+   "bytes": 26534,
+   "sha256": "d870808c94b21a384b27ea848dad4cfe60bdec2fed8ff9cb20cdce064f9a8b3f",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 100,
+   "sheets": {
+    "Test Cases": 100
+   }
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/BDW_S4CLD2608_BPD_EN_MY.docx",
+   "bytes": 139207,
+   "sha256": "d5ab995c38f02ac3b46e8aadcbf565e56a05c5d356d1440ccaeca5744433550b",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": null
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/BDW_S4CLD2608_BPD_EN_MY.xlsx",
+   "bytes": 35409,
+   "sha256": "e1d4b5c35e0d891dc9ec9d5a1d85b32c2fbcdff8d826c099d217a8b3aa8b29cd",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 205,
+   "sheets": {
+    "Test Cases": 205
+   }
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/J45_S4CLD2608_BPD_EN_MY.docx",
+   "bytes": 210446,
+   "sha256": "53e668e3e14ff303dee6bf9fb972b266dde03e06e0ec080a3c98a877098ac6b2",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": null
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/J45_S4CLD2608_BPD_EN_MY.xlsx",
+   "bytes": 90041,
+   "sha256": "aac157df8bd495a5478ad58376e038cf170ff976a94824c61959000dcb6796cb",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 725,
+   "sheets": {
+    "Test Cases": 725
+   }
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/J59_S4CLD2608_BPD_EN_MY.docx",
+   "bytes": 218665,
+   "sha256": "138e4fbef69e71576acf1c45c40a4cc0a1a5347d9b2adc0f97a78bf828293c9d",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": null
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/J59_S4CLD2608_BPD_EN_MY.xlsx",
+   "bytes": 84751,
+   "sha256": "3ff229bd7b8d3e601d4a0a029b8c565d78e0d7779f7193bd11037203b7f9f4b6",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 665,
+   "sheets": {
+    "Test Cases": 665
+   }
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/J60_S4CLD2608_BPD_EN_MY.docx",
+   "bytes": 321093,
+   "sha256": "53aeda21047aa1ad12f9fd25f2e05d856c89669da73a5d0763ab7d6dc3d7e6c6",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": null
+  },
+  {
+   "file": "sap-references/2608/bpd-fts/J60_S4CLD2608_BPD_EN_MY.xlsx",
+   "bytes": 89075,
+   "sha256": "5c2986b7f6f6e7e5d62249949141707a928990a17f841b7165740bb909929c58",
+   "source": "SAP for Me › Process Navigator / Road Map Viewer, SAP Best Practices for SAP S/4HANA Cloud Public Edition 2608, Malaysia",
+   "downloaded": "2026-09-05",
+   "rows": 757,
+   "sheets": {
+    "Test Cases": 757
+   }
+  }
+ ]
+}

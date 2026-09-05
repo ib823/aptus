@@ -16,6 +16,7 @@ import type { ReactNode } from 'react';
 import { Wordmark } from '@/components/brand/Wordmark';
 import { WorkbenchHelpLink } from './WorkbenchHelpLink';
 import { WorkbenchUserMenu } from './WorkbenchUserMenu';
+import { SapContentReleaseFooter } from '@/components/sap-content/SapContentReleaseFooter';
 
 interface Props {
   userEmail: string;
@@ -57,6 +58,7 @@ export function WorkbenchShell({ userEmail, children }: Props) {
         </div>
       </header>
       <main>{children}</main>
+      <SapContentReleaseFooter />
     </div>
   );
 }

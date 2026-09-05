@@ -1,30 +1,44 @@
-# SAP S/4HANA Cloud 2608 — reference drop
+# SAP S/4HANA Cloud 2608 (SAP Cloud ERP) — Malaysia content drop
 
-Landing zone for the 2608 release files (WS0). Everything the later 2608
-workstreams import reads from here, so this folder is **committed**, unlike the
-rest of `sap-references/` (see the carve-out in `.gitignore`).
+The landed 2608 reference files (WS0, `docs/2608/BUILD-LOG.md`). Everything the
+2608 workstreams import reads from here, so this folder is **committed** unlike
+the rest of `sap-references/` (carve-out in `.gitignore`).
+
+| File | What it is |
+|---|---|
+| `MANIFEST.json` | The consultant's download record: file, bytes, sha256, source, downloaded date — plus structural `rows`/`sheets` per workbook, written by recon. |
+| `RELEASE.json` | The release version record: release `2608`, supersedes `2602`, localisation `MY`, status, the manifest's sha256, and the last RECON facts. `SapContentRelease.manifestHash` in the database is this sha256. |
+| `Availability_Dependencies_EN_XX.xlsx` | Scope items (sheet `Scope`, 679 IDs) + `Retired Scope Items`. |
+| `SSCUI_List_EN_XX.xlsm` | Self-service configuration UIs (sheet `2608`, 4,328 activity IDs). |
+| `BP_CLD_ENTPR_2608_Process-Steps_EN_XX.xlsx` | Process steps (sheet `Scope`, 19,158 rows, 661 items). |
+| `S4H_* …xlsx` | 16 BDC questionnaires (incl. the new S4H_706 Process Automation) + S4H_1613 Two-Tier scope questionnaire. |
+| `bpd-fts/` | 2608 BPD test scripts, docx + xlsx, for 1IQ 1NT 2ET BD9 BDG BDW J45 J59 J60. |
+| master data / org data / YCOA / forms / tax codes / FYV | Malaysia localisation accelerators. |
 
 ## Rules
 
-- **Unpacked only.** Zips are ignored by git (`/sap-references/2608/**/*.zip`)
-  and fail `recon-2608`. Extract before landing.
-- **`RELEASE.json` is the version record.** `release` / `releaseVersion` /
-  `supersedes` name the SAP release the drop represents; `files[]` is the
-  recon baseline (path, bytes, sha256) for every landed file.
-- **Nothing is invented.** A file is either in this folder with a hash in
-  `RELEASE.json`, or it is not landed. `status` stays `PENDING` until the first
-  successful `--write`.
+- **Unpacked only.** Zips are ignored by git and fail recon. The two SAP content
+  zips (~170 MB) stay in the OneDrive folder on purpose.
+- **MANIFEST.json is the record; RELEASE.json is the version.** A file is either
+  in `MANIFEST.json` with a matching sha256, or it is not landed. Nothing here
+  is invented from memory.
+- **Where the files are read from is code, not convention:**
+  `scripts/lib/sap-content-sources.ts` (paths, sheets, header rows per release)
+  behind `SAP_CONTENT_RELEASE` (`src/lib/sap-content/release.ts`, default 2602).
 
-## Landing procedure
+## Recon
 
 ```bash
-# 1. copy the unpacked contents of "AB Workbench\2608\" into sap-references/2608/
-# 2. reconcile the folder against RELEASE.json
-pnpm sap:2608:recon            # report only — exits 1 on drift, zips, or an empty drop
-pnpm sap:2608:recon --write    # record what is on disk as the new baseline
+pnpm sap:2608:recon            # integrity + facts; exit 1 on any finding
+pnpm sap:2608:recon --write    # refresh MANIFEST rows/sheets + RELEASE.json
+pnpm sap:2608:recon --json     # machine-readable
+pnpm sap:2608:seed-release     # upsert the SapContentRelease row (refuses on a red recon)
 ```
 
-`--write` refreshes `files[]`, `recon.*`, and flips `status` to `LANDED` with a
-`landedAt` timestamp. Bump `releaseVersion` (`2608.0` → `2608.1`, …) when a
-re-drop changes files; recon prints added / removed / changed so the bump is
-justified by the diff it prints, not by memory.
+Facts recon checks (±1 % on counts): 679 scope items with the 13 new present and
+the 6 obsolete absent · 4,328 SSCUI IDs · 19,158 process-step rows / 661 items ·
+16 BDC + S4H_1613 · 9 BPD pairs. `tests/unit/sap-content/manifest-2608.test.ts`
+runs the integrity half in CI.
+
+Re-drop policy: when a file changes, re-run `--write`, bump `releaseVersion`
+(`2608.0 → 2608.1`) in `RELEASE.json` by hand, and log the diff recon printed.

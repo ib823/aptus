@@ -36,9 +36,50 @@ model ScopeCatalogVersion {
   scopeItems  ScopeItem[]
   assessments Assessment[]
   protocols   ClassificationProtocol[]
+  contentReleases SapContentRelease[]
 
   @@unique([version, edition])
   @@index([isActive])
+}
+
+// =============================================================
+// SAP content release record — 2608 WS0 (docs/2608/BUILD-LOG.md)
+// =============================================================
+// One row per landed SAP content drop: which release ("2608"), which
+// localisation ("MY"), when it was loaded, and the sha256 of the drop's
+// MANIFEST.json so "which files produced this content?" is answerable from
+// the database, not from memory. Distinct from ScopeCatalogVersion (the
+// catalogue axis an Assessment pins to): a content release is the FILE SET;
+// the optional catalogVersionId links the two when a catalogue version was
+// cut from this drop.
+//
+// Every SAP-content table carries a NULLABLE releaseId pointing here. Nullable
+// by design (additive migration, no backfill in WS0): a null means "loaded
+// before release tracking — 2602-era content". Loaders stamp it from
+// SAP_CONTENT_RELEASE (see src/lib/sap-content/release.ts) from WS1 on.
+model SapContentRelease {
+  id           String   @id @default(cuid())
+  release      String // "2602", "2608", …
+  localisation String   @default("MY")
+  loadedAt     DateTime @default(now())
+  manifestHash String? // sha256 of sap-references/<release>/MANIFEST.json
+  manifestPath String? // e.g. "sap-references/2608/MANIFEST.json"
+  fileCount    Int?
+  notes        String?  @db.Text
+
+  catalogVersionId String?
+  catalogVersion   ScopeCatalogVersion? @relation(fields: [catalogVersionId], references: [id])
+
+  scopeItems         ScopeItem[]
+  processSteps       ProcessStep[]
+  configActivities   ConfigActivity[]
+  affirmQuestions    AffirmQuestion[]
+  affirmProcessSteps AffirmProcessStep[]
+  hubContent         SapHubContent[]
+  apiReferences      SapApiReference[]
+
+  @@unique([release, localisation])
+  @@index([release])
 }
 
 // Phase 2 — AD-4: SAP best-practice classification protocol as DB config.
@@ -387,6 +428,10 @@ model SapApiReference {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // 2608 WS0 — nullable content-release pointer; null = pre-tracking (2602-era) row.
+  releaseId      String?
+  contentRelease SapContentRelease? @relation(fields: [releaseId], references: [id])
+
   @@index([status])
   @@index([apiType])
   @@index([apiId])
@@ -398,6 +443,7 @@ model SapApiReference {
   // 6.x supports `type: Gin` with `ArrayOps`) with `map:` pinning the existing
   // index name so `migrate diff` adopts the live index rather than dropping it.
   @@index([scopeItemCodes(ops: ArrayOps)], type: Gin, map: "SapApiReference_scopeItemCodes_gin_idx")
+  @@index([releaseId])
 }
 
 /// Every content type SAP publishes on the Business Accelerator Hub for a
@@ -481,12 +527,17 @@ model SapHubContent {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // 2608 WS0 — nullable content-release pointer; null = pre-tracking (2602-era) row.
+  releaseId      String?
+  contentRelease SapContentRelease? @relation(fields: [releaseId], references: [id])
+
   @@unique([contentType, externalId])
   @@index([contentType])
   @@index([appliesToPublic])
   @@index([appliesToPrivate])
   @@index([appliesToOnPrem])
   @@index([status])
+  @@index([releaseId])
 }
 
 /// SAP Operations middleware — the multi-tenant keystone.
@@ -1073,12 +1124,17 @@ model ScopeItem {
   gapAreaMemberships GapProneAreaItem[]
   processChainSteps  ProcessChainItem[]
 
+  // 2608 WS0 — nullable content-release pointer; null = pre-tracking (2602-era) row.
+  releaseId      String?
+  contentRelease SapContentRelease? @relation(fields: [releaseId], references: [id])
+
   @@unique([scopeCode, catalogVersionId])
   @@index([scopeCode])
   @@index([functionalArea])
   @@index([subArea])
   @@index([country])
   @@index([catalogVersionId])
+  @@index([releaseId])
 }
 
 // Phase M1: Hierarchy Entities — extracted from flat ProcessStep columns
@@ -1201,6 +1257,10 @@ model ProcessStep {
   activity      Activity?      @relation(fields: [activityId], references: [id])
   stepResponses StepResponse[]
 
+  // 2608 WS0 — nullable content-release pointer; null = pre-tracking (2602-era) row.
+  releaseId      String?
+  contentRelease SapContentRelease? @relation(fields: [releaseId], references: [id])
+
   @@index([scopeItemId])
   @@index([scopeItemId, sequence])
   @@index([stepType])
@@ -1210,6 +1270,7 @@ model ProcessStep {
   @@index([scopeItemId, stepCategory])
   @@index([activityId])
   @@index([activityId, sequence])
+  @@index([releaseId])
 }
 
 model ConfigActivity {
@@ -1243,10 +1304,15 @@ model ConfigActivity {
   // multiple IDs (e.g., "J14, J13, 22Z"). The first valid ID is stored.
   // The verify-data script explicitly allows scopeItemId = "All".
 
+  // 2608 WS0 — nullable content-release pointer; null = pre-tracking (2602-era) row.
+  releaseId      String?
+  contentRelease SapContentRelease? @relation(fields: [releaseId], references: [id])
+
   @@index([scopeItemId])
   @@index([applicationArea])
   @@index([category])
   @@index([selfService])
+  @@index([releaseId])
 }
 
 model ImgActivity {
@@ -4748,11 +4814,16 @@ model AffirmQuestion {
   responses   AffirmResponse[]
   bundleItems AffirmBundleQuestion[]
 
+  // 2608 WS0 — nullable content-release pointer; null = pre-tracking (2602-era) row.
+  releaseId      String?
+  contentRelease SapContentRelease? @relation(fields: [releaseId], references: [id])
+
   @@index([streamId])
   @@index([subProcessId])
   @@index([isCustom])
   @@index([status])
   @@index([flag])
+  @@index([releaseId])
 }
 
 /// One affirmation bundle. State machine:
@@ -5083,8 +5154,13 @@ model AffirmProcessStep {
 
   flow AffirmProcessFlow @relation(fields: [scopeItemId], references: [scopeItemId], onDelete: Cascade)
 
+  // 2608 WS0 — nullable content-release pointer; null = pre-tracking (2602-era) row.
+  releaseId      String?
+  contentRelease SapContentRelease? @relation(fields: [releaseId], references: [id])
+
   @@unique([scopeItemId, stepNumber])
   @@index([scopeItemId])
+  @@index([releaseId])
 }
 
 // =============================================================

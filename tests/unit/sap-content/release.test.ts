@@ -1,0 +1,58 @@
+/**
+ * 2608 WS0 — SAP content release resolver.
+ *
+ * The release every SAP-grounded page and loader agrees on comes from ONE
+ * function. These tests pin its contract: default 2602 until WS7 flips it,
+ * 2608 selectable by env, garbage rejected (not silently accepted), and the
+ * footer label verbatim.
+ */
+
+import { describe, expect, it } from "vitest";
+
+import { APP_CONFIG } from "@/constants/config";
+import {
+  SAP_CONTENT_RELEASES,
+  formatSapContentReleaseLabel,
+  isSapContentReleaseCode,
+  resolveSapContentRelease,
+} from "@/lib/sap-content/release";
+
+describe("resolveSapContentRelease", () => {
+  it("defaults to APP_CONFIG.sapVersion (2602) when SAP_CONTENT_RELEASE is unset", () => {
+    const r = resolveSapContentRelease({});
+    expect(r.release).toBe(APP_CONFIG.sapVersion);
+    expect(r.release).toBe("2602");
+    expect(r.fromEnv).toBe(false);
+    expect(r.localisation).toBe("MY");
+  });
+
+  it("selects 2608 when SAP_CONTENT_RELEASE=2608", () => {
+    const r = resolveSapContentRelease({ SAP_CONTENT_RELEASE: "2608" });
+    expect(r.release).toBe("2608");
+    expect(r.fromEnv).toBe(true);
+    expect(r.label).toBe("SAP content release 2608 · MY");
+  });
+
+  it("tolerates surrounding whitespace in the env value", () => {
+    expect(resolveSapContentRelease({ SAP_CONTENT_RELEASE: " 2608 " }).release).toBe("2608");
+  });
+
+  it("falls back to the default (and says so) for an unknown release", () => {
+    for (const bad of ["2605", "2702", "", "latest", "2608.1"]) {
+      const r = resolveSapContentRelease({ SAP_CONTENT_RELEASE: bad });
+      expect(r.release, bad).toBe("2602");
+      expect(r.fromEnv, bad).toBe(false);
+    }
+  });
+
+  it("the default release is always a known release", () => {
+    expect(isSapContentReleaseCode(APP_CONFIG.sapVersion)).toBe(true);
+    expect(SAP_CONTENT_RELEASES).toContain("2602");
+    expect(SAP_CONTENT_RELEASES).toContain("2608");
+  });
+
+  it("formats the footer label exactly as the master prompt specifies", () => {
+    expect(formatSapContentReleaseLabel("2608")).toBe("SAP content release 2608 · MY");
+    expect(formatSapContentReleaseLabel("2602")).toBe("SAP content release 2602 · MY");
+  });
+});
