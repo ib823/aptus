@@ -23,19 +23,20 @@ import {
   getConfiguredSapTenants,
   getSapProduct,
   isSapTddPublicAccessEnabled,
+  getSapServices,
 } from "@/lib/sap-public/tdd-connector";
 import { probeTenantCapabilities } from "@/lib/sap-public/capability-probe";
 import { hubCatalogueScope, mergeProbeTargets, type HubCatalogueScope } from "@/lib/sap-public/dynamic-catalog";
-import type { SapServiceDefinition } from "@/lib/sap-public/tdd-connector";
+import type { SapOdataProduct } from "@/lib/sap-public/tdd-connector";
 import {
   HUB_CONTENT_TYPES,
   HUB_CONTENT_TYPE_META,
   hubApiToService,
   hubAvailabilityQualifier,
   isHubContentType,
-  pathToApiId,
   readStoredProbe,
   resolveHubStatus,
+  serviceApiId,
   type HubContentType,
   type HubStatus,
   HUB_STATUSES,
@@ -69,7 +70,7 @@ function emptyByStatus(): Record<HubStatus, number> {
 async function probeActivatedApiIds(
   prefix: string,
   tenant: { key: string; label: string; baseUrl: string },
-  product: { services: SapServiceDefinition[] },
+  product: Pick<SapOdataProduct, "envPrefix" | "services">,
   scope: HubCatalogueScope,
   dataProbe: boolean,
 ): Promise<{
@@ -112,7 +113,7 @@ async function probeActivatedApiIds(
     .filter((s): s is NonNullable<typeof s> => s !== null);
   // Curated FIRST, re-keyed by apiId (last path segment) so an exposed result's
   // `service` equals the SapHubContent externalId, not the display key.
-  const curated = product.services.map((s) => ({ ...s, key: pathToApiId(s.path) }));
+  const curated = getSapServices(product).map((s) => ({ ...s, key: serviceApiId(s) }));
   const targets = mergeProbeTargets(curated, dynamic, PROBE_CAP);
   if (targets.length === 0) return { outcomes: new Map(), dataConfirmed: new Set(), capabilities: new Map(), probed: 0 };
   const results = await probeTenantCapabilities(prefix, tenant, targets, 4, { dataProbe });

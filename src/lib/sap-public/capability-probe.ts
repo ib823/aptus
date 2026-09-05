@@ -42,6 +42,10 @@ export interface CapabilityResult {
   dataConfirmed?: boolean;
   /** HTTP status of the 1-row data read (when dataProbe ran). */
   dataStatus?: number;
+  /** 2608 WS4 — OData protocol of the probed path (V4 for CE_PURCHASEORDER_0001). */
+  protocol?: "ODATAV2" | "ODATAV4";
+  /** 2608 WS4 — SAP authorisation change to read a 403 by (API_CV_ATTACHMENT_SRV). */
+  note?: string;
   error?: string;
 }
 
@@ -80,7 +84,13 @@ export async function probeService(
   svc: SapServiceDefinition,
   opts: { dataProbe?: boolean } = {},
 ): Promise<CapabilityResult> {
-  const base = { service: svc.key, label: svc.label, scenario: svc.scenario };
+  const base = {
+    service: svc.key,
+    label: svc.label,
+    scenario: svc.scenario,
+    ...(svc.protocol ? { protocol: svc.protocol } : {}),
+    ...(svc.authorisationNote ? { note: svc.authorisationNote } : {}),
+  };
   try {
     const { entitySets, entityCapabilities, flavor } = await inspectSapServiceMetadata(prefix, tenant, svc);
     const result: CapabilityResult = {

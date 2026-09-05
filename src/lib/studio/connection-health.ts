@@ -25,7 +25,7 @@ import {
   buildAuthHeaderFromConnection,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
-import { getSapProduct } from "@/lib/sap-public/tdd-connector";
+import { getSapProduct, getSapServices } from "@/lib/sap-public/tdd-connector";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
 
 export type ConnectionHealthStatus =
@@ -58,7 +58,9 @@ const MAX_TIMEOUT_MS = 30_000;
 export function resolveProbePath(conn: Pick<ResolvedSapConnection, "apiPath" | "product">): string | null {
   if (conn.apiPath && conn.apiPath.trim().length > 0) return conn.apiPath.trim();
   const product = getSapProduct(conn.product);
-  const first = product?.services?.[0]?.path;
+  // Through getSapServices so the 2608 PO legacy flag decides which PO path
+  // a connection without an explicit apiPath is probed with.
+  const first = product ? getSapServices(product)[0]?.path : undefined;
   return first ?? null;
 }
 

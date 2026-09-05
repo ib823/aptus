@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
   getConfiguredSapTenants,
+  getSapOperations,
   getSapProduct,
   getSapService,
   previewSapEntitySet,
@@ -152,7 +153,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const sections = await Promise.all(
-    product.operations.map((config) => loadOperationSection(product, tenant, config)),
+    getSapOperations(product).map((config) => loadOperationSection(product, tenant, config)),
   );
   const generatedAt = new Date().toISOString();
   setLiveCache(cacheKey, { sections, generatedAt });

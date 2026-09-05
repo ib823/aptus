@@ -10,7 +10,7 @@
  * Env overrides: PROBE_PREFIX (default S4_TDD), PROBE_LIMIT (default 60).
  */
 import "dotenv/config";
-import { getConfiguredSapTenants, getSapProduct } from "../src/lib/sap-public/tdd-connector";
+import { getConfiguredSapTenants, getSapProduct, getSapServices } from "../src/lib/sap-public/tdd-connector";
 import { getDynamicOdataServices, mergeProbeTargets } from "../src/lib/sap-public/dynamic-catalog";
 import { probeTenantCapabilities, summarize } from "../src/lib/sap-public/capability-probe";
 
@@ -25,7 +25,7 @@ async function main(): Promise<void> {
 
   const limit = Number(process.env.PROBE_LIMIT ?? 60);
   const product = getSapProduct(productKey);
-  const curated = product?.services ?? [];
+  const curated = product ? getSapServices(product) : [];
   // The PRODUCT decides the catalogue edition — the same rule the
   // /capabilities route applies. A hardcoded "PUBLIC" here meant
   // PROBE_PRODUCT=cloud-erp-private still probed the Public published set.
