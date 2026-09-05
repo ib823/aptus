@@ -1,0 +1,19 @@
+{
+  "release": "2608",
+  "releaseVersion": "2608.0",
+  "supersedes": "2602",
+  "status": "PENDING",
+  "statusNote": "WS0 scaffold only. No 2608 files have been landed yet: the source folder (AB Workbench\\2608\\) was not reachable from the build session. Drop the unpacked files here, then run `pnpm sap:2608:recon --write` to record them.",
+  "source": {
+    "folder": "AB Workbench\\2608\\",
+    "packaging": "unpacked — zips are refused by recon and ignored by git"
+  },
+  "landedAt": null,
+  "recon": {
+    "script": "scripts/recon-2608.ts",
+    "lastRunAt": null,
+    "fileCount": 0,
+    "totalBytes": 0
+  },
+  "files": []
+}
