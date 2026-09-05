@@ -144,6 +144,11 @@ test-results/
 # RELEASE.json is the version record and the recon baseline for the drop.
 !/sap-references/2608/
 !/sap-references/2608/**
+# …and the 2608 WS2 Hub records: the named S/4HANA Cloud Public package set
+# (scripts/discover-hub-packages.ts, with provenance) and the SAP-named
+# successor map for deprecated APIs. Small, reviewed, reproducible.
+!/sap-references/hub-packages.s4public.json
+!/sap-references/api-successors.json
 /sap-references/2608/**/*.zip
 # …and the 2608 workstream inputs (master prompt, catalogue-refresh note, the
 # inventory currency-assessment workbook) that every WS0…WS7 session resumes from.

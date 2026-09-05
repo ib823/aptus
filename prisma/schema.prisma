@@ -469,6 +469,22 @@ model SapApiReference {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // 2608 WS2 — the Hub's own lifecycle fields, persisted verbatim from
+  // catalog.svc so "is this deprecated / which version / when did SAP last
+  // touch it?" is answerable from the row, not from memory.
+  //   hubState          "ACTIVE" | "DEPRECATED" | "BETA" | "RELEASED" | "DECOMMISSIONED" (Hub State)
+  //   hubVersion        artefact Version, e.g. "1.1.0"
+  //   hubModifiedAt     artefact ModifiedAt
+  //   hubSubType        artefact SubType, e.g. "ODATAV4" | "SOAP" (kept even where apiType is normalised)
+  //   catalogueRelease  the OWNING PACKAGE's Version, e.g. "2608" — the Hub's content release
+  //   successorExternalId  SAP-named successor from sap-references/api-successors.json (never inferred)
+  hubState            String?
+  hubVersion          String?
+  hubModifiedAt       DateTime?
+  hubSubType          String?
+  catalogueRelease    String?
+  successorExternalId String?
+
   // 2608 WS0 — nullable content-release pointer; null = pre-tracking (2602-era) row.
   releaseId      String?
   contentRelease SapContentRelease? @relation(fields: [releaseId], references: [id])
@@ -485,6 +501,8 @@ model SapApiReference {
   // index name so `migrate diff` adopts the live index rather than dropping it.
   @@index([scopeItemCodes(ops: ArrayOps)], type: Gin, map: "SapApiReference_scopeItemCodes_gin_idx")
   @@index([releaseId])
+  @@index([hubState])
+  @@index([catalogueRelease])
 }
 
 /// Every content type SAP publishes on the Business Accelerator Hub for a
@@ -568,6 +586,22 @@ model SapHubContent {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // 2608 WS2 — the Hub's own lifecycle fields, persisted verbatim from
+  // catalog.svc so "is this deprecated / which version / when did SAP last
+  // touch it?" is answerable from the row, not from memory.
+  //   hubState          "ACTIVE" | "DEPRECATED" | "BETA" | "RELEASED" | "DECOMMISSIONED" (Hub State)
+  //   hubVersion        artefact Version, e.g. "1.1.0"
+  //   hubModifiedAt     artefact ModifiedAt
+  //   hubSubType        artefact SubType, e.g. "ODATAV4" | "SOAP" (kept even where apiType is normalised)
+  //   catalogueRelease  the OWNING PACKAGE's Version, e.g. "2608" — the Hub's content release
+  //   successorExternalId  SAP-named successor from sap-references/api-successors.json (never inferred)
+  hubState            String?
+  hubVersion          String?
+  hubModifiedAt       DateTime?
+  hubSubType          String?
+  catalogueRelease    String?
+  successorExternalId String?
+
   // 2608 WS0 — nullable content-release pointer; null = pre-tracking (2602-era) row.
   releaseId      String?
   contentRelease SapContentRelease? @relation(fields: [releaseId], references: [id])
@@ -579,6 +613,8 @@ model SapHubContent {
   @@index([appliesToOnPrem])
   @@index([status])
   @@index([releaseId])
+  @@index([hubState])
+  @@index([catalogueRelease])
 }
 
 /// SAP Operations middleware — the multi-tenant keystone.

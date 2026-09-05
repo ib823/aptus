@@ -80,6 +80,7 @@ export {
   type NormalizedApi,
 } from "../src/lib/sap-public/api-reference-import";
 import { normalizeRow, parseJson } from "../src/lib/sap-public/api-reference-import";
+import { apiLifecycleFields } from "../src/lib/sap-public/api-reference-import";
 
 // ── File detection ──────────────────────────────────────────────────────────
 function resolveImportPath(): string {
@@ -225,6 +226,8 @@ async function main(): Promise<void> {
       scopeItemCodes: norm.scopeItemCodes,
       communicationScenarios: norm.communicationScenarios,
       apiHubUrl: norm.apiHubUrl,
+      // 2608 WS2 — the Hub's lifecycle fields, verbatim.
+      ...apiLifecycleFields(norm),
       rawMetadataJson: norm.rawJson as Prisma.InputJsonValue,
       etag: null,
       lastFetchedAt: new Date(),

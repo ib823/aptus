@@ -31,6 +31,7 @@ import {
   parseHubJson,
   type NormalizedHubContent,
 } from "../src/lib/sap-public/hub-import";
+import { hubLifecycleFields } from "../src/lib/sap-public/hub-import";
 
 const prisma = new PrismaClient();
 
@@ -139,9 +140,12 @@ async function main(): Promise<void> {
         itemCount: norm.itemCount,
         illustrative: norm.illustrative,
         hubUrl: norm.hubUrl,
-        // Provenance: which file, when. release is intentionally NOT pinned — the
-        // published counts are indicative volume, not a release-accurate snapshot.
-        rawMetadataJson: { source: label, release: null, importedAt, raw: norm.rawJson } as Prisma.InputJsonValue,
+        // 2608 WS2 — the Hub's lifecycle fields (state, version, modifiedAt, subType,
+        // the owning package's release, SAP-named successor).
+        ...hubLifecycleFields(norm),
+        // Provenance: which file, when, and — when the row carries it — the Hub
+        // content release of its package.
+        rawMetadataJson: { source: label, release: norm.catalogueRelease, importedAt, raw: norm.rawJson } as Prisma.InputJsonValue,
       };
       const existing = await prisma.sapHubContent.findUnique({
         where: { contentType_externalId: { contentType: norm.contentType, externalId: norm.externalId } },

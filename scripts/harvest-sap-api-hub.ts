@@ -54,7 +54,7 @@
  * Both sides are now pinned by tests that parse the committed artifact.
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 const BASE = process.env.HARVEST_BASE ?? "https://api.sap.com/odata/1.0/catalog.svc";
@@ -62,6 +62,14 @@ const OUT = process.env.HARVEST_OUT ?? "sap-references/api-hub-catalog.json";
 const LIMIT = process.env.HARVEST_LIMIT ? Number(process.env.HARVEST_LIMIT) : Infinity;
 const CONCURRENCY = Number(process.env.HARVEST_CONCURRENCY ?? 6);
 const PAGE = 500;
+/**
+ * 2608 WS2 — the checked-in product package list (scripts/discover-hub-packages.ts).
+ * These packages are read FIRST and always, so the S/4HANA Cloud Public set is
+ * complete in every harvest even if the hub-wide walk is limited or a page is
+ * lost; every other package still follows, because the hub-wide floor (edition
+ * tagging for Private / on-prem) is what api-hub-catalog.json is for.
+ */
+const PRODUCT_PACKAGES = process.env.HUB_PACKAGES ?? "sap-references/hub-packages.s4public.json";
 
 /** OData v2 string keys are single-quoted, and an inner quote is doubled. */
 const odataKey = (name: string) => encodeURIComponent(name).replace(/'/g, "%27%27");
@@ -110,6 +118,7 @@ interface HubArtifact {
   Version?: string | null;
   State?: string | null;
   URI?: string | null;
+  ModifiedAt?: string | null;
 }
 
 interface HubPackage {
@@ -149,6 +158,57 @@ async function get<T>(path: string, attempt = 0): Promise<T[] | null> {
   }
 }
 
+/** OData v2 "/Date(1784094846654)/" → ISO string (null when absent/unparseable). */
+export function odataDateToIso(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const m = /\/Date\((-?\d+)\)\//.exec(v);
+  if (m) return new Date(Number(m[1])).toISOString();
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/**
+ * EVERY page of a collection, not the first 500.
+ *
+ * The artifacts call used to be a single `$top=500` GET. SAPS4HANACloud has 859
+ * APIs, S4HANACloudBADI 1,715 BAdIs: both were silently cut at 500 and the
+ * committed catalogue carried 500 of each with nothing saying so. Follows
+ * d.__next when the server sends one, else pages by $skip until a short page.
+ */
+async function getAllPages<T>(path: string): Promise<T[] | null> {
+  const out: T[] = [];
+  for (let skip = 0; ; skip += PAGE) {
+    const page = await get<T>(`${path}&$top=${PAGE}&$skip=${skip}`);
+    if (page === null) return skip === 0 ? null : out;
+    out.push(...page);
+    if (page.length < PAGE) return out;
+  }
+}
+
+/** The checked-in product package list, or [] when absent (hub-wide walk only). */
+function productPackages(): HubPackage[] {
+  const file = resolve(process.cwd(), PRODUCT_PACKAGES);
+  if (!existsSync(file)) return [];
+  const parsed = JSON.parse(readFileSync(file, "utf8")) as {
+    packages?: {
+      technicalName: string;
+      displayName: string | null;
+      version: string | null;
+      category: string | null;
+      products: string[];
+      lineOfBusiness: string | null;
+    }[];
+  };
+  return (parsed.packages ?? []).map((p) => ({
+    TechnicalName: p.technicalName,
+    DisplayName: p.displayName,
+    Products: p.products.join(","),
+    Category: p.category,
+    LineOfBusiness: p.lineOfBusiness,
+    Version: p.version,
+  }));
+}
+
 async function allPackages(): Promise<HubPackage[]> {
   const out: HubPackage[] = [];
   for (let skip = 0; out.length < LIMIT; skip += PAGE) {
@@ -185,7 +245,12 @@ async function main() {
   const startedAt = new Date().toISOString();
   console.log(`SAP Hub harvest — ${BASE}`);
   console.log("Reading content packages…");
-  const packages = await allPackages();
+  const product = productPackages();
+  const walked = await allPackages();
+  // Product packages first, then everything the walk found that is not already listed.
+  const listed = new Set(product.map((p) => p.TechnicalName));
+  const packages = [...product, ...walked.filter((p) => !listed.has(p.TechnicalName))];
+  console.log(`  product list ${PRODUCT_PACKAGES}: ${product.length} package(s) · hub-wide walk: ${walked.length}`);
 
   console.log(`Reading artifacts for ${packages.length} packages (concurrency ${CONCURRENCY})…`);
   let done = 0;
@@ -198,8 +263,9 @@ async function main() {
   const unmappedTypes: Record<string, number> = {};
 
   await pooled(packages, CONCURRENCY, async (p) => {
-    const arts = await get<HubArtifact>(
-      `/ContentPackages('${odataKey(p.TechnicalName)}')/Artifacts?$format=json&$top=${PAGE}`,
+    const arts = await getAllPages<HubArtifact>(
+      `/ContentPackages('${odataKey(p.TechnicalName)}')/Artifacts?$format=json` +
+        `&$select=Name,DisplayName,Type,SubType,Description,Version,State,URI,ModifiedAt`,
     );
     done++;
     if (done % 50 === 0) process.stdout.write(`\r  packages read: ${done}/${packages.length}`);
@@ -243,6 +309,13 @@ async function main() {
           product: p.Products ?? null,
           packageTechnicalName: p.TechnicalName,
           version: a.Version ?? null,
+          // 2608 WS2 — the Hub's lifecycle fields, verbatim (CCC PR-1 §1).
+          hubState: a.State ?? null,
+          hubVersion: a.Version ?? null,
+          hubModifiedAt: odataDateToIso(a.ModifiedAt),
+          hubSubType: a.SubType ?? null,
+          // The OWNING PACKAGE's Version is the Hub's content release ("2608").
+          catalogueRelease: p.Version ?? null,
         });
       } else if (a.Type && a.Type !== "API") {
         unmappedTypes[a.Type] = (unmappedTypes[a.Type] ?? 0) + 1;
@@ -266,6 +339,12 @@ async function main() {
         lineOfBusiness: p.LineOfBusiness ?? null,
         version: a.Version ?? null,
         apiHubUrl: a.URI ?? null,
+        // 2608 WS2 — the Hub's lifecycle fields, verbatim (CCC PR-1 §1).
+        hubState: a.State ?? null,
+        hubVersion: a.Version ?? null,
+        hubModifiedAt: odataDateToIso(a.ModifiedAt),
+        hubSubType: a.SubType ?? null,
+        catalogueRelease: p.Version ?? null,
       });
     }
   });
@@ -300,6 +379,8 @@ async function main() {
       finishedAt: new Date().toISOString(),
       packagesRead: packages.length,
       packagesWalled: walled,
+      productPackageList: product.length ? { file: PRODUCT_PACKAGES, packages: product.length } : null,
+      artifactPaging: `every page (${PAGE} per request, $skip until short page)`,
       artifactTypeCounts: typeCounts,
       apiRowsBeforeDedupe: rows.length,
       apiRows: apis.length,
@@ -368,4 +449,4 @@ async function main() {
   }
 }
 
-void main();
+if (process.argv[1] && /harvest-sap-api-hub\.ts$/.test(process.argv[1])) void main();
