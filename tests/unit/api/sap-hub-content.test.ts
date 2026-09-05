@@ -18,6 +18,8 @@ vi.mock("@/lib/db/prisma", () => ({
 }));
 vi.mock("@/lib/sap-public/tdd-connector", () => ({
   getSapProduct: mocks.getSapProduct,
+  // 2608 WS4: routes resolve services through getSapServices (PO legacy flag); the mock passes the product's list through.
+  getSapServices: (p: { services: unknown[] }) => p.services,
   isSapTddPublicAccessEnabled: mocks.isSapTddPublicAccessEnabled,
   getConfiguredSapTenants: mocks.getConfiguredSapTenants,
   getSapTenant: mocks.getSapTenant,

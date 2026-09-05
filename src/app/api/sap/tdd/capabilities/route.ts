@@ -13,6 +13,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import {
   getConfiguredSapTenants,
   getSapProduct,
+  getSapServices,
 } from "@/lib/sap-public/tdd-connector";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
 import { getDynamicOdataServices, mergeProbeTargets } from "@/lib/sap-public/dynamic-catalog";
@@ -95,7 +96,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const dynamic = product.edition
     ? await getDynamicOdataServices({ edition: product.edition, limit: 60 })
     : [];
-  const services = mergeProbeTargets(product.services, dynamic, 60);
+  const services = mergeProbeTargets(getSapServices(product), dynamic, 60);
   if (services.length === 0) {
     return NextResponse.json({
       data: {

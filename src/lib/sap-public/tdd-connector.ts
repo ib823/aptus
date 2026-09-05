@@ -46,12 +46,43 @@ export interface SapTenant {
   authorization?: () => Promise<string>;
 }
 
+export type SapODataProtocol = "ODATAV2" | "ODATAV4";
+
+/** SAP's published lifecycle for a service, as far as this repo has verified it (2608 WS4). */
+export interface SapServiceLifecycle {
+  state: "ACTIVE" | "DEPRECATED";
+  /** The SAP-named successor apiId, when SAP names one. Never inferred. */
+  successor?: string;
+  /** The SAP content release the deprecation was read at. */
+  since?: string;
+  note?: string;
+}
+
 export interface SapServiceDefinition {
   key: string;
   label: string;
   scenario: string;
   path: string;
   domain: string;
+  /**
+   * 2608 WS4 — OData protocol of `path`. Absent means V2 (every curated service
+   * before WS4 was V2). Drives nothing in the request path — the connector
+   * reads the response shape — but names the fact for the UI and the seed.
+   */
+  protocol?: SapODataProtocol;
+  /**
+   * The SAP Business Accelerator Hub apiId (== SapHubContent.externalId). For
+   * a V2 service it is the last path segment; for a V4 service it is NOT
+   * (…/srvd_a2x/sap/purchaseorder/0001 ends in a version), so it is declared.
+   */
+  hubApiId?: string;
+  lifecycle?: SapServiceLifecycle;
+  /**
+   * Operator-facing note about authorisations SAP changed for this service —
+   * shown next to the probe result so a 403 after an upgrade reads as "the
+   * communication user lacks the new authorisations", not "not activated".
+   */
+  authorisationNote?: string;
 }
 
 /** A dashboard "operations" card: preview one entity set of one service. */
@@ -152,14 +183,56 @@ export interface SapWriteResult {
 }
 
 // ─── S/4HANA Cloud Public Edition — procurement OData catalog ──────────
-const S4HANA_SERVICES: SapServiceDefinition[] = [
-  {
-    key: "purchase-orders",
-    label: "Purchase Orders",
-    scenario: "SAP_COM_0053",
-    path: "/sap/opu/odata/sap/API_PURCHASEORDER_PROCESS_SRV",
-    domain: "Sourcing and Procurement",
+/**
+ * 2608 WS4 (CCC PR-3): the Purchase Orders service is the OData V4 successor.
+ * SAP deprecated API_PURCHASEORDER_PROCESS_SRV (Hub State DEPRECATED at 2608;
+ * deprecation began CE 2308, KBA 3365110) in favour of CE_PURCHASEORDER_0001,
+ * still under communication scenario SAP_COM_0053. The V4 binding is
+ * api_purchaseorder_2 / srvd_a2x / purchaseorder / 0001. Both definitions
+ * share the key "purchase-orders" so every caller (routes, dashboard cards,
+ * the Studio explorer) keeps addressing "the PO service"; which one the key
+ * means is decided by getSapServices() and the {PREFIX}_PO_ODATA_V2 flag.
+ */
+export const PO_SERVICE_V4: SapServiceDefinition = {
+  key: "purchase-orders",
+  label: "Purchase Orders",
+  scenario: "SAP_COM_0053",
+  path: "/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001",
+  domain: "Sourcing and Procurement",
+  protocol: "ODATAV4",
+  hubApiId: "CE_PURCHASEORDER_0001",
+  lifecycle: { state: "ACTIVE", since: "2608" },
+};
+
+/** The deprecated V2 service, kept for ONE release (until 2702) behind {PREFIX}_PO_ODATA_V2=true. */
+export const PO_SERVICE_V2_LEGACY: SapServiceDefinition = {
+  key: "purchase-orders",
+  label: "Purchase Orders (OData V2, deprecated)",
+  scenario: "SAP_COM_0053",
+  path: "/sap/opu/odata/sap/API_PURCHASEORDER_PROCESS_SRV",
+  domain: "Sourcing and Procurement",
+  protocol: "ODATAV2",
+  hubApiId: "API_PURCHASEORDER_PROCESS_SRV",
+  lifecycle: {
+    state: "DEPRECATED",
+    successor: "CE_PURCHASEORDER_0001",
+    since: "2608",
+    note: "Deprecated by SAP — successor CE_PURCHASEORDER_0001 (OData V4). Kept behind {PREFIX}_PO_ODATA_V2 for one release.",
   },
+};
+
+/**
+ * V4 entity sets the dashboard cards address, and their V2 names — used ONLY
+ * when the legacy flag swaps the PO service back to V2. Property names are
+ * the same in both services (PurchaseOrder, Supplier, CompanyCode, …).
+ */
+const PO_V2_ENTITY_SETS: Record<string, string> = {
+  PurchaseOrder: "A_PurchaseOrder",
+  PurchaseOrderItem: "A_PurchaseOrderItem",
+};
+
+const S4HANA_SERVICES: SapServiceDefinition[] = [
+  PO_SERVICE_V4,
   {
     key: "supplier-invoices",
     label: "Supplier Invoices",
@@ -187,6 +260,13 @@ const S4HANA_SERVICES: SapServiceDefinition[] = [
     scenario: "SAP_COM_0053 / 0054 / 0057",
     path: "/sap/opu/odata/sap/API_CV_ATTACHMENT_SRV",
     domain: "Document Management",
+    protocol: "ODATAV2",
+    hubApiId: "API_CV_ATTACHMENT_SRV",
+    // 2608 WS4 (CCC PR-3 §3): SAP's What's New 2608 adds authorisation
+    // requirements for this service. Not re-tested from this repo yet — the
+    // note travels with every probe row so a post-upgrade 403 is read right.
+    authorisationNote:
+      "SAP content release 2608 adds authorisation requirements for API_CV_ATTACHMENT_SRV (What's New 2608). A 403 after the tenant's 2608 upgrade means the communication user needs the new authorisations, not that the arrangement is missing. Re-test after the upgrade.",
   },
 ];
 
@@ -195,7 +275,9 @@ const S4HANA_OPERATIONS: SapOperationConfig[] = [
     key: "purchaseOrders",
     title: "Purchase Orders",
     serviceKey: "purchase-orders",
-    entitySet: "A_PurchaseOrder",
+    // V4 entity set of CE_PURCHASEORDER_0001; getSapOperations() swaps it to
+    // A_PurchaseOrder when the legacy V2 flag is on. Field names are identical.
+    entitySet: "PurchaseOrder",
     limit: 25,
     fields: [
       "PurchaseOrder",
@@ -636,8 +718,38 @@ export function getSapTenant(prefix: string, key: string): SapTenant | null {
   return getConfiguredSapTenants(prefix).find((tenant) => tenant.key === key) ?? null;
 }
 
+/**
+ * 2608 WS4 — `{PREFIX}_PO_ODATA_V2=true` keeps the deprecated V2 Purchase
+ * Orders service for ONE release (until 2702), for a tenant whose SAP_COM_0053
+ * arrangement does not expose the V4 service yet. Only the literal "true".
+ */
+export function isLegacyPoV2Enabled(prefix: string): boolean {
+  return env(prefix, "PO_ODATA_V2") === "true";
+}
+
+/**
+ * The product's services as this deployment should call them: the static list
+ * with the PO service resolved to V4 (default) or the legacy V2 (flag). Every
+ * caller that used to read `product.services` directly goes through here so
+ * the flag is honoured in one place.
+ */
+export function getSapServices(product: Pick<SapOdataProduct, "envPrefix" | "services">): SapServiceDefinition[] {
+  if (!isLegacyPoV2Enabled(product.envPrefix)) return product.services;
+  return product.services.map((s) => (s.key === PO_SERVICE_V4.key ? PO_SERVICE_V2_LEGACY : s));
+}
+
+/** The product's dashboard operations, with entity sets matching getSapServices(). */
+export function getSapOperations(product: Pick<SapOdataProduct, "envPrefix" | "operations">): SapOperationConfig[] {
+  if (!isLegacyPoV2Enabled(product.envPrefix)) return product.operations;
+  return product.operations.map((op) =>
+    op.serviceKey === PO_SERVICE_V4.key && PO_V2_ENTITY_SETS[op.entitySet]
+      ? { ...op, entitySet: PO_V2_ENTITY_SETS[op.entitySet]! }
+      : op,
+  );
+}
+
 export function getSapService(product: SapOdataProduct, key: string): SapServiceDefinition | null {
-  return product.services.find((service) => service.key === key) ?? null;
+  return getSapServices(product).find((service) => service.key === key) ?? null;
 }
 
 function getAuthType(prefix: string): SapAuthType {
@@ -871,8 +983,11 @@ function toRecordRows(rows: unknown[]): Array<Record<string, unknown>> {
   return rows
     .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object" && !Array.isArray(row))
     .map((row) => {
+      // V2 carries __metadata per row; V4 carries @odata.etag / @odata.context
+      // per row. Neither is data — strip both so a V4 preview's `fields` are
+      // the same business properties a V2 preview shows (2608 WS4 parity).
       const { __metadata: _metadata, ...rest } = row;
-      return rest;
+      return Object.fromEntries(Object.entries(rest).filter(([k]) => !k.startsWith("@odata.")));
     });
 }
 

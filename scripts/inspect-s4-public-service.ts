@@ -10,8 +10,8 @@
  *   S4_TDD_AUTH_TYPE=basic|bearer|oauth-client-credentials
  *   ...corresponding credentials
  *
- * Required:
- *   S4_TDD_SERVICE_PATH=/sap/opu/odata/sap/API_PURCHASEORDER_PROCESS_SRV
+ * Required (2608: the PO service is OData V4 — API_PURCHASEORDER_PROCESS_SRV is deprecated):
+ *   S4_TDD_SERVICE_PATH=/sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001
  *
  * Optional:
  *   S4_TDD_ENTITY_LIMIT=20
