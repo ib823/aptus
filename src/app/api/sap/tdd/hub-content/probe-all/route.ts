@@ -35,9 +35,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const auth = await requireAdmin();
   if (isAdminError(auth)) return auth;
 
-  let body: { confirmation?: unknown; product?: unknown; tenant?: unknown };
+  let body: { confirmation?: unknown; product?: unknown; tenant?: unknown; includeDeprecated?: unknown };
   try {
-    body = (await request.json()) as { confirmation?: unknown; product?: unknown; tenant?: unknown };
+    body = (await request.json()) as { confirmation?: unknown; product?: unknown; tenant?: unknown; includeDeprecated?: unknown };
   } catch {
     return NextResponse.json({ error: { code: ERROR_CODES.VALIDATION_ERROR, message: "Invalid JSON body" } }, { status: 400 });
   }
@@ -85,10 +85,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         : `${product.label} rows have no derivable OData paths to probe — only its curated services are probeable, from the Operations panel.`;
     return NextResponse.json({ error: { code: ERROR_CODES.VALIDATION_ERROR, message } }, { status: 400 });
   }
+  // 2608 WS3 — SAP-deprecated services are skipped by default: probing a
+  // retirement proves nothing about readiness and its bucket is DEPRECATED
+  // regardless of the answer. `includeDeprecated: true` opts in (the result is
+  // stored, the bucket does not change).
+  const includeDeprecated = body.includeDeprecated === true;
   // Every probeable row (API/CDS_VIEW on OData V2/V4). SOAP / null apiType are
   // NOT probeable — they stay NOT_PROBEABLE and are skipped here.
   const rows = await prisma.sapHubContent.findMany({
-    where: { ...scope.where, contentType: { in: ["API", "CDS_VIEW"] }, apiType: { in: ["ODATAV2", "ODATAV4"] } },
+    where: {
+      ...scope.where,
+      contentType: { in: ["API", "CDS_VIEW"] },
+      apiType: { in: ["ODATAV2", "ODATAV4"] },
+      ...(includeDeprecated ? {} : { NOT: { hubState: "DEPRECATED" } }),
+    },
     select: { id: true, externalId: true, contentType: true, apiType: true, title: true, packageId: true, communicationScenarios: true, rawMetadataJson: true },
   });
   // Guard: only genuinely-probeable rows (mirror of hubApiToService non-null).
@@ -144,5 +154,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     /* audit is best-effort */
   }
 
-  return NextResponse.json({ data: { probed, byOutcome, at, tenantKey, tenant: tenant.label } });
+  return NextResponse.json({ data: { probed, includeDeprecated, byOutcome, at, tenantKey, tenant: tenant.label } });
 }

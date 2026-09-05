@@ -155,6 +155,13 @@ export const SAP_GLOSSARY: Record<string, GlossaryEntry> = {
     why: "It's honest shorthand for 'you could subscribe to this' — not a claim that it's live in your tenant.",
     related: ["event", "type-event"],
   },
+  "status-deprecated": {
+    term: "Deprecated",
+    short:
+      "SAP has retired this item in its published catalogue (Hub State = Deprecated). It may still answer today, but SAP will not carry it forward.",
+    why: "Build on the successor SAP names, not on this — a deprecated item never counts as activated, even when a probe still gets a 200.",
+    related: ["probe", "status-activated"],
+  },
   "status-reference": {
     term: "Reference",
     short: "Design-time material to read about (a blueprint, an extension point) — not a live service to connect to.",
@@ -261,6 +268,7 @@ export const SAP_GLOSSARY_ORDER: string[] = [
   "status-not-found",
   "status-available",
   "status-reference",
+  "status-deprecated",
   "type-api",
   "type-event",
   "type-cds-view",

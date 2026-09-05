@@ -20,15 +20,17 @@ const TONE: Record<BadgeStatus, { bg: string; fg: string; label: string; tip: st
   NOT_PROBEABLE: { bg: "var(--status-expired-bg)", fg: "var(--status-expired-fg)", label: "Not probeable", tip: "No OData endpoint to check here (SOAP / async / no apiType). A terminal, honest 'can't verify on the tenant from this tool'." },
   AVAILABLE: { bg: "var(--status-sent-bg)", fg: "var(--status-sent-fg)", label: "Available", tip: "Published, subscribe-only (CloudEvents) — tenant subscription NOT verified. Not 'available in your tenant'." },
   REFERENCE: { bg: "var(--status-draft-bg)", fg: "var(--status-draft-fg)", label: "Reference", tip: "Design-time content — not a tenant runtime endpoint." },
+  // 2608 WS3 — grey-red, tenant-independent: SAP retired it, whatever the tenant says.
+  DEPRECATED: { bg: "var(--status-revoked-bg)", fg: "var(--status-revoked-fg)", label: "Deprecated", tip: "Deprecated by SAP — no successor named yet" },
 };
 
-export function StatusBadge({ status, subscribe }: { status: BadgeStatus; subscribe?: boolean }) {
+export function StatusBadge({ status, subscribe, tip }: { status: BadgeStatus; subscribe?: boolean; tip?: string | undefined }) {
   const tone = TONE[status];
   return (
     <span
       role="status"
       aria-label={subscribe ? `${tone.label}, subscribe` : tone.label}
-      title={tone.tip}
+      title={tip ?? tone.tip}
       style={{
         display: "inline-flex",
         alignItems: "center",

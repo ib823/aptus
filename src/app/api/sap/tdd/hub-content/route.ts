@@ -38,7 +38,9 @@ import {
   resolveHubStatus,
   type HubContentType,
   type HubStatus,
+  HUB_STATUSES,
 } from "@/lib/sap-public/hub-content";
+import { successorFor } from "@/lib/sap-public/hub-successors";
 import { resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
@@ -54,7 +56,7 @@ const PROBE_CAP = 60; // bound the OPT-IN live overlay (dataProbe=1) like before
 
 /** All-zero byStatus, so every status key is always present in counts. */
 function emptyByStatus(): Record<HubStatus, number> {
-  return { ACTIVATED: 0, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 0, NOT_PROBEABLE: 0, AVAILABLE: 0, REFERENCE: 0 };
+  return Object.fromEntries(HUB_STATUSES.map((s) => [s, 0])) as Record<HubStatus, number>;
 }
 
 /**
@@ -262,14 +264,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // tenant's stored result.
   const allRows = await prisma.sapHubContent.findMany({
     where: scopeWhere,
-    select: { externalId: true, contentType: true, apiType: true, itemCount: true, rawMetadataJson: true },
+    select: { externalId: true, contentType: true, apiType: true, itemCount: true, rawMetadataJson: true, hubState: true },
   });
   // Headline ITEM volume, not grouped-row count: a grouped row (BAdI, CDS LoB,
   // integration package) stands for itemCount items; an individual row is 1.
   const byTypeItems: Record<string, number> = Object.fromEntries(HUB_CONTENT_TYPES.map((t) => [t, 0]));
+  // 2608 WS3 — "of which N deprecated" per tile, same item arithmetic, from the Hub State.
+  const byTypeDeprecated: Record<string, number> = Object.fromEntries(HUB_CONTENT_TYPES.map((t) => [t, 0]));
   let aiApis = 0;
   for (const r of allRows) {
     byTypeItems[r.contentType] = (byTypeItems[r.contentType] ?? 0) + (r.itemCount ?? 1);
+    if (r.hubState === "DEPRECATED") byTypeDeprecated[r.contentType] = (byTypeDeprecated[r.contentType] ?? 0) + (r.itemCount ?? 1);
     const raw = r.rawMetadataJson;
     if (raw && typeof raw === "object" && !Array.isArray(raw)) {
       const inner = (raw as Record<string, unknown>).raw as Record<string, unknown> | undefined;
@@ -325,12 +330,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // gives exact byStatus counts across the whole edition AND the id-sets used to
   // pre-filter the paged query by status (uniform for all 7 statuses).
   const byStatus = emptyByStatus();
-  const idsByStatus: Record<HubStatus, string[]> = {
-    ACTIVATED: [], NEEDS_SETUP: [], NOT_FOUND: [], NOT_CHECKED: [], NOT_PROBEABLE: [], AVAILABLE: [], REFERENCE: [],
-  };
+  const idsByStatus = Object.fromEntries(HUB_STATUSES.map((s) => [s, [] as string[]])) as Record<HubStatus, string[]>;
   for (const r of allRows) {
     const s = resolveHubStatus(
-      { contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId },
+      { contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId, hubState: r.hubState },
       outcomes,
     );
     byStatus[s]++;
@@ -406,7 +409,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // predates the column). The pill in the catalogue renders only on TRUE.
     illustrative: r.illustrative,
     hubUrl: r.hubUrl,
-    status: resolveHubStatus({ contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId }, outcomes),
+    // 2608 WS3 — SAP lifecycle, tenant-independent. The successor is the row's
+    // (import-stamped) or the checked-in map's; never inferred from a name.
+    hubState: r.hubState,
+    hubVersion: r.hubVersion,
+    successorExternalId: r.successorExternalId ?? successorFor(r.externalId),
+    status: resolveHubStatus({ contentType: r.contentType as HubContentType, apiType: r.apiType, externalId: r.externalId, hubState: r.hubState }, outcomes),
     availabilityNote: hubAvailabilityQualifier(r.contentType as HubContentType),
     dataConfirmed: dataConfirmed.has(r.externalId),
     // Real read/write for the ~60 probed rows (else undefined → "not probed").
@@ -471,7 +479,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       total,
       page,
       limit,
-      counts: { byType, byTypeItems, aiApis, byStatus, byLob, probeableRuntime, probed, lastProbedAt, dataConfirmed: dataConfirmed.size, dataProbe },
+      counts: { byType, byTypeItems, byTypeDeprecated, aiApis, byStatus, byLob, probeableRuntime, probed, lastProbedAt, dataConfirmed: dataConfirmed.size, dataProbe },
       catalogueImported: true,
       tenant: tenant?.label ?? null,
       tenantKey: tenantKey ?? null,
