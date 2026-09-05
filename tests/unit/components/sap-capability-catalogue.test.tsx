@@ -26,6 +26,40 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+describe("SapCapabilityCatalogue — DEPRECATED rows (2608 WS3)", () => {
+  it("shows the Deprecated badge with SAP's successor in the tooltip, and a Deprecated facet", async () => {
+    const payload = {
+      data: {
+        ...PAYLOAD.data,
+        items: [
+          ...PAYLOAD.data.items,
+          {
+            id: "2", contentType: "API", externalId: "API_OLD", title: "Old Billing", description: "retired",
+            packageId: "Procurement", apiType: "ODATAV2", communicationScenarios: [], scopeItemCodes: [],
+            itemCount: null, hubUrl: "https://api.sap.com/api/API_OLD", status: "DEPRECATED", availabilityNote: null,
+            hubState: "DEPRECATED", hubVersion: "2608", successorExternalId: "API_BILLING_DOCUMENT_SRV",
+          },
+        ],
+        total: 2,
+        // byStatus from an OLDER server payload (no DEPRECATED key) must not break the client.
+        counts: { ...PAYLOAD.data.counts, byTypeDeprecated: { API: 56 } },
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => payload }));
+    render(<SapCapabilityCatalogue product="s4hana" />);
+    expect(await screen.findByText("Old Billing")).toBeInTheDocument();
+
+    // The row badge (not the legend swatch) carries the successor tooltip.
+    const badges = screen.getAllByLabelText("Deprecated");
+    expect(badges.some((b) => b.getAttribute("title") === "Deprecated by SAP — successor: API_BILLING_DOCUMENT_SRV")).toBe(true);
+    expect(screen.getByText(/deprecated by SAP — build on the successor/i)).toBeInTheDocument();
+    // Tiles carry "of which N deprecated" from byTypeDeprecated.
+    expect(screen.getByRole("tab", { name: /APIs: .*56 deprecated/i })).toBeInTheDocument();
+    // Scorecard still sums every bucket (DEPRECATED defaulted to 0 from the old payload).
+    expect(screen.getAllByText(/941/).length).toBeGreaterThan(0);
+  });
+});
+
 describe("SapCapabilityCatalogue (CatalogueList) smoke", () => {
   it("mounts with scorecard + type tiles + LoB-grouped list", async () => {
     const { container } = render(<SapCapabilityCatalogue product="s4hana" />);

@@ -42,6 +42,7 @@ describe("StatusBadge (token-mapped)", () => {
         <StatusBadge status="NOT_FOUND" />
         <StatusBadge status="NOT_CHECKED" />
         <StatusBadge status="NOT_PROBEABLE" />
+        <StatusBadge status="DEPRECATED" />
       </div>,
     );
     expect(screen.getByLabelText("Activated")).toBeInTheDocument();
@@ -51,9 +52,30 @@ describe("StatusBadge (token-mapped)", () => {
     expect(screen.getByLabelText("Not found")).toBeInTheDocument();
     // No OData endpoint → a distinct terminal label, never "Not checked".
     expect(screen.getByLabelText("Not probeable")).toBeInTheDocument();
+    // 2608 WS3 — SAP's own retirement, tenant-independent, in the revoked tokens.
+    expect(screen.getByLabelText("Deprecated")).toBeInTheDocument();
+    expect(container.innerHTML).toContain("var(--status-revoked-bg)");
     // Colour is applied via var(--token) inline style — never a hex literal.
     expect(container.innerHTML).not.toMatch(/#[0-9a-fA-F]{6}/);
     expect(container.innerHTML).toContain("var(--status-signed-bg)");
+  });
+});
+
+describe("StatusBadge DEPRECATED tooltip (2608 WS3)", () => {
+  it("names the successor when one is passed, and says so honestly when none is", () => {
+    render(
+      <div>
+        <StatusBadge status="DEPRECATED" tip="Deprecated by SAP — successor: API_BILLING_DOCUMENT_SRV" />
+      </div>,
+    );
+    expect(screen.getByLabelText("Deprecated").getAttribute("title")).toBe(
+      "Deprecated by SAP — successor: API_BILLING_DOCUMENT_SRV",
+    );
+  });
+
+  it("falls back to the no-successor wording when no tip is given", () => {
+    render(<StatusBadge status="DEPRECATED" />);
+    expect(screen.getByLabelText("Deprecated").getAttribute("title")).toBe("Deprecated by SAP — no successor named yet");
   });
 });
 
@@ -68,10 +90,11 @@ describe("every status bucket is shown", () => {
    * On a screen whose entire argument is "nothing is inferred; every number
    * traces to a probe", a silently absent bucket is the worst kind of error:
    * it does not look like a gap, it looks like a total. So this test now
-   * exercises all seven, with every bucket non-zero — a zero bucket cannot
-   * catch an omission, because omitting it does not change the sum.
+   * exercises all of them, with every bucket non-zero — a zero bucket cannot
+   * catch an omission, because omitting it does not change the sum. 2608 WS3
+   * made it EIGHT: DEPRECATED (SAP's own retirements, tenant-independent).
    */
-  it("renders all seven buckets and reconciles the row to the sum", () => {
+  it("renders all eight buckets and reconciles the row to the sum", () => {
     render(
       <ReadinessScorecard
         activated={139}
@@ -86,12 +109,15 @@ describe("every status bucket is shown", () => {
         probeable={1200}
         apiTotal={941}
         reference={819}
+        deprecated={24}
       />,
     );
 
     expect(screen.getByText("Available")).toBeTruthy();
     expect(screen.getByText("Not found")).toBeTruthy();
-    // 139 + 349 + 151 + 7 + 11 + 515 + 819 = 1,991 — the browsable total.
-    expect(screen.getByText("1,991")).toBeTruthy();
+    expect(screen.getByText("Deprecated")).toBeTruthy();
+    expect(screen.getByText(/These eight add up to/i)).toBeTruthy();
+    // 139 + 349 + 151 + 7 + 11 + 515 + 819 + 24 = 2,015 — the browsable total.
+    expect(screen.getByText("2,015")).toBeTruthy();
   });
 });

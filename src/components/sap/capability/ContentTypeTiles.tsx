@@ -2,42 +2,38 @@
  * ContentTypeTiles — per-type count tiles with a runtime/reference tag.
  * Doubles as the content-type filter (click to select). Colour via var(--token).
  *
- * Each tile reads "imported of ~published (indicative)". The published figure is
- * an INDICATIVE volume snapshot — NOT pinned to a release (order of magnitude is
- * stable across releases, exact counts are not). Empty tiles say so honestly and
- * point at the drop-target workflow, never a bare zero.
+ * Each tile headlines the loaded ITEM count. A loaded tile adds "of which N
+ * deprecated" when SAP has retired part of that type (2608 WS3 — Hub State).
+ * An empty tile shows "N published (2608)" — the figure SAP publishes for the
+ * content release in S4_PUBLIC_PUBLISHED_RELEASE, so the scale of what could be
+ * imported is release-pinned, never a bare zero.
  */
 import {
   HUB_CONTENT_TYPES,
   HUB_CONTENT_TYPE_META,
   S4_PUBLIC_PUBLISHED_COUNTS,
+  S4_PUBLIC_PUBLISHED_RELEASE,
   isRuntimeType,
   type HubContentType,
 } from "@/lib/sap-public/hub-content";
 import { useAffirmLearn } from "@/components/affirm/learn/context";
 import { glossaryIdForContentType } from "@/constants/sap-glossary";
 
-const INDICATIVE_NOTE =
-  "Indicative published volume from an SAP Business Accelerator Hub snapshot; not pinned to a release. Refresh from a logged-in Hub check for release-accurate figures.";
+const INDICATIVE_NOTE = `Published volume for SAP content release ${S4_PUBLIC_PUBLISHED_RELEASE} (SAP Business Accelerator Hub, S/4HANA Cloud Public Edition). SAP moves these figures every release — compare within drift, never for equality.`;
 
-/** Types with no distinct content in the S/4 Public product — their content
- *  lives inside other types, so they will never have a "real export". Rendered
- *  as an honest "n/a by design", never "0 · ~N published". A tile with an
- *  NA_NOTE shows "—" (not "0"), the NA_NOTE sublabel, no published figure, and
- *  the NA_HELP text on its "?". The tile's accessible NAME comes from an
- *  explicit aria-label (see `ariaLabel` below), so the sublabel can freely name
- *  other tiles without colliding with their tab names. */
-const NA_NOTE: Partial<Record<HubContentType, string>> = {
-  PROCESS_BLUEPRINT: "Not a separate type — covered under Scenarios & Live Processes",
-};
-const NA_HELP: Partial<Record<HubContentType, string>> = {
-  PROCESS_BLUEPRINT:
-    "SAP delivers standard end-to-end processes for S/4HANA Cloud Public as Scenarios (308) and Live Processes (43). There is no distinct Process Blueprint content type, so this is empty by design — not a pending import.",
-};
+/** Types with no distinct content in the S/4 Public product would render as an
+ *  honest "n/a by design" (em dash, NA_NOTE sublabel, NA_HELP on the "?"),
+ *  never "0 · N published". 2608 WS3: nothing is n/a at this release —
+ *  PROCESS_BLUEPRINT is the Hub's "Process Blueprints" tab (16 solution
+ *  variants at 2608) and carries a published figure like every other type.
+ *  The mechanism stays for the next type SAP folds into another. */
+const NA_NOTE: Partial<Record<HubContentType, string>> = {};
+const NA_HELP: Partial<Record<HubContentType, string>> = {};
 
 export function ContentTypeTiles({
   byType,
   byTypeItems,
+  byTypeDeprecated,
   activeType,
   onSelect,
 }: {
@@ -45,6 +41,8 @@ export function ContentTypeTiles({
   byType: Record<string, number>;
   /** Item volume per type (grouped rows expand by itemCount) — the headline. */
   byTypeItems?: Record<string, number>;
+  /** Items per type whose Hub State is DEPRECATED (2608 WS3) — "of which N deprecated". */
+  byTypeDeprecated?: Record<string, number> | undefined;
   activeType?: HubContentType | "ALL";
   onSelect?: (type: HubContentType | "ALL") => void;
 }) {
@@ -66,11 +64,12 @@ export function ContentTypeTiles({
     defineId?: string,
     naNote?: string,
     naHelp?: string,
+    deprecated = 0,
   ) => {
     // Tiles speak COVERAGE, never tenant status. Loaded → the real count is the
-    // truth (no "indicative"). Not loaded → "~Y published" is the SCALE of what
-    // could be imported (coverage language only), and a 0/absent published figure
-    // never renders "~0". The ALL tile (published null) shows no coverage line.
+    // truth. Not loaded → "Y published (2608)" is the SCALE of what could be
+    // imported (coverage language only), and a 0/absent published figure never
+    // renders "0 published". The ALL tile (published null) shows no coverage line.
     const hasPublished = published != null && published > 0;
     const isAll = key === "ALL";
     // n/a-by-design types show an em dash, never "0" (0 reads as missing/broken).
@@ -78,7 +77,7 @@ export function ContentTypeTiles({
     const title = empty
       ? naNote
         ? `${label}: ${naHelp ?? naNote}`
-        : `${label}: not loaded — no rows imported yet. ${hasPublished ? `~${published!.toLocaleString()} published by SAP. ${INDICATIVE_NOTE} ` : ""}Drop a logged-in Hub export in sap-references/hub-content/${key}.json.`
+        : `${label}: not loaded — no rows imported yet. ${hasPublished ? `${published!.toLocaleString()} published by SAP at release ${S4_PUBLIC_PUBLISHED_RELEASE}. ${INDICATIVE_NOTE} ` : ""}Drop a logged-in Hub export in sap-references/hub-content/${key}.json.`
       : label;
     // Explicit accessible name for the per-type tiles — stable and collision
     // free (n/a types say "not applicable", never the sublabel that names other
@@ -90,7 +89,7 @@ export function ContentTypeTiles({
         ? `${label}: not applicable`
         : empty
           ? `${label}: not loaded`
-          : `${label}: ${count.toLocaleString()} loaded${tag ? `, ${tag}` : ""}`;
+          : `${label}: ${count.toLocaleString()} loaded${tag ? `, ${tag}` : ""}${deprecated > 0 ? `, ${deprecated.toLocaleString()} deprecated` : ""}`;
     return (
       <div
         key={key}
@@ -119,11 +118,12 @@ export function ContentTypeTiles({
           </span>
           {isAll ? null : empty ? (
             <span className="text-[10px] tabular-nums" style={{ color: "var(--ink-muted)" }}>
-              {naNote ?? `Not loaded${hasPublished ? ` · ~${published!.toLocaleString()} published` : ""}`}
+              {naNote ?? `Not loaded${hasPublished ? ` · ${published!.toLocaleString()} published (${S4_PUBLIC_PUBLISHED_RELEASE})` : ""}`}
             </span>
           ) : (
             <span className="text-[10px] uppercase tracking-wide" style={{ color: "var(--ink-muted)" }}>
               loaded{tag ? ` · ${tag}` : ""}
+              {deprecated > 0 ? ` · of which ${deprecated.toLocaleString()} deprecated` : ""}
             </span>
           )}
         </button>
@@ -163,6 +163,7 @@ export function ContentTypeTiles({
           glossaryIdForContentType(t),
           NA_NOTE[t],
           NA_HELP[t],
+          byTypeDeprecated?.[t] ?? 0,
         ),
       )}
     </div>
