@@ -55,6 +55,8 @@ function createBase(overrides: StepOverrides = {}): ProcessStep {
     activityId: overrides.activityId ?? null,
     groupLabel: overrides.groupLabel ?? null,
     createdAt: overrides.createdAt ?? now,
+    // 2608 WS0 — nullable content-release pointer; factories model pre-tracking rows.
+    releaseId: overrides.releaseId ?? null,
   };
 }
 

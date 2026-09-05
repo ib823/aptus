@@ -143,7 +143,11 @@ test-results/
 # enter the repository (they are opaque to review and to scripts/recon-2608.ts).
 # RELEASE.json is the version record and the recon baseline for the drop.
 !/sap-references/2608/
+!/sap-references/2608/**
 /sap-references/2608/**/*.zip
+# …and the 2608 workstream inputs (master prompt, catalogue-refresh note, the
+# inventory currency-assessment workbook) that every WS0…WS7 session resumes from.
+!docs/2608/**
 /api-hub-catalog.json
 .vercel-token
 .claude/
