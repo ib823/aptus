@@ -13,6 +13,7 @@ import { APP_CONFIG } from "@/constants/config";
 import {
   SAP_CONTENT_RELEASES,
   formatSapContentReleaseLabel,
+  formatSapProductReleaseLabel,
   isSapContentReleaseCode,
   resolveSapContentRelease,
 } from "@/lib/sap-content/release";
@@ -49,6 +50,13 @@ describe("resolveSapContentRelease", () => {
     expect(isSapContentReleaseCode(APP_CONFIG.sapVersion)).toBe(true);
     expect(SAP_CONTENT_RELEASES).toContain("2602");
     expect(SAP_CONTENT_RELEASES).toContain("2608");
+  });
+
+  it("formats the first-mention product label with marketing + technical name", () => {
+    expect(formatSapProductReleaseLabel("2608")).toBe(
+      "SAP Cloud ERP (SAP S/4HANA Cloud Public Edition) · content release 2608",
+    );
+    expect(resolveSapContentRelease({ SAP_CONTENT_RELEASE: "2608" }).productLabel).toContain("content release 2608");
   });
 
   it("formats the footer label exactly as the master prompt specifies", () => {

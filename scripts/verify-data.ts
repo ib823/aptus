@@ -16,7 +16,8 @@ async function main(): Promise<void> {
     const results: CheckResult[] = [];
 
     // Check 1: Scope items count (550 from XLSX + 10 from setup-PDF-only)
-    const scopeItemCount = await prisma.scopeItem.count();
+    // 2608 WS1: the hard counts below are the 2602 ZIP load; 2608 rows carry a releaseId and are excluded.
+    const scopeItemCount = await prisma.scopeItem.count({ where: { releaseId: null } });
     results.push({
       name: "Scope items",
       actual: scopeItemCount,
@@ -25,7 +26,7 @@ async function main(): Promise<void> {
     });
 
     // Check 2: Process steps count
-    const processStepCount = await prisma.processStep.count();
+    const processStepCount = await prisma.processStep.count({ where: { releaseId: null } });
     results.push({
       name: "Process steps",
       actual: processStepCount,
@@ -34,7 +35,7 @@ async function main(): Promise<void> {
     });
 
     // Check 3: Config activities count
-    const configCount = await prisma.configActivity.count();
+    const configCount = await prisma.configActivity.count({ where: { releaseId: null } });
     results.push({
       name: "Config activities",
       actual: configCount,
@@ -44,35 +45,31 @@ async function main(): Promise<void> {
 
     // Check 4: Config categories breakdown
     const mandatoryCount = await prisma.configActivity.count({
-      where: { category: "Mandatory" },
+      where: { releaseId: null, category: "Mandatory" },
     });
     const recommendedCount = await prisma.configActivity.count({
-      where: { category: "Recommended" },
+      where: { releaseId: null, category: "Recommended" },
     });
     const optionalCount = await prisma.configActivity.count({
-      where: { category: "Optional" },
+      where: { releaseId: null, category: "Optional" },
     });
     const otherCatCount = await prisma.configActivity.count({
-      where: { category: { notIn: ["Mandatory", "Recommended", "Optional"] } },
+      where: { releaseId: null, category: { notIn: ["Mandatory", "Recommended", "Optional"] } },
     });
     const catTotal = mandatoryCount + recommendedCount + optionalCount + otherCatCount;
     results.push({
       name: `Config categories: Mandatory=${mandatoryCount}, Recommended=${recommendedCount}, Optional=${optionalCount}, Other=${otherCatCount}`,
       actual: catTotal,
       expected: 4703,
-      pass:
-        mandatoryCount === 591 &&
-        recommendedCount === 1491 &&
-        optionalCount === 2604 &&
-        otherCatCount === 17,
+      pass: mandatoryCount === 591 && recommendedCount === 1491 && optionalCount === 2604 && otherCatCount === 17,
     });
 
     // Check 5: Self-service configs
     const selfServiceYes = await prisma.configActivity.count({
-      where: { selfService: true },
+      where: { releaseId: null, selfService: true },
     });
     const selfServiceNo = await prisma.configActivity.count({
-      where: { selfService: false },
+      where: { releaseId: null, selfService: false },
     });
     results.push({
       name: `Self-service configs: Yes=${selfServiceYes}, No=${selfServiceNo}`,

@@ -38,9 +38,9 @@ decisions:
     summary: >
       When an inquiry is rejected, what reasons should be available in the
       dropdown? SAP delivers ~20 standard reasons.
-    # TODO(verify): a real "Reasons for Rejection" SSCUI likely exists in the BD9/sales config set (release 2602); confirm exact ID, else keep this descriptive (no-direct-SSCUI) label.
-    sscui: "No direct SSCUI — Define Reasons for Rejection"
-    sscui_id: ""
+    # Re-validated against SSCUI_List 2608 (WS1): 102494 "Define Reasons for Rejection" (Sales / Basic Functions) lists 1IQ, BD9 and BDG among its main scope items.
+    sscui: "102494 - Define Reasons for Rejection"
+    sscui_id: "102494"
     sscui_name: "Define Reasons for Rejection"
     std_desc: Use SAP standard rejection reasons. Most clients find these sufficient.
     cfg_desc: Add or rename rejection reasons. Included.
@@ -55,7 +55,7 @@ decisions:
     summary: Should the inquiry show preliminary pricing? Standard SAP runs full pricing on inquiry.
     sscui: "104274/75/76 - Pricing Date logic"
     sscui_id: "104274"
-    sscui_name: "Pricing Date - Parameter Catalog / Formulas / Custom Routines"
+    sscui_name: "Define Parameter Catalog for Pricing Date"
     std_desc: Standard pricing runs at inquiry creation. No commitment, just an indicative price.
     cfg_desc: Adjust pricing date logic (e.g., use requested delivery date, not inquiry date). Included.
     cst_desc: Custom pricing routine for inquiries (e.g., apply promo logic only at inquiry stage). Effort estimated separately in your SOW.
@@ -69,7 +69,7 @@ decisions:
     summary: How should the system default and validate the requested delivery date entered by the rep?
     sscui: "103827-30 - Requested Delivery Date parameters & formulas"
     sscui_id: "103827"
-    sscui_name: "Requested Delivery Date - Parameters / Formulas / Rules / Custom Routines"
+    sscui_name: "Define Parameter Catalog for Requested Delivery Date"
     std_desc: Default = today + standard lead time. Standard behavior.
     cfg_desc: Customize default formula via SSCUI (e.g., today plus a fixed lead time, skip weekends). Included.
     cst_desc: Custom routine to look up delivery date from external planning system. Effort estimated separately in your SOW.

@@ -89,7 +89,7 @@ export default async function CatalogVersionsPage() {
                   {v.isActive ? (
                     <span className="text-xs text-green-700">● Active</span>
                   ) : (
-                    <span className="text-xs text-muted-foreground">○ Deprecated</span>
+                    <span className="text-xs text-muted-foreground">○ Inactive</span>
                   )}
                 </td>
               </tr>

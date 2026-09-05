@@ -18,6 +18,7 @@
  *                                  RELEASE.json (status, manifestHash, facts)
  *   pnpm sap:2608:recon --json     machine-readable report
  *   pnpm sap:2608:recon --skip-facts   integrity only (fast)
+ *   pnpm sap:2608:recon --db           also reconcile what the WS1 loaders wrote (needs DATABASE_URL)
  *
  * Exit codes: 0 green · 1 findings · 2 manifest unreadable.
  */
@@ -290,6 +291,121 @@ function checkFacts(o: Observed): Report["facts"] {
 }
 
 // ---------------------------------------------------------------------------
+// database (WS1 loaders) — only with --db
+// ---------------------------------------------------------------------------
+
+/** What the WS1 loaders must have produced for release 2608. */
+export const DB_FACTS_2608 = {
+  scopeItemsActiveOrPlanned: 679, // A&D Scope sheet
+  deprecationPlanned: 9,
+  obsolete: 6,
+  retired: 137, // 143 on the Retired sheet minus the 6 obsolete
+  anomaly: 0,
+  configActivities: 4328,
+  processStepRows: 19158,
+  processStepItems: 661,
+} as const;
+
+async function observeDb(): Promise<{ facts: Report["facts"]; notes: string[] }> {
+  const { PrismaClient } = await import("@prisma/client");
+  const prisma = new PrismaClient();
+  try {
+    const release = await prisma.sapContentRelease.findUnique({
+      where: { release_localisation: { release: RELEASE, localisation: "MY" } },
+    });
+    if (!release)
+      return {
+        facts: [{ name: "SapContentRelease 2608 · MY row", expected: "present", observed: "missing", ok: false }],
+        notes: [],
+      };
+    const catalog = await prisma.scopeCatalogVersion.findUnique({
+      where: { version_edition: { version: RELEASE, edition: "PUBLIC" } },
+    });
+    const by = new Map<string, number>();
+    if (catalog) {
+      for (const g of await prisma.scopeItem.groupBy({
+        by: ["lifecycleStatus"],
+        where: { catalogVersionId: catalog.id },
+        _count: { _all: true },
+      }))
+        by.set(g.lifecycleStatus, g._count._all);
+    }
+    const cfg = await prisma.configActivity.count({ where: { releaseId: release.id } });
+    const psRows = await prisma.sapProcessStep.count({ where: { releaseId: release.id } });
+    const psItems = (await prisma.sapProcessStep.groupBy({ by: ["scopeItemCode"], where: { releaseId: release.id } }))
+      .length;
+    const untouched = {
+      scope: await prisma.scopeItem.count({ where: { releaseId: null } }),
+      cfg: await prisma.configActivity.count({ where: { releaseId: null } }),
+      affirmSteps: await prisma.affirmProcessStep.count(),
+    };
+    const n = (k: string) => by.get(k) ?? 0;
+    const facts: Report["facts"] = [
+      {
+        name: "db · ScopeCatalogVersion PUBLIC/2608",
+        expected: "present, inactive",
+        observed: catalog ? `present, ${catalog.isActive ? "ACTIVE" : "inactive"}` : "missing",
+        ok: !!catalog && !catalog.isActive,
+      },
+      {
+        name: "db · scope items ACTIVE + DEPRECATION_PLANNED",
+        expected: DB_FACTS_2608.scopeItemsActiveOrPlanned,
+        observed: n("ACTIVE") + n("DEPRECATION_PLANNED"),
+        ok: within(DB_FACTS_2608.scopeItemsActiveOrPlanned, n("ACTIVE") + n("DEPRECATION_PLANNED")),
+      },
+      {
+        name: "db · DEPRECATION_PLANNED",
+        expected: DB_FACTS_2608.deprecationPlanned,
+        observed: n("DEPRECATION_PLANNED"),
+        ok: n("DEPRECATION_PLANNED") === DB_FACTS_2608.deprecationPlanned,
+      },
+      {
+        name: "db · OBSOLETE",
+        expected: DB_FACTS_2608.obsolete,
+        observed: n("OBSOLETE"),
+        ok: n("OBSOLETE") === DB_FACTS_2608.obsolete,
+      },
+      {
+        name: "db · RETIRED",
+        expected: DB_FACTS_2608.retired,
+        observed: n("RETIRED"),
+        ok: within(DB_FACTS_2608.retired, n("RETIRED")),
+      },
+      {
+        name: "db · ANOMALY",
+        expected: DB_FACTS_2608.anomaly,
+        observed: n("ANOMALY"),
+        ok: n("ANOMALY") === DB_FACTS_2608.anomaly,
+      },
+      {
+        name: "db · ConfigActivity (2608)",
+        expected: DB_FACTS_2608.configActivities,
+        observed: cfg,
+        ok: within(DB_FACTS_2608.configActivities, cfg),
+      },
+      {
+        name: "db · SapProcessStep rows (2608)",
+        expected: DB_FACTS_2608.processStepRows,
+        observed: psRows,
+        ok: within(DB_FACTS_2608.processStepRows, psRows),
+      },
+      {
+        name: "db · SapProcessStep scope items (2608)",
+        expected: DB_FACTS_2608.processStepItems,
+        observed: psItems,
+        ok: within(DB_FACTS_2608.processStepItems, psItems),
+      },
+    ];
+    const notes = [
+      `db · 2602-era rows (releaseId null): ScopeItem ${untouched.scope} · ConfigActivity ${untouched.cfg} · AffirmProcessStep (MY flows) ${untouched.affirmSteps} — the WS1 loaders never write these`,
+    ];
+    return { facts, notes };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // release record
 // ---------------------------------------------------------------------------
 
@@ -325,6 +441,7 @@ async function main(): Promise<number> {
   const write = args.has("--write");
   const json = args.has("--json");
   const skipFacts = args.has("--skip-facts");
+  const withDb = args.has("--db");
   const now = new Date().toISOString();
 
   let manifest: Manifest;
@@ -382,6 +499,13 @@ async function main(): Promise<number> {
       if (!f.ok) findings.push(`FACT DRIFT > ±1%: ${f.name} — expected ${f.expected}, observed ${String(f.observed)}`);
   } else if (!skipFacts) {
     findings.push("facts skipped: manifest files missing on disk");
+  }
+  if (withDb) {
+    const db = await observeDb();
+    facts = [...facts, ...db.facts];
+    notes.push(...db.notes);
+    for (const f of db.facts)
+      if (!f.ok) findings.push(`DB DRIFT: ${f.name} — expected ${f.expected}, observed ${String(f.observed)}`);
   }
 
   // Release record

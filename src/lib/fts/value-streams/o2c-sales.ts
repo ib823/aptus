@@ -17,7 +17,7 @@
  *     a stored row.
  *
  * PROVENANCE
- *   Every row carries sscui_id (real SAP SSCUI from the 2602 catalogue),
+ *   Every row carries sscui_id (real SAP SSCUI, re-validated against the 2608 list),
  *   area_topic, scope_item_refs, sap_verbatim. Re-generate from a fresh
  *   pull when SAP ships the next release; do NOT hand-edit content.
  *
@@ -30,9 +30,9 @@
 
 import type { ScopeItemContent, Decision } from '../types';
 
-const SOURCE_RELEASE = 'S/4HANA Cloud Public Edition 2602';
+const SOURCE_RELEASE = 'S/4HANA Cloud Public Edition 2608';
 const SOURCE_NOTE =
-  'Generated from SAP BDC Questionnaire S4H_433 · release S4CLD 2602 · the Level-2 pre-workshop affirm-set.';
+  'Generated from SAP BDC Questionnaire S4H_433 (byte-identical 2602→2608) · SSCUI ids re-validated against SSCUI_List 2608 (WS1) · the Level-2 pre-workshop affirm-set.';
 
 /** Narrative-style question — Business Overview. No SSCUI, free-text answer. */
 function n(
@@ -131,8 +131,8 @@ const decisions: Decision[] = [
     id: 'q5',
     title: 'Sales Organizations',
     areaTopic: 'Organization',
-    sscuiId: '100222',
-    sscuiName: 'Sales Organizations',
+    sscuiId: '105970',
+    sscuiName: 'Maintain Sales Organizations',
     scopeItemRefs: ['BD9', '2EQ', 'I9I', 'BKA', 'BDD', '1EZ', '1F1', '1MC', '1J7', 'J14'],
     sapVerbatim:
       'Provide information about all the Sales Entities that are in scope for the project. The details include Name, Address, Country, Language, Jurisdiction Code etc.',
@@ -141,8 +141,8 @@ const decisions: Decision[] = [
     id: 'q6',
     title: 'Distribution Channels',
     areaTopic: 'Organization',
-    sscuiId: '100196',
-    sscuiName: 'Distribution Channels',
+    sscuiId: '106006',
+    sscuiName: 'Maintain Distribution Channels',
     scopeItemRefs: ['BD9', '2EQ', 'I9I', 'BKA', 'BDD', '1EZ', '1F1', '1MC', '1J7', 'J14'],
     sapVerbatim:
       'Please provide a description for each distribution channel you have defined (e.g. Wholesale, Retail, Digital).',
@@ -151,8 +151,8 @@ const decisions: Decision[] = [
     id: 'q7',
     title: 'Define Division',
     areaTopic: 'Organization',
-    sscuiId: '100526',
-    sscuiName: 'Define Division',
+    sscuiId: '106005',
+    sscuiName: 'Maintain Divisions',
     scopeItemRefs: ['BD9', '2EQ', 'I9I', 'BKA', 'BDD', '1EZ', '1F1', '1MC', '1J7', 'J14'],
     sapVerbatim:
       'How many product divisions do you currently have? Please provide a description for each of these.',
@@ -161,8 +161,8 @@ const decisions: Decision[] = [
     id: 'q8',
     title: 'Sales Offices',
     areaTopic: 'Organization',
-    sscuiId: '100221',
-    sscuiName: 'Sales Offices',
+    sscuiId: '105866',
+    sscuiName: 'Maintain Sales Office',
     scopeItemRefs: ['BD9', '2EQ', 'I9I', 'BKA', 'BDD', '1EZ', '1F1', '1MC', '1J7', 'J14'],
     sapVerbatim:
       'Please provide information about each Sales Office such as Name, Address, Country, Language, Jurisdiction Code etc.',
@@ -171,8 +171,8 @@ const decisions: Decision[] = [
     id: 'q9',
     title: 'Sales Groups',
     areaTopic: 'Organization',
-    sscuiId: '100220',
-    sscuiName: 'Sales Groups',
+    sscuiId: '105998',
+    sscuiName: 'Maintain Sales Group',
     scopeItemRefs: ['BD9', '2EQ', 'I9I', 'BKA', 'BDD', '1EZ', '1F1', '1MC', '1J7', 'J14'],
     sapVerbatim:
       'Please describe the different sales groupings that you assign to your customers in order to identify their responsible sales representatives.',
@@ -215,8 +215,11 @@ const decisions: Decision[] = [
     id: 'q13',
     title: 'Maintain Algorithm Parameters for Intelligent Product Proposal',
     areaTopic: 'Basic Functions — Intelligent Product Proposal',
-    sscuiId: '103833',
-    sscuiName: 'Maintain Algorithm Parameters for Intelligent Product Proposal',
+    // 2608: 103833 (Algorithm Parameters) is no longer in the SSCUI list; the
+    // Intelligent Product Proposal is configured through procedure determination
+    // (103834 background / 103835 online). Nearest real 2608 activity, not identical.
+    sscuiId: '103834',
+    sscuiName: 'Maintain Backgr. Procedure Determination for Intelligent Product Proposal',
     scopeItemRefs: ['BD9'],
     sapVerbatim:
       'Decide and mention if you wish to enable the intelligent product proposal. Additionally, identify the customers (Business Partners) for whom you want to enable the intelligent product proposal.',

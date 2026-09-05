@@ -1,0 +1,34 @@
+{
+  "release": "2608",
+  "_provenance": {
+    "transcribedFrom": "docs/2608/aptus-SAP-Inventory-Currency-Assessment-2026-09-05.xlsx · tab \"Scope Delta\" (verified 2026-09-05: A&D 2602→2608 file diff + SAP What's New 2608 \"Deprecated Scope Items\")",
+    "sources": [
+      "sap-references/2608/Availability_Dependencies_EN_XX.xlsx (Scope + Retired Scope Items sheets)",
+      "https://help.sap.com/docs/SAP_S4HANA_CLOUD/ee9ee0ca4c3942068ea584d2f929b5b1/d86b73c768b344708dab88b4a7f6d6ae.html?version=2608.00"
+    ],
+    "note": "Successor codes are the SAP-named successors; an empty list means SAP names none. The loader applies OBSOLETE to codes on the Retired sheet that were in the 2602 catalogue, DEPRECATION_PLANNED to codes still in the A&D Scope sheet, and never invents a successor."
+  },
+  "added": ["5RP", "7ED", "7Z1", "82X", "830", "839", "83B", "83D", "83I", "83S", "85O", "86C", "88K"],
+  "obsolete": [
+    { "code": "1QR", "name": "Predictive Analytics for Purchase Contract Quantity Consumption", "successors": [], "note": "No successor planned" },
+    { "code": "21T", "name": "Subsidiary as Production Unit and Internal Supplier to Headquarters", "successors": ["2EJ", "2EL"], "note": "2EJ Integration of Procurement with External Suppliers / 2EL Integration of Sales with External Buyers" },
+    { "code": "2RP", "name": "Electronic Documents", "successors": ["78L"], "note": "78L SAP Document and Reporting Compliance, Cloud Edition Integration (licence required)" },
+    { "code": "3FY", "name": "Prediction of Delivery Date for Purchase Order Items", "successors": [], "note": "No successor planned" },
+    { "code": "6VB", "name": "Asset Accounting – Additional Depreciation Keys for Local GAAPs", "successors": [], "note": "No successor planned" },
+    { "code": "7ZH", "name": "Revenue Growth Management", "successors": [], "note": "Removed from A&D; not on the What's New deprecation list" }
+  ],
+  "deprecationPlanned": [
+    { "code": "1RK", "name": "Mass Load and Mass Maintenance for Business Partner", "successors": ["7MI"], "note": "7MI Mass Load and Mass Maintenance for Business Partners (+ feature MDC_BP_CLOUD_READY; SAP Note 3646136)" },
+    { "code": "20N", "name": "Predictive Analytics Model Training – Supply Chain", "successors": [], "note": "No successor planned" },
+    { "code": "2OQ", "name": "Integration to SAP Enterprise Contract Assembly", "successors": ["6V2"], "note": "6V2 Integration to Icertis for Contract Assembly (extra licence)" },
+    { "code": "4AI", "name": "SAP Ariba Buying", "successors": ["7YM"], "note": "7YM SAP Ariba Buying Base Edition" },
+    { "code": "4N6", "name": "Invoice Processing with SAP Ariba Central Invoice Management", "successors": ["7YH"], "note": "7YH Invoice Processing with SAP Ariba Invoicing" },
+    { "code": "6AV", "name": "Request Regulatory Documentation from Service Provider", "successors": ["7DO"], "note": "7DO" },
+    { "code": "BH1", "name": "Corrective Maintenance", "successors": ["4HH"], "note": "4HH Reactive Maintenance (close open notifications/orders first)" },
+    { "code": "BH2", "name": "Emergency Maintenance", "successors": ["4HH"], "note": "4HH Reactive Maintenance" },
+    { "code": "BJ2", "name": "Preventive Maintenance", "successors": ["4HI"], "note": "4HI Proactive Maintenance" }
+  ],
+  "anomalyCandidates": [
+    { "code": "1NN", "claim": "Assessment: present in 2608 Process-Steps but not in the 2608 A&D Scope sheet", "note": "WS0 recon: 1NN IS in the 2608 A&D Scope sheet (row 3). The loader decides ANOMALY from the files, not from this list." }
+  ]
+}
