@@ -1,0 +1,52 @@
+{
+  "_provenance": {
+    "purpose": "Sample client answer set for the WS6 Order-to-Cash pilot pack. Question ids are the affirm bank's (prisma/seeds/value-stream/dataset.json, sourced from SAP BDC S4H_433 Sales); choices use the affirm vocabulary standard | discuss | deviate. Reasons are illustrative client wording for a demo, not a real client's answers.",
+    "release": "2608",
+    "chain": "o2c-sales"
+  },
+  "bundle": {
+    "client": "PILOT · Order to Cash (WS6)",
+    "country": "MY",
+    "scopeCodes": ["1IQ", "BDG", "BD9", "J59", "2ET"]
+  },
+  "answers": [
+    {
+      "questionId": "L2-024",
+      "choice": "deviate",
+      "reason": "Committed stock and open deliveries must be considered; we run tight inventory on fast movers."
+    },
+    { "questionId": "L2-025", "choice": "standard", "reason": null },
+    {
+      "questionId": "L2-026",
+      "choice": "deviate",
+      "reason": "Batch determination must run automatically at delivery for all pharma-grade items."
+    },
+    { "questionId": "L2-072", "choice": "standard", "reason": null },
+    {
+      "questionId": "L2-074",
+      "choice": "discuss",
+      "reason": "We need to see the preconfigured incompleteness procedures first."
+    },
+    { "questionId": "L2-075", "choice": "standard", "reason": null },
+    { "questionId": "L2-076", "choice": "standard", "reason": null },
+    {
+      "questionId": "L2-077",
+      "choice": "deviate",
+      "reason": "Quotations above MYR 250k require sales-director approval with a stated reason."
+    },
+    { "questionId": "L2-078", "choice": "standard", "reason": null },
+    { "questionId": "L2-079", "choice": "standard", "reason": null },
+    {
+      "questionId": "L2-082",
+      "choice": "deviate",
+      "reason": "Configurable products are sold through the dealer channel; the described materials do not cover them."
+    },
+    { "questionId": "L2-090", "choice": "deviate", "reason": "Dealer and project pricing use different procedures." },
+    { "questionId": "L2-091", "choice": "discuss", "reason": null },
+    { "questionId": "L2-092", "choice": "standard", "reason": null },
+    { "questionId": "L2-093", "choice": "standard", "reason": null },
+    { "questionId": "L2-095", "choice": "standard", "reason": null },
+    { "questionId": "L2-096", "choice": "standard", "reason": null },
+    { "questionId": "L2-097", "choice": "standard", "reason": null }
+  ]
+}

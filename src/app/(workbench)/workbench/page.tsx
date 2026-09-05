@@ -20,6 +20,7 @@ import { SapOperationsDashboard } from '@/components/sap/SapOperationsDashboard'
 import { getCurrentUser } from '@/lib/auth/session';
 import { getConfiguredSapTenants } from '@/lib/sap-public/tdd-connector';
 import { canAccessStudio } from '@/lib/studio/rbac';
+import { isTobePackEnabled } from '@/lib/tobe/guards';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -99,6 +100,18 @@ const DISCOVERY_SURFACE: SurfaceCard = {
   cta: 'Open discovery',
 };
 
+/** 2608 WS6. Feature-gated by TOBE_PACK_ENABLED, same shape as discovery. */
+const TOBE_SURFACE: SurfaceCard = {
+  href: '/tobe',
+  eyebrow: 'Fit-to-Standard · To-Be',
+  title: 'To-Be Process Packs',
+  body:
+    'Turn an engagement\u2019s scope set and the client\u2019s affirmations into ' +
+    'the to-be process: end-to-end chain, a swimlane per scope item and the ' +
+    'step table, with every non-standard step traced to its answer and SSCUI.',
+  cta: 'Open to-be packs',
+};
+
 export default async function WorkbenchHomePage() {
   const user = await getCurrentUser();
   const sampleEnabled =
@@ -108,6 +121,7 @@ export default async function WorkbenchHomePage() {
   const surfaces = [
     ...SURFACES,
     ...(process.env.NEUTRAL_DISCOVERY_ENABLED === "true" ? [DISCOVERY_SURFACE] : []),
+    ...(isTobePackEnabled() ? [TOBE_SURFACE] : []),
     ...(canAccessStudio(user?.role) ? [STUDIO_SURFACE] : []),
   ];
 

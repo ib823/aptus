@@ -28,6 +28,7 @@ const nextConfig: NextConfig = {
     "nodemailer",
     "web-push",
     "jspdf",
+    "pptxgenjs",
     "archiver",
     "sanitize-html",
     "sharp",

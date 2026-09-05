@@ -155,6 +155,15 @@ jobs:
           NEUTRAL_DISCOVERY_ENABLED: "true"
           DISCOVERY_E2E: "1"
 
+      # 2608 WS6: the To-Be Process Pack is behind TOBE_PACK_ENABLED and runs on
+      # the consultant project. This boots the app with the flag on and
+      # TOBE_E2E=1 so the generate → view → export journey actually executes.
+      - name: Run to-be process pack e2e
+        run: pnpm test:e2e:tobe-pack
+        env:
+          TOBE_PACK_ENABLED: "true"
+          TOBE_E2E: "1"
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v7

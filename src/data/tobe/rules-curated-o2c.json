@@ -1,0 +1,42 @@
+{
+  "_provenance": {
+    "purpose": "Curated To-Be rules for the Order-to-Cash pilot (2608 WS6): a BDC question whose SSCUI configures specific BPD 2608 steps, mapped to those steps by name so the L2 diagram can mark them CONFIGURED when the client deviates. Every SSCUI id is from SSCUI_List 2608; every step name is from the 2608 BPD xlsx. The step mapping is a consultant reading of the question's topic and is flagged confirm-in-workshop on the pack.",
+    "source": "curated",
+    "release": "2608"
+  },
+  "rules": [
+    {
+      "id": "curated:L2-077:BDG",
+      "questionId": "L2-077",
+      "scopeCode": "BDG",
+      "trigger": "deviate",
+      "state": "CONFIGURED",
+      "sscuiId": "102751",
+      "sscuiName": "Define Reasons for Approval Requests",
+      "stepNames": ["Process Sales Quotation Approval (Optional)", "Approve/Reject/Rework Quotation"],
+      "note": "Quotation approval workflow (S4H_433) configures the approval steps of Sales Quotation."
+    },
+    {
+      "id": "curated:L2-024:BD9",
+      "questionId": "L2-024",
+      "scopeCode": "BD9",
+      "trigger": "deviate",
+      "state": "CONFIGURED",
+      "sscuiId": "101099",
+      "sscuiName": "Configure Scope of Availability Check",
+      "stepNames": ["Advanced Available-to-Promise Processing (Optional)"],
+      "note": "Availability-check scope (S4H_433) is exercised in the aATP step of Sell from Stock."
+    },
+    {
+      "id": "curated:L2-026:BD9",
+      "questionId": "L2-026",
+      "scopeCode": "BD9",
+      "trigger": "deviate",
+      "state": "CONFIGURED",
+      "sscuiId": "102172",
+      "sscuiName": "Activate Automatic Batch Determination for Delivery Item Categories",
+      "stepNames": ["Check Batches (Optional)"],
+      "note": "Automatic batch determination (S4H_433) is exercised in the Check Batches step of Sell from Stock."
+    }
+  ]
+}
