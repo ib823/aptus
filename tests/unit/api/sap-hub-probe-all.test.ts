@@ -115,6 +115,22 @@ describe("POST /api/sap/tdd/hub-content/probe-all", () => {
     expect(raw.source).toBe("SapApiReference");
   });
 
+  it("skips SAP-deprecated rows by default and includes them only on includeDeprecated: true (2608 WS3)", async () => {
+    await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES" }));
+    const where = mocks.findMany.mock.calls[0]![0].where;
+    expect(where.NOT).toEqual({ hubState: "DEPRECATED" });
+
+    mocks.findMany.mockClear();
+    const res = await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES", includeDeprecated: true }));
+    expect(mocks.findMany.mock.calls[0]![0].where.NOT).toBeUndefined();
+    expect((await res.json()).data.includeDeprecated).toBe(true);
+
+    // Anything but the literal boolean true stays opted OUT.
+    mocks.findMany.mockClear();
+    await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES", includeDeprecated: "true" }));
+    expect(mocks.findMany.mock.calls[0]![0].where.NOT).toEqual({ hubState: "DEPRECATED" });
+  });
+
   it("400 on an unknown tenant key", async () => {
     mocks.getSapTenant.mockReturnValue(null);
     const res = await POST(makeRequest({ confirmation: "PROBE ALL SAP SERVICES", tenant: "nope" }));

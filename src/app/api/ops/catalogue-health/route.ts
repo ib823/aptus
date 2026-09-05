@@ -31,6 +31,7 @@ import {
   HUB_CONTENT_TYPES,
   HUB_CONTENT_TYPE_META,
   S4_PUBLIC_PUBLISHED_COUNTS,
+  S4_PUBLIC_PUBLISHED_RELEASE,
   type HubContentType,
 } from "@/lib/sap-public/hub-content";
 import { deploymentFallbackTenants } from "@/lib/studio/tenants";
@@ -135,8 +136,8 @@ export async function GET(): Promise<NextResponse> {
       stalenessDays: CATALOGUE_STALE_AFTER_DAYS,
       types,
       reference: {
-        publishedCountsNote:
-          "Published SAP Business Accelerator Hub figures for S/4HANA Cloud Public Edition, reconciled against the committed drop files (2026-07 snapshot). They move with each SAP release — compare within drift, never for equality.",
+        publishedRelease: S4_PUBLIC_PUBLISHED_RELEASE,
+        publishedCountsNote: `Published SAP Business Accelerator Hub figures for S/4HANA Cloud Public Edition at content release ${S4_PUBLIC_PUBLISHED_RELEASE} (anonymous catalogue enumeration + logged-in product page, 2026-09-05). They move with each SAP release — compare within drift, never for equality.`,
         artifactCounts: artifactCountsProvenance(),
       },
       probeCoverage: {

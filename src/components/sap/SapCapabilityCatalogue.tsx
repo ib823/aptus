@@ -10,7 +10,13 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { AlertTriangle, RefreshCw, Search } from "lucide-react";
-import { HUB_CONTENT_TYPE_META, type HubContentType, type HubStatus } from "@/lib/sap-public/hub-content";
+import {
+  HUB_CONTENT_TYPE_META,
+  HUB_STATUSES,
+  deprecationTooltip,
+  type HubContentType,
+  type HubStatus,
+} from "@/lib/sap-public/hub-content";
 import { PRODUCT_MARKS } from "@/lib/studio/product-marks";
 import { HARVEST_TYPES } from "@/lib/sap-public/hub-harvest-types";
 import { useAffirmLearn } from "@/components/affirm/learn/context";
@@ -38,6 +44,10 @@ interface HubItem {
   illustrative?: boolean | null;
   hubUrl: string;
   status: HubStatus;
+  /** 2608 WS3 — Hub State / Version as published; DEPRECATED rows carry SAP's successor when one is named. */
+  hubState?: string | null;
+  hubVersion?: string | null;
+  successorExternalId?: string | null;
   availabilityNote?: "subscribe" | null;
   dataConfirmed?: boolean;
   /** Real read/write for the ~60 probed rows (else null → "not probed"). */
@@ -49,7 +59,7 @@ interface HubData {
   total: number;
   page: number;
   limit: number;
-  counts: { byType: Record<string, number>; byTypeItems?: Record<string, number>; aiApis?: number; byStatus: Record<HubStatus, number>; byLob?: Record<string, number>; probeableRuntime: number; probed: number; lastProbedAt?: string | null; dataConfirmed?: number; dataProbe?: boolean };
+  counts: { byType: Record<string, number>; byTypeItems?: Record<string, number>; byTypeDeprecated?: Record<string, number>; aiApis?: number; byStatus: Record<HubStatus, number>; byLob?: Record<string, number>; probeableRuntime: number; probed: number; lastProbedAt?: string | null; dataConfirmed?: number; dataProbe?: boolean };
   catalogueImported: boolean;
   /** The tenant's display LABEL — for captions, never for query params. */
   tenant: string | null;
@@ -67,7 +77,7 @@ type StatusFilter = "ALL" | HubStatus;
 // Full faceted set. Each facet renders only when it has rows (or is selected),
 // so empty statuses stay out of the way — but NOT_PROBEABLE (~470) always shows
 // its count and is never hidden. Counts come from the edition-wide byStatus.
-const STATUS_FILTERS: StatusFilter[] = ["ALL", "ACTIVATED", "NEEDS_SETUP", "NOT_CHECKED", "NOT_PROBEABLE", "NOT_FOUND", "AVAILABLE", "REFERENCE"];
+const STATUS_FILTERS: StatusFilter[] = ["ALL", "ACTIVATED", "NEEDS_SETUP", "NOT_CHECKED", "NOT_PROBEABLE", "NOT_FOUND", "AVAILABLE", "REFERENCE", "DEPRECATED"];
 const STATUS_LABEL: Record<StatusFilter, string> = {
   ALL: "All",
   ACTIVATED: "Activated",
@@ -77,6 +87,7 @@ const STATUS_LABEL: Record<StatusFilter, string> = {
   NOT_PROBEABLE: "Not probeable",
   AVAILABLE: "Available",
   REFERENCE: "Reference",
+  DEPRECATED: "Deprecated",
 };
 
 /**
@@ -94,6 +105,8 @@ function statusHint(status: BadgeStatus): { text: string; color: string } | null
       return { text: "not probeable — no OData endpoint (SOAP/async)", color: "var(--ink-muted)" };
     case "NOT_FOUND":
       return { text: "path not found on this tenant", color: "var(--ink-muted)" };
+    case "DEPRECATED":
+      return { text: "deprecated by SAP — build on the successor, not on this", color: "var(--status-revoked-fg)" };
     default:
       return null;
   }
@@ -401,15 +414,12 @@ export function SapCapabilityCatalogue({
   );
   const totalItems = Object.values(byTypeItems).reduce((n, c) => n + c, 0);
   const aiApis = data?.counts.aiApis ?? 0;
-  const byStatus: Record<HubStatus, number> = data?.counts.byStatus ?? {
-    ACTIVATED: 0,
-    NEEDS_SETUP: 0,
-    NOT_FOUND: 0,
-    NOT_CHECKED: 0,
-    NOT_PROBEABLE: 0,
-    AVAILABLE: 0,
-    REFERENCE: 0,
-  };
+  // Every bucket in HUB_STATUSES is present (0 when the payload predates it),
+  // so a new status never renders as undefined in a facet or the scorecard.
+  const byStatus = {
+    ...(Object.fromEntries(HUB_STATUSES.map((s) => [s, 0])) as Record<HubStatus, number>),
+    ...(data?.counts.byStatus ?? {}),
+  } as Record<HubStatus, number>;
   // Edition-wide total for the ALL facet (byStatus is computed over every row,
   // independent of the active contentType/search/status filters).
   const allCount = Object.values(byStatus).reduce((sum, n) => sum + n, 0);
@@ -517,6 +527,7 @@ export function SapCapabilityCatalogue({
               probeable={probeable}
               apiTotal={apiTotal}
               reference={byStatus.REFERENCE}
+              deprecated={byStatus.DEPRECATED}
               totalItems={totalItems}
               aiApis={aiApis}
               lastProbedAt={lastProbedAt}
@@ -542,6 +553,7 @@ export function SapCapabilityCatalogue({
               <StatusBadge status="NOT_CHECKED" />
               <StatusBadge status="NOT_PROBEABLE" />
               <StatusBadge status="REFERENCE" />
+              <StatusBadge status="DEPRECATED" />
               <span style={{ color: "var(--ink-muted)" }}>whether an item is live on this tenant</span>
             </div>
             <p style={{ color: "var(--ink-muted)" }}>
@@ -549,7 +561,13 @@ export function SapCapabilityCatalogue({
             </p>
           </div>
           <div data-tour="sap-tiles">
-            <ContentTypeTiles byType={byType} byTypeItems={byTypeItems} activeType={contentType} onSelect={setContentType} />
+            <ContentTypeTiles
+              byType={byType}
+              byTypeItems={byTypeItems}
+              byTypeDeprecated={data?.counts.byTypeDeprecated}
+              activeType={contentType}
+              onSelect={setContentType}
+            />
           </div>
 
           {/* Source / domain facets — SAP-only (hide partner) + AI-only. Read from
@@ -814,7 +832,11 @@ export function SapCapabilityCatalogue({
                               aria-label={`What does "${effStatus}" mean?`}
                               className="cursor-help rounded-[var(--radius-pill)]"
                             >
-                              <StatusBadge status={effStatus} subscribe={item.availabilityNote === "subscribe"} />
+                              <StatusBadge
+                                status={effStatus}
+                                subscribe={item.availabilityNote === "subscribe"}
+                                tip={effStatus === "DEPRECATED" ? deprecationTooltip(item.successorExternalId) : undefined}
+                              />
                             </button>
                           </div>
                         </div>

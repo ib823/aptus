@@ -16,6 +16,8 @@ import {
   resolveHubStatus,
   type HubContentType,
   type HubStatus,
+  HUB_STATUSES,
+  deprecationTooltip,
 } from "@/lib/sap-public/hub-content";
 
 describe("classifyApiTypeById (honest, no broken-path types)", () => {
@@ -136,6 +138,34 @@ describe("resolveHubStatus (probe-outcome-driven, honest badges)", () => {
     expect(resolveHubStatus(cds, new Map([["CDS_X", 200]]))).toBe("ACTIVATED");
     expect(resolveHubStatus(cds, new Map([["CDS_X", 403]]))).toBe("NEEDS_SETUP");
     expect(resolveHubStatus(cds, new Map())).toBe("NOT_CHECKED");
+  });
+
+  it("hubState DEPRECATED wins over every probe outcome and every type (2608 WS3)", () => {
+    const dep = { ...runtime, hubState: "DEPRECATED" };
+    expect(resolveHubStatus(dep, new Map([["API_X", 200]]))).toBe("DEPRECATED"); // never ACTIVATED
+    expect(resolveHubStatus(dep, new Map([["API_X", 403]]))).toBe("DEPRECATED");
+    expect(resolveHubStatus(dep, new Map([["API_X", 404]]))).toBe("DEPRECATED");
+    expect(resolveHubStatus(dep)).toBe("DEPRECATED");
+    expect(resolveHubStatus({ ...reference, hubState: "DEPRECATED" })).toBe("DEPRECATED");
+    expect(resolveHubStatus({ contentType: "EVENT", apiType: null, externalId: "CE_X", hubState: "DEPRECATED" })).toBe("DEPRECATED");
+  });
+
+  it("any other hubState (ACTIVE / null / unknown) leaves the probe-driven bucket untouched", () => {
+    for (const hubState of ["ACTIVE", null, undefined, "RELEASED"]) {
+      expect(resolveHubStatus({ ...runtime, hubState }, new Map([["API_X", 200]]))).toBe("ACTIVATED");
+      expect(resolveHubStatus({ ...runtime, hubState })).toBe("NOT_CHECKED");
+      expect(resolveHubStatus({ ...reference, hubState })).toBe("REFERENCE");
+    }
+  });
+
+  it("deprecationTooltip names the successor or says none is named yet", () => {
+    expect(deprecationTooltip("API_NEW")).toBe("Deprecated by SAP — successor: API_NEW");
+    expect(deprecationTooltip(null)).toBe("Deprecated by SAP — no successor named yet");
+    expect(deprecationTooltip(undefined)).toBe("Deprecated by SAP — no successor named yet");
+    // HUB_STATUSES is the one display-order list every consumer iterates; DEPRECATED is its last bucket.
+    expect(HUB_STATUSES).toHaveLength(8);
+    expect(HUB_STATUSES[HUB_STATUSES.length - 1]).toBe("DEPRECATED");
+    expect(new Set(HUB_STATUSES).size).toBe(8);
   });
 
   it("EVENT is subscribe-only → AVAILABLE, never ACTIVATED even if forced into the map", () => {

@@ -47,11 +47,14 @@ const ALL_ROWS = [
   { externalId: "SOAP_IN", contentType: "API", apiType: "SOAP", rawMetadataJson: { source: "s" } }, // no OData → NOT_PROBEABLE
   { externalId: "CE_X", contentType: "EVENT", apiType: null, rawMetadataJson: null }, // → AVAILABLE
   { externalId: "BADI_X", contentType: "BADI", apiType: null, rawMetadataJson: null }, // → REFERENCE
+  // 2608 WS3: SAP-deprecated and STILL answering 200 on the tenant → DEPRECATED, never ACTIVATED.
+  { externalId: "API_OLD", contentType: "API", apiType: "ODATAV2", hubState: "DEPRECATED", successorExternalId: "API_NEW", rawMetadataJson: stored(200, true, true) },
 ];
 const PAGE_ROWS = [
   { id: "1", contentType: "API", externalId: "API_PO", title: "PO", description: "", packageId: "Proc", apiType: "ODATAV2", communicationScenarios: ["SAP_COM_0053"], itemCount: null, hubUrl: "u" },
   { id: "2", contentType: "EVENT", externalId: "CE_X", title: "Ev", description: "", packageId: null, apiType: null, communicationScenarios: [], itemCount: null, hubUrl: "u" },
   { id: "3", contentType: "BADI", externalId: "BADI_X", title: "BAdI", description: "", packageId: null, apiType: null, communicationScenarios: [], itemCount: 1665, hubUrl: "u" },
+  { id: "4", contentType: "API", externalId: "API_OLD", title: "Old", description: "", packageId: "Proc", apiType: "ODATAV2", communicationScenarios: [], itemCount: null, hubUrl: "u", hubState: "DEPRECATED", hubVersion: "2608", successorExternalId: "API_NEW", rawMetadataJson: stored(200, true, true) },
 ];
 const GROUPED = [
   { contentType: "API", _count: { _all: 5 } },
@@ -114,18 +117,25 @@ describe("GET /api/sap/tdd/hub-content", () => {
   it("happy path: STORED probe drives honest badges + counts (incl. NOT_PROBEABLE)", async () => {
     const body = await (await GET(makeRequest())).json();
     const byId = Object.fromEntries(body.data.items.map((i: { externalId: string; status: string }) => [i.externalId, i.status]));
-    expect(byId).toEqual({ API_PO: "ACTIVATED", CE_X: "AVAILABLE", BADI_X: "REFERENCE" });
-    // Classified over the 5 allRows: 1 ACTIVATED (stored 200), 1 NOT_CHECKED
-    // (probeable C_VIEW, no probe), 1 NOT_PROBEABLE (SOAP), 1 AVAILABLE (event), 1 REFERENCE.
+    expect(byId).toEqual({ API_PO: "ACTIVATED", CE_X: "AVAILABLE", BADI_X: "REFERENCE", API_OLD: "DEPRECATED" });
+    // The deprecated row carries SAP's successor and its Hub State/Version for the badge tooltip.
+    const old = body.data.items.find((i: { externalId: string }) => i.externalId === "API_OLD");
+    expect(old).toMatchObject({ hubState: "DEPRECATED", hubVersion: "2608", successorExternalId: "API_NEW" });
+    // Classified over the 6 allRows: 1 ACTIVATED (stored 200), 1 NOT_CHECKED
+    // (probeable C_VIEW, no probe), 1 NOT_PROBEABLE (SOAP), 1 AVAILABLE (event),
+    // 1 REFERENCE, 1 DEPRECATED (stored 200 but SAP-retired — not ACTIVATED).
     expect(body.data.counts.byStatus).toEqual({
-      ACTIVATED: 1, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 1, NOT_PROBEABLE: 1, AVAILABLE: 1, REFERENCE: 1,
+      ACTIVATED: 1, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 1, NOT_PROBEABLE: 1, AVAILABLE: 1, REFERENCE: 1, DEPRECATED: 1,
     });
+    // Tiles: deprecated items per type, from the same rows.
+    expect(body.data.counts.byTypeDeprecated.API).toBe(1);
+    expect(body.data.counts.byTypeDeprecated.EVENT).toBe(0);
     // Sums to the full set.
     expect(Object.values(body.data.counts.byStatus).reduce((a: number, b) => a + (b as number), 0)).toBe(ALL_ROWS.length);
     // byType still emits all 12 keys from the groupBy.
     expect(Object.keys(body.data.counts.byType)).toHaveLength(12);
     expect(body.data.counts.byType.API).toBe(5);
-    expect(body.data.counts.probed).toBe(1); // only API_PO carries a stored http
+    expect(body.data.counts.probed).toBe(2); // API_PO + API_OLD carry a stored http
     expect(body.data.counts.lastProbedAt).toBe("2026-02-02T00:00:00Z");
     expect(body.data.tenant).toBe("ABeam TDD");
   });

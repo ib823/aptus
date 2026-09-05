@@ -48,7 +48,32 @@ export type HubStatus =
   | "NOT_CHECKED"
   | "NOT_PROBEABLE"
   | "AVAILABLE"
-  | "REFERENCE";
+  | "REFERENCE"
+  /**
+   * 2608 WS3 — SAP has deprecated this artefact (Hub State = DEPRECATED).
+   * TENANT-INDEPENDENT and resolved before any probe: a deprecated API that
+   * still answers 200 is DEPRECATED, never ACTIVATED, so the summary can never
+   * count SAP's own retirements as readiness. The successor, when SAP names
+   * one, rides on the row (successorExternalId).
+   */
+  | "DEPRECATED";
+
+/** Every status bucket, in display order. The scorecard, facets and byStatus all iterate THIS. */
+export const HUB_STATUSES: HubStatus[] = [
+  "ACTIVATED",
+  "NEEDS_SETUP",
+  "NOT_FOUND",
+  "NOT_CHECKED",
+  "NOT_PROBEABLE",
+  "AVAILABLE",
+  "REFERENCE",
+  "DEPRECATED",
+];
+
+/** Tooltip for a DEPRECATED badge — names the SAP successor when one is recorded. */
+export function deprecationTooltip(successor: string | null | undefined): string {
+  return successor ? `Deprecated by SAP — successor: ${successor}` : "Deprecated by SAP — no successor named yet";
+}
 
 export interface HubContentTypeMeta {
   label: string;
@@ -159,36 +184,50 @@ export function pathToApiId(path: string): string {
   return path.split("/").filter(Boolean).pop() ?? path;
 }
 
+/** The SAP content release the published figures below were read for. */
+export const S4_PUBLIC_PUBLISHED_RELEASE = "2608";
+
 /**
  * Published SAP Business Accelerator Hub figures for S/4HANA Cloud PUBLIC
- * Edition, used only as a drift reference by the ingest report — NOT as data.
- * Values move with each SAP release, so the report compares "within drift", not
- * for exact equality. CDS/BAdI/BO are stored as grouped rows carrying itemCount,
- * so the report compares the summed itemCount against these totals.
+ * Edition at release 2608, used as a drift reference by the tiles, the
+ * catalogue-health endpoint and the ingest report — NOT as data. They move
+ * with each SAP release, so consumers compare "within drift", never for
+ * equality. CDS/BAdI/BO are stored as grouped rows carrying itemCount, so the
+ * report compares the summed itemCount against these totals.
  *
- * RECONCILED WITH THE COMMITTED ARTIFACTS (2026-07 snapshot). The previous
- * values contradicted both the drop files this repo ships and the tiles' own
- * help text: SCENARIO said 16 while SCENARIO.json holds 308 and NA_HELP says
- * "Scenarios (308)"; LIVEPROCESS said 0 while 43 were loaded — a tile showing
- * 43 loaded of ~0 published; PROCESS_BLUEPRINT said 15 while its NA_NOTE says
- * it is not a separate content type at all. A drift REFERENCE that disagrees
- * with the data on the same screen measures nothing.
+ * SOURCES (2608 WS3, verified 2026-09-05 — docs/2608/BUILD-LOG.md):
+ *   - API, EVENT, CDS_VIEW, BADI, BO_INTERFACE, SCENARIO, LIVEPROCESS: the
+ *     anonymous catalogue enumeration checked in as
+ *     sap-references/hub-packages.s4public.json (scripts/recon-hub-2608.ts
+ *     gates 859 ±5 / 147 / 9,288 / 1,715 / 221 / 16 scenario packages).
+ *   - INTEGRATION 158, BUILD 91, VPUC 5, ANALYTICS 6, PROCESS_BLUEPRINT 16: the
+ *     logged-in product page (CCC-2608-catalogue-refresh.md), which counts a
+ *     view the anonymous walk cannot see the same way (142 / 29 / 0 exact-tag
+ *     packages). PROCESS_BLUEPRINT is the Hub's "Process Blueprints" tab (URL
+ *     …/businessprocess/solutionvariants, labelled Solution Variants) — 16 in
+ *     2608, so it is no longer "n/a by design".
  */
 export const S4_PUBLIC_PUBLISHED_COUNTS: Record<HubContentType, number> = {
-  API: 862,
-  EVENT: 151,
-  CDS_VIEW: 8983,
-  BADI: 1665,
+  API: 859,
+  EVENT: 147,
+  CDS_VIEW: 9288,
+  BADI: 1715,
   BO_INTERFACE: 221,
   INTEGRATION: 158,
-  BUILD: 77,
-  // Not a separate published type — covered under Scenarios & Live Processes
-  // (see ContentTypeTiles.NA_NOTE). Zero here, "n/a by design" on the tile.
-  PROCESS_BLUEPRINT: 0,
-  LIVEPROCESS: 43,
+  BUILD: 91,
+  PROCESS_BLUEPRINT: 16,
+  LIVEPROCESS: 41,
   SCENARIO: 308,
   VPUC: 5,
   ANALYTICS: 6,
+};
+
+/** Deprecated counts SAP publishes at 2608 for the types that carry a Hub State (drift reference). */
+export const S4_PUBLIC_PUBLISHED_DEPRECATED: Partial<Record<HubContentType, number>> = {
+  API: 56,
+  EVENT: 8,
+  CDS_VIEW: 424,
+  BADI: 24, // SteamPunk package: 24 deprecated across BAdIs + BO interfaces
 };
 
 export function isRuntimeType(type: HubContentType): boolean {
@@ -199,6 +238,8 @@ export interface HubItemForStatus {
   contentType: HubContentType;
   apiType: string | null;
   externalId: string;
+  /** Hub State as published ("ACTIVE" | "DEPRECATED" | …); null/undefined = unknown → no effect. */
+  hubState?: string | null | undefined;
 }
 
 /**
@@ -306,6 +347,9 @@ export function resolveHubStatus(
   item: HubItemForStatus,
   probeOutcomes?: Map<string, number>,
 ): HubStatus {
+  // 2608 WS3 — SAP's own retirement wins over everything, tenant or not: a
+  // deprecated service that still answers 200 must never read as ACTIVATED.
+  if (item.hubState === "DEPRECATED") return "DEPRECATED";
   if (!isRuntimeType(item.contentType)) return "REFERENCE";
   // Events are consumed by subscription (CloudEvents), not a readable OData
   // endpoint — nothing to $metadata-probe, so they never reach ACTIVATED.

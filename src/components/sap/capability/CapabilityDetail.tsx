@@ -7,7 +7,7 @@
  */
 import { Fragment, useEffect, useRef, useState } from "react";
 import { ExternalLink, RefreshCw } from "lucide-react";
-import type { HubContentType, HubStatus } from "@/lib/sap-public/hub-content";
+import { deprecationTooltip, type HubContentType, type HubStatus } from "@/lib/sap-public/hub-content";
 import { ProcessBlueprintView, type BlueprintStep } from "./ProcessBlueprintView";
 import { CapabilityChips } from "./CapabilityChips";
 
@@ -30,6 +30,10 @@ interface DetailData {
     apiType: string | null;
     communicationScenarios: string[];
     hubUrl: string;
+    /** 2608 WS3 — Hub State / successor as published by SAP. */
+    hubState?: string | null;
+    hubVersion?: string | null;
+    successorExternalId?: string | null;
   };
   status: string;
   ladder: string | null;
@@ -231,6 +235,16 @@ export function CapabilityDetail({
               api.sap.com <ExternalLink className="size-3" />
             </a>
           </div>
+          {data.status === "DEPRECATED" && (
+            <p
+              data-testid="deprecation-note"
+              className="rounded-[var(--radius-input)] px-3 py-2 text-sm"
+              style={{ background: "var(--status-revoked-bg)", color: "var(--status-revoked-fg)" }}
+            >
+              {deprecationTooltip(data.item.successorExternalId)}
+              {data.item.hubVersion ? ` (Hub version ${data.item.hubVersion})` : ""}
+            </p>
+          )}
 
           {/* Capability ladder */}
           {reachedIndex >= 0 && (
