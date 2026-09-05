@@ -7,6 +7,139 @@ verified in the session.
 
 ---
 
+## WS5 — BPD + BDC 2608 and the .xlsx BPD parser (2026-09-05)
+
+**Branch:** `feat/bpd-2608` (from `main` at the WS4 squash merge, #237).
+**Instruction:** master prompt WS5: (1) parse the 2608 BPD **.xlsx** for all 9
+workbench items, keep the docx parser as fallback, diff against 2602 and write
+`docs/2608/bpd-delta.md` (1IQ 3→3, BD9 32→?, BDG 10→?, the six V2 items now with
+exact steps); (2) load S4H_706 Process Automation as a 16th questionnaire /
+value stream, re-level Retail + S&P L2/L3 from the 2608 files, keep the other 13
+identical; (3) regenerate `lib/fts/data/*.ts` and workbench previews from 2608,
+update Content Reconciliation tabs 1–3 as a generated report.
+
+### What the code map established first
+
+- The Fit-to-Standard data files were emitted by `scripts/emit_ts.py`, which
+  imports a docx parser from `../../ft2std-toolkit` — a directory outside this
+  repository, with the 2602 BPD docx in its `_input`. Neither exists here, so
+  the 2602 generator cannot run and the 2602 BPDs cannot be re-parsed. The
+  2602 workbench carried exactly three data files (1IQ, BD9, BDG).
+- The 2608 BPD xlsx is SAP's Cloud ALM test-case export: one "Test Cases"
+  sheet, activities in runs, a `Test Procedures` marker separating preliminary
+  configuration from the process steps, and (in BDW, J59, J60) more
+  "Additional Information" runs inside the step band. The docx carries what
+  the xlsx does not: the Roles table with SAP_BR ids, master data, the
+  Overview Table (SAP's one-line expected result per step, split into one
+  table per section in J59/J60) and the succeeding processes.
+- `mammoth` (already a dependency) fails on these docx under the pinned
+  `@xmldom/xmldom` 0.9 ("mimeType undefined"), so the docx fallback reads
+  `word/document.xml` directly. Under vitest's jsdom environment `adm-zip`
+  inflates to empty buffers (cross-realm `Uint8Array`); the WS5 tests declare
+  `@vitest-environment node`.
+- The 2602 affirm set (`prisma/seeds/value-stream/dataset.json`, 150
+  questions) names its source questionnaire per row: 14 rows from S4H_420
+  (S&P) and **none** from S4H_1767 (Retail). `AffirmQuestion` had no Level
+  column. The base seeder verified counts over the whole table.
+- The SSCUI_List "Main Scope Item ID" column is LoB-wide: a row names 100–700
+  scope items and ~1,600 rows name 1IQ — not a usable per-item filter.
+- No 2602 BPD, BDC workbook or 2602 process-step rows exist locally (the
+  `ProcessStep` table is empty in this environment).
+
+### Decisions
+
+| # | Decision | Why |
+|---|---|---|
+| 1 | **TypeScript BPD parsers** in `scripts/lib/bpd-2608/`: `parse-bpd-xlsx.ts` (steps = activity runs after `Test Procedures`; role from the step's own `Log On` action, app from `Access the App`, purpose from its `Information` action; "Additional Information…" runs after the marker are section notes, never steps and never the end of the band), `parse-bpd-docx.ts` (document.xml walk; tables recognised by header cells; every Overview Table section collected; page numbers stripped from step names), `compose.ts` (xlsx steps; role/app xlsx-first with docx fallback; **expected** docx-first because it is SAP's one-line outcome, else the step's last action result). | The instruction: xlsx primary, docx fallback. Nothing inferred — a step whose script names no role or app keeps an empty cell. |
+| 2 | **`scripts/emit-fts-2608.ts`** (`pnpm sap:2608:emit-fts`, `--check`, `--json`) regenerates the nine data files + `index.ts` + `docs/2608/bpd-delta.md`. Decisions are **carried over** from the prior data file (they came from `scripts/decisions-yaml` via the 2602 toolkit and were re-validated in WS1); a new item gets `decisions: []`. The 2602 baseline is **frozen** in `scripts/lib/bpd-2608/baseline-2602.json` (captured from the three files at `e010b48`) so the delta survives regeneration. | The script never authors a decision. Re-running it is idempotent (`--check` is green after a run) and the drift test pins the committed files to the drop. |
+| 3 | **`sscui_refs` are carried over, never derived.** 1IQ/BDG keep `[]`, BD9 keeps its 50 curated refs, the six new items get `[]`. | Filtering SSCUI_List by "Main Scope Item ID" would attach the whole sales configuration catalogue to every sales item — grounding in name only (see code map). A per-item SSCUI appendix needs a curated source. |
+| 4 | **BDC parser** `scripts/lib/bdc-2608/parse-bdc.ts`: header row found by content (a Question + a Level cell), columns mapped by header text across SAP's five layouts ("Accelerator", "Accelerator 2608", "Content Details", Treasury's variant, S4H_706's "Questionnaire"), merged Process cell forward-filled, Level read verbatim or `null`. **`scripts/load-2608-bdc.ts`** (`pnpm sap:2608:load-bdc`, `--db`, `--check`) writes `sap-references/2608/bdc-questionnaires.json` (sidecar, allow-listed) and `prisma/seeds/value-stream/dataset-2608.json`. | One parser for 14 workbooks that SAP laid out five ways; the Two-Tier scope questionnaire in the drop is listed and skipped (no Question/Level rows). |
+| 5 | **S4H_706 → new value stream `process-automation`** (sub-process "SAP Build Process Automation", 16 questions `L2-706-001…016`, `format: "information"`, `status: "suggested"`, `bdcLevel: null`, `releaseId` = the 2608 `SapContentRelease` row, no plain-language wording). | SAP's sheet has no Level and the questions are discovery prompts; the consultant curates them. The stream is the "16th questionnaire" the instruction asks for, beside the 2602 eight, never merged into them. |
+| 6 | **Re-level** by exact verbatim match against the CHANGED 2608 sheets: S4H_420 — all 14 base rows matched, all L2; S4H_1767 — the base set has no Retail rows, so nothing to re-level (reported, not hidden). Unmatched rows would keep `bdcLevel` NULL. | Levels come from SAP's file for the same question text, never guessed. |
+| 7 | **Additive migration `20260905030000_affirm_question_bdc_level`**: `AffirmQuestion.bdcLevel String?`. **`prisma/seeds/value-stream/dataset-2608.ts`** (`seedValueStream2608`) runs after the base seed from `prisma/seed.ts` (skips with a message when the 2608 release row is absent). The base seeder's drift guard now counts **its own ids**, not the whole table. | Whole-table counts would have reported the 2608 rows as drift on every re-run of the 2602 seed. |
+| 8 | **`scripts/report-content-reconciliation-2608.ts`** (`pnpm sap:2608:reconciliation`) → `docs/2608/content-reconciliation-2608.md`: Tab 1 BPD steps 2602→2608 with the assessment's byte comparison; Tab 2 the 14 questionnaires (questions, L1/L2/L3/none, SSCUI ids, byte-compare, 2602 affirm rows, action at 2608); Tab 3 FTS data provenance with D1 status. | The 2602 "Content Reconciliation" workbook is not in the repository; the report reproduces the subjects of its tabs 1–3 from primary sources and says so. **Assumption stated in the report.** |
+| 9 | No data written to any deployed database. The local Postgres ran the base + 2608 seeders twice (idempotent: 166 questions, 9 streams, 14 rows at L2). | Never write to prod without a green RECON; the seeders are the deliverable, the run is the proof they work. |
+
+### What landed
+
+- `scripts/lib/bpd-2608/{parse-bpd-xlsx,parse-bpd-docx,compose}.ts`, `baseline-2602.json`;
+  `scripts/emit-fts-2608.ts`; regenerated `src/lib/fts/data/{1IQ,BD9,BDG}.ts`, new
+  `{1NT,2ET,BDW,J45,J59,J60}.ts`, `index.ts` (9 items + O2C-SALES); `docs/2608/bpd-delta.md`.
+- `scripts/lib/bdc-2608/parse-bdc.ts`; `scripts/load-2608-bdc.ts`;
+  `sap-references/2608/bdc-questionnaires.json`; `prisma/seeds/value-stream/dataset-2608.json`
+  + `dataset-2608.ts`; `prisma/seed.ts` hook; base seeder guard scoped; migration + schema.
+- `scripts/report-content-reconciliation-2608.ts`; `docs/2608/content-reconciliation-2608.md`.
+- `package.json` scripts `sap:2608:emit-fts`, `sap:2608:load-bdc`, `sap:2608:reconciliation`;
+  `REPO_AUTHORED_SIDECARS` + `bdc-questionnaires.json`; drop README section.
+- Tests (+18): `tests/unit/sap-content/bpd-2608.test.ts` (text helpers; 1IQ xlsx 3
+  steps / docx roles, 14 master-data rows, 2 succeeding, 3-row Overview Table;
+  composed = committed data file; all nine regenerate and match the parsers —
+  the drift guard; 1IQ 3 / BDG 10 / BD9 35 with the three added steps; BDW 28
+  with four "Display Pallets Stock"; six new items with `decisions: []` and
+  `sscui_refs: []`, BD9 keeps 50) and `bdc-2608.test.ts` (level/scope-ref/key
+  helpers; S4H_706 16 none-level, S4H_1767 93 L3, S4H_420 98 = 14 L2 + 84 L3,
+  S4H_1060 Content-Details mapping; `dataset-2608.json` regenerates from the
+  workbooks — 16 new questions, 14 re-levelled all L2, 0 unmatched, no invented
+  wording). D1 guard, curation-drift and the existing sap-content tests green.
+
+### Results (from the generated reports)
+
+| Code | Title | 2602 steps | 2608 steps | Added | Roles | Apps |
+|---|---|---:|---:|---:|---:|---:|
+| 1IQ | Sales Inquiry | 3 | 3 | 0 | 1 | 1 |
+| BD9 | Sell from Stock | 32 | 35 | 3 (Handling Unit Management, Process Preliminary Billing Approval, eDocument Cockpit) | 14 | 16 |
+| BDG | Sales Quotation | 10 | 10 | 0 | 6 | 2 |
+| 1NT | Project Control – Finance | none | 32 | — | 7 | 16 |
+| 2ET | Sales Order Processing for Non-Stock Material | none | 13 | — | 6 | 7 |
+| BDW | Returnables Processing | none | 28 | — | 6 | 12 |
+| J45 | Procurement of Direct Materials | none | 43 | — | 11 | 21 |
+| J59 | Accounts Receivable | none | 55 | — | 9 | 38 |
+| J60 | Accounts Payable | none | 79 | — | 10 | 55 |
+
+BDC: 14 workbooks parsed (1,207 questions); S4H_706 16 questions, no Level;
+S4H_1767 93 questions all L3, zero 2602 affirm rows; S4H_420 98 questions,
+14 L2 — the 14 base rows re-levelled to L2; 13 identical workbooks untouched.
+Not in the drop: S4H_2236, S4H_2132 (their 27 / 1 affirm rows untouched).
+
+### Gates (this session)
+
+- `tsc --noEmit --strict`: clean. `eslint --max-warnings 0 .`: clean.
+- `vitest run`: 331 files, 4,897 tests, all passing (134 s) — net +18; vendor-term
+  guard, consultant wall and D1 guard included.
+- `scripts/check-migration-drift.sh`: "No difference detected" with the new
+  migration; `prisma migrate deploy`: applied locally.
+- `pnpm sap:2608:recon`: GREEN (the new sidecar is allow-listed).
+  `pnpm sap:2608:emit-fts -- --check` and `pnpm sap:2608:load-bdc -- --check`: OK.
+- `next build`: compiled, 109/109 static pages, exit 0.
+
+### What was NOT verified
+
+1. **The 2602 BPDs were not re-parsed** — they are not in the repository. The
+   2602 column of the delta is the workbench's prior content for three items
+   and "none" for six; a 2602 step that the old docx parser missed would show
+   here as "added".
+2. **Role / app cells the xlsx and docx both leave blank stay blank** (e.g.
+   BD9 "Set Credit Limit (Optional)", a cross-reference to BD6). No inference.
+3. **No browser run of the presales preview** for the six new items; they
+   render through the same `ScopeItemContent` shape as the three existing
+   ones (types checked, D1 green), which is what the build and the unit tests
+   prove. Their workbench shows steps and no Tier-1 decisions until curated.
+4. **No deployed database was seeded.** `pnpm db:seed` (or
+   `pnpm sap:2608:load-bdc -- --db`) after `pnpm sap:2608:seed-release` is the
+   run that lands S4H_706 and the 14 levels; it was exercised on the local
+   Postgres only.
+5. **Retail re-level is empty by construction** (no 2602 Retail affirm rows).
+   Loading Retail's 93 L3 questions as content was not asked and not done.
+6. **The Content Reconciliation workbook's exact tab layout is unknown here**;
+   the generated report covers the three subjects the master prompt names.
+7. `scripts/emit_ts.py` and `scripts/decisions-yaml/` remain as the curation
+   path for Tier-1 decisions; the emitter carries decisions over from the
+   data files rather than re-reading the YAML (no YAML library in the
+   dependency set). The WS1 re-validation comment on 1IQ d3 survives in the
+   YAML and in the decision's values, not as a comment in the emitted file.
+
+---
+
 ## WS4 — PO connector → OData V4 (2026-09-05)
 
 **Branch:** `feat/po-v4` (from `main` at the WS3 squash merge, #236).
