@@ -138,6 +138,12 @@ test-results/
 # …and the per-type drop targets + README (committed, bundled into the admin
 # Rebuild endpoint). Real exports are dropped INTO these files, not new paths.
 !/sap-references/hub-content/
+# …and the 2608 release drop (WS0, docs/2608/BUILD-LOG.md). Files land here
+# from the consultant's AB Workbench\2608\ folder, UNPACKED — zips never
+# enter the repository (they are opaque to review and to scripts/recon-2608.ts).
+# RELEASE.json is the version record and the recon baseline for the drop.
+!/sap-references/2608/
+/sap-references/2608/**/*.zip
 /api-hub-catalog.json
 .vercel-token
 .claude/
