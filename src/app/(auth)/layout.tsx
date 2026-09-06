@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { BarChart3, type LucideIcon } from "lucide-react";
 import { ABeamLogo } from "@/components/shared/ABeamLogo";
+import { getSapContentRelease } from "@/lib/sap-content/release";
 import { UI_TEXT } from "@/constants/ui-text";
 
 export const metadata: Metadata = { title: "Sign In" };
@@ -51,7 +52,12 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             with SAP best practices
           </h3>
           <div className="space-y-4">
-            <FeatureItem icon={BarChart3} text="Compare processes against SAP Best Practices 2602" />
+            <FeatureItem
+              icon={BarChart3}
+              // The release is resolved, not written: WS7 moved the default and this
+              // panel must not keep advertising the one before it.
+              text={`Compare processes against SAP Best Practices ${getSapContentRelease().release}`}
+            />
           </div>
         </div>
 
