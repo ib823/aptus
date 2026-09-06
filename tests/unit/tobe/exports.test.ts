@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import { generateTobePack } from "@/lib/tobe/engine";
-import { generateTobePackPdf } from "@/lib/tobe/export-pdf";
+import { generateTobePackPdf, winAnsiSafe } from "@/lib/tobe/export-pdf";
 import { generateTobePackPptx } from "@/lib/tobe/export-pptx";
 
 import { fixtureInput } from "./fixtures";
@@ -54,7 +54,9 @@ describe("pagination", () => {
     const { L2_STEPS_PER_PAGE } = await import("@/lib/tobe/svg");
     const short = await count(4);
     const long = await count(55);
-    expect(long - short).toBe(Math.ceil(55 / L2_STEPS_PER_PAGE) - 1);
+    // A long flow adds swimlane slides AND step-detail slides, both paginated.
+    const slidesFor = (n: number) => Math.ceil(n / L2_STEPS_PER_PAGE) + Math.ceil(n / 12);
+    expect(long - short).toBe(slidesFor(55) - slidesFor(4));
   }, 60_000);
 });
 
@@ -65,8 +67,22 @@ describe("PPTX", () => {
     const AdmZip = (await import("adm-zip")).default;
     const zip = new AdmZip(buf);
     const slides = zip.getEntries().filter((e) => /^ppt\/slides\/slide\d+\.xml$/.test(e.entryName));
-    // title + L1 + AAA + BBB + CCC (chain item with a BPD, not in scope, still drawn)
-    expect(slides).toHaveLength(5);
+    /*
+     * Composition, stated rather than counted by hand: a title, one slide per
+     * narrative block (how to read it, the states, the caveats, provenance,
+     * effort drivers, parameters to collect, next steps), the L1 opener, then
+     * per drawn scope item a swimlane, a step-detail table, and a
+     * configurations/gaps slide where it has any.
+     */
+    const { packNarrative } = await import("@/lib/tobe/narrative");
+    const drawn = doc.scopeItems.filter((i) => i.inScope || i.hasBpd);
+    const expected =
+      1 +
+      packNarrative(doc, { clientName: "Pilot Client" }).length +
+      1 +
+      drawn.length * 2 +
+      drawn.filter((i) => i.configurations.length || i.gaps.length).length;
+    expect(slides).toHaveLength(expected);
     const notes = zip
       .getEntries()
       .filter((e) => /^ppt\/notesSlides\/notesSlide\d+\.xml$/.test(e.entryName))
@@ -75,4 +91,23 @@ describe("PPTX", () => {
     expect(notes).toContain("SSCUI 102751");
     expect(notes).toContain("Consultant note (internal)");
   }, 30_000);
+});
+
+describe("WinAnsi", () => {
+  /*
+   * jsPDF's built-in Helvetica derails on a glyph outside WinAnsi — the whole
+   * run rendered as letter-spaced rubble with `!'` where an arrow had been, on
+   * a page a client was meant to read. The guard is a choke point, so test the
+   * choke point.
+   */
+  it("substitutes glyphs the built-in font cannot draw and leaves the ones it can", () => {
+    expect(winAnsiSafe("alternate BDG \u2192 2ET \u2192 J59")).toBe("alternate BDG -> 2ET -> J59");
+    expect(winAnsiSafe("A \u2264 B \u2265 C \u2260 D")).toBe("A <= B >= C != D");
+    // Dashes, middot, curly quotes and the ellipsis ARE in WinAnsi: leave them alone.
+    expect(winAnsiSafe("L1 \u2014 end-to-end \u00b7 \u201cstandard\u201d \u2026")).toBe(
+      "L1 \u2014 end-to-end \u00b7 \u201cstandard\u201d \u2026",
+    );
+    // Anything with no sensible ASCII stand-in degrades visibly rather than corrupting the line.
+    expect(winAnsiSafe("\u4e2d")).toBe("?");
+  });
 });

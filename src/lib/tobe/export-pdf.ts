@@ -7,8 +7,42 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
+import { packNarrative, type NarrativeBlock } from "./narrative";
 import { STATE_STYLE, TOBE_NAVY, l3Rows, layoutL2, paginateL2, wrapText } from "./svg";
 import type { TobePackDoc, TobeStepState } from "./types";
+
+/*
+ * jsPDF's built-in Helvetica is WinAnsi-encoded. A glyph outside that set is
+ * not dropped — it derails the whole run, which is how one arrow in an L1 note
+ * turned the line into letter-spaced rubble with `!'` where the arrow was.
+ * SAP step names, gap reasons and client answers are free text, so the fix has
+ * to be a choke point rather than one corrected string: every draw goes through
+ * this. Characters WinAnsi does carry (en/em dash, middot, curly quotes) pass
+ * through untouched.
+ */
+const WIN_ANSI_EXTRAS = "\u20AC\u201A\u0192\u201E\u2026\u2020\u2021\u02C6\u2030\u0160\u2039\u0152\u017D\u2018\u2019\u201C\u201D\u2022\u2013\u2014\u02DC\u2122\u0161\u203A\u0153\u017E\u0178";
+const GLYPH_FALLBACK: Record<string, string> = {
+  "\u2192": "->",
+  "\u2190": "<-",
+  "\u2194": "<->",
+  "\u21D2": "=>",
+  "\u2264": "<=",
+  "\u2265": ">=",
+  "\u2260": "!=",
+  "\u00A0": " ",
+  "\u2212": "-",
+  "\u00D7": "x",
+};
+
+export function winAnsiSafe(text: string): string {
+  let out = "";
+  for (const ch of text) {
+    const code = ch.codePointAt(0)!;
+    if (code < 0x100 || WIN_ANSI_EXTRAS.includes(ch)) out += ch;
+    else out += GLYPH_FALLBACK[ch] ?? "?";
+  }
+  return out;
+}
 
 function hex(h: string): [number, number, number] {
   const n = parseInt(h.slice(1), 16);
@@ -22,6 +56,18 @@ export interface TobePdfOptions {
 
 export function generateTobePackPdf(doc: TobePackDoc, opts: TobePdfOptions): Uint8Array {
   const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  /*
+   * One interception covers everything drawn — our own labels, autoTable's
+   * cells and `splitTextToSize` output alike — so a stray glyph in SAP content
+   * can never reach a client-facing page. jsPDF puts `text` on the instance,
+   * not the prototype, so reassigning it here affects this document only.
+   */
+  const drawText = pdf.text.bind(pdf) as typeof pdf.text;
+  pdf.text = ((txt: string | string[], ...rest: unknown[]) =>
+    (drawText as (t: string | string[], ...r: unknown[]) => jsPDF)(
+      Array.isArray(txt) ? txt.map(winAnsiSafe) : winAnsiSafe(String(txt)),
+      ...rest,
+    )) as typeof pdf.text;
   const pw = pdf.internal.pageSize.getWidth();
   const ph = pdf.internal.pageSize.getHeight();
   const navy = hex(TOBE_NAVY);
@@ -69,6 +115,9 @@ export function generateTobePackPdf(doc: TobePackDoc, opts: TobePdfOptions): Uin
     20,
     y + 4,
   );
+
+  // ── How to read this pack (context, caveats, provenance, effort drivers)
+  for (const block of packNarrative(doc, { clientName: opts.clientName })) narrativePage(pdf, block, navy, pw, ph);
 
   // ── L1
   pdf.addPage();
@@ -216,11 +265,6 @@ export function generateTobePackPdf(doc: TobePackDoc, opts: TobePdfOptions): Uin
     });
     // L3 table
     pdf.addPage();
-    header(
-      pdf,
-      `${item.code} · ${item.title} — step detail (L3)`,
-      `evidence per step: scope ID · BPD ${doc.release} · SSCUI · BDC question`,
-    );
     autoTable(pdf, {
       startY: 34,
       head: [["#", "Step", "Role", "App", "State", "SSCUI", "Marker", "Expected result", "Evidence"]],
@@ -235,17 +279,59 @@ export function generateTobePackPdf(doc: TobePackDoc, opts: TobePdfOptions): Uin
         r.expected,
         r.evidence,
       ]),
+      /*
+       * Pin the text column rather than inherit a default margin: the widths
+       * below are chosen against this figure, so they cannot silently
+       * overflow. `top` matters as much: it is where autoTable resumes on a
+       * continuation page, and it has to clear the header band that
+       * `didDrawPage` paints there.
+       */
+      margin: { left: 12, right: 12, top: 34, bottom: 14 },
+      /*
+       * Repaint the header on every page the table spills onto. A long L3 ran
+       * to three pages and only the first was titled — the reader was handed
+       * loose grids of steps with nothing saying which scope item they belong
+       * to. autoTable owns the page breaks, so the title has to be drawn from
+       * its own hook rather than once before the call.
+       */
+      didDrawPage: (data) => {
+        const first = data.pageNumber === 1;
+        header(
+          pdf,
+          `${item.code} · ${item.title} — step detail (L3)${first ? "" : ", continued"}`,
+          `evidence per step: scope ID · BPD ${doc.release} · SSCUI · BDC question`,
+        );
+      },
       styles: { fontSize: 7, cellPadding: 1.5, overflow: "linebreak" },
       headStyles: { fillColor: navy, textColor: 255 },
+      /*
+       * Keep a row whole. With the default split, a tall row (a long step name
+       * wrapped over three lines) broke across the page boundary and the
+       * continuation landed alone at the top of the next page as "(Optional)"
+       * in one column and "(VF03)" in another — a fragment with no row to
+       * belong to. Moving the whole row down costs a little whitespace and
+       * makes every printed row readable as one thing.
+       */
+      rowPageBreak: "avoid",
+      /*
+       * Let autoTable size the columns. Fixed widths for all nine fought its
+       * own sizing and it reported the table overflowing the page — shrinking
+       * the declared widths made the reported overflow larger, not smaller.
+       * The content needs only ~157mm of minimum width across nine columns
+       * (measured from the longest unbreakable token in each at 7pt), so there
+       * is ample slack in the 269mm text column; relative weights put it where
+       * the prose is instead of spreading it evenly.
+       */
       columnStyles: {
-        0: { cellWidth: 8 },
-        1: { cellWidth: 44 },
-        2: { cellWidth: 30 },
-        3: { cellWidth: 36 },
-        4: { cellWidth: 22 },
-        5: { cellWidth: 34 },
-        6: { cellWidth: 28 },
-        7: { cellWidth: 46 },
+        0: { cellWidth: 8, halign: "right" },
+        1: { cellWidth: "auto" },
+        2: { cellWidth: "auto" },
+        3: { cellWidth: "auto" },
+        4: { cellWidth: 20 },
+        5: { cellWidth: "auto" },
+        6: { cellWidth: "auto" },
+        7: { cellWidth: "auto" },
+        8: { cellWidth: "auto" },
       },
       didParseCell: (data) => {
         if (data.section === "body" && data.column.index === 4) {
@@ -259,31 +345,38 @@ export function generateTobePackPdf(doc: TobePackDoc, opts: TobePdfOptions): Uin
     });
     if (item.configurations.length || item.gaps.length || (opts.consultantView && doc.consultantNotes?.[item.code])) {
       const afterY = (pdf as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 40;
-      let ty = Math.min(afterY + 8, ph - 30);
+      let ty = afterY + 8;
       pdf.setFontSize(8);
       pdf.setTextColor(31, 31, 31);
-      for (const c of item.configurations) {
-        pdf.text(
+      /*
+       * ADVANCE BY THE LINES ACTUALLY DRAWN. `pdf.text` with `maxWidth` wraps
+       * internally and reports nothing back, so a fixed `ty += 5` moved one
+       * line while the entry had drawn three — every wrapped configuration
+       * landed on top of the next one. splitTextToSize does the same wrapping
+       * up front, so the cursor and the ink agree, and a long list can start a
+       * new page instead of running off the bottom.
+       */
+      const line = (text: string, muted = false): void => {
+        const lines = pdf.splitTextToSize(text, pw - 28) as string[];
+        if (ty + lines.length * 4 > ph - 16) {
+          pdf.addPage();
+          header(pdf, `${item.code} · ${item.title} — step detail (L3), continued`, "configurations and gaps");
+          ty = 34;
+        }
+        pdf.setTextColor(...((muted ? [107, 107, 107] : [31, 31, 31]) as [number, number, number]));
+        pdf.text(lines, 14, ty);
+        ty += lines.length * 4 + 1.5;
+      };
+      for (const c of item.configurations)
+        line(
           `Configured: SSCUI ${c.sscuiId}${c.sscuiName ? ` ${c.sscuiName}` : ""} · BDC ${c.questionId} (${c.choice})${c.scopeWide ? " · scope-wide" : ` · steps: ${c.stepNames.join(", ")}`}${c.reason ? ` · "${c.reason}"` : ""}`,
-          14,
-          ty,
-          { maxWidth: pw - 28 },
         );
-        ty += 5;
-      }
-      for (const g of item.gaps) {
-        pdf.text(
+      for (const g of item.gaps)
+        line(
           `Gap (${g.gapType ?? "unclassified — confirm in workshop"}): BDC ${g.questionId}${g.reason ? ` · "${g.reason}"` : ""}`,
-          14,
-          ty,
-          { maxWidth: pw - 28 },
         );
-        ty += 5;
-      }
-      if (opts.consultantView && doc.consultantNotes?.[item.code]) {
-        pdf.setTextColor(107, 107, 107);
-        pdf.text(`Consultant note (internal): ${doc.consultantNotes[item.code]}`, 14, ty, { maxWidth: pw - 28 });
-      }
+      if (opts.consultantView && doc.consultantNotes?.[item.code])
+        line(`Consultant note (internal): ${doc.consultantNotes[item.code]}`, true);
     }
   }
 
@@ -300,6 +393,60 @@ export function generateTobePackPdf(doc: TobePackDoc, opts: TobePdfOptions): Uin
     );
   }
   return new Uint8Array(pdf.output("arraybuffer"));
+}
+
+/**
+ * One narrative block per page: heading, lead paragraph, bullets or table, then
+ * the footnote. Text wraps through splitTextToSize so the cursor always matches
+ * the ink — the same failure the configuration list had.
+ */
+function narrativePage(
+  pdf: jsPDF,
+  block: NarrativeBlock,
+  navy: [number, number, number],
+  pw: number,
+  ph: number,
+): void {
+  pdf.addPage();
+  header(pdf, block.heading, block.sub ?? "");
+  let y = 38;
+  const write = (text: string, size: number, colour: [number, number, number], indent = 14): void => {
+    pdf.setFontSize(size);
+    pdf.setTextColor(...colour);
+    const lines = pdf.splitTextToSize(text, pw - 28 - (indent - 14)) as string[];
+    if (y + lines.length * (size * 0.42) > ph - 16) {
+      pdf.addPage();
+      header(pdf, `${block.heading} (continued)`, block.sub ?? "");
+      y = 38;
+    }
+    pdf.text(lines, indent, y);
+    y += lines.length * (size * 0.42) + 2;
+  };
+
+  if (block.lead) write(block.lead, 10, [31, 31, 31]);
+  if (block.bullets) {
+    y += 2;
+    for (const b of block.bullets) {
+      const top = y;
+      write(b, 9, [31, 31, 31], 19);
+      pdf.setFillColor(...navy);
+      pdf.circle(15.5, top - 1.2, 0.8, "F");
+      y += 1;
+    }
+  }
+  if (block.table) {
+    autoTable(pdf, {
+      startY: y + 2,
+      head: [block.table.head],
+      body: block.table.rows,
+      margin: { left: 14, right: 14 },
+      styles: { fontSize: 8.5, cellPadding: 2, overflow: "linebreak", valign: "top" },
+      headStyles: { fillColor: navy, textColor: 255 },
+      rowPageBreak: "avoid",
+    });
+    y = ((pdf as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y) + 6;
+  }
+  if (block.footnote) write(block.footnote, 8, [107, 107, 107]);
 }
 
 function header(pdf: jsPDF, title: string, sub: string): void {
