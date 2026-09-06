@@ -7,6 +7,171 @@ verified in the session.
 
 ---
 
+## WS8 — Non-S/4 connectors: Ariba v2, SuccessFactors auth sunset, a wired-API gate (2026-09-06)
+
+**Branch:** `feat/connectors-hub-state` (from `main` at the WS7 squash merge, #242).
+
+### The gap this closes
+
+WS2 taught the importers to read an artefact's `State` from the Business
+Accelerator Hub. WS3 put DEPRECATED badges in the catalogue UI. Both answer
+*"what is the state of this artefact?"*. Neither answered the question that
+costs money: **is anything we call deprecated?**
+
+Nothing joined a connector's endpoint path to a Hub artefact id. So the Ariba
+connector called `sourcing_event` v1 and `sourcing_project_management` v1 —
+both DEPRECATED — for a full release, while a harvested catalogue that knew
+they were deprecated sat in the same repository, in a file the connector never
+read.
+
+### Evidence
+
+Every state below is read from `sap-references/api-hub-catalog.json`
+(5,419 artefacts, 390 packages, harvested from the Hub 2026-09-05) and matches
+the `Non-Public SAP` tab of the assessment workbook independently — two
+sources, same answer:
+
+```
+SAPAribaOpenAPIs               114   91 ACTIVE · 22 DEPRECATED · 1 DECOMMISSIONED
+SAPAribaSourcingAPIs             2    2 ACTIVE
+SuccessFactorsEmployeeCentral   23   22 ACTIVE ·  1 DEPRECATED (Localization)
+SuccessFactorsRecruiting         6    6 ACTIVE
+SuccessFactorsOnboarding         8    8 ACTIVE
+FieldglassAPI                  228  228 ACTIVE
+S4HANAOPAPI                    897  854 ACTIVE · 43 DEPRECATED
+
+sourcing_event                 DEPRECATED v1.0.0 → sourcing_event_v2                ACTIVE v2.0.0
+sourcing_project_management    DEPRECATED v1.0.0 → sourcing_project_management_v2   ACTIVE v2.0.0
+procurement_eventstatus        DEPRECATED v1.0.0 → procurement_reporting_view_v2    ACTIVE v2.0.0
+supplierdatapagination v2, v3  DEPRECATED        → supplierdatapagination_v4        ACTIVE v4.0.0
+```
+
+### What landed
+
+**1. `src/lib/sap-public/wired-apis.ts` — the join.** One entry per API this
+product actually calls, naming the Hub package, the artefact id and the file
+the call is wired in. Twelve dependencies across four packages.
+
+It carries **two granularities, deliberately**, because the wiring has two. An
+Ariba REST endpoint *is* a Hub artefact — `sourcing_event` is both the thing we
+call and the thing SAP deprecates — so those bind exactly and a non-ACTIVE
+state fails the build. SuccessFactors is not like that: the connector calls
+OData *entity sets* under one `/odata/v2` root, and the Hub publishes *API
+documents* ("Employment Information") that each describe several entities.
+`User` is documented across more than one. Asserting `User → ECEmployeeProfile`
+would be a guess dressed as a mapping, so those entries carry a package and an
+entity set instead and are reported as unmapped rather than passed quietly.
+
+**2. Ariba: both deprecated sourcing APIs migrated to v2.**
+`/api/sourcing-eventmanagement/v1` → `/v2`, `/api/sourcing-projectmanagement/v1`
+→ `/v2`. `ARIBA_SOURCING_V1=true` restores the v1 paths for one release — the
+same escape hatch WS4 gave the PO connector, so a live tenant that disagrees is
+a flag flip rather than a deploy.
+
+**3. Ariba: "operational reporting" was one endpoint and two APIs.**
+`/api/operational-reporting-view/v1` named no single Hub artefact — the Hub
+publishes `sourcing_reporting_view` 1.0.0 and `procurement_reporting_view_v2`
+2.0.0 as separate ACTIVE APIs, and the v1 procurement API
+(`procurement_eventstatus`) is DEPRECATED. One endpoint could not be checked
+against the Hub and silently pointed at whichever the tenant routed. Split, so
+each half names the artefact it depends on and the procurement half pins v2.
+
+**4. SuccessFactors: HTTP Basic refused from 2026-11-20.**
+`sf-basic-auth-sunset.ts` holds SAP's date once and is called from both places
+an Authorization header is built — the stored-connection path
+(`connection-resolver.ts`) and the env-tenant path (`tdd-connector.ts`). Before
+the date a Basic SuccessFactors connection warns by name; on and after it the
+call is refused *here*, with instructions, rather than by SAP with a bare 401.
+
+Scoped to SuccessFactors and nothing else: Basic stays legitimate for other
+products, and every entry point passes the product explicitly — there is no
+inference from a hostname or a key. Breaking S/4HANA to protect SuccessFactors
+would be the worse bug. The date is not configurable; an env var that postponed
+it would be a way to keep a broken deployment quiet right up to the moment it
+broke.
+
+The SAML bearer replacement already existed (`oauth-saml-bearer.ts`, both
+credential paths). What was missing was anything that made a deployment use it.
+
+**5. `scripts/recon-connectors-2608.ts` (`pnpm sap:connectors:recon`).**
+Prints every wired API with its live Hub state, package and version, and exits
+non-zero when an exactly-bound one is not ACTIVE, naming the successor. Reads
+the harvested catalogue rather than calling the Hub: this has to run in CI, and
+a network dependency would make it flaky in exactly the way that gets checks
+disabled.
+
+**Proved it fails.** A gate that cannot fail is not a gate, so the registry was
+pointed back at `sourcing_event` v1 and the check re-run:
+
+```
+findings:
+  ! ariba.sourcing-events: sourcing_event is DEPRECATED — successor sourcing_event_v2
+result:    RED — a wired API is not ACTIVE on the Hub
+exit 1
+```
+
+That is precisely the regression that went unnoticed for a release.
+
+### Gates
+
+```
+tsc --noEmit --strict          OK
+eslint --max-warnings 0        OK
+vitest run                     339 files, 4,964 tests, 0 failures (+18)
+next build                     OK
+pnpm sap:2608:recon            GREEN
+pnpm sap:connectors:recon      GREEN — 7 exactly-bound wired APIs all ACTIVE
+```
+
+### Item 4 of the prompt was not built, and why
+
+The master prompt asked to "reuse the WS4 successor map with the `OP_` prefix"
+for the two-tier / Private Edition connectors. **The code does not wire the
+`OP_` package at all.** `cloud-erp-private` (`S4_PRIVATE_TDD`) and
+`s4hana-onprem` (`S4_ONPREM_TDD`) both reuse `S4HANA_SERVICES` — the *public*
+edition service list, addressed per client. Nothing calls an S4HANAOPAPI
+artefact, so there is nothing to migrate and a successor map would describe
+dependencies that do not exist.
+
+The harvest does show the pattern the prompt describes —
+`OP_API_PURCHASEORDER_PROCESS_SRV_0001` DEPRECATED (OData V2) alongside
+`OP_PURCHASEORDER_0001` ACTIVE (V4) — but recording that as a *successor* would
+be inferring one from object, protocol and state. `hub-successors.ts` exists
+specifically to refuse that: successors are recorded only where SAP names them.
+No such naming was available here, so no `OP_` entries were added.
+
+### Unproven / open
+
+1. **Nothing here has been exercised against a live tenant.** No Ariba or
+   SuccessFactors credentials exist in this environment. The states, versions
+   and artefact ids are checked against the harvest on every run; the *runtime
+   behaviour* of the v2 endpoints is not.
+
+2. **The v2 resource paths are carried over, not verified.** The Hub catalogue
+   holds no base path, so `/prod/events` and `/prod/projects` are assumed
+   unchanged across the major version bump. That assumption is untested and is
+   why `ARIBA_SOURCING_V1=true` exists. The first live call is what will
+   confirm or refute it, and the connector's own header has always said these
+   paths are editable data rather than gospel.
+
+3. **The reporting-view paths are inferred from the artefact split.**
+   `/api/sourcing-reporting-view/v1` and `/api/procurement-reporting-view/v2`
+   follow the naming of the artefacts they bind to; neither has been called.
+
+4. **SuccessFactors entity sets are checked at package level only.** A
+   deprecation inside `SuccessFactorsEmployeeCentral` that happened to document
+   `User` or `EmpEmployment` would be reported as a note, not a failure. The one
+   currently deprecated artefact there (`Localization`) does not, but that was
+   read by a human, not asserted by the check.
+
+5. **A latent question this surfaced, out of scope here.** Private Edition and
+   on-premise reuse the public edition's service list, while the workbook
+   records that Private Edition shares the on-prem `S4HANAOPAPI` package. Whether
+   calling `CE_*` public-cloud service names against a Private Edition tenant is
+   correct was not investigated and is not affected by this change.
+
+---
+
 ## WS7 — Flip to 2608, naming, release-refresh runbook (2026-09-06)
 
 **Branch:** `chore/2608-default` (from `main` at the WS6 squash merge, #239).
