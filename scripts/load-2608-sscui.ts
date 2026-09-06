@@ -49,6 +49,16 @@ async function main(): Promise<number> {
   try {
     const release = await ensureContentRelease(prisma, SOURCES, gate);
     const before2602 = await prisma.configActivity.count({ where: { releaseId: null } });
+    /*
+     * The timeout is not optional here. Prisma's interactive transactions
+     * default to 5 seconds, which is ample against a local Postgres and far
+     * too little against a managed one: 4,328 rows in batches of 500 is nine
+     * round trips, and over a network to Neon that ran 5.2s and the
+     * transaction expired mid-load. It rolled back cleanly, but the loader is
+     * meant to be run against production — the environment where it is
+     * slowest is the one that matters. `load-2608-process-steps.ts` already
+     * carries the same allowance for the same reason.
+     */
     await prisma.$transaction(async (tx) => {
       const del = await tx.configActivity.deleteMany({ where: { releaseId: release.id } });
       if (del.count) console.log(`  replaced ${del.count} existing 2608 row(s)`);
@@ -79,7 +89,7 @@ async function main(): Promise<number> {
           })),
         });
       }
-    });
+    }, { maxWait: 30_000, timeout: 120_000 });
     const after = await prisma.configActivity.count({ where: { releaseId: release.id } });
     const after2602 = await prisma.configActivity.count({ where: { releaseId: null } });
     console.log(`  db 2608 ConfigActivity: ${after} · 2602-era rows untouched: ${before2602} → ${after2602}`);

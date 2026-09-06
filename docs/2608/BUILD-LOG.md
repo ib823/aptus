@@ -162,6 +162,119 @@ above.
 
 ---
 
+## WS6.1 — To-Be pack legibility, framing and PPTX parity (2026-09-06)
+
+**Branch:** `fix/tobe-export-pagination` (from `main` at the WS6 squash merge, #239).
+**Trigger:** the first packs generated from production were unreadable. WS6 shipped
+exports that scaled a whole flow onto one page while the font stayed fixed, so a
+35-step swimlane drew its boxes at 9% with 6.5pt labels piled on top of each other,
+and the L3 tables broke rows mid-cell. Separately the PPTX carried far less than the
+PDF, and neither document told the reader what it was.
+
+### What landed
+
+**1. Pagination instead of scale-to-fit** (`svg.ts`, both exporters).
+`paginateL2(item, L2_STEPS_PER_PAGE = 7)` slices a scope item's steps into pages;
+step numbers stay global so the sequence still reads across pages. The header on
+each page says `steps 8–14 of 35` and the title carries `(2/5)`. `wrapText` now
+splits a single over-long word instead of letting it run past its box.
+Pilot O2C: 5 items → 18 L2 pages, every page at a legible scale
+(unit test asserts the layout scale stays above 0.15 for 10…79 steps).
+
+**2. L3 tables that survive a page break** (`export-pdf.ts`).
+`rowPageBreak: "avoid"` (a tall row moves whole rather than orphaning
+`(Optional)` in one column and `(VF03)` in another), `cellWidth: "auto"` for
+eight of nine columns after measuring that the minimum content width is 157mm
+of the 269mm available — the fixed widths were fighting autoTable's own sizing
+and *shrinking* them made the reported overflow larger — and a `didDrawPage`
+hook that repaints the title band on every page the table spills onto. Before
+this, 5 of 37 pages in the pilot pack carried a grid of steps with no title.
+
+**3. The configuration list stopped overlapping itself** (`export-pdf.ts`).
+It advanced the cursor by one line per entry while `pdf.text` wrapped long
+entries over three. Now it splits with `splitTextToSize` and advances by the
+lines actually drawn, breaking the page when it runs out.
+
+**4. A WinAnsi choke point** (`export-pdf.ts`, `winAnsiSafe`).
+jsPDF's built-in Helvetica is WinAnsi-encoded and a glyph outside that set
+derails the whole run: the L1 alternate-path note rendered as letter-spaced
+rubble with `!'` where each `→` had been. Every draw on the document now passes
+through one sanitiser (arrows and comparison operators map to ASCII, anything
+else with no stand-in becomes `?`), so SAP free text — step names, gap reasons,
+client answers — cannot corrupt a client-facing page. Characters WinAnsi does
+carry (en/em dash, middot, curly quotes, ellipsis) pass through untouched.
+
+**5. `src/lib/tobe/narrative.ts` — one source of framing words, two renderers.**
+Seven blocks, rendered as pages in the PDF and slides in the PPTX:
+how to read the pack (the L1/L2/L3 table, and the explicit note that there is
+no L4 — below a step sits the transaction, demonstrated in the system);
+what the colours mean and how a step earns each state; what the pack is not
+(standard best practice at 2608 shaped by the answers so far, not a signed-off
+design; `Standard` means nothing has been said against it, not that it was
+agreed); where every mark comes from, with the four fingerprints; what drives
+the effort (nine countable drivers read off the pack itself); the sizing
+parameters the pack cannot know and is asking for (company codes, plants, COA,
+users, interfaces, migration objects, RICEFW, localisations); and what happens
+next — each kind of correction routed to the aptus surface that owns it
+(scope set, Fit-to-Standard affirm-set, process discovery, bundle sign-off)
+so the marked-up pack regenerates rather than being edited by hand.
+
+**No effort number is computed.** The pack counts what it can see and names
+what it cannot; converting that into person-days needs an estimation model
+this repo does not carry, and inventing one would contradict the rule the
+engine is built on.
+
+**6. PPTX parity** (`export-pptx.ts`). The narrative slides, visible L3 tables
+(12 rows per slide via `addTable`, previously speaker-notes only) and a
+configurations-and-gaps slide per item that has any. Pilot O2C: 41 slides.
+
+### Verification
+
+Regenerated the live pilot pack (the stored `TobePack` row from production)
+through the updated exporters and audited the output rather than eyeballing it:
+
+```
+pdf 38 pages, 513KB · pptx 41 slides, 2.6MB · 116 steps · 5 scope items
+
+pdfjs text-position audit over all 38 pages (2291 text runs):
+  right-edge overflow   0
+  bottom overflow       0
+  above top margin      0
+  overlapping runs      0
+  pages without a title 0   (page 1 is the cover)
+
+pptx OOXML geometry audit: 941 positioned shapes, 0 outside the 13.333×7.5in
+  slide, 0 table grids wider than the slide
+```
+
+Pages were also rendered to PNG through pdf.js and read back: cover, narrative,
+L1, an L2 slice, an L3 first page and an L3 continuation page.
+
+### Gates
+
+```
+tsc --noEmit --strict          OK
+eslint --max-warnings 0        OK
+vitest run                     337 files, 4948 tests, 0 failures
+check-migration-drift.sh       zero drift
+next build                     OK
+pnpm sap:2608:recon            GREEN
+```
+
+### Unproven / open
+
+1. **Effort quantification.** The pack states drivers and asks for the sizing
+   parameters; it does not produce a number. Where those numbers should come
+   from is a decision, not an implementation detail.
+2. **Visual review of the PPTX.** The geometry is asserted from the OOXML; no
+   renderer was available in the sandbox (LibreOffice here has no Impress
+   module), so the slides have not been *seen*. The PDF has.
+3. **`L2_STEPS_PER_PAGE = 7` and `L3_ROWS_PER_SLIDE = 12`** are chosen against
+   A4 landscape and 16:9 respectively and verified against the pilot's 3…55
+   step items. An item far outside that range is untested.
+
+---
+
 ## WS6 — To-Be Process Pack (2026-09-05)
 
 **Branch:** `feat/tobe-process-pack` (from `main` at the WS5 squash merge, #238).

@@ -6,7 +6,16 @@
 import { describe, expect, it } from "vitest";
 
 import { generateTobePack } from "@/lib/tobe/engine";
-import { escapeXml, l3Rows, layoutL2, renderL1Svg, renderL2Svg, wrapText } from "@/lib/tobe/svg";
+import {
+  L2_STEPS_PER_PAGE,
+  escapeXml,
+  l3Rows,
+  layoutL2,
+  paginateL2,
+  renderL1Svg,
+  renderL2Svg,
+  wrapText,
+} from "@/lib/tobe/svg";
 
 import { fixtureInput } from "./fixtures";
 
@@ -109,5 +118,56 @@ describe("l3Rows", () => {
     expect(rows[1]!.marker).toContain("optional in BPD");
     expect(rows[1]!.evidence).toBe("scope AAA · BPD 2608 · SSCUI 102751 · BDC Q-1");
     expect(rows[0]!.sscui).toBe("—");
+  });
+});
+
+/* ── export pagination ──────────────────────────────────────────────────────
+ *
+ * The exports used to scale a whole flow onto one page: BD9 (35 steps) landed
+ * at 15%, J59 (55) at 9%, J60 (79) at 7%, while the labels kept a fixed point
+ * size — the diagrams were present and unreadable. These pin the fix.
+ */
+function longItem(n: number) {
+  return {
+    ...aaa,
+    steps: Array.from({ length: n }, (_, i) => ({
+      ...aaa.steps[0]!,
+      index: i + 1,
+      name: `Step number ${i + 1}`,
+      role: i % 3 === 0 ? "Clerk" : i % 3 === 1 ? "Manager" : "Specialist",
+    })),
+  };
+}
+
+describe("paginateL2", () => {
+  it("leaves a flow that already fits on a single page", () => {
+    expect(paginateL2(aaa)).toEqual([aaa]);
+    expect(paginateL2(longItem(L2_STEPS_PER_PAGE))).toHaveLength(1);
+  });
+
+  it("splits a long flow and preserves global step numbering across pages", () => {
+    const pages = paginateL2(longItem(20));
+    expect(pages.every((p) => p.steps.length <= L2_STEPS_PER_PAGE)).toBe(true);
+    expect(pages).toHaveLength(Math.ceil(20 / L2_STEPS_PER_PAGE));
+    expect(pages.flatMap((p) => p.steps.map((s) => s.index))).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
+    // Everything except the step window is carried through unchanged.
+    expect(pages[1]!.code).toBe(aaa.code);
+    expect(pages[1]!.configurations).toEqual(aaa.configurations);
+  });
+
+  it("holds every page above the legibility floor at the real BPD step counts", () => {
+    // The PDF exporter's own figure: A4 landscape, 297mm wide, 12mm margins.
+    const availW = 297 - 24;
+    for (const n of [10, 28, 32, 35, 43, 55, 79]) {
+      for (const page of paginateL2(longItem(n))) {
+        const L = layoutL2(page);
+        const scale = availW / L.width;
+        expect(scale, `${n} steps scaled to ${scale.toFixed(3)}`).toBeGreaterThan(0.15);
+      }
+    }
+  });
+
+  it("a page never carries more steps than the renderer can draw legibly", () => {
+    for (const page of paginateL2(longItem(79))) expect(page.steps.length).toBeLessThanOrEqual(L2_STEPS_PER_PAGE);
   });
 });
