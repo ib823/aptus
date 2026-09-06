@@ -105,42 +105,70 @@ The product-agnostic and consultant-wall gates are test files inside the suite
 (`tests/unit/discovery/copy.test.ts` and siblings) and are covered by the run
 above.
 
-### Unproven / open — read this before merging
+### The production load (2026-09-06, later the same day)
 
-1. **This must not reach production as it stands.** The flip is correct code
-   against a database that has 2608 in it. Production does not. The order is:
-   run the loaders against production (`sap:2608:seed-release`, `load-scope`,
-   `load-sscui`, `load-process-steps`, `load-bdc`), get `sap:2608:recon --db`
-   green **there**, then merge. If it merges first, the guard fails the Vercel
-   build — the designed outcome, but a failed deploy, not a safe one.
+The precondition this PR was gated on was met before it merged. The loaders
+were run against production from a Windows workstation — the sandbox has no
+outbound TCP 5432, so Prisma cannot reach Neon from it at all. Each step was
+verified from the database independently of what the script printed:
 
-2. **The guard has not been executed against production, and one way it could
-   be silently bypassed is unchecked.** The sandbox cannot open TCP 5432
-   outbound, so Prisma cannot reach Neon from here; the production counts above
-   were read over Neon's SQL-over-HTTPS endpoint instead. The decision logic is
-   unit-tested with those exact production numbers
-   (`tests/unit/sap-content/assert-content-release-landed.test.ts`), and the
-   script itself was run end-to-end against the local database. The two halves
-   have not been observed together.
+```
+seed-release        SapContentRelease 2608 · MY → cmtpt405q0001jym0iftumz8o
+                    manifest sha256 8d910bf7… (identical to the repo checkout)
+load-scope          822 created · 0 updated · ScopeCatalogVersion PUBLIC/2608
+                    (isActive=false) · ACTIVE 670 · DEPRECATION_PLANNED 9 ·
+                    OBSOLETE 6 · RETIRED 137
+load-sscui          4,328 ConfigActivity · 2602-era rows 4,210 → 4,210
+load-process-steps  19,158 SapProcessStep · 661 items ·
+                    AffirmProcessStep (2602 snapshot) untouched: 2,502
+load-bdc            14 workbooks parsed · S4H_706 → stream "process-automation",
+                    16 questions · re-level 14 matched, 0 unmatched
+recon --db          GREEN — all 19 facts, including the 9 database facts
+```
 
-   The Vercel **preview** deployment of this branch built and went Ready. That
-   is not evidence either way, and it raises a question that has to be answered
-   before this PR is trusted to protect anything:
+The 2602 side is provably intact: `ScopeItem` 853, `ConfigActivity` 4,210,
+`AffirmProcessStep` 2,502, all still `releaseId` null, and the 2602 and
+2025-FPS1 catalogue versions unchanged at 582 and 271 items. Every 2608 row
+sits in its own catalogue version.
 
-   - If the Preview environment has its own database (empty, or one with 2608
-     loaded), the guard passed correctly and nothing is wrong.
-   - If Preview shares production's `DATABASE_URL`, the guard should have
-     **failed** that build — and it did not. The most likely reason would be
-     that the Vercel project carries an explicit **Build Command** override, in
-     which case `vercel-build` in `package.json` is ignored entirely and the
-     guard never runs on production either.
+**`load-sscui` failed on the first attempt**, and that is worth recording
+rather than tidying away. Prisma's interactive transactions default to a
+5-second timeout; 4,328 rows in batches of 500 is nine round trips, instant
+against a local Postgres and 5.2s against Neon. The transaction expired
+mid-load and rolled back cleanly — verified: `ConfigActivity` with a
+`releaseId` was still 0 afterwards. `load-2608-process-steps.ts` already
+carried `{ timeout: 120_000 }` because 19,158 rows made the need obvious; the
+sibling loader with a third as many rows never failed locally, so nobody
+questioned it. Fixed in #243. The lesson is not the number: **passing against a
+local database was never evidence the loader worked, because the environment it
+exists to run against is the one where it is slowest.**
 
-   Neither the project's Build Command nor the environment scoping of
-   `DATABASE_URL` is readable from here, and the preview URL is behind Vercel
-   Authentication, so the deployed app cannot be inspected. **Someone must open
-   the Vercel project settings and confirm the Build Command is unset (or is
-   `pnpm vercel-build`).** Until that is confirmed, treat the guard as designed
-   but unproven in the environment it exists to protect.
+One more thing this surfaced: the repo has no `.gitattributes`, so a Windows
+clone gets CRLF line endings on the text files under `sap-references/2608/` and
+RECON fails integrity on `README.rtf` and on the manifest's own hash. Worked
+around with `core.autocrlf false` plus a renormalise; a follow-up should mark
+that tree binary.
+
+### Unproven / open
+
+1. **The guard has still not been observed refusing a real deploy.** The
+   sandbox cannot open TCP 5432, so Prisma cannot reach Neon from it; the
+   production counts were read over Neon's SQL-over-HTTPS endpoint instead. The
+   decision logic is unit-tested with those exact production numbers
+   (`tests/unit/sap-content/assert-content-release-landed.test.ts`) and the
+   script ran end-to-end against a local database, but the two halves have not
+   been observed together — and now that 2608 is landed, the refusing branch
+   cannot be exercised without deliberately misconfiguring something.
+
+2. **Whether `vercel-build` is what Vercel actually runs is unconfirmed.** If
+   the project carries an explicit Build Command override, `vercel-build` in
+   `package.json` is ignored and the guard never runs. The preview deployment
+   of this branch built and went Ready, which is consistent both with the guard
+   passing correctly and with it never running. Neither the Build Command nor
+   the environment scoping of `DATABASE_URL` is readable from this session.
+   This matters less now the data is landed, but a guard is only as good as its
+   being invoked.
+
 
 3. **Two numbers in the affirm subhead were not verified.** "8 streams +
    Foundation" and "~135 client-facing L2 questions". The base seed has 8 value
