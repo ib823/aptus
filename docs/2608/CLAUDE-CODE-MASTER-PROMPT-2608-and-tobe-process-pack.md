@@ -52,3 +52,11 @@ Pilot + acceptance: Order-to-Cash (1IQ → BDG → BD9 → J59, plus 2ET) with a
 
 ## Gates for every PR
 typecheck · lint · unit · migration-integrity · product-agnostic grep · consultant-wall · Playwright smoke on preview · RECON green · BUILD-LOG entry (decision, evidence, what was NOT verified). Report back with: PR links, RECON output, screenshots of /sap-explorer tiles and the O2C to-be pack, and an honest list of anything left unproven.
+
+## WS8 — Non-S/4 connectors: deprecations found 2026-09-05 (branch `feat/connectors-hub-state`)
+Verified live on the Hub (package artefact State) — see docs/2608/aptus-SAP-Inventory-Currency-Assessment-2026-09-05.xlsx tab "Non-Public SAP":
+1. Ariba: `sourcing_event` v1 (/api/sourcing-eventmanagement/v1) and `sourcing_project_management` v1 are DEPRECATED → migrate both to v2 (`sourcing_event_v2`, `sourcing_project_management_v2`). `supplierdatapagination_v4`, contract-workspace, `analytics_reporting_view`, `sourcing_reporting_view` / `procurement_reporting_view_v2` are ACTIVE — pin the operational-reporting call to one of the two explicitly.
+2. SuccessFactors: EC/Recruiting/Onboarding entities all ACTIVE; enforce OAuth2 SAML Bearer only (Basic auth ends 20-Nov-2026) — remove any Basic-auth code path and add a startup guard that refuses `basic` for SF after that date.
+3. Generalise the WS2 Hub-state loader to every wired package (SuccessFactorsEmployeeCentral, SuccessFactorsRecruiting, SuccessFactorsOnboarding, SAPAribaOpenAPIs, FieldglassAPI, S4HANAOPAPI for two-tier/Private) so the connector registry shows ACTIVE / DEPRECATED / DECOMMISSIONED per wired API and fails CI when a wired API is not ACTIVE.
+4. Private/on-prem (two-tier connectors): package S4HANAOPAPI is PRC2025 FPS1 (897 APIs, 43 deprecated, same V2→V4 pattern: OP_API_PURCHASEORDER_PROCESS_SRV_0001 etc.) — reuse the WS4 successor map with the OP_ prefix.
+Gates as above; RECON must list every wired API with its live Hub state.
