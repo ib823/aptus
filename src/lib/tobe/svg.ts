@@ -350,6 +350,31 @@ function pseudoChain(doc: TobePackDoc): TobeChainDoc {
   };
 }
 
+/**
+ * Steps per exported page or slide.
+ *
+ * The on-screen SVG scrolls, so a 79-step flow is fine there. A PDF page and a
+ * PPTX slide are fixed, and scaling a whole flow onto one of them put BD9 at
+ * 15%, J59 at 9% and J60 at 7% — boxes the size of a word, with labels drawn at
+ * a fixed point size on top of each other. Seven holds every page near a
+ * quarter scale, where the wrapped label measures inside its box (checked with
+ * jsPDF's own text metrics, not by eye).
+ */
+export const L2_STEPS_PER_PAGE = 7;
+
+/**
+ * Split one scope item into export-sized slices. Each slice is the same item
+ * with a window of its steps, so `layoutL2` lays out only the roles that window
+ * actually uses. Step numbers are carried on the steps themselves, so numbering
+ * stays global and the sequence reads across pages.
+ */
+export function paginateL2(item: TobeScopeItemDoc, perPage: number = L2_STEPS_PER_PAGE): TobeScopeItemDoc[] {
+  if (item.steps.length <= perPage) return [item];
+  const out: TobeScopeItemDoc[] = [];
+  for (let i = 0; i < item.steps.length; i += perPage) out.push({ ...item, steps: item.steps.slice(i, i + perPage) });
+  return out;
+}
+
 // ── L3 rows (table fallback, PDF, PPTX notes) ─────────────────────────────────
 
 export interface L3Row {

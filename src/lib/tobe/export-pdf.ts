@@ -7,7 +7,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
-import { STATE_STYLE, TOBE_NAVY, l3Rows, layoutL2, wrapText } from "./svg";
+import { STATE_STYLE, TOBE_NAVY, l3Rows, layoutL2, paginateL2, wrapText } from "./svg";
 import type { TobePackDoc, TobeStepState } from "./types";
 
 function hex(h: string): [number, number, number] {
@@ -142,64 +142,78 @@ export function generateTobePackPdf(doc: TobePackDoc, opts: TobePdfOptions): Uin
   // ── Per scope item
   for (const item of doc.scopeItems) {
     if (!item.inScope && !item.hasBpd) continue;
-    pdf.addPage();
-    header(
-      pdf,
-      `${item.code} · ${item.title}`,
-      item.inScope
-        ? `L2 swimlane · ${item.steps.length} steps · ${item.configurations.length} configuration(s) · ${item.gaps.length} gap(s)${item.confirmInWorkshop ? " · confirm in workshop" : ""}`
-        : "not in scope",
-    );
-    const L = layoutL2(item);
-    // Fit the layout to the page: scale px → mm.
-    const availW = pw - 24;
-    const availH = ph - 50;
-    const k = Math.min(availW / L.width, availH / (L.height - 40), 0.35);
-    const ox = 12;
-    const oy = 34;
-    pdf.setFontSize(7);
-    for (const lane of L.lanes) {
-      const ly = oy + (L.headerHeight + lane.index * L.laneHeight) * k - L.headerHeight * k;
-      pdf.setFillColor(...((lane.index % 2 === 0 ? hex("#F6F7F9") : [255, 255, 255]) as [number, number, number]));
-      pdf.rect(ox, ly, L.width * k, L.laneHeight * k, "F");
-      pdf.setTextColor(...navy);
-      pdf.setFont("helvetica", "bold");
-      wrapText(lane.role, 26, 3).forEach((ln, li) => pdf.text(ln, ox + 2, ly + 4 + li * 3.2));
-    }
-    pdf.setFont("helvetica", "normal");
-    for (let i = 1; i < L.nodes.length; i++) {
-      const a = L.nodes[i - 1]!;
-      const b = L.nodes[i]!;
-      pdf.setDrawColor(138, 151, 166);
-      pdf.setLineWidth(0.3);
-      const ax = ox + (a.x + a.w) * k;
-      const ay = oy + (a.y + a.h / 2 - L.headerHeight) * k;
-      const bx = ox + b.x * k;
-      const by = oy + (b.y + b.h / 2 - L.headerHeight) * k;
-      const mx = ax + (bx - ax) / 2;
-      pdf.line(ax, ay, mx, ay);
-      pdf.line(mx, ay, mx, by);
-      pdf.line(mx, by, bx, by);
-    }
-    for (const n of L.nodes) {
-      const st = STATE_STYLE[n.step.state];
-      pdf.setFillColor(...hex(st.fill));
-      pdf.setDrawColor(...hex(st.stroke));
-      pdf.setLineWidth(0.4);
-      if (st.dash || n.step.optional) pdf.setLineDashPattern(st.dash ? [1.2, 0.8] : [0.6, 0.6], 0);
-      pdf.roundedRect(ox + n.x * k, oy + (n.y - L.headerHeight) * k, n.w * k, n.h * k, 1.2, 1.2, "FD");
-      pdf.setLineDashPattern([], 0);
-      pdf.setTextColor(31, 31, 31);
-      pdf.setFontSize(6.5);
-      wrapText(`${n.step.index}. ${n.step.name}`, 26, 2).forEach((ln, li) =>
-        pdf.text(ln, ox + (n.x + 6) * k, oy + (n.y + 13 + li * 11 - L.headerHeight) * k),
+    /*
+     * PAGINATED, NOT SCALED TO FIT. One page held the whole flow, so a 55-step
+     * item drew its boxes at 9% while the labels kept a fixed 6.5pt — the
+     * diagram was present and unreadable, text piled on text. Slicing the flow
+     * holds every page near a fifth scale; step numbers are global, so the
+     * sequence still reads across pages.
+     */
+    const pages = paginateL2(item);
+    pages.forEach((slice, pageIndex) => {
+      pdf.addPage();
+      const from = slice.steps[0]?.index;
+      const to = slice.steps[slice.steps.length - 1]?.index;
+      const range =
+        pages.length > 1 && from && to ? `steps ${from}–${to} of ${item.steps.length}` : `${item.steps.length} steps`;
+      header(
+        pdf,
+        `${item.code} · ${item.title}${pages.length > 1 ? `  (${pageIndex + 1}/${pages.length})` : ""}`,
+        item.inScope
+          ? `L2 swimlane · ${range} · ${item.configurations.length} configuration(s) · ${item.gaps.length} gap(s)${item.confirmInWorkshop ? " · confirm in workshop" : ""}`
+          : "not in scope",
       );
-      const meta = n.step.sscuiId ? `SSCUI ${n.step.sscuiId}` : n.step.app ? wrapText(n.step.app, 28, 1)[0]! : "";
-      if (meta) {
-        pdf.setTextColor(107, 107, 107);
-        pdf.text(meta, ox + (n.x + 6) * k, oy + (n.y + n.h - 7 - L.headerHeight) * k);
+      const L = layoutL2(slice);
+      // Fit the layout to the page: scale px → mm.
+      const availW = pw - 24;
+      const availH = ph - 50;
+      const k = Math.min(availW / L.width, availH / (L.height - 40), 0.35);
+      const ox = 12;
+      const oy = 34;
+      pdf.setFontSize(7);
+      for (const lane of L.lanes) {
+        const ly = oy + (L.headerHeight + lane.index * L.laneHeight) * k - L.headerHeight * k;
+        pdf.setFillColor(...((lane.index % 2 === 0 ? hex("#F6F7F9") : [255, 255, 255]) as [number, number, number]));
+        pdf.rect(ox, ly, L.width * k, L.laneHeight * k, "F");
+        pdf.setTextColor(...navy);
+        pdf.setFont("helvetica", "bold");
+        wrapText(lane.role, 22, 3).forEach((ln, li) => pdf.text(ln, ox + 2, ly + 4 + li * 3.2));
       }
-    }
+      pdf.setFont("helvetica", "normal");
+      for (let i = 1; i < L.nodes.length; i++) {
+        const a = L.nodes[i - 1]!;
+        const b = L.nodes[i]!;
+        pdf.setDrawColor(138, 151, 166);
+        pdf.setLineWidth(0.3);
+        const ax = ox + (a.x + a.w) * k;
+        const ay = oy + (a.y + a.h / 2 - L.headerHeight) * k;
+        const bx = ox + b.x * k;
+        const by = oy + (b.y + b.h / 2 - L.headerHeight) * k;
+        const mx = ax + (bx - ax) / 2;
+        pdf.line(ax, ay, mx, ay);
+        pdf.line(mx, ay, mx, by);
+        pdf.line(mx, by, bx, by);
+      }
+      for (const n of L.nodes) {
+        const st = STATE_STYLE[n.step.state];
+        pdf.setFillColor(...hex(st.fill));
+        pdf.setDrawColor(...hex(st.stroke));
+        pdf.setLineWidth(0.4);
+        if (st.dash || n.step.optional) pdf.setLineDashPattern(st.dash ? [1.2, 0.8] : [0.6, 0.6], 0);
+        pdf.roundedRect(ox + n.x * k, oy + (n.y - L.headerHeight) * k, n.w * k, n.h * k, 1.2, 1.2, "FD");
+        pdf.setLineDashPattern([], 0);
+        pdf.setTextColor(31, 31, 31);
+        pdf.setFontSize(6.5);
+        wrapText(`${n.step.index}. ${n.step.name}`, 20, 2).forEach((ln, li) =>
+          pdf.text(ln, ox + (n.x + 6) * k, oy + (n.y + 13 + li * 11 - L.headerHeight) * k),
+        );
+        const meta = n.step.sscuiId ? `SSCUI ${n.step.sscuiId}` : n.step.app ? wrapText(n.step.app, 20, 1)[0]! : "";
+        if (meta) {
+          pdf.setTextColor(107, 107, 107);
+          pdf.text(meta, ox + (n.x + 6) * k, oy + (n.y + n.h - 7 - L.headerHeight) * k);
+        }
+      }
+    });
     // L3 table
     pdf.addPage();
     header(

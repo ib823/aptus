@@ -30,6 +30,34 @@ describe("PDF", () => {
   });
 });
 
+describe("pagination", () => {
+  /** A scope item with `n` steps, standing in for BD9 (35) / J59 (55) / J60 (79). */
+  function longDoc(n: number) {
+    const d = generateTobePack(fixtureInput({ scopeCodes: ["AAA"], chains: [] }));
+    const item = d.scopeItems.find((i) => i.code === "AAA")!;
+    item.steps = Array.from({ length: n }, (_, i) => ({ ...item.steps[0]!, index: i + 1, name: `Step ${i + 1}` }));
+    return d;
+  }
+
+  it("PDF grows a page per slice instead of shrinking one flow into illegibility", () => {
+    const short = generateTobePackPdf(longDoc(3), { clientName: "X", consultantView: true }).byteLength;
+    const long = generateTobePackPdf(longDoc(55), { clientName: "X", consultantView: true }).byteLength;
+    expect(long).toBeGreaterThan(short);
+  });
+
+  it("PPTX adds slides for a long flow rather than one crowded slide", async () => {
+    const AdmZip = (await import("adm-zip")).default;
+    const count = async (n: number) => {
+      const buf = await generateTobePackPptx(longDoc(n), { clientName: "X", consultantView: true });
+      return new AdmZip(buf).getEntries().filter((e) => /^ppt\/slides\/slide\d+\.xml$/.test(e.entryName)).length;
+    };
+    const { L2_STEPS_PER_PAGE } = await import("@/lib/tobe/svg");
+    const short = await count(4);
+    const long = await count(55);
+    expect(long - short).toBe(Math.ceil(55 / L2_STEPS_PER_PAGE) - 1);
+  }, 60_000);
+});
+
 describe("PPTX", () => {
   it("is a zip (OOXML) with one slide per in-scope item plus title and L1", async () => {
     const buf = await generateTobePackPptx(doc, { clientName: "Pilot Client", consultantView: true });
