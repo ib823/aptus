@@ -26,6 +26,7 @@ import {
   type SapConnectionSecrets,
 } from "@/lib/sap-public/connection-crypto";
 import { exchangeSamlBearerAssertion } from "@/lib/sap-public/oauth-saml-bearer";
+import { assertSuccessFactorsBasicAuthAllowed } from "./sf-basic-auth-sunset";
 
 export type SapAuthType =
   | "basic"
@@ -407,6 +408,9 @@ export function toSapTenant(conn: ResolvedSapConnection): SapTenant {
 export async function buildAuthHeaderFromConnection(conn: ResolvedSapConnection): Promise<string> {
   const s = conn.secrets;
   if (conn.authType === "basic") {
+    // 2608 WS8 — SuccessFactors drops HTTP Basic on 2026-11-20; refuse it here
+    // with instructions rather than let SAP answer 401 without any.
+    assertSuccessFactorsBasicAuthAllowed(conn.product, conn.authType, `connection ${conn.key}`);
     if (!s.username || !s.password) throw new Error(`Connection ${conn.key} is basic auth but missing username/password`);
     return `Basic ${Buffer.from(`${s.username}:${s.password}`).toString("base64")}`;
   }

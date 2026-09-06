@@ -39,21 +39,47 @@ export interface AribaCallResult {
   error: string | null;
 }
 
+/*
+ * 2608 WS8 — the two sourcing endpoints moved from v1 to v2.
+ *
+ * The Hub marks `sourcing_event` 1.0.0 and `sourcing_project_management` 1.0.0
+ * DEPRECATED, and publishes `sourcing_event_v2` 2.0.0 and
+ * `sourcing_project_management_v2` 2.0.0 ACTIVE in the same package. Both are
+ * the same API family under a new major version, so the migration is the
+ * version segment.
+ *
+ * WHAT IS EVIDENCED AND WHAT IS NOT. The states, versions and artefact ids
+ * above come from the harvested Hub catalogue and are checked on every run by
+ * `pnpm sap:connectors:recon`. The **resource paths** under v2 are not: the
+ * Hub catalogue carries no base path, and no Ariba tenant is reachable from
+ * this repository, so `/prod/events` and `/prod/projects` are carried across
+ * unchanged on the assumption that a major version bump kept its collections.
+ * That assumption is untested. `ARIBA_SOURCING_V1=true` restores the v1 paths
+ * for one release so a live tenant that disagrees is a flag flip and not a
+ * deploy — the same escape hatch WS4 gave the PO connector.
+ */
+const ARIBA_SOURCING_V1_ENV = "ARIBA_SOURCING_V1";
+
+/** True while a deployment is pinned to the deprecated v1 sourcing APIs. */
+export function isAribaSourcingV1Pinned(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env[ARIBA_SOURCING_V1_ENV] === "true";
+}
+
 // Starter catalog — Sourcing + Supplier and Reporting families.
 export const ARIBA_ENDPOINTS: AribaEndpoint[] = [
   {
     key: "sourcing-events",
     label: "Sourcing Events",
     group: "Sourcing + Supplier",
-    path: "/api/sourcing-eventmanagement/v1/prod/events",
-    description: "RFx / sourcing events managed in Ariba Sourcing.",
+    path: "/api/sourcing-eventmanagement/v2/prod/events",
+    description: "RFx / sourcing events managed in Ariba Sourcing (Event Management API 2.0.0).",
   },
   {
     key: "sourcing-projects",
     label: "Sourcing Projects",
     group: "Sourcing + Supplier",
-    path: "/api/sourcing-projectmanagement/v1/prod/projects",
-    description: "Sourcing project workspaces and their status.",
+    path: "/api/sourcing-projectmanagement/v2/prod/projects",
+    description: "Sourcing project workspaces and their status (Sourcing Project Management API 2.0.0).",
   },
   {
     key: "suppliers",
@@ -76,14 +102,49 @@ export const ARIBA_ENDPOINTS: AribaEndpoint[] = [
     path: "/api/analytics-reporting-view/v1/prod/views",
     description: "Available analytical report view templates.",
   },
+  /*
+   * 2608 WS8 — "operational reporting" was one endpoint and two APIs.
+   *
+   * `/api/operational-reporting-view/v1` named no single Hub artefact: the Hub
+   * publishes `sourcing_reporting_view` 1.0.0 and
+   * `procurement_reporting_view_v2` 2.0.0 as separate ACTIVE APIs, and the v1
+   * procurement API (`procurement_eventstatus`) is DEPRECATED. A single
+   * endpoint could not be checked against the Hub, and silently pointed at
+   * whichever the tenant happened to route. Split so each half names the
+   * artefact it depends on and the procurement half pins v2.
+   */
   {
-    key: "operational-views",
-    label: "Operational Reporting — Views",
+    key: "sourcing-reporting-views",
+    label: "Operational Reporting — Sourcing Views",
     group: "Reporting",
-    path: "/api/operational-reporting-view/v1/prod/views",
-    description: "Available operational report view templates.",
+    path: "/api/sourcing-reporting-view/v1/prod/views",
+    description: "Operational report view templates for Sourcing.",
+  },
+  {
+    key: "procurement-reporting-views",
+    label: "Operational Reporting — Procurement Views",
+    group: "Reporting",
+    path: "/api/procurement-reporting-view/v2/prod/views",
+    description: "Operational report view templates for Procurement (v2; v1 is deprecated).",
   },
 ];
+
+/**
+ * The deprecated v1 paths, kept only for `ARIBA_SOURCING_V1=true`. Listed
+ * rather than computed so that grepping for the deprecated path finds it.
+ */
+const ARIBA_SOURCING_V1_PATHS: Readonly<Record<string, string>> = {
+  "sourcing-events": "/api/sourcing-eventmanagement/v1/prod/events",
+  "sourcing-projects": "/api/sourcing-projectmanagement/v1/prod/projects",
+};
+
+/** The endpoints as this deployment will actually call them. */
+export function resolveAribaEndpoints(env: NodeJS.ProcessEnv = process.env): AribaEndpoint[] {
+  if (!isAribaSourcingV1Pinned(env)) return ARIBA_ENDPOINTS;
+  return ARIBA_ENDPOINTS.map((e) =>
+    ARIBA_SOURCING_V1_PATHS[e.key] ? { ...e, path: ARIBA_SOURCING_V1_PATHS[e.key]! } : e,
+  );
+}
 
 export const ARIBA_PRODUCT = {
   key: "ariba",
@@ -92,7 +153,7 @@ export const ARIBA_PRODUCT = {
 } as const;
 
 export function getAribaEndpoint(key: string): AribaEndpoint | null {
-  return ARIBA_ENDPOINTS.find((e) => e.key === key) ?? null;
+  return resolveAribaEndpoints().find((e) => e.key === key) ?? null;
 }
 
 /** Configured when we have at least a base URL + api key + a token source. */
