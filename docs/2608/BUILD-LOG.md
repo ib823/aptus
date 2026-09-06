@@ -114,13 +114,33 @@ above.
    green **there**, then merge. If it merges first, the guard fails the Vercel
    build — the designed outcome, but a failed deploy, not a safe one.
 
-2. **The guard has not been executed against production.** The sandbox cannot
-   open TCP 5432 outbound, so Prisma cannot reach Neon from here; the production
-   counts above were read over Neon's SQL-over-HTTPS endpoint instead. The
-   decision logic is unit-tested with those exact production numbers
+2. **The guard has not been executed against production, and one way it could
+   be silently bypassed is unchecked.** The sandbox cannot open TCP 5432
+   outbound, so Prisma cannot reach Neon from here; the production counts above
+   were read over Neon's SQL-over-HTTPS endpoint instead. The decision logic is
+   unit-tested with those exact production numbers
    (`tests/unit/sap-content/assert-content-release-landed.test.ts`), and the
    script itself was run end-to-end against the local database. The two halves
    have not been observed together.
+
+   The Vercel **preview** deployment of this branch built and went Ready. That
+   is not evidence either way, and it raises a question that has to be answered
+   before this PR is trusted to protect anything:
+
+   - If the Preview environment has its own database (empty, or one with 2608
+     loaded), the guard passed correctly and nothing is wrong.
+   - If Preview shares production's `DATABASE_URL`, the guard should have
+     **failed** that build — and it did not. The most likely reason would be
+     that the Vercel project carries an explicit **Build Command** override, in
+     which case `vercel-build` in `package.json` is ignored entirely and the
+     guard never runs on production either.
+
+   Neither the project's Build Command nor the environment scoping of
+   `DATABASE_URL` is readable from here, and the preview URL is behind Vercel
+   Authentication, so the deployed app cannot be inspected. **Someone must open
+   the Vercel project settings and confirm the Build Command is unset (or is
+   `pnpm vercel-build`).** Until that is confirmed, treat the guard as designed
+   but unproven in the environment it exists to protect.
 
 3. **Two numbers in the affirm subhead were not verified.** "8 streams +
    Foundation" and "~135 client-facing L2 questions". The base seed has 8 value
