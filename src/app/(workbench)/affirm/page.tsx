@@ -13,6 +13,7 @@ import { affirmBundleScope } from "@/lib/affirm/authz";
 import { ScreenGuide } from "@/components/affirm/learn/ScreenGuide";
 import { Term } from "@/components/affirm/learn/TermChip";
 import { SampleSandboxCard } from "@/components/affirm/learn/SampleSandboxCard";
+import { getSapContentRelease } from "@/lib/sap-content/release";
 import { formatDate } from "@/lib/format/date";
 
 export const dynamic = "force-dynamic";
@@ -117,9 +118,12 @@ export default async function AffirmIndexPage({ searchParams }: PageProps) {
           <h1 className="font-serif text-3xl leading-10 text-ink">Affirm bundles</h1>
           <p className="mt-1.5 max-w-[720px] text-sm text-ink-soft">
             <Term id="affirm-set">Value-stream affirm-set</Term>,{" "}
-            <Term id="s4hana-cloud-public">SAP S/4HANA Cloud Public Edition 2602</Term>. 8{" "}
+            <Term id="s4hana-cloud-public">
+              SAP S/4HANA Cloud Public Edition {getSapContentRelease().release}
+            </Term>
+            . 8{" "}
             <Term id="value-stream">streams</Term> + <Term id="foundation">Foundation</Term>,
-            672 <Term id="scope-item">scope items</Term>, ~135 client-facing{" "}
+            679 <Term id="scope-item">scope items</Term>, ~135 client-facing{" "}
             <Term id="l2-question">L2 questions</Term>. Consultant assembles &rarr; client
             affirms &rarr; consultant releases.
           </p>
