@@ -62,6 +62,7 @@
     "sap:hub:harvest": "tsx scripts/harvest-sap-api-hub.ts",
     "sap:hub:recon-2608": "tsx scripts/recon-hub-2608.ts",
     "sap:2608:recon": "tsx scripts/recon-2608.ts",
+    "sap:connectors:recon": "tsx scripts/recon-connectors-2608.ts",
     "sap:2608:assert-landed": "tsx scripts/assert-content-release-landed.ts",
     "sap:2608:seed-release": "tsx scripts/seed-sap-content-release.ts",
     "sap:2608:load-scope": "tsx scripts/load-2608-scope.ts",

@@ -1,5 +1,6 @@
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
 import { exchangeSamlBearerAssertion } from "@/lib/sap-public/oauth-saml-bearer";
+import { assertSuccessFactorsBasicAuthAllowed } from "./sf-basic-auth-sunset";
 
 /**
  * The env tenant's auth types — the SAME four the stored-connection path
@@ -845,6 +846,11 @@ export function clearEnvSamlTokenCache(): void {
  * so the host a request goes to and the credential it carries can no longer
  * come from two different places.
  */
+/** The product a `{PREFIX}_*` tenant belongs to, for guards that are product-specific. */
+function productKeyForEnvPrefix(prefix: string): string | null {
+  return SAP_ODATA_PRODUCTS.find((p) => p.envPrefix === prefix)?.key ?? null;
+}
+
 async function authHeaderFor(prefix: string, tenant: SapTenant): Promise<string> {
   if (tenant.authorization) return tenant.authorization();
   return buildAuthHeader(prefix);
@@ -853,6 +859,13 @@ async function authHeaderFor(prefix: string, tenant: SapTenant): Promise<string>
 async function buildAuthHeader(prefix: string): Promise<string> {
   const authType = getAuthType(prefix);
   if (authType === "basic") {
+    /*
+     * 2608 WS8 — SAP withdraws HTTP Basic for SuccessFactors on 2026-11-20.
+     * Refused here rather than by SAP, because a refusal raised here says what
+     * to do about it and a 401 does not. Product is passed explicitly: Basic
+     * stays legitimate for every other tenant this function serves.
+     */
+    assertSuccessFactorsBasicAuthAllowed(productKeyForEnvPrefix(prefix), authType, `${prefix}_* tenant`);
     const username = requiredEnv(prefix, "USERNAME");
     const password = requiredEnv(prefix, "PASSWORD");
     return `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
