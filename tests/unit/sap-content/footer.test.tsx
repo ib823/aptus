@@ -1,5 +1,5 @@
 /**
- * 2608 WS0 — the SAP content release footer renders the resolved release.
+ * 2608 WS0/WS7 — the SAP content release footer renders the resolved release.
  */
 
 import { renderToStaticMarkup } from "react-dom/server";
@@ -15,18 +15,18 @@ afterEach(() => {
 });
 
 describe("SapContentReleaseFooter", () => {
-  it("shows the 2602 default when SAP_CONTENT_RELEASE is unset", () => {
+  it("shows the 2608 default when SAP_CONTENT_RELEASE is unset", () => {
     delete process.env.SAP_CONTENT_RELEASE;
-    const html = renderToStaticMarkup(<SapContentReleaseFooter />);
-    expect(html).toContain("SAP content release 2602 · MY");
-    expect(html).toContain('data-release="2602"');
-  });
-
-  it("shows 2608 · MY when SAP_CONTENT_RELEASE=2608", () => {
-    process.env.SAP_CONTENT_RELEASE = "2608";
     const html = renderToStaticMarkup(<SapContentReleaseFooter />);
     expect(html).toContain("SAP content release 2608 · MY");
     expect(html).toContain('data-release="2608"');
     expect(html).toContain('data-localisation="MY"');
+  });
+
+  it("shows 2602 · MY when an engagement is pinned back with SAP_CONTENT_RELEASE=2602", () => {
+    process.env.SAP_CONTENT_RELEASE = "2602";
+    const html = renderToStaticMarkup(<SapContentReleaseFooter />);
+    expect(html).toContain("SAP content release 2602 · MY");
+    expect(html).toContain('data-release="2602"');
   });
 });

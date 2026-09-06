@@ -12,7 +12,7 @@
  *
  *   a read of a scoped model that names neither `releaseId` nor
  *   `catalogVersionId` in its `where` sees only the ACTIVE content release
- *   (SAP_CONTENT_RELEASE, default 2602).
+ *   (SAP_CONTENT_RELEASE, default 2608 since WS7).
  *
  * The active release is resolved per query, so flipping the env flips every
  * footer AND every catalogue read together (WS7). An assessment pinned to a
