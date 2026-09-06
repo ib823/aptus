@@ -1,11 +1,19 @@
 /**
  * SAP content release — which SAP Best Practices drop the app grounds on.
  *
- * 2608 WS0 (docs/2608/BUILD-LOG.md). The release is selected by the
- * SAP_CONTENT_RELEASE env var and DEFAULTS TO 2602 until WS7 flips it; 2608
- * becomes selectable the moment its files are landed (sap-references/2608/).
+ * 2608 WS0/WS7 (docs/2608/BUILD-LOG.md). The release is selected by the
+ * SAP_CONTENT_RELEASE env var and DEFAULTS TO APP_CONFIG.sapVersion, which
+ * WS7 moved from 2602 to 2608. 2602 remains selectable by env for an
+ * engagement that has not moved, and an assessment pinned to a catalogue
+ * version keeps that version whatever the flag says (AD-3).
  * Reading it here, in one place, is what lets every SAP-grounded page show
  * the same footer label and every loader stamp the same releaseId.
+ *
+ * THE DEFAULT IS ONLY SAFE WHERE THE CONTENT IS LANDED. A release with no
+ * rows scopes every catalogue read to nothing rather than falling back — an
+ * empty scope picker, not a 2602 one. scripts/assert-content-release-landed.ts
+ * runs in `vercel-build` so that misconfiguration fails the deploy instead of
+ * reaching a user.
  *
  * Runtime-safe: no fs, no Prisma. File locations per release live in
  * scripts/lib/sap-content-sources.ts (Node-only).

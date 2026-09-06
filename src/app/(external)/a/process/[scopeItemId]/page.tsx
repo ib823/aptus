@@ -16,6 +16,7 @@ import { GuestShell } from "@/components/affirm/external/GuestShell";
 import { ChapterBand } from "@/components/affirm/external/ChapterBand";
 import { JourneyProgressBar } from "@/components/affirm/external/JourneyProgressBar";
 import { ProcessFlowStrip } from "@/components/affirm/ProcessFlowStrip";
+import { getSapContentRelease } from "@/lib/sap-content/release";
 import { GuestGuide } from "@/components/affirm/external/GuestGuide";
 
 export const dynamic = "force-dynamic";
@@ -107,7 +108,7 @@ export default async function AffirmProcessPage({ params }: PageProps) {
         {/* Attribution */}
         <div className="mt-7 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border-default pt-4">
           <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-ink-muted">
-            Source: SAP Best Practices · S/4HANA Cloud Public Edition 2602
+            Source: SAP Best Practices · S/4HANA Cloud Public Edition {getSapContentRelease().release}
           </span>
           {story?.processNavigatorUrl && (
             <a

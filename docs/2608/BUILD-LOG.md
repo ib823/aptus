@@ -7,6 +7,141 @@ verified in the session.
 
 ---
 
+## WS7 — Flip to 2608, naming, release-refresh runbook (2026-09-06)
+
+**Branch:** `chore/2608-default` (from `main` at the WS6 squash merge, #239).
+
+### The finding that shaped this workstream
+
+Before touching the default, I audited what the flip actually changes, then
+checked the audit against **production** rather than against the local database
+the loaders had been run on. Production (`ep-dawn-flower-a10u6hjf`, confirmed by
+178 `TobeRule` / 23 `AffirmBundle` / 19 `User`) holds:
+
+```
+SapContentRelease            0 rows          ← no 2608 row at all
+ScopeItem              853 rows / 0 with releaseId
+ConfigActivity       4,210 rows / 0 with releaseId
+ProcessStep        129,481 rows / 0 with releaseId
+SapProcessStep               0 rows          ← the WS1 2608 master table
+AffirmQuestion               0 with releaseId
+ScopeCatalogVersion    2025-FPS1, 2602       ← no PUBLIC/2608
+```
+
+**The 2608 content has never been loaded into production.** WS1, WS2 and WS5
+reported green RECON against a local database; nothing was written to prod.
+
+That matters because of how reads are scoped. `src/lib/db/content-release-scope.ts`
+narrows every read of `ScopeItem`, `ProcessStep` and `ConfigActivity` to the
+active release, and a release with no rows **scopes to nothing — it does not
+fall back to 2602**. Flipping the default on the current production database
+would return an empty scope picker, an empty config matrix, reports with no
+process steps and a To-Be pack that draws nothing, all with HTTP 200 and
+nothing in the log.
+
+So WS7 ships the flip together with the thing that stops the flip reaching
+production early.
+
+### What landed
+
+**1. The flip** (`src/constants/config.ts`). `APP_CONFIG.sapVersion` 2602 → 2608.
+That is the single value `resolveSapContentRelease()` falls back to, so it moves
+the footer label, the "SAP Best Practices" copy and every release-scoped
+catalogue read together. `SAP_CONTENT_RELEASE=2602` still selects the old
+release for an engagement that has not moved, and an assessment pinned to a
+`catalogVersionId` keeps that version regardless (AD-3).
+
+**2. A deploy-time guard** (`scripts/assert-content-release-landed.ts`, wired
+into `vercel-build` after `prisma generate`; also `pnpm sap:2608:assert-landed`).
+It refuses the build when the selected release has zero rows in the scoped
+models **and another release has rows** — a real misconfiguration. A genuinely
+empty database (fresh environment, preview branch, CI before the seed) passes,
+because there is nothing there to lose and nothing to compare against. The error
+names the failing release, the counts on both sides, and the two ways out
+(land the content, or pin `SAP_CONTENT_RELEASE` back to a landed release).
+
+Only a `PrismaClientInitializationError` is excused — a missing table or a
+mismatched schema is re-thrown rather than reported as a pass, so the guard
+cannot silently degrade into a no-op.
+
+**3. Client-facing copy that named a release** (3 sites). These hardcoded 2602
+and would now contradict the footer:
+
+- `src/app/(auth)/layout.tsx` — sign-in panel, "Compare processes against SAP Best Practices 2602"
+- `src/app/(workbench)/affirm/page.tsx` — subhead, "SAP S/4HANA Cloud Public Edition 2602"
+- `src/app/(external)/a/process/[scopeItemId]/page.tsx` — client-facing attribution line
+
+All three now read the release from `getSapContentRelease()`. The affirm subhead
+also moved 672 → 679 scope items, which is the 2608 figure the WS1 test
+"yields 679 distinct scope items from 942 rows" already pins. The occurrence in
+`src/app/(workbench)/discovery/page.tsx` is inside an explanatory comment, not
+rendered copy, and was left alone.
+
+**4. Docs** (`docs/runbooks/sap-content-release-refresh.md`, linked from the
+README). The 13 steps transcribed from the `Refresh Runbook` tab of the
+assessment workbook — not invented — plus where the release lives in the code,
+the seven-step procedure for adding 2702 in Feb-2027, and the ordering rule
+stated once and plainly: land the files, load the database, RECON green, *then*
+flip. The README gains a "SAP content release" section saying the same thing for
+someone who never opens the runbook.
+
+### Gates
+
+```
+tsc --noEmit --strict          OK
+eslint --max-warnings 0        OK
+vitest run                     338 files, 4,946 tests, 0 failures
+check-migration-drift.sh       zero drift
+next build                     OK
+pnpm sap:2608:recon            GREEN — 679 scope items · 4,328 SSCUI · 19,158 process
+                               steps · 661 step items · 16 BDC · 9 BPD pairs ·
+                               48/48 MANIFEST files match sha256+bytes
+assert-content-release-landed  local DB: "SAP content release 2608 (from the built-in
+                               default) is landed: ScopeItem 822 · ProcessStep 0 ·
+                               ConfigActivity 4,328" → exit 0
+```
+
+The product-agnostic and consultant-wall gates are test files inside the suite
+(`tests/unit/discovery/copy.test.ts` and siblings) and are covered by the run
+above.
+
+### Unproven / open — read this before merging
+
+1. **This must not reach production as it stands.** The flip is correct code
+   against a database that has 2608 in it. Production does not. The order is:
+   run the loaders against production (`sap:2608:seed-release`, `load-scope`,
+   `load-sscui`, `load-process-steps`, `load-bdc`), get `sap:2608:recon --db`
+   green **there**, then merge. If it merges first, the guard fails the Vercel
+   build — the designed outcome, but a failed deploy, not a safe one.
+
+2. **The guard has not been executed against production.** The sandbox cannot
+   open TCP 5432 outbound, so Prisma cannot reach Neon from here; the production
+   counts above were read over Neon's SQL-over-HTTPS endpoint instead. The
+   decision logic is unit-tested with those exact production numbers
+   (`tests/unit/sap-content/assert-content-release-landed.test.ts`), and the
+   script itself was run end-to-end against the local database. The two halves
+   have not been observed together.
+
+3. **Two numbers in the affirm subhead were not verified.** "8 streams +
+   Foundation" and "~135 client-facing L2 questions". The base seed has 8 value
+   streams of which 1 is Foundation, and WS5 added S4H_706, so the stream count
+   has moved; whether the sentence counts Foundation separately is not clear
+   from the copy. The question count is a filtered subset I did not reproduce.
+   Both left as they were.
+
+4. **No screenshots.** WS7 changes copy on three surfaces, but the flip cannot
+   be exercised end-to-end here: the local database has 822 scope items and zero
+   process steps, so a rendered page would represent neither the current nor the
+   intended production state.
+
+5. **`ScopeItem.id` shape.** 2602 rows carry the bare scope code as `id`; 2608
+   rows carry cuids (the loader lets Prisma generate them, keying on
+   `scopeCode_catalogVersionId`). Code that assumes `id === scopeCode` behaves
+   differently after the flip. I did not find such an assumption among the ~46
+   read sites in `src/`, but I did not prove its absence and no test covers it.
+
+---
+
 ## WS6 — To-Be Process Pack (2026-09-05)
 
 **Branch:** `feat/tobe-process-pack` (from `main` at the WS5 squash merge, #238).

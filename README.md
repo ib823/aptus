@@ -64,6 +64,29 @@ deployment anything absent from it is redirected away *before* auth and RBAC run
 so a fully-built, fully-tested surface can still be unreachable in production.
 Adding a surface means adding it there.
 
+## SAP content release
+
+The SAP Best Practices content the Workbench grounds on is versioned. The
+active release comes from one function — `resolveSapContentRelease()` in
+`src/lib/sap-content/release.ts` — which reads `SAP_CONTENT_RELEASE` and
+otherwise falls back to `APP_CONFIG.sapVersion`, currently **2608**
+(SAP Cloud ERP / SAP S/4HANA Cloud Public Edition, MY localisation).
+
+That one value moves the footer label, the client-facing copy and every
+catalogue read together. The last part is the sharp edge: reads of
+`ScopeItem`, `ProcessStep` and `ConfigActivity` are narrowed to the active
+release by a Prisma extension, and a release with **no rows scopes to nothing
+rather than falling back** — an empty scope picker with a 200 and nothing in
+the log. So content is landed and loaded first, and the flag flips last;
+`scripts/assert-content-release-landed.ts` runs in `vercel-build` to make that
+order non-optional.
+
+An assessment pinned to a catalogue version keeps that version whatever the
+flag says, so an engagement mid-flight does not move when the default does.
+
+[`docs/runbooks/sap-content-release-refresh.md`](./docs/runbooks/sap-content-release-refresh.md)
+is the procedure, including how to add release 2702 in Feb-2027.
+
 ## Documentation
 
 | Where | What |
@@ -73,6 +96,8 @@ Adding a surface means adding it there.
 | [`docs/coreedge/`](./docs/coreedge/) | CoreEdge build specifications and design contracts |
 | [`docs/adr/`](./docs/adr/) | Architecture decision records |
 | [`docs/runbooks/`](./docs/runbooks/) | Operational procedures |
+| [`docs/runbooks/sap-content-release-refresh.md`](./docs/runbooks/sap-content-release-refresh.md) | Moving to a new SAP content release — the 13 steps, and how to add 2702 |
+| [`docs/2608/BUILD-LOG.md`](./docs/2608/BUILD-LOG.md) | The 2608 refresh, workstream by workstream: what landed, what was verified, what was not |
 
 ## Security
 
