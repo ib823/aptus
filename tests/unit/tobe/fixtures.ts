@@ -4,37 +4,28 @@
  * Synthetic on purpose: the snapshot and precedence tests must not move when
  * SAP re-issues a BPD.
  */
-import type { TobeEngineInput, TobeRuleInput } from "@/lib/tobe/types";
+import type { TobeEngineInput, TobeRuleInput, TobeSourcedStep } from "@/lib/tobe/types";
 
-export const STEPS_AAA = [
-  {
-    name: "Create Sales Quotation",
-    role: "Internal Sales Representative",
-    app: "Manage Sales Quotations",
-    expected: "Quotation created.",
-  },
-  { name: "Approve Quotation (Optional)", role: "Sales Manager", app: "My Inbox", expected: "Quotation approved." },
-  {
-    name: "Convert Quotation to Order",
-    role: "Internal Sales Representative",
-    app: "Manage Sales Orders",
-    expected: "Order created.",
-  },
+/** These fixtures stand in for BPD steps, which publish an expected result and name no country. */
+const bpdStep = (name: string, role: string, app: string, expected: string): TobeSourcedStep => ({
+  name,
+  role,
+  app,
+  expected,
+  expectedUnpublished: false,
+  countries: [],
+  isGlobal: true,
+});
+
+export const STEPS_AAA: TobeSourcedStep[] = [
+  bpdStep("Create Sales Quotation", "Internal Sales Representative", "Manage Sales Quotations", "Quotation created."),
+  bpdStep("Approve Quotation (Optional)", "Sales Manager", "My Inbox", "Quotation approved."),
+  bpdStep("Convert Quotation to Order", "Internal Sales Representative", "Manage Sales Orders", "Order created."),
 ];
-export const STEPS_BBB = [
-  {
-    name: "Create Delivery",
-    role: "Shipping Specialist",
-    app: "Create Outbound Deliveries",
-    expected: "Delivery created.",
-  },
-  { name: "Check Batches (Optional)", role: "Warehouse Clerk", app: "Manage Batches", expected: "Batches checked." },
-  {
-    name: "Post Goods Issue",
-    role: "Shipping Specialist",
-    app: "Manage Outbound Deliveries",
-    expected: "Goods issued.",
-  },
+export const STEPS_BBB: TobeSourcedStep[] = [
+  bpdStep("Create Delivery", "Shipping Specialist", "Create Outbound Deliveries", "Delivery created."),
+  bpdStep("Check Batches (Optional)", "Warehouse Clerk", "Manage Batches", "Batches checked."),
+  bpdStep("Post Goods Issue", "Shipping Specialist", "Manage Outbound Deliveries", "Goods issued."),
 ];
 
 export const RULES: TobeRuleInput[] = [
@@ -105,6 +96,7 @@ export function fixtureInput(overrides: Partial<TobeEngineInput> = {}): TobeEngi
         code: "AAA",
         title: "Quotation to Order",
         release: "S/4HANA Cloud Public Edition 2608 — MY",
+        source: "BPD",
         business_roles: [
           { name: "Internal Sales Representative", id: "SAP_BR_INTERNAL_SALES_REP" },
           { name: "Sales Manager", id: "SAP_BR_SALES_MANAGER" },
@@ -115,6 +107,7 @@ export function fixtureInput(overrides: Partial<TobeEngineInput> = {}): TobeEngi
         code: "BBB",
         title: "Delivery to Issue",
         release: "S/4HANA Cloud Public Edition 2608 — MY",
+        source: "BPD",
         business_roles: [
           { name: "Shipping Specialist", id: "SAP_BR_SHIPPING_SPECIALIST" },
           { name: "Warehouse Clerk", id: "SAP_BR_WAREHOUSE_CLERK" },
@@ -125,18 +118,18 @@ export function fixtureInput(overrides: Partial<TobeEngineInput> = {}): TobeEngi
         code: "CCC",
         title: "Billing",
         release: "S/4HANA Cloud Public Edition 2608 — MY",
+        source: "BPD",
         business_roles: [{ name: "Billing Clerk", id: "SAP_BR_BILLING_CLERK" }],
         process_steps: [
-          {
-            name: "Create Billing Document",
-            role: "Billing Clerk",
-            app: "Create Billing Documents",
-            expected: "Invoice created.",
-          },
+          bpdStep("Create Billing Document", "Billing Clerk", "Create Billing Documents", "Invoice created."),
         ],
       },
     },
     answers: [],
+    countries: [],
+    forms: {},
+    integrations: {},
+    restrictions: [],
     questions: [
       {
         id: "Q-1",

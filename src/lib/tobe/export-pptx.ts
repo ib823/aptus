@@ -154,7 +154,7 @@ export async function generateTobePackPptx(
   // One slide per L2 flow — paginated, for the reason in export-pdf.ts: a whole
   // 55-step flow on one slide is a row of unreadable slivers on a projector.
   for (const item of doc.scopeItems) {
-    if (!item.inScope && !item.hasBpd) continue;
+    if (!item.inScope && !item.hasSteps) continue;
     const pages = paginateL2(item);
     pages.forEach((slice, pageIndex) => {
       const L = layoutL2(slice);

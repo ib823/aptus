@@ -190,7 +190,7 @@ export function generateTobePackPdf(doc: TobePackDoc, opts: TobePdfOptions): Uin
 
   // ── Per scope item
   for (const item of doc.scopeItems) {
-    if (!item.inScope && !item.hasBpd) continue;
+    if (!item.inScope && !item.hasSteps) continue;
     /*
      * PAGINATED, NOT SCALED TO FIT. One page held the whole flow, so a 55-step
      * item drew its boxes at 9% while the labels kept a fixed 6.5pt — the

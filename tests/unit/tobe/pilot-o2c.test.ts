@@ -57,6 +57,10 @@ const doc = generateTobePack({
   release: releaseOf(contents),
   scopeCodes,
   contents,
+  countries: [],
+  forms: {},
+  integrations: {},
+  restrictions: [],
   answers: pilot.answers,
   questions,
   rules,
@@ -104,7 +108,8 @@ describe("pilot O2C pack", () => {
     for (const item of doc.scopeItems) {
       const src = contents[item.code]!;
       expect(item.steps.map((s) => s.name)).toEqual(src.process_steps.map((s) => s.name));
-      for (const s of item.steps) expect(s.evidence).toMatchObject({ scopeCode: item.code, bpd: "BPD 2608" });
+      for (const s of item.steps)
+        expect(s.evidence).toMatchObject({ scopeCode: item.code, citation: "BPD 2608", source: "BPD" });
     }
     const bdg = doc.scopeItems.find((i) => i.code === "BDG")!;
     const configured = bdg.steps.filter((s) => s.state === "CONFIGURED");
