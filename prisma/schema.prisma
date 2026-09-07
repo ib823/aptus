@@ -5069,6 +5069,21 @@ model AffirmBundle {
   /// — silently dropping questions because a field was never filled in would
   /// be a worse failure than showing too many.
   country  String?
+  /// 2608 WS14 — every country the engagement runs in, ISO-3166-1 alpha-2.
+  ///
+  /// `country` above is singular and stays: it is what the question filter
+  /// reads, and one localisation is what an affirm bundle asks about. A
+  /// To-Be pack is a different question. A group rolling out to Malaysia and
+  /// the Philippines has one bundle and two country footprints, and SAP
+  /// publishes its process steps per country — 14,365 steps reach MY and
+  /// 13,988 reach PH, overlapping but not equal. Collapsing that to one
+  /// country would silently drop the other entity's processes from the pack.
+  ///
+  /// Empty means "not stated", and an unstated footprint is NOT filtered:
+  /// the pack shows every step SAP publishes and says the footprint was
+  /// never given. Filtering on an empty list would hide content because a
+  /// field was left blank, which is the WS9.1 failure in another costume.
+  countries String[] @default([])
   /// Free-form industry key, filtered against AffirmQuestion.industryScope on
   /// the same "null means do not filter" rule.
   industry String?

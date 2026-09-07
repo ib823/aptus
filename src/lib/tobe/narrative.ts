@@ -17,8 +17,16 @@
  * model this pack does not carry, and inventing one would contradict the rule
  * the whole engine is built on.
  */
-import { STATE_STYLE } from "./svg";
+import { countriesWithoutRestrictionData } from "./countries";
+import { DISPOSITION_LABEL, STATE_STYLE } from "./svg";
 import type { TobePackDoc, TobeStepState } from "./types";
+
+/**
+ * How many restrictions the narrative prints inline. The rest stay in the pack
+ * document and the appendix: a bid pack that opens with 264 bullet points about
+ * what SAP cannot do has buried the ones that matter.
+ */
+export const RESTRICTIONS_LISTED = 12;
 
 export interface NarrativeTable {
   head: string[];
@@ -60,6 +68,24 @@ export function effortDriversFromPack(doc: TobePackDoc): NarrativeTable {
         "Scope items to confirm in workshop",
         String(s.confirmInWorkshop),
         "Carries an optional step, a 'discuss', or an unanswered question.",
+      ],
+      [
+        "Forms SAP ships for these items",
+        // Distinct forms, not placements. One SAP form names many scope items,
+        // and on a 12-item finance scope the placement count is 928 against 107
+        // real forms — a number that would not survive a reviewer checking it.
+        `${s.forms}${s.formPlacements > s.forms ? ` (${s.formPlacements} placements)` : ""}`,
+        "Each is a printed output to review, brand and test — a form SAP ships is not a form you have approved.",
+      ],
+      [
+        "Integrations SAP publishes for these items",
+        `${s.integrations}${s.integrationLinks > s.integrations ? ` (${s.integrationLinks} links)` : ""}`,
+        "Each communication scenario is an interface to configure, authorise and test.",
+      ],
+      [
+        "Restrictions SAP publishes for this footprint",
+        String(s.restrictions),
+        "Statements SAP makes about what it does not support. Each needs checking against how you work.",
       ],
       ["Questions not yet answered", String(s.unansweredQuestions), "Unknowns that can still move the design."],
       [
@@ -113,7 +139,7 @@ export function packNarrative(doc: TobePackDoc, opts: { clientName: string }): N
           [
             "L3 — step detail",
             "Every step as a row: role, app, state, configuration activity, expected result, and the evidence behind it.",
-            "The working list for the workshop. Each row names the BPD and the question it came from.",
+            "The working list for the workshop. Each row names the SAP publication and the question it came from, and whether it is cited or needs you.",
           ],
         ],
       },
@@ -155,6 +181,33 @@ export function packNarrative(doc: TobePackDoc, opts: { clientName: string }): N
       },
     },
     {
+      // 2608 WS14 — the block a bid pack lives or dies on. Everything else in
+      // this document describes the process; this one says which parts of it we
+      // are asserting on SAP's authority and which parts nobody can answer yet.
+      heading: "What SAP publishes, and what only you can answer",
+      sub: "Every step on these pages carries one of two labels",
+      lead: `Of the ${s.steps} steps drawn, ${s.byDisposition.SAP_STANDARD_CITED} are SAP's published standard and are cited to the publication they came from. ${s.byDisposition.CONFIRM_WITH_CLIENT} cannot be settled without ${opts.clientName}. That split is the honest state of this pack, and it is not a defect: a pack with no second column would be one that guessed.`,
+      table: {
+        head: ["Label", "Steps", "What it means", "What we need"],
+        rows: [
+          [
+            DISPOSITION_LABEL.SAP_STANDARD_CITED,
+            String(s.byDisposition.SAP_STANDARD_CITED),
+            "SAP publishes this step, in this sequence, for this scope item. The row names the publication.",
+            "Nothing. Read it and tell us if it is wrong.",
+          ],
+          [
+            DISPOSITION_LABEL.CONFIRM_WITH_CLIENT,
+            String(s.byDisposition.CONFIRM_WITH_CLIENT),
+            "SAP marks the step optional, or a question naming it is unanswered or marked to discuss, or an answer has already made it a variation.",
+            "A decision from you, in a workshop or in writing.",
+          ],
+        ],
+      },
+      footnote:
+        "A step is only labelled cited when nothing about it is outstanding. An optional step SAP publishes is not a step you have chosen, so it sits in the second column even though SAP documents it fully.",
+    },
+    {
       heading: "What this pack is not",
       sub: "Read this before treating anything here as agreed",
       bullets: [
@@ -168,6 +221,15 @@ export function packNarrative(doc: TobePackDoc, opts: { clientName: string }): N
           : "No scope item is currently flagged for workshop confirmation.",
         "Steps the SAP document marks optional are drawn with a dashed border. Whether you use them is a decision, not a default.",
         "Nothing on these pages is inferred. Where a scope item has no SAP process document loaded, the pack says so rather than drawing a plausible flow.",
+        doc.countries.length > 0
+          ? `Drawn for a country footprint of ${doc.countries.join(", ")}. SAP publishes its process steps per country, so a different footprint draws a different pack${s.stepsExcludedByCountry > 0 ? `; ${s.stepsExcludedByCountry} step(s) SAP publishes for other countries are excluded here` : ""}.`
+          : "No country footprint was stated for this engagement, so nothing has been filtered by country. Every step SAP publishes for these scope items is drawn, including steps that apply only in countries you do not operate in.",
+        s.itemsWithoutSteps > 0
+          ? `${s.itemsWithoutSteps} scope item(s) in scope have no process steps in any SAP publication aptus holds. They appear as placeholders with no flow, because drawing one would mean inventing it.`
+          : "Every scope item in scope has published process steps behind it.",
+        s.bySource.PROCESS_STEP_MASTER > 0
+          ? `Expected results are shown only where SAP publishes them. ${s.bySource.PROCESS_STEP_MASTER} scope item(s) here take their steps from SAP's process-step master, which carries no expected-result column; those rows say "not published by SAP" rather than carrying a sentence we wrote.`
+          : "Expected results come from the SAP process documents and are shown as published.",
         "Effort and duration are not stated here. The counts on the next page are the drivers; converting them into a plan needs the sizing parameters listed beside them.",
       ],
     },
@@ -177,14 +239,64 @@ export function packNarrative(doc: TobePackDoc, opts: { clientName: string }): N
       table: {
         head: ["Element", "Source"],
         rows: [
-          ["Process steps, roles, apps, expected results", `SAP Business Process Documents, content release ${rel}`],
+          [
+            "Process steps, roles and apps",
+            s.bySource.BPD > 0 && s.bySource.PROCESS_STEP_MASTER > 0
+              ? `Two SAP publications, named per step: the Business Process Document (${s.bySource.BPD} scope item(s)) and the process-step master (${s.bySource.PROCESS_STEP_MASTER}), both at release ${rel}`
+              : s.bySource.BPD > 0
+                ? `SAP Business Process Documents, content release ${rel}`
+                : `SAP process-step master, content release ${rel}`,
+          ],
+          [
+            "Expected results",
+            s.bySource.PROCESS_STEP_MASTER > 0
+              ? `SAP Business Process Documents only. The process-step master publishes no expected result, so steps from it show "not published by SAP" rather than a written-in sentence.`
+              : `SAP Business Process Documents, content release ${rel}`,
+          ],
           ["Questions and the answers behind each state", "SAP Business Driven Configuration questionnaires, as answered in this engagement"],
           ["Configuration activity ids and names", `SAP Self-Service Configuration UI list, release ${rel}`],
+          ["Forms", `SAP form template list, release ${rel} — the scope items each form names`],
+          ["Integrations", `SAP communication scenarios and the published scope-item-to-interface table, release ${rel}`],
+          ["Restrictions", "SAP's own published statements of what is not supported, quoted verbatim with their source"],
           ["End-to-end chains", "Repository-defined chain for this value stream, recorded with its source"],
           ["Scope set", "The scope items agreed for this engagement"],
         ],
       },
       footnote: `Generated ${doc.generatedAt}. Fingerprints — inputs ${doc.hashes.inputs.slice(0, 16)}, scope ${doc.hashes.scope.slice(0, 12)}, answers ${doc.hashes.answers.slice(0, 12)}, rules ${doc.hashes.rules.slice(0, 12)}. The same inputs always produce the same pack, so two versions can be compared by fingerprint rather than by eye.`,
+    },
+    {
+      // 2608 WS14 — the first thing aptus can say about what SAP does NOT do.
+      // Every other section describes capability; this one describes its edge,
+      // and at bid time the edge is where the money is.
+      heading: "What SAP states it does not support",
+      sub:
+        doc.countries.length > 0
+          ? `SAP's own published restrictions for ${doc.countries.join(", ")}, quoted verbatim`
+          : "SAP's own published restrictions, quoted verbatim",
+      lead:
+        s.restrictions > 0
+          ? `${s.restrictions} statement(s), in SAP's words rather than ours. These are not risks we have identified — they are limitations SAP publishes about its own product, and each one needs checking against how ${opts.clientName} actually works.`
+          : `The restriction register carries no statement matching this engagement's footprint. That is a statement about the source, not a guarantee: it means the published register aptus holds names nothing for these countries, not that SAP supports everything.`,
+      ...(s.restrictions > 0
+        ? {
+            bullets: doc.restrictions
+              .slice(0, RESTRICTIONS_LISTED)
+              .map((r) => `${r.country ? `${r.country} · ` : ""}${r.capability} — ${r.whatIsNotSupported}`),
+          }
+        : {}),
+      footnote: [
+        s.restrictions > RESTRICTIONS_LISTED
+          ? `${RESTRICTIONS_LISTED} of ${s.restrictions} shown here; the full list with SAP's verbatim wording and source link is in the appendix data.`
+          : "",
+        (() => {
+          const missing = countriesWithoutRestrictionData(doc.countries);
+          return missing.length > 0
+            ? `The register names no restrictions for ${missing.join(", ")}. aptus holds the anonymous published slice only, so this is an unexplored source rather than a finding — treat those countries as unassessed, not as unrestricted.`
+            : "";
+        })(),
+      ]
+        .filter(Boolean)
+        .join(" "),
     },
     {
       heading: "What drives the effort",

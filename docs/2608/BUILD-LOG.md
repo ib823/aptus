@@ -7,6 +7,135 @@ verified in the session.
 
 ---
 
+## WS14 — the To-Be engine read 9 scope items; the database held 661 (2026-09-07)
+
+**Branch:** `feat/tobe-db-steps` (from `main` @ `b649c26`).
+
+### The defect
+
+`src/lib/tobe/inputs.ts` carried the constraint in its own header:
+
+```
+contents    the 2608 BPD data files (src/lib/fts/data) — steps come from here only
+```
+
+There are nine of those files. WS1.4, in this same programme, loaded SAP's 2608
+process-step master into `SapProcessStep`: **19,158 steps over 661 scope items.**
+So every pack generated since WS6 drew nine scope items with steps and rendered
+the rest as empty placeholders. Correct under the never-invent rule, and not a
+deliverable.
+
+### What landed
+
+`src/lib/tobe/step-source.ts` resolves a scope code's steps from the BPD file
+where one exists and the process-step master otherwise. The BPD stays preferred
+because **only it publishes an expected result per step**; falling to the master
+everywhere would lose that text on the nine items that have it.
+
+The master publishes no expected-result column at all, so master-sourced steps
+carry `expectedUnpublished: true` and render "not published by SAP" rather than a
+sentence somebody wrote. 5,290 of 19,158 master steps also publish no Fiori app
+and 5,142 no business role; those render blank for the same reason.
+
+**Country footprint.** SAP publishes each step with the countries it reaches:
+
+```
+steps reaching MY   14,365 over 477 scope items
+steps reaching PH   13,988 over 478 scope items
+MY-only items       6   3F7 5IK 6A9 7EZ 7G4 7G5
+PH-only items       7   1WQ 2OO 5VX 5VY 5VZ 5YU 5YV
+```
+
+`AffirmBundle.countries String[]` is additive beside the existing singular
+`country`, which still drives the question filter and is untouched; the migration
+backfills the list from it. **An unstated footprint is not a filter** — filtering
+on a blank field is how WS9.1 lost 813,804 scope-item links.
+
+**The pre-award reading.** Every step and scope item now carries
+`SAP_STANDARD_CITED`, `CONFIRM_WITH_CLIENT`, or `NOT_IN_SCOPE`, rendered as a
+"Reading" column in all three outputs — web, PDF and PPTX — with one palette
+shared between them, deliberately distinct from the state palette.
+
+**Forms, integrations, restrictions** reach the pack. `narrative.ts` had printed
+"Integration: inbound and outbound interfaces" and "Extensions: … forms and
+workflows" as parameters to collect, while aptus held 272 forms and 1,149
+published scope-item-to-interface links. Restrictions attach at pack level, not
+per scope item — **measured, not preferred: 1 of the 539 rows carries a
+scope-item code**, so the register keys on capability and country.
+
+`scripts/generate-preaward-pack.ts` / `pnpm tobe:preaward` creates a bundle with
+a scope set and **no answers**, which is the honest bid-time case.
+
+### Result on a 12-item finance and O2C scope, footprint MY + PH
+
+```
+scope items   12 in scope
+  steps from a BPD                  9
+  steps from the step master        3
+  no published steps at all         0
+process steps 543
+  SAP standard — cited            111   20%
+  Confirm with client             432   80%
+  excluded by country footprint   233
+end-to-end    forms 107 (928 placements) · integrations 76 (104 links) · restrictions 275
+```
+
+The 80% is the point, not a defect: with zero client answers, four steps in five
+are things only the client can settle.
+
+### RECON
+
+`pnpm sap:2608:recon --db` **GREEN on 47 facts** (was 40). All seven new facts
+passed on the first run:
+
+```
+scope items the To-Be engine can draw steps for   661
+scope items with no published steps               161
+process steps reaching MY / PH             14365 / 13988
+scope items reaching MY / PH                 477 / 478
+steps stating neither country nor global           12
+```
+
+### Four things caught, three by existing tests
+
+1. **Pushing the item-level "unanswered questions" condition onto every step's
+   `confirmInWorkshop`** dotted every step in the swimlane and said nothing. That
+   flag has meant "this particular step" since WS6 and still does; the item-level
+   condition reaches the disposition instead. Caught by the WS6 snapshot.
+2. **The citation repeated the scope code every call site already prints** —
+   "scope AAA · BPD 2608 · AAA". Caught by `svg.test.ts`.
+3. **The forms count was placements, not forms.** On the 12-item scope it read
+   **928 against 107 distinct forms** — an 8.7x overstatement that would not have
+   survived a reviewer checking it. Caught by reading the generated pack's own
+   output against the database. Both figures are now carried.
+4. **A raw `Foreign key constraint violated`** when the BDC hierarchy is not
+   loaded. `AffirmBundleScopeItem.scopeItemId` points at `AffirmScopeItem`, whose
+   id is the SAP code, so a code valid in the catalogue can still fail to attach.
+   The script now names the codes and the loader to run.
+
+### Gates
+
+| gate | result |
+|---|---|
+| `tsc --noEmit --strict` | clean |
+| `eslint . --max-warnings 0` | clean |
+| migration-integrity | zero drift |
+| product-agnostic grep | clean |
+| consultant wall | clean |
+| `sap:2608:recon --db` | GREEN, 47 facts |
+
+### Stated honestly
+
+- **No pack has been generated for a real bid.** The figures above are a
+  demonstration scope chosen to exercise both step sources, not any client's
+  scope set. `pnpm tobe:preaward -- --from-assessment <id>` reads the codes a bid
+  response already cited, and that path has not been run against real data.
+- **Nothing is deployed.** GitHub Actions remains red account-wide for billing;
+  every gate above ran locally.
+- The nine BPD items still carry richer content than the 652 master-sourced ones,
+  and the pack says so rather than levelling them.
+
+
 ## WS13 — the bridge WS10 measured as impossible is one published SAP page (2026-09-07)
 
 **Branch:** `feat/2608-harvest-landing` (from `main` @ `e1d03a1`).

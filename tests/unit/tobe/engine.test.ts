@@ -67,7 +67,7 @@ describe("defaults — nothing is inferred", () => {
   it("a scope code without a 2608 data file is a placeholder with no steps, never fabricated ones", () => {
     const doc = generateTobePack(fixtureInput({ scopeCodes: ["AAA", "ZZZ"] }));
     const zzz = item(doc, "ZZZ");
-    expect(zzz.hasBpd).toBe(false);
+    expect(zzz.hasSteps).toBe(false);
     expect(zzz.steps).toEqual([]);
     expect(zzz.title).toBe("ZZZ");
   });
@@ -107,7 +107,15 @@ describe("rules fire only on their trigger", () => {
     expect(approve.state).toBe("CONFIGURED");
     expect(approve.sscuiId).toBe("102751");
     expect(approve.reasons).toEqual(["two-level approval"]);
-    expect(approve.evidence).toEqual({ scopeCode: "AAA", bpd: "BPD 2608", sscuiId: "102751", questionIds: ["Q-1"] });
+    expect(approve.evidence).toEqual({
+      scopeCode: "AAA",
+      // WS14: the citation names the publication the step came from, so a
+      // master-sourced step cannot claim a BPD it was never in.
+      citation: "BPD 2608",
+      source: "BPD",
+      sscuiId: "102751",
+      questionIds: ["Q-1"],
+    });
     expect(doc.summary.configuredSscuis).toBe(1);
     expect(aaa.gaps).toEqual([]);
   });
