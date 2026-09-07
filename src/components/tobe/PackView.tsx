@@ -12,7 +12,7 @@
  * gone, so this component never has to decide what to hide.
  */
 import { STATE_STYLE, l3Rows, renderL1Svg, renderL2Svg } from "@/lib/tobe/svg";
-import type { TobePackDoc, TobeStepState } from "@/lib/tobe/types";
+import type { TobeDisposition, TobePackDoc, TobeStepState } from "@/lib/tobe/types";
 
 function Legend() {
   return (
@@ -43,6 +43,25 @@ function StatePill({ state }: { state: TobeStepState }) {
       style={{ background: st.fill, color: st.stroke }}
     >
       {st.label}
+    </span>
+  );
+}
+
+/**
+ * 2608 WS14 — the pre-award reading. Deliberately NOT coloured like a state:
+ * a state is what the step is, a disposition is whether we can assert it, and
+ * two colour systems that look alike would be read as one.
+ */
+const DISPOSITION_STYLE: Record<TobeDisposition, { background: string; color: string }> = {
+  SAP_STANDARD_CITED: { background: "#E8F1E9", color: "#1F5B33" },
+  CONFIRM_WITH_CLIENT: { background: "#FDF1DC", color: "#8B5A00" },
+  NOT_IN_SCOPE: { background: "#F1F1F1", color: "#6B6B6B" },
+};
+
+function DispositionPill({ disposition, label }: { disposition: TobeDisposition; label: string }) {
+  return (
+    <span className="inline-flex rounded-pill px-2 py-0.5 text-[11px] font-semibold" style={DISPOSITION_STYLE[disposition]}>
+      {label}
     </span>
   );
 }
@@ -148,6 +167,9 @@ export function PackView({ doc, consultantView }: { doc: TobePackDoc; consultant
                         SSCUI
                       </th>
                       <th scope="col" className="px-3 py-2">
+                        Reading
+                      </th>
+                      <th scope="col" className="px-3 py-2">
                         Evidence
                       </th>
                     </tr>
@@ -166,6 +188,9 @@ export function PackView({ doc, consultantView }: { doc: TobePackDoc; consultant
                         <td className="px-3 py-2 text-ink-soft">{r.role}</td>
                         <td className="px-3 py-2 text-ink-soft">{r.app}</td>
                         <td className="px-3 py-2 text-ink-soft">{r.sscui}</td>
+                        <td className="px-3 py-2">
+                          <DispositionPill disposition={r.disposition} label={r.dispositionLabel} />
+                        </td>
                         <td className="px-3 py-2 text-xs text-ink-muted">{r.evidence}</td>
                       </tr>
                     ))}
@@ -175,8 +200,61 @@ export function PackView({ doc, consultantView }: { doc: TobePackDoc; consultant
             </>
           ) : (
             <p className="rounded-card-warm border border-dashed border-border-default bg-paper p-4 text-sm text-ink-soft">
-              No 2608 business process document is loaded for {item.code}; no steps are drawn. Nothing is inferred.
+              No SAP publication aptus holds carries process steps for {item.code} — neither a business process
+              document nor the process-step master. No steps are drawn, because drawing one would mean inventing it.
+              {item.stepsExcludedByCountry > 0 && (
+                <span className="mt-1 block">
+                  {item.stepsExcludedByCountry} step(s) exist for this item but fall outside the engagement&rsquo;s
+                  country footprint.
+                </span>
+              )}
             </p>
+          )}
+          {(item.forms.length > 0 || item.integrations.length > 0) && (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {item.forms.length > 0 && (
+                <div className="rounded-card-warm border border-border-default bg-paper p-4">
+                  <h3 className="text-sm font-semibold text-ink">Forms SAP ships ({item.forms.length})</h3>
+                  <ul className="mt-2 space-y-1 text-sm text-ink-soft">
+                    {item.forms.map((f) => (
+                      <li key={`${f.name}-${f.outputType}-${f.adobeFormTemplate}`}>
+                        {f.name}
+                        <span className="block text-xs text-ink-muted">
+                          {f.applicationArea} · {f.applicationObject} · output {f.outputType} · template{" "}
+                          {f.adobeFormTemplate}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-xs text-ink-muted">
+                    A form SAP ships is not a form you have approved. Each needs review, branding and testing.
+                  </p>
+                </div>
+              )}
+              {item.integrations.length > 0 && (
+                <div className="rounded-card-warm border border-border-default bg-paper p-4">
+                  <h3 className="text-sm font-semibold text-ink">
+                    Integrations SAP publishes ({item.integrations.length})
+                  </h3>
+                  <ul className="mt-2 space-y-1 text-sm text-ink-soft">
+                    {item.integrations.map((i) => (
+                      <li key={i.commScenarioId}>
+                        {i.commScenarioId}
+                        {/* SAP names 62 of 496 scenarios in the published slice. A
+                            placeholder here would read as a name SAP gave it. */}
+                        {i.name ? ` — ${i.name}` : ""}
+                        <span className="block text-xs text-ink-muted">
+                          {i.name ? "" : "name not published by SAP · "}
+                          {i.direction ? `${i.direction} · ` : ""}
+                          {i.mandatory ? `${i.mandatory} · ` : ""}
+                          {i.apiIds.length > 0 ? `${i.apiIds.length} interface(s)` : "no interfaces published"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           )}
           {(item.configurations.length > 0 || item.gaps.length > 0) && (
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
