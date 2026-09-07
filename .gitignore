@@ -160,3 +160,21 @@ test-results/
 # curation-model derived files (regenerated from inputs)
 curation-model/_*.txt
 curation-model/_*.tsv
+# …and the 2026-09-07 data-acquisition harvest, for the same reason again.
+#
+# Three directories produced against SAP's own published, anonymous content
+# services — the Fiori Apps Library data service, help.sap.com's page-content
+# service — never by scraping a rendered page or by a human download. Each file
+# carries its own provenance block naming the source URL, the date read and
+# whether the walk was complete.
+#
+# They close gaps docs/2608/DATA-ACQUISITION-BRIEF.md measured: the Fiori Apps
+# Library aptus held none of, the scope-item ↔ communication-scenario bridge the
+# brief recorded as having no evidence path, and the first negative-evidence
+# register — aptus had no way to represent "SAP does not support this" at all.
+#
+# Committed for the same reason as the Hub catalogue: a gitignored input makes
+# an import unreproducible and unreviewable.
+!/sap-references/fiori-apps/
+!/sap-references/comm-scenarios/
+!/sap-references/restrictions/
