@@ -8,7 +8,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
 import { packNarrative, type NarrativeBlock } from "./narrative";
-import { STATE_STYLE, TOBE_NAVY, l3Rows, layoutL2, paginateL2, wrapText } from "./svg";
+import { L1_CAVEAT, STATE_STYLE, TOBE_NAVY, l3Rows, layoutL2, paginateL2, wrapText } from "./svg";
 import type { TobeDisposition, TobePackDoc, TobeStepState } from "./types";
 
 /**
@@ -130,9 +130,9 @@ export function generateTobePackPdf(doc: TobePackDoc, opts: TobePdfOptions): Uin
   // ── How to read this pack (context, caveats, provenance, effort drivers)
   for (const block of packNarrative(doc, { clientName: opts.clientName })) narrativePage(pdf, block, navy, pw, ph);
 
-  // ── L1
-  pdf.addPage();
-  header(pdf, "End-to-end to-be process (L1)", `${doc.chains.length || 1} chain(s) · ${doc.release}`);
+  // ── L1 — one page per chain.
+  // WS16: all chains used to share one page, which was fine at one chain and
+  // unreadable at seven — the later ones ran off the bottom of the sheet.
   const chains = doc.chains.length
     ? doc.chains
     : [
@@ -147,8 +147,14 @@ export function generateTobePackPdf(doc: TobePackDoc, opts: TobePdfOptions): Uin
           alternates: [],
         },
       ];
-  let cy = 40;
-  for (const chain of chains) {
+  chains.forEach((chain, chainIndex) => {
+    pdf.addPage();
+    header(
+      pdf,
+      "End-to-end to-be process (L1)",
+      `chain ${chainIndex + 1} of ${chains.length} · ${doc.release}`,
+    );
+    let cy = 40;
     pdf.setFontSize(10);
     pdf.setTextColor(107, 107, 107);
     pdf.text(`${chain.name} · ${chain.valueStreamId}`, 18, cy);
@@ -196,8 +202,11 @@ export function generateTobePackPdf(doc: TobePackDoc, opts: TobePdfOptions): Uin
       );
       cy += 5;
     }
-    cy += 8;
-  }
+    // Chain ORDER is a consultant assertion, never an SAP citation.
+    pdf.setFontSize(8);
+    pdf.setTextColor(107, 107, 107);
+    wrapText(L1_CAVEAT, 150, 3).forEach((ln, li) => pdf.text(ln, 18, ph - 14 + li * 3.6));
+  });
 
   // ── Per scope item
   for (const item of doc.scopeItems) {
