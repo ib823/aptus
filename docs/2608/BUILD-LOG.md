@@ -7,6 +7,105 @@ verified in the session.
 
 ---
 
+## WS13 — the bridge WS10 measured as impossible is one published SAP page (2026-09-07)
+
+**Branch:** `feat/2608-harvest-landing` (from `main` @ `e1d03a1`).
+
+### What WS10 got wrong
+
+`docs/2608/WS10-SCOPE.md` recorded that "which APIs does scope item X need?" has
+**no evidence path in the repository and none derivable**, and measured it:
+
+```
+API rows carrying scopeItemCodes            0 of 5,419
+API rows carrying communicationScenarios    0 of 5,419
+iFlow rows naming any of the 822 codes      0 of 4,502
+iFlow rows mentioning any SAP_COM_* id      6 of 4,502
+Fiori Apps Library data in the repo         none
+```
+
+Every one of those numbers is correct, and the conclusion drawn from them was
+not. They are facts about the **Business Accelerator Hub**. SAP publishes the
+mapping somewhere else entirely — *Available Interfaces for Your Selected
+Scope*, an ordinary help.sap.com table for 2608: Scope Item ID · Interface ID ·
+Interface Type · **Communication Scenario ID** · Set-Up Instructions. 5,658
+rows, 354 scope items, 487 scenarios.
+
+Same shape of error as WS9.1 and as WS11's reading of the process-step master:
+measure one source exhaustively, then conclude about the product.
+
+### What landed
+
+Nine files from the 2026-09-07 harvest against
+`docs/2608/DATA-ACQUISITION-BRIEF.md` targets 1, 2, 3 and 6, four new tables,
+one loader, nine RECON facts and 12 tests.
+
+```
+SapFioriApp             5,854   the Fiori Apps Reference Library for 2608
+SapCommScenario           496   SAP_COM_ scenarios and the interfaces they carry
+ScopeItemCommScenario   1,149   the bridge — 1,058 resolve in PUBLIC/2608
+SapNotSupported           539   the first negative evidence aptus can hold
+hub-harvest/DATA_PRODUCT.json        334
+hub-harvest/INTEGRATION_ADAPTER.json  91
+```
+
+`pnpm sap:2608:load-harvest`, plus two `SapHubContentType` enum values and the
+six-line `HUB_TYPE_MAP` extension that produces the last two files.
+
+### Acceptance tests, run here rather than taken on trust
+
+- **F1577 Manage Checkbooks carries `J60|1WQ|J59`; F1578 carries `J60|1WQ`**,
+  both with `SAP_FIN_BC_AP_CHECK_*_PC`. WS11 measured these apps in 0 of 14,088
+  process steps and concluded SAP had attached them to no scope item. SAP had.
+  The blind spot was aptus reading only the process-step master.
+- **All 609 distinct scope codes across the 5,854 apps resolve** against
+  PUBLIC/2608. None unresolvable.
+- **1RO resolves to SAP_COM_0008, 0009, 0539 and 0540**; 78L to SAP_COM_0854.
+- All 1,149 bridge rows are `PUBLISHED` with non-empty evidence; the loader
+  refuses the file otherwise.
+
+### Three findings the harvest notes did not carry
+
+1. **21 bridge scope ids do not resolve, across 91 rows** — a JC0–JC9 cluster of
+   52, and **8 rows whose `scope_item_id` is blank**. `scopeItemCode` is
+   therefore deliberately NOT a foreign key, unlike `VerdictScopeItem`: an FK
+   would force those rows to be dropped and hide a real disagreement between two
+   SAP publications. `resolvesInCatalogue` records the answer instead.
+2. **Seven pairs of not-supported rows differ only inside the verbatim text.**
+   The first unique key kept one of each — the WS11 cost-centre defect again —
+   so `sourceRow` is part of the key and all 539 store.
+3. **The 11 Malaysia rows matter more than the notes suggest.** Five state that
+   cross-border electronic invoices are NOT supported on the Peppol network for
+   Malaysia, across customer invoices, supplier invoices, Convergent Invoicing
+   and sales billing. That bears directly on a Malaysian e-invoicing design.
+
+### RECON
+
+`pnpm sap:2608:recon --db` with all six 2608 loaders run: **GREEN, 40 facts,
+exit 0**, including `db · comm scenarios for 1RO expected 4 observed 4` as the
+bridge's canary.
+
+### Unproven / not done
+
+1. **The four tenant-only scenario columns are empty on every row** —
+   `direction`, `auth_methods`, `inbound_services`, `outbound_services`. SAP
+   publishes none of them outside a provisioned tenant. Empty because SAP did
+   not publish them, not because a loader failed.
+2. **`comm_scenario_name` is filled on 62 of 496**, deliberately. A pass that
+   recovered ~240 more was discarded upstream because SAP's set-up instructions
+   put a scope item or interface name beside a `SAP_COM_` id as often as the
+   scenario name. A RECON fact pins 62 so a later jump reads as guessing.
+3. **The not-supported register is the anonymous help.sap.com slice only.** The
+   RE-FX exclusion from the Malaysian e-invoice solution is NOT in it — that
+   class of statement is KBA-only. Brief target 9 is where it closes.
+4. **Nothing reads any of the four tables yet.** No page, API or export.
+5. **Nothing is deployed**, and the harvest itself was not reproduced here —
+   these are the harvest's files, verified against their own acceptance tests
+   and against the 2608 catalogue, not re-fetched from SAP.
+6. **CI has not run.** GitHub Actions is red account-wide.
+
+---
+
 ## WS12 — the bid was built in spreadsheets beside the product that exists to hold it (2026-09-07)
 
 **Branch:** `feat/bid-response-import` (from `main` @ `b002c48`).

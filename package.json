@@ -69,6 +69,7 @@
     "sap:2608:load-sscui": "tsx scripts/load-2608-sscui.ts",
     "sap:2608:load-process-steps": "tsx scripts/load-2608-process-steps.ts",
     "sap:2608:load-content": "tsx scripts/load-2608-content.ts",
+    "sap:2608:load-harvest": "tsx scripts/load-2608-harvest.ts",
     "sap:2608:revalidate-sscui": "tsx scripts/revalidate-sscui-citations-2608.ts",
     "sap:2608:emit-fts": "tsx scripts/emit-fts-2608.ts",
     "sap:2608:load-bdc": "tsx scripts/load-2608-bdc.ts",
