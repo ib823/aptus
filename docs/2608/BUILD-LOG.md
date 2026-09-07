@@ -125,6 +125,25 @@ Gates: typecheck clean · eslint clean · **5,083 unit tests pass** (22 new in
 The L1 SVG snapshot was updated deliberately: the only delta is the caveat line
 and the 26pt of height it needs.
 
+### Denylist extended, in the same session
+
+Reading a live RFP end to end surfaced sixteen further identifiers that would
+be a disclosure in a public repository: the client's operating entities, its
+named affiliates and assets, its registered address, its procurement contact,
+and the five incumbent systems its landscape is built on. A system name is not
+obviously confidential in isolation; the combination of a particular ledger, a
+particular purchasing tool and a particular treasury package identifies the
+client to anyone in the market.
+
+All sixteen are on the denylist as **hashes**, with notes that do not identify
+anyone ("client A system", "client A affiliate"). Seventeen terms in total; the
+full scan over 2,378 tracked and untracked files is clean.
+
+The guard proved itself while this entry was being written: the paragraph above
+originally named the three incumbent systems as its example, and the pre-commit
+hook refused the commit. That is the whole point of the control — the person
+writing about a leak is exactly the person about to cause one.
+
 ### Unproven / open
 
 1. **The chain sequences themselves.** They are a consultant reading of how
