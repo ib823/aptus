@@ -29,14 +29,27 @@ describe("ContentTypeTiles — coverage language, not status", () => {
 
   it("never renders a zero published figure, whatever the map says", () => {
     /*
-     * Every 2608 figure is > 0 (PROCESS_BLUEPRINT gained its 16), so the zero
-     * case has no live fixture — but the invariant these tests exist for is
-     * unchanged: nothing ever renders "0 published" or "~0".
+     * The zero case now HAS a live fixture. 2608 WS13 added DATA_PRODUCT and
+     * INTEGRATION_ADAPTER, and both are a measured 0: the Hub publishes 334 and
+     * 91 of them, and not one belongs to a package in SAP S/4HANA Cloud Public
+     * Edition. So the old convenience assertion — every figure > 0 — is no
+     * longer true and should not be made true by hiding a real number.
+     *
+     * The invariant these tests exist for is unchanged and is asserted below:
+     * nothing ever renders "0 published" or "~0". A zero renders as "Not
+     * loaded" with no published clause, which is what the component already
+     * does via `hasPublished = published != null && published > 0`.
      */
-    expect(Object.values(S4_PUBLIC_PUBLISHED_COUNTS).every((n) => n > 0)).toBe(true);
+    const zeroTypes = Object.entries(S4_PUBLIC_PUBLISHED_COUNTS).filter(([, n]) => n === 0);
+    expect(zeroTypes.map(([k]) => k).sort()).toEqual(["DATA_PRODUCT", "INTEGRATION_ADAPTER"]);
     const { container } = render(<ContentTypeTiles byType={{}} />);
     expect(container.textContent).not.toMatch(/~0/);
     expect(container.textContent).not.toMatch(/\b0 published/);
+
+    // …and with rows present for a type whose published figure is a real zero.
+    const withZero = render(<ContentTypeTiles byType={{ DATA_PRODUCT: 0, API: 943 }} />);
+    expect(withZero.container.textContent).not.toMatch(/~0/);
+    expect(withZero.container.textContent).not.toMatch(/\b0 published/);
   });
 
   it("Live Processes carries its 2608 published figure", () => {
