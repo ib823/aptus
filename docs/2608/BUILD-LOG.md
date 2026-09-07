@@ -7,6 +7,116 @@ verified in the session.
 
 ---
 
+## WS9.1 — SSCUI activities were reachable from one scope item out of hundreds (2026-09-07)
+
+**Branch:** `feat/sscui-scope-links` (from `main` at the WS8 squash merge, #244).
+
+### The defect
+
+The 2608 SSCUI list publishes a **Main Scope Item ID** cell that is usually a
+list: "Manage G/L Account Master Data" names 704 scope items. `parseSscuiList`
+kept the whole string in `rawScopeItemIds` — but the only column any consumer
+could query, `ConfigActivity.scopeItemId`, held `firstScopeItemId(raw)`, the
+first entry alone.
+
+3,608 of the 4,328 2608 activities carry such a list. The arithmetic:
+
+```
+scope-item links in the source          813,804
+links a query could reach                 4,328   (one per row)
+activities naming J58                     1,050
+activities reachable from J58                 1   ← "Define Tax Codes for Sales and Purchases"
+```
+
+Anyone asking what configures **J58 Accounting and Financial Close** — the
+backbone of a general-ledger response — got one tax-code activity and could
+reasonably conclude SAP ships almost no configuration for the general ledger.
+That is exactly what happened: a requirement-mapping exercise this week used an
+export of this table and had to source its configuration evidence elsewhere.
+
+The data was never lost. It was stored where nothing could read it.
+
+### What landed
+
+**1. `ConfigActivity.mainScopeItemCodes String[]`, GIN-indexed.** The parsed
+list, queryable. `scopeItemId` is untouched, so every pre-WS9 consumer behaves
+exactly as before — this is additive in behaviour as well as in schema.
+
+**2. A migration that backfills itself.** The column is derived in SQL from
+`rawScopeItemIds` (falling back to `scopeItemId`), so no re-import and no bulk
+insert is needed — 813,804 links land as an `UPDATE` over 4,328 rows rather
+than as a 813k-row load over the network. WS1's `P2028` transaction timeout is
+the reason that mattered.
+
+**3. `scopeItemIdsFrom()` in the parser, and the loader persists it.** A test
+asserts `scopeItemIdsFrom(raw)[0] === firstScopeItemId(raw)` for every shape,
+so the new column can never disagree with the old one about the first id.
+
+**4. `src/lib/sap-public/config-activities.ts`** — the one place that decides
+what "All" means. `configActivitiesForScopeCode()` excludes "All" by default:
+an activity SAP publishes as universal is not evidence about a particular scope
+item, and a configuration backlog that wants it can ask.
+
+**"All" is not expanded.** Two 2608 rows carry it. Turning that into 822
+per-item claims would assert something the source does not say — the same
+refusal `hub-successors.ts` makes about inferred successors.
+
+**5. Two RECON facts, and they fail.** `configActivityScopeLinks` (813,804) and
+`configActivitiesForJ58` (1,050). Proved by collapsing the arrays back to the
+pre-WS9 shape and re-running:
+
+```
+FAIL db · ConfigActivity scope-item links (2608)   expected 813804  observed 4328
+FAIL db · ConfigActivity naming J58 (2608)         expected   1050  observed 1
+result: DRIFT                                                          exit 1
+```
+
+A silent regression here looks like a working system with thin evidence, which
+is why it survived a full release.
+
+### Carried in from `main`
+
+`tsc --noEmit --strict` was failing on `main` at `5f755f0` — four errors in the
+WS8 test file, because `NodeJS.ProcessEnv` requires `NODE_ENV` and the tests
+pass a one-key literal to check one flag. Widened `isAribaSourcingV1Pinned` and
+`resolveAribaEndpoints` to an `EnvLike` alias (`Partial<Record<string, string |
+undefined>>`), which is the shape they actually read. Out of WS9's scope, but
+it blocked WS9's own gate and leaving `main` red on typecheck was not an option.
+
+### Gates
+
+```
+tsc --noEmit --strict          OK   (4 pre-existing errors fixed)
+eslint --max-warnings 0        OK
+vitest run                     340 files, 4,972 tests, 0 failures (+8)
+next build                     OK
+check-migration-drift.sh       OK — zero drift
+pnpm sap:2608:recon --db       GREEN — 21 facts, including the two new ones
+```
+
+### Unproven / open
+
+1. **Production still holds the old shape.** The migration backfills wherever it
+   runs; it has run against the local database only. Until it is deployed,
+   production answers "what configures J58?" with one activity.
+
+2. **The 2602-era rows are backfilled from whatever they hold.** Rows written
+   before the 2608 loaders have `releaseId` null and their own
+   `rawScopeItemIds` history; the migration derives their arrays the same way,
+   but no 2602 fact asserts the result.
+
+3. **Nothing consumes the new column yet.** The helper exists and is tested; no
+   UI, report or export reads it. The catalogue export handed to the
+   requirement-mapping work this week was built from the old column and is
+   still thin for that reason.
+
+4. **`ScopeItem` has no FK to these codes.** The array holds strings, and a code
+   naming a scope item that does not exist in a given catalogue version would
+   not be rejected. The source is SAP's own list, so this is a tolerance rather
+   than a check — recorded because it is the kind of gap WS8 closed elsewhere.
+
+---
+
 ## WS8 — Non-S/4 connectors: Ariba v2, SuccessFactors auth sunset, a wired-API gate (2026-09-06)
 
 **Branch:** `feat/connectors-hub-state` (from `main` at the WS7 squash merge, #242).

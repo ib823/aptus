@@ -85,6 +85,9 @@ async function main(): Promise<number> {
             additionalInfo: r.additionalInfo || null,
             fileUploadEnabled: r.fileUploadEnabled || null,
             rawScopeItemIds: r.mainScopeItemIds !== r.scopeItemId ? r.mainScopeItemIds : null,
+            // WS9 — the whole list, indexed. `scopeItemId` above keeps only the
+            // first id and every pre-WS9 consumer joins on it.
+            mainScopeItemCodes: r.mainScopeItemCodes,
             releaseId: release.id,
           })),
         });
