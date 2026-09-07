@@ -235,7 +235,7 @@ export function renderL2Svg(item: TobeScopeItemDoc, opts: { title?: string } = {
     const meta = n.step.sscuiId
       ? `SSCUI ${n.step.sscuiId}`
       : n.step.app
-        ? wrapText(n.step.app, 23, 1)[0]!
+        ? shortAppLabel(n.step.app, 25)
         : n.step.optional
           ? "optional"
           : "";
@@ -254,6 +254,26 @@ export function renderL2Svg(item: TobeScopeItemDoc, opts: { title?: string } = {
   );
   p.push(`</svg>`);
   return p.join("");
+}
+
+/**
+ * An L2 box's second line, at `max` characters.
+ *
+ * The app label is `Title (ID)` (step-source.ts `formatApp`). Plain truncation
+ * at 20 characters turned every Requisitioning box into "My Purchase…", which
+ * identifies nothing: the whole scope item is purchase requisitions. The ID is
+ * the half that disambiguates and is what a consultant looks up, so it is kept
+ * and the title is elided instead.
+ */
+export function shortAppLabel(app: string, max: number): string {
+  const s = app.trim();
+  if (s.length <= max) return s;
+  const m = s.match(/^(.*?)\s*(\([^()]+\))$/);
+  if (!m) return s.slice(0, Math.max(1, max - 1)).trimEnd() + "\u2026";
+  const [, title, id] = m as unknown as [string, string, string];
+  const room = max - id.length - 2; // space + ellipsis
+  if (room < 4) return id; // no room for any title: the ID alone still identifies it
+  return title.slice(0, room).trimEnd() + "\u2026 " + id;
 }
 
 /**
