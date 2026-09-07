@@ -1,0 +1,13 @@
+# provenance
+# target	aptus Philippines brief target 2, file 2 of 3 — Philippine tax rates
+# result	EMPTY, AND THE EMPTINESS IS THE FINDING. Zero data rows.
+# source_url	https://help.sap.com/docs/SAP_S4HANA_CLOUD/88520ff2932b479090ed3b7b116b2e91/07a91317c42c47e0b881c4efd3aa88cc.html?version=2608.500
+# source_searched	the SAP S/4HANA Cloud Public Edition 2608 Philippines localisation deliverable (88520ff2932b479090ed3b7b116b2e91), all 127 topics, 125 with a body. Every table on those pages was read.
+# why_empty	SAP's published "Tax Codes for VAT" table for the Philippines carries Tax Code, Description, Accounting Key and Tax Type. It carries NO rate column and NO valid-from column. Several descriptions contain a percentage in prose ("Output VAT 12%-Goods"); a rate was NOT extracted from that text, because reading a number out of a description is inference, not publication.
+# where_the_data_is	the rate and valid-from live in the "Time Dependent Tax Rates" sheet of the Best Practices workbook 2608_Pre-configured_Tax_Codes_EN_PH.xlsx — the Philippine counterpart of the ..._EN_MY.xlsx file WS11 read. That workbook is not in the repository and the Best Practices content library requires a signed-in SAP session, which this run did not have.
+# withholding_rates	SAP DOES publish rates for Philippine WITHHOLDING tax codes, and those are in withholding-tax-codes-ph.tsv beside this file. They are not in this file because withholding tax codes are a different code space from the VAT tax codes in tax-codes-ph.tsv, and putting them here would create joins that do not exist.
+# date_read	2026-09-07
+# release	2608
+# acceptance_test	"every tax_code in the rates file resolves against the codes file" — vacuously satisfied: 0 rows. "count of rates SAP publishes with no percentage" — 0, because 0 rates are published on the pages read.
+# empty	a blank is a blank. This file is empty because SAP publishes nothing here anonymously, not because nobody looked.
+country	tax_code	condition_type	rate_percent	valid_from

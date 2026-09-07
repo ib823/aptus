@@ -40,6 +40,45 @@ export type AdParse = {
   rowCount: number;
 };
 
+/**
+ * Is an A&D country cell an availability, or a "no"?
+ *
+ * The matrix does not carry booleans. A cell holds a release code ("2402"),
+ * a phrase ("Can be added"), the literal "No", or nothing at all. WS1.2 read
+ * the MY cell as `myValue !== "" && myValue !== "No"` and this keeps exactly
+ * that rule for all 60 columns rather than inventing a second one — so
+ * `availableInMy` and `countries.includes("MY")` cannot disagree.
+ */
+export function isAvailableCell(value: string): boolean {
+  const v = value.trim();
+  return v !== "" && v !== "No";
+}
+
+/** The countries an A&D row is available in, sorted for a stable array. */
+export function availableCountries(countries: Record<string, string>): string[] {
+  return Object.entries(countries)
+    .filter(([, v]) => isAvailableCell(v))
+    .map(([c]) => c)
+    .sort();
+}
+
+/**
+ * The A&D cells that say something, verbatim, keyed by country.
+ *
+ * Kept beside the boolean list because the cells are not equivalent: "2402"
+ * says WHEN the item became available and "Can be added" says it is not on by
+ * default. Collapsing both to `true` is how a release date and a caveat became
+ * the same fact.
+ */
+export function nonEmptyCountryCells(countries: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [c, v] of Object.entries(countries)) {
+    const t = v.trim();
+    if (t !== "") out[c] = t;
+  }
+  return out;
+}
+
 function splitCodes(raw: string): string[] {
   return raw
     .split(/[;,]/)
