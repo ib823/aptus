@@ -235,7 +235,7 @@ export function renderL2Svg(item: TobeScopeItemDoc, opts: { title?: string } = {
     const meta = n.step.sscuiId
       ? `SSCUI ${n.step.sscuiId}`
       : n.step.app
-        ? wrapText(n.step.app, 23, 1)[0]!
+        ? shortAppLabel(n.step.app, 25)
         : n.step.optional
           ? "optional"
           : "";
@@ -256,6 +256,37 @@ export function renderL2Svg(item: TobeScopeItemDoc, opts: { title?: string } = {
   return p.join("");
 }
 
+/**
+ * An L2 box's second line, at `max` characters.
+ *
+ * The app label is `Title (ID)` (step-source.ts `formatApp`). Plain truncation
+ * at 20 characters turned every Requisitioning box into "My Purchase…", which
+ * identifies nothing: the whole scope item is purchase requisitions. The ID is
+ * the half that disambiguates and is what a consultant looks up, so it is kept
+ * and the title is elided instead.
+ */
+export function shortAppLabel(app: string, max: number): string {
+  const s = app.trim();
+  if (s.length <= max) return s;
+  const m = s.match(/^(.*?)\s*(\([^()]+\))$/);
+  if (!m) return s.slice(0, Math.max(1, max - 1)).trimEnd() + "\u2026";
+  const [, title, id] = m as unknown as [string, string, string];
+  const room = max - id.length - 2; // space + ellipsis
+  if (room < 4) return id; // no room for any title: the ID alone still identifies it
+  return title.slice(0, room).trimEnd() + "\u2026 " + id;
+}
+
+/**
+ * The one thing an L1 chain is not allowed to imply.
+ *
+ * Chain membership traces to SAP's own process-area grouping, but the ORDER of
+ * the items is a consultant assertion: SAP publishes no business-process
+ * hierarchy in the content drop. Every L1 rendering carries this line.
+ */
+export const L1_CAVEAT =
+  "Chain membership follows SAP's own process areas; the order of the items is our reading, not an SAP publication. Confirm it in Fit-to-Standard.";
+const L1_CAVEAT_H = 26;
+
 /** L1 — end-to-end chain per value stream. */
 export function renderL1Svg(doc: TobePackDoc, opts: { title?: string } = {}): string {
   const chains = doc.chains.length > 0 ? doc.chains : [pseudoChain(doc)];
@@ -265,7 +296,7 @@ export function renderL1Svg(doc: TobePackDoc, opts: { title?: string } = {}): st
   const rowH = 150;
   const maxLen = Math.max(...chains.map((c) => c.items.length));
   const width = 40 + maxLen * boxW + (maxLen - 1) * gap;
-  const height = 56 + chains.length * rowH;
+  const height = 56 + chains.length * rowH + L1_CAVEAT_H;
   const p: string[] = [];
   p.push(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="l1-title" ${FONT}>`,
@@ -341,6 +372,11 @@ export function renderL1Svg(doc: TobePackDoc, opts: { title?: string } = {}): st
       );
     });
   });
+  // The chain ORDER is consultant-asserted: SAP's Process Navigator hierarchy
+  // is not in the content drop, so an L1 chain must never read as cited.
+  p.push(
+    `<text x="20" y="${height - 14}" font-size="9.5" fill="${TOBE_MUTED}">${escapeXml(L1_CAVEAT)}</text>`,
+  );
   p.push(`</svg>`);
   return p.join("");
 }

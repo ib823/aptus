@@ -77,6 +77,7 @@
     "sap:2608:seed-tobe": "tsx scripts/seed-tobe-2608.ts",
     "bid:import": "tsx scripts/import-bid-requirements.ts",
     "tobe:preaward": "tsx scripts/generate-preaward-pack.ts",
+    "tobe:regenerate": "tsx scripts/regenerate-tobe-pack.ts",
     "guard:confidentiality": "tsx scripts/check-confidentiality.ts",
     "guard:add-term": "tsx scripts/add-confidential-term.ts",
     "ingest": "tsx scripts/ingest-sap-zip.ts",

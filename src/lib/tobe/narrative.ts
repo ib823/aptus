@@ -128,8 +128,8 @@ export function packNarrative(doc: TobePackDoc, opts: { clientName: string }): N
         rows: [
           [
             "L1 — end-to-end",
-            `The chain of scope items that make up the process end to end${chainNames ? ` (${chainNames})` : ""}, with a bar under each showing how its steps split across the states below.`,
-            "Check the chain is the business you actually run, and that nothing is missing from it.",
+            `The chain of scope items that make up the process end to end${chainNames ? ` (${chainNames})` : ""}, with a bar under each showing how its steps split across the states below. Which items belong to a chain follows SAP's own process areas; the ORDER of the items is our reading, because SAP publishes no process hierarchy in this content release.`,
+            "Check the chain is the business you actually run, that the order is right, and that nothing is missing from it.",
           ],
           [
             "L2 — swimlane",

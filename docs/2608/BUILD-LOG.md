@@ -7,6 +7,180 @@ verified in the session.
 
 ---
 
+## WS16 — the L1 page of a finance pack opened on "Sales Inquiry" (2026-09-07)
+
+**Branch:** `feat/2608-finance-chains` (from `main` @ `59cf142`).
+
+### The defect, found by looking at the output
+
+The To-Be Process Pack generated for a live three-entity ERP Finance bid ran to
+494 slides. Its L2 swimlanes and L3 step tables were correct across all 55
+in-scope finance and procurement scope items. Its **L1 end-to-end page showed
+one chain: Sales Inquiry (1IQ) → Sales Quotation (BDG) → Sell from Stock (BD9)
+→ Accounts Receivable (J59)**, with the first three marked "not in scope".
+
+Two causes, both structural:
+
+1. **`sap-references/2608/e2e-chains.json` held exactly one chain** — the WS6
+   Order-to-Cash pilot. Every finance engagement was going to draw it or draw
+   nothing.
+2. **`chainsForScope` matched a chain when ONE of its path items was in
+   scope.** J59 is in the finance scope set, so the sales chain matched off a
+   single shared item. One item in common is a shared item, not evidence that
+   the client runs the process.
+
+Neither showed up in any test, because the pilot fixture and the pilot bundle
+both run the one chain that existed.
+
+### What landed
+
+**Seven finance and procurement chains**, covering 54 of the 55 scope items in
+a real finance scope set (the one omission is 1BS, SAP Fiori Analytical Apps
+for Sales, which is an analytics item rather than a process step):
+
+| Chain | Value stream | Path |
+|---|---|---|
+| Procure to Pay, requisition to payment | source-to-pay | 18J → BNX → 2V7 → J60 → 7MJ |
+| Order to Cash, service billing to collection | lead-to-cash | 2EQ → 1Z6 → J59 → 1S0 → BFC |
+| Record to Report, period close to consolidation | finance | J58 → 2QL → 40Y → 1GA → 1SG |
+| Acquire to Retire, fixed assets | finance | BFH → J62 → 1GB → 2QY |
+| Cash and bank operations | finance | BFA → J77 → 1EG → 4X8 → J78 → 3L5 |
+| Plan to Perform, budget, plan and project control | finance | J54 → 1HB → 2FM → 4RC → 1NT |
+| Statutory reporting and e-invoicing | finance | 5XU → 1J2 → 78L |
+
+plus 15 alternates, each anchored to two codes that are actually on its chain's
+path (a test enforces that; an alternate leaving from a code the chain does not
+contain draws an arrow from nowhere).
+
+**A threshold on chain selection.** `chainsForScope` now requires at least two
+path items in scope, and counts only path items — an alternate is a variation
+on a chain you already run, so it cannot be the evidence that you run it.
+
+### The honesty problem this creates, and what was done about it
+
+Chain **membership** is traceable: every code is a 2608 scope item, and the
+grouping follows the process areas SAP itself uses in the BDC questionnaires
+(S4H_405 Finance, S4H_420 Sourcing and Procurement, S4H_433 Sales).
+
+Chain **order is not published by SAP anywhere in the 2608 drop.** SAP's
+Process Navigator business-process hierarchy is not in the content drop; the
+only ordered SAP-published sequences in this repository are the nine BPD
+process diagrams, all of them Order-to-Cash. So the sequences added here are a
+consultant assertion, and the pack must never let one read as an SAP citation.
+
+Four places now say so, because one place would have been decoration:
+
+- `_provenance.orderingCaveat` in the chain file, and a per-chain `source` line
+  on each of the seven ending "ordering consultant-asserted, not SAP-published
+  — confirm in Fit-to-Standard".
+- `L1_CAVEAT` printed under every rendered L1 diagram, in the SVG, the PDF and
+  the PPTX.
+- The "How to read this pack" narrative row for L1, which now tells the reader
+  to check the order, not just the membership.
+- A test that fails if a WS16-authored chain drops the phrase from its source.
+
+### A second defect the first one hid
+
+Both exporters drew **all chains on one page**. That was invisible at one
+chain. At seven, the later ones ran off the bottom of the sheet and off the
+bottom of the slide. Both now paginate one chain per page, headed "chain N of
+M".
+
+### A third defect, found by looking at the regenerated pages
+
+Every L2 box on the Requisitioning swimlane read **"My Purchase…"**. The app
+label is `Title (ID)` and both exporters truncated it at 20 characters, which
+threw away the ID and kept a prefix that identifies nothing — the whole scope
+item is purchase requisitions.
+
+`shortAppLabel()` now keeps the Fiori app ID and elides the title instead, so
+the boxes read `My Purchase Req… (F1639A)` / `(F1643A)` / `Manage Catalog Items
+(F3149)`. The ID is the half that disambiguates and the half a consultant looks
+up. Where there is no room for any title at all it falls back to the ID alone
+rather than to a meaningless prefix.
+
+### Result
+
+```
+RECON 2608 — sap-references/2608/
+  integrity: 48/48 files match sha256+bytes · no unlisted files · no zips
+  facts (±1% on counts):
+    OK   scope items (A&D distinct IDs)                    expected  679  observed 679
+    OK   process-step rows                                 expected 19158 observed 19158
+    OK   end-to-end chains defined (e2e-chains.json)       expected    8  observed 8
+    OK   every e2e-chain code exists in the A&D catalogue  expected    0  observed 0
+  notes:
+    · e2e-chains.json: 8 chain(s), 58 distinct scope-item code(s)
+  result:    GREEN
+```
+
+The second new fact is a **presence** fact, so it carries no ±1% tolerance: one
+unknown code is one box in the L1 diagram with no scope item behind it, titled
+`undefined`, and nothing else in the pipeline would notice.
+
+Gates: typecheck clean · eslint clean · **5,083 unit tests pass** (22 new in
+`tests/unit/tobe/chains.test.ts`) · migration drift zero (no schema change) ·
+`pnpm sap:2608:recon` GREEN · `next build` clean.
+
+The L1 SVG snapshot was updated deliberately: the only delta is the caveat line
+and the 26pt of height it needs.
+
+### A gap this workstream walked straight into
+
+WS16 changed the L1 chains for every finance engagement, which makes every pack
+already generated stale — and there was no supported way to draw one again.
+`pnpm tobe:preaward` creates a bundle and draws its pack once; regenerating
+meant creating a second bundle and losing the first one's identity.
+
+`pnpm tobe:regenerate -- --bundle <id>` closes that. It is additive:
+`generateAndSavePack` writes a NEW `TobePack` row with its own input hashes and
+the previous ones stay, so what a client was shown last week is still
+recoverable. `--no-export` writes the row without the files; `--client-view`
+strips consultant notes. The bundle id is an argument, so nothing about any
+engagement is in the script.
+
+`scripts/.tmp/` is now gitignored, and the rule is written next to it: anything
+worth keeping gets promoted to `scripts/` with a pnpm entry rather than living
+as a scratch file nobody reviews. This script was one of those.
+
+### Denylist extended, in the same session
+
+Reading a live RFP end to end surfaced sixteen further identifiers that would
+be a disclosure in a public repository: the client's operating entities, its
+named affiliates and assets, its registered address, its procurement contact,
+and the five incumbent systems its landscape is built on. A system name is not
+obviously confidential in isolation; the combination of a particular ledger, a
+particular purchasing tool and a particular treasury package identifies the
+client to anyone in the market.
+
+All sixteen are on the denylist as **hashes**, with notes that do not identify
+anyone ("client A system", "client A affiliate"). Seventeen terms in total; the
+full scan over 2,378 tracked and untracked files is clean.
+
+The guard proved itself while this entry was being written: the paragraph above
+originally named the three incumbent systems as its example, and the pre-commit
+hook refused the commit. That is the whole point of the control — the person
+writing about a leak is exactly the person about to cause one.
+
+### Unproven / open
+
+1. **The chain sequences themselves.** They are a consultant reading of how
+   these scope items follow one another, defensible but not cited. The
+   caveat is carried into every rendering precisely because this is the part
+   a reviewer must check rather than trust.
+2. **1BS is in no chain.** SAP Fiori Analytical Apps for Sales is an analytics
+   scope item; the engine renders scoped items outside a chain after the
+   chains, so it still reaches L2 and L3. Whether an analytics item belongs in
+   an L1 chain at all is a modelling question, not a bug.
+3. **`0 configuration(s)` on nearly every L2.** The generated pack shows zero
+   config activities against most finance scope items. That is a
+   `ConfigActivity` linkage question in the WS1.3 loader, not a chain
+   question, and it is untouched here.
+4. **No BPD process diagrams exist for the finance scope items.** Only nine
+   BPD pairs shipped in the 2608 drop, all Order-to-Cash, so finance L2 content
+   comes from the process-step master. That is why finance swimlanes carry a
+   "Role not named in BPD" lane and no published expected results.
+
 ## WS15 — 59 countries were parsed and discarded one statement before the database (2026-09-07)
 
 **Branch:** `feat/scope-item-countries` (from `main` @ `21f54b8`).
