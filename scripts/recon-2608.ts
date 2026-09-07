@@ -397,6 +397,27 @@ export const DB_FACTS_2608 = {
    * columns have stopped parsing.
    */
   stepsWithNoCountryStated: 12,
+
+  // ── WS15 — the A&D country matrix, now persisted ──────────────────────────
+  /**
+   * Distinct countries queryable across ScopeItem.countries. The A&D workbook
+   * publishes 60 ISO columns and the parser has read all of them since WS1.2;
+   * until WS15 the loader persisted one. A fall to 1 means the loader has gone
+   * back to keeping only Malaysia.
+   */
+  scopeItemCountriesDistinct: 60,
+  /** Scope items the A&D export marks available in MY. Must not move: WS1.2 stored it. */
+  scopeItemsAvailableInMy: 623,
+  /** Scope items available in PH — two more than MY, which is the point. */
+  scopeItemsAvailableInPh: 625,
+  /**
+   * Rows where availableInMy disagrees with countries containing "MY".
+   *
+   * Zero, and checked exactly. The old boolean and the new array are two
+   * spellings of one cell, and the day they diverge is the day one of them is
+   * being written by something that does not know the rule in isAvailableCell.
+   */
+  scopeItemCountryMismatch: 0,
 } as const;
 
 async function observeDb(): Promise<{ facts: Report["facts"]; notes: string[] }> {
@@ -506,6 +527,28 @@ async function observeDb(): Promise<{ facts: Report["facts"]; notes: string[] }>
         where: { releaseId: release.id, countries: { isEmpty: true }, isGlobal: false },
       }),
     ]);
+    /*
+     * WS15 — the A&D matrix. `countryMismatch` is a raw query because the
+     * comparison is between two columns of the same row, which Prisma's
+     * filter language cannot express.
+     */
+    const [countryRows, availMy, availPh] = await Promise.all([
+      prisma.$queryRaw<{ c: string }[]>`
+        SELECT DISTINCT unnest(si."countries") AS c
+          FROM "ScopeItem" si
+          JOIN "ScopeCatalogVersion" cv ON cv.id = si."catalogVersionId"
+         WHERE cv.edition = 'PUBLIC' AND cv.version = '2608'`,
+      prisma.scopeItem.count({ where: { catalogVersionId: catalog?.id ?? "", countries: { has: "MY" } } }),
+      prisma.scopeItem.count({ where: { catalogVersionId: catalog?.id ?? "", countries: { has: "PH" } } }),
+    ]);
+    const countryMismatch = await prisma.$queryRaw<{ n: bigint }[]>`
+      SELECT count(*) AS n
+        FROM "ScopeItem" si
+        JOIN "ScopeCatalogVersion" cv ON cv.id = si."catalogVersionId"
+       WHERE cv.edition = 'PUBLIC' AND cv.version = '2608'
+         AND coalesce(si."availableInMy", false) <> ('MY' = ANY(si."countries"))`;
+    const mismatchCount = Number(countryMismatch[0]?.n ?? 0);
+
     const [itemsMy, itemsPh] = await Promise.all([
       prisma.sapProcessStep.groupBy({
         by: ["scopeItemCode"],
@@ -728,6 +771,34 @@ async function observeDb(): Promise<{ facts: Report["facts"]; notes: string[] }>
         expected: DB_FACTS_2608.stepsWithNoCountryStated,
         observed: stepsNoCountry,
         ok: stepsNoCountry === DB_FACTS_2608.stepsWithNoCountryStated,
+      },
+      {
+        // Exact. 60 to 1 is what the WS15 defect looked like; a band would
+        // report it as a rounding difference.
+        name: "db · distinct countries in ScopeItem.countries",
+        expected: DB_FACTS_2608.scopeItemCountriesDistinct,
+        observed: countryRows.length,
+        ok: countryRows.length === DB_FACTS_2608.scopeItemCountriesDistinct,
+      },
+      {
+        name: "db · scope items available in MY (A&D)",
+        expected: DB_FACTS_2608.scopeItemsAvailableInMy,
+        observed: availMy,
+        ok: within(DB_FACTS_2608.scopeItemsAvailableInMy, availMy),
+      },
+      {
+        name: "db · scope items available in PH (A&D)",
+        expected: DB_FACTS_2608.scopeItemsAvailableInPh,
+        observed: availPh,
+        ok: within(DB_FACTS_2608.scopeItemsAvailableInPh, availPh),
+      },
+      {
+        // The invariant. Not a count to watch drift on — a contradiction that
+        // must never be non-zero, so it is checked exactly.
+        name: "db · availableInMy vs countries has MY (must be 0)",
+        expected: DB_FACTS_2608.scopeItemCountryMismatch,
+        observed: mismatchCount,
+        ok: mismatchCount === DB_FACTS_2608.scopeItemCountryMismatch,
       },
     ];
     const notes = [

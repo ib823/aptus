@@ -1,0 +1,32 @@
+# provenance
+# target	aptus Philippines brief target 2, file 1 of 3 — Philippine tax codes
+# source_url	https://help.sap.com/docs/SAP_S4HANA_CLOUD/88520ff2932b479090ed3b7b116b2e91/07a91317c42c47e0b881c4efd3aa88cc.html?version=2608.500
+# source_title	SAP S/4HANA Cloud Public Edition 2608 > Philippines > "Tax Codes for VAT" (deliverable 88520ff2932b479090ed3b7b116b2e91)
+# source_note	This is NOT the source the brief expected. The brief points at the Philippine counterpart of 2608_Pre-configured_Tax_Codes_EN_MY.xlsx. That workbook is not in the repository and the Best Practices content library needs a signed-in session, so it was not read. SAP publishes the same tax-code list anonymously in the Philippines localisation documentation, and that is what this file carries. The workbook additionally carries local-language descriptions, an EU code and an error indicator; those are not published here and the columns are absent rather than blank-filled.
+# access_method	anonymous read of help.sap.com's own published content service (http.svc/deliverableMetadata, http.svc/pagecontent). No login, no scraping.
+# date_read	2026-09-07
+# release	2608
+# completeness	complete for this source: all 18 rows of SAP's published "Tax Codes for VAT" table. Floor with respect to SAP overall — this table covers VAT only. Withholding tax codes are published separately and are in withholding-tax-codes-ph.tsv beside this file; any tax code SAP predelivers but does not print on this page is not here and its count cannot be measured from this source.
+# cross_check	tax-account-assignment-ph.tsv (from the YCOA workbook, an independent source) names 22 distinct Philippine tax codes; 15 of them resolve against this file. UNRESOLVED: S4, S5, S6, SE, SO, V8, V9.
+# column_source	tax_code="Tax Code" · description="Description" · transaction_key="Accounting Key" · tax_type="Tax Type", all verbatim from the published table. country is PH on every row.
+# empty_columns	reporting_country is empty on every row: this page publishes no reporting country. Empty means not published.
+# empty	a blank is a blank. Never "N/A", never a substitute.
+country	tax_code	description	tax_type	transaction_key	reporting_country
+PH	E0	VAT Exempt Sales	A (Output Tax)	MWS	
+PH	OX	Output Tax Exempt	A (Output Tax)	MWS	
+PH	S0	Zero-Rated Sales	A (Output Tax)	MWS	
+PH	S1	Output VAT 12%-Goods	A (Output Tax)	MWS	
+PH	S2	Output VAT 12%-Services	A (Output Tax)	MWS	
+PH	S3	Output VAT 12%-Rental	A (Output Tax)	MWS	
+PH	S7	Output Tax-Sales to Government 12%-GoodsOutput	A (Output Tax)	MWS	
+PH	S8	Output Tax-Sales to Government 12%-Service	A (Output Tax)	MWS	
+PH	EI	VAT-Exempt Importations	V (Input Tax)	VST	
+PH	IX	Input Tax Exempt	V (Input Tax)	VST	
+PH	V0	Zero-Rated Purchases	V (Input Tax)	VST	
+PH	V1	Input Tax 12% Goods-Domestic	V (Input Tax)	VST	
+PH	V2	Input Tax 12% Goods-Import	V (Input Tax)	VST	
+PH	V3	Input Tax 12% Services-Domestic	V (Input Tax)	VST	
+PH	V4	Input Tax 12% Services-Import	V (Input Tax)	VST	
+PH	V5	Input VAT 12% Capex-Domestic	V (Input Tax)	VST	
+PH	V6	Input VAT 12% Capex-Importation	V (Input Tax)	VST	
+PH	V7	Purchases not subject to VAT	V (Input Tax)	VST	
