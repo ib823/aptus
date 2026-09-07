@@ -12,6 +12,67 @@ Every number below was **measured in aptus on 07 Sep 2026** against content rele
 
 ---
 
+> ## Status 2026-09-07 — harvested, and **target 1 was wrong**
+>
+> All six targets were worked. Three needed no harvest at all: the data was
+> already in `sap-references/2608/`, in workbooks aptus loads from and then reads
+> only the Malaysian column of.
+>
+> | Target | Result | Where it actually came from |
+> |---|---|---|
+> | 1 availability | **679 rows — NO HARVEST NEEDED** | `Availability_Dependencies_EN_XX.xlsx`, already in the repo |
+> | 2 tax codes | 18 | help.sap.com PH localisation |
+> | 2 tax rates | **0 — documented empty** | SAP publishes no rate column anonymously |
+> | 2 tax acct assignment | 22 | `..._for_YCOA.xlsx` sheet `T030K`, already in the repo |
+> | 3 G/L accounts | 578 | `..._for_YCOA.xlsx`, already in the repo |
+> | 4 restrictions | **0 — documented empty** | 127 topics + the whole WS13 corpus re-scanned |
+> | 5 BPDs | blocked | needs a signed-in Best Practices session |
+> | 6 org structure | **0** | the workbook is country-templated — a finding, not a gap |
+>
+> ### Target 1 below is wrong, and this is the correction
+>
+> It is ranked first as the highest-value **harvest**. There was nothing to
+> harvest. `Availability_Dependencies_EN_XX.xlsx` was already in the repository,
+> carries **60 ISO country columns**, and
+> `scripts/lib/sap-2608/parse.ts` has parsed every one of them into
+> `AdScopeItem.countries` since WS1.2. `scripts/load-2608-scope.ts` then persisted
+> exactly one — `availableInMy` — and discarded the other 59 one statement before
+> the database.
+>
+> That is a **loader and schema defect, not a data-acquisition problem**, and
+> fixing it unlocked all 60 countries at once rather than just the Philippines
+> (WS15). Measured after the fix:
+>
+> ```
+> distinct countries queryable   60   (was 1)
+> available in MY               623   unchanged
+> available in PH               625
+> PH but not MY   1WQ 2OO 5VX 5VY 5VZ 5YU 5YV
+> MY but not PH   3F7 7EZ 7G4 7G5 BH3
+> ```
+>
+> **The lesson for the next brief: before scoping a harvest, check whether the
+> repository already holds the file and is throwing the column away.** This is
+> the third time in this programme (WS9.1, WS11, WS15) that a source was parsed
+> exhaustively and then reduced to one column at persist time.
+>
+> ### Two findings from the harvest that are not counts
+>
+> - **There is no Philippine chart of accounts.** The YCOA workbook carries 20
+>   `Alternative Account Number` columns for countries with their own local
+>   chart. There is no PH column — and no MY one either. SAP publishes both as
+>   using the YCOA template directly.
+> - **There is no BIR EIS restriction to find, because there is no feature.** The
+>   PH localisation deliverable mentions Peppol, "electronic invoice", "e-invoic"
+>   and EIS zero times each. SAP's *Supported Compliance Tasks* page for DRC
+>   Cloud enumerates 35 countries over 487 task rows — Malaysia and Singapore
+>   among them, the Philippines not. That is recorded in
+>   `not-supported-ph-evidence.tsv`, **not** in the register: absence from a list
+>   is not a sentence in which SAP states a non-support, and `statement_verbatim`
+>   has to be SAP's own words.
+
+---
+
 ## Read this first: aptus is not as Malaysia-only as it looks
 
 The obvious assumption — "aptus has no Philippines data at all" — is wrong, and

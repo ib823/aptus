@@ -7,6 +7,144 @@ verified in the session.
 
 ---
 
+## WS15 — 59 countries were parsed and discarded one statement before the database (2026-09-07)
+
+**Branch:** `feat/scope-item-countries` (from `main` @ `21f54b8`).
+
+### The defect
+
+`scripts/lib/sap-2608/parse.ts` has read the whole Availability & Dependencies
+country matrix into `AdScopeItem.countries` since WS1.2 — **60 ISO country
+columns**, sheet `Scope`, header row 2. `scripts/load-2608-scope.ts` then
+persisted one of them:
+
+```ts
+country: r.ad?.availableInMy ? "MY" : "XX",
+availableInMy: r.ad ? r.ad.availableInMy : null,
+```
+
+Fifty-nine countries' availability was parsed into memory and dropped one
+statement before the database. **The WS9.1 pattern for the third time in this
+programme** (WS9.1, WS11's cost centres, now this): parse or measure a source
+exhaustively, then reduce it to one column at persist time.
+
+It is also why `docs/2608/PH-DATA-ACQUISITION-BRIEF.md`, written this morning,
+ranked Philippine scope-item availability as its **highest-value harvest
+target**. There was nothing to harvest. The file was already in the repository.
+
+### What landed
+
+`ScopeItem.countries String[]` (GIN-indexed) and `ScopeItem.countryAvailability
+Json`. `availableInMy` and `myAvailableSince` are untouched, so every pre-WS15
+consumer is unaffected.
+
+The Json column exists because the cells are not booleans: `"2402"` says WHEN an
+item became available, `"Can be added"` says it is not on by default, `"No"` says
+it is absent. `isAvailableCell()` keeps WS1.2's exact rule — non-empty and not
+`"No"` — for all 60 columns rather than inventing a second one, so the old
+boolean and the new array cannot disagree.
+
+### Result, after re-running the loader over all 822 rows
+
+```
+distinct countries queryable    60    (was 1)
+available in MY                623    unchanged, as it must be
+available in PH                625
+available in SG / US     620 / 649
+availableInMy disagreeing with countries has MY     0
+
+PH but not MY   1WQ 2OO 5VX 5VY 5VZ 5YU 5YV
+MY but not PH   3F7 7EZ 7G4 7G5 BH3
+```
+
+Those seven PH-only codes are **the same seven WS14 found independently in the
+process-step master**. Two SAP publications agreeing is the strongest
+confirmation available here.
+
+Verbatim cells work as intended: `1WQ` reads `No` in MY and `1811` in PH; `3F7`
+reads `2302` in MY and `No` in PH; `J59` reads `1702` and `1603`.
+
+### Philippine files landed
+
+| file | rows |
+|---|---:|
+| `2608/ph/tax-codes-ph.tsv` | 18 |
+| `2608/ph/withholding-tax-codes-ph.tsv` | 53 |
+| `2608/ph/gl-accounts-ph.tsv` | 578 |
+| `2608/ph/tax-account-assignment-ph.tsv` | 22 |
+| `2608/ph/availability-ph-uncovered.tsv` | 145 |
+| `2608/ph/tax-rates-ph.tsv` | **0 — documented empty** |
+| `2608/ph/org-structure-ph.tsv` | **0 — documented empty** |
+| `restrictions/not-supported-ph.tsv` | **0 — documented empty** |
+| `restrictions/not-supported-ph-evidence.tsv` | 13 |
+
+`availability-ph.tsv` was deliberately **not** landed: the loader change above
+produces the same data from the workbook already in the repository, which is
+reproducible where a derived TSV is not.
+
+Three empty files are landed as empties on purpose. A zero produced by a
+documented search is a different fact from a zero nobody has looked for, and
+aptus has to be able to tell them apart.
+
+### Two findings that are not counts
+
+- **There is no Philippine chart of accounts.** The YCOA workbook carries 20
+  `Alternative Account Number` columns for countries with their own local chart.
+  There is no PH column — **and no MY one either**. SAP publishes both as using
+  the YCOA template directly.
+- **There is no BIR EIS restriction to find, because there is no feature.** The
+  PH localisation deliverable mentions Peppol, "electronic invoice", "e-invoic"
+  and EIS zero times each. SAP's *Supported Compliance Tasks* page for DRC Cloud
+  enumerates 35 countries over 487 task rows — Malaysia and Singapore among them,
+  the Philippines not. Recorded in the evidence companion, **not** the register:
+  absence from a list is not a sentence in which SAP states a non-support, and
+  `statement_verbatim` has to be SAP's own words.
+
+### RECON
+
+`pnpm sap:2608:recon --db` **GREEN on 51 facts** (was 47). The fourth new one is
+an invariant rather than a count:
+
+```
+distinct countries in ScopeItem.countries            60   exact
+scope items available in MY (A&D)                   623
+scope items available in PH (A&D)                   625
+availableInMy vs countries has MY (must be 0)         0   exact
+```
+
+### Caught while writing this
+
+The schema edit added the GIN index to **every** model carrying
+`@@index([country])` — four models, three with no `countries` field at all.
+`prisma validate` refused it. A Python `str.replace` replaces every occurrence,
+not the first.
+
+### Gates
+
+| gate | result |
+|---|---|
+| `tsc --noEmit --strict` | clean |
+| `eslint . --max-warnings 0` | clean |
+| migration-integrity | zero drift |
+| `sap:2608:recon --db` | GREEN, 51 facts |
+
+**GitHub Actions billing was restored during this workstream.** For the first
+time since 2026-09-05, CI on this PR is a real signal rather than a 2-second
+abort, and it is treated as one.
+
+### Stated honestly
+
+- The other 59 countries need `pnpm sap:2608:load-scope` re-run against any
+  database that is not re-loaded; the migration seeds `countries = ['MY']` for
+  rows already flagged `availableInMy`, which is the truth about what was stored,
+  not the truth about the workbook.
+- **Nothing consumes `countries` yet** beyond RECON. The To-Be pack still filters
+  by `SapProcessStep.countries`, which is a different (and also correct) source.
+- G/L accounts and tax account assignment were landed as TSVs derived from a
+  workbook already in the repository. Parsing them directly, as WS15 did for
+  availability, is the better shape and is not done here.
+
+
 ## WS14 — the To-Be engine read 9 scope items; the database held 661 (2026-09-07)
 
 **Branch:** `feat/tobe-db-steps` (from `main` @ `b649c26`).
