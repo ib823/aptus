@@ -33,9 +33,9 @@ model ScopeCatalogVersion {
   isActive          Boolean   @default(true)
   supersededById    String?
 
-  scopeItems  ScopeItem[]
-  assessments Assessment[]
-  protocols   ClassificationProtocol[]
+  scopeItems      ScopeItem[]
+  assessments     Assessment[]
+  protocols       ClassificationProtocol[]
   contentReleases SapContentRelease[]
 
   @@unique([version, edition])
@@ -70,16 +70,24 @@ model SapContentRelease {
   catalogVersionId String?
   catalogVersion   ScopeCatalogVersion? @relation(fields: [catalogVersionId], references: [id])
 
-  scopeItems         ScopeItem[]
-  processSteps       ProcessStep[]
-  tobeRules          TobeRule[]
-  tobePacks          TobePack[]
-  configActivities   ConfigActivity[]
-  affirmQuestions    AffirmQuestion[]
-  affirmProcessSteps AffirmProcessStep[]
-  hubContent         SapHubContent[]
-  apiReferences      SapApiReference[]
-  processStepMaster  SapProcessStep[]
+  scopeItems            ScopeItem[]
+  processSteps          ProcessStep[]
+  tobeRules             TobeRule[]
+  tobePacks             TobePack[]
+  configActivities      ConfigActivity[]
+  affirmQuestions       AffirmQuestion[]
+  affirmProcessSteps    AffirmProcessStep[]
+  hubContent            SapHubContent[]
+  apiReferences         SapApiReference[]
+  processStepMaster     SapProcessStep[]
+  formTemplates         SapFormTemplate[]
+  orgStructure          SapOrgStructureElement[]
+  glAccounts            SapGlAccount[]
+  coMasterObjects       SapCoMasterObject[]
+  taxCodes              SapTaxCode[]
+  taxRates              SapTaxRate[]
+  taxAccountAssignments SapTaxAccountAssignment[]
+  fiscalYearVariants    SapFiscalYearVariant[]
 
   @@unique([release, localisation])
   @@index([release])
@@ -97,24 +105,24 @@ model SapProcessStep {
   id        String @id @default(cuid())
   releaseId String
 
-  scopeItemCode String
-  scopeItemName String
-  lob           String
-  businessArea  String
+  scopeItemCode           String
+  scopeItemName           String
+  lob                     String
+  businessArea            String
   /// 1-based position of the row within its scope item, in file order.
-  sequence      Int
+  sequence                Int
   /// "Solution Activity (Hierarchy)" — SAP-verbatim, never edited.
-  activity      String  @db.Text
-  fioriAppTitle String?
-  fioriAppId    String?
-  fioriSemanticObject String?
-  fioriSemanticAction String?
+  activity                String   @db.Text
+  fioriAppTitle           String?
+  fioriAppId              String?
+  fioriSemanticObject     String?
+  fioriSemanticAction     String?
   businessRoleDescription String?
   businessRoleId          String?
   /// ISO country codes whose column carries an "X" for this step.
-  countries     String[] @default([])
-  availableInMy Boolean  @default(false)
-  isGlobal      Boolean  @default(false)
+  countries               String[] @default([])
+  availableInMy           Boolean  @default(false)
+  isGlobal                Boolean  @default(false)
 
   contentRelease SapContentRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
 
@@ -234,17 +242,17 @@ model VerdictScopeItem {
 // Buyer-side stakeholders access a filtered view of an assessment without
 // needing a full account. Auth is via signed share-link token.
 model AssessmentShareLink {
-  id           String @id @default(cuid())
-  assessmentId String
+  id             String    @id @default(cuid())
+  assessmentId   String
   /// LEGACY plaintext slug — null for links issued after token hashing landed.
   /// Kept for the dual-read window only: a legacy row upgrades (hash written,
   /// plaintext nulled) on its first successful use, and revocation retires the
   /// rest. A readable token column was a database that could leak usable links.
-  token        String? @unique
+  token          String?   @unique
   /// SHA-256 hex of the raw token. The raw value lives only in the URL the
   /// issuer copied; a database read cannot become a share link.
-  tokenHash    String? @unique
-  createdBy    String
+  tokenHash      String?   @unique
+  createdBy      String
   createdAt      DateTime  @default(now())
   expiresAt      DateTime?
   revokedAt      DateTime?
@@ -808,7 +816,7 @@ model SapConnectionProbeEvent {
   httpStatus Int?
   durationMs Int?
   /// cron | manual | test — who caused this probe.
-  source String
+  source     String
 
   at DateTime @default(now())
 
@@ -826,9 +834,9 @@ model CronRunLog {
   /// northbound-reap | connection-probes | analytics | trials
   job String
 
-  startedAt  DateTime
-  finishedAt DateTime
-  ok         Boolean
+  startedAt   DateTime
+  finishedAt  DateTime
+  ok          Boolean
   /// Job-shaped summary: counts, caps hit, error strings. Never secrets.
   summaryJson Json?
 
@@ -2401,17 +2409,17 @@ model Subscription {
 /// audit table is not. A floor, not a census, for the same reasons the audit
 /// feed is one (throttled/timed-out/failed-write calls leave no row).
 model CoreEdgeUsageRollup {
-  id             String   @id @default(cuid())
-  organizationId String
+  id                  String   @id @default(cuid())
+  organizationId      String
   /// UTC midnight of the day this row covers.
-  day            DateTime
-  calls          Int      @default(0)
-  rowsRead       Int      @default(0)
-  writes         Int      @default(0)
-  refusals       Int      @default(0)
-  distinctInterfaces  Int @default(0)
-  distinctCredentials Int @default(0)
-  computedAt     DateTime @default(now())
+  day                 DateTime
+  calls               Int      @default(0)
+  rowsRead            Int      @default(0)
+  writes              Int      @default(0)
+  refusals            Int      @default(0)
+  distinctInterfaces  Int      @default(0)
+  distinctCredentials Int      @default(0)
+  computedAt          DateTime @default(now())
 
   @@unique([organizationId, day])
   @@index([day])
@@ -4892,17 +4900,17 @@ model AffirmQuestion {
   /// Prisma's convention; these two do not, because "empty means universal" is
   /// a rule the readers rely on and NULL is not the same value as `{}` to a
   /// raw-SQL writer.
-  countryScope           String[] @default([])
+  countryScope  String[] @default([])
   /// Which industries this question applies to. Empty means all — same rule.
   /// Stops a Public-Sector "Budget Execution" item reaching a generic bundle.
-  industryScope          String[] @default([])
+  industryScope String[] @default([])
   // null | "config-how-to" | "no-question-source".
   // 13 rows carry "config-how-to" — drafted but flagged for the
   // consultant because they read like an L3 configuration step rather
   // than a business-affirm decision.
-  flag                   String?
-  statusNote             String?  @db.Text
-  displayOrder           Int      @default(0)
+  flag          String?
+  statusNote    String?  @db.Text
+  displayOrder  Int      @default(0)
 
   // v2 (CCC follow-up): aboutText seeds from the SAP Topic Definition
   // and is shown as "What this is about:" on each client card.
@@ -4938,7 +4946,7 @@ model AffirmQuestion {
   // 2608 WS5 — SAP's BDC Level as read from the questionnaire ("L1" | "L2" | "L3").
   // Null = SAP's sheet carries no Level for the row (S4H_706) or the row was
   // never matched to a 2608 sheet. Read from the file, never inferred.
-  bdcLevel       String?
+  bdcLevel String?
 
   @@index([streamId])
   @@index([subProcessId])
@@ -4979,25 +4987,25 @@ enum TobeGapType {
 /// trigger. Never invented: a question with no rule leaves its steps STANDARD
 /// with "confirm in workshop".
 model TobeRule {
-  id         String @id
-  questionId String
+  id              String           @id
+  questionId      String
   /// SAP scope item the effect applies to (a question can name several).
-  scopeCode  String
+  scopeCode       String
   /// The affirm choice that fires the rule: "standard" | "discuss" | "deviate".
-  trigger    String
-  state      ProcessStepState
+  trigger         String
+  state           ProcessStepState
   /// Real SSCUI id from the 2608 list when state = CONFIGURED.
-  sscuiId    String?
-  sscuiName  String?
-  gapType    TobeGapType?
+  sscuiId         String?
+  sscuiName       String?
+  gapType         TobeGapType?
   alternatePathId String?
   /// BPD step names the rule targets; EMPTY = the whole scope item (scope-wide
   /// configuration, shown on the L2 header and every step's evidence footer).
-  stepNames  String[] @default([])
+  stepNames       String[]         @default([])
   /// "bdc-sscui-xref-2608" | "curated" — where the rule came from.
-  source     String
-  note       String?  @db.Text
-  createdAt  DateTime @default(now())
+  source          String
+  note            String?          @db.Text
+  createdAt       DateTime         @default(now())
 
   question AffirmQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
@@ -5013,16 +5021,16 @@ model TobeRule {
 /// One generated pack for one affirm bundle ("engagement"). Frozen: the
 /// document and the hashes of the inputs it was generated from.
 model TobePack {
-  id          String   @id @default(cuid())
-  bundleId    String
-  releaseId   String?
-  scopeCodes  String[] @default([])
-  scopeHash   String
-  answerHash  String
-  rulesHash   String
-  inputsHash  String
-  packJson    Json
-  generatedAt DateTime @default(now())
+  id            String   @id @default(cuid())
+  bundleId      String
+  releaseId     String?
+  scopeCodes    String[] @default([])
+  scopeHash     String
+  answerHash    String
+  rulesHash     String
+  inputsHash    String
+  packJson      Json
+  generatedAt   DateTime @default(now())
   generatedById String?
 
   bundle         AffirmBundle       @relation(fields: [bundleId], references: [id], onDelete: Cascade)
@@ -5147,10 +5155,10 @@ model AffirmBundleQuestion {
   // NULL means "not frozen yet" — the bundle is still a draft and reads live
   // from the bank. Populated at issue; from that moment the bundle renders
   // its own copy and the bank cannot reach it.
-  frozenWording      String? @db.Text
-  frozenAboutText    String? @db.Text
-  frozenStandardMeans String? @db.Text
-  frozenAt           DateTime?
+  frozenWording       String?   @db.Text
+  frozenAboutText     String?   @db.Text
+  frozenStandardMeans String?   @db.Text
+  frozenAt            DateTime?
 
   bundle   AffirmBundle   @relation(fields: [bundleId], references: [id], onDelete: Cascade)
   question AffirmQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
@@ -5800,4 +5808,246 @@ model DiscoveryPromotedEntry {
 
   @@index([linkedProcessId])
   @@index([type])
+}
+
+// ---------------------------------------------------------------------------
+// 2608 WS11 — the seven landed-but-unread files
+//
+// Eight workbooks shipped in the 2608 drop and no loader had ever opened them.
+// The catalogue could describe a process and the configuration behind it, but
+// not the form it prints, the org units it runs in, the G/L account it posts
+// to, the cost object it charges, the tax code it applies or the fiscal
+// calendar it closes on. These models are that content, release-scoped.
+//
+// `releaseId` is REQUIRED here, unlike the WS0 backfill columns: these tables
+// are new, so no pre-tracking row can exist and nullable would only invite one.
+// ---------------------------------------------------------------------------
+
+/// BP_CLD_ENTPR_<release>_Forms_List_EN_MY.xlsx — the output forms SAP delivers.
+///
+/// 272 rows for 2608, and every one names the scope items it belongs to in the
+/// source's `Use` and `Used in SI` columns. That makes this the one published
+/// artefact-to-scope-item linkage in the drop that needed no derivation: 462 of
+/// the 822 scope items have at least one form. `relevantFor` is "All" or a
+/// country code ("MY" on 17 rows).
+model SapFormTemplate {
+  id                String @id @default(cuid())
+  applicationArea   String
+  name              String
+  applicationObject String
+  /// The Adobe form template, e.g. "FIN_FO_CORR_ACC_STAT".
+  adobeFormTemplate String
+  outputType        String
+  callbackClass     String
+  /// "All", or a country code the form is specific to.
+  relevantFor       String @default("All")
+
+  /// Every scope item code the source names, from `Use` and `Used in SI`
+  /// combined and de-duplicated. Codes are kept verbatim — 62 of the 524 cited
+  /// do not resolve against the 2608 catalogue and are recorded, not dropped.
+  scopeItemCodes String[] @default([])
+  /// The two source columns, verbatim, so the split can always be re-derived.
+  rawUse         String?
+  rawUsedInSi    String?
+
+  releaseId      String
+  contentRelease SapContentRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([releaseId, name, outputType, adobeFormTemplate])
+  @@index([releaseId])
+  @@index([applicationArea])
+  @@index([relevantFor])
+  @@index([scopeItemCodes], type: Gin)
+}
+
+/// 2608_Org_Data_Overview_EN_XX.xlsx — the delivered enterprise structure.
+///
+/// The source sheet is column-wise, not row-wise: each column enumerates the
+/// org units of one type independently (two company codes, dozens of purchasing
+/// groups), so a row across the sheet asserts no relationship and none is stored.
+/// `elementType` is the column header verbatim rather than an enum, because the
+/// full set of headers across sheets and releases is not something to guess at.
+model SapOrgStructureElement {
+  id          String  @id @default(cuid())
+  /// Column header verbatim, e.g. "Company Code", "Purchasing Group", "Plant".
+  elementType String
+  /// The cell value verbatim, e.g. "1000", "1000/1010".
+  code        String
+  /// The banner above the column group, e.g. "CO/FI", "MM", "LO". May be absent.
+  areaLabel   String?
+  /// Which sheet it came from: Global_Enterprise_Structure, Retail_..., Enterprise_Structure_Data.
+  sheetName   String
+
+  releaseId      String
+  contentRelease SapContentRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([releaseId, sheetName, elementType, code])
+  @@index([releaseId])
+  @@index([elementType])
+}
+
+/// BP_CLD_ENTPR_<release>_Account_Master_Data_for_YCOA[_MY].xlsx — the delivered
+/// chart of accounts. 2,008 rows in the Malaysia local variant.
+model SapGlAccount {
+  id                  String  @id @default(cuid())
+  chartOfAccounts     String
+  companyCode         String
+  accountNumber       String
+  longTextEn          String
+  /// I_GLACCOUNT_TYPE — "X" where the source marks it.
+  glAccountType       String?
+  balanceSheetAccount String?
+  groupAccountNumber  String?
+  plStatementAcctType String?
+  accountGroup        String?
+  tradingPartner      String?
+  functionalArea      String?
+  planningGroup       String?
+  /// "" for the global YCOA file, "MY" for the Malaysia local variant.
+  countryVariant      String  @default("")
+
+  releaseId      String
+  contentRelease SapContentRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([releaseId, countryVariant, chartOfAccounts, companyCode, accountNumber])
+  @@index([releaseId])
+  @@index([accountNumber])
+  @@index([accountGroup])
+}
+
+/// 2608_Master_Data_CO_EN_XX.xlsx and 2608_Master_Data_FI_EN_XX.xlsx — the
+/// delivered controlling and financial master objects, one row per object.
+///
+/// `objectType` is the sheet name normalised (COST_CENTER, SECONDARY_COST_ELEMENT,
+/// ACTIVITY_TYPE, COST_ELEMENT_GROUP, PROFIT_CENTER, FUNCTIONAL_AREA, SEGMENT, …)
+/// and stays a String for the same reason as SapOrgStructureElement.elementType.
+model SapCoMasterObject {
+  id              String  @id @default(cuid())
+  objectType      String
+  /// "" where the source carries no controlling area, so the unique key holds.
+  controllingArea String  @default("")
+  code            String
+  name            String?
+  category        String?
+  /// Standard hierarchy node, or the parent group for a *_GROUP row.
+  hierarchy       String?
+  functionalArea  String?
+  country         String?
+  /// Hierarchy depth for the FI sheets that publish a level layout; null otherwise.
+  level           Int?
+
+  /// 1-based row number in the source sheet, and part of the unique key.
+  ///
+  /// SAP's own Cost Centers sheet lists 20 US cost centre IDs TWICE under
+  /// different names — 17101601 is both "Marketing (US)" and "Transportation
+  /// (US)". Keying on the code alone silently kept one of each pair, which is
+  /// the same defect WS9.1 fixed for SSCUI: the source told the truth and the
+  /// key threw half of it away. Both rows are stored, and the row number is
+  /// what tells them apart. A consumer asking for a code may get two rows
+  /// because the source has two.
+  sourceRow Int
+
+  releaseId      String
+  contentRelease SapContentRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([releaseId, objectType, controllingArea, code, sourceRow])
+  @@index([releaseId, objectType, code])
+  @@index([releaseId])
+  @@index([objectType])
+}
+
+/// 2608_Pre-configured_Tax_Codes_EN_<country>.xlsx — the delivered tax codes.
+model SapTaxCode {
+  id               String  @id @default(cuid())
+  country          String
+  taxCode          String
+  description      String
+  descriptionLocal String?
+  /// SAP tax type, e.g. "V" (input), "A" (output).
+  taxType          String?
+  euCode           String?
+  errorIndicator   String?
+
+  releaseId      String
+  contentRelease SapContentRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([releaseId, country, taxCode])
+  @@index([releaseId])
+  @@index([country])
+}
+
+/// The "Time Dependent Tax Rates" sheet. One row per (validFrom, code, condition).
+model SapTaxRate {
+  id            String @id @default(cuid())
+  country       String
+  taxCode       String
+  /// YYYYMMDD verbatim from the source — not parsed to a date, because "19000101"
+  /// is SAP's open-start sentinel and coercing it invites a timezone argument.
+  validFrom     String
+  /// Condition type column, e.g. "MWVS" (input tax), "MWAS" (output tax).
+  conditionType String
+  rate          String
+
+  releaseId      String
+  contentRelease SapContentRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([releaseId, country, taxCode, validFrom, conditionType])
+  @@index([releaseId])
+}
+
+/// The T030K sheet — tax code to transaction key to G/L account determination.
+model SapTaxAccountAssignment {
+  id             String  @id @default(cuid())
+  taxCode        String
+  description    String?
+  /// I_KTOSL, e.g. "VST", "MWS".
+  transactionKey String
+  glAccount      String
+  countryVariant String  @default("")
+
+  releaseId      String
+  contentRelease SapContentRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([releaseId, countryVariant, taxCode, transactionKey, glAccount])
+  @@index([releaseId])
+}
+
+/// 2608_predelivered_FYV.xlsx — the fiscal year variants SAP ships. 29 for 2608.
+///
+/// `corporateFyvCapable` matters: a variant that cannot be a corporate FYV
+/// constrains the group-ledger design, and that is a decision taken once at
+/// company-code creation.
+model SapFiscalYearVariant {
+  id                    String  @id @default(cuid())
+  variant               String
+  description           String
+  /// Kept as the source's zero-padded strings ("024", "00"), not integers.
+  postingPeriods        String
+  specialPeriods        String
+  calendarYearDependent String?
+  corporateFyvCapable   String?
+  origin                String?
+  remarks               String?
+
+  releaseId      String
+  contentRelease SapContentRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([releaseId, variant])
+  @@index([releaseId])
 }

@@ -7,6 +7,119 @@ verified in the session.
 
 ---
 
+## WS11 — seven files shipped in the drop and nothing had ever opened them (2026-09-07)
+
+**Branch:** `feat/2608-content-completion` (from `main` @ `b002c48`).
+
+### The defect
+
+`sap-references/2608/` holds 48 files. Grepping every loader and script for each
+filename showed eight workbooks referenced by nothing at all:
+
+```
+BP_CLD_ENTPR_2608_Forms_List_EN_MY.xlsx                    272 forms
+BP_CLD_ENTPR_2608_Account_Master_Data_for_YCOA[_MY].xlsx   871 G/L accounts + T030K
+2608_Master_Data_CO_EN_XX.xlsx                             1,302 cost centres, 791 secondary cost elements
+2608_Master_Data_FI_EN_XX.xlsx                             profit centres, functional areas, segments
+2608_Org_Data_Overview_EN_XX.xlsx                          116 enterprise-structure elements
+2608_Pre-configured_Tax_Codes_EN_MY.xlsx                   32 MY tax codes + rates + account determination
+2608_predelivered_FYV.xlsx                                 26 fiscal year variants
+2608_Master_Data_Overview_EN_XX.xlsx                       sample master data (NOT loaded — see below)
+```
+
+The catalogue could describe a process and the configuration behind it, but not
+the form it prints, the org units it runs in, the account it posts to, the cost
+object it charges, the tax code it applies or the calendar it closes on. The
+content was in the repository the whole time.
+
+### The forms file is the find
+
+All 272 rows name the scope items they belong to, in the source's own `Use` and
+`Used in SI` columns. **462 of the 822 scope items have at least one form.** That
+is a published artefact-to-scope-item linkage that needed no derivation — the
+opposite of the API problem in WS10, where the same question has no evidence path
+at all. 524 codes are cited; 462 resolve against the 2608 catalogue and the other
+62 are stored verbatim rather than dropped, because a mismatch between two SAP
+files is a finding, not noise.
+
+### What landed
+
+- Eight additive tables (`SapFormTemplate`, `SapOrgStructureElement`,
+  `SapGlAccount`, `SapCoMasterObject`, `SapTaxCode`, `SapTaxRate`,
+  `SapTaxAccountAssignment`, `SapFiscalYearVariant`), migration
+  `20260907090000_ws11_forms_org_masterdata_tax_fyv`. `releaseId` is NOT NULL —
+  these tables are new, so no pre-tracking row can exist.
+- `scripts/lib/sap-2608/parse-content.ts` — one parser per file, columns by
+  header name, nothing inferred.
+- `pnpm sap:2608:load-content` — one idempotent, release-scoped loader for all
+  seven, carrying the 120s transaction allowance WS1 learned the hard way.
+- Eight RECON facts, and 16 unit tests run against the committed workbooks
+  rather than fixtures.
+
+### Three defects the work surfaced
+
+1. **exceljs cannot open the forms list at all.** It ships its sheet as a
+   declared Excel table (`xl/tables/table1.xml`, named `FormList`) with no style
+   block, and exceljs 4.4 throws `Cannot read properties of undefined (reading
+   'name')` before any cell is reachable. Six of the seven workbooks open
+   normally. `openWorkbook()` in `xlsx.ts` retries through JSZip with the table
+   parts stripped **in memory** — the file on disk is manifest-hashed and is
+   never rewritten.
+
+2. **SAP's own Cost Centers sheet lists 20 US cost centre IDs twice**, under
+   different names — 17101601 is both "Marketing (US)" and "Transportation
+   (US)". Keying on the code alone silently kept one of each pair, which is the
+   WS9.1 defect again: the source told the truth and the key threw half of it
+   away. `sourceRow` is now part of the unique key, both rows are stored, and a
+   RECON fact pins the duplicate count at 20 so a future key change cannot
+   quietly swallow them.
+
+3. **The FYV sheet ends with a footnote sitting in the variant column** ("***
+   Special periods represent an extension of the last normal posting period…").
+   The first parse loaded it as a 27th variant. Every real variant carries
+   posting periods and the footnote does not, so that is the test. The delivered
+   count is **26**.
+
+### RECON
+
+`pnpm sap:2608:recon --db` against a local Postgres with all four 2608 loaders
+run: **GREEN**, 31 facts, exit 0. The eight new ones:
+
+```
+db · SapFormTemplate (2608)                        expected  272  observed  272
+db · forms naming a scope item (2608)              expected  272  observed  272
+db · scope items reachable from a form (2608)      expected  462  observed  462
+db · SapOrgStructureElement (2608)                 expected  116  observed  116
+db · SapGlAccount (2608)                           expected  871  observed  871
+db · SapCoMasterObject (2608)                      expected 2233  observed 2233
+db · CO codes the source repeats (2608)            expected   20  observed   20
+db · SapTaxCode / TaxRate / TaxAccountAssignment   expected 32/34/34  observed 32/34/34
+db · SapFiscalYearVariant (2608)                   expected   26  observed   26
+```
+
+### Unproven / not done
+
+1. **`2608_Master_Data_Overview_EN_XX.xlsx` is still unread.** It is SAP's
+   sample master data — Material Master across 329 columns with placeholder
+   ids (`##200001`), section headers interleaved with data rows, and a scope-
+   option matrix to the right. It is a different parsing problem from the other
+   seven and is deferred rather than half-done. The drop now has one unread file,
+   not eight.
+2. **Nothing is deployed.** The migration and loader have run against a local
+   Postgres only. Production still has none of these tables.
+3. **Nothing consumes the new tables yet.** No page, API or export reads them;
+   the To-Be pack does not render forms. WS11 lands the content and proves it
+   loads. Surfacing it is separate work.
+4. **A correction to an earlier report.** I told the user this drop held "2,008
+   GL accounts" and "29 fiscal year variants". Both came from a sheet's row
+   count rather than its populated rows. The real figures are **871** and **26**.
+5. **CI has not run.** GitHub Actions is red account-wide — every job aborts in
+   1–3 seconds with no logs, on `main` as well. Gates were run locally: tsc
+   strict, eslint `--max-warnings 0`, the WS11 tests, zero migration drift, and
+   RECON green.
+
+---
+
 ## WS10 — Integration & external connectivity: scoped, not built (2026-09-07)
 
 **Branch:** `claude/2608-files-landing-recon-ddezas` (from `main` @ `d1ffa63`).
