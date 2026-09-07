@@ -420,8 +420,38 @@ export async function generateTobePackPptx(
     }
   }
 
-  const out = await pptx.write({ outputType: "nodebuffer" });
-  return out as Buffer;
+  /*
+   * 2608 WS18 — this is `stream()` rather than `write()` because of an upstream
+   * bug, and swapping it back silently costs a factor of nineteen.
+   *
+   * pptxgenjs 4.0.1 `exportPresentation` branches three ways:
+   *
+   *   outputType === "STREAM"  → generateAsync({ type: "nodebuffer", compression })
+   *   outputType (anything)    → generateAsync({ type: outputType })      ← no compression
+   *   no outputType (browser)  → generateAsync({ type: "blob", compression })
+   *
+   * The middle branch drops `compression` on the floor, and JSZip defaults to
+   * STORE. So `write({ outputType: "nodebuffer", compression: true })` — the
+   * obvious call, and the one this file used — cannot compress, whatever is
+   * passed to it. Only the STREAM branch honours the flag, and it hardcodes a
+   * nodebuffer, so it is the compressed-Buffer path on Node.
+   *
+   * It matters because a pack is pure shape XML with no images: the 483-slide
+   * pack shipped at 40.7 MB and the same bytes deflate to 2.1 MB. That is the
+   * difference between an artefact a consultant can email and one they cannot,
+   * and nothing caught it because an uncompressed pptx is perfectly valid — it
+   * opens, it renders, every checker passes. Only the size is absurd.
+   */
+  const out = await pptx.stream({ compression: true });
+  /*
+   * STREAM returning a Buffer is an upstream implementation detail, so check it
+   * rather than cast it: if a later pptxgenjs returns an actual stream, fail
+   * here instead of handing a caller something that is not a file.
+   */
+  if (!Buffer.isBuffer(out)) {
+    throw new Error(`pptxgenjs stream() returned ${typeof out}, expected a Buffer — check the pptxgenjs version`);
+  }
+  return out;
 }
 
 /** The navy title band every content slide carries. */
