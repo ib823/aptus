@@ -125,6 +125,24 @@ Gates: typecheck clean · eslint clean · **5,083 unit tests pass** (22 new in
 The L1 SVG snapshot was updated deliberately: the only delta is the caveat line
 and the 26pt of height it needs.
 
+### A gap this workstream walked straight into
+
+WS16 changed the L1 chains for every finance engagement, which makes every pack
+already generated stale — and there was no supported way to draw one again.
+`pnpm tobe:preaward` creates a bundle and draws its pack once; regenerating
+meant creating a second bundle and losing the first one's identity.
+
+`pnpm tobe:regenerate -- --bundle <id>` closes that. It is additive:
+`generateAndSavePack` writes a NEW `TobePack` row with its own input hashes and
+the previous ones stay, so what a client was shown last week is still
+recoverable. `--no-export` writes the row without the files; `--client-view`
+strips consultant notes. The bundle id is an argument, so nothing about any
+engagement is in the script.
+
+`scripts/.tmp/` is now gitignored, and the rule is written next to it: anything
+worth keeping gets promoted to `scripts/` with a pnpm entry rather than living
+as a scratch file nobody reviews. This script was one of those.
+
 ### Denylist extended, in the same session
 
 Reading a live RFP end to end surfaced sixteen further identifiers that would
