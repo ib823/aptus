@@ -23,7 +23,7 @@ import {
   chainPathHits,
   chainsForScope,
 } from "@/lib/tobe/chains";
-import { L1_CAVEAT } from "@/lib/tobe/svg";
+import { L1_CAVEAT, shortAppLabel } from "@/lib/tobe/svg";
 import type { TobeChain } from "@/lib/tobe/types";
 
 const chain = (id: string, path: string[]): TobeChain => ({
@@ -158,5 +158,35 @@ describe("the finance chains against a real finance scope set", () => {
     expect(chainsForScope(["1IQ", "BDG", "BD9", "J59", "2ET"]).map((c) => c.id)).toEqual([
       "o2c-sales",
     ]);
+  });
+});
+
+describe("shortAppLabel", () => {
+  it("leaves a label that already fits", () => {
+    expect(shortAppLabel("Manage Catalog Items (F3149)", 30)).toBe("Manage Catalog Items (F3149)");
+  });
+
+  it("keeps the Fiori app ID and elides the title, not the other way round", () => {
+    // The defect: plain truncation made every Requisitioning box read
+    // "My Purchase…", which identifies nothing, because the whole scope item
+    // is purchase requisitions. The ID is the half that disambiguates.
+    const out = shortAppLabel("My Purchase Requisitions (F1639A)", 25);
+    expect(out).toContain("(F1639A)");
+    expect(out.length).toBeLessThanOrEqual(25);
+    expect(out).not.toBe("My Purchase…");
+  });
+
+  it("falls back to the ID alone when there is no room for any title", () => {
+    expect(shortAppLabel("Something Very Long Indeed (F1639A)", 10)).toBe("(F1639A)");
+  });
+
+  it("truncates plainly when the label carries no ID", () => {
+    const out = shortAppLabel("A label with no identifier at all", 12);
+    expect(out.length).toBeLessThanOrEqual(12);
+    expect(out.endsWith("…")).toBe(true);
+  });
+
+  it("never returns an empty string for a non-empty label", () => {
+    for (const s of ["x", "(F1)", "abc def (G12345)"]) expect(shortAppLabel(s, 6).length).toBeGreaterThan(0);
   });
 });

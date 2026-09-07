@@ -86,6 +86,19 @@ chain. At seven, the later ones ran off the bottom of the sheet and off the
 bottom of the slide. Both now paginate one chain per page, headed "chain N of
 M".
 
+### A third defect, found by looking at the regenerated pages
+
+Every L2 box on the Requisitioning swimlane read **"My Purchase…"**. The app
+label is `Title (ID)` and both exporters truncated it at 20 characters, which
+threw away the ID and kept a prefix that identifies nothing — the whole scope
+item is purchase requisitions.
+
+`shortAppLabel()` now keeps the Fiori app ID and elides the title instead, so
+the boxes read `My Purchase Req… (F1639A)` / `(F1643A)` / `Manage Catalog Items
+(F3149)`. The ID is the half that disambiguates and the half a consultant looks
+up. Where there is no room for any title at all it falls back to the ID alone
+rather than to a meaningless prefix.
+
 ### Result
 
 ```
@@ -105,7 +118,7 @@ The second new fact is a **presence** fact, so it carries no ±1% tolerance: one
 unknown code is one box in the L1 diagram with no scope item behind it, titled
 `undefined`, and nothing else in the pipeline would notice.
 
-Gates: typecheck clean · eslint clean · **5,078 unit tests pass** (17 new in
+Gates: typecheck clean · eslint clean · **5,083 unit tests pass** (22 new in
 `tests/unit/tobe/chains.test.ts`) · migration drift zero (no schema change) ·
 `pnpm sap:2608:recon` GREEN · `next build` clean.
 

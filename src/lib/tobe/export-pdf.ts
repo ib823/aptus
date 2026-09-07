@@ -8,7 +8,16 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
 import { packNarrative, type NarrativeBlock } from "./narrative";
-import { L1_CAVEAT, STATE_STYLE, TOBE_NAVY, l3Rows, layoutL2, paginateL2, wrapText } from "./svg";
+import {
+  L1_CAVEAT,
+  STATE_STYLE,
+  TOBE_NAVY,
+  l3Rows,
+  layoutL2,
+  paginateL2,
+  shortAppLabel,
+  wrapText,
+} from "./svg";
 import type { TobeDisposition, TobePackDoc, TobeStepState } from "./types";
 
 /**
@@ -276,7 +285,7 @@ export function generateTobePackPdf(doc: TobePackDoc, opts: TobePdfOptions): Uin
         wrapText(`${n.step.index}. ${n.step.name}`, 20, 2).forEach((ln, li) =>
           pdf.text(ln, ox + (n.x + 6) * k, oy + (n.y + 13 + li * 11 - L.headerHeight) * k),
         );
-        const meta = n.step.sscuiId ? `SSCUI ${n.step.sscuiId}` : n.step.app ? wrapText(n.step.app, 20, 1)[0]! : "";
+        const meta = n.step.sscuiId ? `SSCUI ${n.step.sscuiId}` : n.step.app ? shortAppLabel(n.step.app, 22) : "";
         if (meta) {
           pdf.setTextColor(107, 107, 107);
           pdf.text(meta, ox + (n.x + 6) * k, oy + (n.y + n.h - 7 - L.headerHeight) * k);

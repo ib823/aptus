@@ -7,7 +7,16 @@
 import PptxGenJS from "pptxgenjs";
 
 import { packNarrative, type NarrativeBlock } from "./narrative";
-import { L1_CAVEAT, STATE_STYLE, TOBE_NAVY, l3Rows, layoutL2, paginateL2, wrapText } from "./svg";
+import {
+  L1_CAVEAT,
+  STATE_STYLE,
+  TOBE_NAVY,
+  l3Rows,
+  layoutL2,
+  paginateL2,
+  shortAppLabel,
+  wrapText,
+} from "./svg";
 import type { TobeDisposition, TobePackDoc, TobeStepState } from "./types";
 
 /**
@@ -278,7 +287,11 @@ export async function generateTobePackPptx(
           line: { color: c(st.stroke), width: 1, dashType: st.dash ? "dash" : n.step.optional ? "sysDot" : "solid" },
           rectRadius: 0.05,
         });
-        const meta = n.step.sscuiId ? `SSCUI ${n.step.sscuiId}` : n.step.app || "";
+        const meta = n.step.sscuiId
+          ? `SSCUI ${n.step.sscuiId}`
+          : n.step.app
+            ? shortAppLabel(n.step.app, 25)
+            : "";
         sl.addText(
           [
             {
