@@ -304,6 +304,15 @@ export const DB_FACTS_2608 = {
   configActivities: 4328,
   processStepRows: 19158,
   processStepItems: 661,
+  /**
+   * WS9 — scope-item links carried by those 4,328 activities. Before WS9 only
+   * the first id of each list was queryable, so this number was effectively
+   * 4,328 and J58 resolved to a single activity. A collapse back towards the
+   * row count is the regression this fact exists to catch.
+   */
+  configActivityScopeLinks: 813804,
+  /** Activities naming J58 — 1 before WS9, and the clearest single symptom. */
+  configActivitiesForJ58: 1050,
 } as const;
 
 async function observeDb(): Promise<{ facts: Report["facts"]; notes: string[] }> {
@@ -331,6 +340,16 @@ async function observeDb(): Promise<{ facts: Report["facts"]; notes: string[] }>
         by.set(g.lifecycleStatus, g._count._all);
     }
     const cfg = await prisma.configActivity.count({ where: { releaseId: release.id } });
+    // WS9 — the scope-item links those activities carry. Summed in SQL: the
+    // arrays hold 813k ids in total and pulling them into Node to count would
+    // trade a cheap aggregate for a large transfer.
+    const linkRows = await prisma.$queryRaw<{ links: bigint }[]>`
+      SELECT COALESCE(SUM(cardinality("mainScopeItemCodes")), 0)::bigint AS links
+      FROM "ConfigActivity" WHERE "releaseId" = ${release.id}`;
+    const cfgLinks = Number(linkRows[0]?.links ?? 0);
+    const cfgJ58 = await prisma.configActivity.count({
+      where: { releaseId: release.id, mainScopeItemCodes: { has: "J58" } },
+    });
     const psRows = await prisma.sapProcessStep.count({ where: { releaseId: release.id } });
     const psItems = (await prisma.sapProcessStep.groupBy({ by: ["scopeItemCode"], where: { releaseId: release.id } }))
       .length;
@@ -382,6 +401,18 @@ async function observeDb(): Promise<{ facts: Report["facts"]; notes: string[] }>
         expected: DB_FACTS_2608.configActivities,
         observed: cfg,
         ok: within(DB_FACTS_2608.configActivities, cfg),
+      },
+      {
+        name: "db · ConfigActivity scope-item links (2608)",
+        expected: DB_FACTS_2608.configActivityScopeLinks,
+        observed: cfgLinks,
+        ok: within(DB_FACTS_2608.configActivityScopeLinks, cfgLinks),
+      },
+      {
+        name: "db · ConfigActivity naming J58 (2608)",
+        expected: DB_FACTS_2608.configActivitiesForJ58,
+        observed: cfgJ58,
+        ok: within(DB_FACTS_2608.configActivitiesForJ58, cfgJ58),
       },
       {
         name: "db · SapProcessStep rows (2608)",

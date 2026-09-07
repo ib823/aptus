@@ -1398,6 +1398,20 @@ model ConfigActivity {
 
   rawScopeItemIds String? // Preserves original multi-ID value (e.g., "J14, J13, 22Z")
 
+  /// 2608 WS9 — every scope item this activity applies to, not just the first.
+  ///
+  /// `scopeItemId` holds `firstScopeItemId(rawScopeItemIds)` and every consumer
+  /// joins on it, so an activity naming 500 scope items was reachable from one.
+  /// 3,608 of 4,328 2608 rows carry a list; J58 is named in 1,050 of them and
+  /// exactly one was reachable. `rawScopeItemIds` always held the truth — as an
+  /// unindexed string nothing could query. This is that string, parsed once and
+  /// indexed, so "which activities configure J58?" is answerable.
+  ///
+  /// "All" is kept verbatim as a single element: it is what SAP publishes and
+  /// expanding it to 822 codes would assert a per-item claim the source does
+  /// not make. Callers decide what "All" means for them.
+  mainScopeItemCodes String[] @default([])
+
   createdAt DateTime @default(now())
 
   // Note: No FK relation to ScopeItem because scopeItemId can be "All" or contain
@@ -1413,6 +1427,7 @@ model ConfigActivity {
   @@index([category])
   @@index([selfService])
   @@index([releaseId])
+  @@index([mainScopeItemCodes], type: Gin)
 }
 
 model ImgActivity {
