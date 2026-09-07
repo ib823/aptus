@@ -38,6 +38,7 @@ import {
   type Manifest,
 } from "./lib/manifest-2608";
 import { E2E_CHAINS } from "../src/lib/tobe/chains";
+import { eDocumentCountries } from "../src/lib/sap/localised-apis";
 import { BPD_2608_SCOPE_ITEMS, sapContentSourcesFor, type SheetSource } from "./lib/sap-content-sources";
 
 const RELEASE = "2608" as const;
@@ -65,6 +66,17 @@ export const FACTS_2608 = {
    * box with a title of "undefined" and nothing else notices.
    */
   e2eChains: 8,
+  /**
+   * The countries SAP publishes an eDocument connector for, in the 2608
+   * interface content. A presence fact, not a count: a bid in a country
+   * outside this list has NO published e-invoicing scenario to bind to, and
+   * that is a finding worth failing a build over when it changes. Malaysia is
+   * deliberately absent from this list, and that absence is the point.
+   */
+  eDocumentCountries: [
+    "AR", "CH", "CL", "EG", "ES", "GR", "HU", "IN", "IT", "MX",
+    "PE", "PL", "PT", "RO", "RS", "SA", "SK", "TH", "TR",
+  ],
 } as const;
 
 type Observed = {
@@ -84,6 +96,8 @@ type Observed = {
   e2eChains: number;
   /** Codes named by e2e-chains.json that the A&D catalogue does not contain. */
   e2eChainCodesUnknown: string[];
+  /** Countries with an eDocument connector in the published interface content. */
+  eDocumentCountries: string[];
 };
 
 type ReleaseRecord = {
@@ -211,6 +225,35 @@ async function observeFacts(manifest: Manifest): Promise<{ observed: Observed; n
     `e2e-chains.json: ${E2E_CHAINS.length} chain(s), ${chainCodes.size} distinct scope-item code(s)${chainCodesUnknown.length ? ` — NOT IN A&D: ${chainCodesUnknown.join(", ")}` : ""}`,
   );
 
+  // eDocument connector coverage, from the published communication-scenario
+  // content. Read from the file rather than the database so the check runs in
+  // CI without a database, like every other fact here.
+  const COMM_SCENARIOS_TSV = path.join(
+    path.dirname(DROP_DIR), "comm-scenarios", "comm-scenarios.tsv",
+  );
+  let edocCountries: string[] = [];
+  try {
+    const csv = fs.readFileSync(COMM_SCENARIOS_TSV, "utf-8");
+    const apis: string[] = [];
+    for (const line of csv.split("\n")) {
+      if (!line || line.startsWith("#") || line.startsWith("comm_scenario_id")) continue;
+      for (const a of (line.split("\t")[6] ?? "").split("|")) if (a.trim()) apis.push(a.trim());
+    }
+    edocCountries = eDocumentCountries(apis);
+    notes.push(
+      `eDocument connectors published for ${edocCountries.length} countries: ${edocCountries.join(" ")}` +
+        `${edocCountries.includes("MY") ? "" : " — note: no Malaysia connector"}`,
+    );
+  } catch (err) {
+    // Say WHY. A missing file and a bug in this block are different problems,
+    // and a bare catch makes them look identical — which is exactly how this
+    // check first shipped broken.
+    notes.push(
+      `eDocument coverage NOT measured — ${COMM_SCENARIOS_TSV}: ` +
+        `${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
   const in1NN = { inScopeSheet: scopeIds.has("1NN"), inProcessSteps: psItems.has("1NN") };
   if (in1NN.inScopeSheet && in1NN.inProcessSteps) {
     notes.push(
@@ -242,6 +285,7 @@ async function observeFacts(manifest: Manifest): Promise<{ observed: Observed; n
       bpdPairs,
       e2eChains: E2E_CHAINS.length,
       e2eChainCodesUnknown: chainCodesUnknown,
+      eDocumentCountries: edocCountries,
     },
     notes,
   };
@@ -322,6 +366,14 @@ function checkFacts(o: Observed): Report["facts"] {
       expected: 0,
       observed: o.e2eChainCodesUnknown.length,
       ok: o.e2eChainCodesUnknown.length === 0,
+    },
+    {
+      // A presence fact with no tolerance. If a content release adds or drops
+      // an eDocument country this fails, and that is news a bid needs.
+      name: "eDocument connector countries (published interface content)",
+      expected: FACTS_2608.eDocumentCountries.join(" "),
+      observed: o.eDocumentCountries.join(" ") || "(not measured)",
+      ok: o.eDocumentCountries.join(" ") === FACTS_2608.eDocumentCountries.join(" "),
     },
   ];
 }
