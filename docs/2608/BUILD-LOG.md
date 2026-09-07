@@ -7,6 +7,92 @@ verified in the session.
 
 ---
 
+## WS12 — the bid was built in spreadsheets beside the product that exists to hold it (2026-09-07)
+
+**Branch:** `feat/bid-response-import` (from `main` @ `b002c48`).
+
+### The defect
+
+aptus already holds the entire Statement-of-Compliance machine:
+
+```
+ClientRequirement  ->  ClassificationVerdict  ->  VerdictScopeItem
+                                                   scopeItemId  FK -> ScopeItem
+```
+
+`VerdictScopeItem.scopeItemId` is a **real foreign key**. A citation to a scope
+item that does not exist in the selected catalogue cannot be stored — the write
+fails. Two tenders were imported through it before
+(`import-bursa-requirements.ts`, `import-skm-requirements.ts`), and a provenance
+API already returns a requirement's cited scope items looked up against the
+catalogue.
+
+A third mapping — 367 requirements, 88 distinct scope codes — was built entirely
+in spreadsheets, where a wrong code is a string like any other and nothing
+objects. The product that makes a citation unfabricable was never pointed at it.
+
+### What landed
+
+`scripts/import-bid-requirements.ts` / `pnpm bid:import`. Client-agnostic: the
+workbook path and client name are arguments, so the same script takes the next
+tender. Reads any sheet carrying the requirement headers, skips the rest **and
+names them** — a method or index tab must not become sixty empty requirements.
+
+Creates Assessment -> ClassificationProtocol -> ClassificationPass ->
+ClientRequirement -> ClassificationVerdict -> VerdictScopeItem. Idempotent on
+`(assessmentId, module, code)`; a re-run supersedes the prior verdict with
+`isCurrent = false` rather than deleting it, because the history is the point of
+the model.
+
+**Citations are resolved before anything is written**, so an unresolvable code
+is reported whole — with the rows that cite it — rather than discovered one
+failed insert at a time.
+
+### Result against the real mapping
+
+```
+requirement rows      367 across 9 module sheets
+sheets skipped        6 (method, artefact index, the 4 source-verification tabs)
+catalogue             PUBLIC/2608 - 822 scope items
+distinct codes cited  88 - resolve 88 - do NOT resolve 0
+classification        O 124 - C 193 - E 23 - G 4 - N/A 4 - NEEDS REVIEW 19
+stored                367 requirements - 746 scope citations
+re-run                inserted 0 - updated 367 - one current verdict each
+```
+
+Every citation in the response is now backed by a row in the 2608 catalogue,
+proved by the database rather than asserted in a footnote.
+
+### Two things stated honestly
+
+1. **The FK proves a code EXISTS. It does not prove it is the RIGHT code** for
+   the requirement — that is a consultant's judgement, and the verdict's remarks
+   carry it. The green count must not be read as more than it is.
+2. **The verdict column is stored verbatim.** `ClassificationVerdict.verdict`
+   documents four values (O / C / G / N/A); the mapping also carries `E` for
+   extension and `NEEDS REVIEW` for a row that could not be classified. Folding
+   those into the four would report an answer where none was given, so they are
+   kept as written.
+
+### Unproven / not done
+
+1. **No client data is in this repository, and none should be.** `*.xlsx` is
+   gitignored; the importer takes a path outside the repo. The unit test builds
+   its fixture in memory for the same reason.
+2. **The open items register is not imported.** aptus has `RemainingItem` with
+   category, severity, assignedTo and resolution — the right home for the 15
+   architecture decisions and 28 open rows — and WS12 does not fill it. Deferred,
+   not attempted.
+3. **Nothing reads the imported assessment yet in a bid-shaped way.** The
+   existing requirements pages and export route were not touched or checked
+   against this data.
+4. **Local only.** Nothing deployed; the import ran against a local Postgres
+   seeded with one organisation and one user.
+5. **CI has not run.** GitHub Actions is red account-wide. Gates were run
+   locally: tsc strict, eslint `--max-warnings 0`, the new tests, full suite.
+
+---
+
 ## WS11 — seven files shipped in the drop and nothing had ever opened them (2026-09-07)
 
 **Branch:** `feat/2608-content-completion` (from `main` @ `b002c48`).
