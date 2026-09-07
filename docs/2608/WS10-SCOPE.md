@@ -65,7 +65,21 @@ tallies in `hub-artifact-counts.json`. WS10 does not change that.
 
 ---
 
-## 2. The linkage gap, measured
+## 2. The linkage gap, measured — **CORRECTED 2026-09-07**
+
+> **This section drew the wrong conclusion, and WS13 landed the evidence that
+> shows it.** Every measurement below is accurate: those are the Business
+> Accelerator Hub's rows and the Hub does not carry the mapping. What does not
+> follow is "there is no evidence path". SAP publishes the mapping as an
+> ordinary help.sap.com table — *Available Interfaces for Your Selected Scope*,
+> 2608, eight columns including Communication Scenario ID, 5,658 rows over 354
+> scope items — that aptus had never read. `sap-references/comm-scenarios/`
+> holds it now: 1,149 scope-item ↔ scenario links, every one `PUBLISHED`.
+>
+> The error was of a familiar kind for this programme: measuring one source
+> exhaustively and concluding about the product. WS9.1 was the same shape, and
+> so was WS11's reading of the process-step master. Keep the measurements
+> below; read them as a fact about the Hub, not about SAP.
 
 This is the part that cannot be solved by harvesting more.
 

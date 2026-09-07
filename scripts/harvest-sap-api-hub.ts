@@ -95,6 +95,12 @@ const HUB_TYPE_MAP: Record<string, string> = {
   Scenario: "SCENARIO",
   BOInterface: "BO_INTERFACE",
   BADI: "BADI",
+  // 2608 WS10.1 — the two types docs/2608/DATA-ACQUISITION-BRIEF.md #6 names.
+  // They were counted and refused before (_provenance.unmappedArtifactTypes:
+  // DataProduct 334, IntegrationAdapter 91); the walk always fetched them.
+  // Both need matching SapHubContentType enum values — additive migration.
+  DataProduct: "DATA_PRODUCT",
+  IntegrationAdapter: "INTEGRATION_ADAPTER",
 };
 
 /**
