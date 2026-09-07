@@ -1,0 +1,67 @@
+# provenance
+# target	source page for every non-empty comm_scenario_name in comm-scenarios.tsv
+# date_read	2026-09-07
+# completeness	one row per named scenario; scenarios with an empty name are absent by design
+comm_scenario_id	comm_scenario_name	source_url
+SAP_COM_0087	SAP Analytics Cloud for Planning Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/620997cd1c9344e49d0dc5a063be7c33.html?version=2608.500
+SAP_COM_0092	Enterprise Eventing Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/a2c23346b3b74b4687f00594f6f5c031/8d5b18c7256440f9a648b3224362d38b.html?version=2608.500
+SAP_COM_0095	SAP Subscription Billing with Sales Billing Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/78da10ca6df542acb5926ac921af99e9.html?version=2608.500
+SAP_COM_0109	Sales Order Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/a5550ea977b24a6eb6ce1ce832088567.html?version=2608.500
+SAP_COM_0117	Sales Inquiry Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/ddb476591113422c98116a80d108e2cc.html?version=2608.500
+SAP_COM_0118	Sales Quotation Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/ddb476591113422c98116a80d108e2cc.html?version=2608.500
+SAP_COM_0119	Sales Contract Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/cf6401c7699544b0bba3c6ce927c3b28.html?version=2608.500
+SAP_COM_0120	Billing Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/78da10ca6df542acb5926ac921af99e9.html?version=2608.500
+SAP_COM_0134	Customer Material Info Record Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/620997cd1c9344e49d0dc5a063be7c33.html?version=2608.500
+SAP_COM_0157	Customer Return Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/375d4067cd114126b7360761637b30f4.html?version=2608.500
+SAP_COM_0158	Credit Memo Request Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/375d4067cd114126b7360761637b30f4.html?version=2608.500
+SAP_COM_0159	Debit Memo Request Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/375d4067cd114126b7360761637b30f4.html?version=2608.500
+SAP_COM_0176	External Billing Document Request Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/78da10ca6df542acb5926ac921af99e9.html?version=2608.500
+SAP_COM_0223	Sales with Buyers Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/a5550ea977b24a6eb6ce1ce832088567.html?version=2608.500
+SAP_COM_0236	SAP Cloud Platform Business Rules - Outbound Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/a2c23346b3b74b4687f00594f6f5c031/8d5b18c7256440f9a648b3224362d38b.html?version=2608.500
+SAP_COM_0287	Sales Order Bulk Replication Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/a5550ea977b24a6eb6ce1ce832088567.html?version=2608.500
+SAP_COM_0288	Sales Order Bulk Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/a5550ea977b24a6eb6ce1ce832088567.html?version=2608.500
+SAP_COM_0294	Pricing Data Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/6eb17e047d5c4722a79209ea4bebaa78.html?version=2608.500
+SAP_COM_0295	Pricing Data Replication Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/6eb17e047d5c4722a79209ea4bebaa78.html?version=2608.500
+SAP_COM_0334	Sales Order Without Charge Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/375d4067cd114126b7360761637b30f4.html?version=2608.500
+SAP_COM_0350	Service Order OData Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0352	Service Confirmation OData Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0355	Service Quotation Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0360	Sales Scheduling Agreement Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/3b0bd797ba2147978bf21afc0a218f6d.html?version=2608.500
+SAP_COM_0361	Finance - Contract Accounting Open Item Management Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/a2c23346b3b74b4687f00594f6f5c031/8d5b18c7256440f9a648b3224362d38b.html?version=2608.500
+SAP_COM_0367	Sold-to Party Assignment of Sales Scheduling Agreement Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/3b0bd797ba2147978bf21afc0a218f6d.html?version=2608.500
+SAP_COM_0382	Sales Scheduling Agreements Consignment Issue Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/3b0bd797ba2147978bf21afc0a218f6d.html?version=2608.500
+SAP_COM_0423	Service Confirmation SOAP Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0424	Service Order SOAP Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0427	Sales Area Replication Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/620997cd1c9344e49d0dc5a063be7c33.html?version=2608.500
+SAP_COM_0436	Service Contract SOAP Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0444	Sales Scheduling Agreements with Buyers Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/3b0bd797ba2147978bf21afc0a218f6d.html?version=2608.500
+SAP_COM_0459	Customer Return Bulk Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/375d4067cd114126b7360761637b30f4.html?version=2608.500
+SAP_COM_0493	SAP Integration Suite, advanced event mesh Integration AEM Validation Service	https://help.sap.com/docs/SAP_S4HANA_CLOUD/a2c23346b3b74b4687f00594f6f5c031/8d5b18c7256440f9a648b3224362d38b.html?version=2608.500
+SAP_COM_0497	Customer Return Bulk Replication Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/375d4067cd114126b7360761637b30f4.html?version=2608.500
+SAP_COM_0542	SAP Workflow Service Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/a2c23346b3b74b4687f00594f6f5c031/8d5b18c7256440f9a648b3224362d38b.html?version=2608.500
+SAP_COM_0558	Service Contract OData Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0564	SAP Self-Billing Cockpit Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/78da10ca6df542acb5926ac921af99e9.html?version=2608.500
+SAP_COM_0573	SAP HANA Spatial Services Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/a2c23346b3b74b4687f00594f6f5c031/8d5b18c7256440f9a648b3224362d38b.html?version=2608.500
+SAP_COM_0574	SAP BTP Connectivity Service Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/a2c23346b3b74b4687f00594f6f5c031/8d5b18c7256440f9a648b3224362d38b.html?version=2608.500
+SAP_COM_0575	SAP Cloud Platform Master Data Service for Workforce Integration (Obsolete)	https://help.sap.com/docs/SAP_S4HANA_CLOUD/a2c23346b3b74b4687f00594f6f5c031/8d5b18c7256440f9a648b3224362d38b.html?version=2608.500
+SAP_COM_0623	UI Theme Designer Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/a2c23346b3b74b4687f00594f6f5c031/8d5b18c7256440f9a648b3224362d38b.html?version=2608.500
+SAP_COM_0637	SAP Process Visibility Service Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/a2c23346b3b74b4687f00594f6f5c031/8d5b18c7256440f9a648b3224362d38b.html?version=2608.500
+SAP_COM_0659	ABAP Master Data Integration Client: Communication Scenario	https://help.sap.com/docs/SAP_S4HANA_CLOUD/a2c23346b3b74b4687f00594f6f5c031/8d5b18c7256440f9a648b3224362d38b.html?version=2608.500
+SAP_COM_0677	Service - Repair Order SOAP Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0702	Sales Price Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/6eb17e047d5c4722a79209ea4bebaa78.html?version=2608.500
+SAP_COM_0715	Service Order Template Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0717	Service - In-House Repair OData Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0718	Intelligent Product Proposal Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/a5550ea977b24a6eb6ce1ce832088567.html?version=2608.500
+SAP_COM_0742	Service - Repair Order Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0744	Service - Repair Quotation Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0746	Sales Master Data Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/620997cd1c9344e49d0dc5a063be7c33.html?version=2608.500
+SAP_COM_0764	Codelist for Service	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0766	Warranty Management	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0788	Service Contract Template Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0789	Service Contract OData V4 Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0795	Returns Inspection OData V4 Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/375d4067cd114126b7360761637b30f4.html?version=2608.500
+SAP_COM_0848	Sales with SAP Business Network Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/a5550ea977b24a6eb6ce1ce832088567.html?version=2608.500
+SAP_COM_0858	Service - Repair Confirmation SOAP Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0863	SAP Process Automation Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/a2c23346b3b74b4687f00594f6f5c031/8d5b18c7256440f9a648b3224362d38b.html?version=2608.500
+SAP_COM_0933	Service - Repair Confirmation Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/6d57d4ab71e5408581e2018320a0ce49/8ac548ba2cb04e2bb30d77b59fecb242.html?version=2608.500
+SAP_COM_0953	Preliminary Billing Document Integration	https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/78da10ca6df542acb5926ac921af99e9.html?version=2608.500
