@@ -75,7 +75,7 @@ describe("PPTX", () => {
      * configurations/gaps slide where it has any.
      */
     const { packNarrative } = await import("@/lib/tobe/narrative");
-    const drawn = doc.scopeItems.filter((i) => i.inScope || i.hasBpd);
+    const drawn = doc.scopeItems.filter((i) => i.inScope || i.hasSteps);
     const expected =
       1 +
       packNarrative(doc, { clientName: "Pilot Client" }).length +

@@ -12,7 +12,14 @@
  * Every text node is escaped; nothing from the client's answers reaches the
  * markup unescaped.
  */
-import type { TobeChainDoc, TobePackDoc, TobeScopeItemDoc, TobeStepDoc, TobeStepState } from "./types";
+import type {
+  TobeChainDoc,
+  TobeDisposition,
+  TobePackDoc,
+  TobeScopeItemDoc,
+  TobeStepDoc,
+  TobeStepState,
+} from "./types";
 
 export const TOBE_NAVY = "#002B5C";
 export const TOBE_INK = "#1F1F1F";
@@ -241,7 +248,9 @@ export function renderL2Svg(item: TobeScopeItemDoc, opts: { title?: string } = {
     p.push(`</g>`);
   }
   p.push(
-    `<text x="14" y="${L.height - 14}" font-size="9" fill="${TOBE_MUTED}">${escapeXml(`Evidence: scope ${item.code} · BPD ${item.release.match(/\d{4}/)?.[0] ?? ""} · dashed = optional in BPD · dot = confirm in workshop`)}</text>`,
+    // The citation comes from the steps rather than a hardcoded "BPD", because
+    // 652 of 661 scope items take their steps from the process-step master.
+    `<text x="14" y="${L.height - 14}" font-size="9" fill="${TOBE_MUTED}">${escapeXml(`Evidence: scope ${item.code} · ${item.steps[0]?.evidence.citation ?? `BPD ${item.release.match(/\d{4}/)?.[0] ?? ""}`} · dashed = optional in source · dot = confirm in workshop`)}</text>`,
   );
   p.push(`</svg>`);
   return p.join("");
@@ -377,6 +386,13 @@ export function paginateL2(item: TobeScopeItemDoc, perPage: number = L2_STEPS_PE
 
 // ── L3 rows (table fallback, PDF, PPTX notes) ─────────────────────────────────
 
+/** The pre-award reading, in the words that go on the page. */
+export const DISPOSITION_LABEL: Record<TobeDisposition, string> = {
+  SAP_STANDARD_CITED: "SAP standard — cited",
+  CONFIRM_WITH_CLIENT: "Confirm with client",
+  NOT_IN_SCOPE: "Not in scope",
+};
+
 export interface L3Row {
   index: number;
   step: string;
@@ -387,11 +403,12 @@ export interface L3Row {
   marker: string;
   sscui: string;
   expected: string;
+  disposition: TobeDisposition;
+  dispositionLabel: string;
   evidence: string;
 }
 
 export function l3Rows(item: TobeScopeItemDoc): L3Row[] {
-  const rel = item.release.match(/\d{4}/)?.[0] ?? "";
   return item.steps.map((s) => ({
     index: s.index,
     step: s.name,
@@ -400,7 +417,7 @@ export function l3Rows(item: TobeScopeItemDoc): L3Row[] {
     state: s.state,
     stateLabel: STATE_STYLE[s.state].label,
     marker: [
-      s.optional ? "optional in BPD" : "",
+      s.optional ? "optional in source" : "",
       s.confirmInWorkshop ? "confirm in workshop" : "",
       s.gapType ? `gap: ${s.gapType}` : s.state === "GAP" ? "gap: unclassified" : "",
       s.alternatePathId ? `variant: ${s.alternatePathId}` : "",
@@ -408,10 +425,14 @@ export function l3Rows(item: TobeScopeItemDoc): L3Row[] {
       .filter(Boolean)
       .join(" · "),
     sscui: s.sscuiId ? `${s.sscuiId}${s.sscuiName ? ` ${s.sscuiName}` : ""}` : "—",
-    expected: s.expected || "—",
+    // The process-step master publishes no expected result. Saying so beats an
+    // em dash, which reads as "none" rather than "the source does not carry it".
+    expected: s.expected || (s.expectedUnpublished ? "not published by SAP" : "—"),
+    disposition: s.disposition,
+    dispositionLabel: DISPOSITION_LABEL[s.disposition],
     evidence: [
       `scope ${item.code}`,
-      `BPD ${rel}`,
+      s.evidence.citation,
       s.sscuiId ? `SSCUI ${s.sscuiId}` : null,
       s.questionIds.length ? `BDC ${s.questionIds.join(", ")}` : null,
     ]

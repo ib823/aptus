@@ -115,7 +115,7 @@ export function PackView({ doc, consultantView }: { doc: TobePackDoc; consultant
               {item.confirmInWorkshop ? " · confirm in workshop" : ""}
             </p>
           </header>
-          {item.hasBpd ? (
+          {item.hasSteps ? (
             <>
               <div
                 className="overflow-x-auto rounded-card-warm border border-border-default bg-paper p-2"

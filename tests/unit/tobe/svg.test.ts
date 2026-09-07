@@ -115,7 +115,7 @@ describe("l3Rows", () => {
       stateLabel: "Configured (SSCUI)",
       sscui: "102751 Define Reasons for Approval Requests",
     });
-    expect(rows[1]!.marker).toContain("optional in BPD");
+    expect(rows[1]!.marker).toContain("optional in source");
     expect(rows[1]!.evidence).toBe("scope AAA · BPD 2608 · SSCUI 102751 · BDC Q-1");
     expect(rows[0]!.sscui).toBe("—");
   });
