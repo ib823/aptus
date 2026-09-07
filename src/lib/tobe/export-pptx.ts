@@ -8,7 +8,18 @@ import PptxGenJS from "pptxgenjs";
 
 import { packNarrative, type NarrativeBlock } from "./narrative";
 import { STATE_STYLE, TOBE_NAVY, l3Rows, layoutL2, paginateL2, wrapText } from "./svg";
-import type { TobePackDoc, TobeStepState } from "./types";
+import type { TobeDisposition, TobePackDoc, TobeStepState } from "./types";
+
+/**
+ * 2608 WS14 — the pre-award reading, on a slide. Same values as the PDF and
+ * the web view; a bid pack whose three renderings disagree about which steps
+ * are cited is worse than one that omits the column.
+ */
+const PPTX_DISPOSITION_STYLE: Record<TobeDisposition, { fill: string; text: string }> = {
+  SAP_STANDARD_CITED: { fill: "#E8F1E9", text: "#1F5B33" },
+  CONFIRM_WITH_CLIENT: { fill: "#FDF1DC", text: "#8B5A00" },
+  NOT_IN_SCOPE: { fill: "#F1F1F1", text: "#6B6B6B" },
+};
 
 const SLIDE_W = 13.333;
 /** Step rows per L3 slide — beyond this the table runs off the bottom. */
@@ -270,7 +281,7 @@ export async function generateTobePackPptx(
       }
       const notes = l3Rows(slice).map(
         (r) =>
-          `${r.index}. ${r.step} — ${r.stateLabel}${r.marker ? ` (${r.marker})` : ""} · role ${r.role} · app ${r.app} · SSCUI ${r.sscui} · ${r.evidence}`,
+          `${r.index}. ${r.step} — ${r.stateLabel} · ${r.dispositionLabel}${r.marker ? ` (${r.marker})` : ""} · role ${r.role} · app ${r.app} · SSCUI ${r.sscui} · ${r.evidence}`,
       );
       const extra =
         pageIndex < pages.length - 1
@@ -309,7 +320,7 @@ export async function generateTobePackPptx(
       );
       ds.addTable(
         [
-          ["#", "Step", "Role", "App", "State", "SSCUI", "Expected result", "Evidence"].map((t) => ({
+          ["#", "Step", "Role", "App", "State", "Reading", "SSCUI", "Expected result", "Evidence"].map((t) => ({
             text: t,
             options: { bold: true, color: "FFFFFF", fill: { color: c(TOBE_NAVY) }, fontSize: 10 },
           })),
@@ -326,6 +337,14 @@ export async function generateTobePackPptx(
                 color: c(STATE_STYLE[r.state].stroke),
               },
             },
+            {
+              text: r.dispositionLabel,
+              options: {
+                fontSize: 8,
+                fill: { color: c(PPTX_DISPOSITION_STYLE[r.disposition].fill) },
+                color: c(PPTX_DISPOSITION_STYLE[r.disposition].text),
+              },
+            },
             { text: r.sscui, options: { fontSize: 9 } },
             { text: r.expected, options: { fontSize: 8 } },
             { text: r.evidence, options: { fontSize: 8, color: "6B6B6B" } },
@@ -335,7 +354,10 @@ export async function generateTobePackPptx(
           x: 0.3,
           y: 0.95,
           w: 12.73,
-          colW: [0.4, 2.5, 1.5, 1.7, 1.2, 1.9, 1.9, 1.63],
+          // Nine columns now; the total must stay 12.73 to match `w` above, so
+          // Reading (1.25) comes out of Step, Role, App and SSCUI rather than
+          // widening the table off the slide.
+          colW: [0.4, 2.2, 1.35, 1.5, 1.2, 1.25, 1.55, 1.75, 1.53],
           border: { type: "solid", color: "E3E6EA", pt: 0.5 },
           valign: "top",
           fontFace: "Helvetica",

@@ -9,7 +9,18 @@ import autoTable from "jspdf-autotable";
 
 import { packNarrative, type NarrativeBlock } from "./narrative";
 import { STATE_STYLE, TOBE_NAVY, l3Rows, layoutL2, paginateL2, wrapText } from "./svg";
-import type { TobePackDoc, TobeStepState } from "./types";
+import type { TobeDisposition, TobePackDoc, TobeStepState } from "./types";
+
+/**
+ * 2608 WS14 — the pre-award reading, in print. Kept distinct from STATE_STYLE
+ * on purpose: a state says what the step is, a reading says whether we can
+ * assert it, and a reader who sees one palette will conflate the two.
+ */
+const PDF_DISPOSITION_STYLE: Record<TobeDisposition, { fill: string; text: string }> = {
+  SAP_STANDARD_CITED: { fill: "#E8F1E9", text: "#1F5B33" },
+  CONFIRM_WITH_CLIENT: { fill: "#FDF1DC", text: "#8B5A00" },
+  NOT_IN_SCOPE: { fill: "#F1F1F1", text: "#6B6B6B" },
+};
 
 /*
  * jsPDF's built-in Helvetica is WinAnsi-encoded. A glyph outside that set is
@@ -265,15 +276,17 @@ export function generateTobePackPdf(doc: TobePackDoc, opts: TobePdfOptions): Uin
     });
     // L3 table
     pdf.addPage();
+    const rows = l3Rows(item);
     autoTable(pdf, {
       startY: 34,
-      head: [["#", "Step", "Role", "App", "State", "SSCUI", "Marker", "Expected result", "Evidence"]],
-      body: l3Rows(item).map((r) => [
+      head: [["#", "Step", "Role", "App", "State", "Reading", "SSCUI", "Marker", "Expected result", "Evidence"]],
+      body: rows.map((r) => [
         String(r.index),
         r.step,
         r.role,
         r.app,
         r.stateLabel,
+        r.dispositionLabel,
         r.sscui,
         r.marker || "—",
         r.expected,
@@ -299,7 +312,9 @@ export function generateTobePackPdf(doc: TobePackDoc, opts: TobePdfOptions): Uin
         header(
           pdf,
           `${item.code} · ${item.title} — step detail (L3)${first ? "" : ", continued"}`,
-          `evidence per step: scope ID · BPD ${doc.release} · SSCUI · BDC question`,
+          // Not "BPD": 652 of 661 scope items take their steps from the
+          // process-step master, and the per-row citation says which.
+          `evidence per step: scope ID · SAP publication · SSCUI · BDC question`,
         );
       },
       styles: { fontSize: 7, cellPadding: 1.5, overflow: "linebreak" },
@@ -328,18 +343,30 @@ export function generateTobePackPdf(doc: TobePackDoc, opts: TobePdfOptions): Uin
         2: { cellWidth: "auto" },
         3: { cellWidth: "auto" },
         4: { cellWidth: 20 },
-        5: { cellWidth: "auto" },
+        // Fixed, like State beside it: both are short controlled vocabularies,
+        // and letting them size to content makes the column width wobble
+        // between scope items for no reason.
+        5: { cellWidth: 24 },
         6: { cellWidth: "auto" },
         7: { cellWidth: "auto" },
         8: { cellWidth: "auto" },
+        9: { cellWidth: "auto" },
       },
       didParseCell: (data) => {
-        if (data.section === "body" && data.column.index === 4) {
-          const row = l3Rows(item)[data.row.index];
-          if (row) {
-            data.cell.styles.fillColor = hex(STATE_STYLE[row.state].fill);
-            data.cell.styles.textColor = hex(STATE_STYLE[row.state].stroke);
-          }
+        if (data.section !== "body") return;
+        // `rows` is hoisted above the call: this hook fires once per cell, and
+        // rebuilding the row model inside it walked every step of the item for
+        // every cell of the table.
+        const row = rows[data.row.index];
+        if (!row) return;
+        if (data.column.index === 4) {
+          data.cell.styles.fillColor = hex(STATE_STYLE[row.state].fill);
+          data.cell.styles.textColor = hex(STATE_STYLE[row.state].stroke);
+        }
+        if (data.column.index === 5) {
+          const d = PDF_DISPOSITION_STYLE[row.disposition];
+          data.cell.styles.fillColor = hex(d.fill);
+          data.cell.styles.textColor = hex(d.text);
         }
       },
     });
