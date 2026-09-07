@@ -1,0 +1,593 @@
+# provenance
+# target	aptus Philippines brief target 3 — Philippine chart of accounts
+# source_file	sap-references/2608/BP_CLD_ENTPR_2608_Account_Master_Data_for_YCOA.xlsx, sheet "Template CoA YCOA"
+# source_origin	SAP Best Practices 2608 account master data for the YCOA template chart of accounts
+# finding	NO HARVEST WAS NEEDED, AND THERE IS NO SEPARATE PHILIPPINE CHART. This workbook is the country-independent one already in the repository. It carries one column per country company code — "PH (5810)" is the Philippines — marking which YCOA accounts that country uses. It also carries 20 "Alternative Account Number" columns for countries that have their own local chart (AT, BE, BR, CH, CN, CZ, DE, ES, FI, FR, HU, JP, LU, NO, PT, RO, RU, SE, TR, TW). THERE IS NO PH ALTERNATIVE-ACCOUNT COLUMN: SAP publishes the Philippines as using the YCOA template chart directly, with no local chart variant. Malaysia has none either.
+# date_read	2026-09-07
+# release	2608
+# completeness	complete for this source. 865 accounts on the sheet; 578 are marked for the Philippine company code and are the rows of this file.
+# comparison_to_malaysia	the brief asks for this explicitly: Malaysia is marked on 570 accounts of the same sheet, the Philippines on 578. The brief warns that a PH count landing on exactly Malaysia's 871 would suggest an accidental re-read of the MY file — it does not. Note also that aptus's 871 SapGlAccount rows did NOT come from this sheet (865 accounts); they came from BP_CLD_ENTPR_2608_Account_Master_Data_for_YCOA_MY.xlsx, sheet "YCOA_local", which is company-code-level MY data. The Philippine equivalent of THAT file (a "..._PH.xlsx" local workbook) is not in the repository and is not published anonymously — see the notes file.
+# column_source	gl_account="G/L Account Number (I_SAKNR)" · long_text="G/L Acct Long Text (SKAT)" · account_group="G/L Account Group" · account_type="Type of a General Ledger Account" · chart_of_accounts="Chart of Accounts", all verbatim
+# empty_columns	short_text is empty on every row: this sheet publishes only the long text (SKAT). pl_or_bs is empty on every row: this sheet publishes no balance-sheet / P&L indicator — the MY local workbook does ("Balance Sheet Account", "P&L Statement Acct Type") and the Philippine local workbook would too, but neither is available here.
+# columns_not_carried	the source publishes more than the brief's eight columns — Item Category, Functional Area, Cost Element Category, Account Category, Account Purpose, account hierarchy level, group account number and the 20 alternative-chart columns. They are NOT lost: the workbook is in the repository at the path above. They are omitted here only because the brief fixes the column list.
+# empty	a blank cell means the workbook publishes nothing there.
+# not_claimed	this is SAP's Best Practices template content for release 2608, not any client's chart of accounts.
+country_variant	gl_account	short_text	long_text	account_group	account_type	pl_or_bs	chart_of_accounts
+PH	10010000		Petty Cash	FIN.	X		YCOA
+PH	10020000		Petty Cash Journal - postings automatic only	FIN.	X		YCOA
+PH	11001000		Bank 1 - Bank (Main) Account	FIN.	X		YCOA
+PH	11001010		Bank 1 - Cash Payment	FIN.	X		YCOA
+PH	11001020		Bank 1 - Bank Transfer (Domestic/SEPA/Foreign)	FIN.	X		YCOA
+PH	11001030		Bank 1 - Other Interim Transfers	FIN.	X		YCOA
+PH	11001040		Bank 1 - Direct Debit	FIN.	X		YCOA
+PH	11001050		Bank 1 - Checks Out	FIN.	X		YCOA
+PH	11001060		Bank 1 - Checks In	FIN.	X		YCOA
+PH	11001070		Bank 1 - Check Clearing Account	FIN.	X		YCOA
+PH	11001080		Bank 1 - Cash Receipt	FIN.	X		YCOA
+PH	11001090		Bank 1 - Technical Account for Bank Statement	FIN.	X		YCOA
+PH	11001099		Bank 1 - Foreign Currency Adjustment	SAKO	X		YCOA
+PH	11001100		Bank 1 - Bank (Main) Account Foreign Currency	FIN.	X		YCOA
+PH	11002000		Bank 2 - Bank (Main) Account	FIN.	X		YCOA
+PH	11002010		Bank 2 - Cash Payment	FIN.	X		YCOA
+PH	11002020		Bank 2 - Bank Transfer (Domestic/SEPA/Foreign)	FIN.	X		YCOA
+PH	11002030		Bank 2 - Other Interim Transfers	FIN.	X		YCOA
+PH	11002040		Bank 2 - Direct Debit	FIN.	X		YCOA
+PH	11002050		Bank 2 - Checks Out	FIN.	X		YCOA
+PH	11002055		Bank 2 - BoE Out	FIN.	X		YCOA
+PH	11002060		Bank 2 - Checks In	FIN.	X		YCOA
+PH	11002065		Bank 2 - BoE Collection	FIN.	X		YCOA
+PH	11002066		Bank 2 - BoE Discounting	FIN.	X		YCOA
+PH	11002067		Bank2 - BoE Foreiting (AE)	FIN.	X		YCOA
+PH	11002070		Bank 2 - Check Clearing Account	FIN.	X		YCOA
+PH	11002080		Bank 2 - Cash Receipt	FIN.	X		YCOA
+PH	11002090		Bank 2 - Technical Account for Bank Statement	FIN.	X		YCOA
+PH	11002099		Bank 2 - Foreign Currency Adjustment	SAKO	X		YCOA
+PH	11008000		Bank 3 - Digital Payments Acquirer Bank	FIN.	X		YCOA
+PH	11008030		Bank 3 - Digital Payments Transfer Account	FIN.	X		YCOA
+PH	11008070		Bank 3 - Digital Payments Acquirer Clrng (Stlmnt)	FIN.	X		YCOA
+PH	11008099		Bank 3 - Foreign Currency Adjustment	SAKO	X		YCOA
+PH	11999000		Bank 4 - External Payments Account	FIN.	X		YCOA
+PH	11999030		Bank 4 - External Payments Clearing Account	FIN.	X		YCOA
+PH	11999099		Bank 4 - Foreign Currency Adjustment	SAKO	X		YCOA
+PH	12010000		Short Term Investments	SAKO	X		YCOA
+PH	12100000		Receivables Domestic	ABST	X		YCOA
+PH	12100100		Receivables Domestic - One Time Accounts	ABST	X		YCOA
+PH	12101000		Receivables Domestic due > 1 Year	SAKO	X		YCOA
+PH	12102000		Receivables Domestic Adjustments	SAKO	X		YCOA
+PH	12110000		Other Down Payments Made Current Assets	ABST	X		YCOA
+PH	12110100		Down Payments Made due > 1 Year	SAKO	X		YCOA
+PH	12111000		Input Tax Clrg-other Down Pyts Made for Curr. Asts	SAKO	X		YCOA
+PH	12112000		Down Payments made for Inventory	ABST	X		YCOA
+PH	12113000		Input Tax Clearing Inventory Down Payments made	SAKO	X		YCOA
+PH	12119000		Down Payment Requests Vendors	ABST	X		YCOA
+PH	12119200		Adjustment Account Vendor Down Payments	SAKO	X		YCOA
+PH	12120000		Receivables Foreign	ABST	X		YCOA
+PH	12120100		Receivables Foreign - One Time Accounts	ABST	X		YCOA
+PH	12121000		Receivables Foreign due > 1 Year	SAKO	X		YCOA
+PH	12122000		Receivables Foreign Adjustments	SAKO	X		YCOA
+PH	12300000		Receivables affiliated Companies	ABST	X		YCOA
+PH	12301000		Receivables affiliated Companies > 1 Year	SAKO	X		YCOA
+PH	12302000		Receivables affiliated Companies Adjustments	SAKO	X		YCOA
+PH	12400000		Allowance for Doubtful Receivables	ABST	X		YCOA
+PH	12401000		Individual Value Adjustments for Receivables	ABST	X		YCOA
+PH	12401100		Allowance for Doubtful Receivables(Valuation)	SAKO	X		YCOA
+PH	12402000		Depreciation Receivables from Aff.Companies	ABST	X		YCOA
+PH	12410000		Clearing of Granted Warranties to Customers	SAKO	X		YCOA
+PH	12411000		Guarantees given to Customers	ABST	X		YCOA
+PH	12420000		Security Deposit Customers	ABST	X		YCOA
+PH	12500000		Interest Receivables	ABST	X		YCOA
+PH	12501000		Clearing Interest Receivables	SAKO	X		YCOA
+PH	12510000		Accounts Receivable - BoE Receivable	ABST	X		YCOA
+PH	12511000		Accounts Receivable - BOE Bounced Check (AE)	ABST	X		YCOA
+PH	12530000		Accounts Receivable - Payment Cards	SAKO	X		YCOA
+PH	12530100		Accounts Receivable - External Payments Clearing	SAKO	X		YCOA
+PH	12530110		Accounts Receivable - External Payments	SAKO	X		YCOA
+PH	12540000		Other Receivables (no recon acct)	SAKO	X		YCOA
+PH	12540200		Other Receivables Adjustments	SAKO	X		YCOA
+PH	12541000		Receivables from Tax Authorities (no recon acct)	SAKO	X		YCOA
+PH	12542000		Receivables from Employees Overpay (no recon acct)	SAKO	X		YCOA
+PH	12543000		Receivables from Partners (no recon acct)	SAKO	X		YCOA
+PH	12549000		Depreciation from other Receivables	SAKO	X		YCOA
+PH	12550000		Unbilled Revenue	SAKO	X		YCOA
+PH	12561000		Prepaid Expenses	SAKO	X		YCOA
+PH	12562000		Deferred Income	SAKO	X		YCOA
+PH	12590000		Vendors with a Debit Balance	SAKO	X		YCOA
+PH	12600000		Input Tax (VST)	SAKO	X		YCOA
+PH	12605000		Import Sales Tax paid (VST)	SAKO	X		YCOA
+PH	12610000		Input Tax	SAKO	X		YCOA
+PH	13100000		Inventory - Raw Material	MAT.	X		YCOA
+PH	13100900		Inventory - Revaluation Raw Material	MAT.	X		YCOA
+PH	13200000		Inventory - Work In Progress	MAT.	X		YCOA
+PH	13210000		WIP	MAT.	X		YCOA
+PH	13300000		Inventory - Semi Finished Goods	MAT.	X		YCOA
+PH	13300900		Inventory - Revaluation Semi Finished Goods	MAT.	X		YCOA
+PH	13400000		Inventory - Finished Goods	MAT.	X		YCOA
+PH	13400900		Inventory - Revaluation Finished Goods	MAT.	X		YCOA
+PH	13500000		Inventory - Packaging Materials	MAT.	X		YCOA
+PH	13500900		Inventory - Revaluation Packaging Materials	MAT.	X		YCOA
+PH	13600000		Inventory - Trading Goods	MAT.	X		YCOA
+PH	13600900		Inventory - Revaluation Trading Goods	MAT.	X		YCOA
+PH	13601000		Inventory Adjustment Account	MAT.	X		YCOA
+PH	13701400		WIP Deferred Revenue	SAKO	X		YCOA
+PH	13711100		WIP Accrued Revenue	SAKO	X		YCOA
+PH	13711400		WIP Accrued Revenue	SAKO	X		YCOA
+PH	13711900		WIP Unbilled Revenue	SAKO	X		YCOA
+PH	13715100		WIP Accrued Revenue Deductions - Time	SAKO	X		YCOA
+PH	13715600		WIP Accrued Revenue On Account Adjustment	SAKO	X		YCOA
+PH	13781000		B/S reserves for anticipated losses	SAKO	X		YCOA
+PH	13811100		Deferrals Revenue	SAKO	X		YCOA
+PH	13815100		Deferrals Revenue Deductions - Time	SAKO	X		YCOA
+PH	13815600		Deferrals Revenue - On Account Adjustment	SAKO	X		YCOA
+PH	14102000		Loans Other - short term	SAKO	X		YCOA
+PH	14107000		Loans to Staff	ABST	X		YCOA
+PH	15200000		Salary and Wages Advances	SAKO	X		YCOA
+PH	15300000		Trip Costs in Advance	SAKO	X		YCOA
+PH	16000000		Land & Land Improvements	ANL.	X		YCOA
+PH	16001000		Buildings	ANL.	X		YCOA
+PH	16002000		Machinery & Equipment	ANL.	X		YCOA
+PH	16003000		Building Improvements	ANL.	X		YCOA
+PH	16004000		Motor Vehicles	ANL.	X		YCOA
+PH	16005000		Office Equipment	ANL.	X		YCOA
+PH	16006000		Furniture and Fixtures	ANL.	X		YCOA
+PH	16007000		Computer Hardware and Equipment	ANL.	X		YCOA
+PH	16008000		Computer Software	ANL.	X		YCOA
+PH	16009000		Assets under Construction	ANL.	X		YCOA
+PH	16010000		Down Payments made on Tangible Assets w/o FI-AA	ABST	X		YCOA
+PH	16010500		Sett. of Input Tax Down Payts Tangibles w/o FI-AA	SAKO	X		YCOA
+PH	16011500		Input Tax Clearing Intangibles Down Payments made	SAKO	X		YCOA
+PH	16012000		Capitalized Down Payments made on Fixed Assets	ANL.	X		YCOA
+PH	16013000		Clearing capitalized Down Payments on Fixed Assets	SAKO	X		YCOA
+PH	16014000		Technical Clrng Acct Integrated Asset Acquisition	ANL.	X		YCOA
+PH	16014100		Clearing Account for Asset Acquisition	SAKO	X		YCOA
+PH	16015000		Offsetting Account Revaluation APC	ANL.	X		YCOA
+PH	16020000		Low Value Assets	ANL.	X		YCOA
+PH	17000000		Accumulated Depreciation - Land Improvements	ANL.	X		YCOA
+PH	17001000		Accumulated Depreciation - Buildings	ANL.	X		YCOA
+PH	17002000		Accumulated Depreciation - Machinery & Equipment	ANL.	X		YCOA
+PH	17003000		Accumulated Depreciation - Building Improvements	ANL.	X		YCOA
+PH	17004000		Accumulated Depreciation - Motor Vehicles	ANL.	X		YCOA
+PH	17005000		Accumulated Depreciation - Office Equipment	ANL.	X		YCOA
+PH	17006000		Accumulated Depreciation - Furniture and Fixtures	ANL.	X		YCOA
+PH	17007000		Accumulated Depreciation - Computer Hardware	ANL.	X		YCOA
+PH	17008000		Accumulated Depreciation - Computer Software	ANL.	X		YCOA
+PH	17020000		Accumulated Depreciation - Low Value Assets	ANL.	X		YCOA
+PH	18010000		Investment Subsidiaries	SAKO	X		YCOA
+PH	18020000		Other Long Term Investments	SAKO	X		YCOA
+PH	19110000		Loans Other - Long Term	SAKO	X		YCOA
+PH	19210000		Other Receivables > 1 year	SAKO	X		YCOA
+PH	19310000		Internal Development	ANL.	X		YCOA
+PH	19320000		Intangible Assets	ANL.	X		YCOA
+PH	19330000		Goodwill	ANL.	X		YCOA
+PH	19410000		Accumulated amortization - Internal Development	ANL.	X		YCOA
+PH	19420000		Accumulated Amortization - Intangible Assets	ANL.	X		YCOA
+PH	19430000		Amortization - Goodwill	ANL.	X		YCOA
+PH	21100000		Payables Domestic	ABST	X		YCOA
+PH	21100100		Payables Domestic - One Time Accounts	ABST	X		YCOA
+PH	21100200		Payables Domestic due within 1-5 Years	SAKO	X		YCOA
+PH	21100300		Payables Domestic due > 5 Years	SAKO	X		YCOA
+PH	21102000		Payables Domestic Adjustments	SAKO	X		YCOA
+PH	21105000		Travel Expenses Payable	ABST	X		YCOA
+PH	21110000		Goods Received/Invoice Received Consignt/Pipeline	MAT.	X		YCOA
+PH	21120000		Goods Received/Invoice Received	MAT.	X		YCOA
+PH	21121000		GR/IR Sett.transferred (material ledger)	MAT.	X		YCOA
+PH	21122000		Goods Received / Invoice Received Adjustment	MAT.	X		YCOA
+PH	21180000		Customers with a Credit Balance	SAKO	X		YCOA
+PH	21190000		Down Payments-Customers (sp ind A)	ABST	X		YCOA
+PH	21190100		Down Payments received due within 1-5 Years	SAKO	X		YCOA
+PH	21190200		Down Payments received due > 5 Years	SAKO	X		YCOA
+PH	21191000		Down Payment Requests-Customers (Sp Ind F)	ABST	X		YCOA
+PH	21191100		Contract Liability for Down Payments	SAKO	X		YCOA
+PH	21191200		Contract Liability for Down Payment Requests	SAKO	X		YCOA
+PH	21191500		Tax on sls/purch-settlement of Customer Down Pyts	SAKO	X		YCOA
+PH	21192000		Adjustment account down payments received	SAKO	X		YCOA
+PH	21200000		Payables Foreign	ABST	X		YCOA
+PH	21200100		Payables Foreign - One Time Accounts	ABST	X		YCOA
+PH	21200200		Payables Foreign due within 1-5 years	SAKO	X		YCOA
+PH	21200300		Payables Foreign due > 5 years	SAKO	X		YCOA
+PH	21202000		Payables Foreign Adjustments	SAKO	X		YCOA
+PH	21300000		Payables affiliated Companies	ABST	X		YCOA
+PH	21300200		Payables affiliated Companies due 1-5 Years	SAKO	X		YCOA
+PH	21300300		Payables affiliated Companies due > 5 years	SAKO	X		YCOA
+PH	21302000		Payables affiliated Companies Adjustments	SAKO	X		YCOA
+PH	21310000		Accounts Payable - BoE Payable	ABST	X		YCOA
+PH	21350000		Clearing Invoice Reduction	SAKO	X		YCOA
+PH	21450000		Offsett. of Travel Expenses paid by Employer	SAKO	X		YCOA
+PH	21501000		Accrued Net Payroll	SAKO	X		YCOA
+PH	21502000		Payroll Taxes	SAKO	X		YCOA
+PH	21503000		Payroll - Social Security	SAKO	X		YCOA
+PH	21505000		Payroll - Savings Plan	SAKO	X		YCOA
+PH	21508000		Payroll - Garnishment	SAKO	X		YCOA
+PH	21509000		Payroll - Workers' Compensation Association	SAKO	X		YCOA
+PH	21512000		Payroll - EE Benefit	SAKO	X		YCOA
+PH	21516000		Payroll - ER Benefit	SAKO	X		YCOA
+PH	21517000		Other Personnel Costs	SAKO	X		YCOA
+PH	21518000		Document split acct (trip costs co.code clrg HR)	SAKO	X		YCOA
+PH	21519000		Payroll Allocation	SAKO	X		YCOA
+PH	21540000		Other Clearing Account	SAKO	X		YCOA
+PH	21599000		HR Month End Accruals	SAKO	X		YCOA
+PH	21600000		Reserve for Deferred Taxes	SAKO	X		YCOA
+PH	21603000		Withholding Tax	SAKO	X		YCOA
+PH	21613000		Prepaid Tax for Creditable Withholding Tax	SAKO	X		YCOA
+PH	21710000		Amortization - Prepayments	ABST	X		YCOA
+PH	21720000		Other Payables (no recon acct)	SAKO	X		YCOA
+PH	21720100		Guarantees received from Vendors	ABST	X		YCOA
+PH	21720200		Other Payables Adjustments	SAKO	X		YCOA
+PH	21721000		Reserves for Unrealized Costs	SAKO	X		YCOA
+PH	21722000		Manual Reserves for Imminent Loss	SAKO	X		YCOA
+PH	21723000		Manual Reserves for Anticipated Sales Deductions	SAKO	X		YCOA
+PH	21724000		Manual Reserves for Unrealized Costs	SAKO	X		YCOA
+PH	21725000		Accrued Expenses–Goods & Services	SAKO	X		YCOA
+PH	21730000		Freight Clearing Account (MM)	MAT.	X		YCOA
+PH	21735000		Delivery Costs Provision (MM)	MAT.	X		YCOA
+PH	21735500		Delivery Costs Clearing (MM)	MAT.	X		YCOA
+PH	21740000		Customs Duty Clearing Account (MM)	MAT.	X		YCOA
+PH	21745000		Customs Provision (MM)	MAT.	X		YCOA
+PH	21750000		Clearing Vendor Discounts - Net Method	SAKO	X		YCOA
+PH	21751000		Clearing - Guarantees Received Vendors	SAKO	X		YCOA
+PH	21760000		Freight Provision (MM)	MAT.	X		YCOA
+PH	21770000		Accrued Volume Rebate	SAKO	X		YCOA
+PH	21771000		Accrued Supplier Rebate	SAKO	X		YCOA
+PH	21772000		Provision for Sales Commissions	SAKO	X		YCOA
+PH	21775000		Accrual Statistical condition	SAKO	X		YCOA
+PH	21780000		Freight Provision SD	MAT.	X		YCOA
+PH	21790000		Disposite Reserve SD	MAT.	X		YCOA
+PH	21814000		Sales - Future/Free Delivery	SAKO	X		YCOA
+PH	21900000		Payment Request Clearing Account(TRM)	SAKO	X		YCOA
+PH	22000000		Output Tax (MWS)	SAKO	X		YCOA
+PH	22009000		Deferred Output tax > %	SAKO	X		YCOA
+PH	22090000		Alterative Tax Payable - UMS	SAKO	X		YCOA
+PH	22100000		Acquisition Tax	SAKO	X		YCOA
+PH	22510000		Loans from Banks (no recon acct)	SAKO	X		YCOA
+PH	22512000		Loans from Banks Adjustments	SAKO	X		YCOA
+PH	24010000		GR/IR: Goods and Services not yet delivered	MAT.	X		YCOA
+PH	24020000		GR/IR: Goods and Services not yet invoiced	MAT.	X		YCOA
+PH	24030000		Tax Provisions	SAKO	X		YCOA
+PH	24031000		Pension Provision	SAKO	X		YCOA
+PH	24031100		Pension Provision - ledgerspecific	SASL	X		YCOA
+PH	24032000		Trade Tax Provision	SAKO	X		YCOA
+PH	24033000		Corporate Income Tax Provision	SAKO	X		YCOA
+PH	24034000		Capital Gains Tax Provision	SAKO	X		YCOA
+PH	24035000		Foreign Withholding Tax Provision	SAKO	X		YCOA
+PH	24036000		Provision for Other Income and Revenue Tax	SAKO	X		YCOA
+PH	24037000		Provision for Deferred Tax Liabilities	SAKO	X		YCOA
+PH	24090000		Other Provisions	SAKO	X		YCOA
+PH	24091000		Provisions for Guarantees	SAKO	X		YCOA
+PH	24093000		Provisions for Indeterminate Payables	SAKO	X		YCOA
+PH	24097000		Prov for expected Losses fr executory Contracts	SAKO	X		YCOA
+PH	24098000		Asset Revaluation Reserve - ROU	SAKO	X		YCOA
+PH	24098300		Capital Reserve	SAKO	X		YCOA
+PH	24098400		Legal Reserve	SAKO	X		YCOA
+PH	24098500		Statutory Reserve	SAKO	X		YCOA
+PH	24098600		Other Reservers	SAKO	X		YCOA
+PH	24098700		Special tax-allowable Reserve §6b	SAKO	X		YCOA
+PH	24099900		Correction of Provisions	SAKO	X		YCOA
+PH	26900000		Functional Area Clearing	SAKO	X		YCOA
+PH	26910000		Investment Receivables received	ANL.	X		YCOA
+PH	26911000		Clearing of Investment receivables received	SAKO	X		YCOA
+PH	29110000		Other Payables due within 1-5 Years	SAKO	X		YCOA
+PH	29120000		Other Payables due > 5 Years	SAKO	X		YCOA
+PH	29130000		Loans from Banks remaining Life 1-5 Years	SAKO	X		YCOA
+PH	29131000		Loans from Banks remaining Life > 5 Years	SAKO	X		YCOA
+PH	29500100		Document Split Clearing Account	SAKO	X		YCOA
+PH	29500900		Document Split Clearing Account CO	SAKO	X		YCOA
+PH	31000000		Common Stock	SAKO	X		YCOA
+PH	31100000		Preferred Stock	SAKO	X		YCOA
+PH	32000000		Capital in Excess of Par Value	SAKO	X		YCOA
+PH	32100000		Paid in Capital from treasury stock	SAKO	X		YCOA
+PH	33000000		Retained Earnings	SAKO	X		YCOA
+PH	39911000		Inventory - Initial Entry of Raw Material Balances	MAT.	X		YCOA
+PH	39912000		Inventory - Initial Entry SF & Finish Gds Balances	MAT.	X		YCOA
+PH	39913000		Initial FI-AM offset	ANL.	X		YCOA
+PH	39914000		Initial FI-AR offset	SAKO	X		YCOA
+PH	39915000		Initial FI-AP offset	SAKO	X		YCOA
+PH	39916000		Initial other GL offset	SAKO	X		YCOA
+PH	39917000		Initial other Open Item GL offset	SAKO	X		YCOA
+PH	41000000		Revenue Domestic - Product	ERG.	P		YCOA
+PH	41000400		Sales Revenue w/ Cost Element	ERG.	P		YCOA
+PH	41001000		Revenue Foreign - Product	ERG.	P		YCOA
+PH	41001500		Revenue Affiliate - Product	ERG.	P		YCOA
+PH	41002000		Accrued Revenue - Adjustment	ERG.	N		YCOA
+PH	41003000		Accrued Revenue – EBR Adjustment	ERG.	P		YCOA
+PH	41004000		Sales Deductions with Cost Element	ERG.	P		YCOA
+PH	41007100		On-Account Issued (Service Provider)	ERG.	P		YCOA
+PH	41007200		On-Account Utilized (Service Provider)	ERG.	P		YCOA
+PH	41090000		Other Operating Revenue	ERG.	P		YCOA
+PH	41910000		Billed Revenue Domestic	ERG.	P		YCOA
+PH	41940000		Billed Revenue Foreign	ERG.	P		YCOA
+PH	41970000		Billed Revenue Affiliated	ERG.	P		YCOA
+PH	44000000		Over/Underpayments and Unallowed Deductions	ERG.	P		YCOA
+PH	44001000		Sales Rebates	ERG.	P		YCOA
+PH	44002000		Sales Discounts - Domestic	ERG.	P		YCOA
+PH	44002100		Sales Discounts - Foreign	ERG.	P		YCOA
+PH	44002200		Sales Discounts - Affiliated	ERG.	P		YCOA
+PH	44003000		Customer Sales Deduction - Domestic	ERG.	P		YCOA
+PH	44003100		Customer Sales Deduction - Foreign	ERG.	P		YCOA
+PH	44003200		Customer Sales Deduction - Affiliated	ERG.	P		YCOA
+PH	44004000		Sales Deduction - Material	ERG.	P		YCOA
+PH	44005000		Free Goods and Discount in kind	ERG.	P		YCOA
+PH	44006000		Sales Deduction - Menge	ERG.	P		YCOA
+PH	44401100		Revenue Adjustment	ERG.	P		YCOA
+PH	44405600		Revenue - On Account Adjustment	ERG.	P		YCOA
+PH	44420000		Revenue Adjustment	ERG.	P		YCOA
+PH	44910000		Sales Deduction Domestic	ERG.	P		YCOA
+PH	44940000		Sales Deduction Foreign	ERG.	P		YCOA
+PH	44970000		Sales Deduction Affiliated	ERG.	P		YCOA
+PH	49999900		Clearing Target Revenue Reallocation	ERG.	P		YCOA
+PH	50100000		Cost of Goods Sold (Raw Material w/o Cost Element)	ERG.	N		YCOA
+PH	50150000		Cost of Goods Sold (PackagingMat w/o Cost Element)	ERG.	N		YCOA
+PH	50200000		Cost of Goods Sold (Trade w/o Cost Element)	ERG.	N		YCOA
+PH	50300000		Cost of Goods Sold (SF & Finish Goods w/o Cost El)	ERG.	N		YCOA
+PH	50301000		COGS Direct Material	ERG.	P		YCOA
+PH	50302000		COGS Third Party	ERG.	P		YCOA
+PH	50303000		COGS Material Overhead	ERG.	P		YCOA
+PH	50304000		COGS Personnel Time	ERG.	P		YCOA
+PH	50305000		COGS Machine Time	ERG.	P		YCOA
+PH	50306000		COGS Setup Time	ERG.	P		YCOA
+PH	50307000		COGS Production Overhead	ERG.	P		YCOA
+PH	50308000		COGS Credits (Co/By-Pr)	ERG.	P		YCOA
+PH	50309000		COGS - Hardware	ERG.	P		YCOA
+PH	50309500		COGS - Licenses	ERG.	P		YCOA
+PH	51100000		Consumption - Raw Material	ERG.	P		YCOA
+PH	51500000		Consumption - Packaging Material	ERG.	P		YCOA
+PH	51600000		Consumption - Trading Goods	ERG.	P		YCOA
+PH	51700000		Consumption - Repair Material	ERG.	P		YCOA
+PH	51900000		Consumption - Subcontracting, w/o CE	ERG.	N		YCOA
+PH	51950000		Consumption - Subcontracting	ERG.	P		YCOA
+PH	52001000		Loss Inventory Variance (Raw & Trade)	ERG.	P		YCOA
+PH	52003000		Loss Inventory Variance (SF & Finish Goods)	ERG.	P		YCOA
+PH	52011000		Loss Inventory Transfer (Raw & Trade)	ERG.	P		YCOA
+PH	52013000		Loss Inventory Transfer (SF & Finish Goods)	ERG.	P		YCOA
+PH	52021000		Loss Consumption for Quality Control (Raw & Trade)	ERG.	P		YCOA
+PH	52023000		Loss Consumption for Quality Control (SF&Fin Gds)	ERG.	P		YCOA
+PH	52030000		Loss from Revaluation	ERG.	P		YCOA
+PH	52031000		Loss from Valuation of External Products	ERG.	P		YCOA
+PH	52033000		Loss from Valuation of own Products	ERG.	P		YCOA
+PH	52041000		Loss Price Variance (PRD)	ERG.	P		YCOA
+PH	52041500		Loss Inventory Value Adjustment Ext. Prod. (BSK)	ERG.	P		YCOA
+PH	52042000		Loss Price Differences (PRL)	ERG.	P		YCOA
+PH	52043000		Loss Price Differences (PRY)	ERG.	P		YCOA
+PH	52044000		Loss Price Differences - Material Ledger (LKW)	ERG.	P		YCOA
+PH	52045000		Loss Price Differences own Products (PRK)	ERG.	P		YCOA
+PH	52046000		Differences (AVR Price) (PRC)	ERG.	P		YCOA
+PH	52051000		Loss Consumption of Consign. Mat (Raw & Trade)	ERG.	P		YCOA
+PH	52053000		Loss Consumption of Consign. Mat (SF & F.Goods)	ERG.	P		YCOA
+PH	52060000		Loss Small Price Differences Invoice Receipt (MM)	ERG.	P		YCOA
+PH	52070000		Loss from Production Variances	ERG.	P		YCOA
+PH	52070500		Loss Inventory Value Adjustment Own Prod. (BSK)	ERG.	P		YCOA
+PH	52071000		Price Difference PRIV	ERG.	P		YCOA
+PH	52072000		Price Difference QTYV	ERG.	P		YCOA
+PH	52073000		Price Difference RSUV	ERG.	P		YCOA
+PH	52074000		Price Difference INPV	ERG.	P		YCOA
+PH	52075000		Price Difference MXPV	ERG.	P		YCOA
+PH	52076000		Price Difference OPPV	ERG.	P		YCOA
+PH	52077000		Price Difference LSFV	ERG.	P		YCOA
+PH	52078000		Price Difference REMV	ERG.	P		YCOA
+PH	52079000		Price Difference SCRP	ERG.	P		YCOA
+PH	52080000		Loss from allowed Differences GL Account Clearing	ERG.	P		YCOA
+PH	52501000		Gain Inventory Variance (Raw & Trade)	ERG.	P		YCOA
+PH	52503000		Gain Inventory Variance (SF & Finish Goods)	ERG.	P		YCOA
+PH	52511000		Gain Inventory Transfer (Raw & Trade)	ERG.	P		YCOA
+PH	52513000		Gain Inventory Transfer (SF & Finish Goods)	ERG.	P		YCOA
+PH	52521000		Gain Consumption for Quality Control (Raw & Trade)	ERG.	P		YCOA
+PH	52523000		Gain Consumption for QM (SF & Finish Goods)	ERG.	P		YCOA
+PH	52530000		Gain from Revaluation	ERG.	P		YCOA
+PH	52531000		Gain from Valuation of External Products	ERG.	P		YCOA
+PH	52532000		Gain from Valuation own Products	ERG.	P		YCOA
+PH	52541000		Gain Price Variance (PRD)	ERG.	P		YCOA
+PH	52541100		Activity Price Diff. writeoff from WIP (PRA)	ERG.	P		YCOA
+PH	52541200		Activity Price Diff. writeoff from WIP (PRM)	ERG.	P		YCOA
+PH	52541500		Gain Inventory Value Adjustment Ext. Prod. (BSK)	ERG.	P		YCOA
+PH	52542000		Gain Price Differences (PRL)	ERG.	P		YCOA
+PH	52543000		Gain Price Differences (PRY)	ERG.	P		YCOA
+PH	52544000		Gain Price Differences - Material Ledger (LKW)	ERG.	P		YCOA
+PH	52545000		Posterior Real Rate Activity Allocation (AUI)	ERG.	P		YCOA
+PH	52546000		Consumption Valuation (COC)	ERG.	P		YCOA
+PH	52551000		Gain Consumption of Consign. Mat (Raw & Trade)	ERG.	P		YCOA
+PH	52552000		Gain Consumption of Consign. Mat (SF & F.Goods)	ERG.	P		YCOA
+PH	52560000		Gain Small Price Difference Invoices Receipt (MM)	ERG.	P		YCOA
+PH	52570000		Gain from Production Variances	ERG.	P		YCOA
+PH	52570500		Gain Inventory Value Adjustment Own Prod. (BSK)	ERG.	P		YCOA
+PH	52580000		Gain from allowed Differences GL Account Clearing	ERG.	P		YCOA
+PH	52590000		Freight Revenue - Recovery	ERG.	P		YCOA
+PH	54011000		Inventory Change - Purch.Offset.Acct (Raw)	ERG.	P		YCOA
+PH	54011100		Inventory Change - Purch.offset.acct (Packaging)	ERG.	P		YCOA
+PH	54011200		Inventory Change - Purch.offset.acct (Trading)	ERG.	P		YCOA
+PH	54013000		Inventory Change - Purch.Offset.Acct (SF & F.Good)	ERG.	P		YCOA
+PH	54040000		Inventory Change - Reserve	ERG.	N		YCOA
+PH	54051000		Inventory Change - Scrap External Products	ERG.	P		YCOA
+PH	54053000		Inventory Change - Scrap own Products	ERG.	P		YCOA
+PH	54070000		Inventory Change - Receipt without PO	ERG.	N		YCOA
+PH	54083000		Inventory Change - Cost of own Goods sold w/C.Elem	ERG.	P		YCOA
+PH	54084000		Inventory Change Cost own Goods sold SO cons. w/CE	ERG.	P		YCOA
+PH	54093000		Inventory Change - QM cons.own prod. w/ cst elem.	ERG.	P		YCOA
+PH	54200000		Inventory Change - Work in Progress	ERG.	N		YCOA
+PH	54300000		Inventory Change - Semi Finished goods	ERG.	P		YCOA
+PH	54400000		Inventory Change - Finished Goods	ERG.	P		YCOA
+PH	54441000		Reserves for Unrealized Costs	ERG.	P		YCOA
+PH	54442000		Man Adj of Reserves for Imminent Loss	ERG.	P		YCOA
+PH	54444000		Man Adj of Reserves for Unrealized Costs	ERG.	P		YCOA
+PH	55100000		Plant Activity Production Order	ERG.	P		YCOA
+PH	55110000		Secondary Cost external Settlement	ERG.	P		YCOA
+PH	59801000		Reserves for Anticipated Losses	ERG.	P		YCOA
+PH	59900000		Cost of Goods Sold (Affiliated)	ERG.	P		YCOA
+PH	61002000		3rd party material	ERG.	P		YCOA
+PH	61003000		Travel Expenses - Hotel and Accommodation	ERG.	P		YCOA
+PH	61004000		Travel Expenses - Meals	ERG.	P		YCOA
+PH	61005000		Travel Expenses - Ground Transportation	ERG.	P		YCOA
+PH	61006000		Travel Expenses - Entertainment	ERG.	P		YCOA
+PH	61007000		Travel Expenses - Airfare, Rail, Mileage	ERG.	P		YCOA
+PH	61008000		Travel Expenses - Miscellaneous	ERG.	P		YCOA
+PH	61010000		Payroll - Other Personnel Expenses	ERG.	P		YCOA
+PH	61020000		Payroll - Bonus	ERG.	P		YCOA
+PH	61021000		Payroll - Overtime Salaries	ERG.	P		YCOA
+PH	61021100		Payroll - Overtime Wages	ERG.	P		YCOA
+PH	61022000		Payroll - Vacation Pay Salaries	ERG.	P		YCOA
+PH	61022100		Payroll - Vacation Pay Wages	ERG.	P		YCOA
+PH	61051000		Payroll Expense - Downtime Wages	ERG.	P		YCOA
+PH	61052000		Payroll Expense - Downtime Salaries	ERG.	P		YCOA
+PH	61060000		Payroll Expense - Pension Contributions	ERG.	P		YCOA
+PH	61061000		Payroll - Benefits	ERG.	P		YCOA
+PH	61062000		Workers' Compensation Association Contributions	ERG.	P		YCOA
+PH	61063000		Dues to Associations	ERG.	P		YCOA
+PH	61100000		Payroll Expense - Salaries	ERG.	P		YCOA
+PH	61101000		Payroll Expense - Other salary-related expenses	ERG.	P		YCOA
+PH	61102000		Payroll Expense - Other wage-related expenses	ERG.	P		YCOA
+PH	61103000		Payroll Expense - Direct Labor Cost	ERG.	P		YCOA
+PH	61104000		Payroll Expense - Indirect Labor Cost	ERG.	P		YCOA
+PH	61200000		Payroll Expense - Tax and Soc Security - Wages	ERG.	P		YCOA
+PH	61201000		Payroll Expense - Tax and Soc Security - Salaries	ERG.	P		YCOA
+PH	61400000		Training and Education	ERG.	P		YCOA
+PH	61401000		HR Recruitement	ERG.	P		YCOA
+PH	61500000		Sales Commissions	ERG.	P		YCOA
+PH	62000000		Bad Debt Expense	ERG.	P		YCOA
+PH	62010000		Individual Value Adjustments	ERG.	P		YCOA
+PH	62020000		Flat-rate Value Adjustments	ERG.	P		YCOA
+PH	63000000		Machine and Equipment Periodic Service	ERG.	P		YCOA
+PH	63000500		Qualtiy Control Consumption Ext. Prod. w/ Act Type	ERG.	P		YCOA
+PH	63001000		Electricity and other Utilities	ERG.	P		YCOA
+PH	63002000		Water	ERG.	P		YCOA
+PH	63003000		Other Periodic Service	ERG.	P		YCOA
+PH	63004000		Insurance	ERG.	P		YCOA
+PH	63005000		Office/Building Rent	ERG.	P		YCOA
+PH	63006000		Telephone and other Communication	ERG.	P		YCOA
+PH	63007000		Fax and Internet	ERG.	P		YCOA
+PH	63008000		Building Periodic Service	ERG.	P		YCOA
+PH	63009000		Leasing Expense	ERG.	P		YCOA
+PH	64001000		Depreciation Expense - Buildings	ERG.	P		YCOA
+PH	64002000		Depreciation Expense - Machinery & Equipment	ERG.	P		YCOA
+PH	64003000		Depreciation Expense - Building Improvement	ERG.	P		YCOA
+PH	64004000		Depreciation Expense - Motor Vehicles	ERG.	P		YCOA
+PH	64005000		Depreciation Expense - Office Equipment	ERG.	P		YCOA
+PH	64006000		Depreciation Expense - Furniture	ERG.	P		YCOA
+PH	64007000		Depreciation Expense - Computer Hardware	ERG.	P		YCOA
+PH	64008000		Depreciation Expense - Computer Software	ERG.	P		YCOA
+PH	64020000		Depreciation Expense - Low Value Assets	ERG.	P		YCOA
+PH	64021000		Depreciation Expense - Intangible Assets	ERG.	P		YCOA
+PH	64030000		Unplanned Depreciation Expense	ERG.	P		YCOA
+PH	64040000		Scheduled Deprec Fixed Assets below Asset Value	ERG.	P		YCOA
+PH	64043000		Amortization Expense - Goodwill	ERG.	P		YCOA
+PH	64050000		Estimated Depreciation (CO)	ERG.	P		YCOA
+PH	64060000		Accrued interest (CO)	ERG.	P		YCOA
+PH	65000000		Postage and Shipping	ERG.	P		YCOA
+PH	65000500		Non Production - Material Consumption	ERG.	P		YCOA
+PH	65001000		Purchased Services	ERG.	P		YCOA
+PH	65002000		Advertising and Sales Costs	ERG.	P		YCOA
+PH	65003000		Vehicle Costs	ERG.	P		YCOA
+PH	65004000		Donations	ERG.	P		YCOA
+PH	65008000		Purchased Services-Time	ERG.	P		YCOA
+PH	65008300		Services - General	ERG.	P		YCOA
+PH	65008400		Purchased Services - Accommodation	ERG.	P		YCOA
+PH	65008410		Purchased Services - Airfair	ERG.	P		YCOA
+PH	65008420		Purchased Services - Ground Transportation	ERG.	P		YCOA
+PH	65008430		Purchased Services - Travel Miscellaneous	ERG.	P		YCOA
+PH	65008500		Subcontracting Services	ERG.	P		YCOA
+PH	65009000		Other Activity Costs	ERG.	P		YCOA
+PH	65050000		Unplanned Delivery costs	ERG.	P		YCOA
+PH	65100000		Office Supplies	ERG.	P		YCOA
+PH	65150000		Computer Supplies	ERG.	P		YCOA
+PH	65200000		Other Supplies	ERG.	P		YCOA
+PH	65300000		Legal and Audit Services	ERG.	P		YCOA
+PH	65301000		Marketing Expenses	ERG.	P		YCOA
+PH	65400000		Freight	ERG.	P		YCOA
+PH	65900000		Loss in the Event of Damage	ERG.	P		YCOA
+PH	66000000		Other Operating Expenses	ERG.	P		YCOA
+PH	66000500		Income - reduction in provisions	ERG.	P		YCOA
+PH	66000600		Other Gains	ERG.	P		YCOA
+PH	66010000		Expense of Discounting (ZKB)	ERG.	P		YCOA
+PH	66019900		Addition to Provisions (ZKK)	ERG.	P		YCOA
+PH	66888800		ICO Expense Travel	ERG.	N		YCOA
+PH	66999900		ICO Expense Consultance	ERG.	N		YCOA
+PH	68000000		Purchase Account (Raw)	ERG.	P		YCOA
+PH	68001000		Purchase account (Packaging)	ERG.	P		YCOA
+PH	68002000		Purchase account (Trading)	ERG.	P		YCOA
+PH	68010000		Purchase Account (SF & Finish Goods)	ERG.	P		YCOA
+PH	68888800		ICO Clearing Account - Travel	ERG.	N		YCOA
+PH	70010000		Revenue from Post Capitalization	ERG.	P		YCOA
+PH	70015000		Settlement of Asset u. Construction to CO Object	ERG.	P		YCOA
+PH	70020000		Revenue from Fixed Asset Sale	ERG.	N		YCOA
+PH	70030000		Clearing Account Asset Disposals	ERG.	N		YCOA
+PH	70040000		Discount Received	ERG.	P		YCOA
+PH	70050000		Clearing affiliated asset transfer	ERG.	N		YCOA
+PH	70100000		Interest Income	ERG.	P		YCOA
+PH	70300000		Interest Income - Subsidiaries	ERG.	P		YCOA
+PH	70300100		Gain from Long Term Investment	ERG.	P		YCOA
+PH	70500000		Consumption of Provisions	ERG.	P		YCOA
+PH	70800000		Other Extraordinary Income	ERG.	P		YCOA
+PH	70900000		Fines and Penalties	ERG.	P		YCOA
+PH	71000000		Bank Charges	ERG.	P		YCOA
+PH	71010000		Loss from Asset Transactions	ERG.	P		YCOA
+PH	71010100		Gain from Asset Transactions	ERG.	P		YCOA
+PH	71010200		Gain from Write Up of Fixed Assets	ERG.	P		YCOA
+PH	71010400		Loss from Capitalization Differences	ERG.	P		YCOA
+PH	71010500		Clearing-estimated Depreciation on Fixed Assets	ERG.	P		YCOA
+PH	71010600		Clearing Depreciation local GAAP	ERG.	P		YCOA
+PH	71010700		Estimated depreciation (FI-AA)	ERG.	P		YCOA
+PH	71010800		Depreciation local GAAP	ERG.	P		YCOA
+PH	71015000		Offsetting Account Revaluation ord. Depreciation	ERG.	P		YCOA
+PH	71040000		Discount lost using Net Procedure	ERG.	P		YCOA
+PH	71050000		Cash Discounts Expense	ERG.	P		YCOA
+PH	71055000		Statistical Condtion cash discount	ERG.	P		YCOA
+PH	71100000		Interest Expense	ERG.	P		YCOA
+PH	71300000		Interest Expense - Subsidiaries	ERG.	P		YCOA
+PH	71800000		Other Extraordinary Expenses	ERG.	P		YCOA
+PH	72010000		Loss from Exchange Rate Differences	ERG.	P		YCOA
+PH	72020000		Loss from Rounding Dif. Foreign Currency	ERG.	P		YCOA
+PH	72040000		Loss from Currency Valuation	ERG.	P		YCOA
+PH	72510000		Gain from exchange rate differences	ERG.	P		YCOA
+PH	72520000		Gain from rounding dif. foreign currency	ERG.	P		YCOA
+PH	72530000		Gain from rebates differences	ERG.	P		YCOA
+PH	72531000		Gain from Supplier Rebate (MM)	MAT.	P		YCOA
+PH	72532000		Gain from Supplier Rebate (SD)	MAT.	P		YCOA
+PH	72540000		Gain from currency valuation	ERG.	P		YCOA
+PH	75001000		Excise Taxes	ERG.	P		YCOA
+PH	75002000		Corporate Income Tax Expense	ERG.	P		YCOA
+PH	75002100		Capital Gains Tax	ERG.	P		YCOA
+PH	75002200		Solidary Surcharge on Corporate Income Tax	ERG.	P		YCOA
+PH	75002300		Solidary surcharge for Interest Income Tax	ERG.	P		YCOA
+PH	75003000		Deferred Tax	ERG.	P		YCOA
+PH	75004000		Other Taxes on Income	ERG.	P		YCOA
+PH	75005000		Input Tax non deductable (NAV)	ERG.	P		YCOA
+PH	75007000		Property Taxes	ERG.	P		YCOA
+PH	75008000		Trade Tax	ERG.	P		YCOA
+PH	75009000		Export Duty	ERG.	P		YCOA
+PH	75009900		Other Company Taxes	ERG.	P		YCOA
+PH	90001000		Activated Carried Forward Losses	ERG.	N		YCOA
+PH	90002000		Deferred Carried Forward Losses	ERG.	N		YCOA
+PH	92101500		Settl. Rework	SECC	S		YCOA
+PH	92101800		Settlement R&D	SECC	S		YCOA
+PH	92105100		Personnel costs	SECC	S		YCOA
+PH	92105200		Spare/Service/Ext Material con	SECC	S		YCOA
+PH	92105300		Other costs	SECC	S		YCOA
+PH	92105400		Secondary costs	SECC	S		YCOA
+PH	94111000		Overhead Material	SECC	S		YCOA
+PH	94112000		Overhead production	SECC	S		YCOA
+PH	94113000		Overhead administration	SECC	S		YCOA
+PH	94114000		Overhead sales	SECC	S		YCOA
+PH	94201000		Buildings & Periodic Service	SECC	S		YCOA
+PH	94202000		Assessment Quality costs	SECC	S		YCOA
+PH	94220000		COPA Assessment	SECC	S		YCOA
+PH	94221000		COPA-overhead cost	SECC	S		YCOA
+PH	94222000		COPA-Marketing	SECC	S		YCOA
+PH	94223000		COPA -R&D	SECC	S		YCOA
+PH	94224000		COPA -Admin. Overhead	SECC	S		YCOA
+PH	94225000		COPA -Sales. Overhead	SECC	S		YCOA
+PH	94226000		COPA-Non-Operating Expense	SECC	S		YCOA
+PH	94227000		COPA-Non-Operating Income	SECC	S		YCOA
+PH	94228000		COPA -Taxes	SECC	S		YCOA
+PH	94229000		COPA -cash Discount	SECC	S		YCOA
+PH	94229900		COPA -consulting overhead	SECC	S		YCOA
+PH	94301000		Machine hours 1	SECC	S		YCOA
+PH	94302000		Machine hours 2	SECC	S		YCOA
+PH	94303000		Setup Production	SECC	S		YCOA
+PH	94304000		Water	SECC	S		YCOA
+PH	94305000		Industry Effluent	SECC	S		YCOA
+PH	94306000		Environmental	SECC	S		YCOA
+PH	94307000		Internal Transport	SECC	S		YCOA
+PH	94308000		Consulting	SECC	S		YCOA
+PH	94308500		Activity Unit based Billing	SECC	S		YCOA
+PH	94309000		Development	SECC	S		YCOA
+PH	94310000		QM Control	SECC	S		YCOA
+PH	94311000		Personnel hours	SECC	S		YCOA
+PH	97777700		ICO Margin	ERG.	P		YCOA
+PH	98888800		ICO Clearing Account - Margin	ERG.	N		YCOA
+PH	99999900		ICO Clearing Account - Consultancy	ERG.	N		YCOA

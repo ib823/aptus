@@ -1,0 +1,36 @@
+# provenance
+# target	aptus Philippines brief target 2, file 3 of 3 — Philippine tax account assignment
+# source_file	sap-references/2608/BP_CLD_ENTPR_2608_Account_Master_Data_for_YCOA.xlsx, sheet "T030K" (Account determination for tax codes)
+# source_origin	SAP Best Practices 2608 account master data for the YCOA template chart of accounts
+# finding	NO HARVEST WAS NEEDED for this file. The sheet is multi-country: it carries a Country column (LAND1) with 66 countries, and 22 Philippine rows sit beside the 59 Malaysian rows WS11 loaded. The workbook is already in the repository.
+# date_read	2026-09-07
+# release	2608
+# completeness	complete for this source: every row of the T030K sheet with Country = PH was taken, 22 of them.
+# completeness_caveat	this is the tax account assignment SAP publishes in the TEMPLATE chart workbook. The Malaysian LOCAL workbook (..._YCOA_MY.xlsx) also carries a T030K sheet; its Philippine counterpart is not in the repository, so a PH local variant of this table, if SAP publishes one, is not represented here.
+# column_source	transaction_key="Transaction Keys" (KTOSL) · tax_code="Tax Code" (MWSKZ) · gl_account="G/L account" (KONTS) · description="Description", all verbatim. country_variant is the sheet's Country (LAND1) column, which reads PH on every row of this file.
+# blank_tax_code	0 of 22 rows carry no tax code — SAP publishes those assignments as tax-code-independent. The cell is left empty, never filled.
+# columns_not_carried	the sheet also publishes a second G/L account column (KONTH, the credit-side account). The brief fixes a single gl_account column, so KONTH is not in this file; it is in the workbook at the path above.
+# empty	a blank cell means the workbook publishes nothing there.
+country_variant	transaction_key	tax_code	gl_account	description
+PH	MWS	E0	22000000	
+PH	MWS	OX	22000000	
+PH	MWS	S0	22000000	
+PH	MWS	S1	22000000	
+PH	MWS	S2	22000000	
+PH	MWS	S3	22000000	
+PH	MWS	S4	22000000	
+PH	MWS	S5	22000000	
+PH	MWS	S6	22000000	
+PH	MWS	SE	22000000	
+PH	MWS	SO	22000000	
+PH	VST	IX	12600000	
+PH	VST	V0	12600000	
+PH	VST	V1	12600000	
+PH	VST	V2	12600000	
+PH	VST	V3	12600000	
+PH	VST	V4	12600000	
+PH	VST	V5	12600000	
+PH	VST	V6	12600000	
+PH	VST	V7	12600000	
+PH	VST	V8	12600000	
+PH	VST	V9	12600000	

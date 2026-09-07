@@ -1,0 +1,11 @@
+# provenance
+# target	aptus Philippines brief target 6 — Philippine org-structure sample values
+# result	EMPTY, AND THE EMPTINESS IS THE FINDING. Zero data rows.
+# source_file	sap-references/2608/2608_Org_Data_Overview_EN_XX.xlsx, sheets "Global_Enterprise_Structure" (182 rows) and "Enterprise_Structure_Data" (163 rows)
+# why_empty	the workbook is country-INDEPENDENT by construction and publishes no Philippine values. Its own first row says "## represents the two-digit country code" — country-specific ids are written as templates, not as values — and its legend reads "(XX) --> Global (country-independent)". The sample values it does publish (company code 1000/2000, plant 1000/1100, purchasing org 1000/2000, sales org 1000/1100 and so on) are the global Best Practices values. The strings "PH", "5810", "MY" and "5410" do not occur anywhere in either sheet.
+# consequence_for_aptus	this answers the brief's question rather than filling its file. SapOrgStructureElement's 116 rows cannot be Malaysian values from this workbook, because this workbook has none — they are the GLOBAL sample values. The missing country column is therefore not a Malaysia/Philippines problem; it is that the rows are country-independent and are currently implied to be country-specific. The fix is to stamp them XX, not to harvest a PH set.
+# where_a_real_ph_set_would_come_from	the Philippine company code SAP predelivers is 5810 — published in BP_CLD_ENTPR_2608_Account_Master_Data_for_YCOA.xlsx as the column header "PH (5810)". A Philippine organisational-structure workbook, if SAP publishes one, sits in the Best Practices content library behind a signed-in session, which this run did not have.
+# date_read	2026-09-07
+# release	2608
+# brief_rule_observed	the brief says to read each column down independently and never to read across a row to assert a parent-child relationship the workbook does not state. No relationship was asserted: no rows were emitted.
+country	element_type	element_id	element_name	parent_type	parent_id
