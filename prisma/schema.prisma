@@ -88,6 +88,10 @@ model SapContentRelease {
   taxRates              SapTaxRate[]
   taxAccountAssignments SapTaxAccountAssignment[]
   fiscalYearVariants    SapFiscalYearVariant[]
+  fioriApps             SapFioriApp[]
+  commScenarios         SapCommScenario[]
+  scopeCommScenarios    ScopeItemCommScenario[]
+  notSupported          SapNotSupported[]
 
   @@unique([release, localisation])
   @@index([release])
@@ -533,6 +537,8 @@ enum SapHubContentType {
   SCENARIO // standard end-to-end process scenario — reference
   VPUC // validated partner use case — reference
   ANALYTICS // prebuilt SAC design — reference
+  DATA_PRODUCT // published data product — reference (2608 WS13)
+  INTEGRATION_ADAPTER // Integration Suite adapter — reference (2608 WS13)
 }
 
 model SapHubContent {
@@ -6050,4 +6056,174 @@ model SapFiscalYearVariant {
 
   @@unique([releaseId, variant])
   @@index([releaseId])
+}
+
+// ---------------------------------------------------------------------------
+// 2608 WS13 — the 2026-09-07 data-acquisition harvest
+//
+// Three gaps docs/2608/DATA-ACQUISITION-BRIEF.md measured, and one of them the
+// brief measured WRONGLY. It recorded that "which APIs does scope item X need?"
+// has no evidence path: 0 of 5,419 API rows carried a scope code, 0 carried a
+// communication scenario, 0 of 4,502 iFlows named any of the 822 scope codes.
+// All of that is true of the Business Accelerator Hub. It is not true of SAP,
+// which publishes the mapping as an ordinary table — "Available Interfaces for
+// Your Selected Scope" — that aptus had never read. The bridge below is that
+// table, and every row of it is PUBLISHED.
+// ---------------------------------------------------------------------------
+
+/// The SAP Fiori Apps Reference Library for a release. 5,854 apps for 2608.
+///
+/// WS11 measured Manage Checkbooks (F1577) and Manage Outgoing Checks (F1578)
+/// in 0 of 14,088 process steps and concluded SAP had attached them to no scope
+/// item. SAP had — here, carrying `J60|1WQ|J59` and `J60|1WQ`. The blind spot
+/// was aptus reading only the process-step master; this is the master that
+/// closes it.
+model SapFioriApp {
+  id      String  @id @default(cuid())
+  appId   String
+  appName String
+  appType String?
+  lob     String?
+
+  /// Business catalogs and roles the app belongs to. `SAP_FIN_BC_AP_CHECK_PC`
+  /// is the string aptus could not resolve to anything before this table.
+  businessCatalogIds String[] @default([])
+  businessRoleIds    String[] @default([])
+  /// The OData services the app consumes — half the app-to-API bridge.
+  odataServices      String[] @default([])
+  /// Scope items SAP names as required for the app. 609 distinct codes across
+  /// the 2608 set, every one of which resolves against PUBLIC/2608.
+  scopeItemCodes     String[] @default([])
+
+  productVersion String?
+  availability   String?
+  deviceTypes    String[] @default([])
+  appHubUrl      String?
+
+  releaseId      String
+  contentRelease SapContentRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([releaseId, appId])
+  @@index([releaseId])
+  @@index([appId])
+  @@index([scopeItemCodes], type: Gin)
+  @@index([businessCatalogIds], type: Gin)
+  @@index([odataServices], type: Gin)
+}
+
+/// A communication scenario (SAP_COM_nnnn) and the interfaces it carries.
+///
+/// `direction`, `authMethods`, `inboundServices` and `outboundServices` are
+/// EMPTY ON EVERY ROW and that is the honest state: SAP publishes none of them
+/// outside a provisioned tenant or a signed-in Process Navigator session. They
+/// are columns waiting for a source, not columns a loader failed to fill.
+///
+/// `name` is filled on 62 of 496. A second harvest pass recovered ~240 more and
+/// discarded them: beside a SAP_COM_ id, SAP's set-up instructions put a scope
+/// item name, an interface name or a column label as often as the scenario
+/// name, and nothing published separates them. A wrong name in a bid is worse
+/// than a blank one.
+model SapCommScenario {
+  id               String   @id @default(cuid())
+  commScenarioId   String
+  name             String?
+  direction        String?
+  authMethods      String[] @default([])
+  inboundServices  String[] @default([])
+  outboundServices String[] @default([])
+  /// Interface ids SAP lists under the scenario.
+  apiIds           String[] @default([])
+  /// Page the name came from, where there is a name.
+  nameSourceUrl    String?
+
+  releaseId      String
+  contentRelease SapContentRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([releaseId, commScenarioId])
+  @@index([releaseId])
+  @@index([apiIds], type: Gin)
+}
+
+/// The scope item ↔ communication scenario bridge — the published mapping.
+///
+/// `linkSource` is PUBLISHED or DERIVED and is never defaulted; `evidence` is
+/// required and non-empty, naming the source row. Both are the discipline the
+/// brief asked for: a row with no evidence is worse than a missing row.
+///
+/// `scopeItemId` is deliberately NOT a foreign key. 21 of the 354 ids SAP
+/// publishes here do not exist in PUBLIC/2608 — a JC0–JC9 cluster and others —
+/// and 8 source rows carry a blank id. An FK would have forced those rows to be
+/// dropped, which would hide a real disagreement between two SAP publications.
+/// `resolvesInCatalogue` records the answer instead of discarding the question.
+model ScopeItemCommScenario {
+  id                  String  @id @default(cuid())
+  scopeItemCode       String
+  commScenarioId      String
+  mandatory           String?
+  sourceUrl           String
+  /// "PUBLISHED" | "DERIVED" — what kind of claim this row is.
+  linkSource          String
+  evidence            String  @db.Text
+  /// Whether scopeItemCode resolves to a ScopeItem in this release's catalogue.
+  resolvesInCatalogue Boolean
+
+  releaseId      String
+  contentRelease SapContentRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([releaseId, scopeItemCode, commScenarioId])
+  @@index([releaseId])
+  @@index([scopeItemCode])
+  @@index([commScenarioId])
+  @@index([linkSource])
+  @@index([resolvesInCatalogue])
+}
+
+/// Negative evidence — what SAP states it does NOT support.
+///
+/// The first table in aptus that can hold an exclusion. Every other table
+/// answers what is there, which is why a capability could read as available
+/// right up to the moment someone tried to use it.
+///
+/// `statementVerbatim` is SAP's own words, never paraphrased and never softened.
+model SapNotSupported {
+  id                  String   @id @default(cuid())
+  capability          String
+  scopeItemCodes      String[] @default([])
+  country             String?
+  whatIsNotSupported  String   @db.Text
+  statementVerbatim   String   @db.Text
+  /// "KBA" | "Note" | "Help" — which class of SAP source said it.
+  sourceType          String
+  sourceId            String
+  sourceUrl           String
+  releasedOn          String?
+  futureSupportStated String?
+
+  /// 1-based data-row number in the source file, and the unique key.
+  ///
+  /// Seven pairs of rows share source id, country, capability and summary and
+  /// differ only inside `statementVerbatim` — the same SAP topic stating
+  /// non-support twice, in different words. A key over the summary fields
+  /// silently kept one of each pair, which is the WS11 cost-centre defect and
+  /// the WS9.1 defect before it: the source told the truth and the key threw
+  /// half of it away. A long text column cannot go in a btree key, so the row
+  /// number does the disambiguating.
+  sourceRow Int
+
+  releaseId      String
+  contentRelease SapContentRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([releaseId, sourceRow])
+  @@index([releaseId])
+  @@index([country])
+  @@index([sourceType])
+  @@index([scopeItemCodes], type: Gin)
 }

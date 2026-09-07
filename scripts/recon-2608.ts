@@ -337,6 +337,32 @@ export const DB_FACTS_2608 = {
   taxRates: 34,
   taxAccountAssignments: 34,
   fiscalYearVariants: 26,
+
+  /*
+   * WS13 — the 2026-09-07 data-acquisition harvest.
+   */
+  fioriApps: 5854,
+  /** Apps SAP names a required scope item for. */
+  fioriAppsWithScopeCodes: 2177,
+  commScenarios: 496,
+  /**
+   * Scenarios carrying a name. 62 of 496, and deliberately so: a harvest pass
+   * that recovered ~240 more was discarded because SAP's set-up instructions
+   * put a scope item or interface name beside a SAP_COM_ id as often as the
+   * scenario name. A jump here means someone started guessing.
+   */
+  commScenariosNamed: 62,
+  /** The published scope item to communication scenario bridge. */
+  scopeCommScenarioLinks: 1149,
+  /** Of those, links whose scope code exists in PUBLIC/2608. */
+  scopeCommScenarioResolved: 1058,
+  /**
+   * 1RO Integration of Core Master Data — a pure integration enablement item,
+   * and the bridge's canary. Zero here means the bridge stopped resolving.
+   */
+  commScenariosFor1RO: 4,
+  /** Statements of non-support. The first negative evidence aptus can hold. */
+  notSupportedStatements: 539,
 } as const;
 
 async function observeDb(): Promise<{ facts: Report["facts"]; notes: string[] }> {
@@ -407,6 +433,23 @@ async function observeDb(): Promise<{ facts: Report["facts"]; notes: string[] }>
       ) d`;
     const scopeItemsWithForms = Number(formScopeRows[0]?.items ?? 0);
     const coDuplicateCodes = Number(dupRows[0]?.dupes ?? 0);
+    // WS13 — the harvest.
+    const [fioriApps, commScenarios, bridgeLinks, bridgeResolved, notSupported] = await Promise.all([
+      prisma.sapFioriApp.count({ where: { releaseId: release.id } }),
+      prisma.sapCommScenario.count({ where: { releaseId: release.id } }),
+      prisma.scopeItemCommScenario.count({ where: { releaseId: release.id } }),
+      prisma.scopeItemCommScenario.count({ where: { releaseId: release.id, resolvesInCatalogue: true } }),
+      prisma.sapNotSupported.count({ where: { releaseId: release.id } }),
+    ]);
+    const fioriAppsWithScope = await prisma.sapFioriApp.count({
+      where: { releaseId: release.id, NOT: { scopeItemCodes: { isEmpty: true } } },
+    });
+    const commScenariosNamed = await prisma.sapCommScenario.count({
+      where: { releaseId: release.id, NOT: { name: null } },
+    });
+    const scenariosFor1RO = await prisma.scopeItemCommScenario.count({
+      where: { releaseId: release.id, scopeItemCode: "1RO" },
+    });
     const untouched = {
       scope: await prisma.scopeItem.count({ where: { releaseId: null } }),
       cfg: await prisma.configActivity.count({ where: { releaseId: null } }),
@@ -525,6 +568,54 @@ async function observeDb(): Promise<{ facts: Report["facts"]; notes: string[] }>
         expected: DB_FACTS_2608.fiscalYearVariants,
         observed: fyv,
         ok: fyv === DB_FACTS_2608.fiscalYearVariants,
+      },
+      {
+        name: "db · SapFioriApp (2608)",
+        expected: DB_FACTS_2608.fioriApps,
+        observed: fioriApps,
+        ok: within(DB_FACTS_2608.fioriApps, fioriApps),
+      },
+      {
+        name: "db · Fiori apps naming a scope item (2608)",
+        expected: DB_FACTS_2608.fioriAppsWithScopeCodes,
+        observed: fioriAppsWithScope,
+        ok: within(DB_FACTS_2608.fioriAppsWithScopeCodes, fioriAppsWithScope),
+      },
+      {
+        name: "db · SapCommScenario (2608)",
+        expected: DB_FACTS_2608.commScenarios,
+        observed: commScenarios,
+        ok: commScenarios === DB_FACTS_2608.commScenarios,
+      },
+      {
+        name: "db · comm scenarios carrying a name (2608)",
+        expected: DB_FACTS_2608.commScenariosNamed,
+        observed: commScenariosNamed,
+        ok: commScenariosNamed === DB_FACTS_2608.commScenariosNamed,
+      },
+      {
+        name: "db · scope item to comm scenario links (2608)",
+        expected: DB_FACTS_2608.scopeCommScenarioLinks,
+        observed: bridgeLinks,
+        ok: within(DB_FACTS_2608.scopeCommScenarioLinks, bridgeLinks),
+      },
+      {
+        name: "db · of those, resolving in PUBLIC/2608",
+        expected: DB_FACTS_2608.scopeCommScenarioResolved,
+        observed: bridgeResolved,
+        ok: within(DB_FACTS_2608.scopeCommScenarioResolved, bridgeResolved),
+      },
+      {
+        name: "db · comm scenarios for 1RO (2608)",
+        expected: DB_FACTS_2608.commScenariosFor1RO,
+        observed: scenariosFor1RO,
+        ok: scenariosFor1RO === DB_FACTS_2608.commScenariosFor1RO,
+      },
+      {
+        name: "db · SapNotSupported statements (2608)",
+        expected: DB_FACTS_2608.notSupportedStatements,
+        observed: notSupported,
+        ok: within(DB_FACTS_2608.notSupportedStatements, notSupported),
       },
     ];
     const notes = [
