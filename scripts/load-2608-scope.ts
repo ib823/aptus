@@ -24,13 +24,19 @@
  * Usage:  pnpm sap:2608:load-scope [--dry-run]
  */
 
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { sapContentSourcesFor } from "./lib/sap-content-sources";
 import { ensureCatalogVersion, ensureContentRelease, integrityGate } from "./lib/sap-2608/db";
-import { parseAvailabilityDependencies, parseProcessSteps, type AdScopeItem } from "./lib/sap-2608/parse";
+import {
+  availableCountries,
+  nonEmptyCountryCells,
+  parseAvailabilityDependencies,
+  parseProcessSteps,
+  type AdScopeItem,
+} from "./lib/sap-2608/parse";
 
 const RELEASE = "2608" as const;
 const SOURCES = sapContentSourcesFor(RELEASE);
@@ -207,6 +213,14 @@ async function main(): Promise<number> {
             provisioning: r.ad?.provisioning ?? null,
             availableInMy: r.ad ? r.ad.availableInMy : null,
             myAvailableSince: r.ad?.myAvailableSince ?? null,
+            /*
+             * WS15 — the other 59 countries. `parseAvailabilityDependencies`
+             * has read the whole matrix since WS1.2; only `availableInMy`
+             * reached the database, so a Philippine harvest was scoped for
+             * data this loader was already holding in memory and dropping.
+             */
+            countries: r.ad ? availableCountries(r.ad.countries) : [],
+            countryAvailability: r.ad ? nonEmptyCountryCells(r.ad.countries) : Prisma.JsonNull,
             lobs: r.ad?.lobs ?? [],
             businessAreas: r.ad?.businessAreas ?? [],
             requiredScopeCodes: r.ad?.requiredScopeCodes ?? [],
