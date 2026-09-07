@@ -85,6 +85,37 @@ six-line `HUB_TYPE_MAP` extension that produces the last two files.
 exit 0**, including `db · comm scenarios for 1RO expected 4 observed 4` as the
 bridge's canary.
 
+### Target 6 delivers zero rows for this product
+
+`S4_PUBLIC_PUBLISHED_COUNTS` demanded a number for the two new types, so it was
+measured rather than assumed — the harvest files cross-referenced against the
+235 packages in `hub-packages.s4public.json`:
+
+```
+DATA_PRODUCT         hub-wide 334  ·  in the S/4-Public packages    0
+INTEGRATION_ADAPTER  hub-wide  91  ·  in the S/4-Public packages    0
+```
+
+**Neither type has a single artefact in SAP S/4HANA Cloud Public Edition.** The
+files are real and correctly harvested; the content belongs to other SAP
+products. The brief ranked target 6 fourth ("cheap, unblocks WS10.1") and this
+programme has repeated that it is what matters in the integration surface — for
+this product it is not. Both counts are recorded as a measured `0` with the
+reasoning beside them, so a later reader does not take the zero for a count
+nobody has run.
+
+### A pre-existing guard caught the incomplete landing
+
+`tests/unit/sap/hub-harvest-remote.test.ts` asserts that the committed
+`hub-harvest/*.json` files and the declared `HARVEST_TYPES` agree in both
+directions, resolved through `git ls-files` rather than the disk because
+`/sap-references/*` is gitignored. Its own comment records that the assertion
+"has shipped once and been caught three times". It caught a fourth: two JSON
+files committed without registering the types. The fix threads both through
+`HubContentType`, `HUB_CONTENT_TYPES`, `HUB_CONTENT_TYPE_META`, `HARVEST_TYPES`,
+`S4_PUBLIC_PUBLISHED_COUNTS` and the status-map test — REFERENCE in every case,
+because both are design-time contracts and neither is a tenant endpoint.
+
 ### Unproven / not done
 
 1. **The four tenant-only scenario columns are empty on every row** —

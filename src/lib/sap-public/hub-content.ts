@@ -15,6 +15,8 @@ import type { SapServiceDefinition } from "@/lib/sap-public/tdd-connector";
 
 export type HubContentType =
   | "API"
+  | "DATA_PRODUCT"
+  | "INTEGRATION_ADAPTER"
   | "EVENT"
   | "CDS_VIEW"
   | "BADI"
@@ -85,6 +87,8 @@ export interface HubContentTypeMeta {
 
 export const HUB_CONTENT_TYPES: HubContentType[] = [
   "API",
+  "DATA_PRODUCT",
+  "INTEGRATION_ADAPTER",
   "EVENT",
   "CDS_VIEW",
   "BADI",
@@ -166,6 +170,17 @@ export const HUB_CONTENT_TYPE_META: Record<HubContentType, HubContentTypeMeta> =
     kind: "reference",
     whyItMatters: "Prebuilt SAC dashboard / planning designs — inform our reporting (need SAC to run).",
   },
+  // 2608 WS13 — the two types the harvest counted and refused to carry until now.
+  DATA_PRODUCT: {
+    label: "Data Products",
+    kind: "reference",
+    whyItMatters: "Published data products — design-time contracts for analytical consumption, not tenant endpoints.",
+  },
+  INTEGRATION_ADAPTER: {
+    label: "Integration Adapters",
+    kind: "reference",
+    whyItMatters: "SAP Integration Suite adapters — what a middleware tier can connect with, not what a tenant has.",
+  },
 };
 
 export function isHubContentType(value: string): value is HubContentType {
@@ -220,6 +235,18 @@ export const S4_PUBLIC_PUBLISHED_COUNTS: Record<HubContentType, number> = {
   SCENARIO: 308,
   VPUC: 5,
   ANALYTICS: 6,
+  /*
+   * 2608 WS13 — ZERO IS THE MEASURED ANSWER, not a count nobody has taken.
+   *
+   * The Hub publishes 334 data products and 91 integration adapters, and
+   * sap-references/hub-harvest/ carries every one of them. Cross-referenced
+   * against the 235 packages in hub-packages.s4public.json, the number that
+   * belong to SAP S/4HANA Cloud Public Edition is 0 and 0. They are real Hub
+   * content owned by other products, which is exactly why the drift report
+   * should expect none of them here.
+   */
+  DATA_PRODUCT: 0,
+  INTEGRATION_ADAPTER: 0,
 };
 
 /** Deprecated counts SAP publishes at 2608 for the types that carry a Hub State (drift reference). */
