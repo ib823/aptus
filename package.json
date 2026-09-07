@@ -74,6 +74,7 @@
     "sap:2608:load-bdc": "tsx scripts/load-2608-bdc.ts",
     "sap:2608:reconciliation": "tsx scripts/report-content-reconciliation-2608.ts",
     "sap:2608:seed-tobe": "tsx scripts/seed-tobe-2608.ts",
+    "bid:import": "tsx scripts/import-bid-requirements.ts",
     "ingest": "tsx scripts/ingest-sap-zip.ts",
     "catalog:snapshot": "tsx scripts/snapshot-catalog.ts",
     "fixtures:classifier:refresh": "tsx scripts/snapshot-classifier-fixture.ts",
