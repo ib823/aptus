@@ -381,8 +381,9 @@ export const DB_FACTS_2608 = {
    */
   bpdDataFiles: 9,
   /**
-   * Country reach of the process-step master. UT has Malaysian and Philippine
-   * entities, and these two numbers are why the pack filters by footprint
+   * Country reach of the process-step master. The first bid engagement spans
+   * two country footprints, and these two numbers are why the pack filters by
+   * footprint
    * rather than by a single country: the sets overlap but neither contains
    * the other.
    */
