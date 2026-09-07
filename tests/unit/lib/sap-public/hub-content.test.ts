@@ -178,7 +178,7 @@ describe("resolveHubStatus (probe-outcome-driven, honest badges)", () => {
   });
 });
 
-describe("all 12 content types map to an honest un-probed status", () => {
+describe("all 14 content types map to an honest un-probed status", () => {
   // With NO probe outcomes AND apiType null: reference → REFERENCE; EVENT →
   // AVAILABLE; API + CDS_VIEW → NOT_PROBEABLE (null apiType = no OData endpoint).
   const EXPECTED_NULL_APITYPE: Record<HubContentType, HubStatus> = {
@@ -194,6 +194,11 @@ describe("all 12 content types map to an honest un-probed status", () => {
     SCENARIO: "REFERENCE",
     VPUC: "REFERENCE",
     ANALYTICS: "REFERENCE",
+    // 2608 WS13. Both are design-time contracts, not tenant endpoints, so
+    // REFERENCE is the honest badge — and neither has a single artefact in the
+    // 235 S/4HANA Cloud Public Edition packages anyway.
+    DATA_PRODUCT: "REFERENCE",
+    INTEGRATION_ADAPTER: "REFERENCE",
   };
 
   it("covers every enum member (no type left unbadged)", () => {
