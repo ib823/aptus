@@ -313,6 +313,30 @@ export const DB_FACTS_2608 = {
   configActivityScopeLinks: 813804,
   /** Activities naming J58 — 1 before WS9, and the clearest single symptom. */
   configActivitiesForJ58: 1050,
+
+  /*
+   * WS11 — the seven workbooks that shipped in the drop and had no loader.
+   * Zero on any of these means a loader stopped running, which is exactly how
+   * they went unread for a release in the first place.
+   */
+  forms: 272,
+  /** Forms naming at least one scope item. All of them do; a drop is a parser bug. */
+  formsWithScopeCodes: 272,
+  /** Distinct 2608 scope items reachable from a form. */
+  scopeItemsWithForms: 462,
+  orgStructureElements: 116,
+  glAccounts: 871,
+  coMasterObjects: 2233,
+  /**
+   * SAP's Cost Centers sheet lists 20 US cost centre IDs twice under different
+   * names. Both rows are stored and `sourceRow` tells them apart. If this drops
+   * to 0 the unique key has started swallowing them again.
+   */
+  coMasterObjectDuplicateCodes: 20,
+  taxCodes: 32,
+  taxRates: 34,
+  taxAccountAssignments: 34,
+  fiscalYearVariants: 26,
 } as const;
 
 async function observeDb(): Promise<{ facts: Report["facts"]; notes: string[] }> {
@@ -353,6 +377,36 @@ async function observeDb(): Promise<{ facts: Report["facts"]; notes: string[] }>
     const psRows = await prisma.sapProcessStep.count({ where: { releaseId: release.id } });
     const psItems = (await prisma.sapProcessStep.groupBy({ by: ["scopeItemCode"], where: { releaseId: release.id } }))
       .length;
+    // WS11 — the seven files the drop shipped and nothing read until now.
+    const [forms, org, gl, co, taxCodes, taxRates, taxAcct, fyv] = await Promise.all([
+      prisma.sapFormTemplate.count({ where: { releaseId: release.id } }),
+      prisma.sapOrgStructureElement.count({ where: { releaseId: release.id } }),
+      prisma.sapGlAccount.count({ where: { releaseId: release.id } }),
+      prisma.sapCoMasterObject.count({ where: { releaseId: release.id } }),
+      prisma.sapTaxCode.count({ where: { releaseId: release.id } }),
+      prisma.sapTaxRate.count({ where: { releaseId: release.id } }),
+      prisma.sapTaxAccountAssignment.count({ where: { releaseId: release.id } }),
+      prisma.sapFiscalYearVariant.count({ where: { releaseId: release.id } }),
+    ]);
+    const formsWithScope = await prisma.sapFormTemplate.count({
+      where: { releaseId: release.id, NOT: { scopeItemCodes: { isEmpty: true } } },
+    });
+    // Distinct scope items reachable from a form, and the count of codes the
+    // source repeats within one object type. Both in SQL: unnesting 524 codes
+    // and 2,233 objects in Node to count them would be a transfer for nothing.
+    const formScopeRows = await prisma.$queryRaw<{ items: bigint }[]>`
+      SELECT COUNT(DISTINCT code)::bigint AS items
+      FROM "SapFormTemplate" f, unnest(f."scopeItemCodes") AS code
+      JOIN "ScopeItem" si ON si."scopeCode" = code
+      WHERE f."releaseId" = ${release.id} AND si."releaseId" = ${release.id}`;
+    const dupRows = await prisma.$queryRaw<{ dupes: bigint }[]>`
+      SELECT COALESCE(SUM(c - 1), 0)::bigint AS dupes FROM (
+        SELECT COUNT(*) AS c FROM "SapCoMasterObject"
+        WHERE "releaseId" = ${release.id}
+        GROUP BY "objectType", "controllingArea", "code" HAVING COUNT(*) > 1
+      ) d`;
+    const scopeItemsWithForms = Number(formScopeRows[0]?.items ?? 0);
+    const coDuplicateCodes = Number(dupRows[0]?.dupes ?? 0);
     const untouched = {
       scope: await prisma.scopeItem.count({ where: { releaseId: null } }),
       cfg: await prisma.configActivity.count({ where: { releaseId: null } }),
@@ -425,6 +479,52 @@ async function observeDb(): Promise<{ facts: Report["facts"]; notes: string[] }>
         expected: DB_FACTS_2608.processStepItems,
         observed: psItems,
         ok: within(DB_FACTS_2608.processStepItems, psItems),
+      },
+      { name: "db · SapFormTemplate (2608)", expected: DB_FACTS_2608.forms, observed: forms, ok: within(DB_FACTS_2608.forms, forms) },
+      {
+        name: "db · forms naming a scope item (2608)",
+        expected: DB_FACTS_2608.formsWithScopeCodes,
+        observed: formsWithScope,
+        ok: within(DB_FACTS_2608.formsWithScopeCodes, formsWithScope),
+      },
+      {
+        name: "db · scope items reachable from a form (2608)",
+        expected: DB_FACTS_2608.scopeItemsWithForms,
+        observed: scopeItemsWithForms,
+        ok: within(DB_FACTS_2608.scopeItemsWithForms, scopeItemsWithForms),
+      },
+      {
+        name: "db · SapOrgStructureElement (2608)",
+        expected: DB_FACTS_2608.orgStructureElements,
+        observed: org,
+        ok: within(DB_FACTS_2608.orgStructureElements, org),
+      },
+      { name: "db · SapGlAccount (2608)", expected: DB_FACTS_2608.glAccounts, observed: gl, ok: within(DB_FACTS_2608.glAccounts, gl) },
+      {
+        name: "db · SapCoMasterObject (2608)",
+        expected: DB_FACTS_2608.coMasterObjects,
+        observed: co,
+        ok: within(DB_FACTS_2608.coMasterObjects, co),
+      },
+      {
+        name: "db · CO codes the source repeats (2608)",
+        expected: DB_FACTS_2608.coMasterObjectDuplicateCodes,
+        observed: coDuplicateCodes,
+        ok: coDuplicateCodes === DB_FACTS_2608.coMasterObjectDuplicateCodes,
+      },
+      { name: "db · SapTaxCode (2608)", expected: DB_FACTS_2608.taxCodes, observed: taxCodes, ok: taxCodes === DB_FACTS_2608.taxCodes },
+      { name: "db · SapTaxRate (2608)", expected: DB_FACTS_2608.taxRates, observed: taxRates, ok: taxRates === DB_FACTS_2608.taxRates },
+      {
+        name: "db · SapTaxAccountAssignment (2608)",
+        expected: DB_FACTS_2608.taxAccountAssignments,
+        observed: taxAcct,
+        ok: taxAcct === DB_FACTS_2608.taxAccountAssignments,
+      },
+      {
+        name: "db · SapFiscalYearVariant (2608)",
+        expected: DB_FACTS_2608.fiscalYearVariants,
+        observed: fyv,
+        ok: fyv === DB_FACTS_2608.fiscalYearVariants,
       },
     ];
     const notes = [
