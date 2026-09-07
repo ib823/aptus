@@ -3,7 +3,8 @@
 Status: **scope only**. Nothing in this document is built.
 Written 2026-09-07 against `main` @ `d1ffa63` (WS9.1).
 
-Origin: the To-Be Process Pack produced for Usaha Tegas (UT) covers scope items,
+Origin: the To-Be Process Pack produced for the first bid engagement covers
+scope items,
 process steps and SSCUI configuration. It does not cover integration. This
 document says exactly what is missing, what is already present and was
 mis-reported as missing, and what it would take to close the gap.
@@ -169,10 +170,10 @@ Authentication and error handling have no model at all. Those stay out of scope
 
 ---
 
-## 4. Product-scoped figures for the UT bid
+## 4. Product-scoped figures for the bid
 
 The hub-wide totals in §1 span Private Edition, Ariba, SuccessFactors and
-partner content. For UT on **SAP Cloud ERP, Public Edition, content release
+partner content. For the engagement on **SAP Cloud ERP, Public Edition, content release
 2608**, the relevant surface is smaller and is already pinned in
 `HUB_FACTS_2608` (`scripts/recon-hub-2608.ts:35`):
 
@@ -265,10 +266,10 @@ otherwise is how a bid gets found out:
 - Volumetrics and sizing.
 - Anything asserting what a **tenant** has provisioned. The harvest's own
   caveat holds unchanged: it is what SAP publishes, not what is active on any
-  system. Only a probe against a real tenant can say more, and UT has no
-  tenant yet.
+  system. Only a probe against a real tenant can say more, and the engagement
+  has no tenant yet.
 
-## 7. What WS10 gives the UT bid
+## 7. What WS10 gives the bid
 
 An integration section per scope item, sourced from the 2608 Hub catalogue,
 where every line is either an SAP-published fact or is labelled as derived or
