@@ -1,9 +1,10 @@
 {
   "_provenance": {
-    "purpose": "End-to-end chains of SAP scope items per value stream, used by the To-Be Process Pack's L1 diagram (2608 WS6). Repo-authored — not an SAP download.",
+    "purpose": "End-to-end chains of SAP scope items per value stream, used by the To-Be Process Pack's L1 diagram (2608 WS6, extended WS16). Repo-authored — not an SAP download.",
     "release": "2608",
-    "source": "WS6 pilot definition in docs/2608/CLAUDE-CODE-MASTER-PROMPT-2608-and-tobe-process-pack.md (Order-to-Cash: 1IQ → BDG → BD9 → J59, plus 2ET). SAP's Process Navigator business-process hierarchy is not in the 2608 content drop and was NOT read for this file; add chains only with their source.",
-    "generatedAt": "2026-09-05"
+    "source": "WS6 pilot definition in docs/2608/CLAUDE-CODE-MASTER-PROMPT-2608-and-tobe-process-pack.md (Order-to-Cash: 1IQ → BDG → BD9 → J59, plus 2ET). WS16 added seven finance and procurement chains. SAP's Process Navigator business-process hierarchy is not in the 2608 content drop and was NOT read for this file; add chains only with their source.",
+    "orderingCaveat": "Chain MEMBERSHIP is traceable: every code below is a 2608 scope item, and the grouping follows the process areas SAP itself uses in the BDC questionnaires (S4H_405 Finance, S4H_420 Sourcing and Procurement, S4H_433 Sales). Chain ORDER is not published by SAP anywhere in the 2608 drop, so the sequences here are consultant-asserted and must be confirmed in Fit-to-Standard. Each chain says so in its own source line. Do not present an L1 chain as SAP-cited.",
+    "generatedAt": "2026-09-07"
   },
   "chains": [
     {
@@ -21,6 +22,194 @@
         }
       ],
       "source": "WS6 pilot definition (master prompt)"
+    },
+    {
+      "id": "p2p-requisition-to-payment",
+      "name": "Procure to Pay — requisition to payment",
+      "valueStreamId": "source-to-pay",
+      "path": ["18J", "BNX", "2V7", "J60", "7MJ"],
+      "alternates": [
+        {
+          "id": "p2p-services",
+          "from": "18J",
+          "via": ["22Z"],
+          "to": "2V7",
+          "note": "Procurement of Services (22Z) replaces Consumable Purchasing (BNX) where the requisition is for a service rather than a material."
+        },
+        {
+          "id": "p2p-contract",
+          "from": "18J",
+          "via": ["BMD"],
+          "to": "BNX",
+          "note": "Purchase Contract (BMD) supplies the source of supply and the agreed price where a contract already exists."
+        },
+        {
+          "id": "p2p-supplier-governance",
+          "from": "18J",
+          "via": ["19E", "2TW"],
+          "to": "BNX",
+          "note": "Supplier Classification and Segmentation (19E) and Complementary Procurement Functions (2TW) govern the supplier and the source before a requisition can be released against it."
+        },
+        {
+          "id": "p2p-evaluated-receipt",
+          "from": "2V7",
+          "via": ["2LH"],
+          "to": "7MJ",
+          "note": "Automated Invoice Settlement (2LH) replaces supplier invoice entry where settlement is on the goods receipt."
+        },
+        {
+          "id": "p2p-commitment",
+          "from": "18J",
+          "via": ["2I3"],
+          "to": "J60",
+          "note": "Predictive Commitments Management (2I3) carries the commitment from requisition through purchase order to invoice, which is what a real-time budget check reads."
+        }
+      ],
+      "source": "WS16, repo-authored. Membership from the SAP BDC questionnaire S4H_420 Sourcing and Procurement process areas (2608); ordering consultant-asserted, not SAP-published — confirm in Fit-to-Standard."
+    },
+    {
+      "id": "o2c-service-billing",
+      "name": "Order to Cash — service billing to collection",
+      "valueStreamId": "lead-to-cash",
+      "path": ["2EQ", "1Z6", "J59", "1S0", "BFC"],
+      "alternates": [
+        {
+          "id": "o2c-credit-check",
+          "from": "2EQ",
+          "via": ["BD6"],
+          "to": "1Z6",
+          "note": "Basic Credit Management (BD6) checks the customer limit before the billing document is released."
+        },
+        {
+          "id": "o2c-credit-correction",
+          "from": "J59",
+          "via": ["1EZ", "BKL"],
+          "to": "1S0",
+          "note": "Credit Memo Processing (1EZ) and Invoice Correction Process with Credit Memo (BKL) handle a downward correction to an issued invoice."
+        },
+        {
+          "id": "o2c-debit-correction",
+          "from": "J59",
+          "via": ["1F1", "BDQ"],
+          "to": "1S0",
+          "note": "Debit Memo Processing (1F1) and Invoice Correction Process with Debit Memo (BDQ) handle an upward correction."
+        },
+        {
+          "id": "o2c-cash-application",
+          "from": "1S0",
+          "via": ["1MV"],
+          "to": "BFC",
+          "note": "Cash Application Integration (1MV) matches incoming payments to open items automatically, so only the unmatched residue reaches collections."
+        },
+        {
+          "id": "o2c-overdue-provision",
+          "from": "J59",
+          "via": ["2PD"],
+          "to": "BFC",
+          "note": "Provisioning of Overdue Receivables (2PD) values the exposure before the collection strategy runs."
+        }
+      ],
+      "source": "WS16, repo-authored. Membership from the SAP BDC questionnaire S4H_405 Finance (Accounts Receivable) and S4H_433 Sales process areas (2608); ordering consultant-asserted, not SAP-published — confirm in Fit-to-Standard."
+    },
+    {
+      "id": "r2r-close-to-consolidation",
+      "name": "Record to Report — period close to consolidation",
+      "valueStreamId": "finance",
+      "path": ["J58", "2QL", "40Y", "1GA", "1SG"],
+      "alternates": [
+        {
+          "id": "r2r-intercompany",
+          "from": "J58",
+          "via": ["1GP", "3ZB"],
+          "to": "40Y",
+          "note": "Intercompany Financial Posting (1GP) and Billing of Costs Between Affiliated Companies (3ZB) create the intercompany positions that Intercompany Reconciliation (40Y) then matches."
+        },
+        {
+          "id": "r2r-group-valuation",
+          "from": "1GA",
+          "via": ["5W2"],
+          "to": "1SG",
+          "note": "Group Valuation (5W2) where the group view of a transaction differs from the local one."
+        },
+        {
+          "id": "r2r-org-change",
+          "from": "J58",
+          "via": ["4PG"],
+          "to": "1GA",
+          "note": "Organizational Flexibility in Financial Accounting (4PG) where the organisational structure changes inside a fiscal year."
+        }
+      ],
+      "source": "WS16, repo-authored. Membership from the SAP BDC questionnaire S4H_405 Finance (Accounting and Financial Close, General Settings) process areas (2608); ordering consultant-asserted, not SAP-published — confirm in Fit-to-Standard."
+    },
+    {
+      "id": "a2r-fixed-assets",
+      "name": "Acquire to Retire — fixed assets",
+      "valueStreamId": "finance",
+      "path": ["BFH", "J62", "1GB", "2QY"],
+      "alternates": [
+        {
+          "id": "a2r-extra-depreciation-area",
+          "from": "J62",
+          "via": ["5HG"],
+          "to": "1GB",
+          "note": "Asset Accounting – Additional Depreciation Area (5HG) where a further valuation is kept alongside the local and group ones."
+        }
+      ],
+      "source": "WS16, repo-authored. Membership from the SAP BDC questionnaire S4H_405 Finance (Asset Accounting) process area (2608); ordering consultant-asserted, not SAP-published — confirm in Fit-to-Standard."
+    },
+    {
+      "id": "fin-cash-and-bank",
+      "name": "Cash and bank operations",
+      "valueStreamId": "finance",
+      "path": ["BFA", "J77", "1EG", "4X8", "J78", "3L5"],
+      "alternates": [
+        {
+          "id": "cash-multi-bank-connectivity",
+          "from": "1EG",
+          "via": ["16R"],
+          "to": "4X8",
+          "note": "Bank Integration with SAP Multi-Bank Connectivity (16R) replaces the file interface where the bank supports it."
+        },
+        {
+          "id": "cash-direct-debit",
+          "from": "4X8",
+          "via": ["19M"],
+          "to": "J78",
+          "note": "Direct Debit (19M) collects from customer accounts through the same bank channel the statements arrive on."
+        },
+        {
+          "id": "cash-intercompany-fx",
+          "from": "J78",
+          "via": ["2F2"],
+          "to": "3L5",
+          "note": "Intercompany Foreign Exchange Management (2F2) where cash moves between currencies inside the group."
+        }
+      ],
+      "source": "WS16, repo-authored. Membership from the SAP BDC questionnaire S4H_405 Finance (Payments & Receipts, Bank) process areas (2608); ordering consultant-asserted, not SAP-published — confirm in Fit-to-Standard."
+    },
+    {
+      "id": "fin-plan-to-perform",
+      "name": "Plan to Perform — budget, plan and project control",
+      "valueStreamId": "finance",
+      "path": ["J54", "1HB", "2FM", "4RC", "1NT"],
+      "alternates": [
+        {
+          "id": "plan-commitment-view",
+          "from": "2FM",
+          "via": ["2I3"],
+          "to": "4RC",
+          "note": "Predictive Commitments Management (2I3) brings committed but uninvoiced spend into the plan-versus-actual view, which is what a budget holder is actually asking to see."
+        }
+      ],
+      "source": "WS16, repo-authored. Membership from the SAP BDC questionnaire S4H_405 Finance (Profitability and Cost Analysis, Planning) process areas (2608); ordering consultant-asserted, not SAP-published — confirm in Fit-to-Standard."
+    },
+    {
+      "id": "fin-statutory-reporting",
+      "name": "Statutory reporting and e-invoicing",
+      "valueStreamId": "finance",
+      "path": ["5XU", "1J2", "78L"],
+      "alternates": [],
+      "source": "WS16, repo-authored. Membership from the SAP BDC questionnaire S4H_405 Finance (Compliance) process area (2608); ordering consultant-asserted, not SAP-published — confirm in Fit-to-Standard."
     }
   ]
 }
