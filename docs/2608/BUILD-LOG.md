@@ -7,6 +7,77 @@ verified in the session.
 
 ---
 
+## WS10 — Integration & external connectivity: scoped, not built (2026-09-07)
+
+**Branch:** `claude/2608-files-landing-recon-ddezas` (from `main` @ `d1ffa63`).
+**Deliverable:** `docs/2608/WS10-SCOPE.md`. No code, no schema, no migration.
+
+### Why
+
+The To-Be Process Pack built for Usaha Tegas covers scope items, process steps
+and SSCUI configuration. Its APIs tab holds 26 rows — exactly the APIs cited by
+the 24 Appendix 4 integration requirements. It is not a connectivity catalogue,
+and the bid needs an honest account of that before anyone builds against it.
+
+### Correction to an earlier statement in this programme
+
+It was stated that the iFlows, Events, Data Products and Integration Adapters
+counted by the Hub harvest are "none in the repo as rows". **Wrong for five
+types.** `scripts/harvest-sap-api-hub.ts` writes `sap-references/hub-harvest/`
+alongside `api-hub-catalog.json`, and those files are committed:
+
+```
+BADI 3,214 · INTEGRATION (iFlow) 4,502 · SCENARIO 734 · BO_INTERFACE 478 · EVENT 496
+```
+
+`scripts/import-sap-hub-content.ts` already reads that directory into
+`SapHubContent`, and `SapHubContentType` already has the enum values. The
+integration surface is harvested and importable. Genuinely absent are the 15
+types in `_provenance.unmappedArtifactTypes` — 1,525 artefacts, of which
+DataProduct (334) and IntegrationAdapter (91) are the ones that matter here.
+
+### The gap that harvesting cannot close
+
+Measured against the committed harvest and the 822-item 2608 catalogue:
+
+```
+API rows carrying scopeItemCodes                          0 of 5,419
+API rows carrying communicationScenarios                  0 of 5,419
+iFlow rows naming any of the 822 scope codes              0 of 4,502
+Event rows naming any of the 822 scope codes              0 of   496
+Scenario rows naming any of the 822 scope codes           0 of   734
+iFlow rows mentioning any SAP_COM_* scenario id           6 of 4,502
+Fiori Apps Library data anywhere in the repo              none
+```
+
+There is no evidence path from a scope item to an API, and none derivable from
+what is held. `SapApiReference.scopeItemCodes` is populated only from a
+logged-in Hub export carrying a `Business Scenarios` column
+(`src/lib/sap-public/api-reference-import.ts:184`); the anonymous harvest has no
+such field. The scope document ranks the three candidate bridges and requires
+every future link row to carry `linkSource` of `PUBLISHED | DERIVED |
+CONSULTANT` with non-empty evidence.
+
+### Also corrected
+
+`model IntegrationPoint` (`prisma/schema.prisma:2131`) already carries
+direction, source/target system, interface type, frequency, middleware, data
+volume, complexity and effort. The gap is not the schema — it is that no row is
+bound to a published artefact, and nothing populates it from the catalogue.
+
+### Unproven
+
+1. **All figures above come from the committed harvest files, not from the
+   database.** `pnpm sap:hub:recon-2608 --db` was not run in this session; the
+   live `SapHubContent` row counts by `contentType` and `releaseId` are unknown.
+   WS10.0 must establish them before anything is built.
+2. **No source has been obtained for the communication-scenario bridge.**
+   Whether route (a) is available at all is untested. If it is not, WS10 ships
+   with no `PUBLISHED` links, which is the honest outcome, not a failure to
+   work around.
+
+---
+
 ## WS9.1 — SSCUI activities were reachable from one scope item out of hundreds (2026-09-07)
 
 **Branch:** `feat/sscui-scope-links` (from `main` at the WS8 squash merge, #244).
