@@ -363,6 +363,40 @@ export const DB_FACTS_2608 = {
   commScenariosFor1RO: 4,
   /** Statements of non-support. The first negative evidence aptus can hold. */
   notSupportedStatements: 539,
+
+  // ── WS14 — what the To-Be engine can actually reach ────────────────────────
+  /**
+   * Scope items with at least one row in the process-step master. This is the
+   * number the To-Be pack can draw. WS6 read the 9 BPD data files and nothing
+   * else, so a pack rendered 9 items with steps and the rest as placeholders;
+   * a fall in this figure means the engine has quietly gone back to that.
+   */
+  scopeItemsWithSteps: 661,
+  /** Scope items in PUBLIC/2608 with no published steps from any source. */
+  scopeItemsWithoutSteps: 161,
+  /**
+   * The nine BPD data files. The engine still prefers them where they exist,
+   * because only they publish an expected result per step. If this reaches
+   * 661 somebody has started generating BPD content rather than reading it.
+   */
+  bpdDataFiles: 9,
+  /**
+   * Country reach of the process-step master. UT has Malaysian and Philippine
+   * entities, and these two numbers are why the pack filters by footprint
+   * rather than by a single country: the sets overlap but neither contains
+   * the other.
+   */
+  stepsReachingMy: 14365,
+  stepsReachingPh: 13988,
+  scopeItemsReachingMy: 477,
+  scopeItemsReachingPh: 478,
+  /**
+   * Steps SAP publishes with no country list AND no global flag. Twelve rows
+   * of 19,158 — the master states neither, so the loader keeps them and reads
+   * that as "not stated" rather than "nowhere". A jump here means the country
+   * columns have stopped parsing.
+   */
+  stepsWithNoCountryStated: 12,
 } as const;
 
 async function observeDb(): Promise<{ facts: Report["facts"]; notes: string[] }> {
@@ -450,6 +484,38 @@ async function observeDb(): Promise<{ facts: Report["facts"]; notes: string[] }>
     const scenariosFor1RO = await prisma.scopeItemCommScenario.count({
       where: { releaseId: release.id, scopeItemCode: "1RO" },
     });
+    /*
+     * WS14 — what the To-Be engine can reach. Grouped rather than counted per
+     * scope code: 661 round trips to answer one question is how a recon run
+     * becomes something nobody runs.
+     */
+    const stepScopeCodes = await prisma.sapProcessStep.groupBy({
+      by: ["scopeItemCode"],
+      where: { releaseId: release.id },
+    });
+    const withSteps = new Set(stepScopeCodes.map((r) => r.scopeItemCode));
+    const catalogueCodes = await prisma.scopeItem.findMany({
+      where: { catalogVersionId: catalog?.id ?? "" },
+      select: { scopeCode: true },
+    });
+    const withoutSteps = catalogueCodes.filter((c) => !withSteps.has(c.scopeCode)).length;
+    const [stepsMy, stepsPh, stepsNoCountry] = await Promise.all([
+      prisma.sapProcessStep.count({ where: { releaseId: release.id, countries: { has: "MY" } } }),
+      prisma.sapProcessStep.count({ where: { releaseId: release.id, countries: { has: "PH" } } }),
+      prisma.sapProcessStep.count({
+        where: { releaseId: release.id, countries: { isEmpty: true }, isGlobal: false },
+      }),
+    ]);
+    const [itemsMy, itemsPh] = await Promise.all([
+      prisma.sapProcessStep.groupBy({
+        by: ["scopeItemCode"],
+        where: { releaseId: release.id, countries: { has: "MY" } },
+      }),
+      prisma.sapProcessStep.groupBy({
+        by: ["scopeItemCode"],
+        where: { releaseId: release.id, countries: { has: "PH" } },
+      }),
+    ]);
     const untouched = {
       scope: await prisma.scopeItem.count({ where: { releaseId: null } }),
       cfg: await prisma.configActivity.count({ where: { releaseId: null } }),
@@ -616,6 +682,52 @@ async function observeDb(): Promise<{ facts: Report["facts"]; notes: string[] }>
         expected: DB_FACTS_2608.notSupportedStatements,
         observed: notSupported,
         ok: within(DB_FACTS_2608.notSupportedStatements, notSupported),
+      },
+      {
+        // The WS14 headline. This is what a To-Be pack can draw, and WS6 could
+        // reach 9 of it. A fall means the engine has regressed to the files.
+        name: "db · scope items the To-Be engine can draw steps for",
+        expected: DB_FACTS_2608.scopeItemsWithSteps,
+        observed: withSteps.size,
+        ok: within(DB_FACTS_2608.scopeItemsWithSteps, withSteps.size),
+      },
+      {
+        name: "db · scope items with no published steps",
+        expected: DB_FACTS_2608.scopeItemsWithoutSteps,
+        observed: withoutSteps,
+        ok: within(DB_FACTS_2608.scopeItemsWithoutSteps, withoutSteps),
+      },
+      {
+        name: "db · process steps reaching MY",
+        expected: DB_FACTS_2608.stepsReachingMy,
+        observed: stepsMy,
+        ok: within(DB_FACTS_2608.stepsReachingMy, stepsMy),
+      },
+      {
+        name: "db · process steps reaching PH",
+        expected: DB_FACTS_2608.stepsReachingPh,
+        observed: stepsPh,
+        ok: within(DB_FACTS_2608.stepsReachingPh, stepsPh),
+      },
+      {
+        name: "db · scope items reaching MY",
+        expected: DB_FACTS_2608.scopeItemsReachingMy,
+        observed: itemsMy.length,
+        ok: within(DB_FACTS_2608.scopeItemsReachingMy, itemsMy.length),
+      },
+      {
+        name: "db · scope items reaching PH",
+        expected: DB_FACTS_2608.scopeItemsReachingPh,
+        observed: itemsPh.length,
+        ok: within(DB_FACTS_2608.scopeItemsReachingPh, itemsPh.length),
+      },
+      {
+        // Exact, not within(): 12 of 19,158 is small enough that a percentage
+        // band would swallow the country columns failing to parse entirely.
+        name: "db · steps stating neither country nor global",
+        expected: DB_FACTS_2608.stepsWithNoCountryStated,
+        observed: stepsNoCountry,
+        ok: stepsNoCountry === DB_FACTS_2608.stepsWithNoCountryStated,
       },
     ];
     const notes = [
