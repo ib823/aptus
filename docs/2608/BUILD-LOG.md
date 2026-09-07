@@ -7,6 +7,113 @@ verified in the session.
 
 ---
 
+## WS17 — SAP's e-invoicing connectors are per country, and there are nineteen (2026-09-07)
+
+**Branch:** `feat/2608-localised-apis` (from `main` @ `4ca8526`).
+
+### Where this came from
+
+Binding a live engagement's named interfaces to SAP communication scenarios,
+one by one, against `sap-references/comm-scenarios/`. Five of seven bound
+cleanly. Two did not, and the reason was a property of SAP's content rather
+than of that engagement, so it belongs here.
+
+### The finding
+
+**SAP publishes eDocument connectors for nineteen countries** in the 2608
+interface content, named `CO_EDO_<CC>_...`:
+
+```
+AR CH CL EG ES GR HU IN IT MX PE PL PT RO RS SA SK TH TR
+```
+
+**Malaysia is not among them.** Nor are Hong Kong, the Philippines or
+Singapore. A bid in any of those countries has no published e-invoicing
+communication scenario to bind an outbound invoice or an inbound clearance
+status to, whatever a product summary implies. In the engagement that surfaced
+this, it meant the tax-authority status write-back — validation result,
+reference number, timestamp — had nowhere standard to land, which turns a
+"standard interface" into an extension.
+
+This compounds the restriction already in the register: SAP states plainly
+that cross-border electronic invoices are not supported for Malaysia. Two
+independent findings, same conclusion.
+
+### The second finding, which is a trap rather than a gap
+
+`API_CN_BANK_RECONCILIAITON_SRV_0001` (SAP's own spelling) is linked by SAP to
+**1EG, Bank Integration with File Interface** — a scope item that sits in
+plenty of engagements with no China footprint. The link is real. The API is
+not usable outside China.
+
+Counting a link like that as integration coverage overstates what a bid can
+do, and nothing else in the pipeline would notice: the link resolves, the API
+name is real, the scope item is in scope. Only reading the country prefix
+catches it.
+
+### What landed
+
+`src/lib/sap/localised-apis.ts`:
+
+- `eDocumentCountries()` — the country codes of every `CO_EDO_<CC>_` connector.
+- `foreignLocalisedApis()` — APIs localised to a country outside the
+  engagement's footprint, covering both `CO_EDO_<CC>_` and `API_<CC>_`.
+- `hasEDocumentConnector()` — the one-line question a bid actually asks.
+
+An empty footprint returns nothing rather than everything: an unstated
+footprint is not a filter, the same rule `step-source.ts` already applies.
+
+**A curated not-a-country list**, because the failure mode is silent and
+expensive in the wrong direction. `API_CV_ATTACHMENT` is a content-version
+attachment service, not Cape Verde. `API_HR_EMPLOYEEEXPENSE` is Human
+Resources, not Croatia. `BR_CTR_SERVICE` is a Brazil connector but the prefix
+shape differs. A false positive marks a usable API as foreign and quietly
+shrinks a bid's coverage, so the list is explicit and tested.
+
+### RECON
+
+A new **presence** fact, no tolerance:
+
+```
+OK   eDocument connector countries (published interface content)
+     expected AR CH CL EG ES GR HU IN IT MX PE PL PT RO RS SA SK TH TR
+     observed AR CH CL EG ES GR HU IN IT MX PE PL PT RO RS SA SK TH TR
+notes:
+  · eDocument connectors published for 19 countries: … — note: no Malaysia connector
+result: GREEN
+```
+
+If a later content release adds Malaysia, this fact fails. That is the point:
+it is news a bid needs, and a silent improvement is as easy to miss as a
+silent regression.
+
+### A bug this check shipped with, caught by running it
+
+The first version referenced a `ROOT` constant that does not exist in
+`recon-2608.ts`, inside a bare `try/catch`. The catch swallowed the
+`ReferenceError` and the fact reported `(not measured)` — so a **programming
+error and a missing file looked identical**. The catch now reports the path
+and the error message, and the check reads the folder as a sibling of
+`DROP_DIR` rather than inventing a root.
+
+Gates: typecheck clean · eslint clean · **5,087 unit tests pass** (11 new) ·
+migration drift zero (no schema change) · `pnpm sap:2608:recon` GREEN ·
+`pnpm guard:confidentiality` clean · `next build` clean.
+
+### Unproven / open
+
+1. **Scope of the evidence.** This is SAP's published *scope-item to
+   interface* mapping — 496 scenarios — not the whole `SAP_COM_*` universe. A
+   country absent here is absent from that mapping, NOT proven absent from the
+   product. Confirm against the SAP API Hub before asserting it to a client.
+2. **`API_<CC>_` is a heuristic.** The eDocument prefix is unambiguous; the
+   OData one is a naming convention SAP does not guarantee. The not-a-country
+   list makes it safe in practice, and every entry is there because a real API
+   name would otherwise have been mis-flagged.
+3. **No connector inventory for the countries that ARE covered.** Knowing
+   Poland has a connector is not the same as knowing which documents it
+   carries. That is a harvest, not an inference.
+
 ## WS16 — the L1 page of a finance pack opened on "Sales Inquiry" (2026-09-07)
 
 **Branch:** `feat/2608-finance-chains` (from `main` @ `59cf142`).
