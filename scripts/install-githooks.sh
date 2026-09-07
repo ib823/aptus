@@ -24,5 +24,6 @@ fi
 git config core.hooksPath .githooks
 chmod +x .githooks/* 2>/dev/null || true
 printf "\033[32m✓\033[0m githooks installed (core.hooksPath = .githooks)\n"
+printf "   Pre-commit runs the client-confidentiality guard (no bypass).\n"
 printf "   Pre-push will run 'next build' before allowing pushes.\n"
 printf "   Bypass: SKIP_PRE_PUSH=1 git push  (use sparingly)\n"

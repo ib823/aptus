@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Client-confidentiality guard — runs before every commit.
+#
+# ib823/aptus is a PUBLIC repository. Git history is permanent: a client name
+# committed and then deleted in a later commit is still served by GitHub
+# forever, and is still in every merged PR diff. Blocking the commit is the
+# only control that actually prevents the disclosure.
+#
+# There is deliberately NO bypass variable. The pre-push hook has
+# SKIP_PRE_PUSH because a slow build is sometimes worth skipping; a
+# confidentiality check is not. If this fires, the fix is to remove the term.
+set -euo pipefail
+
+if ! command -v npx >/dev/null 2>&1; then
+  echo "pre-commit: npx not found — cannot run the confidentiality guard." >&2
+  echo "Install dependencies before committing." >&2
+  exit 1
+fi
+
+npx tsx scripts/check-confidentiality.ts --staged --message "${1:-.git/COMMIT_EDITMSG}"
