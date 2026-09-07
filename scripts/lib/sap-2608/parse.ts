@@ -112,7 +112,16 @@ export type SscuiRow = {
   category: string;
   activityId: string; // "Configuration Activity ID" — the SSCUI id
   mainScopeItemIds: string; // raw "Main Scope Item ID" (e.g. "All" or "J14, J13")
-  scopeItemId: string; // first id, or "All"
+  scopeItemId: string; // first id, or "All" — kept for the pre-WS9 consumers
+  /**
+   * 2608 WS9 — every id in "Main Scope Item ID", not just the first.
+   *
+   * `scopeItemId` was the only thing persisted in a queryable column, so an
+   * activity naming hundreds of scope items was reachable from exactly one of
+   * them. "All" stays a single element: expanding it would assert a per-item
+   * claim SAP does not make.
+   */
+  mainScopeItemCodes: string[];
   scopeItemDescription: string;
   localizationScope: string;
   countrySpecific: string;
@@ -128,6 +137,22 @@ export type SscuiRow = {
 export function firstScopeItemId(raw: string): string {
   if (raw === "All" || raw === "") return raw || "All";
   return raw.split(/[,;]/)[0]!.trim();
+}
+
+/**
+ * Every scope-item id in a raw "Main Scope Item ID" cell, de-duplicated and in
+ * file order. An empty cell yields ["All"], matching `firstScopeItemId`, so the
+ * two never disagree about what an unqualified activity applies to.
+ */
+export function scopeItemIdsFrom(raw: string): string[] {
+  const trimmed = raw.trim();
+  if (trimmed === "" || trimmed === "All") return ["All"];
+  const out: string[] = [];
+  for (const part of trimmed.split(/[,;]/)) {
+    const id = part.trim();
+    if (id && !out.includes(id)) out.push(id);
+  }
+  return out.length ? out : ["All"];
 }
 
 export async function parseSscuiList(sources: SapContentSources): Promise<SscuiRow[]> {
@@ -151,6 +176,7 @@ export async function parseSscuiList(sources: SapContentSources): Promise<SscuiR
       activityId,
       mainScopeItemIds: main,
       scopeItemId: firstScopeItemId(main),
+      mainScopeItemCodes: scopeItemIdsFrom(main),
       scopeItemDescription: row.get("Main Scope Item Descriptions"),
       localizationScope: row.get("Global, Country Dependent, or Localized"),
       countrySpecific: row.get("Specialized for Certain Countries"),

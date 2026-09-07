@@ -61,7 +61,14 @@ export interface AribaCallResult {
 const ARIBA_SOURCING_V1_ENV = "ARIBA_SOURCING_V1";
 
 /** True while a deployment is pinned to the deprecated v1 sourcing APIs. */
-export function isAribaSourcingV1Pinned(env: NodeJS.ProcessEnv = process.env): boolean {
+/**
+ * Just the shape these helpers read: a bag of optional strings. Narrower than
+ * `NodeJS.ProcessEnv`, which requires NODE_ENV and so forced every caller —
+ * tests included — to hand over a full environment to check one flag.
+ */
+type EnvLike = Partial<Record<string, string | undefined>>;
+
+export function isAribaSourcingV1Pinned(env: EnvLike = process.env): boolean {
   return env[ARIBA_SOURCING_V1_ENV] === "true";
 }
 
@@ -139,7 +146,7 @@ const ARIBA_SOURCING_V1_PATHS: Readonly<Record<string, string>> = {
 };
 
 /** The endpoints as this deployment will actually call them. */
-export function resolveAribaEndpoints(env: NodeJS.ProcessEnv = process.env): AribaEndpoint[] {
+export function resolveAribaEndpoints(env: EnvLike = process.env): AribaEndpoint[] {
   if (!isAribaSourcingV1Pinned(env)) return ARIBA_ENDPOINTS;
   return ARIBA_ENDPOINTS.map((e) =>
     ARIBA_SOURCING_V1_PATHS[e.key] ? { ...e, path: ARIBA_SOURCING_V1_PATHS[e.key]! } : e,
