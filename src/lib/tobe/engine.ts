@@ -334,8 +334,14 @@ export function generateTobePack(input: TobeEngineInput): TobePackDoc {
       byDisposition,
       itemsWithoutSteps: inScopeItems.filter((s) => !s.hasSteps).length,
       stepsExcludedByCountry: inScopeItems.reduce((n, s) => n + s.stepsExcludedByCountry, 0),
-      forms: inScopeItems.reduce((n, s) => n + s.forms.length, 0),
-      integrations: inScopeItems.reduce((n, s) => n + s.integrations.length, 0),
+      formPlacements: inScopeItems.reduce((n, s) => n + s.forms.length, 0),
+      // Distinct by the same key the unique index uses, because SAP ships two
+      // forms that differ only in output type and both must be reviewed.
+      forms: new Set(
+        inScopeItems.flatMap((s) => s.forms.map((f) => `${f.name}|${f.outputType}|${f.adobeFormTemplate}`)),
+      ).size,
+      integrationLinks: inScopeItems.reduce((n, s) => n + s.integrations.length, 0),
+      integrations: new Set(inScopeItems.flatMap((s) => s.integrations.map((i) => i.commScenarioId))).size,
       restrictions: input.restrictions.length,
       confirmInWorkshop: inScopeItems.filter((s) => s.confirmInWorkshop).length,
       configuredSscuis: new Set(inScopeItems.flatMap((s) => s.configurations.map((c) => c.sscuiId))).size,
