@@ -1231,6 +1231,25 @@ model ScopeItem {
   provisioning        String? // A&D "Provisioning": Default | Optional | Optional (only with …)
   availableInMy       Boolean? // A&D "MY" column != "No"
   myAvailableSince    String? // A&D "MY" column value, e.g. "2402" (release it became available in MY)
+  /// 2608 WS15 — every country the A&D export says this scope item is
+  /// available in, ISO-3166-1 alpha-2.
+  ///
+  /// The Availability & Dependencies workbook publishes a matrix of SIXTY
+  /// country columns, and `parseAvailabilityDependencies` has read all of them
+  /// into `AdScopeItem.countries` since WS1.2. The loader then persisted one:
+  /// `availableInMy`. Fifty-nine countries' availability was parsed and
+  /// discarded one statement before the database — the WS9.1 defect for the
+  /// third time in this programme, and the reason a Philippine harvest was
+  /// scoped for data the repository already held.
+  ///
+  /// `availableInMy` and `myAvailableSince` are NOT removed. Every pre-WS15
+  /// consumer keeps working, and `availableInMy` must stay equal to
+  /// `countries` containing "MY" — a RECON fact checks exactly that.
+  countries           String[] @default([])
+  /// The A&D cell verbatim for each country, e.g. {"MY":"2402","PH":"1608"}.
+  /// A release code says WHEN, and "Can be added" says something different
+  /// again; reducing all of it to a boolean threw that away.
+  countryAvailability Json?
   lobs                String[] @default([]) // every A&D LOB row for the item (133 items span several)
   businessAreas       String[] @default([])
   requiredScopeCodes  String[] @default([]) // A&D "Required Scope Items and Business Conditions"
@@ -1246,6 +1265,7 @@ model ScopeItem {
   @@index([functionalArea])
   @@index([subArea])
   @@index([country])
+  @@index([countries], type: Gin)
   @@index([catalogVersionId])
   @@index([releaseId])
   @@index([lifecycleStatus])
