@@ -7,7 +7,16 @@
 import PptxGenJS from "pptxgenjs";
 
 import { packNarrative, type NarrativeBlock } from "./narrative";
-import { STATE_STYLE, TOBE_NAVY, l3Rows, layoutL2, paginateL2, wrapText } from "./svg";
+import {
+  L1_CAVEAT,
+  STATE_STYLE,
+  TOBE_NAVY,
+  l3Rows,
+  layoutL2,
+  paginateL2,
+  shortAppLabel,
+  wrapText,
+} from "./svg";
 import type { TobeDisposition, TobePackDoc, TobeStepState } from "./types";
 
 /**
@@ -78,20 +87,30 @@ export async function generateTobePackPptx(
           alternates: [],
         },
       ];
-  const l1 = pptx.addSlide();
-  l1.addText("End-to-end to-be process (L1)", {
-    x: 0.4,
-    y: 0.25,
-    w: 12.5,
-    h: 0.5,
-    fontSize: 22,
-    bold: true,
-    color: c(TOBE_NAVY),
-    fontFace: "Helvetica",
-  });
-  legend(l1, 0.4, 0.85);
-  let cy = 1.5;
-  for (const chain of chains) {
+  // WS16: one slide per chain. Seven chains on one slide ran off the bottom.
+  chains.forEach((chain, chainIndex) => {
+    const l1 = pptx.addSlide();
+    l1.addText("End-to-end to-be process (L1)", {
+      x: 0.4,
+      y: 0.25,
+      w: 12.5,
+      h: 0.5,
+      fontSize: 22,
+      bold: true,
+      color: c(TOBE_NAVY),
+      fontFace: "Helvetica",
+    });
+    l1.addText(`chain ${chainIndex + 1} of ${chains.length} · ${doc.release}`, {
+      x: 0.4,
+      y: 0.72,
+      w: 12.5,
+      h: 0.25,
+      fontSize: 10,
+      color: "6B6B6B",
+      fontFace: "Helvetica",
+    });
+    legend(l1, 0.4, 1.0);
+    let cy = 1.65;
     l1.addText(`${chain.name} · ${chain.valueStreamId}`, {
       x: 0.4,
       y: cy,
@@ -159,8 +178,17 @@ export async function generateTobePackPptx(
       );
       cy += 0.3;
     }
-    cy += 0.3;
-  }
+    // Chain ORDER is a consultant assertion, never an SAP citation.
+    l1.addText(L1_CAVEAT, {
+      x: 0.4,
+      y: 6.85,
+      w: 12.5,
+      h: 0.4,
+      fontSize: 9,
+      color: "6B6B6B",
+      fontFace: "Helvetica",
+    });
+  });
 
   // One slide per L2 flow — paginated, for the reason in export-pdf.ts: a whole
   // 55-step flow on one slide is a row of unreadable slivers on a projector.
@@ -259,7 +287,11 @@ export async function generateTobePackPptx(
           line: { color: c(st.stroke), width: 1, dashType: st.dash ? "dash" : n.step.optional ? "sysDot" : "solid" },
           rectRadius: 0.05,
         });
-        const meta = n.step.sscuiId ? `SSCUI ${n.step.sscuiId}` : n.step.app || "";
+        const meta = n.step.sscuiId
+          ? `SSCUI ${n.step.sscuiId}`
+          : n.step.app
+            ? shortAppLabel(n.step.app, 25)
+            : "";
         sl.addText(
           [
             {

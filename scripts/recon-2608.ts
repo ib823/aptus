@@ -37,6 +37,7 @@ import {
   type IntegrityResult,
   type Manifest,
 } from "./lib/manifest-2608";
+import { E2E_CHAINS } from "../src/lib/tobe/chains";
 import { BPD_2608_SCOPE_ITEMS, sapContentSourcesFor, type SheetSource } from "./lib/sap-content-sources";
 
 const RELEASE = "2608" as const;
@@ -57,6 +58,13 @@ export const FACTS_2608 = {
   bdcQuestionnaires: 16, // S4H_* BDC files, excluding the Two-Tier scope questionnaire
   bdcNewIn2608: "S4H_706",
   bpdPairs: 9,
+  /**
+   * WS16 — the L1 layer's chain file. A count alone would be weak; the fact
+   * that earns its place is the presence one below: every scope-item code the
+   * chain file names must exist in the A&D catalogue. A typo'd code draws a
+   * box with a title of "undefined" and nothing else notices.
+   */
+  e2eChains: 8,
 } as const;
 
 type Observed = {
@@ -73,6 +81,9 @@ type Observed = {
   bdcNewPresent: boolean;
   twoTierPresent: boolean;
   bpdPairs: number;
+  e2eChains: number;
+  /** Codes named by e2e-chains.json that the A&D catalogue does not contain. */
+  e2eChainCodesUnknown: string[];
 };
 
 type ReleaseRecord = {
@@ -191,6 +202,15 @@ async function observeFacts(manifest: Manifest): Promise<{ observed: Observed; n
   const bdcNewPresent = bdcPresent.some((q) => q.id === FACTS_2608.bdcNewIn2608);
   const bpdPairs = SOURCES.bpd.filter((b) => listed.has(b.docx) && listed.has(b.xlsx)).length;
 
+  // End-to-end chains — every code they name must be a real 2608 scope item.
+  const chainCodes = new Set(
+    E2E_CHAINS.flatMap((c) => [...c.path, ...c.alternates.flatMap((a) => a.via)]),
+  );
+  const chainCodesUnknown = [...chainCodes].filter((c) => !scopeIds.has(c)).sort();
+  notes.push(
+    `e2e-chains.json: ${E2E_CHAINS.length} chain(s), ${chainCodes.size} distinct scope-item code(s)${chainCodesUnknown.length ? ` — NOT IN A&D: ${chainCodesUnknown.join(", ")}` : ""}`,
+  );
+
   const in1NN = { inScopeSheet: scopeIds.has("1NN"), inProcessSteps: psItems.has("1NN") };
   if (in1NN.inScopeSheet && in1NN.inProcessSteps) {
     notes.push(
@@ -220,6 +240,8 @@ async function observeFacts(manifest: Manifest): Promise<{ observed: Observed; n
       bdcNewPresent,
       twoTierPresent,
       bpdPairs,
+      e2eChains: E2E_CHAINS.length,
+      e2eChainCodesUnknown: chainCodesUnknown,
     },
     notes,
   };
@@ -286,6 +308,20 @@ function checkFacts(o: Observed): Report["facts"] {
       expected: FACTS_2608.bpdPairs,
       observed: o.bpdPairs,
       ok: o.bpdPairs === FACTS_2608.bpdPairs,
+    },
+    {
+      name: "end-to-end chains defined (e2e-chains.json)",
+      expected: FACTS_2608.e2eChains,
+      observed: o.e2eChains,
+      ok: o.e2eChains === FACTS_2608.e2eChains,
+    },
+    {
+      // A presence fact, so no ±1% tolerance: one unknown code is one box in
+      // the L1 diagram with no scope item behind it.
+      name: "every e2e-chain code exists in the A&D catalogue",
+      expected: 0,
+      observed: o.e2eChainCodesUnknown.length,
+      ok: o.e2eChainCodesUnknown.length === 0,
     },
   ];
 }

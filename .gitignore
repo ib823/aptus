@@ -185,3 +185,7 @@ curation-model/_*.tsv
 !/sap-references/fiori-apps/
 !/sap-references/comm-scenarios/
 !/sap-references/restrictions/
+
+# Scratch scripts for one-off local work. Anything worth keeping gets promoted
+# to scripts/ with a pnpm entry; this directory never reaches a review.
+scripts/.tmp/
