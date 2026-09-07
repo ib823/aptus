@@ -315,7 +315,19 @@ export interface TobePackDoc {
     itemsWithoutSteps: number;
     /** Steps the country footprint excluded, across every in-scope item. */
     stepsExcludedByCountry: number;
+    /**
+     * Form placements — one per (form, scope item) pair. A single SAP form
+     * names many scope items, so this is NOT the number of forms: on a
+     * 12-item finance scope it read 928 against 107 distinct forms. Both are
+     * carried, because "928 forms" in a bid pack is an 8.7x overstatement and
+     * "107 placements" would undercount the review work.
+     */
+    formPlacements: number;
+    /** Distinct forms across the in-scope items. The number to say out loud. */
     forms: number;
+    /** Integration links — one per (scope item, communication scenario) pair. */
+    integrationLinks: number;
+    /** Distinct communication scenarios across the in-scope items. */
     integrations: number;
     restrictions: number;
     confirmInWorkshop: number;

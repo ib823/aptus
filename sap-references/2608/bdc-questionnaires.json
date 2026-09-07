@@ -2,7 +2,7 @@
   "_provenance": {
     "purpose": "Every question of every SAP BDC questionnaire shipped in the 2608 accelerator set, normalised across SAP's five sheet layouts. Generated — do not edit.",
     "generatedBy": "scripts/load-2608-bdc.ts",
-    "generatedAt": "2026-09-05",
+    "generatedAt": "2026-09-07",
     "manifest": "sap-references/2608/MANIFEST.json",
     "manifestSha256": "8d910bf77e4ddec525ed7d19edf2aae3b5533af4811098a2067fcc8e1cfda050",
     "changedAt2608": [

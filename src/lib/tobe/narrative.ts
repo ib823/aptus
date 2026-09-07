@@ -71,12 +71,15 @@ export function effortDriversFromPack(doc: TobePackDoc): NarrativeTable {
       ],
       [
         "Forms SAP ships for these items",
-        String(s.forms),
+        // Distinct forms, not placements. One SAP form names many scope items,
+        // and on a 12-item finance scope the placement count is 928 against 107
+        // real forms — a number that would not survive a reviewer checking it.
+        `${s.forms}${s.formPlacements > s.forms ? ` (${s.formPlacements} placements)` : ""}`,
         "Each is a printed output to review, brand and test — a form SAP ships is not a form you have approved.",
       ],
       [
         "Integrations SAP publishes for these items",
-        String(s.integrations),
+        `${s.integrations}${s.integrationLinks > s.integrations ? ` (${s.integrationLinks} links)` : ""}`,
         "Each communication scenario is an interface to configure, authorise and test.",
       ],
       [
