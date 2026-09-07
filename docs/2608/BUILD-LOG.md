@@ -10,7 +10,10 @@ verified in the session.
 ## WS10 — Integration & external connectivity: scoped, not built (2026-09-07)
 
 **Branch:** `claude/2608-files-landing-recon-ddezas` (from `main` @ `d1ffa63`).
-**Deliverable:** `docs/2608/WS10-SCOPE.md`. No code, no schema, no migration.
+**Deliverable:** `docs/2608/WS10-SCOPE.md`, plus `docs/2608/DATA-ACQUISITION-BRIEF.md` —
+a standing, client-agnostic list of the nine data sets aptus is missing, each with the
+gap measured in this repository, the exact column shape, the landing path and an
+acceptance test. No code, no schema, no migration.
 
 ### Why
 
