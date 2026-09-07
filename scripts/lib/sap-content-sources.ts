@@ -39,11 +39,49 @@ export type SapContentSources = {
   bdcQuestionnaires: { id: string; file: string }[];
   /** BPD test scripts — docx + xlsx per scope item. */
   bpd: { scopeItemCode: string; docx: string; xlsx: string }[];
+  /**
+   * 2608 WS11 — the workbooks that shipped in the drop and had no loader.
+   * Null on a release whose drop does not carry them.
+   */
+  forms: SheetSource | null;
+  glAccounts: SheetSource | null;
+  taxAccountAssignment: SheetSource | null;
+  taxCodes: SheetSource | null;
+  taxRates: SheetSource | null;
+  fiscalYearVariants: SheetSource | null;
+  orgStructure: SheetSource | null;
+  /**
+   * Controlling / financial master objects: one sheet per object type.
+   *
+   * `levelColumns` are 1-based column numbers, not header names, because the
+   * group sheets repeat a header ("Activity Type Group" twice, once per level)
+   * and a name lookup cannot tell the two apart. Naming the positions here is
+   * explicit; inferring them from header text was not.
+   */
+  coMasterObjects: {
+    objectType: string;
+    source: SheetSource;
+    /** Hierarchy level columns, outermost first. Empty for a flat sheet. */
+    levelColumns?: number[];
+    /** Column holding the node's name, when it is not part of the code cell. */
+    nameColumn?: number;
+    /** Column holding leaf members that appear on no flat sheet of their own. */
+    memberColumn?: number;
+  }[];
   /** Where the release's content came from before WS0 (2602 only). */
   legacy?: { sapZipEnv: string; note: string };
 };
 
 const DROP_2608 = "sap-references/2608";
+/** 2608 WS11 file names, kept beside the drop path they hang off. */
+const FORMS_2608 = "BP_CLD_ENTPR_2608_Forms_List_EN_MY.xlsx";
+const YCOA_MY_2608 = "BP_CLD_ENTPR_2608_Account_Master_Data_for_YCOA_MY.xlsx";
+const TAX_2608 = "2608_Pre-configured_Tax_Codes_EN_MY.xlsx";
+const CO_2608 = "2608_Master_Data_CO_EN_XX.xlsx";
+const FI_2608 = "2608_Master_Data_FI_EN_XX.xlsx";
+
+const co = (sheet: string, headerRow: number): SheetSource => ({ file: `${DROP_2608}/${CO_2608}`, sheet, headerRow });
+const fi = (sheet: string, headerRow: number): SheetSource => ({ file: `${DROP_2608}/${FI_2608}`, sheet, headerRow });
 
 /** The 16 BDC questionnaires + the Two-Tier scope questionnaire shipped with 2608. */
 export const BDC_2608: { id: string; file: string }[] = [
@@ -88,6 +126,35 @@ const SOURCES_2608: SapContentSources = {
     docx: `${DROP_2608}/bpd-fts/${code}_S4CLD2608_BPD_EN_MY.docx`,
     xlsx: `${DROP_2608}/bpd-fts/${code}_S4CLD2608_BPD_EN_MY.xlsx`,
   })),
+  // 2608 WS11. Header rows are 1-based and were read off the files, not guessed:
+  // the two Account_Master_Data sheets put SAP's technical field names (I_KTOPL,
+  // I_SAKNR, …) on the row BELOW the labels, so the parser drops that row rather
+  // than loading it as an account.
+  forms: { file: `${DROP_2608}/${FORMS_2608}`, sheet: "FormList", headerRow: 1 },
+  glAccounts: { file: `${DROP_2608}/${YCOA_MY_2608}`, sheet: "YCOA_local", headerRow: 2 },
+  taxAccountAssignment: { file: `${DROP_2608}/${YCOA_MY_2608}`, sheet: "T030K", headerRow: 2 },
+  taxCodes: { file: `${DROP_2608}/${TAX_2608}`, sheet: "Tax Codes", headerRow: 1 },
+  taxRates: { file: `${DROP_2608}/${TAX_2608}`, sheet: "Time Dependent Tax Rates", headerRow: 1 },
+  fiscalYearVariants: { file: `${DROP_2608}/2608_predelivered_FYV.xlsx`, sheet: "Fiscal Year Variants", headerRow: 2 },
+  // Only Enterprise_Structure_Data carries data. Global_/Retail_Enterprise_Structure
+  // are the drawn diagrams with a legend and no table.
+  orgStructure: { file: `${DROP_2608}/2608_Org_Data_Overview_EN_XX.xlsx`, sheet: "Enterprise_Structure_Data", headerRow: 2 },
+  coMasterObjects: [
+    { objectType: "COST_CENTER", source: co("Cost Centers", 1) },
+    { objectType: "SECONDARY_COST_ELEMENT", source: co("Secondary Cost Elements", 1) },
+    { objectType: "ACTIVITY_TYPE", source: co("Activity Types", 1) },
+    { objectType: "STATISTICAL_KEY_FIGURE", source: co("Statistical Key Figures", 1) },
+    // Group ladders. Only the nodes are taken: the member columns beside them
+    // repeat cost centres and cost elements the flat sheets already carry.
+    { objectType: "COST_CENTER_GROUP", source: co("Cost Center Groups", 1), levelColumns: [1, 2, 4, 5, 6], nameColumn: 7 },
+    { objectType: "COST_ELEMENT_GROUP", source: co("Cost Element Groups", 1), levelColumns: [1, 2, 3, 4, 5], nameColumn: 6 },
+    { objectType: "ACTIVITY_TYPE_GROUP", source: co("Activity Type Groups", 1), levelColumns: [1, 2], nameColumn: 3 },
+    { objectType: "FUNCTIONAL_AREA", source: fi("Functional Areas", 1) },
+    { objectType: "SEGMENT", source: fi("Segments", 1) },
+    // The one ladder whose leaves exist on no other sheet, so they are taken too.
+    // SAP's own header typo ("Leve1" for level 1) is why these are positions.
+    { objectType: "PROFIT_CENTER", source: fi("Profit Centers", 2), levelColumns: [1, 2, 3], memberColumn: 4 },
+  ],
 };
 
 const SOURCES_2602: SapContentSources = {
@@ -101,6 +168,14 @@ const SOURCES_2602: SapContentSources = {
   processSteps: null,
   bdcQuestionnaires: [],
   bpd: [],
+  forms: null,
+  glAccounts: null,
+  taxAccountAssignment: null,
+  taxCodes: null,
+  taxRates: null,
+  fiscalYearVariants: null,
+  orgStructure: null,
+  coMasterObjects: [],
   legacy: {
     sapZipEnv: "SAP_ZIP_PATH",
     note: "2602 content was loaded from the SAP Best Practices ZIP (scripts/ingest-sap-zip.ts) and the gitignored Layer0–Layer3 / BDC workbooks at the repo root (scripts/extract-*.py). No per-file drop exists for it; ScopeCatalogVersion PUBLIC/2602 is its record.",
