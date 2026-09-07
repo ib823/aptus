@@ -68,13 +68,13 @@ reads `2302` in MY and `No` in PH; `J59` reads `1702` and `1603`.
 
 | file | rows |
 |---|---:|
-| `2608/ph/tax-codes-ph.tsv` | 18 |
-| `2608/ph/withholding-tax-codes-ph.tsv` | 53 |
-| `2608/ph/gl-accounts-ph.tsv` | 578 |
-| `2608/ph/tax-account-assignment-ph.tsv` | 22 |
-| `2608/ph/availability-ph-uncovered.tsv` | 145 |
-| `2608/ph/tax-rates-ph.tsv` | **0 — documented empty** |
-| `2608/ph/org-structure-ph.tsv` | **0 — documented empty** |
+| `ph-localisation/tax-codes-ph.tsv` | 18 |
+| `ph-localisation/withholding-tax-codes-ph.tsv` | 53 |
+| `ph-localisation/gl-accounts-ph.tsv` | 578 |
+| `ph-localisation/tax-account-assignment-ph.tsv` | 22 |
+| `ph-localisation/availability-ph-uncovered.tsv` | 145 |
+| `ph-localisation/tax-rates-ph.tsv` | **0 — documented empty** |
+| `ph-localisation/org-structure-ph.tsv` | **0 — documented empty** |
 | `restrictions/not-supported-ph.tsv` | **0 — documented empty** |
 | `restrictions/not-supported-ph-evidence.tsv` | 13 |
 
@@ -85,6 +85,15 @@ reproducible where a derived TSV is not.
 Three empty files are landed as empties on purpose. A zero produced by a
 documented search is a different fact from a zero nobody has looked for, and
 aptus has to be able to tell them apart.
+
+**They sit in `sap-references/ph-localisation/`, not under `2608/`, and the WS0
+manifest guard is why.** `sap-references/2608/` is SAP's own drop and
+`MANIFEST.json` is a sha256 record of exactly what SAP shipped in it. Landing a
+harvested file there failed `manifest-2608.test.ts` with "7 file(s) in the drop
+not listed in MANIFEST.json" — and listing them would have broken what the
+manifest means. The harvest belongs beside `hub-harvest/`, `fiori-apps/`,
+`comm-scenarios/` and `restrictions/` instead. The guard was written in WS0 for
+exactly this and caught it on the first full run.
 
 ### Two findings that are not counts
 

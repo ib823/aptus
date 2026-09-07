@@ -147,6 +147,13 @@ test-results/
 # …and the 2608 WS2 Hub records: the named S/4HANA Cloud Public package set
 # (scripts/discover-hub-packages.ts, with provenance) and the SAP-named
 # successor map for deprecated APIs. Small, reviewed, reproducible.
+# 2608 WS15 — the Philippine localisation harvest. NOT under /2608/, because
+# that directory is SAP's own drop and MANIFEST.json is a sha256 record of
+# exactly what SAP shipped in it. A harvested file placed there fails the
+# manifest guard, and adding it to the manifest would break what the manifest
+# means. These sit beside the other harvests instead.
+!/sap-references/ph-localisation/
+!/sap-references/ph-localisation/**
 !/sap-references/hub-packages.s4public.json
 !/sap-references/api-successors.json
 /sap-references/2608/**/*.zip
