@@ -2,6 +2,14 @@
 
 **Standing document. Product-scoped, not tied to any client, engagement or bid.**
 
+> **Status 2026-09-07 — targets 1, 2, 3 and 6 are DONE and landed** (WS13).
+> `sap-references/fiori-apps/`, `sap-references/comm-scenarios/`,
+> `sap-references/restrictions/` and two new `hub-harvest/` files. Target 2's
+> premise below — that the scope-item ↔ API question has no evidence path — was
+> **wrong**: SAP publishes the mapping on one help.sap.com page, and it is now
+> in the repository. Targets 4, 5, 7, 8 and 9 remain open; target 5 is now cheap
+> because target 1's file already carries the catalog and role ids.
+
 Hand this to a research session working against the aptus repository. Every gap below
 was **measured in aptus on 07 Sep 2026** against content release 2608, SAP S/4HANA
 Cloud Public Edition. The numbers are facts about this repository, not estimates.

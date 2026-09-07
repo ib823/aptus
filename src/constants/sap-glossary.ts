@@ -242,6 +242,18 @@ export const SAP_GLOSSARY: Record<string, GlossaryEntry> = {
     why: "Reporting inspiration; needs SAC to actually run, so it's reference here.",
     related: ["runtime-vs-reference"],
   },
+  "type-data-product": {
+    term: "Data Products",
+    short: "Published contracts describing a dataset for analytical consumption.",
+    why: "Design-time, not a tenant endpoint — and SAP publishes none of them for Public Edition.",
+    related: ["runtime-vs-reference"],
+  },
+  "type-integration-adapter": {
+    term: "Integration Adapters",
+    short: "SAP Integration Suite adapters — what a middleware tier can connect with.",
+    why: "Tells you what a landscape could integrate, never what a tenant has; none are published for Public Edition.",
+    related: ["runtime-vs-reference"],
+  },
 };
 
 /** Display order for the SAP glossary drawer: concepts → statuses → types. */
@@ -281,6 +293,8 @@ export const SAP_GLOSSARY_ORDER: string[] = [
   "type-scenario",
   "type-vpuc",
   "type-analytics",
+  "type-data-product",
+  "type-integration-adapter",
 ];
 
 /** Glossary id for a status badge (used for one-tap define on each badge). */

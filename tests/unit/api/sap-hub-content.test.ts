@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { HUB_CONTENT_TYPES } from "@/lib/sap-public/hub-content";
+
 const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   getSapProduct: vi.fn(),
@@ -134,8 +136,10 @@ describe("GET /api/sap/tdd/hub-content", () => {
     expect(body.data.counts.byTypeDeprecated.EVENT).toBe(0);
     // Sums to the full set.
     expect(Object.values(body.data.counts.byStatus).reduce((a: number, b) => a + (b as number), 0)).toBe(ALL_ROWS.length);
-    // byType still emits all 12 keys from the groupBy.
-    expect(Object.keys(body.data.counts.byType)).toHaveLength(12);
+    // byType still emits a key for every content type, whatever the rows hold.
+    // 14 since 2608 WS13 added DATA_PRODUCT and INTEGRATION_ADAPTER; asserted
+    // against the list rather than a literal so the next addition cannot drift.
+    expect(Object.keys(body.data.counts.byType).sort()).toEqual([...HUB_CONTENT_TYPES].sort());
     expect(body.data.counts.byType.API).toBe(5);
     expect(body.data.counts.probed).toBe(2); // API_PO + API_OLD carry a stored http
     expect(body.data.counts.lastProbedAt).toBe("2026-02-02T00:00:00Z");

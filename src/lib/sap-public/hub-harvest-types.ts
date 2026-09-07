@@ -24,7 +24,21 @@
  * contradiction: that list governs what may be BAKED INTO a serverless
  * function, and this path bakes in nothing — 1,000 BAdIs cost a fetch.
  */
-export const HARVEST_TYPES = ["BADI", "BO_INTERFACE", "EVENT", "INTEGRATION", "SCENARIO"] as const;
+export const HARVEST_TYPES = [
+  "BADI",
+  "BO_INTERFACE",
+  "EVENT",
+  "INTEGRATION",
+  "SCENARIO",
+  // 2608 WS13 — the two types docs/2608/DATA-ACQUISITION-BRIEF.md target 6 named.
+  // They were counted and refused before (_provenance.unmappedArtifactTypes:
+  // DataProduct 334, IntegrationAdapter 91); HUB_TYPE_MAP now carries them and
+  // the files are committed beside the other five. The sibling assertion in
+  // tests/unit/sap/hub-harvest-remote.test.ts caught this list not being
+  // updated with them — which is the whole reason it exists.
+  "DATA_PRODUCT",
+  "INTEGRATION_ADAPTER",
+] as const;
 
 export type HarvestType = (typeof HARVEST_TYPES)[number];
 
