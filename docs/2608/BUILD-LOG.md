@@ -622,7 +622,8 @@ acceptance test. No code, no schema, no migration.
 
 ### Why
 
-The To-Be Process Pack built for [client name redacted] covers scope items, process steps
+The To-Be Process Pack built for the first bid engagement covers scope items,
+process steps
 and SSCUI configuration. Its APIs tab holds 26 rows — exactly the APIs cited by
 the 24 Appendix 4 integration requirements. It is not a connectivity catalogue,
 and the bid needs an honest account of that before anyone builds against it.
