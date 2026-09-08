@@ -111,3 +111,54 @@ describe("WinAnsi", () => {
     expect(winAnsiSafe("\u4e2d")).toBe("?");
   });
 });
+
+describe("PPTX compression", () => {
+  /*
+   * 2608 WS18 — an uncompressed pptx is perfectly valid: it opens, it renders,
+   * every checker passes. The only symptom is size, and the pack that surfaced
+   * it was 40.7 MB of pure shape XML that deflates to 2.1 MB. The regression is
+   * one word in one call, so pin the mechanism.
+   */
+  const STORED = 0;
+  const DEFLATED = 8;
+  const entriesOf = async (buf: Buffer) => {
+    const AdmZip = (await import("adm-zip")).default;
+    return new AdmZip(buf).getEntries();
+  };
+  const build = () => generateTobePackPptx(doc, { clientName: "Pilot Client", consultantView: true });
+
+  it("deflates the slide XML instead of storing it", async () => {
+    const entries = await entriesOf(await build());
+    const slides = entries.filter((e) => /^ppt\/slides\/slide\d+\.xml$/.test(e.entryName));
+    expect(slides.length).toBeGreaterThan(0);
+    // Every slide part is big enough that DEFLATE always wins; only tiny parts
+    // are legitimately stored, so assert on the slides rather than on all parts.
+    expect(slides.filter((e) => e.header.method === STORED).map((e) => e.entryName)).toEqual([]);
+    expect(slides.every((e) => e.header.method === DEFLATED)).toBe(true);
+  }, 60_000);
+
+  it("shrinks that XML by more than half, which STORE never does", async () => {
+    const entries = await entriesOf(await build());
+    const slides = entries.filter((e) => /^ppt\/slides\/slide\d+\.xml$/.test(e.entryName));
+    const raw = slides.reduce((n, e) => n + e.header.size, 0);
+    const packed = slides.reduce((n, e) => n + e.header.compressedSize, 0);
+    expect(raw).toBeGreaterThan(0);
+    // Stored parts report compressedSize === size, so a 1:1 ratio is the exact
+    // signature of the bug this test exists for.
+    expect(packed).toBeLessThan(raw / 2);
+  }, 60_000);
+
+  it("is still a well-formed pptx after compression", async () => {
+    const buf = await build();
+    expect(Buffer.isBuffer(buf)).toBe(true);
+    const entries = await entriesOf(buf);
+    const names = entries.map((e) => e.entryName);
+    expect(names).toContain("[Content_Types].xml");
+    expect(names).toContain("ppt/presentation.xml");
+    const ct = entries.find((e) => e.entryName === "[Content_Types].xml")!.getData().toString("utf8");
+    expect(ct).toContain("presentationml");
+    // Round-trip a slide: compression must not corrupt what it packs.
+    const slide1 = entries.find((e) => e.entryName === "ppt/slides/slide1.xml")!;
+    expect(slide1.getData().toString("utf8")).toContain("<p:sld");
+  }, 60_000);
+});

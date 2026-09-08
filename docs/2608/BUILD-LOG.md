@@ -7,6 +7,95 @@ verified in the session.
 
 ---
 
+## WS18 — every pack exported at nineteen times the size it needed to be (2026-09-07)
+
+**Branch:** `feat/2608-pptx-compression` (from `main` @ `046fbfd`).
+
+### Where this came from
+
+A 483-slide To-Be pack was 40.7 MB and too large to send. The obvious reading
+was "466 pages of diagrams, of course it is big". That reading was wrong.
+
+The file contains **no images at all**: 38.7 MB of it is shape XML, and every
+one of its 1,967 zip parts was written with compression OFF. Repacking the same
+bytes with DEFLATE gave 2.1 MB, with the parts byte-identical and in the same
+order. There was never a size problem, only a packaging one.
+
+### The bug is upstream, and the obvious fix does not work
+
+The first attempt was `write({ outputType: "nodebuffer", compression: true })`.
+It changed nothing: identical byte count, all parts still stored. pptxgenjs
+4.0.1 `exportPresentation` branches three ways:
+
+```
+outputType === "STREAM"   →  generateAsync({ type: "nodebuffer", compression })
+outputType (anything else)→  generateAsync({ type: outputType })     ← dropped
+no outputType (browser)   →  generateAsync({ type: "blob", compression })
+```
+
+The middle branch — the one every Node caller takes — **discards `compression`
+entirely**, and JSZip defaults to STORE. So the documented option cannot work
+on that path, whatever is passed. Only the STREAM branch honours it, and it
+hardcodes a nodebuffer, which makes `stream({ compression: true })` the
+compressed-Buffer path on Node.
+
+That is what `src/lib/tobe/export-pptx.ts` now calls, with an explicit
+`Buffer.isBuffer` check: STREAM returning a Buffer is an upstream implementation
+detail, so a future pptxgenjs that returns an actual stream fails loudly here
+rather than handing a caller something that is not a file.
+
+### Why nothing caught it
+
+An uncompressed pptx is **perfectly valid**. It opens, it renders, python-pptx
+parses it, LibreOffice converts all 483 slides. Every existing test passed. The
+only symptom was a number nobody was asserting on, which is why the new tests
+assert the mechanism (slide parts are DEFLATE, and the slide XML packs to under
+half its raw size) rather than a byte threshold that would drift with content.
+
+A 1:1 compressed-to-raw ratio is the exact signature of the regression, because
+stored parts report `compressedSize === size`.
+
+### Measured, at real scale
+
+Regenerating the actual 483-slide pack through the fixed exporter:
+
+```
+before   40,692,775 bytes    1,967 parts, all STORED
+after     2,173,706 bytes    1,948 DEFLATE + 19 STORED     18.7 : 1
+```
+
+The 19 stored parts are JSZip declining to deflate parts too small to benefit,
+which is correct behaviour and why "every part is DEFLATE" would be the wrong
+assertion. Content is unchanged: 7 chains, 55 scope items, 1,831 steps, 483
+slides at 960x540, `testzip()` clean.
+
+### Gates
+
+typecheck clean · eslint clean · **4,815 unit tests pass** (4,812 on `main`,
++3 here) · no schema change, so no migration · `pnpm sap:2608:recon` GREEN ·
+`pnpm guard:confidentiality` clean · `next build` clean.
+
+### A correction to WS17
+
+The WS17 entry and PR body state "5,087 unit tests pass". That figure is wrong.
+Measured on `main` @ `046fbfd` with a clean tree, `pnpm test:unit` reports
+**4,812**. Recorded here rather than edited there, because a build log that
+quietly revises itself is worth less than one that says where it was wrong.
+
+### Unproven / open
+
+1. **Not reported upstream.** The pptxgenjs branch bug is described here from
+   reading `dist/pptxgen.cjs.js` at 4.0.1 and confirmed by measurement, but no
+   issue has been filed and no maintainer has confirmed it.
+2. **The PDF path was not re-examined.** jsPDF compresses its own streams and
+   the 7.9 MB PDF is plausible for 466 pages, but that is an assumption, not a
+   measurement.
+3. **Packs already generated stay large.** This fixes the exporter, not the
+   `TobePack` rows already stored. Anything already sent to a client keeps the
+   size it was sent at; regenerating is what picks the fix up.
+
+---
+
 ## WS17 — SAP's e-invoicing connectors are per country, and there are nineteen (2026-09-07)
 
 **Branch:** `feat/2608-localised-apis` (from `main` @ `4ca8526`).
