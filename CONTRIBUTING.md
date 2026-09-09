@@ -185,9 +185,20 @@ PR for long:
 - **Auto-merge** (`.github/workflows/dependabot-auto-merge.yml`) merges patch/minor
   and security PRs once CI is green (`gh pr merge --auto`, so branch protection
   still gates it). Major bumps stay manual.
-- **The audit gate** (`scripts/ci-audit-gate.mjs`) fails on any **direct-dependency**
-  or **fixable** high/critical, and only *warns* on a genuinely-unfixable transitive
-  advisory. It never passes a fixable or direct vuln.
+- **The audit gate** (`scripts/ci-audit-gate.mjs`) fails on every production
+  **high/critical** advisory, including transitive dependencies without an
+  upstream patch. An unavailable or invalid audit also fails: retry or
+  investigate it. No exceptions are currently accepted. A future exception
+  requires a separately reviewed policy change recording the exact advisory,
+  affected dependency path/version, reachability evidence, compensating
+  controls, accountable owner and expiry date.
+
+PptxGenJS 4.0.1 declares `image-size` but its published runtime entry points do
+not import it. The version-scoped `pptxgenjs@4.0.1>image-size` removal override
+keeps that unused, vulnerable parser out of the dependency graph. On any
+PptxGenJS upgrade, reassess the dependency and run the real PPTX export tests;
+do not widen the override without verifying the new version. The export tests
+check package resolution, slide contents, geometry, relationships and notes.
 
 ### Unblocking a transitive CVE by hand (when you can't wait for Dependabot)
 
