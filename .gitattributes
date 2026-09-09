@@ -1,0 +1,6 @@
+# These artifacts have pinned byte hashes. Preserve the committed bytes even
+# when a Windows checkout has core.autocrlf=true.
+/src/data/discovery/*.json -text
+/sap-references/2608/** -text
+# Snapshot strings should not change solely because the host uses CRLF.
+*.snap text eol=lf

@@ -1,3 +1,4 @@
+import { repoPath } from "../../helpers/source-files";
 /**
  * Studio surface guards — structural, not by-convention.
  *
@@ -51,7 +52,7 @@ const GUARDED_DIRS = [
 ];
 
 const studioFiles = GUARDED_DIRS.flatMap((d) => collect(d, (f) => /\.tsx?$/.test(f)));
-const rel = (f: string) => f.replace(`${ROOT}/`, "");
+const rel = (f: string) => repoPath(f, ROOT);
 
 /**
  * Files permitted to name a secret column, with the reason recorded here rather

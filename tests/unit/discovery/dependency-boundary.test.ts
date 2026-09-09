@@ -1,3 +1,4 @@
+import { repoPath } from "../../helpers/source-files";
 /**
  * ABeam Workbench — Neutral Process Discovery dependency boundary (INVARIANT 2).
  *
@@ -17,7 +18,7 @@
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from "fs";
-import { dirname, join, relative, resolve } from "path";
+import { dirname, join, resolve } from "path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
@@ -91,7 +92,7 @@ function reachableFrom(entries: string[]): Map<string, string[]> {
   return seen;
 }
 
-const rel = (p: string) => relative(ROOT, p);
+const rel = (p: string) => repoPath(p, ROOT);
 
 describe("dependency boundary — the resolver itself", () => {
   it("resolves the @/ alias to src/", () => {

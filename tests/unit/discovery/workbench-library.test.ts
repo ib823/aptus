@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * ABeam Workbench — consultant library projection, facets, and APQC coverage.
  *
@@ -6,6 +7,8 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 
 import {
   COVERAGE_LEVEL_LABELS,
@@ -189,14 +192,13 @@ describe("D14 — the gap register is derived, never meta.gaps", () => {
     expect(shares).toEqual([...shares].sort((a, b) => a - b));
   });
 
-  it("no source file reads meta.apqc_coverage", async () => {
-    const { readdirSync, readFileSync, statSync } = await import("fs");
-    const { join } = await import("path");
+  it("no source file reads meta.apqc_coverage", () => {
     const files: string[] = [];
     const walk = (dir: string) => {
-      for (const name of readdirSync(dir)) {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const name = entry.name;
         const p = join(dir, name);
-        if (statSync(p).isDirectory()) walk(p);
+        if (entry.isDirectory()) walk(p);
         else if (/\.tsx?$/.test(name)) files.push(p);
       }
     };
@@ -204,12 +206,12 @@ describe("D14 — the gap register is derived, never meta.gaps", () => {
 
     const offenders = files
       .filter((f) => /apqc_coverage/.test(stripComments(readFileSync(f, "utf8"))))
-      .map((f) => f.replace(process.cwd() + "/", ""));
+      .map((f) => relative(process.cwd(), f).replace(/\\/g, "/"));
     expect(
       offenders,
       `These read the stale meta.apqc_coverage block:\n${offenders.join("\n")}`,
     ).toEqual([]);
-  });
+  }, 30_000);
 
   it("the comment-stripper works — the guard is not vacuous", () => {
     // Without stripping, this guard fires on library.ts's own doc comment

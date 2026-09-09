@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Every mutation of a tenant-anchored row must name its organization.
  *
@@ -223,7 +224,7 @@ describe("tenant-scope coverage", () => {
         "instead of trusting the lookup above it:\n" +
         offenders.join("\n"),
     ).toEqual([]);
-  });
+  }, 30_000); // Whole-repository filesystem scan; allow slower Windows disks.
 
   it("knows which models it is guarding", () => {
     // A model added to TENANT_ANCHORED_MODELS is automatically covered by the

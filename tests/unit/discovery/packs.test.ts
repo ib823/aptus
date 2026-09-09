@@ -1,3 +1,4 @@
+import { readSource } from "../../helpers/source-files";
 /**
  * ABeam Workbench — the two-lane export, tested by CONSTRUCTION (brief §9.3).
  *
@@ -11,7 +12,6 @@
  * client's inbox.
  */
 
-import { readFileSync } from "fs";
 import { join } from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -65,7 +65,7 @@ vi.mock("@/lib/db/prisma", () => ({
 const { buildClientPack, buildInternalPack } = await import("@/lib/discovery/workbench/packs");
 
 const guardTerms: string[] = JSON.parse(
-  readFileSync(join(process.cwd(), "src/data/discovery/vendor-term-guard.json"), "utf8"),
+  readSource(join(process.cwd(), "src/data/discovery/vendor-term-guard.json"), "utf8"),
 ).terms;
 
 /** Strip comments so a source scan matches CODE, not the prose documenting it. */
@@ -201,7 +201,7 @@ describe("the internal pack carries the fence", () => {
 
 describe("two serializers, not one with a flag (§9.3)", () => {
   it("buildClientPack has no reference to the product map at all", () => {
-    const src = readFileSync(join(process.cwd(), "src/lib/discovery/workbench/packs.ts"), "utf8");
+    const src = readSource(join(process.cwd(), "src/lib/discovery/workbench/packs.ts"), "utf8");
     const fn = /export async function buildClientPack[\s\S]*?\n}\n/.exec(stripComments(src))?.[0] ?? "";
     expect(fn.length).toBeGreaterThan(0);
     // Not "filters it out" — cannot see it.
@@ -216,7 +216,7 @@ describe("two serializers, not one with a flag (§9.3)", () => {
     // prose is not committing it. (Fourth time a scan of mine has matched its
     // own documentation — see D10, PR-3's notes guard, D14's meta scan.)
     const src = stripComments(
-      readFileSync(join(process.cwd(), "src/lib/discovery/workbench/packs.ts"), "utf8"),
+      readSource(join(process.cwd(), "src/lib/discovery/workbench/packs.ts"), "utf8"),
     );
     expect(src).not.toMatch(/includeProductMap|withProductMap|internal\s*[?:]\s*boolean/);
   });
