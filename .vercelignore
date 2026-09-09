@@ -13,8 +13,11 @@
 #
 # Anchoring is what makes the pattern mean the thing you meant.
 
-# Documentation & specs (not needed at runtime)
-/docs/
+# The authenticated developer-guide route reads this one document at runtime.
+# Exclude the children, not the parent directory, so the exception can apply.
+/docs/*
+!/docs/coreedge-developer-guide.md
+# Other documentation & specs are not needed at runtime.
 /specs/
 /fit-portal-transfer/
 
