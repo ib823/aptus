@@ -43,6 +43,7 @@
     "test:visual-app": "playwright test --config=playwright.visual-app.config.ts",
     "test:visual-app:update": "playwright test --config=playwright.visual-app.config.ts --update-snapshots",
     "test:security": "vitest run tests/security",
+    "test:security:http": "playwright test --config=playwright.security.config.ts",
     "test:perf": "vitest run tests/performance",
     "test:a11y": "playwright test tests/e2e/accessibility.unauth.spec.ts tests/e2e/accessibility.auth.spec.ts --project=unauthenticated --project=authenticated",
     "test:ci": "vitest run && pnpm test:e2e:chromium",
