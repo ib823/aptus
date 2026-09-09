@@ -188,8 +188,8 @@ So: **reuse the same key when you retry.** The rules are:
 | Situation | What you get |
 |---|---|
 | First call with a key | The write happens |
-| Same key, same payload | The **recorded outcome**, replayed — SAP is not touched again |
-| Same key, **different** payload | `409` — that is a bug in your code, not a retry |
+| Same key, same payload and SAP destination | The **recorded outcome**, replayed — SAP is not touched again |
+| Same key, **different** payload or destination | `409` — a different write requires a different intent/key |
 | Same key, still in flight | `409` — one intent, one write |
 | Key older than 24h | Treated as a fresh request |
 
@@ -197,10 +197,24 @@ Failures are recorded too. If a write was refused with a `403`, retrying the sam
 key returns that same `403` rather than re-attempting something the tenant has
 already declined.
 
-**A timeout is the case this exists for.** If a write times out, you genuinely do
-not know whether the record was created. Retry with the **same** key: if it
-landed, you get the original result; if it did not, the write is attempted once.
-Either way you end up with exactly one record.
+The destination includes the environment, SAP client, connection, service,
+entity set, and interface version. Rotating a token for the same destination
+preserves retries; rebinding it to another destination cannot replay the old
+result. Replays preserve the original response body and include
+`Idempotency-Replayed: true`. The correlation header identifies the current
+attempt; a recorded error body retains its original correlation ID.
+
+During the destination-binding upgrade, unexpired keys written by the older
+version return `409` because their destination cannot be verified. Check the
+original outcome before issuing a new write. Do not change keys merely to get
+past this refusal.
+
+If the response to your application is lost, retry with the **same** key to get
+the recorded outcome. If the broker itself times out waiting for SAP, the
+recorded outcome is a timeout: SAP may already have committed. Retrying the key
+does not send another write or determine SAP's final state. Reconcile that
+outcome with SAP before starting a new intent. The key expires after 24 hours;
+retrying after that window can perform another write.
 
 ### Where the human is
 

@@ -20,7 +20,7 @@ export type MarkdownBlock =
 
 export function splitMarkdownBlocks(md: string): MarkdownBlock[] {
   const blocks: MarkdownBlock[] = [];
-  const lines = md.split("\n");
+  const lines = md.split(/\r\n?|\n/);
   let i = 0;
   while (i < lines.length) {
     const line = lines[i] ?? "";
@@ -68,7 +68,10 @@ export function splitMarkdownBlocks(md: string): MarkdownBlock[] {
       blocks.push({ kind: "list", items });
       continue;
     }
-    const buf: string[] = [];
+    // Consume this line unconditionally. If a future block detector and its
+    // paragraph boundary disagree, the parser must still make progress.
+    const buf: string[] = [line];
+    i++;
     while (i < lines.length && (lines[i] ?? "").trim() !== "" && !/^(#{1,4})\s|^```|^\||^---+\s*$|^[-*]\s/.test(lines[i] ?? "")) {
       buf.push(lines[i] ?? "");
       i++;

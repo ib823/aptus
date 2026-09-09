@@ -1,3 +1,4 @@
+import { repoPath } from "../../helpers/source-files";
 /**
  * ABeam Workbench — THE WALL, both directions (invariant 2).
  *
@@ -20,12 +21,12 @@
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from "fs";
-import { dirname, join, relative, resolve } from "path";
+import { dirname, join, resolve } from "path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
 const SRC = join(ROOT, "src");
-const rel = (p: string) => relative(ROOT, p);
+const rel = (p: string) => repoPath(p, ROOT);
 
 /** Everything on the consultant side of the wall. */
 const FORBIDDEN_FROM_CLIENT = [

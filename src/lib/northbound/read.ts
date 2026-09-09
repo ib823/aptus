@@ -43,16 +43,21 @@ const MAX_TIMEOUT_MS = 30_000;
 const MAX_LIMIT = 100;
 
 /** OData v2 nests rows under `d.results`; v4 puts them in `value`. */
-function extractRecords(json: unknown): Record<string, unknown>[] {
-  if (!json || typeof json !== "object") return [];
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function extractRecords(json: unknown): Record<string, unknown>[] | null {
+  if (!isRecord(json) || "error" in json) return null;
   const v4 = (json as { value?: unknown }).value;
-  if (Array.isArray(v4)) return v4 as Record<string, unknown>[];
-  const v2 = (json as { d?: { results?: unknown } }).d?.results;
-  if (Array.isArray(v2)) return v2 as Record<string, unknown>[];
+  if ("value" in json) return Array.isArray(v4) && v4.every(isRecord) ? v4 : null;
+  const d = json.d;
+  if (!isRecord(d) || "error" in d) return null;
+  if ("results" in d) {
+    return Array.isArray(d.results) && d.results.every(isRecord) ? d.results : null;
+  }
   // A v2 single-entity response is `d` itself.
-  const d = (json as { d?: unknown }).d;
-  if (d && typeof d === "object" && !Array.isArray(d)) return [d as Record<string, unknown>];
-  return [];
+  return [d];
 }
 
 function classify(httpStatus: number, records: Record<string, unknown>[]): {
@@ -138,6 +143,13 @@ export async function readEntitySet(
     }
 
     const records = res.status === 200 ? extractRecords(json) : [];
+    if (records === null) {
+      return {
+        status: "ERROR", httpStatus: res.status, records: [],
+        detail: "The tenant returned an invalid OData response.",
+        durationMs: Date.now() - started,
+      };
+    }
     const { status, detail } = classify(res.status, records);
     return { status, httpStatus: res.status, records, detail, durationMs: Date.now() - started };
   } catch (err) {

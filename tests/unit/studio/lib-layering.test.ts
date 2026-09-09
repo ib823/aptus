@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * `src/lib` never imports from a `"use client"` module.
  *
@@ -149,7 +150,7 @@ describe("server code holds no dependency on client-only modules", () => {
         "module with no directive and import it from both sides:\n\n" +
         violations.join("\n"),
     ).toEqual([]);
-  });
+  }, 30_000); // Whole-repository filesystem scan; allow slower Windows disks.
 
   it("detects the directive it is looking for", () => {
     // Proving the detector, not the rule: a scan that never matches `"use

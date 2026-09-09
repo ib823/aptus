@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { requireHelpUser } from "@/lib/help/require-help-user";
 
 import { INCIDENT_REFERENCE, WORKSPACE_OVERVIEWS } from "@/lib/help/manual";
 
@@ -13,7 +14,8 @@ const card: React.CSSProperties = {
   padding: 18,
 };
 
-export default function ManualIndexPage() {
+export default async function ManualIndexPage() {
+  await requireHelpUser();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
       <header>

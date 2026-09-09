@@ -1,3 +1,4 @@
+import { repoPath } from "../../helpers/source-files";
 /**
  * ABeam Workbench — every /d route is flag-gated.
  *
@@ -38,7 +39,7 @@ function walk(dir: string, out: string[]): void {
   }
 }
 
-const rel = (p: string) => p.replace(process.cwd() + "/", "");
+const rel = (p: string) => repoPath(p);
 
 describe("every /d route module is flag-gated", () => {
   const routes: string[] = [];

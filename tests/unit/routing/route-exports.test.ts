@@ -25,6 +25,7 @@
  * perfectly on its own, which is the whole problem.
  */
 
+import { repoPath } from "../../helpers/source-files";
 import { readdirSync, readFileSync, statSync } from "fs";
 import path from "path";
 
@@ -82,7 +83,7 @@ function exportedValues(src: string): string[] {
   return names;
 }
 
-const routeFiles = walk(APP_DIR).filter((f) => /(^|\/)route\.tsx?$/.test(f));
+const routeFiles = walk(APP_DIR).filter((f) => /(^|\/)route\.tsx?$/.test(repoPath(f)));
 
 describe("route handlers export only what Next.js permits", () => {
   it("finds route files to check (a dead guard is worse than none)", () => {
@@ -96,7 +97,7 @@ describe("route handlers export only what Next.js permits", () => {
       const src = readFileSync(file, "utf8");
       for (const name of exportedValues(src)) {
         if (!ALLOWED_ROUTE_EXPORTS.has(name)) {
-          offenders.push(`${file.replace(`${path.resolve(APP_DIR, "../..")}/`, "")} exports \`${name}\``);
+          offenders.push(`${repoPath(file)} exports \`${name}\``);
         }
       }
     }

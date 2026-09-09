@@ -92,6 +92,25 @@ describe("honest status", () => {
 });
 
 describe("OData shapes", () => {
+  it.each([
+    "<html>Login</html>", "", "null", "[]", "{}", '{"error":{"message":"private"}}',
+    '{"value":null}', '{"value":[null]}', '{"value":[[]]}', '{"d":{"results":{}}}',
+  ])("refuses malformed HTTP 200 content: %s", async (body) => {
+    const f = vi.fn().mockResolvedValue(res(200, body));
+    const r = await readEntitySet({ connection: conn(), ...INPUT }, f);
+    expect(r.status).toBe("ERROR");
+    expect(httpStatusFor(r.status)).toBe(502);
+    expect(r.records).toEqual([]);
+    expect(r.detail).not.toContain("private");
+  });
+
+  it("keeps a valid empty v2 collection distinct from malformed responses", async () => {
+    const f = vi.fn().mockResolvedValue(res(200, { d: { results: [] } }));
+    const r = await readEntitySet({ connection: conn(), ...INPUT }, f);
+    expect(r.status).toBe("EMPTY");
+    expect(httpStatusFor(r.status)).toBe(200);
+  });
+
   it("reads v4 `value`", async () => {
     const f = vi.fn().mockResolvedValue(res(200, { value: [{ id: 1 }] }));
     const r = await readEntitySet({ connection: conn(), ...INPUT }, f as unknown as typeof fetch);

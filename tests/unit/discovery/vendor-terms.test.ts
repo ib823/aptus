@@ -1,3 +1,4 @@
+import { repoPath } from "../../helpers/source-files";
 /**
  * ABeam Workbench — Neutral Process Discovery vendor-term guard (INVARIANT 1).
  *
@@ -35,7 +36,7 @@ const CLIENT_SOURCE_ROOTS = [
 ];
 
 /** Consultant-only subtree — vendor terms are legitimate here, so it is excluded. */
-const CONSULTANT_SUBTREE = join("src", "components", "discovery", "workbench");
+const CONSULTANT_SUBTREE = "src/components/discovery/workbench";
 
 function walk(dir: string, out: string[]): void {
   let entries: string[];
@@ -47,7 +48,7 @@ function walk(dir: string, out: string[]): void {
   for (const name of entries) {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) {
-      if (p.includes(CONSULTANT_SUBTREE)) continue;
+      if (p.replace(/\\/g, "/").includes(CONSULTANT_SUBTREE)) continue;
       walk(p, out);
     } else if (/\.(tsx|ts|css|json|md)$/.test(name)) {
       out.push(p);
@@ -167,7 +168,7 @@ describe("vendor-term guard — client-facing source", () => {
     for (const file of files) {
       const hits = vendorHits(readFileSync(file, "utf8"));
       if (Object.keys(hits).length > 0) {
-        offenders.push(`${file.replace(process.cwd() + "/", "")} → ${JSON.stringify(hits)}`);
+        offenders.push(`${repoPath(file)} → ${JSON.stringify(hits)}`);
       }
     }
     expect(
@@ -188,7 +189,7 @@ describe("vendor-term guard — client-facing source", () => {
   });
 
   it("covers both client-facing roots", () => {
-    const rel = files.map((f) => f.replace(process.cwd() + "/", ""));
+    const rel = files.map((f) => repoPath(f));
     expect(rel.some((f) => f.startsWith("src/app/(external)/d/"))).toBe(true);
     expect(rel.some((f) => f.startsWith("src/components/discovery/"))).toBe(true);
   });

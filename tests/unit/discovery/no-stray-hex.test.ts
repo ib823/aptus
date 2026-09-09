@@ -1,3 +1,4 @@
+import { repoPath } from "../../helpers/source-files";
 /**
  * ABeam Workbench — "nothing stray" guard for the Neutral Process Discovery surface.
  *
@@ -48,7 +49,7 @@ function walk(dir: string, out: string[]): void {
 describe("no stray hex literals on the discovery surface", () => {
   const all: string[] = [];
   for (const r of ROOTS) walk(join(process.cwd(), r), all);
-  const rel = (f: string) => f.replace(process.cwd() + "/", "");
+  const rel = (f: string) => repoPath(f);
   const files = all.filter((f) => rel(f) !== PRINT_PALETTE_EXEMPTION);
 
   it("scans a non-empty set of discovery files", () => {
@@ -87,7 +88,7 @@ describe("no stray hex literals on the discovery surface", () => {
       lines.forEach((line, i) => {
         if (HEX.test(line)) {
           offenders.push(
-            `${file.replace(process.cwd() + "/", "")}:${i + 1}  ${line.trim().slice(0, 100)}`,
+            `${repoPath(file)}:${i + 1}  ${line.trim().slice(0, 100)}`,
           );
         }
       });
@@ -103,7 +104,7 @@ describe("no stray hex literals on the discovery surface", () => {
       const lines = readFileSync(file, "utf8").split("\n");
       lines.forEach((line, i) => {
         if (/\brgba?\(\s*\d/.test(line)) {
-          offenders.push(`${file.replace(process.cwd() + "/", "")}:${i + 1}  ${line.trim().slice(0, 100)}`);
+          offenders.push(`${repoPath(file)}:${i + 1}  ${line.trim().slice(0, 100)}`);
         }
       });
     }

@@ -23,7 +23,7 @@
  * client's own retry logic starts branching on which attempt it is.
  */
 
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma";
@@ -65,6 +65,16 @@ export interface ReservationInput {
   interfaceId: string;
   key: string;
   payload: unknown;
+  /** The resolved destination, independent of bearer-token rotation. */
+  destination: {
+    environment: string;
+    sapClient: string | null;
+    connectionId: string;
+    baseUrl: string;
+    servicePath: string;
+    entitySet: string;
+    interfaceVersion: number;
+  };
 }
 
 export type Reservation =
@@ -87,7 +97,10 @@ export async function reserveIdempotencyKey(
   now: Date = new Date(),
 ): Promise<Reservation> {
   const organizationId = input.scope.organizationId;
-  const requestHash = hashRequest(input.payload);
+  // Versioned so pre-upgrade keys (which did not bind a destination) conflict
+  // safely until expiry. Never replay an unverified legacy result or erase a
+  // reservation that could already represent a committed SAP write.
+  const requestHash = hashRequest({ version: 2, destination: input.destination, payload: input.payload });
 
   const existing = await prisma.northboundIdempotencyKey.findUnique({
     where: {
@@ -104,11 +117,15 @@ export async function reserveIdempotencyKey(
     // An expired record is not a retry of anything — the client has come back
     // long after any reasonable retry window, so treat the key as fresh.
     if (existing.expiresAt.getTime() <= now.getTime()) {
-      await prisma.northboundIdempotencyKey.update({
+      const recordId = randomUUID();
+      const renewed = await prisma.northboundIdempotencyKey.updateMany({
         // organizationId alongside the id: the model is tenant-anchored and the
         // scope guard requires every mutation's where to carry the tenant.
-        where: { id: existing.id, organizationId },
+        where: { id: existing.id, organizationId, expiresAt: existing.expiresAt },
         data: {
+          // A new ownership token also fences off a late completion/release
+          // from the old reservation. Only one conditional update can win.
+          id: recordId,
           requestHash,
           // The interface too — the reset re-opens the key for THIS request,
           // and leaving the old interfaceId stranded the row's attribution on
@@ -124,7 +141,9 @@ export async function reserveIdempotencyKey(
           expiresAt: new Date(now.getTime() + IDEMPOTENCY_TTL_MS),
         },
       });
-      return { outcome: "proceed", recordId: existing.id };
+      return renewed.count === 1
+        ? { outcome: "proceed", recordId }
+        : { outcome: "conflict", reason: "IN_FLIGHT" };
     }
 
     /*
@@ -168,10 +187,13 @@ export async function reserveIdempotencyKey(
       select: { id: true },
     });
     return { outcome: "proceed", recordId: created.id };
-  } catch {
+  } catch (err) {
     // Lost the race against a concurrent request carrying the same key. The
     // unique constraint is the real guarantee; this is where it pays off.
-    return { outcome: "conflict", reason: "IN_FLIGHT" };
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return { outcome: "conflict", reason: "IN_FLIGHT" };
+    }
+    throw err;
   }
 }
 

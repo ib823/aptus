@@ -1,4 +1,5 @@
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
+import { extractCookies } from "@/lib/sap-public/cookies";
 import { exchangeSamlBearerAssertion } from "@/lib/sap-public/oauth-saml-bearer";
 import { assertSuccessFactorsBasicAuthAllowed } from "./sf-basic-auth-sunset";
 
@@ -885,15 +886,7 @@ function serviceUrl(tenant: SapTenant, service: SapServiceDefinition): string {
   return buildSapUrl({ baseUrl: tenant.baseUrl, path: service.path, client: tenant.client });
 }
 
-function extractCookies(headers: Headers): string {
-  const extendedHeaders = headers as Headers & { getSetCookie?: () => string[] };
-  const setCookies = extendedHeaders.getSetCookie?.() ?? [];
-  const rawCookies = setCookies.length > 0 ? setCookies : [headers.get("set-cookie")].filter(Boolean);
-  return rawCookies
-    .map((cookie) => cookie?.split(";")[0] ?? "")
-    .filter(Boolean)
-    .join("; ");
-}
+// Shared with the connection-aware northbound CSRF handshake.
 
 function parseEntitySets(metadataXml: string): SapEntitySet[] {
   const entitySets: SapEntitySet[] = [];

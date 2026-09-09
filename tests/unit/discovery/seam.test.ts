@@ -1,3 +1,5 @@
+import { readSource } from "../../helpers/source-files";
+import { repoPath } from "../../helpers/source-files";
 /**
  * ABeam Workbench — the client↔consultant seam (brief §8, §9.4).
  *
@@ -11,14 +13,13 @@
  * where the consumer exists, so the assertions are now load-bearing.
  */
 
-import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
 
 import { effectiveStreamIds, isSessionScoped, isStreamInScope } from "@/lib/discovery/external/scope";
 
 const ROOT = process.cwd();
-const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
+const read = (p: string) => readSource(join(ROOT, p), "utf8");
 
 function stripComments(src: string): string {
   return src
@@ -141,8 +142,8 @@ describe("the notes consumer lives on the consultant side only", () => {
     walk(join(ROOT, "src"));
 
     const readers = files
-      .filter((f) => /\b(?:prisma|tx|db)\s*\.\s*discoveryNote\s*\.\s*findMany\b/.test(stripComments(readFileSync(f, "utf8"))))
-      .map((f) => f.replace(ROOT + "/", ""))
+      .filter((f) => /\b(?:prisma|tx|db)\s*\.\s*discoveryNote\s*\.\s*findMany\b/.test(stripComments(readSource(f, "utf8"))))
+      .map((f) => repoPath(f, ROOT))
       .sort();
 
     /**

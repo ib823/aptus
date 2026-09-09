@@ -75,6 +75,17 @@ describe("peekRateLimit does not spend what it measures", () => {
 });
 
 describe("the idempotency reaper is bounded and honest about it", () => {
+  it("leaves a key alive when it is renewed between selection and deletion", async () => {
+    const now = new Date("2026-09-09T00:00:00Z");
+    const liveExpiry = new Date(now.getTime() + 1000);
+    mocks.findMany.mockResolvedValue([{ id: "k1", organizationId: "org_a" }]);
+    mocks.deleteMany.mockImplementation(async ({ where }) => ({
+      count: where.organizationId === "org_a" &&
+        (!where.expiresAt || liveExpiry < where.expiresAt.lt) ? 1 : 0,
+    }));
+    expect(await reapExpiredIdempotencyKeys(now)).toEqual({ deleted: 0, moreRemaining: false });
+  });
+
   it("deletes nothing, and says so, when there is nothing expired", async () => {
     mocks.findMany.mockResolvedValue([]);
     const result = await reapExpiredIdempotencyKeys();

@@ -4,6 +4,7 @@ import path from "node:path";
 import type { Metadata } from "next";
 
 import { splitMarkdownBlocks, stripInlineMarkdown as plain } from "@/lib/help/markdown-blocks";
+import { requireHelpUser } from "@/lib/help/require-help-user";
 
 export const metadata: Metadata = { title: "Developer guide" };
 
@@ -25,11 +26,12 @@ export const metadata: Metadata = { title: "Developer guide" };
  * deliberately minimal and dependency-free: headings, paragraphs, fences and
  * tables — enough to read, nothing to maintain.
  *
- * Session-gated by the (help) layout, like the rest of the manual.
+ * Checks the session before reading the guide; the layout renders concurrently.
  */
 export const dynamic = "force-dynamic";
 
 export default async function DeveloperGuidePage() {
+  await requireHelpUser();
   const file = path.join(process.cwd(), "docs", "coreedge-developer-guide.md");
   let markdown: string;
   try {

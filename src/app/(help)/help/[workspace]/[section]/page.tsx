@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { MANUAL, manualScreen } from "@/lib/help/manual";
+import { requireHelpUser } from "@/lib/help/require-help-user";
 
 /**
  * One screen's manual page.
@@ -22,6 +23,7 @@ interface Params {
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
+  await requireHelpUser();
   const { workspace, section } = await params;
   const screen = manualScreen(`${workspace}/${section}`);
   return { title: screen ? `${screen.title} · ${screen.workspaceLabel}` : "Not found" };
@@ -36,6 +38,7 @@ const card: React.CSSProperties = {
 };
 
 export default async function ManualScreenPage({ params }: Params) {
+  await requireHelpUser();
   const { workspace, section } = await params;
   const screen = manualScreen(`${workspace}/${section}`);
   if (!screen) notFound();

@@ -1,3 +1,4 @@
+import { readSource } from "../../helpers/source-files";
 /**
  * The scope boundary, asserted rather than assumed.
  *
@@ -8,12 +9,11 @@
  * decision, not by omission.
  */
 
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
-const read = (p: string) => readFileSync(path.resolve(ROOT, p), "utf8");
+const read = (p: string) => readSource(path.resolve(ROOT, p), "utf8");
 
 const GUIDE = read("docs/coreedge-developer-guide.md");
 const RUNBOOK = read("docs/coreedge/SAP-CONNECTION-KEYSTONE-RUNBOOK.md");
@@ -78,11 +78,9 @@ describe("the guide is straight about what is NOT built", () => {
     expect(GUIDE.toLowerCase()).toContain("two records in a\nclient's ledger");
   });
 
-  it("explains the timeout case, which is the one that actually bites", () => {
-    expect(GUIDE.toLowerCase()).toContain("a timeout is the case this exists for");
-    expect(GUIDE.toLowerCase()).toContain("exactly one record");
-  });
-
+  // Timeout/replay safety is exercised against the real route and PostgreSQL
+  // in integration/northbound-idempotency-race.test.ts. Checking for an
+  // "exactly one record" sentence previously enforced an untrue guarantee.
   it("says where the human oversight sits, since there is none per call", () => {
     expect(GUIDE.toLowerCase()).toContain("no per-call confirmation");
     expect(GUIDE.toLowerCase()).toContain("approved once");

@@ -1,3 +1,4 @@
+import { readSource } from "../../helpers/source-files";
 /**
  * ABeam Workbench — the P4 capture pipeline's gates.
  *
@@ -131,9 +132,8 @@ describe("provenance shape (P4 §4)", () => {
  */
 describe("dual records: the shared entry cannot carry attribution", () => {
   it("the shared entry model has no clientRef, rawText or engagement link", async () => {
-    const { readFileSync } = await import("fs");
     const { join } = await import("path");
-    const schema = readFileSync(join(process.cwd(), "prisma/schema.prisma"), "utf8");
+    const schema = readSource(join(process.cwd(), "prisma/schema.prisma"), "utf8");
     const model = /model DiscoveryPromotedEntry \{([\s\S]*?)\n\}/.exec(schema)?.[1] ?? "";
     expect(model.length).toBeGreaterThan(0);
 
@@ -145,18 +145,16 @@ describe("dual records: the shared entry cannot carry attribution", () => {
   });
 
   it("the register keeps attribution, so the split is real", async () => {
-    const { readFileSync } = await import("fs");
     const { join } = await import("path");
-    const schema = readFileSync(join(process.cwd(), "prisma/schema.prisma"), "utf8");
+    const schema = readSource(join(process.cwd(), "prisma/schema.prisma"), "utf8");
     const model = /model DiscoveryCapture \{([\s\S]*?)\n\}/.exec(schema)?.[1] ?? "";
     expect(model).toMatch(/^\s*clientRef\b/m);
     expect(model).toMatch(/^\s*rawText\b/m);
   });
 
   it("promotedEntries() selects no attribution", async () => {
-    const { readFileSync } = await import("fs");
     const { join } = await import("path");
-    const src = readFileSync(join(process.cwd(), "src/lib/discovery/workbench/capture.ts"), "utf8");
+    const src = readSource(join(process.cwd(), "src/lib/discovery/workbench/capture.ts"), "utf8");
     const fn = /export async function promotedEntries[\s\S]*?\n}\n/.exec(src)?.[0] ?? "";
     expect(fn.length).toBeGreaterThan(0);
     // An explicit select, so a new column cannot ride along into a shared read.
@@ -173,7 +171,7 @@ describe("dual records: the shared entry cannot carry attribution", () => {
  */
 describe("the wizard never writes to the committed library", () => {
   it("no capture/promotion code writes to src/data/discovery", async () => {
-    const { readFileSync, readdirSync, statSync } = await import("fs");
+    const { readdirSync, statSync } = await import("fs");
     const { join } = await import("path");
     const files: string[] = [];
     const walk = (dir: string) => {
@@ -187,7 +185,7 @@ describe("the wizard never writes to the committed library", () => {
     walk(join(process.cwd(), "src/app/api/discovery"));
 
     const writers = files.filter((f) => {
-      const src = readFileSync(f, "utf8");
+      const src = readSource(f, "utf8");
       return /writeFileSync|writeFile|appendFile|fs\.promises\.write/.test(src);
     });
     expect(writers, "nothing may write to the committed library").toEqual([]);

@@ -1,3 +1,4 @@
+import { repoPath } from "../../helpers/source-files";
 /**
  * ABeam Workbench — facilitator notes never reach a client payload.
  *
@@ -90,7 +91,7 @@ describe("1 · no client view model reads the notes table", () => {
 
     const offenders = files
       .filter((f) => NOTE_ACCESS.test(readFileSync(f, "utf8")))
-      .map((f) => f.replace(ROOT + "/", ""))
+      .map((f) => repoPath(f, ROOT))
       // The write route is the one legitimate toucher — and it only creates.
       .filter((f) => f !== "src/app/(external)/d/notes/route.ts");
 

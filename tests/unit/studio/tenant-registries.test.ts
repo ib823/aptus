@@ -1,3 +1,4 @@
+import { repoPath } from "../../helpers/source-files";
 /**
  * "Tenant" names two registries, and the read path answers to both.
  *
@@ -171,7 +172,7 @@ describe("no route resolves a tenant key from one registry only", () => {
 
   it("uses the shared resolver wherever a caller-supplied key is turned into a tenant", async () => {
     const { readdirSync, readFileSync, statSync } = await import("node:fs");
-    const { join, relative, resolve } = await import("node:path");
+    const { join, resolve } = await import("node:path");
     const root = resolve(__dirname, "../../..");
     const api = join(root, "src/app/api/sap");
     const walk = (d: string): string[] =>
@@ -205,7 +206,7 @@ describe("no route resolves a tenant key from one registry only", () => {
         // consult the connection registry. A route may legitimately use both.
         return src.includes("getSapTenant(") && !src.includes("resolveReadTenant");
       })
-      .map((f) => relative(root, f))
+      .map((f) => repoPath(f, root))
       .filter((f) => !DEPLOYMENT_SCOPED.includes(f));
 
     expect(
