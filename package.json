@@ -124,10 +124,10 @@
     "jszip": "^3.10.1",
     "lucide-react": "^0.575.0",
     "mammoth": "^1.11.0",
-    "next": "15.5.21",
+    "next": "15.5.24",
     "next-auth": "^4.24.15",
     "next-themes": "^0.4.6",
-    "nodemailer": "^9.0.1",
+    "nodemailer": "^9.1.0",
     "otpauth": "^9.5.0",
     "pptxgenjs": "^4.0.1",
     "prisma": "^6.19.2",
@@ -138,7 +138,7 @@
     "react-dom": "19.2.4",
     "react-hook-form": "^7.71.2",
     "sanitize-html": "^2.17.4",
-    "sharp": "^0.35.0",
+    "sharp": "^0.35.4",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "web-push": "^3.6.7",
@@ -167,7 +167,7 @@
     "docx": "^9.6.1",
     "dotenv": "^17.3.1",
     "eslint": "^9.39.3",
-    "eslint-config-next": "15.5.18",
+    "eslint-config-next": "15.5.24",
     "jsdom": "^28.1.0",
     "shadcn": "^3.8.5",
     "tailwindcss": "^4.2.1",
@@ -188,7 +188,7 @@
       "msw"
     ],
     "overrides": {
-      "@xmldom/xmldom": ">=0.8.12",
+      "@xmldom/xmldom": ">=0.9.12",
       "defu": ">=6.1.5",
       "effect": ">=3.20.0",
       "fast-uri": ">=4.1.3",
@@ -202,7 +202,7 @@
       "@vercel/blob>undici": ">=8.9.0",
       "puppeteer-core>ws": ">=8.21.0",
       "tmp": ">=0.2.6",
-      "sharp": ">=0.35.0"
+      "sharp": ">=0.35.4"
     },
     "peerDependencyRules": {
       "allowedVersions": {
