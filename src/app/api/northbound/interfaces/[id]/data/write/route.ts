@@ -22,7 +22,7 @@
  * bearing controls. All three are enforced, and expiry is checked per call.
  */
 
-import type { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { resolveWritableInterface } from "@/lib/northbound/access";
@@ -31,7 +31,6 @@ import { recordNorthboundCall } from "@/lib/northbound/audit";
 import {
   completeIdempotencyKey,
   isValidIdempotencyKey,
-  releaseIdempotencyKey,
   reserveIdempotencyKey,
 } from "@/lib/northbound/idempotency";
 import {
@@ -174,34 +173,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   }
   const iface = access.iface;
 
-  // 6 — reserve the key BEFORE touching SAP. A duplicate never reaches the tenant.
-  const reservation = await reserveIdempotencyKey({
-    scope: client.scope,
-    solutionId: client.solutionId,
-    interfaceId: iface.id,
-    key: idempotencyKey,
-    payload: parsed.data,
-  });
-
-  if (reservation.outcome === "replay") {
-    // Byte-for-byte the original outcome, so a retry is indistinguishable from
-    // the first call and the client's retry logic never has to branch.
-    await audit(reservation.status, iface.id, iface.externalId);
-    return reservation.status >= 400
-      ? northboundError("CONFLICT", "Replaying the recorded outcome for this Idempotency-Key.", reservation.status, correlationId)
-      : northboundOk({ ...(reservation.body as object), replayed: true }, correlationId, reservation.status);
-  }
-
-  if (reservation.outcome === "conflict") {
-    const message =
-      reservation.reason === "PAYLOAD_MISMATCH"
-        ? "This Idempotency-Key was already used with a different payload. Use a new key for a different write."
-        : "A request with this Idempotency-Key is still in progress.";
-    await audit(409, iface.id, iface.externalId);
-    return northboundError("CONFLICT", message, 409, correlationId);
-  }
-
-  // 7 — resolve the client's OWN connection, and check ITS write flag. A
+  // 6 — resolve the client's OWN connection, and check ITS write flag. A
   // connection with writeEnabled=false is a deliberate per-tenant veto that
   // overrides any grant.
   // The environment binding is STRICTER here than on the read path: a connection
@@ -222,7 +194,6 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       ({ ok: false, reason: "UNKNOWN_PRODUCT" } as const);
 
   if (!binding.ok) {
-    await releaseIdempotencyKey(client.scope, reservation.recordId);
     await audit(403, iface.id, iface.externalId, undefined, undefined, binding.reason);
     return northboundError(
       "CONNECTION_NOT_CONFIGURED",
@@ -234,7 +205,6 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const connection = binding.connection;
 
   if (!connection.writeEnabled) {
-    await releaseIdempotencyKey(client.scope, reservation.recordId);
     await audit(403, iface.id, iface.externalId, connection);
     return northboundError(
       "FORBIDDEN",
@@ -247,9 +217,6 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const service = await resolveHubService(product!, iface.externalId);
   const entitySet = parsed.data.entity ?? iface.entitySet;
   if (!service || !entitySet) {
-    // Released, so a client that supplies the missing entity can retry with the
-    // same key rather than being told it is forever in flight.
-    await releaseIdempotencyKey(client.scope, reservation.recordId);
     await audit(400, iface.id, iface.externalId, connection);
     return northboundError(
       "VALIDATION_ERROR",
@@ -257,6 +224,48 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       400,
       correlationId,
     );
+  }
+
+  // 7 — bind the key to the resolved destination before either upstream call.
+  // Reissuing a credential for another landscape must not replay an old write.
+  const reservation = await reserveIdempotencyKey({
+    scope: client.scope,
+    solutionId: client.solutionId,
+    interfaceId: iface.id,
+    key: idempotencyKey,
+    payload: parsed.data,
+    destination: {
+      environment: client.environment,
+      sapClient: connection.client,
+      connectionId: connection.id,
+      baseUrl: connection.baseUrl,
+      servicePath: service.path,
+      entitySet,
+      interfaceVersion: iface.version,
+    },
+  });
+
+  if (reservation.outcome === "replay") {
+    // Byte-for-byte the original outcome, so a retry is indistinguishable from
+    // the first call and the client's retry logic never has to branch.
+    await audit(reservation.status, iface.id, iface.externalId);
+    return NextResponse.json(reservation.body, {
+      status: reservation.status,
+      headers: {
+        "cache-control": "no-store",
+        "x-correlation-id": correlationId,
+        "idempotency-replayed": "true",
+      },
+    });
+  }
+
+  if (reservation.outcome === "conflict") {
+    const message =
+      reservation.reason === "PAYLOAD_MISMATCH"
+        ? "This Idempotency-Key was already used with a different payload or SAP destination. Use a new key for a different write."
+        : "A request with this Idempotency-Key is still in progress.";
+    await audit(409, iface.id, iface.externalId);
+    return northboundError("CONFLICT", message, 409, correlationId);
   }
 
   // 8 — write. Timed around the upstream call only — see the read route.
@@ -270,16 +279,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   const durationMs = Date.now() - startedAt;
   const status = writeHttpStatusFor(result.status);
 
-  const responseBody =
-    status < 400
-      ? { created: true, record: result.record, location: result.location, note: result.detail }
-      : { error: { code: result.status, message: result.detail, correlationId } };
-
-  // Record the outcome — including failures, so a retry replays the same refusal
-  // rather than attempting the write again.
-  await completeIdempotencyKey(client.scope, reservation.recordId, status, responseBody);
-  await audit(status, iface.id, iface.externalId, connection, durationMs);
-
+  let response: NextResponse;
   if (status >= 400) {
     const code =
       result.status === "NEEDS_SETUP"
@@ -291,18 +291,23 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
             : result.status === "TIMEOUT"
               ? "UPSTREAM_TIMEOUT"
               : "UPSTREAM_ERROR";
-    return northboundError(code, result.detail, status, correlationId);
+    response = northboundError(code, result.detail, status, correlationId);
+  } else {
+    response = northboundOk(
+      {
+        created: true,
+        record: result.record,
+        location: result.location,
+        interface: { id: iface.id, name: iface.name, version: iface.version },
+        note: result.detail,
+      },
+      correlationId,
+      201,
+    );
   }
-
-  return northboundOk(
-    {
-      created: true,
-      record: result.record,
-      location: result.location,
-      interface: { id: iface.id, name: iface.name, version: iface.version },
-      note: result.detail,
-    },
-    correlationId,
-    201,
-  );
+  // Persist the actual envelope: retries preserve interface metadata and the
+  // original error code/body rather than translating a failure into CONFLICT.
+  await completeIdempotencyKey(client.scope, reservation.recordId, status, await response.clone().json());
+  await audit(status, iface.id, iface.externalId, connection, durationMs);
+  return response;
 }

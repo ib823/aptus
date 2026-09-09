@@ -18,6 +18,7 @@ import {
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
+import { extractCookies } from "@/lib/sap-public/cookies";
 
 export type NorthboundWriteStatus =
   | "CREATED"
@@ -68,9 +69,12 @@ function classify(httpStatus: number): { status: NorthboundWriteStatus; detail: 
 }
 
 function extractRecord(json: unknown): Record<string, unknown> | null {
-  if (!json || typeof json !== "object") return null;
+  if (!json || typeof json !== "object" || Array.isArray(json) || "error" in json) return null;
   const d = (json as { d?: unknown }).d;
-  if (d && typeof d === "object" && !Array.isArray(d)) return d as Record<string, unknown>;
+  if ("d" in json) {
+    return d && typeof d === "object" && !Array.isArray(d) && !("error" in d)
+      ? d as Record<string, unknown> : null;
+  }
   return json as Record<string, unknown>;
 }
 
@@ -148,7 +152,7 @@ export async function writeEntitySet(
       "Content-Type": "application/json",
       "X-CSRF-Token": csrfToken,
     };
-    const cookie = csrfRes.headers.get("set-cookie");
+    const cookie = extractCookies(csrfRes.headers);
     if (cookie) headers.Cookie = cookie;
 
     // 2 — the write itself.
@@ -171,10 +175,20 @@ export async function writeEntitySet(
     }
 
     const { status, detail } = classify(res.status);
+    const record = status === "CREATED" ? extractRecord(json) : null;
+    // A 201 with no representation is valid. A nonempty malformed body, or
+    // an empty 200 (often a login proxy), cannot establish the claimed result.
+    if (status === "CREATED" && record === null && (text.trim() !== "" || res.status !== 201)) {
+      return {
+        status: "ERROR", httpStatus: res.status, record: null, location: null,
+        detail: "The tenant returned an invalid write response. The write may have been applied; retry only with the same Idempotency-Key.",
+        durationMs: Date.now() - started,
+      };
+    }
     return {
       status,
       httpStatus: res.status,
-      record: status === "CREATED" ? extractRecord(json) : null,
+      record,
       location: res.headers.get("location"),
       detail,
       durationMs: Date.now() - started,

@@ -8,11 +8,13 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Prisma } from "@prisma/client";
 
 const mocks = vi.hoisted(() => ({
   findUnique: vi.fn(),
   create: vi.fn(),
   update: vi.fn(),
+  updateMany: vi.fn(),
   del: vi.fn(),
 }));
 
@@ -22,6 +24,7 @@ vi.mock("@/lib/db/prisma", () => ({
       findUnique: mocks.findUnique,
       create: mocks.create,
       update: mocks.update,
+      updateMany: mocks.updateMany,
       delete: mocks.del,
     },
   },
@@ -47,13 +50,20 @@ const INPUT = {
   interfaceId: "if_1",
   key: "order-4471-attempt",
   payload: PAYLOAD,
+  destination: {
+    environment: "SANDBOX", sapClient: "100", connectionId: "conn_1",
+    baseUrl: "https://sandbox.example", servicePath: "/sap/odata/API_TEST",
+    entitySet: "A_Thing", interfaceVersion: 1,
+  },
 };
+const REQUEST_HASH = hashRequest({ version: 2, destination: INPUT.destination, payload: PAYLOAD });
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.findUnique.mockResolvedValue(null);
   mocks.create.mockResolvedValue({ id: "idem_1" });
   mocks.update.mockResolvedValue({});
+  mocks.updateMany.mockResolvedValue({ count: 1 });
   mocks.del.mockResolvedValue({});
 });
 
@@ -106,7 +116,7 @@ describe("first use of a key", () => {
     await reserveIdempotencyKey(INPUT, NOW);
     const data = mocks.create.mock.calls[0]?.[0]?.data as Record<string, unknown>;
     expect(data.organizationId).toBe("org_a");
-    expect(data.requestHash).toBe(hashRequest(PAYLOAD));
+    expect(data.requestHash).toBe(REQUEST_HASH);
     expect((data.expiresAt as Date).getTime()).toBe(NOW.getTime() + IDEMPOTENCY_TTL_MS);
   });
 
@@ -123,7 +133,7 @@ describe("a genuine retry", () => {
     mocks.findUnique.mockResolvedValue({
       interfaceId: "if_1",
       id: "idem_1",
-      requestHash: hashRequest(PAYLOAD),
+      requestHash: REQUEST_HASH,
       status: 201,
       responseBody: { created: true, location: "/A_Thing('1')" },
       expiresAt: new Date(NOW.getTime() + 1000),
@@ -143,7 +153,7 @@ describe("a genuine retry", () => {
     mocks.findUnique.mockResolvedValue({
       id: "idem_1",
       interfaceId: "if_1",
-      requestHash: hashRequest(PAYLOAD),
+      requestHash: REQUEST_HASH,
       status: 403,
       responseBody: { error: { code: "FORBIDDEN" } },
       expiresAt: new Date(NOW.getTime() + 1000),
@@ -155,6 +165,36 @@ describe("a genuine retry", () => {
 });
 
 describe("misuse of a key", () => {
+  it.each([
+    { environment: "PROD" }, { sapClient: "080" }, { connectionId: "conn_2" },
+    { baseUrl: "https://another.example" }, { servicePath: "/another/service" },
+    { entitySet: "AnotherEntity" }, { interfaceVersion: 2 },
+  ])("refuses an old result when the destination changes: %j", async (change) => {
+    mocks.findUnique.mockResolvedValue({
+      id: "idem_1", interfaceId: "if_1", requestHash: REQUEST_HASH, status: 201,
+      responseBody: { created: true }, expiresAt: new Date(NOW.getTime() + 1000),
+    });
+    expect(await reserveIdempotencyKey({
+      ...INPUT, destination: { ...INPUT.destination, ...change },
+    }, NOW)).toEqual({ outcome: "conflict", reason: "PAYLOAD_MISMATCH" });
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses legacy unbound keys without replaying or starting a new write", async () => {
+    mocks.findUnique.mockResolvedValue({
+      id: "legacy", interfaceId: "if_1", requestHash: hashRequest(PAYLOAD), status: 201,
+      responseBody: { created: true }, expiresAt: new Date(NOW.getTime() + 1000),
+    });
+    expect(await reserveIdempotencyKey(INPUT, NOW)).toEqual({ outcome: "conflict", reason: "PAYLOAD_MISMATCH" });
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("does not hide a database outage as an insert race", async () => {
+    mocks.create.mockRejectedValue(new Error("database unavailable"));
+    await expect(reserveIdempotencyKey(INPUT, NOW)).rejects.toThrow("database unavailable");
+  });
+
   it("refuses the same key with a DIFFERENT payload", async () => {
     // Replaying here would make the caller's second, genuinely different write
     // vanish without a trace.
@@ -174,7 +214,7 @@ describe("misuse of a key", () => {
     mocks.findUnique.mockResolvedValue({
       interfaceId: "if_1",
       id: "idem_1",
-      requestHash: hashRequest(PAYLOAD),
+      requestHash: REQUEST_HASH,
       status: null,
       responseBody: null,
       expiresAt: new Date(NOW.getTime() + 1000),
@@ -187,7 +227,9 @@ describe("misuse of a key", () => {
   it("treats a lost insert race as in-flight — the unique constraint is the guarantee", async () => {
     // Two concurrent requests with one key: exactly one can insert.
     mocks.findUnique.mockResolvedValue(null);
-    mocks.create.mockRejectedValue(new Error("unique constraint violation"));
+    mocks.create.mockRejectedValue(new Prisma.PrismaClientKnownRequestError(
+      "unique constraint violation", { code: "P2002", clientVersion: "6.19.2" },
+    ));
     const r = await reserveIdempotencyKey(INPUT, NOW);
     expect(r.outcome).toBe("conflict");
     if (r.outcome === "conflict") expect(r.reason).toBe("IN_FLIGHT");
@@ -195,6 +237,16 @@ describe("misuse of a key", () => {
 });
 
 describe("expiry", () => {
+  it("does not proceed when another caller has already renewed or reaped the row", async () => {
+    mocks.findUnique.mockResolvedValue({
+      id: "expired", interfaceId: "if_1", requestHash: REQUEST_HASH,
+      expiresAt: new Date(NOW.getTime() - 1),
+    });
+    mocks.updateMany.mockResolvedValue({ count: 0 });
+    expect(await reserveIdempotencyKey(INPUT, NOW)).toEqual({ outcome: "conflict", reason: "IN_FLIGHT" });
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
   it("treats an expired key as fresh — it is not a retry of anything", async () => {
     mocks.findUnique.mockResolvedValue({
       interfaceId: "if_1",
@@ -221,10 +273,10 @@ describe("expiry", () => {
       expiresAt: new Date(NOW.getTime() - 1),
     });
     await reserveIdempotencyKey(INPUT, NOW);
-    const data = mocks.update.mock.calls[0]?.[0]?.data as Record<string, unknown>;
+    const data = mocks.updateMany.mock.calls[0]?.[0]?.data as Record<string, unknown>;
     expect(data.status).toBeNull();
     expect(data.responseBody).not.toBeUndefined();
-    expect(data.requestHash).toBe(hashRequest(PAYLOAD));
+    expect(data.requestHash).toBe(REQUEST_HASH);
   });
 });
 

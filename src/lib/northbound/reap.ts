@@ -75,7 +75,9 @@ export async function reapExpiredIdempotencyKeys(
   let deleted = 0;
   for (const [organizationId, ids] of byOrg) {
     const result = await prisma.northboundIdempotencyKey.deleteMany({
-      where: { organizationId, id: { in: ids } },
+      // Recheck expiry at deletion time: a reservation may have been renewed
+      // since the scan. A stale sweep must never remove a live write's key.
+      where: { organizationId, id: { in: ids }, expiresAt: { lt: now } },
     });
     deleted += result.count;
   }
