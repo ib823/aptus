@@ -4,6 +4,7 @@
  * the screen renders. Byte-level checks only; layout is not asserted.
  */
 import { describe, expect, it } from "vitest";
+import { createRequire } from "node:module";
 
 import { generateTobePack } from "@/lib/tobe/engine";
 import { generateTobePackPdf, winAnsiSafe } from "@/lib/tobe/export-pdf";
@@ -61,6 +62,15 @@ describe("pagination", () => {
 });
 
 describe("PPTX", () => {
+  it("cannot resolve the unused image parser from PptxGenJS", () => {
+    const require = createRequire(import.meta.url);
+    const fromPptx = createRequire(require.resolve("pptxgenjs"));
+    expect(() => fromPptx.resolve("image-size")).toThrowError(
+      expect.objectContaining({ code: "MODULE_NOT_FOUND" }),
+    );
+  });
+
+
   it("is a zip (OOXML) with one slide per in-scope item plus title and L1", async () => {
     const buf = await generateTobePackPptx(doc, { clientName: "Pilot Client", consultantView: true });
     expect(buf.subarray(0, 2).toString("latin1")).toBe("PK");

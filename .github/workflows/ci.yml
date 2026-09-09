@@ -59,12 +59,8 @@ jobs:
             ${{ runner.os }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - name: Security audit
-        # Resilient gate (scripts/ci-audit-gate.mjs): FAILS on any DIRECT-dep or
-        # FIXABLE high/critical (a fixable transitive CVE like fast-uri still
-        # fails — Dependabot raises the override PR, which auto-merges, and open
-        # PRs rebase onto a green main). Only a genuinely-UNFIXABLE transitive
-        # advisory (no patched version) is downgraded to a warning, so it can't
-        # hard-block every build. Retired/unavailable audit endpoint → warning.
+        # Every production high/critical advisory blocks, including transitive
+        # findings without an upstream patch. Unavailable/invalid audits fail.
         run: node scripts/ci-audit-gate.mjs
 
       - name: Generate Prisma client
