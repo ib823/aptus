@@ -163,10 +163,18 @@ export interface CatalogueSelection {
 export function SapCapabilityCatalogue({
   product = "s4hana",
   /**
-   * Business-domain lens (CoreEdge Developer Studio). When true, a line-of-business
-   * filter row renders, built from the LoB counts the catalogue endpoint reports —
-   * so it offers the domains that ACTUALLY exist, with their real sizes, rather
-   * than a hardcoded taxonomy that would drift into empty buckets.
+   * Package lens (CoreEdge Developer Studio). When true, a package filter row
+   * renders, built from the counts the catalogue endpoint reports — so it offers
+   * the values that ACTUALLY exist, with their real sizes, rather than a
+   * hardcoded taxonomy that would drift into empty buckets.
+   *
+   * IT IS NOT A DOMAIN TAXONOMY, and used to say it was. The values are
+   * `packageId`, which the importer takes verbatim for most content types: raw,
+   * comma-joined, and order-dependent. Rows without one are dropped from the
+   * facet, and whole content types (BAdI, Event, Business Object Interface)
+   * have none — so a selection quietly excludes them. CE-030 is the real fix:
+   * a populated lineOfBusiness column, multi-value split, and an explicit
+   * Unclassified bucket so nothing is dropped in silence.
    *
    * NOTE it filters `lob` (persisted on packageId, and what the grouped list below
    * is grouped by) and NOT the `domain` facet, which carries SAP's own vocabulary
@@ -208,7 +216,7 @@ export function SapCapabilityCatalogue({
   // Source/domain facets: SAP-only (hide partner) and AI-only (domain=AI).
   const [sapOnly, setSapOnly] = useState(false);
   const [aiOnly, setAiOnly] = useState(false);
-  // Business-domain lens (Studio). Null = "All domains". Filters `lob`.
+  // Package lens (Studio). Null = "All packages". Filters `lob` (== packageId).
   const [lob, setLob] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
@@ -606,13 +614,34 @@ export function SapCapabilityCatalogue({
             </button>
           </div>
 
-          {/* Business-domain lens (Studio only — rendered when a taxonomy is passed).
-              Narrows the same server-side `domain` facet; it is a VIEW over the
-              catalogue, never a claim about the tenant. */}
+          {/*
+            PACKAGE lens (Studio only — rendered when a taxonomy is passed).
+            Narrows the server-side facet; a VIEW over the catalogue, never a
+            claim about the tenant.
+
+            IT IS CALLED "PACKAGE" BECAUSE THAT IS WHAT IT FILTERS. The facet
+            groups on `packageId`, which is a resolved line of business for API
+            rows and SAP's raw package string for everything else — so it offers
+            comma-joined values, order-permutations of the same set listed as
+            separate entries ("Sales,Service" beside "Service,Sales"), and
+            non-domain values like LIVEPROCESS.
+
+            Worse for a reader trying to browse: rows with no packageId are
+            dropped from the facet entirely, and BAdIs, Events and Business
+            Object Interfaces carry none at all — over half the harvested
+            catalogue. Selecting any entry silently hides them.
+
+            Calling that a "Business domain" asserted a taxonomy the data does
+            not have. The honest label costs nothing and stops the claim while
+            the real fix (a populated lineOfBusiness column, multi-value split,
+            an explicit Unclassified bucket — CE-030) is scheduled. Silently
+            omitting half the catalogue from a facet is the same sin as a badge
+            claiming more than its probe established, moved one screen across.
+          */}
           {domainLens && lobOptions.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Business domain filter">
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Package filter">
               <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--ink-muted)" }}>
-                Business domain
+                Package
               </span>
               {[null, ...lobOptions].map((d) => {
                 const selected = lob === d;
@@ -630,7 +659,7 @@ export function SapCapabilityCatalogue({
                       border: `1px solid ${selected ? "var(--brand-navy)" : "var(--border-default)"}`,
                     }}
                   >
-                    {d ?? "All domains"}
+                    {d ?? "All packages"}
                     {count != null ? ` · ${count}` : ""}
                   </button>
                 );
