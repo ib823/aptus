@@ -117,6 +117,7 @@ export function StudioTopBar({
 
   return (
     <header
+      data-studio-topbar=""
       style={{
         height: 56,
         flexShrink: 0,
@@ -291,7 +292,9 @@ export function StudioTopBar({
         </span>
       )}
 
-      <Badge label={roleLabel} title="Your role in this workspace" />
+      <span data-studio-role-badge="">
+        <Badge label={roleLabel} title="Your role in this workspace" />
+      </span>
 
       <div ref={userRef} style={{ position: "relative" }}>
         <button

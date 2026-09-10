@@ -168,6 +168,13 @@ jobs:
           TOBE_PACK_ENABLED: "true"
           TOBE_E2E: "1"
 
+      # CE-013a: the Studio shell's narrow-width layout. responsive.auth.spec.ts
+      # runs in no CI job, so a check added there would report nothing; this one
+      # is wired in deliberately. It also asserts the desktop rail is untouched,
+      # so the fix cannot quietly bleed into >=900px.
+      - name: Run Discover responsive e2e
+        run: pnpm test:e2e:discover-responsive
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v7
