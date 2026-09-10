@@ -92,9 +92,11 @@ describe("every status bucket is shown", () => {
    * it does not look like a gap, it looks like a total. So this test now
    * exercises all of them, with every bucket non-zero — a zero bucket cannot
    * catch an omission, because omitting it does not change the sum. 2608 WS3
-   * made it EIGHT: DEPRECATED (SAP's own retirements, tenant-independent).
+   * made it EIGHT: DEPRECATED (SAP's own retirements, tenant-independent), and
+   * a NINTH: PROBE_FAILED, split out of NOT_CHECKED so a probe that ran and
+   * errored stops being counted as one that never ran.
    */
-  it("renders all eight buckets and reconciles the row to the sum", () => {
+  it("renders all nine buckets and reconciles the row to the sum", () => {
     render(
       <ReadinessScorecard
         activated={139}
@@ -103,6 +105,7 @@ describe("every status bucket is shown", () => {
         needsSetup={349}
         notFound={7}
         notChecked={11}
+        probeFailed={4}
         notProbeable={515}
         available={151}
         probed={1003}
@@ -116,8 +119,9 @@ describe("every status bucket is shown", () => {
     expect(screen.getByText("Available")).toBeTruthy();
     expect(screen.getByText("Not found")).toBeTruthy();
     expect(screen.getByText("Deprecated")).toBeTruthy();
-    expect(screen.getByText(/These eight add up to/i)).toBeTruthy();
-    // 139 + 349 + 151 + 7 + 11 + 515 + 819 + 24 = 2,015 — the browsable total.
-    expect(screen.getByText("2,015")).toBeTruthy();
+    expect(screen.getByText(/These nine add up to/i)).toBeTruthy();
+    expect(screen.getByText("Probe failed")).toBeTruthy();
+    // 139 + 349 + 151 + 7 + 11 + 4 + 515 + 819 + 24 = 2,019 — the browsable total.
+    expect(screen.getByText("2,019")).toBeTruthy();
   });
 });

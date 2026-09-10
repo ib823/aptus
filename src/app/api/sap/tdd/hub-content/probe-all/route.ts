@@ -106,7 +106,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const at = new Date().toISOString();
   let probed = 0;
-  const byOutcome: Record<string, number> = { ACTIVATED: 0, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 0 };
+  const byOutcome: Record<string, number> = { ACTIVATED: 0, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 0, PROBE_FAILED: 0 };
   let cursor = 0;
 
   async function worker(): Promise<void> {

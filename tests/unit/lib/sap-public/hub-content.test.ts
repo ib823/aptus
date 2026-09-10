@@ -91,11 +91,21 @@ describe("httpToRuntimeStatus (outcome → status)", () => {
     expect(httpToRuntimeStatus(404)).toBe("NOT_FOUND");
   });
 
-  it("un-probed (undefined) and inconclusive (0 / 5xx) → NOT_CHECKED, never a fake negative", () => {
+  it("separates 'nobody looked' from 'we looked and it failed' — neither a fake negative", () => {
+    // Un-probed: nothing has been attempted.
     expect(httpToRuntimeStatus(undefined)).toBe("NOT_CHECKED");
-    expect(httpToRuntimeStatus(0)).toBe("NOT_CHECKED");
-    expect(httpToRuntimeStatus(500)).toBe("NOT_CHECKED");
-    expect(httpToRuntimeStatus(503)).toBe("NOT_CHECKED");
+    /*
+     * A probe RAN and errored. Both are unknown, but they are different facts
+     * with different fixes, and collapsing them (as this did) hid a tenant
+     * returning 500 for an entire run behind "not probed yet".
+     */
+    expect(httpToRuntimeStatus(0)).toBe("PROBE_FAILED");
+    expect(httpToRuntimeStatus(500)).toBe("PROBE_FAILED");
+    expect(httpToRuntimeStatus(503)).toBe("PROBE_FAILED");
+    // Still never a confirmed negative about the capability itself.
+    for (const http of [0, 500, 503]) {
+      expect(["NEEDS_SETUP", "NOT_FOUND", "ACTIVATED"]).not.toContain(httpToRuntimeStatus(http));
+    }
   });
 });
 
@@ -163,9 +173,10 @@ describe("resolveHubStatus (probe-outcome-driven, honest badges)", () => {
     expect(deprecationTooltip(null)).toBe("Deprecated by SAP — no successor named yet");
     expect(deprecationTooltip(undefined)).toBe("Deprecated by SAP — no successor named yet");
     // HUB_STATUSES is the one display-order list every consumer iterates; DEPRECATED is its last bucket.
-    expect(HUB_STATUSES).toHaveLength(8);
+    expect(HUB_STATUSES).toHaveLength(9);
     expect(HUB_STATUSES[HUB_STATUSES.length - 1]).toBe("DEPRECATED");
-    expect(new Set(HUB_STATUSES).size).toBe(8);
+    expect(new Set(HUB_STATUSES).size).toBe(9);
+    expect(HUB_STATUSES).toContain("PROBE_FAILED");
   });
 
   it("EVENT is subscribe-only → AVAILABLE, never ACTIVATED even if forced into the map", () => {

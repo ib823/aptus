@@ -77,13 +77,14 @@ type StatusFilter = "ALL" | HubStatus;
 // Full faceted set. Each facet renders only when it has rows (or is selected),
 // so empty statuses stay out of the way — but NOT_PROBEABLE (~470) always shows
 // its count and is never hidden. Counts come from the edition-wide byStatus.
-const STATUS_FILTERS: StatusFilter[] = ["ALL", "ACTIVATED", "NEEDS_SETUP", "NOT_CHECKED", "NOT_PROBEABLE", "NOT_FOUND", "AVAILABLE", "REFERENCE", "DEPRECATED"];
+const STATUS_FILTERS: StatusFilter[] = ["ALL", "ACTIVATED", "NEEDS_SETUP", "NOT_CHECKED", "PROBE_FAILED", "NOT_PROBEABLE", "NOT_FOUND", "AVAILABLE", "REFERENCE", "DEPRECATED"];
 const STATUS_LABEL: Record<StatusFilter, string> = {
   ALL: "All",
   ACTIVATED: "Activated",
   NEEDS_SETUP: "Needs setup",
   NOT_FOUND: "Not found",
   NOT_CHECKED: "Not checked",
+  PROBE_FAILED: "Probe failed",
   NOT_PROBEABLE: "Not probeable",
   AVAILABLE: "Available",
   REFERENCE: "Reference",
@@ -101,6 +102,8 @@ function statusHint(status: BadgeStatus): { text: string; color: string } | null
       return { text: "needs setup — activate the arrangement", color: "var(--status-awaiting-fg)" };
     case "NOT_CHECKED":
       return { text: "not checked — open to run a live probe", color: "var(--ink-muted)" };
+    case "PROBE_FAILED":
+      return { text: "probe failed — the attempt errored, re-run it", color: "var(--status-expired-fg)" };
     case "NOT_PROBEABLE":
       return { text: "not probeable — no OData endpoint (SOAP/async)", color: "var(--ink-muted)" };
     case "NOT_FOUND":
@@ -521,6 +524,7 @@ export function SapCapabilityCatalogue({
               needsSetup={byStatus.NEEDS_SETUP}
               notFound={byStatus.NOT_FOUND}
               notChecked={byStatus.NOT_CHECKED}
+              probeFailed={byStatus.PROBE_FAILED}
               notProbeable={byStatus.NOT_PROBEABLE}
               available={byStatus.AVAILABLE}
               probed={probed}
