@@ -226,8 +226,15 @@ describe("the bundle", () => {
 
   it("wires mock and demo as npm scripts", () => {
     const pkg = JSON.parse(buildPackageJson(IFACE)) as { scripts: Record<string, string> };
-    expect(pkg.scripts.mock).toBe("node mock.mjs");
-    expect(pkg.scripts.demo).toBe("node demo.mjs");
+    /*
+     * --env-file-if-exists is load-bearing, not cosmetic: the README says
+     * `cp .env.example .env && npm run demo`, and without the flag nothing ever
+     * read that file, so the documented first run always exited 1. `-if-exists`
+     * because the inline form (COREEDGE_BASE_URL=… npm run demo) passes no .env
+     * and a bare --env-file would make Node exit on the missing file.
+     */
+    expect(pkg.scripts.mock).toBe("node --env-file-if-exists=.env mock.mjs");
+    expect(pkg.scripts.demo).toBe("node --env-file-if-exists=.env demo.mjs");
   });
 
   it("embeds the captured fixtures as valid JSON", () => {
