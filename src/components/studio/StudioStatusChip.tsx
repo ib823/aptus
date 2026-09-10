@@ -28,6 +28,7 @@ const TOKENS: Record<HonestStatus, { bg: string; fg: string }> = {
   NEEDS_SETUP: { bg: "var(--status-awaiting-bg)", fg: "var(--status-awaiting-fg)" },
   AVAILABLE: { bg: "var(--status-sent-bg)", fg: "var(--status-sent-fg)" },
   NOT_PROBEABLE: { bg: "var(--status-expired-bg)", fg: "var(--status-expired-fg)" },
+  PROBE_FAILED: { bg: "var(--status-expired-bg)", fg: "var(--status-expired-fg)" },
   REFERENCE: { bg: "var(--status-draft-bg)", fg: "var(--status-draft-fg)" },
   NOT_CHECKED: { bg: "var(--status-nocheck-bg)", fg: "var(--status-nocheck-fg)" },
   NOT_FOUND: { bg: "var(--status-revoked-bg)", fg: "var(--status-revoked-fg)" },
@@ -38,6 +39,7 @@ const LABELS: Record<HonestStatus, string> = {
   NEEDS_SETUP: "Needs setup",
   AVAILABLE: "Available",
   NOT_PROBEABLE: "Not probeable",
+  PROBE_FAILED: "Probe failed",
   REFERENCE: "Reference",
   NOT_CHECKED: "Not checked",
   NOT_FOUND: "Not found",
@@ -49,6 +51,7 @@ const MEANINGS: Record<HonestStatus, string> = {
   NEEDS_SETUP: "401 or 403 — communication arrangement not set up",
   AVAILABLE: "event or subscribe-only; not pulled",
   NOT_PROBEABLE: "no OData endpoint to probe",
+  PROBE_FAILED: "the attempt errored — re-run it",
   REFERENCE: "design-time content",
   NOT_CHECKED: "not yet probed",
   NOT_FOUND: "404 — not in this tenant",
@@ -56,6 +59,16 @@ const MEANINGS: Record<HonestStatus, string> = {
 
 export function studioStatusLabel(status: HonestStatus): string {
   return LABELS[status];
+}
+
+/**
+ * What the status MEANS, in the words the chip already uses for its accessible
+ * description. Exported as the sibling of studioStatusLabel so a test can assert
+ * that two statuses say genuinely different things, rather than scraping the
+ * component's source for a string literal.
+ */
+export function studioStatusMeaning(status: HonestStatus): string {
+  return MEANINGS[status];
 }
 
 // `label` is written `string | undefined` rather than plain optional because

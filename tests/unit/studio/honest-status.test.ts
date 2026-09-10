@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { studioStatusLabel, type HonestStatus } from "@/components/studio/StudioStatusChip";
+import { studioStatusLabel, studioStatusMeaning, type HonestStatus } from "@/components/studio/StudioStatusChip";
 
 const ALL: HonestStatus[] = [
   "ACTIVATED",
@@ -40,6 +40,14 @@ const EXPECTED_TOKENS: Record<HonestStatus, string> = {
   NEEDS_SETUP: "--status-awaiting",
   AVAILABLE: "--status-sent",
   NOT_PROBEABLE: "--status-expired",
+  /*
+   * Shares NOT_PROBEABLE's token pair deliberately: both read as "this did not
+   * give you an answer", and inventing a ninth colour for the difference would
+   * make the palette carry a distinction the WORDS carry better. The label and
+   * the meaning are what separate them — "Probe failed · the attempt errored,
+   * re-run it" against "Not probeable · no OData endpoint to probe".
+   */
+  PROBE_FAILED: "--status-expired",
   REFERENCE: "--status-draft",
   NOT_CHECKED: "--status-nocheck",
   NOT_FOUND: "--status-revoked",
@@ -97,5 +105,35 @@ describe("--status-nocheck-* token", () => {
     const darkBlock = globalsCss.slice(globalsCss.indexOf(".dark"));
     expect(darkBlock).toContain("--status-nocheck-bg:");
     expect(darkBlock).toContain("--status-nocheck-fg:");
+  });
+});
+
+describe("PROBE_FAILED is not NOT_PROBEABLE", () => {
+  /*
+   * The Studio chip vocabulary had no PROBE_FAILED, so a connection whose stored
+   * status was ERROR and a Test Console read that came back 502 both rendered as
+   * "Not probeable" — a word that means there is no endpoint here to check, and
+   * so tells the reader to stop trying at the moment a retry is the fix.
+   *
+   * The catalogue vocabulary (hub-content.ts HubStatus) already drew this line.
+   * These assertions stop the two drifting apart again.
+   */
+  it("gives the failed attempt its own label and its own meaning", () => {
+    expect(studioStatusLabel("PROBE_FAILED")).toBe("Probe failed");
+    expect(studioStatusLabel("PROBE_FAILED")).not.toBe(studioStatusLabel("NOT_PROBEABLE"));
+    expect(studioStatusMeaning("PROBE_FAILED")).toMatch(/re-run/i);
+    expect(studioStatusMeaning("NOT_PROBEABLE")).toMatch(/no OData endpoint/i);
+  });
+
+  it("keeps NO_PROBE_PATH terminal while ERROR and TIMEOUT become retryable", () => {
+    // Mirrors ConnectionsClient's mapping. NO_PROBE_PATH genuinely has nothing
+    // to probe; separating it from ERROR is the entire point of the split.
+    expect(chipSource).toContain("PROBE_FAILED");
+    const connSource = readFileSync(
+      path.resolve(process.cwd(), "src/components/studio/ConnectionsClient.tsx"),
+      "utf8",
+    );
+    expect(connSource).toMatch(/case "ERROR":\s*\n\s*return "PROBE_FAILED"/);
+    expect(connSource).toMatch(/case "NO_PROBE_PATH":\s*\n\s*return "NOT_PROBEABLE"/);
   });
 });

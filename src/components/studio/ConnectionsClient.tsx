@@ -59,8 +59,15 @@ function healthToStatus(status: string | null): HonestStatus {
       return "NEEDS_SETUP";
     case "NOT_FOUND":
       return "NOT_FOUND";
+    /*
+     * The attempt ran and failed. Distinct from NO_PROBE_PATH below, which is
+     * terminal — separating them is the entire point of the split, and lumping
+     * a timed-out connection in with "there is nothing here to check" told an
+     * operator to stop trying at exactly the moment a retry was the fix.
+     */
     case "TIMEOUT":
     case "ERROR":
+      return "PROBE_FAILED";
     case "NO_PROBE_PATH":
       return "NOT_PROBEABLE";
     default:
