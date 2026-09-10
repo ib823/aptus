@@ -9,6 +9,7 @@
  */
 
 import { formatDateTime } from "@/lib/format/date";
+import { HUB_CONTENT_TYPES } from "@/lib/sap-public/hub-content";
 
 /** activated / probed as a 0–100 integer (0 when nothing was probed). */
 export function readinessPercent(activated: number, probed: number): number {
@@ -32,6 +33,7 @@ export function ReadinessScorecard({
   needsSetup,
   notFound,
   notChecked,
+  probeFailed = 0,
   notProbeable,
   available,
   probed,
@@ -50,6 +52,12 @@ export function ReadinessScorecard({
   /** A probe returned 404 — published, but the path is not on this tenant. */
   notFound: number;
   notChecked: number;
+  /**
+   * A probe RAN and could not reach a verdict (5xx / timeout / network).
+   * Optional so existing callers keep compiling and read 0, which is honest:
+   * a caller that does not yet supply it has no failed probes to report.
+   */
+  probeFailed?: number;
   notProbeable: number;
   /** Published for this edition but not yet probed on this tenant. */
   available: number;
@@ -124,8 +132,9 @@ export function ReadinessScorecard({
       {/* catalogue scale — shown separately, never folded into the ratio */}
       <p className="mt-2 text-xs" style={{ color: "var(--ink-muted)" }}>
         Catalogue scale:{" "}
-        <strong style={{ color: "var(--ink-secondary)" }}>{(totalItems ?? apiTotal).toLocaleString()}</strong> items across 12 content
-        types · <strong style={{ color: "var(--ink-secondary)" }}>{probeable.toLocaleString()}</strong> OData-probeable (V2 + best-effort
+        <strong style={{ color: "var(--ink-secondary)" }}>{(totalItems ?? apiTotal).toLocaleString()}</strong> items across{" "}
+        {HUB_CONTENT_TYPES.length} content types ·{" "}
+        <strong style={{ color: "var(--ink-secondary)" }}>{probeable.toLocaleString()}</strong> OData-probeable (V2 + best-effort
         V4){aiApis ? <> · <strong style={{ color: "var(--ink-secondary)" }}>{aiApis.toLocaleString()}</strong> AI APIs</> : null} · the
         rest reference
       </p>
@@ -139,26 +148,30 @@ export function ReadinessScorecard({
         subtract and get 151 items that exist, are filterable, and appear in no
         summary. The fix added a comment saying "every bucket"… and the row was
         still missing NOT_FOUND, so any 404 probe result made the stated sum
-        false all over again. The vocabulary has EIGHT members (DEPRECATED
-        joined in 2608 WS3); this row renders all eight, and the reconciliation
-        sentence below is only ever computed over the same eight. On a screen whose whole argument is
+        false all over again. The vocabulary has NINE members (DEPRECATED joined in
+        2608 WS3; PROBE_FAILED split out of NOT_CHECKED so a failed attempt stops
+        reading as "nobody looked"); this row renders all nine, and the
+        reconciliation sentence below is only ever computed over the same nine. On a screen whose whole argument is
         "nothing is inferred, every number traces to a probe", a silently
         missing bucket is the worst kind of error.
       */}
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-9">
         <CountPill label="Authorized" value={activated} bg="var(--status-signed-bg)" fg="var(--status-signed-fg)" />
         <CountPill label="Needs setup" value={needsSetup} bg="var(--status-awaiting-bg)" fg="var(--status-awaiting-fg)" />
         <CountPill label="Available" value={available} bg="var(--status-sent-bg)" fg="var(--status-sent-fg)" />
         <CountPill label="Not found" value={notFound} bg="var(--status-revoked-bg)" fg="var(--status-revoked-fg)" />
         <CountPill label="Not checked" value={notChecked} bg="var(--surface-ink-tint)" fg="var(--ink-secondary)" />
+        <CountPill label="Probe failed" value={probeFailed} bg="var(--status-expired-bg)" fg="var(--status-expired-fg)" />
         <CountPill label="Not probeable" value={notProbeable} bg="var(--status-expired-bg)" fg="var(--status-expired-fg)" />
         <CountPill label="Reference" value={reference} bg="var(--status-draft-bg)" fg="var(--status-draft-fg)" />
         <CountPill label="Deprecated" value={deprecated} bg="var(--status-revoked-bg)" fg="var(--status-revoked-fg)" />
       </div>
       <p className="mt-2 text-xs" style={{ color: "var(--ink-muted)" }}>
-        These eight add up to{" "}
+        These nine add up to{" "}
         <strong style={{ color: "var(--ink-secondary)" }}>
-          {(activated + needsSetup + available + notFound + notChecked + notProbeable + reference + deprecated).toLocaleString()}
+          {(
+            activated + needsSetup + available + notFound + notChecked + probeFailed + notProbeable + reference + deprecated
+          ).toLocaleString()}
         </strong>{" "}
         browsable items — the same number the status filter offers. Stated so the
         two can be checked against each other rather than taken on trust.
