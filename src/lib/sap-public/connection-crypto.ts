@@ -49,6 +49,25 @@ export interface SapConnectionSecrets {
   writeSecret?: string;
 }
 
+/**
+ * Is the encryption key configured well enough to store a secret?
+ *
+ * EXPORTED SO A SCREEN CAN ASK BEFORE IT OFFERS THE FORM. Without the key,
+ * getEncryptionKey throws and every connection save 500s — on the first action
+ * of the whole journey, after the developer has typed a client's SAP
+ * credentials into a form that could never have stored them. The error was
+ * honest about being a deployment problem, but it arrived one step too late to
+ * stop that happening.
+ *
+ * Deliberately mirrors the length check below rather than trying the key: the
+ * question a page needs answered is "will this deployment accept a secret",
+ * which is exactly this predicate, and a page must not need a plaintext to ask.
+ */
+export function isConnectionEncryptionConfigured(): boolean {
+  const hex = process.env.SAP_CONNECTION_ENCRYPTION_KEY;
+  return typeof hex === "string" && hex.length === 64 && /^[0-9a-fA-F]+$/.test(hex);
+}
+
 function getEncryptionKey(): Buffer {
   const hex = process.env.SAP_CONNECTION_ENCRYPTION_KEY;
   if (!hex || hex.length !== 64) {

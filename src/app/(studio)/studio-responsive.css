@@ -1,0 +1,118 @@
+/* ============================================================
+   CoreEdge Console — Studio responsive pass (CE-013a)
+   ============================================================
+   THE DEFECT THIS FIXES, measured on /studio/discover before any change:
+
+     375px viewport → body.scrollWidth 492  (117px of horizontal overflow)
+     420px viewport → body.scrollWidth 492  ( 72px of horizontal overflow)
+     768px / 1280px → no overflow
+
+   The cause is not the catalogue. StudioRail is a hard `width: 220px;
+   flex-shrink: 0` column that never yields, so at 375px the content column
+   gets 155px, and after <main>'s 24px padding on each side roughly 107px of
+   usable width remains. Discover's prose wrapped to two words per line, and
+   the top bar's role badge and avatar were pushed past the right edge — those
+   were the elements the overflow measurement caught, but they were symptoms.
+
+   So the rail stacks instead of shrinking. Below the breakpoint the shell
+   becomes a column, the rail becomes a full-width horizontally scrollable
+   strip with its sections in a row, and the content area takes the whole
+   width.
+
+   WHY `!important`. The shell, rail and top bar style themselves inline
+   (they are server components using style={{…}}), and an inline declaration
+   outranks any selector here regardless of specificity. Every override below
+   therefore has to carry it; that is a consequence of the existing styling
+   approach, not a shortcut around a specificity problem.
+
+   DESKTOP IS UNTOUCHED. Every rule sits inside `@media (max-width: 899px)`,
+   so >=900px — which includes both viewports the responsive suite snapshots
+   for other pages (1280, 1920) — renders exactly as before.
+
+   Token discipline: design-system CSS variables only, no new tokens.
+   ============================================================ */
+
+@media (max-width: 899px) {
+  /* Shell: rail above content instead of beside it. */
+  [data-studio] {
+    flex-direction: column !important;
+  }
+
+  /* Rail: a full-width strip. `min-height: 100vh` is inline and would
+     otherwise push the content a whole screen down once stacked. */
+  [data-studio-rail] {
+    width: 100% !important;
+    min-height: 0 !important;
+    gap: 12px !important;
+    padding: 12px !important;
+  }
+
+  /* The rail's groups sit in a row and scroll sideways rather than stacking
+     into a wall of links above every page — the rail measured 504px tall at
+     375px wide, so the whole first screen was navigation.
+     `-webkit-overflow-scrolling` is deliberate: momentum scrolling on iOS,
+     where this strip is most likely to be touched. */
+  [data-studio-rail] > section {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* The <ul> styles itself inline (listStyle in StudioRail), hence !important. */
+  [data-studio-rail] ul {
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 4px !important;
+  }
+
+  [data-studio-rail] li > a,
+  [data-studio-rail] li > span {
+    white-space: nowrap;
+  }
+
+  /* THE SELECTION HAS TO COME FROM SOMEWHERE ELSE HERE.
+     RailHighlight draws the one selected background for the whole rail, and
+     itemStyle carries none of its own by design, so that two items can never
+     both look selected mid-transition. But that bar is positioned with
+     `translateY(offsetTop)` and stretched `left: 0; right: 0` — in a row every
+     item shares a top, so it would span the strip and highlight all of them.
+
+     So below the breakpoint the bar is hidden and the active item paints its
+     own background, keyed off the `aria-current="page"` the link already sets.
+     The invariant the bar existed to protect still holds: exactly one item can
+     be aria-current, and there is no transition here for two to overlap
+     during. Same token as the bar, so the selection looks the same. */
+  [data-studio-rail] ul + div[aria-hidden="true"],
+  [data-studio-rail] div[aria-hidden="true"] {
+    display: none !important;
+  }
+
+  [data-studio-rail] [aria-current="page"] {
+    background: rgba(255, 255, 254, 0.14) !important;
+  }
+
+  /* Top bar: 56px is a desktop height. Let it grow and wrap rather than
+     shove its right-hand controls off the edge. */
+  [data-studio-topbar] {
+    height: auto !important;
+    min-height: 56px;
+    flex-wrap: wrap !important;
+    row-gap: 8px !important;
+    padding: 8px 12px !important;
+  }
+
+  /* Reclaim the width the 24px gutters were taking from a ~107px content
+     column. */
+  [data-studio-main] {
+    padding: 16px 12px !important;
+  }
+}
+
+/* The role badge is the least load-bearing thing in the top bar — the account
+   menu it sits beside already names the user, and the rail already says which
+   workspace this is. It is the first thing to go when the bar is genuinely
+   tight. */
+@media (max-width: 519px) {
+  [data-studio-role-badge] {
+    display: none !important;
+  }
+}

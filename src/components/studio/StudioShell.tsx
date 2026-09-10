@@ -76,7 +76,7 @@ export function StudioShell({
           roleLabel={roleLabel}
           userEmail={userEmail}
         />
-        <main style={{ flex: 1, padding: 24, minWidth: 0 }}>{children}</main>
+        <main data-studio-main="" style={{ flex: 1, padding: 24, minWidth: 0 }}>{children}</main>
       </div>
     </div>
   );

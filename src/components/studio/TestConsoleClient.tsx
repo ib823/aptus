@@ -247,7 +247,12 @@ export function TestConsoleClient({
             ? "NEEDS_SETUP"
             : d.status === "NOT_FOUND"
               ? "NOT_FOUND"
-              : "NOT_PROBEABLE";
+              : // What remains is TIMEOUT | ERROR — the attempt ran and failed.
+                // It used to fall through to NOT_PROBEABLE, which is terminal and
+                // means there is no endpoint here to check: the opposite advice to
+                // the one a timed-out read deserves. The broker never reports
+                // NOT_PROBEABLE on this path, so there is no case to preserve.
+                "PROBE_FAILED";
       setRun({
         phase: "done",
         status,

@@ -36,7 +36,14 @@ const requestSchema = z.object({
   operation: z.enum(["READ", "CREATE", "UPDATE"]),
   environment: z.enum(["SANDBOX", "DEV", "TEST", "PROD"]),
   justification: z.string().min(10).max(2000),
-  expiresAt: z.string().datetime().optional(),
+  /*
+   * REQUIRED, because every granting decision requires it (grants.ts
+   * evaluateDecision). Optional here produced requests that could only ever be
+   * rejected, and the approver has no field to supply the date themselves --
+   * deliberately, since inventing the boundary on access you are granting is
+   * what that rule prevents.
+   */
+  expiresAt: z.string().datetime(),
 });
 
 const decisionSchema = z.object({

@@ -12,6 +12,20 @@ export type HonestStatus =
   | "NEEDS_SETUP"
   | "AVAILABLE"
   | "NOT_PROBEABLE"
+  /**
+   * A probe RAN and could not reach a verdict — 5xx, a timeout, a network or
+   * TLS failure. Unknown, like NOT_CHECKED, but for a different reason and with
+   * a different next step: re-run it.
+   *
+   * IT IS NOT "NOT PROBEABLE", which this union previously had to borrow.
+   * NOT_PROBEABLE is terminal and means there is no OData endpoint here to
+   * check at all; telling a developer that when the tenant merely returned 502
+   * sends them away from a call that would succeed on a retry. The catalogue
+   * vocabulary (hub-content.ts HubStatus) drew this distinction and this one did
+   * not, so Discover said "Probe failed — re-run it" while the Studio chip said
+   * "Not probeable" about the same fact.
+   */
+  | "PROBE_FAILED"
   | "REFERENCE"
   | "NOT_CHECKED"
   | "NOT_FOUND";
@@ -140,13 +154,18 @@ export function previewOutcome(
         rows: [],
       };
     }
+    /*
+     * The attempt ran and failed — not "there is nothing here to probe". A 502
+     * or a dropped connection is worth retrying; NOT_PROBEABLE tells the reader
+     * it never will be.
+     */
     return {
       probed: true,
-      status: "NOT_PROBEABLE",
+      status: "PROBE_FAILED",
       httpStatus: code || undefined,
       detail: code
-        ? `The tenant answered ${code}. The read did not succeed.`
-        : "The tenant did not return a usable result.",
+        ? `The tenant answered ${code}. The read did not succeed — the attempt failed rather than proving anything about the service.`
+        : "The tenant did not return a usable result. The attempt failed rather than proving anything about the service.",
       rows: [],
     };
   }

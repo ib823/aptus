@@ -221,9 +221,19 @@ export function evaluateDecision(req: DecisionRequest): DecisionOutcome {
     return {
       ok: false,
       reason: "GRANT_REQUIRES_EXPIRY",
+      /*
+       * NAME THE WAY OUT, not just the rule.
+       *
+       * This refusal is correct and the approver having no expiry field is
+       * correct — but between them they read as a dead end, because nothing
+       * said what to do next. REJECTED is not a granting decision, so this rule
+       * never fires on it: the request can always be rejected and re-raised
+       * with a date. That was true the whole time and went unsaid, which is the
+       * same defect as an unhelpful error, not a lesser one.
+       */
       message: authorisesWrite
-        ? "A write grant must have an expiry date. Revocation exists only as an admin emergency action, so the grant has to end on its own."
-        : "A grant must have an expiry date. Revocation exists only as an admin emergency action in Control Tower, so an approved request has to end on its own — one with no expiry would authorise access to the client's SAP system until someone notices.",
+        ? "A write grant must have an expiry date. Revocation exists only as an admin emergency action, so the grant has to end on its own. You cannot add the date yourself — reject this request and ask for it to be re-raised with one."
+        : "A grant must have an expiry date. Revocation exists only as an admin emergency action in Control Tower, so an approved request has to end on its own — one with no expiry would authorise access to the client's SAP system until someone notices. You cannot add the date yourself — reject this request and ask for it to be re-raised with one.",
     };
   }
 

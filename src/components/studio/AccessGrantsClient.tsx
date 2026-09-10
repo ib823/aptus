@@ -365,13 +365,36 @@ function Td({ children, mono }: { children: React.ReactNode; mono?: boolean }) {
  * together: a READ grant raised against a CREATE interface would pass approval
  * and then be refused at the first call, long after anyone was looking.
  */
+/**
+ * Ninety days out, as `yyyy-mm-dd` for `<input type="date">`.
+ *
+ * Built from local date parts rather than `toISOString().slice(0, 10)`: that
+ * converts to UTC first, so west of Greenwich it renders yesterday's date and
+ * the requester sees a default one day earlier than the one they were offered.
+ */
+function defaultExpiryDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 90);
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
 function RequestAccess({ interfaces }: { interfaces: readonly RequestableInterface[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [interfaceId, setInterfaceId] = useState("");
   const [environment, setEnvironment] = useState<GrantEnvironment>("SANDBOX");
   const [justification, setJustification] = useState("");
-  const [expiresAt, setExpiresAt] = useState("");
+  /*
+   * DEFAULTED, NOT BLANK. An expiry is required for every granting decision
+   * (grants.ts evaluateDecision), so a blank field can only ever produce a
+   * request an approver must reject. Ninety days is a nudge with a sane value
+   * in it, not a policy: the requester can shorten or lengthen it, and the
+   * approver still cannot set it at all — inventing the boundary on access you
+   * are granting is exactly what that rule exists to prevent.
+   */
+  const [expiresAt, setExpiresAt] = useState(() => defaultExpiryDate());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -381,13 +404,20 @@ function RequestAccess({ interfaces }: { interfaces: readonly RequestableInterfa
   // Mirrors the server bound (10-2000). Mirrored, never trusted: the route
   // validates independently.
   const justificationTooShort = justification.trim().length < 10;
-  // A write grant cannot be APPROVED without an expiry, so a write request that
-  // arrives without one strands the approver -- they can neither approve it nor
-  // supply the date themselves. Requiring it here keeps them unblocked. It is a
-  // convenience, NOT the control: evaluateDecision is the control, and a caller
-  // hitting the API directly is still refused there.
-  const missingWriteExpiry = isWrite && expiresAt.trim().length === 0;
-  const cannotSubmit = !selected || justificationTooShort || missingWriteExpiry || busy;
+  /*
+   * NO grant can be APPROVED without an expiry -- not a write, not a read. The
+   * rule widened from writes to reads in grants.ts (see the DecisionRefusal
+   * comment recording the rename) and this gate did not follow, so a read
+   * request could be raised with no expiry and then met with a 403 the approver
+   * had no field to resolve. Rejecting and re-raising was always available, but
+   * nothing said so.
+   *
+   * Requiring it here keeps the approver unblocked. It is a convenience, NOT the
+   * control: evaluateDecision is the control, and a caller hitting the API
+   * directly is still refused there.
+   */
+  const missingExpiry = expiresAt.trim().length === 0;
+  const cannotSubmit = !selected || justificationTooShort || missingExpiry || busy;
 
   const submit = useCallback(async () => {
     if (!selected) return;
@@ -494,7 +524,7 @@ function RequestAccess({ interfaces }: { interfaces: readonly RequestableInterfa
 
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={fieldLabel}>
-            Expires {isWrite ? <strong>(required for a write)</strong> : "(optional)"}
+            Expires <strong>(required)</strong>
           </span>
           <input
             type="date"
@@ -502,12 +532,11 @@ function RequestAccess({ interfaces }: { interfaces: readonly RequestableInterfa
             onChange={(e) => setExpiresAt(e.target.value)}
             style={field}
           />
-          {isWrite && (
-            <span style={muted}>
-              A write grant cannot be approved without an expiry. Revocation exists only as
-              an admin emergency action, so the grant has to end on its own.
-            </span>
-          )}
+          <span style={muted}>
+            {isWrite
+              ? "A write grant cannot be approved without an expiry. Revocation exists only as an admin emergency action, so the grant has to end on its own."
+              : "No grant can be approved without an expiry — a read is a standing authorisation to pull the client's data until someone notices. The approver cannot set this for you."}
+          </span>
         </label>
 
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>

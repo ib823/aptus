@@ -59,15 +59,24 @@ describe("the tenant's answer decides the status, not our own route's", () => {
   });
 
   it("does not call an unexplained upstream failure 'Activated'", () => {
+    /*
+     * The point of this test is unchanged — a 500 must never read as Activated.
+     * What changed is the word for it. NOT_PROBEABLE is terminal and means the
+     * service has no endpoint to check; a tenant that answered 500 has one and
+     * failed, which is worth retrying. The catalogue vocabulary already drew
+     * that line and this one had to borrow the wrong word for want of a member.
+     */
     const out = previewOutcome(OK, { data: { ok: false, status: 500, rows: [] } });
-    expect(out.status).toBe("NOT_PROBEABLE");
+    expect(out.status).toBe("PROBE_FAILED");
+    expect(out.status).not.toBe("ACTIVATED");
     expect(out.httpStatus).toBe(500);
   });
 
   it("treats a missing body as a failure, not as an empty success", () => {
     // The subtler version of the same mistake: no data at all is not zero rows.
+    // A failed attempt, not a service with nothing to probe.
     const out = previewOutcome(OK, {});
-    expect(out.status).toBe("NOT_PROBEABLE");
+    expect(out.status).toBe("PROBE_FAILED");
     expect(out.detail).not.toContain("answered successfully");
   });
 
@@ -198,7 +207,9 @@ describe("our own failures never wear the tenant's vocabulary", () => {
     expect(out.detail).toMatch(/did not reach sap/i);
   });
 
-  it("never says NOT_PROBEABLE or NEEDS_SETUP for a transport failure", () => {
+  it("never says PROBE_FAILED, NOT_PROBEABLE or NEEDS_SETUP for a transport failure", () => {
+    // OUR OWN route failing is not a tenant verdict of any kind — including the
+    // new one. An undefined status is the only honest answer here.
     for (const status of [400, 401, 403, 404, 500, 502]) {
       const out = previewOutcome({ ok: false, status }, {});
       expect(out.status, `transport ${status} must carry no tenant verdict`).toBeUndefined();

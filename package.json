@@ -38,6 +38,7 @@
     "test:e2e:smoke": "playwright test tests/e2e/login.unauth.spec.ts tests/e2e/portal.auth.spec.ts tests/e2e/accessibility.unauth.spec.ts tests/e2e/accessibility.auth.spec.ts --project=unauthenticated --project=authenticated",
     "test:e2e:discovery-session": "playwright test tests/e2e/discovery-new-session.consultant.spec.ts --project=consultant",
     "test:e2e:tobe-pack": "playwright test tests/e2e/tobe-pack.consultant.spec.ts --project=consultant",
+    "test:e2e:discover-responsive": "playwright test tests/e2e/discover-responsive.auth.spec.ts --project=authenticated",
     "test:visual": "playwright test --config=playwright.visual.config.ts",
     "test:visual:update": "playwright test --config=playwright.visual.config.ts --update-snapshots",
     "test:visual-app": "playwright test --config=playwright.visual-app.config.ts",

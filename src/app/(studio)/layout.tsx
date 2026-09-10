@@ -19,6 +19,8 @@
  */
 
 import type { Metadata } from "next";
+
+import "./studio-responsive.css";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
