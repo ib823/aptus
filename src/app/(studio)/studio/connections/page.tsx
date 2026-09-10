@@ -12,6 +12,7 @@ import type { Metadata } from "next";
 import { ConnectionsClient, type StudioConnection } from "@/components/studio/ConnectionsClient";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { isConnectionEncryptionConfigured } from "@/lib/sap-public/connection-crypto";
 import { canMutateStudio } from "@/lib/studio/rbac";
 import { resolveStudioTenants } from "@/lib/studio/tenants";
 
@@ -77,6 +78,43 @@ export default async function StudioConnectionsPage() {
           actually returned.
         </p>
       </div>
+
+      {/*
+        PREFLIGHT, BEFORE THE FORM IS OFFERED.
+
+        Without SAP_CONNECTION_ENCRYPTION_KEY the seal cannot be applied, so the
+        first save returns 500 — and it does so AFTER a consultant has typed a
+        client's SAP credentials into the form. The 500 was honest about being a
+        deployment fault and carried a correlation id, but by then the damage to
+        the developer's first five minutes was done, and the credentials had been
+        typed into a browser for nothing.
+
+        `.env.example` ships this blank and check-production-env.js only enforces
+        it for production, so a default local install lands here every time. A
+        form that cannot succeed should not be presented as though it can.
+      */}
+      {!isConnectionEncryptionConfigured() && (
+        <section
+          role="alert"
+          style={{
+            background: "var(--status-revoked-bg)",
+            border: "1px solid var(--status-revoked-fg)",
+            borderRadius: "var(--radius-card-warm, 12px)",
+            padding: 16,
+          }}
+        >
+          <h2 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 600, color: "var(--status-revoked-fg)" }}>
+            This deployment cannot store SAP credentials yet
+          </h2>
+          <p style={{ margin: 0, fontSize: 13, lineHeight: "20px", color: "var(--ink-secondary)" }}>
+            <code>SAP_CONNECTION_ENCRYPTION_KEY</code> is not set to a 64-character hex value, so
+            connection secrets cannot be sealed and any save would fail. Generate one with{" "}
+            <code>openssl rand -hex 32</code>, set it in the environment, and restart. Do not enter a
+            client&rsquo;s credentials until this banner is gone — nothing can be stored while it is
+            here.
+          </p>
+        </section>
+      )}
 
       <section
         style={{
