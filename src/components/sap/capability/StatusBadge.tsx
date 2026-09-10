@@ -14,7 +14,7 @@ export type BadgeStatus = HubStatus;
 
 const TONE: Record<BadgeStatus, { bg: string; fg: string; label: string; tip: string }> = {
   ACTIVATED: { bg: "var(--status-signed-bg)", fg: "var(--status-signed-fg)", label: "Activated", tip: "Live $metadata returned 200 for the comm user — reachable/authorized." },
-  NEEDS_SETUP: { bg: "var(--status-awaiting-bg)", fg: "var(--status-awaiting-fg)", label: "Needs setup", tip: "Probed 403/401 — published for this edition, but the tenant hasn't authorized the communication arrangement." },
+  NEEDS_SETUP: { bg: "var(--status-awaiting-bg)", fg: "var(--status-awaiting-fg)", label: "Needs setup", tip: "Probed 403/401 — published for this edition, and this tenant refused the call. The code alone does not say WHY: a missing communication arrangement, a credential without the scenario, an expired secret and an IP restriction all answer the same way. Check the arrangement first, then the communication user." },
   NOT_FOUND: { bg: "var(--surface-ink-tint)", fg: "var(--ink-muted)", label: "Not found", tip: "Probed 404 — the service path is absent on this tenant." },
   NOT_CHECKED: { bg: "var(--surface-ink-tint)", fg: "var(--ink-secondary)", label: "Not checked", tip: "Probeable (OData) but not probed yet — run Probe-all or open the item. Status unknown, not a negative." },
   PROBE_FAILED: { bg: "var(--status-expired-bg)", fg: "var(--status-expired-fg)", label: "Probe failed", tip: "A probe ran and could not reach a verdict (5xx, timeout or network failure). Unknown — like 'Not checked', but we DID look, and the tenant or the route is why we still don't know. Re-run it." },

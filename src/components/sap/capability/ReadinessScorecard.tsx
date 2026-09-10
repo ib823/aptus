@@ -129,13 +129,26 @@ export function ReadinessScorecard({
         <div className="h-full rounded-[var(--radius-pill)]" style={{ width: `${pct}%`, background: "var(--brand-navy)" }} />
       </div>
 
-      {/* catalogue scale — shown separately, never folded into the ratio */}
+      {/*
+        CATALOGUE SCALE — and what each number actually counts.
+
+        "Items" is not rows and not tenant services. A grouped catalogue row (a
+        BAdI bundle, a CDS line-of-business bundle, an integration package)
+        stands for the member count SAP declares for it, so this total is item
+        VOLUME across SAP's published content. Saying "items" alone invited three
+        different readings of one number — how many records we hold, how many
+        artefacts SAP publishes, and how many services this tenant serves — and
+        only the middle one is true. The tenant question is the probe ratio
+        above, which is why this line is never folded into it.
+      */}
       <p className="mt-2 text-xs" style={{ color: "var(--ink-muted)" }}>
-        Catalogue scale:{" "}
+        Catalogue scale (SAP&rsquo;s published content, not this tenant):{" "}
         <strong style={{ color: "var(--ink-secondary)" }}>{(totalItems ?? apiTotal).toLocaleString()}</strong> items across{" "}
-        {HUB_CONTENT_TYPES.length} content types ·{" "}
-        <strong style={{ color: "var(--ink-secondary)" }}>{probeable.toLocaleString()}</strong> OData-probeable (V2 + best-effort
-        V4){aiApis ? <> · <strong style={{ color: "var(--ink-secondary)" }}>{aiApis.toLocaleString()}</strong> AI APIs</> : null} · the
+        {HUB_CONTENT_TYPES.length} content types — grouped packages counted by the member count SAP declares, not by
+        catalogue rows ·{" "}
+        <strong style={{ color: "var(--ink-secondary)" }}>{probeable.toLocaleString()}</strong> services with an OData endpoint to
+        probe (V2 + best-effort V4)
+        {aiApis ? <> · <strong style={{ color: "var(--ink-secondary)" }}>{aiApis.toLocaleString()}</strong> AI APIs</> : null} · the
         rest reference
       </p>
 

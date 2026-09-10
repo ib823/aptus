@@ -168,6 +168,21 @@ describe("resolveHubStatus (probe-outcome-driven, honest badges)", () => {
     }
   });
 
+  it("extension-point blurbs never claim a tenant's custom APIs are discovered", () => {
+    /*
+     * These read "custom OData APIs your connector then pulls", which described
+     * a capability that does not exist: the catalogue mirrors SAP's PUBLISHED
+     * content, and nothing enumerates a tenant's own services or extensions.
+     * A developer could reasonably have planned around custom discovery that
+     * was never going to appear.
+     */
+    for (const t of ["BADI", "BO_INTERFACE"] as const) {
+      const blurb = HUB_CONTENT_TYPE_META[t].whyItMatters;
+      expect(blurb).not.toMatch(/your connector then pulls/i);
+      expect(blurb).toMatch(/not discovered here|not listed here/i);
+    }
+  });
+
   it("deprecationTooltip names the successor or says none is named yet", () => {
     expect(deprecationTooltip("API_NEW")).toBe("Deprecated by SAP — successor: API_NEW");
     expect(deprecationTooltip(null)).toBe("Deprecated by SAP — no successor named yet");

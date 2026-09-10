@@ -41,6 +41,7 @@ describe("StatusBadge (token-mapped)", () => {
         <StatusBadge status="NEEDS_SETUP" />
         <StatusBadge status="NOT_FOUND" />
         <StatusBadge status="NOT_CHECKED" />
+        <StatusBadge status="PROBE_FAILED" />
         <StatusBadge status="NOT_PROBEABLE" />
         <StatusBadge status="DEPRECATED" />
       </div>,
@@ -52,6 +53,21 @@ describe("StatusBadge (token-mapped)", () => {
     expect(screen.getByLabelText("Not found")).toBeInTheDocument();
     // No OData endpoint → a distinct terminal label, never "Not checked".
     expect(screen.getByLabelText("Not probeable")).toBeInTheDocument();
+    // A probe that RAN and errored is its own label, never "Not checked".
+    expect(screen.getByLabelText("Probe failed")).toBeInTheDocument();
+
+    /*
+     * 403/401 MUST NOT ASSERT A SINGLE CAUSE.
+     *
+     * The tip used to read "the tenant hasn't authorized the communication
+     * arrangement" — one diagnosis from a status code that a missing
+     * arrangement, an under-scoped communication user, an expired secret and an
+     * IP restriction all produce identically. A developer sent to the
+     * arrangement screen by a confident wrong tip loses the afternoon.
+     */
+    const needsSetupTip = screen.getByLabelText("Needs setup").getAttribute("title") ?? "";
+    expect(needsSetupTip).toMatch(/communication arrangement/i);
+    expect(needsSetupTip).toMatch(/does not say WHY|expired|IP restriction/i);
     // 2608 WS3 — SAP's own retirement, tenant-independent, in the revoked tokens.
     expect(screen.getByLabelText("Deprecated")).toBeInTheDocument();
     expect(container.innerHTML).toContain("var(--status-revoked-bg)");

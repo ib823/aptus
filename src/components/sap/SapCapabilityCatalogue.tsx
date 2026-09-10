@@ -99,7 +99,7 @@ const STATUS_LABEL: Record<StatusFilter, string> = {
 function statusHint(status: BadgeStatus): { text: string; color: string } | null {
   switch (status) {
     case "NEEDS_SETUP":
-      return { text: "needs setup — activate the arrangement", color: "var(--status-awaiting-fg)" };
+      return { text: "needs setup — refused 403/401; check the arrangement, then the user", color: "var(--status-awaiting-fg)" };
     case "NOT_CHECKED":
       return { text: "not checked — open to run a live probe", color: "var(--ink-muted)" };
     case "PROBE_FAILED":

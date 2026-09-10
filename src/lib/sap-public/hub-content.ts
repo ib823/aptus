@@ -130,13 +130,13 @@ export const HUB_CONTENT_TYPE_META: Record<HubContentType, HubContentTypeMeta> =
     label: "BAdIs",
     kind: "reference",
     whyItMatters:
-      "The extension map — how a tenant grows custom fields and custom OData APIs your connector then pulls.",
+      "SAP's published extension POINTS — where a tenant COULD add custom fields and expose custom OData services. Those tenant-specific extensions are not discovered here: this catalogue mirrors SAP's published content, and nothing enumerates a tenant's own services yet.",
   },
   BO_INTERFACE: {
     label: "Business Object Interfaces",
     kind: "reference",
     whyItMatters:
-      "The extension map — business-object interfaces behind custom fields and custom OData APIs your connector then pulls.",
+      "SAP's published business-object interfaces — the design-time surface behind a tenant's custom fields and custom OData services. A tenant's actual extensions are not listed here; nothing enumerates them yet.",
   },
   INTEGRATION: {
     label: "Integrations",
