@@ -41,6 +41,7 @@ describe("StatusBadge (token-mapped)", () => {
         <StatusBadge status="NEEDS_SETUP" />
         <StatusBadge status="NOT_FOUND" />
         <StatusBadge status="NOT_CHECKED" />
+        <StatusBadge status="PROBE_FAILED" />
         <StatusBadge status="NOT_PROBEABLE" />
         <StatusBadge status="DEPRECATED" />
       </div>,
@@ -52,6 +53,21 @@ describe("StatusBadge (token-mapped)", () => {
     expect(screen.getByLabelText("Not found")).toBeInTheDocument();
     // No OData endpoint → a distinct terminal label, never "Not checked".
     expect(screen.getByLabelText("Not probeable")).toBeInTheDocument();
+    // A probe that RAN and errored is its own label, never "Not checked".
+    expect(screen.getByLabelText("Probe failed")).toBeInTheDocument();
+
+    /*
+     * 403/401 MUST NOT ASSERT A SINGLE CAUSE.
+     *
+     * The tip used to read "the tenant hasn't authorized the communication
+     * arrangement" — one diagnosis from a status code that a missing
+     * arrangement, an under-scoped communication user, an expired secret and an
+     * IP restriction all produce identically. A developer sent to the
+     * arrangement screen by a confident wrong tip loses the afternoon.
+     */
+    const needsSetupTip = screen.getByLabelText("Needs setup").getAttribute("title") ?? "";
+    expect(needsSetupTip).toMatch(/communication arrangement/i);
+    expect(needsSetupTip).toMatch(/does not say WHY|expired|IP restriction/i);
     // 2608 WS3 — SAP's own retirement, tenant-independent, in the revoked tokens.
     expect(screen.getByLabelText("Deprecated")).toBeInTheDocument();
     expect(container.innerHTML).toContain("var(--status-revoked-bg)");
@@ -92,9 +108,11 @@ describe("every status bucket is shown", () => {
    * it does not look like a gap, it looks like a total. So this test now
    * exercises all of them, with every bucket non-zero — a zero bucket cannot
    * catch an omission, because omitting it does not change the sum. 2608 WS3
-   * made it EIGHT: DEPRECATED (SAP's own retirements, tenant-independent).
+   * made it EIGHT: DEPRECATED (SAP's own retirements, tenant-independent), and
+   * a NINTH: PROBE_FAILED, split out of NOT_CHECKED so a probe that ran and
+   * errored stops being counted as one that never ran.
    */
-  it("renders all eight buckets and reconciles the row to the sum", () => {
+  it("renders all nine buckets and reconciles the row to the sum", () => {
     render(
       <ReadinessScorecard
         activated={139}
@@ -103,6 +121,7 @@ describe("every status bucket is shown", () => {
         needsSetup={349}
         notFound={7}
         notChecked={11}
+        probeFailed={4}
         notProbeable={515}
         available={151}
         probed={1003}
@@ -116,8 +135,9 @@ describe("every status bucket is shown", () => {
     expect(screen.getByText("Available")).toBeTruthy();
     expect(screen.getByText("Not found")).toBeTruthy();
     expect(screen.getByText("Deprecated")).toBeTruthy();
-    expect(screen.getByText(/These eight add up to/i)).toBeTruthy();
-    // 139 + 349 + 151 + 7 + 11 + 515 + 819 + 24 = 2,015 — the browsable total.
-    expect(screen.getByText("2,015")).toBeTruthy();
+    expect(screen.getByText(/These nine add up to/i)).toBeTruthy();
+    expect(screen.getByText("Probe failed")).toBeTruthy();
+    // 139 + 349 + 151 + 7 + 11 + 4 + 515 + 819 + 24 = 2,019 — the browsable total.
+    expect(screen.getByText("2,019")).toBeTruthy();
   });
 });

@@ -233,7 +233,10 @@ function buildRecordBody(responseSchema: unknown): string {
 }
 
 /** TypeScript types + a tiny typed client. Any language can be generated from the OpenAPI. */
-export function buildTypeScriptClient(iface: ScaffoldInterface): string {
+export function buildTypeScriptClient(
+  iface: ScaffoldInterface,
+  baseUrl = "https://coreedge.example/api/northbound",
+): string {
   const typeName = toTypeName(iface.entitySet ?? iface.name);
   return `/**
  * ${safeName(iface.name)} — CoreEdge northbound client
@@ -267,7 +270,7 @@ export interface ReadResult {
 }
 
 export interface CoreEdgeClientOptions {
-  /** e.g. https://coreedge.example/api/northbound — or your local mock. */
+  /** e.g. ${baseUrl} — or your local mock. */
   baseUrl: string;
   /** Per-solution client token issued in Developer Studio. Keep it server-side. */
   token: string;
@@ -323,6 +326,7 @@ export function createClient(options: CoreEdgeClientOptions) {
 export function buildReadme(
   iface: ScaffoldInterface,
   fixtures: readonly ScaffoldFixture[] = [],
+  baseUrl = "https://coreedge.example/api/northbound",
 ): string {
   const captured = fixtures.map((f) => f.scenario);
   const missing = ["data", "empty", "needs_setup", "error"].filter((s) => !captured.includes(s));
@@ -377,9 +381,18 @@ Your database, your framework, your language: untouched by any of this.
 
 ## Run it
 
+Needs Node 20.12 or newer — the scripts load \`.env\` for you.
+
 \`\`\`bash
-cp .env.example .env     # then fill in COREEDGE_TOKEN
+cp .env.example .env     # COREEDGE_BASE_URL is already filled in for you
+                         # add your COREEDGE_TOKEN
 npm run demo
+\`\`\`
+
+No \`.env\`? Pass them inline — both scripts work either way:
+
+\`\`\`bash
+COREEDGE_BASE_URL=${baseUrl} COREEDGE_TOKEN=ce_… npm run demo
 \`\`\`
 
 ${fixtureSection}
@@ -416,10 +429,21 @@ way an integration lies to its users.
 `;
 }
 
-export function buildEnvExample(): string {
-  return `# The CoreEdge northbound base URL.
-# Point at the live broker, or at your local mock to develop offline.
-COREEDGE_BASE_URL=https://coreedge.example/api/northbound
+/**
+ * .env.example — pre-filled with THIS deployment's base URL.
+ *
+ * IT USED TO HARDCODE `https://coreedge.example/api/northbound` while
+ * openapi.json (three files away, same download) carried the real origin the
+ * route derives. So the one file the README tells you to copy was the one file
+ * that could not work, and `npm run demo` failed against a domain that does not
+ * resolve — after the developer had already filled in a real token. The base URL
+ * is a parameter here for the same reason it is one in buildOpenApi: the kit is
+ * generated per request and knows where it came from.
+ */
+export function buildEnvExample(baseUrl = "https://coreedge.example/api/northbound"): string {
+  return `# The CoreEdge northbound base URL, pre-filled for the deployment that
+# generated this kit. Point it at your local mock to develop offline.
+COREEDGE_BASE_URL=${baseUrl}
 
 # Per-solution client token, issued in Developer Studio.
 # Treat it like a password: server-side only, never in a browser bundle or git.
@@ -564,6 +588,7 @@ import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = JSON.parse(readFileSync(join(here, "fixtures.json"), "utf8"));
+${loadEnvPrelude()}
 const PORT = Number(process.env.PORT ?? 4010);
 const DEFAULT_SCENARIO = process.env.COREEDGE_SCENARIO ?? "data";
 const INTERFACE_ID = ${JSON.stringify(iface.id)};
@@ -621,7 +646,19 @@ createServer((req, res) => {
 `;
 }
 
-/** package.json for the starter kit — the two scripts that matter. */
+/**
+ * package.json for the starter kit — the two scripts that matter.
+ *
+ * PLAIN `node`, because loading .env is the SCRIPT'S job now (see loadEnvPrelude).
+ *
+ * This briefly ran `node --env-file-if-exists=.env`, with `engines: >=22.9` to
+ * declare the flag's floor. That floor was the problem: npm treats `engines` as
+ * ADVISORY unless engine-strict is set, so a developer on Node 22.5 — a version
+ * that looks entirely current — gets a warning they may not read and then
+ * `node: bad option: --env-file-if-exists`. Cryptic, and landing on exactly the
+ * "the documented first run works" promise this kit exists to keep. The floor
+ * also excluded all of 22.0–22.8, not just older majors.
+ */
 export function buildPackageJson(iface: ScaffoldInterface): string {
   return JSON.stringify(
     {
@@ -639,6 +676,38 @@ export function buildPackageJson(iface: ScaffoldInterface): string {
   );
 }
 
+/**
+ * Load .env with NODE'S OWN PARSER, and shrug if there isn't one.
+ *
+ * THE DEFECT THIS CLOSES. The README has always said `cp .env.example .env` then
+ * `npm run demo`. Nothing ever loaded that file, so the documented first run
+ * exited 1 with "Set COREEDGE_BASE_URL and COREEDGE_TOKEN (see .env.example)"
+ * while the developer was looking at a .env holding exactly those two values.
+ * The first thing the kit did was tell them they had not done the thing they
+ * had just done.
+ *
+ * `process.loadEnvFile` (Node 20.12+) is the built-in parser — comments and
+ * quoting handled by Node, not by a hand-rolled splitter that would eventually
+ * mangle a token containing "=". It THROWS on a missing file, so the catch is
+ * what makes the inline form (`COREEDGE_BASE_URL=… npm run demo`, and the mock
+ * walkthrough) keep working: both paths in the README have to run.
+ *
+ * The typeof guard costs one line and means a genuinely ancient Node still
+ * reaches the script's own "set these two variables" message rather than dying
+ * on an unknown method.
+ */
+function loadEnvPrelude(): string {
+  return `// Load .env if present — Node's own parser; absent file is fine (inline env vars).
+if (typeof process.loadEnvFile === "function") {
+  try {
+    process.loadEnvFile(".env");
+  } catch {
+    /* no .env — variables may come from the environment instead */
+  }
+}
+`;
+}
+
 /** A runnable demo — the thing that proves the loop works end to end. */
 export function buildDemo(iface: ScaffoldInterface): string {
   return `#!/usr/bin/env node
@@ -653,6 +722,7 @@ export function buildDemo(iface: ScaffoldInterface): string {
  *
  *   COREEDGE_BASE_URL=https://…/api/northbound COREEDGE_TOKEN=ce_… npm run demo
  */
+${loadEnvPrelude()}
 const baseUrl = process.env.COREEDGE_BASE_URL;
 const token = process.env.COREEDGE_TOKEN;
 
@@ -705,10 +775,10 @@ export function buildScaffold(
   fixtures: readonly ScaffoldFixture[] = [],
 ): ScaffoldFile[] {
   return [
-    { path: "README.md", contents: buildReadme(iface, fixtures) },
+    { path: "README.md", contents: buildReadme(iface, fixtures, baseUrl) },
     { path: "openapi.json", contents: buildOpenApi(iface, baseUrl) },
-    { path: "client.ts", contents: buildTypeScriptClient(iface) },
-    { path: ".env.example", contents: buildEnvExample() },
+    { path: "client.ts", contents: buildTypeScriptClient(iface, baseUrl) },
+    { path: ".env.example", contents: buildEnvExample(baseUrl) },
     { path: "package.json", contents: buildPackageJson(iface) },
     { path: "demo.mjs", contents: buildDemo(iface) },
     { path: "mock.mjs", contents: buildMockServer(iface) },

@@ -18,8 +18,11 @@ import {
   ARIBA_ENDPOINTS,
 } from "@/lib/sap-public/ariba-connector";
 import {
-  SF_BASIC_AUTH_SUNSET_ISO,
+  SF_BASIC_AUTH_DEPRECATED_ISO,
+  SF_BASIC_AUTH_DELETION_DEFAULT_ISO,
+  SF_BASIC_AUTH_DELETION_ENV,
   assertSuccessFactorsBasicAuthAllowed,
+  resolveDeletionDateIso,
   successFactorsBasicAuthVerdict,
 } from "@/lib/sap-public/sf-basic-auth-sunset";
 import { WIRED_APIS, artefactBoundApis, packageBoundApis } from "@/lib/sap-public/wired-apis";
@@ -99,40 +102,87 @@ describe("Ariba endpoints", () => {
   });
 });
 
-describe("SuccessFactors Basic auth sunset", () => {
-  const before = new Date("2026-11-19T23:59:59Z");
-  const onTheDay = new Date(`${SF_BASIC_AUTH_SUNSET_ISO}T00:00:00Z`);
+describe("SuccessFactors Basic auth lifecycle", () => {
+  /*
+   * TWO DATES, AND THE WINDOW BETWEEN THEM IS THE POINT.
+   *
+   * The previous guard threw on 2026-11-20 — SAP's RETIREMENT milestone, not the
+   * day Basic stops working. SAP's OAuth FAQ puts deletion at a tentative
+   * 2027-11-12. Refusing on the earlier date would have taken working customer
+   * integrations down roughly a year before SAP did. These tests pin the window.
+   */
+  const noEnv: Record<string, string | undefined> = {};
+  const beforeRetirement = new Date("2026-11-19T23:59:59Z");
+  const onRetirement = new Date(`${SF_BASIC_AUTH_DEPRECATED_ISO}T00:00:00Z`);
+  const inWindow = new Date("2027-06-01T00:00:00Z");
+  const onDeletion = new Date(`${SF_BASIC_AUTH_DELETION_DEFAULT_ISO}T00:00:00Z`);
 
-  it("warns while Basic still works and refuses from the sunset date", () => {
-    const warn = successFactorsBasicAuthVerdict("successfactors", "basic", before);
-    expect(warn.kind).toBe("allowed");
-    const refused = successFactorsBasicAuthVerdict("successfactors", "basic", onTheDay);
+  it("still WORKS across the retirement window — the regression that mattered", () => {
+    // The whole point: retired is not deleted. Neither of these may refuse.
+    for (const when of [onRetirement, inWindow]) {
+      const v = successFactorsBasicAuthVerdict("successfactors", "basic", when, "t", noEnv);
+      expect(v.kind).toBe("deprecated");
+    }
+    expect(() =>
+      assertSuccessFactorsBasicAuthAllowed("successfactors", "basic", "t", onRetirement, noEnv),
+    ).not.toThrow();
+    expect(() =>
+      assertSuccessFactorsBasicAuthAllowed("successfactors", "basic", "t", inWindow, noEnv),
+    ).not.toThrow();
+  });
+
+  it("warns before retirement, warns harder after it, refuses only from deletion", () => {
+    expect(successFactorsBasicAuthVerdict("successfactors", "basic", beforeRetirement, "t", noEnv).kind).toBe("allowed");
+    const deprecated = successFactorsBasicAuthVerdict("successfactors", "basic", onRetirement, "t", noEnv);
+    expect(deprecated.kind).toBe("deprecated");
+    if (deprecated.kind === "deprecated") {
+      expect(deprecated.warning).toContain(SF_BASIC_AUTH_DELETION_DEFAULT_ISO);
+      expect(deprecated.daysUntilDeletion).toBeGreaterThan(0);
+    }
+    const refused = successFactorsBasicAuthVerdict("successfactors", "basic", onDeletion, "t", noEnv);
     expect(refused.kind).toBe("refused");
     if (refused.kind === "refused") expect(refused.reason).toContain("oauth-saml-bearer");
   });
 
-  it("never touches another product, before or after the date", () => {
+  it("tracks SAP when the tentative deletion date moves", () => {
+    const moved = { [SF_BASIC_AUTH_DELETION_ENV]: "2028-03-01" };
+    // The old default would have refused here; the override must not.
+    expect(successFactorsBasicAuthVerdict("successfactors", "basic", onDeletion, "t", moved).kind).toBe("deprecated");
+    expect(successFactorsBasicAuthVerdict("successfactors", "basic", new Date("2028-03-01T00:00:00Z"), "t", moved).kind).toBe(
+      "refused",
+    );
+  });
+
+  it("ignores an unparseable override rather than obeying it", () => {
+    for (const bad of ["", "soon", "2027-13-45", "11/12/2027"]) {
+      expect(resolveDeletionDateIso({ [SF_BASIC_AUTH_DELETION_ENV]: bad })).toBe(
+        SF_BASIC_AUTH_DELETION_DEFAULT_ISO,
+      );
+    }
+  });
+
+  it("never touches another product, at any point in the lifecycle", () => {
     // Breaking S/4HANA to protect SuccessFactors would be the worse bug.
-    for (const when of [before, onTheDay]) {
-      expect(successFactorsBasicAuthVerdict("s4hana", "basic", when).kind).toBe("not-applicable");
-      expect(successFactorsBasicAuthVerdict("ariba", "basic", when).kind).toBe("not-applicable");
-      expect(successFactorsBasicAuthVerdict(null, "basic", when).kind).toBe("not-applicable");
+    for (const when of [beforeRetirement, onRetirement, inWindow, onDeletion]) {
+      expect(successFactorsBasicAuthVerdict("s4hana", "basic", when, "t", noEnv).kind).toBe("not-applicable");
+      expect(successFactorsBasicAuthVerdict("ariba", "basic", when, "t", noEnv).kind).toBe("not-applicable");
+      expect(successFactorsBasicAuthVerdict(null, "basic", when, "t", noEnv).kind).toBe("not-applicable");
     }
   });
 
   it("ignores SuccessFactors connections that already moved off Basic", () => {
     for (const t of ["oauth-saml-bearer", "bearer", "oauth-client-credentials"]) {
-      expect(successFactorsBasicAuthVerdict("successfactors", t, onTheDay).kind).toBe("not-applicable");
+      expect(successFactorsBasicAuthVerdict("successfactors", t, onDeletion, "t", noEnv).kind).toBe("not-applicable");
     }
   });
 
-  it("throws from the assert helper only where the verdict refuses", () => {
-    expect(() => assertSuccessFactorsBasicAuthAllowed("successfactors", "basic", "t", onTheDay)).toThrow(
-      /2026-11-20/,
+  it("throws from the assert helper only once Basic is actually deleted", () => {
+    expect(() => assertSuccessFactorsBasicAuthAllowed("successfactors", "basic", "t", onDeletion, noEnv)).toThrow(
+      new RegExp(SF_BASIC_AUTH_DELETION_DEFAULT_ISO),
     );
     expect(() =>
-      assertSuccessFactorsBasicAuthAllowed("successfactors", "oauth-saml-bearer", "t", onTheDay),
+      assertSuccessFactorsBasicAuthAllowed("successfactors", "oauth-saml-bearer", "t", onDeletion, noEnv),
     ).not.toThrow();
-    expect(() => assertSuccessFactorsBasicAuthAllowed("s4hana", "basic", "t", onTheDay)).not.toThrow();
+    expect(() => assertSuccessFactorsBasicAuthAllowed("s4hana", "basic", "t", onDeletion, noEnv)).not.toThrow();
   });
 });

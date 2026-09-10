@@ -226,8 +226,23 @@ describe("the bundle", () => {
 
   it("wires mock and demo as npm scripts", () => {
     const pkg = JSON.parse(buildPackageJson(IFACE)) as { scripts: Record<string, string> };
+    /*
+     * Plain `node` — loading .env is the script's job, so the kit carries no
+     * Node version floor. A brief `--env-file-if-exists` + `engines: >=22.9`
+     * version of this failed on 22.0–22.8 with a bare-option error, and npm
+     * treats `engines` as advisory, so the warning that was meant to catch it
+     * would not have.
+     */
     expect(pkg.scripts.mock).toBe("node mock.mjs");
     expect(pkg.scripts.demo).toBe("node demo.mjs");
+    expect(pkg).not.toHaveProperty("engines");
+
+    // The .env load itself is load-bearing: without it the documented first run
+    // (`cp .env.example .env && npm run demo`) exits 1 with the variables set.
+    for (const f of ["demo.mjs", "mock.mjs"]) {
+      const src = buildScaffold(IFACE, "https://x.example/api/northbound", []).find((x) => x.path === f)!.contents;
+      expect(src).toContain("process.loadEnvFile");
+    }
   });
 
   it("embeds the captured fixtures as valid JSON", () => {

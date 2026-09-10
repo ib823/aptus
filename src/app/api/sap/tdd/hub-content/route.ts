@@ -154,7 +154,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const typeParam = params.get("contentType");
   const contentType: HubContentType | null = typeParam && isHubContentType(typeParam) ? typeParam : null;
   const statusParam = (params.get("status") ?? "ALL").toUpperCase();
-  const VALID_STATUS: HubStatus[] = ["ACTIVATED", "NEEDS_SETUP", "NOT_FOUND", "NOT_CHECKED", "NOT_PROBEABLE", "AVAILABLE", "REFERENCE"];
+  const VALID_STATUS: HubStatus[] = ["ACTIVATED", "NEEDS_SETUP", "NOT_FOUND", "NOT_CHECKED", "PROBE_FAILED", "NOT_PROBEABLE", "AVAILABLE", "REFERENCE"];
   const status: HubStatus | "ALL" = (VALID_STATUS as string[]).includes(statusParam) ? (statusParam as HubStatus) : "ALL";
   const q = (params.get("q") ?? "").trim();
   // Source/domain facets (rawMetadataJson.raw): "sap" = SAP-only (exclude

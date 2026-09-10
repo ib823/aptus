@@ -38,6 +38,12 @@ export type HubContentType =
  *   NOT_FOUND   — probed, 404 (service path absent on this tenant). Distinct from 403.
  *   NOT_CHECKED — PROBEABLE (OData) runtime item that hasn't been probed yet.
  *                 UNKNOWN, not a negative — run Probe-all / open it to resolve.
+ *   PROBE_FAILED — a probe RAN and could not reach a verdict (5xx, network
+ *                 failure, timeout). Also unknown, but for a different reason and
+ *                 with a different fix: NOT_CHECKED means nobody has looked,
+ *                 PROBE_FAILED means we looked and the attempt failed. Folding
+ *                 the two together hid every tenant-side outage behind "not
+ *                 probed yet" and left a re-run with nothing to prioritise.
  *   NOT_PROBEABLE — runtime item with NO OData endpoint to probe (SOAP, async,
  *                 apiType null / sap-s4-*). A terminal, honest "can't check here".
  *   AVAILABLE   — EVENT (subscribe-only; no read endpoint, so never probed).
@@ -48,6 +54,7 @@ export type HubStatus =
   | "NEEDS_SETUP"
   | "NOT_FOUND"
   | "NOT_CHECKED"
+  | "PROBE_FAILED"
   | "NOT_PROBEABLE"
   | "AVAILABLE"
   | "REFERENCE"
@@ -66,6 +73,7 @@ export const HUB_STATUSES: HubStatus[] = [
   "NEEDS_SETUP",
   "NOT_FOUND",
   "NOT_CHECKED",
+  "PROBE_FAILED",
   "NOT_PROBEABLE",
   "AVAILABLE",
   "REFERENCE",
@@ -122,13 +130,13 @@ export const HUB_CONTENT_TYPE_META: Record<HubContentType, HubContentTypeMeta> =
     label: "BAdIs",
     kind: "reference",
     whyItMatters:
-      "The extension map — how a tenant grows custom fields and custom OData APIs your connector then pulls.",
+      "SAP's published extension POINTS — where a tenant COULD add custom fields and expose custom OData services. Those tenant-specific extensions are not discovered here: this catalogue mirrors SAP's published content, and nothing enumerates a tenant's own services yet.",
   },
   BO_INTERFACE: {
     label: "Business Object Interfaces",
     kind: "reference",
     whyItMatters:
-      "The extension map — business-object interfaces behind custom fields and custom OData APIs your connector then pulls.",
+      "SAP's published business-object interfaces — the design-time surface behind a tenant's custom fields and custom OData services. A tenant's actual extensions are not listed here; nothing enumerates them yet.",
   },
   INTEGRATION: {
     label: "Integrations",
@@ -351,11 +359,19 @@ export function isProbeable(item: { contentType: HubContentType; apiType: string
  * NOT_CHECKED so a badge never over-claims what the probe did not establish.
  */
 export function httpToRuntimeStatus(http: number | undefined): HubStatus {
-  if (http === undefined) return "NOT_CHECKED";
+  if (http === undefined) return "NOT_CHECKED"; // nobody has looked yet
   if (http === 200) return "ACTIVATED";
   if (http === 403 || http === 401) return "NEEDS_SETUP"; // published, not authorized
   if (http === 404) return "NOT_FOUND"; // path absent on this tenant
-  return "NOT_CHECKED"; // 0 / 5xx / anything inconclusive — don't over-claim
+  /*
+   * WE LOOKED AND THE ATTEMPT FAILED — 0 (network/timeout), 5xx, anything
+   * inconclusive. Still not a negative about the capability, so it must never
+   * read as NEEDS_SETUP or NOT_FOUND. But it is not "not checked" either: that
+   * conflation meant a tenant returning 500 for a whole run was indistinguishable
+   * from one that had never been probed, so nothing surfaced the outage and a
+   * re-run could not tell which rows were worth retrying.
+   */
+  return "PROBE_FAILED";
 }
 
 /**

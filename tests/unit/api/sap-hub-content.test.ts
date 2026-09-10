@@ -129,7 +129,7 @@ describe("GET /api/sap/tdd/hub-content", () => {
     // (probeable C_VIEW, no probe), 1 NOT_PROBEABLE (SOAP), 1 AVAILABLE (event),
     // 1 REFERENCE, 1 DEPRECATED (stored 200 but SAP-retired — not ACTIVATED).
     expect(body.data.counts.byStatus).toEqual({
-      ACTIVATED: 1, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 1, NOT_PROBEABLE: 1, AVAILABLE: 1, REFERENCE: 1, DEPRECATED: 1,
+      ACTIVATED: 1, NEEDS_SETUP: 0, NOT_FOUND: 0, NOT_CHECKED: 1, PROBE_FAILED: 0, NOT_PROBEABLE: 1, AVAILABLE: 1, REFERENCE: 1, DEPRECATED: 1,
     });
     // Tiles: deprecated items per type, from the same rows.
     expect(body.data.counts.byTypeDeprecated.API).toBe(1);

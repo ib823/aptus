@@ -861,10 +861,11 @@ async function buildAuthHeader(prefix: string): Promise<string> {
   const authType = getAuthType(prefix);
   if (authType === "basic") {
     /*
-     * 2608 WS8 — SAP withdraws HTTP Basic for SuccessFactors on 2026-11-20.
-     * Refused here rather than by SAP, because a refusal raised here says what
-     * to do about it and a 401 does not. Product is passed explicitly: Basic
-     * stays legitimate for every other tenant this function serves.
+     * SuccessFactors: SAP retired HTTP Basic on 2026-11-20 and deletes it on a
+     * tentative 2027-11-12. Warn across that window, refuse only after deletion,
+     * because a refusal raised here says what to do about it and a 401 does not.
+     * Product is passed explicitly: Basic stays legitimate for every other
+     * tenant this function serves.
      */
     assertSuccessFactorsBasicAuthAllowed(productKeyForEnvPrefix(prefix), authType, `${prefix}_* tenant`);
     const username = requiredEnv(prefix, "USERNAME");
