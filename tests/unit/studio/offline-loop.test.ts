@@ -227,14 +227,22 @@ describe("the bundle", () => {
   it("wires mock and demo as npm scripts", () => {
     const pkg = JSON.parse(buildPackageJson(IFACE)) as { scripts: Record<string, string> };
     /*
-     * --env-file-if-exists is load-bearing, not cosmetic: the README says
-     * `cp .env.example .env && npm run demo`, and without the flag nothing ever
-     * read that file, so the documented first run always exited 1. `-if-exists`
-     * because the inline form (COREEDGE_BASE_URL=… npm run demo) passes no .env
-     * and a bare --env-file would make Node exit on the missing file.
+     * Plain `node` — loading .env is the script's job, so the kit carries no
+     * Node version floor. A brief `--env-file-if-exists` + `engines: >=22.9`
+     * version of this failed on 22.0–22.8 with a bare-option error, and npm
+     * treats `engines` as advisory, so the warning that was meant to catch it
+     * would not have.
      */
-    expect(pkg.scripts.mock).toBe("node --env-file-if-exists=.env mock.mjs");
-    expect(pkg.scripts.demo).toBe("node --env-file-if-exists=.env demo.mjs");
+    expect(pkg.scripts.mock).toBe("node mock.mjs");
+    expect(pkg.scripts.demo).toBe("node demo.mjs");
+    expect(pkg).not.toHaveProperty("engines");
+
+    // The .env load itself is load-bearing: without it the documented first run
+    // (`cp .env.example .env && npm run demo`) exits 1 with the variables set.
+    for (const f of ["demo.mjs", "mock.mjs"]) {
+      const src = buildScaffold(IFACE, "https://x.example/api/northbound", []).find((x) => x.path === f)!.contents;
+      expect(src).toContain("process.loadEnvFile");
+    }
   });
 
   it("embeds the captured fixtures as valid JSON", () => {

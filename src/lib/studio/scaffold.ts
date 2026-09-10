@@ -381,7 +381,7 @@ Your database, your framework, your language: untouched by any of this.
 
 ## Run it
 
-Needs Node 22.9 or newer — \`npm run\` loads \`.env\` for you.
+Needs Node 20.12 or newer — the scripts load \`.env\` for you.
 
 \`\`\`bash
 cp .env.example .env     # COREEDGE_BASE_URL is already filled in for you
@@ -588,6 +588,7 @@ import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = JSON.parse(readFileSync(join(here, "fixtures.json"), "utf8"));
+${loadEnvPrelude()}
 const PORT = Number(process.env.PORT ?? 4010);
 const DEFAULT_SCENARIO = process.env.COREEDGE_SCENARIO ?? "data";
 const INTERFACE_ID = ${JSON.stringify(iface.id)};
@@ -648,23 +649,15 @@ createServer((req, res) => {
 /**
  * package.json for the starter kit — the two scripts that matter.
  *
- * `--env-file-if-exists=.env` IS THE WHOLE FIX FOR THE DOCUMENTED RUN.
+ * PLAIN `node`, because loading .env is the SCRIPT'S job now (see loadEnvPrelude).
  *
- * The README has always said `cp .env.example .env` then `npm run demo`. The
- * script was a bare `node demo.mjs`, and demo.mjs reads `process.env` — nothing
- * ever loaded the file. So the documented first run exited 1 with "Set
- * COREEDGE_BASE_URL and COREEDGE_TOKEN (see .env.example)" while the developer
- * was looking at a .env containing exactly those two values. The first thing the
- * kit did was tell the developer they had not done the thing they had just done.
- *
- * `-if-exists` rather than a bare `--env-file`: the inline form documented at the
- * top of demo.mjs (`COREEDGE_BASE_URL=… npm run demo`, and the mock walkthrough)
- * passes no .env at all, and a bare --env-file makes Node exit on the missing
- * file. Both paths in the README have to work.
- *
- * The flag needs Node 22.9+, so `engines` declares it: a clear refusal at install
- * beats the silent "flag ignored, variables missing" failure that would otherwise
- * look identical to the bug this replaces.
+ * This briefly ran `node --env-file-if-exists=.env`, with `engines: >=22.9` to
+ * declare the flag's floor. That floor was the problem: npm treats `engines` as
+ * ADVISORY unless engine-strict is set, so a developer on Node 22.5 — a version
+ * that looks entirely current — gets a warning they may not read and then
+ * `node: bad option: --env-file-if-exists`. Cryptic, and landing on exactly the
+ * "the documented first run works" promise this kit exists to keep. The floor
+ * also excluded all of 22.0–22.8, not just older majors.
  */
 export function buildPackageJson(iface: ScaffoldInterface): string {
   return JSON.stringify(
@@ -673,15 +666,46 @@ export function buildPackageJson(iface: ScaffoldInterface): string {
       private: true,
       type: "module",
       description: `CoreEdge starter kit for ${safeName(iface.name)}`,
-      engines: { node: ">=22.9" },
       scripts: {
-        mock: "node --env-file-if-exists=.env mock.mjs",
-        demo: "node --env-file-if-exists=.env demo.mjs",
+        mock: "node mock.mjs",
+        demo: "node demo.mjs",
       },
     },
     null,
     2,
   );
+}
+
+/**
+ * Load .env with NODE'S OWN PARSER, and shrug if there isn't one.
+ *
+ * THE DEFECT THIS CLOSES. The README has always said `cp .env.example .env` then
+ * `npm run demo`. Nothing ever loaded that file, so the documented first run
+ * exited 1 with "Set COREEDGE_BASE_URL and COREEDGE_TOKEN (see .env.example)"
+ * while the developer was looking at a .env holding exactly those two values.
+ * The first thing the kit did was tell them they had not done the thing they
+ * had just done.
+ *
+ * `process.loadEnvFile` (Node 20.12+) is the built-in parser — comments and
+ * quoting handled by Node, not by a hand-rolled splitter that would eventually
+ * mangle a token containing "=". It THROWS on a missing file, so the catch is
+ * what makes the inline form (`COREEDGE_BASE_URL=… npm run demo`, and the mock
+ * walkthrough) keep working: both paths in the README have to run.
+ *
+ * The typeof guard costs one line and means a genuinely ancient Node still
+ * reaches the script's own "set these two variables" message rather than dying
+ * on an unknown method.
+ */
+function loadEnvPrelude(): string {
+  return `// Load .env if present — Node's own parser; absent file is fine (inline env vars).
+if (typeof process.loadEnvFile === "function") {
+  try {
+    process.loadEnvFile(".env");
+  } catch {
+    /* no .env — variables may come from the environment instead */
+  }
+}
+`;
 }
 
 /** A runnable demo — the thing that proves the loop works end to end. */
@@ -698,6 +722,7 @@ export function buildDemo(iface: ScaffoldInterface): string {
  *
  *   COREEDGE_BASE_URL=https://…/api/northbound COREEDGE_TOKEN=ce_… npm run demo
  */
+${loadEnvPrelude()}
 const baseUrl = process.env.COREEDGE_BASE_URL;
 const token = process.env.COREEDGE_TOKEN;
 
