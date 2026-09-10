@@ -136,30 +136,52 @@ describe("the capability is derived from the interface, never typed", () => {
 });
 
 describe("a write request arrives bounded", () => {
-  it("cannot be submitted without an expiry", () => {
+  it("cannot be submitted with the expiry cleared", () => {
     // Not the control — evaluateDecision is. This keeps the APPROVER unblocked:
-    // a write grant cannot be approved without an expiry, and the approver
-    // cannot supply one themselves, so an unbounded write request would strand.
+    // no grant can be approved without an expiry, and the approver cannot supply
+    // one themselves, so an unbounded request would leave them able only to
+    // reject it.
     renderScreen([WRITE_IFACE]);
     openWith(WRITE_IFACE);
     fireEvent.change(screen.getByRole("textbox"), {
       target: { value: "The portal raises sales orders on behalf of the customer." },
     });
 
-    const submit = screen.getByRole("button", { name: "Raise request" }) as HTMLButtonElement;
-    expect(submit.disabled).toBe(true);
+    // The field is defaulted, so it has to be emptied to reach the guard at all.
+    fireEvent.change(screen.getByLabelText(/Expires/i), { target: { value: "" } });
+    expect((screen.getByRole("button", { name: "Raise request" }) as HTMLButtonElement).disabled).toBe(true);
 
     fireEvent.change(screen.getByLabelText(/Expires/i), { target: { value: "2026-12-31" } });
     expect((screen.getByRole("button", { name: "Raise request" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("does not demand an expiry for a read", () => {
+  it("demands an expiry for a READ as well — this test asserted the opposite", () => {
+    /*
+     * IT USED TO READ "does not demand an expiry for a read", and passed.
+     *
+     * That was the defect written down as an expectation. The rule in grants.ts
+     * widened from writes to reads — its own DecisionRefusal comment records the
+     * rename — but the dialog kept letting a read through unbounded, so the
+     * request reached an approver who could neither approve it nor add the date.
+     * Rejecting and re-raising was always available and nothing said so.
+     */
     renderScreen([READ_IFACE]);
     openWith(READ_IFACE);
     fireEvent.change(screen.getByRole("textbox"), {
       target: { value: "The portal lists partners on its account screen." },
     });
-    expect((screen.getByRole("button", { name: "Raise request" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.change(screen.getByLabelText(/Expires/i), { target: { value: "" } });
+    expect((screen.getByRole("button", { name: "Raise request" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("opens with an expiry already filled, so the default path is a bounded grant", () => {
+    // A blank field could only ever produce a request an approver must reject.
+    // Ninety days is a nudge with a sane value in it, not a policy.
+    renderScreen([READ_IFACE]);
+    openWith(READ_IFACE);
+    const expiry = screen.getByLabelText(/Expires/i) as HTMLInputElement;
+    expect(expiry.value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(new Date(expiry.value).getTime()).toBeGreaterThan(Date.now());
   });
 });
 

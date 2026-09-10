@@ -50,6 +50,8 @@ const VALID_REQUEST = {
   operation: "READ",
   environment: "DEV",
   justification: "Needed to read supplier master for the onboarding accelerator.",
+  // Required for a READ too, not only a write — see the expiry test below.
+  expiresAt: "2027-01-01T00:00:00.000Z",
 };
 
 beforeEach(() => {
@@ -90,6 +92,19 @@ describe("raising a request", () => {
     expect(mocks.findFirstSolution).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: "sol_1", organizationId: "org_a" } }),
     );
+  });
+
+  it("refuses a request with no expiry — a READ, not just a write", async () => {
+    /*
+     * The rule this mirrors lives in grants.ts evaluateDecision: no GRANTING
+     * decision is allowed without an expiry, and that widened from writes to
+     * reads. This boundary stayed optional, so a read request could be raised
+     * with no date and then met with a 403 the approver had no field to fix —
+     * rejecting and re-raising was the only way through, and nothing said so.
+     */
+    const { expiresAt: _dropped, ...noExpiry } = VALID_REQUEST;
+    expect((await POST(req(noExpiry))).status).toBe(400);
+    expect(mocks.createGrant).not.toHaveBeenCalled();
   });
 
   it("404s a solution in another tenant", async () => {
