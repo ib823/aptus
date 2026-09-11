@@ -26,7 +26,11 @@ import { permitCrossTenantReads } from "@/lib/db/tenant-guard";
 import { sendEmail } from "@/lib/email/brevo";
 import { isDriftTransition } from "@/lib/ops/incidents";
 import { probeConnection, resolveProbePath, type ConnectionHealthStatus } from "@/lib/studio/connection-health";
-import { resolveSapConnections, type ResolvedSapConnection } from "@/lib/sap-public/connection-resolver";
+import {
+  connectionRefusalMessage,
+  resolveSapConnections,
+  type ResolvedSapConnection,
+} from "@/lib/sap-public/connection-resolver";
 
 const SWEEP_CONCURRENCY = 4;
 
@@ -179,25 +183,55 @@ export async function sweepConnectionProbes(): Promise<SweepResult> {
   return result;
 }
 
+/**
+ * What "Probe now" can come back with. THREE OUTCOMES, NOT TWO.
+ *
+ * This returned `null` for both "no such active connection in this tenant"
+ * and "the row exists but its secrets would not open", and the route rendered
+ * both as NOT_FOUND. So the one state an operator most needs to be told about
+ * — a connection sealed under a previous SAP_CONNECTION_ENCRYPTION_KEY, which
+ * every northbound call is already refusing as CONNECTION_UNREADABLE — read
+ * as "no active connection with that id" on the screen built to diagnose it.
+ * Same defect class as the Studio test route's bare 500 (R5), one file over.
+ *
+ * `unreadable` carries the resolver's own sentence, and writes NO health
+ * status or probe event: no probe ran, so there is no tenant fact to record.
+ */
+export type ProbeOneOutcome =
+  | { outcome: "probed"; status: ConnectionHealthStatus; detail: string }
+  | { outcome: "not-found" }
+  | { outcome: "unreadable"; detail: string };
+
 /** Probe ONE connection on demand (the Ops "Probe now" action). */
 export async function probeOneConnection(
   organizationId: string,
   connectionId: string,
   source: "manual" | "test",
-): Promise<{ status: ConnectionHealthStatus; detail: string } | null> {
+): Promise<ProbeOneOutcome> {
   const row = await prisma.sapConnection.findFirst({
     where: { id: connectionId, organizationId, isActive: true },
-    select: { id: true, key: true, product: true },
+    select: { id: true, key: true, product: true, environment: true },
   });
-  if (!row) return null;
+  if (!row) return { outcome: "not-found" };
   let resolved: ResolvedSapConnection[];
   try {
     resolved = await resolveSapConnections(organizationId, row.product);
   } catch {
-    return null;
+    // The resolver opens every row of the (organization, product) group and
+    // fails closed on the set — the same refusal the binding path gives, with
+    // the same sentence, so the operator is sent to the same fix.
+    return { outcome: "unreadable", detail: connectionRefusalMessage("CONNECTION_UNREADABLE", row.environment ?? "") };
   }
   const conn = resolved.find((c) => c.key === row.key);
-  if (!conn) return null;
+  if (!conn) {
+    // The row is active in the database and absent from the resolver's view
+    // of the same group: not a state the product produces, and not "not
+    // found" either. Said as what it is rather than dressed as a 404.
+    return {
+      outcome: "unreadable",
+      detail: `The stored connection "${row.key}" is active but could not be resolved with the rest of its product group. Re-save it in Studio, or deactivate it.`,
+    };
+  }
 
   const probe = await probeConnection(conn);
   await prisma.sapConnection.update({
@@ -219,5 +253,5 @@ export async function probeOneConnection(
       source,
     },
   });
-  return { status: probe.status, detail: probe.detail };
+  return { outcome: "probed", status: probe.status, detail: probe.detail };
 }

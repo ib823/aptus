@@ -53,11 +53,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const result = await probeOneConnection(organizationId, connectionId, "manual");
-  if (!result) {
-    // Inactive, missing in this tenant, or its stored row could not be
-    // resolved — all render the same refusal, because distinguishing them
-    // would leak whether a foreign connection id exists.
-    return studioError("NOT_FOUND", "No active connection with that id, or its stored row could not be resolved.");
+  if (result.outcome === "not-found") {
+    // Inactive or missing IN THIS TENANT. A foreign id lands here too, and
+    // reads the same — the lookup is scoped, so nothing below can leak
+    // whether another organization's connection exists.
+    return studioError("NOT_FOUND", "No active connection with that id.");
+  }
+  if (result.outcome === "unreadable") {
+    // The row is here and active; its secrets would not open. This used to
+    // be folded into the 404 above, so the one connection an operator most
+    // needed to diagnose — sealed under a previous encryption key, refused as
+    // CONNECTION_UNREADABLE on every northbound call — read as "no active
+    // connection with that id" on the screen built to diagnose it. Nothing
+    // about a foreign tenant is disclosed: the row was found in the caller's
+    // own scope first. Same status and sentence as the Studio test route (R5).
+    return studioError("CONFLICT", result.detail);
   }
 
   return studioOk({
