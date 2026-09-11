@@ -23,28 +23,41 @@ export default async function StudioInterfacesPage() {
   if (!user) return null;
 
   const organizationId = user.organizationId;
-  const rows = organizationId
-    ? await prisma.interface.findMany({
-        where: { organizationId },
-        select: {
-          id: true,
-          name: true,
-          version: true,
-          sapProduct: true,
-          externalId: true,
-          operation: true,
-          entitySet: true,
-          mode: true,
-          status: true,
-          mappingVersion: true,
-          requestSchema: true,
-          responseSchema: true,
-          solutionId: true,
-          solution: { select: { name: true } },
-        },
-        orderBy: [{ updatedAt: "desc" }],
-      })
-    : [];
+  const [rows, writeHolders] = await Promise.all([
+    organizationId
+      ? prisma.interface.findMany({
+          where: { organizationId },
+          select: {
+            id: true,
+            name: true,
+            version: true,
+            sapProduct: true,
+            externalId: true,
+            operation: true,
+            entitySet: true,
+            mode: true,
+            status: true,
+            mappingVersion: true,
+            requestSchema: true,
+            responseSchema: true,
+            solutionId: true,
+            solution: { select: { name: true } },
+          },
+          orderBy: [{ updatedAt: "desc" }],
+        })
+      : Promise.resolve([]),
+    // Which solutions hold a live write credential. A CREATE/UPDATE interface
+    // cannot be activated without one (the route refuses), and the button
+    // should say so before the click, not after. Metadata only — the sealed
+    // secret is never selected.
+    organizationId
+      ? prisma.solutionClient.findMany({
+          where: { organizationId, isActive: true, revokedAt: null, NOT: { secretsCiphertext: null } },
+          select: { solutionId: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const writeCredentialSolutions = new Set(writeHolders.map((c) => c.solutionId));
 
   /**
    * The entity set the curated registry names for a service, when it names
@@ -79,6 +92,7 @@ export default async function StudioInterfacesPage() {
     solutionId: r.solutionId,
     solutionName: r.solution.name,
     suggestedEntitySet: r.entitySet ? null : suggestEntitySet(r.sapProduct, r.externalId),
+    writeCredentialIssued: writeCredentialSolutions.has(r.solutionId),
   }));
 
   return (

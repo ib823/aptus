@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   findFirstInterface: vi.fn(),
   updateInterface: vi.fn(),
   createAudit: vi.fn(),
+  findFirstClient: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
@@ -25,6 +26,7 @@ vi.mock("@/lib/db/prisma", () => ({
       create: vi.fn(),
     },
     solution: { findFirst: vi.fn() },
+    solutionClient: { findFirst: mocks.findFirstClient },
     configAudit: { create: mocks.createAudit },
   },
 }));
@@ -42,6 +44,7 @@ const EXISTING = {
   mode: "READ",
   status: "DRAFT",
   mappingVersion: null,
+  solutionId: "sol_1",
 };
 
 function req(body: unknown) {
@@ -64,6 +67,71 @@ beforeEach(() => {
     Promise.resolve({ id: "if_1", version: 1, mappingVersion: null, ...data }),
   );
   mocks.createAudit.mockResolvedValue({ id: "a1" });
+  mocks.findFirstClient.mockResolvedValue(null);
+});
+
+describe("ACTIVE has preconditions — the gate is the API, not the greyed button", () => {
+  it("refuses to activate without an entity set", async () => {
+    mocks.findFirstInterface.mockResolvedValue({ ...EXISTING, entitySet: null });
+    const res = await PATCH(req({ id: "if_1", status: "ACTIVE" }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.message).toMatch(/without an entity set/);
+    expect(mocks.updateInterface).not.toHaveBeenCalled();
+  });
+
+  it("refuses to activate a WRITE interface whose solution holds no write credential", async () => {
+    // A CREATE interface could be defined, requested, approved and marked
+    // ACTIVE — then never called, because nothing had issued the write key
+    // the broker checks first. The developer built toward a wall.
+    mocks.findFirstInterface.mockResolvedValue({ ...EXISTING, operation: "CREATE", mode: "WRITE" });
+    const res = await PATCH(req({ id: "if_1", status: "ACTIVE" }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.message).toMatch(/CREATE interface cannot be activated until its solution holds a write credential/);
+    expect(body.error.message).toMatch(/issue the write credential under API Access/);
+    expect(mocks.updateInterface).not.toHaveBeenCalled();
+    // The lookup is the solution's live, unrevoked credential WITH a sealed write secret, in this org.
+    expect(mocks.findFirstClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          organizationId: "org_a",
+          solutionId: "sol_1",
+          isActive: true,
+          revokedAt: null,
+          NOT: { secretsCiphertext: null },
+        }),
+      }),
+    );
+  });
+
+  it("…and the same for an interface being switched to UPDATE in the same edit", async () => {
+    const res = await PATCH(req({ id: "if_1", status: "ACTIVE", operation: "UPDATE" }));
+    expect(res.status).toBe(400);
+    expect(mocks.updateInterface).not.toHaveBeenCalled();
+  });
+
+  it("activates a WRITE interface once the write credential exists", async () => {
+    mocks.findFirstInterface.mockResolvedValue({ ...EXISTING, operation: "CREATE", mode: "WRITE" });
+    mocks.findFirstClient.mockResolvedValue({ id: "cl_1" });
+    const res = await PATCH(req({ id: "if_1", status: "ACTIVE" }));
+    expect(res.status).toBe(200);
+    expect(lastUpdateData().status).toBe("ACTIVE");
+  });
+
+  it("never consults the write credential for a READ interface", async () => {
+    const res = await PATCH(req({ id: "if_1", status: "ACTIVE" }));
+    expect(res.status).toBe(200);
+    expect(mocks.findFirstClient).not.toHaveBeenCalled();
+  });
+
+  it("does not re-check on an interface that is already ACTIVE", async () => {
+    // Promotion is the gate; a later revocation is the broker's to refuse per call.
+    mocks.findFirstInterface.mockResolvedValue({ ...EXISTING, operation: "CREATE", mode: "WRITE", status: "ACTIVE" });
+    const res = await PATCH(req({ id: "if_1", status: "ACTIVE", name: "Renamed" }));
+    expect(res.status).toBe(200);
+    expect(mocks.findFirstClient).not.toHaveBeenCalled();
+  });
 });
 
 describe("mapping stays disabled — enforced by the API, not the UI", () => {

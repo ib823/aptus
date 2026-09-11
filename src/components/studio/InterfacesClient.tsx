@@ -41,6 +41,12 @@ export interface StudioInterface {
    * the runtime validates against the tenant, not against this hint.
    */
   suggestedEntitySet?: string | null;
+  /**
+   * Whether the owning solution holds a live write credential. Only a WRITE
+   * interface reads it: the route refuses to activate one without it, and the
+   * button says so first. Absent means unknown → treated as not issued.
+   */
+  writeCredentialIssued?: boolean;
   mode: string;
   status: "DRAFT" | "ACTIVE" | "DEPRECATED";
   mappingVersion: number | null;
@@ -198,6 +204,13 @@ export function InterfacesClient({
                 </span>
               )}
             </Row>
+            {selected.mode === "WRITE" && (
+              <Row label="Write credential">
+                {selected.writeCredentialIssued
+                  ? "issued — the solution can write once this interface is ACTIVE"
+                  : "not issued — the broker refuses every write without one, so this interface cannot be activated yet. Get the write grant approved, then issue the write credential under API Access."}
+              </Row>
+            )}
             <Row label="Version">v{selected.version}</Row>
             <Row label="Request schema">
               {selected.hasRequestSchema ? "captured" : "not captured yet"}
@@ -252,11 +265,17 @@ export function InterfacesClient({
                    it). Saying so on the button beats a refusal after the click. */
                 <button
                   type="button"
-                  disabled={busy || selected.entitySet === null}
+                  disabled={
+                    busy ||
+                    selected.entitySet === null ||
+                    (selected.mode === "WRITE" && !selected.writeCredentialIssued)
+                  }
                   title={
                     selected.entitySet === null
                       ? "Set the entity set first — an ACTIVE interface with none would refuse every read."
-                      : undefined
+                      : selected.mode === "WRITE" && !selected.writeCredentialIssued
+                        ? "Issue the solution's write credential first — a WRITE interface activated without one builds toward a call the broker refuses."
+                        : undefined
                   }
                   onClick={() => patch({ id: selected.id, status: "ACTIVE" })}
                   style={btnPrimary}
