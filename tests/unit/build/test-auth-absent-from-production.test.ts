@@ -57,24 +57,18 @@ describe("the files are named so a production build does not pick them up", () =
  * option actually resolves to for each kind of deploy.
  */
 describe("the resolved pageExtensions", () => {
-  const ENV_KEYS = ["VERCEL_ENV", "NODE_ENV"] as const;
-  const saved = new Map<string, string | undefined>();
-
+  /*
+   * vi.stubEnv rather than assigning process.env directly: NODE_ENV is typed
+   * read-only (tsc --strict refuses the assignment), and the stub restores the
+   * real value for the rest of the suite.
+   */
   afterEach(() => {
-    for (const [k, v] of saved) {
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
-    }
-    saved.clear();
+    vi.unstubAllEnvs();
   });
 
-  async function pageExtensionsFor(env: Partial<Record<(typeof ENV_KEYS)[number], string | undefined>>) {
-    for (const k of ENV_KEYS) {
-      if (!saved.has(k)) saved.set(k, process.env[k]);
-      const value = env[k];
-      if (value === undefined) delete process.env[k];
-      else process.env[k] = value;
-    }
+  async function pageExtensionsFor(env: { VERCEL_ENV?: string; NODE_ENV?: string }) {
+    vi.stubEnv("VERCEL_ENV", env.VERCEL_ENV);
+    vi.stubEnv("NODE_ENV", env.NODE_ENV as "production" | "development" | "test" | undefined);
     vi.resetModules();
     const mod = (await import("../../../next.config")) as { default: { pageExtensions?: string[] } };
     return mod.default.pageExtensions ?? [];
@@ -87,7 +81,7 @@ describe("the resolved pageExtensions", () => {
   });
 
   it("…and on a production build off Vercel", async () => {
-    const exts = await pageExtensionsFor({ VERCEL_ENV: undefined, NODE_ENV: "production" });
+    const exts = await pageExtensionsFor({ NODE_ENV: "production" });
     expect(exts.some((e) => e.startsWith("e2e."))).toBe(false);
   });
 
@@ -97,7 +91,7 @@ describe("the resolved pageExtensions", () => {
   });
 
   it("includes them in development", async () => {
-    const exts = await pageExtensionsFor({ VERCEL_ENV: undefined, NODE_ENV: "development" });
+    const exts = await pageExtensionsFor({ NODE_ENV: "development" });
     expect(exts).toContain("e2e.ts");
     // The defaults are never lost — dropping them would hide every real page.
     for (const e of ["tsx", "ts", "jsx", "js"]) expect(exts, e).toContain(e);
