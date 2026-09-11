@@ -115,6 +115,18 @@ export default async function StudioAccessPage() {
           select: {
             id: true,
             name: true,
+            /*
+             * THE ONLY THING THAT TELLS TWO SOLUTIONS APART. `name` is not
+             * unique — the schema constrains `@@unique([organizationId, slug])`
+             * and nothing else — so an organization can hold two solutions
+             * called the same thing, separated only by slug (`qa-e2e-main` and
+             * `qa-e2e-main-2`). That happened, and the credential issued
+             * against the wrong twin looked correct everywhere a human could
+             * check: the picker, the credentials table and the auto-generated
+             * label all showed the name alone. The northbound list came back
+             * empty and there was nothing on screen to explain why.
+             */
+            slug: true,
             technicalOwnerId: true,
             businessOwnerId: true,
             supportOwnerId: true,
@@ -143,6 +155,7 @@ export default async function StudioAccessPage() {
   ]);
 
   const solutionNames = new Map(solutionRows.map((s) => [s.id, s.name]));
+  const solutionSlugs = new Map(solutionRows.map((s) => [s.id, s.slug]));
 
   const requestableInterfaces: RequestableInterface[] = interfaceRows.map((i) => ({
     id: i.id,
@@ -157,6 +170,7 @@ export default async function StudioAccessPage() {
     id: c.id,
     solutionId: c.solutionId,
     solutionName: solutionNames.get(c.solutionId) ?? "(unknown solution)",
+    solutionSlug: solutionSlugs.get(c.solutionId) ?? null,
     label: c.label,
     environment: c.environment,
     sapClient: c.sapClient,
@@ -170,6 +184,7 @@ export default async function StudioAccessPage() {
   const credentialSolutions: CredentialSolution[] = solutionRows.map((s) => ({
     id: s.id,
     name: s.name,
+    slug: s.slug,
     viewerOwns: [s.technicalOwnerId, s.businessOwnerId, s.supportOwnerId].includes(user.id),
   }));
 

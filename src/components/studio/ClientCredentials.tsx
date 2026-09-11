@@ -15,12 +15,14 @@
 
 import { useRouter } from "next/navigation";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 export interface CredentialSummary {
   id: string;
   solutionId: string;
   solutionName: string;
+  /** Null only when the solution row is gone; see `disambiguate`. */
+  solutionSlug: string | null;
   label: string;
   environment: string;
   sapClient?: string | null;
@@ -32,8 +34,46 @@ export interface CredentialSummary {
 export interface CredentialSolution {
   id: string;
   name: string;
+  /** Unique within the organization, unlike `name`. See `disambiguate`. */
+  slug: string;
   /** True when the viewer owns it — they may not mint its credential. */
   viewerOwns: boolean;
+}
+
+/**
+ * The names that more than one solution answers to.
+ *
+ * A credential is chosen by solution and verified by reading the name back, and
+ * `Solution.name` carries no uniqueness — the schema constrains
+ * `@@unique([organizationId, slug])` and nothing else. Two solutions called
+ * "QA-E2E-Main" are therefore legal, and a credential minted against the wrong
+ * one is indistinguishable from a correct one in the picker, in the credentials
+ * table, and in the auto-generated `<solution> · <environment>` label. The
+ * symptom is a northbound interface list that comes back empty with nothing on
+ * screen to explain it.
+ *
+ * The slug is shown ONLY where the name is genuinely ambiguous. Appending it
+ * everywhere would put a technical identifier in front of every reader to solve
+ * a problem most organizations do not have; showing it exactly when it
+ * discriminates keeps the common case clean and makes its appearance meaningful.
+ */
+export function ambiguousNames(names: readonly string[]): Set<string> {
+  const seen = new Set<string>();
+  const twice = new Set<string>();
+  for (const n of names) {
+    if (seen.has(n)) twice.add(n);
+    seen.add(n);
+  }
+  return twice;
+}
+
+/** `name` alone, or `name (slug)` when the name does not identify one solution. */
+export function disambiguate(
+  name: string,
+  slug: string | null,
+  ambiguous: ReadonlySet<string>,
+): string {
+  return ambiguous.has(name) && slug ? `${name} (${slug})` : name;
 }
 
 export function ClientCredentials({
@@ -58,6 +98,18 @@ export function ClientCredentials({
   const [busy, setBusy] = useState(false);
   const [issued, setIssued] = useState<{ token: string; warning: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  /*
+   * Computed from the organization's full solution list, so the picker and the
+   * credentials table below reach the same verdict about which names are
+   * ambiguous. Deriving them separately is how the two would eventually
+   * disagree — the picker qualifying a name the table left bare, which is worse
+   * than neither doing it.
+   */
+  const ambiguousSolutionNames = useMemo(
+    () => ambiguousNames(solutions.map((s) => s.name)),
+    [solutions],
+  );
 
   const call = useCallback(async (method: "POST" | "PATCH", body: Record<string, unknown>) => {
     setBusy(true);
@@ -103,7 +155,7 @@ export function ClientCredentials({
             <select value={solutionId} onChange={(e) => setSolutionId(e.target.value)} style={field}>
               {solutions.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name}
+                  {disambiguate(s.name, s.slug, ambiguousSolutionNames)}
                   {s.viewerOwns ? " (you own this)" : ""}
                 </option>
               ))}
@@ -140,7 +192,18 @@ export function ClientCredentials({
                 solutionId,
                 environment,
                 ...(sapClient ? { sapClient } : {}),
-                label: `${selected?.name ?? "solution"} · ${environment}${sapClient ? `/${sapClient}` : ""}`,
+                /*
+                 * The label is stored, and is what someone reads back weeks
+                 * later to decide whether a credential is the right one. It
+                 * qualifies the same way the picker does — otherwise the one
+                 * durable record of which solution a token belongs to is the
+                 * one place the ambiguity survives.
+                 */
+                label: `${
+                  selected
+                    ? disambiguate(selected.name, selected.slug, ambiguousSolutionNames)
+                    : "solution"
+                } · ${environment}${sapClient ? `/${sapClient}` : ""}`,
               })
             }
             title={
@@ -206,7 +269,7 @@ export function ClientCredentials({
             <tbody>
               {credentials.map((c) => (
                 <tr key={c.id} style={{ borderTop: "1px solid var(--border-default)" }}>
-                  <Td>{c.solutionName}</Td>
+                  <Td>{disambiguate(c.solutionName, c.solutionSlug, ambiguousSolutionNames)}</Td>
                   <Td>{c.sapClient ? `${c.environment}/${c.sapClient}` : c.environment}</Td>
                   <Td>
                     {c.revokedAt ? "revoked" : c.isActive ? "active" : "inactive"}
