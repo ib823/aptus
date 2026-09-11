@@ -115,7 +115,20 @@ describe("ambiguity is refused, never resolved by creation order", () => {
     const binding = await resolveSapConnectionForEnvironment("org_a", "s4hana", "DEV", "READ");
 
     expect(binding.ok).toBe(false);
-    if (!binding.ok) expect(binding.reason).toBe("AMBIGUOUS");
+    // Not AMBIGUOUS: nothing declares DEV, and the one undeclared row cannot be
+    // assumed to be it. AMBIGUOUS is for two rows that both CLAIM the
+    // environment, whose fix is "deactivate one"; the fix here is "declare it".
+    if (!binding.ok) expect(binding.reason).toBe("NO_DECLARED_CANDIDATE");
+  });
+
+  it("tells 'nothing declares it' apart from 'two declare it' in the refusal text", () => {
+    // The old message for this case said "more than one connection could be
+    // it", which sent the operator to deactivate a connection — when no
+    // connection claimed the environment at all, and setting one was the fix.
+    const message = connectionRefusalMessage("NO_DECLARED_CANDIDATE", "DEV");
+    expect(message).toMatch(/No SAP connection declares the DEV environment/);
+    expect(message).toMatch(/Set the environment/);
+    expect(message).not.toMatch(/deactivate/i);
   });
 });
 
@@ -170,6 +183,7 @@ describe("refusal messages are safe", () => {
       "NO_MATCH_FOR_CLIENT",
       "NO_MATCH_FOR_ENVIRONMENT",
       "AMBIGUOUS",
+      "NO_DECLARED_CANDIDATE",
       "UNDECLARED_ENVIRONMENT_WRITE",
     ] as const;
 

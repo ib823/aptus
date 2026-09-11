@@ -11,6 +11,8 @@ import type { Metadata } from "next";
 import { InterfacesClient, type StudioInterface } from "@/components/studio/InterfacesClient";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { serviceApiId } from "@/lib/sap-public/hub-content";
+import { getSapProduct, getSapServices } from "@/lib/sap-public/tdd-connector";
 import { canMutateStudio } from "@/lib/studio/rbac";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +46,23 @@ export default async function StudioInterfacesPage() {
       })
     : [];
 
+  /**
+   * The entity set the curated registry names for a service, when it names
+   * one. The interface's externalId is the Hub apiId; a curated service maps
+   * to the same apiId (serviceApiId), and its dashboard operation carries the
+   * entity set the connector already reads. Offered as a placeholder, never
+   * written: the developer still confirms it, because a tenant can expose a
+   * service whose $metadata differs from the registry's expectation.
+   */
+  const suggestEntitySet = (sapProduct: string, externalId: string): string | null => {
+    const product = getSapProduct(sapProduct);
+    if (!product) return null;
+    const service = getSapServices(product).find((svc) => serviceApiId(svc) === externalId);
+    if (!service) return null;
+    const op = product.operations.find((o) => o.serviceKey === service.key);
+    return op?.entitySet ?? null;
+  };
+
   const interfaces: StudioInterface[] = rows.map((r) => ({
     id: r.id,
     name: r.name,
@@ -59,6 +78,7 @@ export default async function StudioInterfacesPage() {
     hasResponseSchema: r.responseSchema !== null,
     solutionId: r.solutionId,
     solutionName: r.solution.name,
+    suggestedEntitySet: r.entitySet ? null : suggestEntitySet(r.sapProduct, r.externalId),
   }));
 
   return (

@@ -32,20 +32,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     tenantKey,
   );
   const tenant = resolved?.tenant ?? null;
-  const service = await resolveHubService(product, request.nextUrl.searchParams.get("service") ?? "");
+  const serviceKey = request.nextUrl.searchParams.get("service") ?? "";
+  const service = await resolveHubService(product, serviceKey);
   const entity = request.nextUrl.searchParams.get("entity") ?? "";
   const limit = Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "10", 10);
 
   if (!tenant || !service || !entity) {
+    // Three different mistakes, three different sentences. "A valid service
+    // and entity are required" covered all of them and named none, so a
+    // service absent from the catalogue was indistinguishable from a missing
+    // entity parameter — and the caller had to guess which half to fix.
+    const message = !tenant
+      ? unknownTenantMessage(tenantKey)
+      : !service
+        ? serviceKey
+          ? `Unknown service "${serviceKey}" for ${product.label}: it is not a curated service and is not in this product's catalogue.`
+          : "A service is required (?service=)."
+        : "An entity set is required (?entity=).";
     return NextResponse.json(
-      {
-        error: {
-          code: ERROR_CODES.VALIDATION_ERROR,
-          message: tenant
-            ? "A valid service and entity are required"
-            : unknownTenantMessage(tenantKey),
-        },
-      },
+      { error: { code: ERROR_CODES.VALIDATION_ERROR, message } },
       { status: 400 },
     );
   }

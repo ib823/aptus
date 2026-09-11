@@ -34,6 +34,13 @@ export interface StudioInterface {
   externalId: string;
   operation: "READ" | "CREATE" | "UPDATE";
   entitySet: string | null;
+  /**
+   * The entity set the curated registry knows for this service, when it knows
+   * one — the value the editor offers as its placeholder. Null for a catalogue
+   * service the registry has no record of. The field is free text either way:
+   * the runtime validates against the tenant, not against this hint.
+   */
+  suggestedEntitySet?: string | null;
   mode: string;
   status: "DRAFT" | "ACTIVE" | "DEPRECATED";
   mappingVersion: number | null;
@@ -161,6 +168,7 @@ export function InterfacesClient({
                 <EntitySetEditor
                   key={selected.id}
                   value={selected.entitySet}
+                  suggestion={selected.suggestedEntitySet ?? null}
                   busy={busy}
                   onSave={(next) => patch({ id: selected.id, entitySet: next })}
                 />
@@ -239,7 +247,20 @@ export function InterfacesClient({
           {canAuthor && (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               {selected.status !== "ACTIVE" && (
-                <button type="button" disabled={busy} onClick={() => patch({ id: selected.id, status: "ACTIVE" })} style={btnPrimary}>
+                /* The route refuses ACTIVE without an entity set (an ACTIVE
+                   interface that 400s every read is a contract with a hole in
+                   it). Saying so on the button beats a refusal after the click. */
+                <button
+                  type="button"
+                  disabled={busy || selected.entitySet === null}
+                  title={
+                    selected.entitySet === null
+                      ? "Set the entity set first — an ACTIVE interface with none would refuse every read."
+                      : undefined
+                  }
+                  onClick={() => patch({ id: selected.id, status: "ACTIVE" })}
+                  style={btnPrimary}
+                >
                   Mark ACTIVE
                 </button>
               )}
@@ -307,10 +328,19 @@ function Td({ children }: { children: React.ReactNode }) {
  */
 function EntitySetEditor({
   value,
+  suggestion,
   busy,
   onSave,
 }: {
   value: string | null;
+  /**
+   * What the curated registry knows this service's entity set to be, or null.
+   * The placeholder used to be `A_BusinessPartner` on EVERY interface — the
+   * entity set of a different service — so it was a hint that could only
+   * mislead. Now it is the real name when one is known, and an honest
+   * description of what to type when one is not.
+   */
+  suggestion: string | null;
   busy: boolean;
   onSave: (next: string | null) => void;
 }) {
@@ -334,7 +364,7 @@ function EntitySetEditor({
       <input
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        placeholder="A_BusinessPartner"
+        placeholder={suggestion ?? "Entity set name from this service's $metadata"}
         aria-label="Entity set"
         style={{
           height: 28,

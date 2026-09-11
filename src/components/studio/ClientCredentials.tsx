@@ -80,10 +80,19 @@ export function ClientCredentials({
   credentials,
   solutions,
   canIssue,
+  connectedEnvironments,
 }: {
   credentials: readonly CredentialSummary[];
   solutions: readonly CredentialSolution[];
   canIssue: boolean;
+  /**
+   * Environments at least one ACTIVE connection declares, upper-cased. The
+   * picker offered SANDBOX / DEV / TEST / PROD with nothing to say which of
+   * them anything serves — SANDBOX is first and the natural starting point, and
+   * on a DEV-only estate it produced a credential that was issued cleanly and
+   * failed at every call. Now each option says so before it is chosen.
+   */
+  connectedEnvironments: readonly string[];
 }) {
   const router = useRouter();
   const [solutionId, setSolutionId] = useState(solutions[0]?.id ?? "");
@@ -166,10 +175,17 @@ export function ClientCredentials({
             <select value={environment} onChange={(e) => setEnvironment(e.target.value)} style={field}>
               {["SANDBOX", "DEV", "TEST", "PROD"].map((e) => (
                 <option key={e} value={e}>
-                  {e}
+                  {connectedEnvironments.includes(e) ? e : `${e} — no connection`}
                 </option>
               ))}
             </select>
+            {!connectedEnvironments.includes(environment) && (
+              <span style={{ display: "block", marginTop: 4, fontSize: 11, lineHeight: "16px", color: "var(--status-awaiting-fg)", maxWidth: 260 }}>
+                No active connection declares {environment}. A credential issued for it
+                will authenticate and then be refused at the environment binding on every
+                call. Add the connection first, or pick an environment that has one.
+              </span>
+            )}
           </label>
           <label>
             <span style={labelText}>SAP client (optional)</span>

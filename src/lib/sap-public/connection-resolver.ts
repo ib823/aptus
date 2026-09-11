@@ -219,6 +219,19 @@ export type ConnectionBindingFailure =
   | "NO_MATCH_FOR_ENVIRONMENT"
   /** Several candidates and no way to choose — refuse rather than guess. */
   | "AMBIGUOUS"
+  /**
+   * NOTHING declares the caller's environment, and more than one connection
+   * has not declared its own — so none can be assumed to be it.
+   *
+   * This used to fall through to AMBIGUOUS, and AMBIGUOUS's sentence says "more
+   * than one SAP connection could serve the SANDBOX environment". With one DEV
+   * row and one undeclared row that is false — zero connections declare
+   * SANDBOX — and it sent the developer hunting for a duplicate that did not
+   * exist, with a suggested fix ("declare a distinct environment on each") that
+   * was not the fix. The situation is different, so it gets its own name and
+   * its own sentence: declare the environment on the undeclared rows.
+   */
+  | "NO_DECLARED_CANDIDATE"
   /** A write against a connection that has not declared its landscape. */
   | "UNDECLARED_ENVIRONMENT_WRITE"
   /**
@@ -336,7 +349,10 @@ export async function resolveSapConnectionForEnvironment(
     }
     return { ok: true, connection: only, bindingUnverified: true };
   }
-  return { ok: false, reason: "AMBIGUOUS" };
+  // Reached only when envMatches is empty and undeclared rows exist beside
+  // others: nothing declares the target, several could be it. Not AMBIGUOUS —
+  // that word claims more than one connection DECLARES the environment.
+  return { ok: false, reason: "NO_DECLARED_CANDIDATE" };
 }
 
 /**
@@ -360,6 +376,8 @@ export function connectionRefusalMessage(
       return `A SAP connection is configured for the ${environment} environment, but none of them addresses the SAP client this credential is bound to. A client is a separate data container inside the same system, so this will not fall back to another one. Add the connection for that client in Studio, or re-issue this credential against a client that exists.`;
     case "AMBIGUOUS":
       return `More than one SAP connection could serve the ${environment} environment, so none was chosen. Declare a distinct environment on each connection in Studio — or, where one system hosts several SAP clients, set the client on each connection and on this credential so the pair identifies exactly one.`;
+    case "NO_DECLARED_CANDIDATE":
+      return `No SAP connection declares the ${environment} environment, and more than one connection has not declared its environment at all — so none can be assumed to be it. Set the environment on each undeclared connection in Studio; this credential will not guess between them.`;
     case "UNDECLARED_ENVIRONMENT_WRITE":
       return "This organization's SAP connection has not declared which environment it is, so a write cannot be authorised against it. Set the environment on the connection in Studio.";
     case "CONNECTION_UNREADABLE":

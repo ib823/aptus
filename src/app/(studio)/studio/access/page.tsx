@@ -88,7 +88,7 @@ export default async function StudioAccessPage() {
 
   // Runtime credentials. Metadata only — tokenHash is never selected, so there
   // is no value here that could become a credential.
-  const [clientRows, solutionRows, interfaceRows] = await Promise.all([
+  const [clientRows, solutionRows, interfaceRows, connectionRows] = await Promise.all([
     organizationId
       ? prisma.solutionClient.findMany({
           where: { organizationId },
@@ -152,7 +152,26 @@ export default async function StudioAccessPage() {
           orderBy: { name: "asc" },
         })
       : Promise.resolve([]),
+    // Environments an active SAP connection actually declares. A grant or a
+    // credential can be issued for any of DEV/TEST/PROD, but the runtime binds
+    // a call to a connection by that environment — so an environment nothing
+    // declares is one every call will be refused on. The pickers say so up
+    // front instead of letting the first refused call be the notice.
+    organizationId
+      ? prisma.sapConnection.findMany({
+          where: { organizationId, isActive: true },
+          select: { environment: true },
+        })
+      : Promise.resolve([]),
   ]);
+
+  const connectedEnvironments = Array.from(
+    new Set(
+      connectionRows
+        .map((c) => (c.environment ?? "").trim().toUpperCase())
+        .filter((e) => e.length > 0),
+    ),
+  );
 
   const solutionNames = new Map(solutionRows.map((s) => [s.id, s.name]));
   const solutionSlugs = new Map(solutionRows.map((s) => [s.id, s.slug]));
@@ -209,12 +228,14 @@ export default async function StudioAccessPage() {
         canDecide={canMutateStudio(user.role)}
         canRequest={canMutateStudio(user.role)}
         requestableInterfaces={requestableInterfaces}
+        connectedEnvironments={connectedEnvironments}
       />
 
       <ClientCredentials
         credentials={credentials}
         solutions={credentialSolutions}
         canIssue={canMutateStudio(user.role)}
+        connectedEnvironments={connectedEnvironments}
       />
     </div>
   );

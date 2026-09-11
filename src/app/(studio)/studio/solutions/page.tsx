@@ -7,7 +7,11 @@
 
 import type { Metadata } from "next";
 
-import { SolutionsClient, type StudioSolution } from "@/components/studio/SolutionsClient";
+import {
+  SolutionsClient,
+  type SolutionPerson,
+  type StudioSolution,
+} from "@/components/studio/SolutionsClient";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { canMutateStudio } from "@/lib/studio/rbac";
@@ -21,28 +25,45 @@ export default async function StudioSolutionsPage() {
   if (!user) return null;
 
   const organizationId = user.organizationId;
-  const rows = organizationId
-    ? await prisma.solution.findMany({
-        where: { organizationId },
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          classification: true,
-          businessProblem: true,
-          status: true,
-          dataClass: true,
-          technicalOwnerId: true,
-          businessOwnerId: true,
-          supportOwnerId: true,
-          repoUrl: true,
-          packagingNote: true,
-          reuseIntent: true,
-          _count: { select: { interfaces: true, grants: true } },
-        },
-        orderBy: { name: "asc" },
-      })
-    : [];
+  const [rows, peopleRows] = await Promise.all([
+    organizationId
+      ? prisma.solution.findMany({
+          where: { organizationId },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            classification: true,
+            businessProblem: true,
+            status: true,
+            dataClass: true,
+            technicalOwnerId: true,
+            businessOwnerId: true,
+            supportOwnerId: true,
+            repoUrl: true,
+            packagingNote: true,
+            reuseIntent: true,
+            _count: { select: { interfaces: true, grants: true } },
+          },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([]),
+    // Names for the owner slots. An owner is stored as a user id, and the
+    // accountability panel printed that id — a cuid nobody can recognise as a
+    // colleague. Name and email are what a person reads; the id stays the key.
+    organizationId
+      ? prisma.user.findMany({
+          where: { organizationId },
+          select: { id: true, name: true, email: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const people: SolutionPerson[] = peopleRows.map((p) => ({
+    id: p.id,
+    name: p.name,
+    email: p.email,
+  }));
 
   const solutions: StudioSolution[] = rows.map((r) => ({
     id: r.id,
@@ -79,6 +100,7 @@ export default async function StudioSolutionsPage() {
         solutions={solutions}
         canAuthor={canMutateStudio(user.role)}
         currentUserId={user.id}
+        people={people}
       />
     </div>
   );

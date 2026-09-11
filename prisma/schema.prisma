@@ -1050,8 +1050,9 @@ model NorthboundAuditEvent {
 
   /// Why the broker refused before it reached a connection, or null if it did.
   ///
-  /// NO_CONNECTION | NO_MATCH_FOR_ENVIRONMENT | AMBIGUOUS |
-  /// UNDECLARED_ENVIRONMENT_WRITE
+  /// NO_CONNECTION | NO_MATCH_FOR_ENVIRONMENT | NO_MATCH_FOR_CLIENT | AMBIGUOUS |
+  /// NO_DECLARED_CANDIDATE | UNDECLARED_ENVIRONMENT_WRITE | CONNECTION_UNREADABLE |
+  /// UNKNOWN_PRODUCT — see ConnectionBindingFailure in connection-resolver.ts
   ///
   /// WITHOUT THIS, A BINDING REFUSAL IS INVISIBLE. It audits as HTTP 403 with a
   /// null connection — byte-identical to a grant-gate refusal, which is also 403

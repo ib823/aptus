@@ -25,6 +25,13 @@ import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioS
 import { missingOwners, type SolutionStatus } from "@/lib/studio/solutions";
 import { DATA_CLASSES, dataClassLabel } from "@/lib/studio/data-class";
 
+/** A colleague an owner slot may name: id is the key, name/email what a person reads. */
+export interface SolutionPerson {
+  id: string;
+  name: string;
+  email: string;
+}
+
 export interface StudioSolution {
   id: string;
   name: string;
@@ -77,10 +84,12 @@ export function SolutionsClient({
   solutions,
   canAuthor,
   currentUserId,
+  people,
 }: {
   solutions: readonly StudioSolution[];
   canAuthor: boolean;
   currentUserId: string;
+  people: readonly SolutionPerson[];
 }) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(solutions[0]?.id ?? null);
@@ -262,6 +271,7 @@ export function SolutionsClient({
                   canAuthor={canAuthor}
                   busy={busy}
                   currentUserId={currentUserId}
+                  people={people}
                   onSave={patch}
                 />
               </>
@@ -302,16 +312,26 @@ function OwnershipEditor({
   canAuthor,
   busy,
   currentUserId,
+  people,
   onSave,
 }: {
   solution: StudioSolution;
   canAuthor: boolean;
   busy: boolean;
   currentUserId: string;
+  people: readonly SolutionPerson[];
   onSave: (body: Record<string, unknown>) => void;
 }) {
   const missing = missingOwners(solution);
   const complete = missing.length === 0;
+
+  // "Ikmal Baharudin (ikmal@…)" rather than "cmg3…": the id is the key, not
+  // the name. A user this organization no longer lists (deactivated, moved)
+  // still shows the id, marked, so the slot reads as stale rather than blank.
+  const personLabel = (id: string): string => {
+    const person = people.find((p) => p.id === id);
+    return person ? `${person.name} (${person.email})` : `${id} — not in this organization`;
+  };
 
   const claim = (field: "technicalOwnerId" | "businessOwnerId" | "supportOwnerId") =>
     onSave({ id: solution.id, [field]: currentUserId });
@@ -338,8 +358,8 @@ function OwnershipEditor({
       ).map(([field, label, value]) => (
         <div key={field} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", fontSize: 13 }}>
           <span style={{ width: 140, color: "var(--ink-secondary)" }}>{label}</span>
-          <span style={{ flex: 1, fontFamily: "var(--font-mono, monospace)", fontSize: 12 }}>
-            {value ?? "— unassigned"}
+          <span style={{ flex: 1, fontSize: 12 }} title={value ?? undefined}>
+            {value ? personLabel(value) : "— unassigned"}
           </span>
           {canAuthor && (
             <button
