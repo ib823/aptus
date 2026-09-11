@@ -20,6 +20,11 @@ import {
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
+import {
+  FAILURE_REASON_INVALID_BODY,
+  failureReasonFromError,
+  failureReasonFromHttp,
+} from "@/lib/northbound/failure-reason";
 
 export type NorthboundReadStatus =
   | "OK"
@@ -36,6 +41,12 @@ export interface NorthboundReadResult {
   /** Safe for a client: never a URL, header, credential or upstream body. */
   detail: string;
   durationMs: number;
+  /**
+   * WHY it failed, as a bounded code for the audit row and the server log —
+   * null on success. Never sent to the client; `detail` is what they see.
+   * See failure-reason.ts for the shape and the reason it exists.
+   */
+  failureReason: string | null;
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -74,11 +85,26 @@ function classify(httpStatus: number, records: Record<string, unknown>[]): {
         }
       : { status: "OK", detail: `${records.length} record${records.length === 1 ? "" : "s"}.` };
   }
-  if (httpStatus === 401 || httpStatus === 403) {
+  /*
+   * 401 AND 403 ARE DIFFERENT PROBLEMS WITH DIFFERENT FIXES. They shared one
+   * sentence, so a wrong communication-user password read exactly like a
+   * missing communication arrangement, and a consultant chasing the wrong one
+   * lost the afternoon. Both stay NEEDS_SETUP — the status vocabulary is about
+   * the capability on the tenant, and neither is a fault in the capability —
+   * but the detail now says which half of the connection to look at.
+   */
+  if (httpStatus === 401) {
     return {
       status: "NEEDS_SETUP",
       detail:
-        "The tenant rejected the request: the communication arrangement is not set up, or this entity is not released to the connected user.",
+        "The tenant rejected the connection's credentials (HTTP 401). The communication user's password or token is wrong or expired — a connection problem, not a missing arrangement.",
+    };
+  }
+  if (httpStatus === 403) {
+    return {
+      status: "NEEDS_SETUP",
+      detail:
+        "The tenant refused this read (HTTP 403): the communication arrangement is not set up, or this entity is not released to the connected user.",
     };
   }
   if (httpStatus === 404) {
@@ -148,10 +174,18 @@ export async function readEntitySet(
         status: "ERROR", httpStatus: res.status, records: [],
         detail: "The tenant returned an invalid OData response.",
         durationMs: Date.now() - started,
+        failureReason: FAILURE_REASON_INVALID_BODY,
       };
     }
     const { status, detail } = classify(res.status, records);
-    return { status, httpStatus: res.status, records, detail, durationMs: Date.now() - started };
+    return {
+      status,
+      httpStatus: res.status,
+      records,
+      detail,
+      durationMs: Date.now() - started,
+      failureReason: failureReasonFromHttp(res.status),
+    };
   } catch (err) {
     const aborted = err instanceof Error && err.name === "AbortError";
     return {
@@ -164,6 +198,9 @@ export async function readEntitySet(
         ? `The tenant did not respond within ${timeoutMs}ms.`
         : "The read could not be completed.",
       durationMs: Date.now() - started,
+      // The cause is NOT thrown away any more — it is reduced to a code that
+      // cannot carry a host, for the audit row and the log. See failure-reason.ts.
+      failureReason: failureReasonFromError(err),
     };
   } finally {
     clearTimeout(timer);

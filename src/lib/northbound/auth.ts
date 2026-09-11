@@ -58,7 +58,26 @@ export type ClientAuthFailure =
   | "UNKNOWN_TOKEN"
   | "INACTIVE"
   | "REVOKED"
-  | "EXPIRED";
+  | "EXPIRED"
+  /**
+   * The credential is fine; the SOLUTION it belongs to has been retired.
+   *
+   * Nothing on the northbound path ever loaded the solution: the token, the
+   * grant and the interface were each checked, and none of them consult the
+   * status of the thing that owns them. So `Solution.status = RETIRED` — the
+   * closest thing the product has to decommissioning — had no effect on the
+   * runtime at all. A retired solution's credentials kept working until an
+   * admin revoked each one by hand, and a duplicate solution retired precisely
+   * so it could not be used again was still callable the moment after.
+   *
+   * RETIRED only, deliberately. RESTRICTED means an ACTIVE solution lost an
+   * owner — a governance flag raised by a personnel change, not a decision to
+   * stop the integration — and refusing it would take a running solution down
+   * because someone left. Gating that is a product decision; this is not.
+   */
+  | "SOLUTION_RETIRED"
+  /** The solution row is gone. An orphaned credential is refused, not served. */
+  | "SOLUTION_MISSING";
 
 export type ClientAuthResult =
   | { ok: true; client: AuthenticatedClient }
@@ -100,6 +119,16 @@ export async function authenticateClientToken(
   if (row.expiresAt !== null && row.expiresAt.getTime() <= now.getTime()) {
     return { ok: false, reason: "EXPIRED" };
   }
+
+  // Checked LAST, after the token's own states: a revoked token on a retired
+  // solution should audit as REVOKED, which is the more specific event. Scoped
+  // by organization as well as id, like every other query on this path.
+  const solution = await prisma.solution.findFirst({
+    where: { id: row.solutionId, organizationId: row.organizationId },
+    select: { status: true },
+  });
+  if (!solution) return { ok: false, reason: "SOLUTION_MISSING" };
+  if (solution.status === "RETIRED") return { ok: false, reason: "SOLUTION_RETIRED" };
 
   return {
     ok: true,

@@ -1,0 +1,15 @@
+-- Northbound audit: record WHY an upstream call failed.
+--
+-- The broker's catch blocks discarded the error object entirely. The client
+-- got "The read could not be completed" (correct — a fetch error commonly
+-- carries the host), the audit row got a bare 502, and the server log got
+-- nothing. The correlation id a caller was told to quote led an operator to a
+-- row that could not say why, and DNS failure, an expired certificate, a
+-- refused connection and a genuine SAP 500 were indistinguishable to the whole
+-- organisation, permanently.
+--
+-- The column holds a bounded code — ENOTFOUND, ECONNREFUSED, CERT_HAS_EXPIRED,
+-- TIMEOUT, HTTP_503 — constrained to /^[A-Z][A-Z0-9_]+$/ where it is derived,
+-- so it can never carry a host or a message. Null on success and on calls that
+-- never reached a connection. Additive; existing rows read as "unrecorded".
+ALTER TABLE "NorthboundAuditEvent" ADD COLUMN "failureReason" TEXT;
