@@ -11,10 +11,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   findUnique: vi.fn(),
   update: vi.fn(),
+  findSolution: vi.fn(),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
-  prisma: { solutionClient: { findUnique: mocks.findUnique, update: mocks.update } },
+  prisma: {
+    solutionClient: { findUnique: mocks.findUnique, update: mocks.update },
+    solution: { findFirst: mocks.findSolution },
+  },
 }));
 
 import {
@@ -42,6 +46,57 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.findUnique.mockResolvedValue(LIVE_ROW);
   mocks.update.mockResolvedValue({});
+  mocks.findSolution.mockResolvedValue({ status: "ACTIVE" });
+});
+
+/*
+ * The solution behind the token.
+ *
+ * Nothing on the northbound path loaded it: token, grant and interface were
+ * each checked and none consulted the status of the thing that owns them, so
+ * retiring a solution — the closest thing the product has to decommissioning —
+ * changed nothing at runtime. A duplicate solution retired precisely so it could
+ * not be used again was callable the moment after.
+ */
+describe("the owning solution", () => {
+  it("refuses a token whose solution is RETIRED", async () => {
+    mocks.findSolution.mockResolvedValue({ status: "RETIRED" });
+    const r = await authenticateClientToken("ce_x", NOW);
+    expect(r).toEqual({ ok: false, reason: "SOLUTION_RETIRED" });
+  });
+
+  it("refuses a token whose solution row is gone — an orphan is not served", async () => {
+    mocks.findSolution.mockResolvedValue(null);
+    const r = await authenticateClientToken("ce_x", NOW);
+    expect(r).toEqual({ ok: false, reason: "SOLUTION_MISSING" });
+  });
+
+  it("looks the solution up scoped to the token's organization, never by id alone", async () => {
+    await authenticateClientToken("ce_x", NOW);
+    expect(mocks.findSolution).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: LIVE_ROW.solutionId, organizationId: LIVE_ROW.organizationId },
+      }),
+    );
+  });
+
+  // RESTRICTED is an ACTIVE solution that lost an owner — a governance flag from
+  // a personnel change, not a decision to stop the integration. Refusing it
+  // would take a running solution down because someone left. That is a product
+  // decision, so it is deliberately NOT gated here; this test pins the scope.
+  it.each(["ACTIVE", "DRAFT", "RESTRICTED"])("still serves a %s solution", async (status) => {
+    mocks.findSolution.mockResolvedValue({ status });
+    const r = await authenticateClientToken("ce_x", NOW);
+    expect(r.ok).toBe(true);
+  });
+
+  it("checks the token's own states first, so a revoked token audits as REVOKED even on a retired solution", async () => {
+    mocks.findUnique.mockResolvedValue({ ...LIVE_ROW, revokedAt: PAST });
+    mocks.findSolution.mockResolvedValue({ status: "RETIRED" });
+    const r = await authenticateClientToken("ce_x", NOW);
+    expect(r).toEqual({ ok: false, reason: "REVOKED" });
+    expect(mocks.findSolution).not.toHaveBeenCalled();
+  });
 });
 
 describe("extractBearer", () => {

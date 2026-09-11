@@ -21,7 +21,7 @@ import type { NextRequest } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { resolveSapConnection } from "@/lib/sap-public/connection-resolver";
+import { connectionRefusalMessage, resolveSapConnection } from "@/lib/sap-public/connection-resolver";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { probeConnection } from "@/lib/studio/connection-health";
@@ -51,13 +51,35 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
   // organization is indistinguishable from one that does not exist.
   const row = await prisma.sapConnection.findFirst({
     where: { id, organizationId },
-    select: { id: true, product: true, key: true, label: true },
+    select: { id: true, product: true, key: true, label: true, environment: true },
   });
   if (!row) return studioError("NOT_FOUND", "Connection not found.");
 
   // Resolve WITH secrets — server-side only, never returned. The resolver is
   // itself org-scoped and never falls back to another tenant's row.
-  const resolved = await resolveSapConnection(organizationId, row.product, row.key);
+  //
+  // A ROW WHOSE SECRETS WILL NOT OPEN IS A REFUSAL, NOT A CRASH. The resolver
+  // throws when the sealed bundle fails to decrypt — a rotated encryption key,
+  // a restored backup, a redeploy with a different SAP_CONNECTION_ENCRYPTION_KEY
+  // — and that throw escaped this handler as an unhandled 500 with a stack
+  // trace, on the one screen an operator would open to diagnose exactly that.
+  // The northbound binding path already catches the same throw and answers
+  // CONNECTION_UNREADABLE with an actionable sentence; this is the same
+  // treatment one caller over. No probe ran, so no health status is written —
+  // "could not even try" must not be recorded as a probe outcome.
+  let resolved;
+  try {
+    resolved = await resolveSapConnection(organizationId, row.product, row.key);
+  } catch (err) {
+    console.warn("[studio] connection secrets could not be opened", {
+      connectionId: row.id,
+      reason: err instanceof Error ? err.name : "unknown",
+    });
+    return studioError(
+      "CONFLICT",
+      connectionRefusalMessage("CONNECTION_UNREADABLE", row.environment ?? ""),
+    );
+  }
   if (!resolved) return studioError("NOT_FOUND", "Connection not found.");
 
   const result = await probeConnection(resolved);
@@ -68,6 +90,22 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
       lastValidationStatus: result.status,
       // Only a real 200 updates the timestamp (see rule 1).
       ...(result.status === "OK" ? { lastValidatedAt: new Date() } : {}),
+    },
+  });
+
+  // THE MANUAL TEST LEAVES A TRACE. Only the cron sweep and the Ops "Probe now"
+  // wrote a SapConnectionProbeEvent; the one probe a human runs while actively
+  // diagnosing a connection was the one that left no history in Operations.
+  // Same row shape as the sweep, with the source the schema already documented
+  // and nothing emitted.
+  await prisma.sapConnectionProbeEvent.create({
+    data: {
+      organizationId,
+      connectionId: row.id,
+      status: result.status,
+      httpStatus: result.httpStatus,
+      durationMs: result.durationMs,
+      source: "test",
     },
   });
 

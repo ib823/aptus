@@ -19,6 +19,11 @@ import {
 } from "@/lib/sap-public/connection-resolver";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
 import { extractCookies } from "@/lib/sap-public/cookies";
+import {
+  FAILURE_REASON_INVALID_BODY,
+  failureReasonFromError,
+  failureReasonFromHttp,
+} from "@/lib/northbound/failure-reason";
 
 export type NorthboundWriteStatus =
   | "CREATED"
@@ -38,6 +43,12 @@ export interface NorthboundWriteResult {
   /** Safe for a client: never a URL, header, credential, or raw upstream body. */
   detail: string;
   durationMs: number;
+  /**
+   * WHY it failed, as a bounded code for the audit row and the server log —
+   * null on success. Never sent to the client. Same shape as the read path, so
+   * the audit column means one thing whichever route wrote it.
+   */
+  failureReason: string | null;
 }
 
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -47,11 +58,20 @@ function classify(httpStatus: number): { status: NorthboundWriteStatus; detail: 
   if (httpStatus === 201 || httpStatus === 200) {
     return { status: "CREATED", detail: "The record was created." };
   }
-  if (httpStatus === 401 || httpStatus === 403) {
+  // 401 and 403 are told apart for the same reason as on the read path: a bad
+  // password and a missing arrangement are fixed in different places.
+  if (httpStatus === 401) {
     return {
       status: "NEEDS_SETUP",
       detail:
-        "The tenant rejected the write: the communication arrangement does not permit it, or the connected user lacks authorisation.",
+        "The tenant rejected the connection's credentials (HTTP 401). The communication user's password or token is wrong or expired — a connection problem, not a missing arrangement.",
+    };
+  }
+  if (httpStatus === 403) {
+    return {
+      status: "NEEDS_SETUP",
+      detail:
+        "The tenant refused the write (HTTP 403): the communication arrangement does not permit it, or the connected user lacks authorisation.",
     };
   }
   if (httpStatus === 404) {
@@ -143,6 +163,8 @@ export async function writeEntitySet(
         location: null,
         detail: csrfToken ? detail : `${detail} (the tenant did not issue a CSRF token)`,
         durationMs: Date.now() - started,
+        // A 200 that withheld the token is its own failure, not an HTTP_200.
+        failureReason: csrfRes.ok && !csrfToken ? "NO_CSRF_TOKEN" : failureReasonFromHttp(csrfRes.status),
       };
     }
 
@@ -183,6 +205,7 @@ export async function writeEntitySet(
         status: "ERROR", httpStatus: res.status, record: null, location: null,
         detail: "The tenant returned an invalid write response. The write may have been applied; retry only with the same Idempotency-Key.",
         durationMs: Date.now() - started,
+        failureReason: FAILURE_REASON_INVALID_BODY,
       };
     }
     return {
@@ -192,6 +215,7 @@ export async function writeEntitySet(
       location: res.headers.get("location"),
       detail,
       durationMs: Date.now() - started,
+      failureReason: failureReasonFromHttp(res.status),
     };
   } catch (err) {
     const aborted = err instanceof Error && err.name === "AbortError";
@@ -200,6 +224,7 @@ export async function writeEntitySet(
       httpStatus: null,
       record: null,
       location: null,
+      failureReason: failureReasonFromError(err),
       // Deliberately generic: the caught error carries the host, and on the OAuth
       // path the request body. Neither belongs in a client response.
       detail: aborted

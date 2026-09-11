@@ -42,6 +42,121 @@ function res(status: number, body: unknown) {
 
 const INPUT = { servicePath: "/sap/opu/odata/sap/API_TEST", entitySet: "A_Thing", limit: 10 };
 
+/*
+ * The failure reason — the cause, reduced to a code that cannot carry a host.
+ *
+ * The catch block used to discard the error entirely, which was right for the
+ * client and wrong for everyone else: the audit row said 502 and nothing more,
+ * and the correlation id a caller was told to quote led nowhere.
+ */
+describe("failure reason", () => {
+  it("is null on success, including an empty result", async () => {
+    const ok = await readEntitySet(
+      { connection: conn(), ...INPUT },
+      vi.fn().mockResolvedValue(res(200, { value: [{ a: 1 }] })) as unknown as typeof fetch,
+    );
+    expect(ok.failureReason).toBeNull();
+    const empty = await readEntitySet(
+      { connection: conn(), ...INPUT },
+      vi.fn().mockResolvedValue(res(200, { value: [] })) as unknown as typeof fetch,
+    );
+    expect(empty.failureReason).toBeNull();
+  });
+
+  it("carries the HTTP status when the tenant answered with one", async () => {
+    for (const status of [401, 403, 404, 500, 503]) {
+      const r = await readEntitySet(
+        { connection: conn(), ...INPUT },
+        vi.fn().mockResolvedValue(res(status, { error: {} })) as unknown as typeof fetch,
+      );
+      expect(r.failureReason, String(status)).toBe(`HTTP_${status}`);
+    }
+  });
+
+  it("carries the error's own code when the request never got an answer", async () => {
+    const err = Object.assign(new TypeError("fetch failed"), { code: "ECONNREFUSED" });
+    const r = await readEntitySet(
+      { connection: conn(), ...INPUT },
+      vi.fn().mockRejectedValue(err) as unknown as typeof fetch,
+    );
+    expect(r.status).toBe("ERROR");
+    expect(r.failureReason).toBe("ECONNREFUSED");
+  });
+
+  it("reads the code off `cause`, which is where Node's fetch puts it", async () => {
+    const err = new TypeError("fetch failed", { cause: { code: "ENOTFOUND" } });
+    const r = await readEntitySet(
+      { connection: conn(), ...INPUT },
+      vi.fn().mockRejectedValue(err) as unknown as typeof fetch,
+    );
+    expect(r.failureReason).toBe("ENOTFOUND");
+  });
+
+  it("reports our own abort as TIMEOUT", async () => {
+    const err = Object.assign(new Error("aborted"), { name: "AbortError" });
+    const r = await readEntitySet(
+      { connection: conn(), ...INPUT },
+      vi.fn().mockRejectedValue(err) as unknown as typeof fetch,
+    );
+    expect(r.status).toBe("TIMEOUT");
+    expect(r.failureReason).toBe("TIMEOUT");
+  });
+
+  it("collapses anything that is not a bare code, so a host can never ride through", async () => {
+    const err = Object.assign(new TypeError("connect to my1234-api.s4hana.cloud.sap failed"), {
+      code: "connect to my1234-api.s4hana.cloud.sap failed",
+    });
+    const r = await readEntitySet(
+      { connection: conn(), ...INPUT },
+      vi.fn().mockRejectedValue(err) as unknown as typeof fetch,
+    );
+    expect(r.failureReason).toBe("FETCH_FAILED");
+    expect(JSON.stringify(r)).not.toContain("s4hana.cloud.sap");
+  });
+
+  it("names a 200 whose body is not OData", async () => {
+    const r = await readEntitySet(
+      { connection: conn(), ...INPUT },
+      vi.fn().mockResolvedValue(res(200, "<html>login</html>")) as unknown as typeof fetch,
+    );
+    expect(r.status).toBe("ERROR");
+    expect(r.failureReason).toBe("INVALID_UPSTREAM_BODY");
+  });
+});
+
+/*
+ * 401 and 403 are different problems with different fixes. They shared one
+ * sentence, so a wrong communication-user password read exactly like a missing
+ * communication arrangement.
+ */
+describe("401 is told apart from 403", () => {
+  it("both remain NEEDS_SETUP — the capability is not at fault either way", async () => {
+    for (const status of [401, 403]) {
+      const r = await readEntitySet(
+        { connection: conn(), ...INPUT },
+        vi.fn().mockResolvedValue(res(status, {})) as unknown as typeof fetch,
+      );
+      expect(r.status, String(status)).toBe("NEEDS_SETUP");
+    }
+  });
+
+  it("401 points at the credentials; 403 points at the arrangement", async () => {
+    const r401 = await readEntitySet(
+      { connection: conn(), ...INPUT },
+      vi.fn().mockResolvedValue(res(401, {})) as unknown as typeof fetch,
+    );
+    const r403 = await readEntitySet(
+      { connection: conn(), ...INPUT },
+      vi.fn().mockResolvedValue(res(403, {})) as unknown as typeof fetch,
+    );
+    expect(r401.detail).not.toBe(r403.detail);
+    expect(r401.detail).toMatch(/credentials|password/i);
+    expect(r401.detail).toMatch(/401/);
+    expect(r403.detail).toMatch(/arrangement/i);
+    expect(r403.detail).toMatch(/403/);
+  });
+});
+
 describe("honest status", () => {
   it("200 with rows → OK", async () => {
     const f = vi.fn().mockResolvedValue(res(200, { value: [{ a: 1 }, { a: 2 }] }));

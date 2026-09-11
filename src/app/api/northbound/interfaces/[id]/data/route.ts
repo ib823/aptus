@@ -221,7 +221,19 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     // Null here on a served read is the honest record of a permitted-but-
     // unverified binding: the connection never declared its landscape.
     connectionEnvironment: connection.environment,
+    failureReason: result.failureReason,
   });
+
+  // The one place the cause and the correlation id meet. The client keeps the
+  // generic sentence; whoever is quoted that id can now find out what happened.
+  if (result.failureReason) {
+    console.warn("[northbound] upstream read failed", {
+      correlationId,
+      failureReason: result.failureReason,
+      httpStatus: result.httpStatus,
+      durationMs,
+    });
+  }
 
   if (status >= 400) {
     const code =

@@ -11,6 +11,8 @@ import type { Metadata } from "next";
 import { InterfacesClient, type StudioInterface } from "@/components/studio/InterfacesClient";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { serviceApiId } from "@/lib/sap-public/hub-content";
+import { getSapProduct, getSapServices } from "@/lib/sap-public/tdd-connector";
 import { canMutateStudio } from "@/lib/studio/rbac";
 
 export const dynamic = "force-dynamic";
@@ -21,28 +23,58 @@ export default async function StudioInterfacesPage() {
   if (!user) return null;
 
   const organizationId = user.organizationId;
-  const rows = organizationId
-    ? await prisma.interface.findMany({
-        where: { organizationId },
-        select: {
-          id: true,
-          name: true,
-          version: true,
-          sapProduct: true,
-          externalId: true,
-          operation: true,
-          entitySet: true,
-          mode: true,
-          status: true,
-          mappingVersion: true,
-          requestSchema: true,
-          responseSchema: true,
-          solutionId: true,
-          solution: { select: { name: true } },
-        },
-        orderBy: [{ updatedAt: "desc" }],
-      })
-    : [];
+  const [rows, writeHolders] = await Promise.all([
+    organizationId
+      ? prisma.interface.findMany({
+          where: { organizationId },
+          select: {
+            id: true,
+            name: true,
+            version: true,
+            sapProduct: true,
+            externalId: true,
+            operation: true,
+            entitySet: true,
+            mode: true,
+            status: true,
+            mappingVersion: true,
+            requestSchema: true,
+            responseSchema: true,
+            solutionId: true,
+            solution: { select: { name: true } },
+          },
+          orderBy: [{ updatedAt: "desc" }],
+        })
+      : Promise.resolve([]),
+    // Which solutions hold a live write credential. A CREATE/UPDATE interface
+    // cannot be activated without one (the route refuses), and the button
+    // should say so before the click, not after. Metadata only — the sealed
+    // secret is never selected.
+    organizationId
+      ? prisma.solutionClient.findMany({
+          where: { organizationId, isActive: true, revokedAt: null, NOT: { secretsCiphertext: null } },
+          select: { solutionId: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const writeCredentialSolutions = new Set(writeHolders.map((c) => c.solutionId));
+
+  /**
+   * The entity set the curated registry names for a service, when it names
+   * one. The interface's externalId is the Hub apiId; a curated service maps
+   * to the same apiId (serviceApiId), and its dashboard operation carries the
+   * entity set the connector already reads. Offered as a placeholder, never
+   * written: the developer still confirms it, because a tenant can expose a
+   * service whose $metadata differs from the registry's expectation.
+   */
+  const suggestEntitySet = (sapProduct: string, externalId: string): string | null => {
+    const product = getSapProduct(sapProduct);
+    if (!product) return null;
+    const service = getSapServices(product).find((svc) => serviceApiId(svc) === externalId);
+    if (!service) return null;
+    const op = product.operations.find((o) => o.serviceKey === service.key);
+    return op?.entitySet ?? null;
+  };
 
   const interfaces: StudioInterface[] = rows.map((r) => ({
     id: r.id,
@@ -59,6 +91,8 @@ export default async function StudioInterfacesPage() {
     hasResponseSchema: r.responseSchema !== null,
     solutionId: r.solutionId,
     solutionName: r.solution.name,
+    suggestedEntitySet: r.entitySet ? null : suggestEntitySet(r.sapProduct, r.externalId),
+    writeCredentialIssued: writeCredentialSolutions.has(r.solutionId),
   }));
 
   return (

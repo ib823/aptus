@@ -34,6 +34,7 @@ import {
   hubApiToService,
   hubAvailabilityQualifier,
   isHubContentType,
+  isProbeStale,
   readStoredProbe,
   resolveHubStatus,
   serviceApiId,
@@ -175,6 +176,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * edition column for S/4 editions, the product-tag filter for SF/Ariba, and
    * an honest "none" for ECC — see hubCatalogueScope.
    */
+  /*
+   * THE TENANT IS RESOLVED BEFORE ANY EARLY RETURN. Both empty-catalogue
+   * branches below used to answer `tenant: null` because the tenant was only
+   * resolved further down — so with a connection selected and passed as
+   * `?tenant=`, the heading read "…on no tenant" directly under a top bar
+   * naming the tenant. The tenant had been chosen; it was merely withheld.
+   * (The anonymous-caller rule — no tenant for a caller we cannot attribute —
+   * is unchanged: `user` still gates it.)
+   */
+  const configuredTenants = getConfiguredSapTenants(product.envPrefix);
+  const defaultTenantKey = configuredTenants[0]?.key;
+  const tenantKey = user ? params.get("tenant") ?? defaultTenantKey : null;
+  const tenant = tenantKey
+    ? (await resolveReadTenant(product.envPrefix, product.key, user?.organizationId ?? null, tenantKey))?.tenant ?? null
+    : null;
+
   const scope = hubCatalogueScope(product);
   if (scope.kind === "none") {
     return NextResponse.json({
@@ -192,7 +209,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         // The catalogue may well be imported — this product deliberately has
         // no published list, which is a different statement than "not loaded".
         catalogueImported: true,
-        tenant: null,
+        tenant: tenant?.label ?? null,
         isAdmin,
       },
     }, { headers: NO_STORE });
@@ -218,15 +235,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           byLob: {},
         },
         catalogueImported: false,
-        tenant: null,
+        tenant: tenant?.label ?? null,
         isAdmin,
       },
     }, { headers: NO_STORE });
   }
 
-  // ── tenant + PERSISTED probe (per-tenant; no cross-tenant leak, no hammering) ──
-  const configuredTenants = getConfiguredSapTenants(product.envPrefix);
-  const defaultTenantKey = configuredTenants[0]?.key;
+  // ── PERSISTED probe (per-tenant; no cross-tenant leak, no hammering) ──
+  // `tenantKey` / `tenant` / `defaultTenantKey` are resolved above the empty
+  // branches now; the rule below is unchanged and still governs them.
 
   /*
    * AN ANONYMOUS CALLER GETS THE PUBLISHED CATALOGUE, NEVER TENANT OBSERVATIONS.
@@ -253,10 +270,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * is what the vocabulary means. A redaction pass would have left the probe
    * still running and one forgotten field away from leaking again.
    */
-  const tenantKey = user ? params.get("tenant") ?? defaultTenantKey : null;
-  const tenant = tenantKey
-    ? (await resolveReadTenant(product.envPrefix, product.key, user?.organizationId ?? null, tenantKey))?.tenant ?? null
-    : null;
   const dataProbe = params.get("dataProbe") === "1"; // opt-in LIVE overlay (freshness + data-confirm)
 
   // Load the persisted probe for the FULL scoped catalogue (rawMetadataJson.
@@ -284,14 +297,28 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
   const outcomes = new Map<string, number>();
   const capabilities = new Map<string, { read: boolean; write: boolean }>();
+  // When each row's stored probe ran (ISO), and which of them are too old to
+  // set a badge. A stale probe is withheld from `outcomes` — the row classifies
+  // NOT_CHECKED — but its date travels with the item so the reader can see
+  // there is a memory and how old it is. See isProbeStale.
+  const probedAt = new Map<string, string>();
+  const staleIds = new Set<string>();
   let lastProbedAt: string | null = null;
   let probed = 0;
+  let stale = 0;
+  const now = new Date();
   for (const r of allRows) {
     const p = tenantKey ? readStoredProbe(r.rawMetadataJson, tenantKey, defaultTenantKey) : null;
     if (!p) continue;
+    if (p.at) probedAt.set(r.externalId, p.at);
     if (typeof p.http === "number") {
-      outcomes.set(r.externalId, p.http);
-      probed++;
+      if (isProbeStale(p.at, now)) {
+        staleIds.add(r.externalId);
+        stale++;
+      } else {
+        outcomes.set(r.externalId, p.http);
+        probed++;
+      }
     }
     if (typeof p.read === "boolean") capabilities.set(r.externalId, { read: p.read, write: p.write === true });
     if (p.at && (!lastProbedAt || p.at > lastProbedAt)) lastProbedAt = p.at;
@@ -420,6 +447,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     dataConfirmed: dataConfirmed.has(r.externalId),
     // Real read/write for the ~60 probed rows (else undefined → "not probed").
     capability: capabilities.get(r.externalId) ?? null,
+    // WHEN the badge's evidence was gathered — a verdict without a date read as
+    // current however old it was. Stale = a memory this response declined to
+    // render as a status (the row is NOT_CHECKED above); a live overlay result
+    // for the same row is fresh and clears the flag.
+    probedAt: probedAt.get(r.externalId) ?? null,
+    probeStale: staleIds.has(r.externalId) && !outcomes.has(r.externalId),
     };
   });
 
@@ -480,7 +513,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       total,
       page,
       limit,
-      counts: { byType, byTypeItems, byTypeDeprecated, aiApis, byStatus, byLob, probeableRuntime, probed, lastProbedAt, dataConfirmed: dataConfirmed.size, dataProbe },
+      counts: { byType, byTypeItems, byTypeDeprecated, aiApis, byStatus, byLob, probeableRuntime, probed, stale, lastProbedAt, dataConfirmed: dataConfirmed.size, dataProbe },
       catalogueImported: true,
       tenant: tenant?.label ?? null,
       tenantKey: tenantKey ?? null,

@@ -4,6 +4,8 @@
  *
  * Each tile headlines the loaded ITEM count. A loaded tile adds "of which N
  * deprecated" when SAP has retired part of that type (2608 WS3 — Hub State).
+ * A tile whose count sits well under SAP's published figure reads PARTIAL with
+ * both numbers — see coverageOf — so five rows never read as coverage.
  * An empty tile shows "N published (2608)" — the figure SAP publishes for the
  * content release in S4_PUBLIC_PUBLISHED_RELEASE, so the scale of what could be
  * imported is release-pinned, never a bare zero.
@@ -18,6 +20,21 @@ import {
 } from "@/lib/sap-public/hub-content";
 import { useAffirmLearn } from "@/components/affirm/learn/context";
 import { glossaryIdForContentType } from "@/constants/sap-glossary";
+
+/**
+ * A LOADED tile whose item count sits this far under SAP's published figure is
+ * PARTIAL, not loaded. Coverage was `count > 0`, so five APIs out of 859 read
+ * "LOADED" and the published figure appeared only on the empty tile — nothing
+ * on screen to compare against. The published counts move ±5 a release, so the
+ * comparison tolerates drift and never demands equality.
+ */
+export const PARTIAL_COVERAGE_BELOW_PCT = 95;
+
+export function coverageOf(count: number, published: number | null): "loaded" | "partial" | "empty" {
+  if (count <= 0) return "empty";
+  if (published != null && published > 0 && count * 100 < published * PARTIAL_COVERAGE_BELOW_PCT) return "partial";
+  return "loaded";
+}
 
 const INDICATIVE_NOTE = `Published volume for SAP content release ${S4_PUBLIC_PUBLISHED_RELEASE} (SAP Business Accelerator Hub, S/4HANA Cloud Public Edition). SAP moves these figures every release — compare within drift, never for equality.`;
 
@@ -72,13 +89,17 @@ export function ContentTypeTiles({
     // renders "0 published". The ALL tile (published null) shows no coverage line.
     const hasPublished = published != null && published > 0;
     const isAll = key === "ALL";
+    // Loaded rows that cover only a fraction of what SAP publishes are said so.
+    const partial = !empty && !naNote && coverageOf(count, published) === "partial";
     // n/a-by-design types show an em dash, never "0" (0 reads as missing/broken).
     const displayCount = naNote ? "—" : count.toLocaleString();
     const title = empty
       ? naNote
         ? `${label}: ${naHelp ?? naNote}`
         : `${label}: not loaded — no rows imported yet. ${hasPublished ? `${published!.toLocaleString()} published by SAP at release ${S4_PUBLIC_PUBLISHED_RELEASE}. ${INDICATIVE_NOTE} ` : ""}Drop a logged-in Hub export in sap-references/hub-content/${key}.json.`
-      : label;
+      : partial
+        ? `${label}: partial — ${count.toLocaleString()} of the ${published!.toLocaleString()} SAP publishes at release ${S4_PUBLIC_PUBLISHED_RELEASE} are imported. ${INDICATIVE_NOTE} Import a fuller Hub export to close the gap.`
+        : label;
     // Explicit accessible name for the per-type tiles — stable and collision
     // free (n/a types say "not applicable", never the sublabel that names other
     // tiles). The ALL tile keeps its default text-content name (starts with the
@@ -89,7 +110,9 @@ export function ContentTypeTiles({
         ? `${label}: not applicable`
         : empty
           ? `${label}: not loaded`
-          : `${label}: ${count.toLocaleString()} loaded${tag ? `, ${tag}` : ""}${deprecated > 0 ? `, ${deprecated.toLocaleString()} deprecated` : ""}`;
+          : partial
+            ? `${label}: ${count.toLocaleString()} of ${published!.toLocaleString()} published, partial${tag ? `, ${tag}` : ""}${deprecated > 0 ? `, ${deprecated.toLocaleString()} deprecated` : ""}`
+            : `${label}: ${count.toLocaleString()} loaded${tag ? `, ${tag}` : ""}${deprecated > 0 ? `, ${deprecated.toLocaleString()} deprecated` : ""}`;
     return (
       <div
         key={key}
@@ -119,6 +142,12 @@ export function ContentTypeTiles({
           {isAll ? null : empty ? (
             <span className="text-[10px] tabular-nums" style={{ color: "var(--ink-muted)" }}>
               {naNote ?? `Not loaded${hasPublished ? ` · ${published!.toLocaleString()} published (${S4_PUBLIC_PUBLISHED_RELEASE})` : ""}`}
+            </span>
+          ) : partial ? (
+            <span className="text-[10px] tabular-nums" style={{ color: "var(--status-awaiting-fg)" }}>
+              partial · {count.toLocaleString()} of {published!.toLocaleString()} published ({S4_PUBLIC_PUBLISHED_RELEASE})
+              {tag ? ` · ${tag}` : ""}
+              {deprecated > 0 ? ` · of which ${deprecated.toLocaleString()} deprecated` : ""}
             </span>
           ) : (
             <span className="text-[10px] uppercase tracking-wide" style={{ color: "var(--ink-muted)" }}>

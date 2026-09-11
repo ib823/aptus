@@ -30,6 +30,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { StudioStatusChip } from "@/components/studio/StudioStatusChip";
+import { formatDate } from "@/lib/format/date";
 import { type HonestStatus } from "@/lib/studio/honest-status";
 
 /** A saved run, as the test-cases API returns it. */
@@ -43,6 +44,27 @@ interface SavedCase {
   lastRunAt: string | null;
 }
 
+/**
+ * Which connection a run of this interface WILL bind to, computed on the
+ * server from the credential and connection rows with the broker's own
+ * selection function — before Run, without a SAP call. The top-bar tenant
+ * picker does not decide this and the console says so.
+ */
+export type BindingPreview =
+  | { kind: "no-credential" }
+  | {
+      kind: "bound";
+      credential: { label: string; environment: string; sapClient: string | null };
+      connection: { label: string; environment: string | null; sapClient: string | null };
+      bindingUnverified: boolean;
+    }
+  | {
+      kind: "refused";
+      credential: { label: string; environment: string; sapClient: string | null };
+      reason: string;
+      message: string;
+    };
+
 export interface TestableInterface {
   id: string;
   name: string;
@@ -51,6 +73,7 @@ export interface TestableInterface {
   entitySet: string | null;
   operation: string;
   solutionName: string;
+  binding: BindingPreview;
 }
 
 interface RunState {
@@ -465,10 +488,16 @@ export function TestConsoleClient({
             {run.phase === "running" ? "Running…" : "Run"}
           </button>
         </div>
+        {/* WHERE THE RUN WILL GO, said before it goes. The binding follows the
+            solution credential's environment, not the top-bar tenant picker;
+            without this line the only way to learn which system a run would
+            reach was to run it and read the "Bound to" that came back. */}
+        {selected && <BindingPreviewLine binding={selected.binding} />}
         <p style={{ ...muted, marginTop: 10 }}>
           Nothing is read until you press Run. The run goes through the broker: the same
           grant check, the same environment binding, the same connection the deployed
           application would reach — and it is recorded in the northbound trail as a dry run.
+          The tenant selected in the top bar applies to Discover, not to this run.
         </p>
       </section>
 
@@ -578,11 +607,28 @@ export function TestConsoleClient({
                 style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: "1px solid var(--border-default)" }}
               >
                 <span style={{ fontSize: 13, fontWeight: 600 }}>{c.name}</span>
-                <span style={muted}>
-                  last: {c.lastOutcome}
-                  {c.httpStatus ? ` · HTTP ${c.httpStatus}` : ""}
-                  {c.lastRunAt ? ` · ${new Date(c.lastRunAt).toLocaleDateString()}` : ""}
-                </span>
+                {/* A PASS WITH NO STATUS IS A PASS NOBODY CAN CHECK. Cases saved
+                    before runs carried the tenant's status — and before the
+                    console went through the broker at all — sit in this list as
+                    "PASS 29 Jul" for services that 403 on every tenant today.
+                    The record is kept (it is history), but it is not rendered
+                    as evidence: it says what it lacks, and Replay is the cure. */}
+                {c.lastOutcome === "PASS" && c.httpStatus === null ? (
+                  <span
+                    style={{ ...muted, color: "var(--status-awaiting-fg)" }}
+                    title="Saved before runs recorded the tenant's HTTP status, so this PASS cannot say what it passed against. Replay to check it against today's tenant through the broker."
+                  >
+                    last: PASS · unevidenced
+                    {c.lastRunAt ? ` · ${formatDate(c.lastRunAt)}` : ""}
+                    {" — recorded before runs carried their status; replay to check"}
+                  </span>
+                ) : (
+                  <span style={muted}>
+                    last: {c.lastOutcome}
+                    {c.httpStatus ? ` · HTTP ${c.httpStatus}` : ""}
+                    {c.lastRunAt ? ` · ${formatDate(c.lastRunAt)}` : ""}
+                  </span>
+                )}
                 {caseResult[c.id] && (
                   <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>now: {caseResult[c.id]}</span>
                 )}
@@ -627,6 +673,36 @@ export function TestConsoleClient({
         )}
       </section>
     </div>
+  );
+}
+
+/** "Runs as <credential> → binds to <connection>", or the refusal the run would get. */
+function BindingPreviewLine({ binding }: { binding: BindingPreview }) {
+  if (binding.kind === "no-credential") {
+    return (
+      <p style={{ ...muted, marginTop: 10, color: "var(--status-awaiting-fg)" }} data-testid="binding-preview">
+        This solution has no live runtime credential, so Run will be refused before it reaches a
+        tenant — the deployed application would be too. Issue one under API Access.
+      </p>
+    );
+  }
+  const cred = `${binding.credential.label} (${binding.credential.environment}${binding.credential.sapClient ? `/${binding.credential.sapClient}` : ""})`;
+  if (binding.kind === "refused") {
+    return (
+      <p style={{ ...muted, marginTop: 10, color: "var(--status-awaiting-fg)" }} data-testid="binding-preview">
+        Runs as <strong>{cred}</strong> — and will be refused at the binding: {binding.message}
+      </p>
+    );
+  }
+  return (
+    <p style={{ ...muted, marginTop: 10 }} data-testid="binding-preview">
+      Runs as <strong>{cred}</strong> → will bind to <strong>{binding.connection.label}</strong>
+      {binding.connection.environment ? ` · ${binding.connection.environment}` : ""}
+      {binding.connection.sapClient ? `/${binding.connection.sapClient}` : ""}
+      {binding.bindingUnverified
+        ? " · binding unverified (the connection has not declared its environment)"
+        : ""}
+    </p>
   );
 }
 

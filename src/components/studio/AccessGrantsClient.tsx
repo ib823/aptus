@@ -21,8 +21,13 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
-import { ENVIRONMENT_ORDER, isWriteOperation, type GrantEnvironment } from "@/lib/studio/grants";
-import { formatDate } from "@/lib/format/date";
+import {
+  ENVIRONMENT_ORDER,
+  isWriteOperation,
+  type GrantDecision,
+  type GrantEnvironment,
+} from "@/lib/studio/grants";
+import { formatDate, formatDateTime } from "@/lib/format/date";
 
 /**
  * An interface a request may be raised against.
@@ -94,6 +99,20 @@ const DECISION_LABEL: Record<string, string> = {
 };
 
 /**
+ * What the reviewer's BUTTONS say. `DECISION_LABEL` above names the state a
+ * grant is in, and is right for the ledger chip; on a button it read as the
+ * outcome rather than the act — "Approved" next to "Rejected" looks like a pair
+ * of statuses to read, not a pair of things to do. A control says what happens
+ * when it is pressed.
+ */
+const DECISION_ACTION: Record<Exclude<GrantDecision, "REQUESTED" | "EXPIRED">, string> = {
+  APPROVED: "Approve",
+  SANDBOX_ONLY: "Approve for sandbox only",
+  READ_ONLY: "Approve read-only",
+  REJECTED: "Reject",
+};
+
+/**
  * What each ledger state MEANS, in the ledger's own vocabulary — passed to the
  * chip so assistive tech never hears a probe fact ("a live probe returned 200")
  * on a governance decision. The chip reuses honest-status TONES; it must not
@@ -116,6 +135,7 @@ export function AccessGrantsClient({
   canDecide,
   canRequest,
   requestableInterfaces,
+  connectedEnvironments,
 }: {
   grants: readonly LedgerGrant[];
   currentUserId: string;
@@ -124,6 +144,13 @@ export function AccessGrantsClient({
   /** Raising a request is a builder action, same gate as deciding one. */
   canRequest: boolean;
   requestableInterfaces: readonly RequestableInterface[];
+  /**
+   * Environments an active SAP connection declares (upper-cased). A grant
+   * can be raised for any environment in the vocabulary, but a call under it
+   * is bound to a connection by that environment — so one nothing declares
+   * is one every call would be refused on. The picker says so.
+   */
+  connectedEnvironments: readonly string[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -163,7 +190,9 @@ export function AccessGrantsClient({
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <ProgressiveTrust highest={highestApproved} />
 
-      {canRequest && <RequestAccess interfaces={requestableInterfaces} />}
+      {canRequest && (
+        <RequestAccess interfaces={requestableInterfaces} connectedEnvironments={connectedEnvironments} />
+      )}
 
       {grants.length === 0 ? (
         <section style={card}>
@@ -234,7 +263,10 @@ export function AccessGrantsClient({
                       <Td>
                         {!pending ? (
                           <span style={{ color: "var(--ink-muted)", fontSize: 12 }}>
-                            {g.decidedAt ? `decided ${formatDate(g.decidedAt)}` : "—"}
+                            {/* With the time and the zone: a decision at 06:33 in Kuala
+                                Lumpur is 22:33 UTC the day before, and a bare date read
+                                as the wrong day to the person who made it. */}
+                            {g.decidedAt ? `decided ${formatDateTime(g.decidedAt)} UTC` : "—"}
                           </span>
                         ) : isOwnRequest ? (
                           <span style={{ color: "var(--ink-muted)", fontSize: 12, maxWidth: 220, display: "block" }}>
@@ -265,8 +297,9 @@ export function AccessGrantsClient({
                                   disabled={busy === g.id}
                                   onClick={() => void decide(g.id, d)}
                                   style={d === "REJECTED" ? btnDanger : btnSmall}
+                                  title={DECISION_MEANING[d]}
                                 >
-                                  {DECISION_LABEL[d]}
+                                  {DECISION_ACTION[d]}
                                 </button>
                               ))}
                             </div>
@@ -380,7 +413,13 @@ function defaultExpiryDate(): string {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
-function RequestAccess({ interfaces }: { interfaces: readonly RequestableInterface[] }) {
+function RequestAccess({
+  interfaces,
+  connectedEnvironments,
+}: {
+  interfaces: readonly RequestableInterface[];
+  connectedEnvironments: readonly string[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [interfaceId, setInterfaceId] = useState("");
@@ -433,7 +472,17 @@ function RequestAccess({ interfaces }: { interfaces: readonly RequestableInterfa
           operation: selected.operation,
           environment,
           justification: justification.trim(),
-          ...(expiresAt ? { expiresAt: new Date(expiresAt).toISOString() } : {}),
+          /*
+           * END OF THE CHOSEN DAY, not its first instant. A date picker yields
+           * "2026-12-10"; `new Date("2026-12-10")` is 00:00 UTC, so a grant the
+           * requester meant to run through the 10th expired eight hours into it
+           * for anyone east of Greenwich — and the ledger, which formats in UTC,
+           * showed a different day from the one they picked. 23:59:59.999Z is
+           * the last instant of that calendar day in every zone at or west of
+           * UTC+0, and covers the whole of it everywhere east; the runway is
+           * "through the day you chose", which is what the picker implied.
+           */
+          ...(expiresAt ? { expiresAt: `${expiresAt}T23:59:59.999Z` } : {}),
         }),
       });
       const json = (await res.json()) as { error?: { message?: string } };
@@ -516,10 +565,17 @@ function RequestAccess({ interfaces }: { interfaces: readonly RequestableInterfa
           >
             {ENVIRONMENT_ORDER.map((env) => (
               <option key={env} value={env}>
-                {env}
+                {connectedEnvironments.includes(env) ? env : `${env} — no connection`}
               </option>
             ))}
           </select>
+          {!connectedEnvironments.includes(environment) && (
+            <span style={muted}>
+              No active SAP connection declares {environment}. A grant here can be
+              approved, but every call under it will be refused until a connection
+              in Studio is set to this environment.
+            </span>
+          )}
         </label>
 
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>

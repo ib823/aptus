@@ -306,6 +306,30 @@ function coerceProbe(v: unknown): StoredProbe | null {
 }
 
 /**
+ * A STORED PROBE IS A MEMORY, NOT A STATUS, once it is old enough.
+ *
+ * Discover rendered a 403 recorded on 29 July as "Needs setup" on 11 September,
+ * while the same service answered 200 to a data read that day. The vocabulary
+ * was honest about WHAT the probe found and silent about WHEN; six weeks on, the
+ * badge was asserting a fact about a tenant that had since been fixed. Past
+ * this age a stored outcome no longer sets a badge — the row reads NOT_CHECKED,
+ * with the old date carried beside it so the reader knows there IS a memory
+ * and can re-probe. The overlay (?dataProbe=1) and Probe-all write fresh
+ * timestamps and are unaffected.
+ *
+ * An UNDATED probe (written before `at` existed) cannot be aged and keeps its
+ * verdict; the UI says the date is unrecorded rather than inventing one.
+ */
+export const PROBE_MAX_AGE_DAYS = 30;
+
+export function isProbeStale(at: string | undefined, now: Date = new Date()): boolean {
+  if (!at) return false;
+  const t = Date.parse(at);
+  if (Number.isNaN(t)) return false;
+  return now.getTime() - t > PROBE_MAX_AGE_DAYS * 86_400_000;
+}
+
+/**
  * Read the persisted probe FOR A SPECIFIC TENANT (or null if that tenant was
  * not probed). Never falls back to another tenant's data. `defaultTenantKey`
  * enables the legacy read: a pre-tenant-scoping singular `probe` is treated as

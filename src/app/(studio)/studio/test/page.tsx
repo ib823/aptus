@@ -10,10 +10,20 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
 import { ScopeNote } from "@/components/studio/ScopeNote";
-import { TestConsoleClient, type TestableInterface } from "@/components/studio/TestConsoleClient";
+import {
+  TestConsoleClient,
+  type BindingPreview,
+  type TestableInterface,
+} from "@/components/studio/TestConsoleClient";
 import { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenants";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import {
+  connectionRefusalMessage,
+  listBindableConnections,
+  selectConnectionForEnvironment,
+} from "@/lib/sap-public/connection-resolver";
+import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { canMutateStudio } from "@/lib/studio/rbac";
 import { pickActiveTenant, resolveStudioTenants } from "@/lib/studio/tenants";
 
@@ -26,7 +36,7 @@ export default async function StudioTestPage() {
 
   const organizationId = user.organizationId;
 
-  const [rows, tenants] = await Promise.all([
+  const [rows, tenants, clientRows] = await Promise.all([
     organizationId
       ? prisma.interface.findMany({
           where: { organizationId },
@@ -37,13 +47,84 @@ export default async function StudioTestPage() {
             sapProduct: true,
             entitySet: true,
             operation: true,
+            solutionId: true,
             solution: { select: { name: true } },
           },
           orderBy: { updatedAt: "desc" },
         })
       : Promise.resolve([]),
     resolveStudioTenants(organizationId),
+    /*
+     * THE BINDING, BEFORE RUN. A run binds by the solution CREDENTIAL's
+     * environment and SAP client — not by the tenant picker in the top bar,
+     * which governs Discover. One session showed the picker on X5M/080 DEV
+     * while the run reported "Bound to Customizing X5M/100 · TEST", and the
+     * only way to learn which system a run would reach was to run it. These
+     * reads are metadata only (no secret is selected, nothing is decrypted,
+     * no SAP call is made) and feed the same selection function the broker
+     * applies, so what the console says before Run is what the run does.
+     */
+    organizationId
+      ? prisma.solutionClient.findMany({
+          where: { organizationId, isActive: true, revokedAt: null },
+          select: { solutionId: true, label: true, environment: true, sapClient: true, expiresAt: true },
+          orderBy: { createdAt: "asc" },
+        })
+      : Promise.resolve([]),
   ]);
+
+  // Connections per product the interfaces name — through the resolver's own
+  // metadata read (no secret is opened), one query per distinct product.
+  const products = Array.from(new Set(rows.map((r) => r.sapProduct)));
+  const connectionsByProduct = new Map(
+    await Promise.all(
+      products.map(
+        async (p) => [p, organizationId ? await listBindableConnections(organizationId, p) : []] as const,
+      ),
+    ),
+  );
+
+  const now = Date.now();
+  const previewBinding = (solutionId: string, sapProduct: string): BindingPreview => {
+    // Same pick as broker-run: the first live, unexpired credential row.
+    const client = clientRows.find(
+      (c) => c.solutionId === solutionId && (c.expiresAt === null || c.expiresAt.getTime() > now),
+    );
+    if (!client) return { kind: "no-credential" };
+    const credential = { label: client.label, environment: client.environment, sapClient: client.sapClient };
+    if (!getSapProduct(sapProduct)) {
+      return {
+        kind: "refused",
+        credential,
+        reason: "UNKNOWN_PRODUCT",
+        message: connectionRefusalMessage("UNKNOWN_PRODUCT", client.environment),
+      };
+    }
+    const selection = selectConnectionForEnvironment(
+      connectionsByProduct.get(sapProduct) ?? [],
+      client.environment,
+      "READ",
+      client.sapClient,
+    );
+    if (!selection.ok) {
+      return {
+        kind: "refused",
+        credential,
+        reason: selection.reason,
+        message: connectionRefusalMessage(selection.reason, client.environment),
+      };
+    }
+    return {
+      kind: "bound",
+      credential,
+      connection: {
+        label: selection.connection.label,
+        environment: selection.connection.environment,
+        sapClient: selection.connection.client,
+      },
+      bindingUnverified: selection.bindingUnverified,
+    };
+  };
 
   // Honour the remembered tenant only if it is one the caller may actually use —
   // the cookie is a view preference, never an authorization input.
@@ -58,6 +139,7 @@ export default async function StudioTestPage() {
     entitySet: r.entitySet,
     operation: r.operation,
     solutionName: r.solution.name,
+    binding: previewBinding(r.solutionId, r.sapProduct),
   }));
 
   return (

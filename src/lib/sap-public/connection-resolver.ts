@@ -219,6 +219,19 @@ export type ConnectionBindingFailure =
   | "NO_MATCH_FOR_ENVIRONMENT"
   /** Several candidates and no way to choose — refuse rather than guess. */
   | "AMBIGUOUS"
+  /**
+   * NOTHING declares the caller's environment, and more than one connection
+   * has not declared its own — so none can be assumed to be it.
+   *
+   * This used to fall through to AMBIGUOUS, and AMBIGUOUS's sentence says "more
+   * than one SAP connection could serve the SANDBOX environment". With one DEV
+   * row and one undeclared row that is false — zero connections declare
+   * SANDBOX — and it sent the developer hunting for a duplicate that did not
+   * exist, with a suggested fix ("declare a distinct environment on each") that
+   * was not the fix. The situation is different, so it gets its own name and
+   * its own sentence: declare the environment on the undeclared rows.
+   */
+  | "NO_DECLARED_CANDIDATE"
   /** A write against a connection that has not declared its landscape. */
   | "UNDECLARED_ENVIRONMENT_WRITE"
   /**
@@ -246,39 +259,67 @@ export type ConnectionBinding =
   | { ok: true; connection: ResolvedSapConnection; bindingUnverified: boolean }
   | { ok: false; reason: ConnectionBindingFailure };
 
-function normalizedEnvironmentOf(conn: ResolvedSapConnection): string | null {
+/** The two fields the binding decides on — so the SELECTION can run on rows that were never decrypted. */
+export interface BindableConnection {
+  environment: string | null;
+  client: string | null;
+}
+
+/** A connection as the binding PREVIEW sees it: identity and the two binding fields, no secret. */
+export interface BindableConnectionSummary extends BindableConnection {
+  key: string;
+  label: string;
+  product: string;
+}
+
+/**
+ * The organization's active connections for a product, METADATA ONLY — the
+ * same rows resolveSapConnections opens, without opening them. For a surface
+ * that needs to say which connection a credential would bind to (the Test
+ * Console, before Run) and has no business holding a decrypted secret to say
+ * it. Same where-clause and order as the decrypting read, so the preview and
+ * the run see the same estate.
+ */
+export async function listBindableConnections(
+  organizationId: string,
+  product: string,
+): Promise<BindableConnectionSummary[]> {
+  if (!organizationId) return [];
+  return prisma.sapConnection.findMany({
+    where: { organizationId, product, isActive: true },
+    select: { key: true, label: true, product: true, environment: true, client: true },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+function normalizedEnvironmentOf(conn: BindableConnection): string | null {
   const raw = conn.environment?.trim();
   return raw ? raw.toUpperCase() : null;
 }
 
-export async function resolveSapConnectionForEnvironment(
-  organizationId: string,
-  product: string,
+export type ConnectionSelection<T extends BindableConnection> =
+  | { ok: true; connection: T; bindingUnverified: boolean }
+  | { ok: false; reason: Exclude<ConnectionBindingFailure, "CONNECTION_UNREADABLE" | "UNKNOWN_PRODUCT"> };
+
+/**
+ * THE DECISION, SEPARATED FROM THE SECRETS. Which connection a credential's
+ * environment + SAP client selects depends on nothing but `environment` and
+ * `client` across the organization's active rows — so it can be answered from
+ * redacted rows, before a run, without opening a single ciphertext. The Test
+ * Console uses that to say "this will bind to X5M/100 · TEST" BEFORE Run: a
+ * session showed the top bar on X5M/080 DEV while the run reported "Bound to
+ * Customizing X5M/100 · TEST", because the picker and the binding never
+ * shared a rule. Now they share this function.
+ *
+ * resolveSapConnectionForEnvironment calls exactly this on the decrypted rows,
+ * so the preview and the run cannot disagree.
+ */
+export function selectConnectionForEnvironment<T extends BindableConnection>(
+  all: readonly T[],
   environment: string,
   operation: "READ" | "WRITE",
-  /**
-   * The SAP client the CALLER'S CREDENTIAL is bound to, or null when it names
-   * none. Optional so the many callers on products without an SAP client stay
-   * unchanged; passing null and omitting it mean the same thing.
-   */
   sapClient?: string | null,
-): Promise<ConnectionBinding> {
-  /*
-   * A ROW THAT CANNOT BE RESOLVED IS A REFUSAL, NOT A CRASH. `resolveSapConnections`
-   * throws on an unrecognised authType or secrets that fail to open — and that
-   * throw used to escape the northbound routes as an unhandled 500 with no
-   * audit row. It is caught HERE and not per-caller so every binding path gets
-   * the same behaviour. Fail-closed on the whole set, deliberately: skipping
-   * just the bad row could bind the call to a DIFFERENT connection than the
-   * estate intended, which is the cross-landscape routing this module exists
-   * to prevent.
-   */
-  let all: ResolvedSapConnection[];
-  try {
-    all = await resolveSapConnections(organizationId, product);
-  } catch {
-    return { ok: false, reason: "CONNECTION_UNREADABLE" };
-  }
+): ConnectionSelection<T> {
   if (all.length === 0) return { ok: false, reason: "NO_CONNECTION" };
 
   const target = environment.trim().toUpperCase();
@@ -336,7 +377,41 @@ export async function resolveSapConnectionForEnvironment(
     }
     return { ok: true, connection: only, bindingUnverified: true };
   }
-  return { ok: false, reason: "AMBIGUOUS" };
+  // Reached only when envMatches is empty and undeclared rows exist beside
+  // others: nothing declares the target, several could be it. Not AMBIGUOUS —
+  // that word claims more than one connection DECLARES the environment.
+  return { ok: false, reason: "NO_DECLARED_CANDIDATE" };
+}
+
+export async function resolveSapConnectionForEnvironment(
+  organizationId: string,
+  product: string,
+  environment: string,
+  operation: "READ" | "WRITE",
+  /**
+   * The SAP client the CALLER'S CREDENTIAL is bound to, or null when it names
+   * none. Optional so the many callers on products without an SAP client stay
+   * unchanged; passing null and omitting it mean the same thing.
+   */
+  sapClient?: string | null,
+): Promise<ConnectionBinding> {
+  /*
+   * A ROW THAT CANNOT BE RESOLVED IS A REFUSAL, NOT A CRASH. `resolveSapConnections`
+   * throws on an unrecognised authType or secrets that fail to open — and that
+   * throw used to escape the northbound routes as an unhandled 500 with no
+   * audit row. It is caught HERE and not per-caller so every binding path gets
+   * the same behaviour. Fail-closed on the whole set, deliberately: skipping
+   * just the bad row could bind the call to a DIFFERENT connection than the
+   * estate intended, which is the cross-landscape routing this module exists
+   * to prevent.
+   */
+  let all: ResolvedSapConnection[];
+  try {
+    all = await resolveSapConnections(organizationId, product);
+  } catch {
+    return { ok: false, reason: "CONNECTION_UNREADABLE" };
+  }
+  return selectConnectionForEnvironment(all, environment, operation, sapClient);
 }
 
 /**
@@ -360,6 +435,8 @@ export function connectionRefusalMessage(
       return `A SAP connection is configured for the ${environment} environment, but none of them addresses the SAP client this credential is bound to. A client is a separate data container inside the same system, so this will not fall back to another one. Add the connection for that client in Studio, or re-issue this credential against a client that exists.`;
     case "AMBIGUOUS":
       return `More than one SAP connection could serve the ${environment} environment, so none was chosen. Declare a distinct environment on each connection in Studio — or, where one system hosts several SAP clients, set the client on each connection and on this credential so the pair identifies exactly one.`;
+    case "NO_DECLARED_CANDIDATE":
+      return `No SAP connection declares the ${environment} environment, and more than one connection has not declared its environment at all — so none can be assumed to be it. Set the environment on each undeclared connection in Studio; this credential will not guess between them.`;
     case "UNDECLARED_ENVIRONMENT_WRITE":
       return "This organization's SAP connection has not declared which environment it is, so a write cannot be authorised against it. Set the environment on the connection in Studio.";
     case "CONNECTION_UNREADABLE":

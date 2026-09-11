@@ -32,6 +32,7 @@ vi.mock("@/lib/sap-public/connection-crypto", () => ({
 import {
   connectionRefusalMessage,
   resolveSapConnectionForEnvironment,
+  selectConnectionForEnvironment,
 } from "@/lib/sap-public/connection-resolver";
 
 /** A stored row as Prisma would return it. `environment: null` = undeclared. */
@@ -115,7 +116,20 @@ describe("ambiguity is refused, never resolved by creation order", () => {
     const binding = await resolveSapConnectionForEnvironment("org_a", "s4hana", "DEV", "READ");
 
     expect(binding.ok).toBe(false);
-    if (!binding.ok) expect(binding.reason).toBe("AMBIGUOUS");
+    // Not AMBIGUOUS: nothing declares DEV, and the one undeclared row cannot be
+    // assumed to be it. AMBIGUOUS is for two rows that both CLAIM the
+    // environment, whose fix is "deactivate one"; the fix here is "declare it".
+    if (!binding.ok) expect(binding.reason).toBe("NO_DECLARED_CANDIDATE");
+  });
+
+  it("tells 'nothing declares it' apart from 'two declare it' in the refusal text", () => {
+    // The old message for this case said "more than one connection could be
+    // it", which sent the operator to deactivate a connection — when no
+    // connection claimed the environment at all, and setting one was the fix.
+    const message = connectionRefusalMessage("NO_DECLARED_CANDIDATE", "DEV");
+    expect(message).toMatch(/No SAP connection declares the DEV environment/);
+    expect(message).toMatch(/Set the environment/);
+    expect(message).not.toMatch(/deactivate/i);
   });
 });
 
@@ -170,6 +184,7 @@ describe("refusal messages are safe", () => {
       "NO_MATCH_FOR_CLIENT",
       "NO_MATCH_FOR_ENVIRONMENT",
       "AMBIGUOUS",
+      "NO_DECLARED_CANDIDATE",
       "UNDECLARED_ENVIRONMENT_WRITE",
     ] as const;
 
@@ -321,5 +336,38 @@ describe("a row that cannot be resolved refuses, never crashes", () => {
     } finally {
       cryptoMocks.openSecretsImpl = () => ({ username: "u", password: "p" });
     }
+  });
+});
+
+describe("selectConnectionForEnvironment — the decision without the secrets", () => {
+  // The Test Console previews the binding BEFORE Run from redacted rows; it
+  // must reach the same answer the decrypting resolver reaches on the same
+  // estate, or the preview is one more surface that says something untrue.
+  const estate = [
+    { key: "dev", label: "Development X5M/080", environment: "DEV", client: "080" },
+    { key: "cust", label: "Customizing X5M/100", environment: "TEST", client: "100" },
+  ];
+
+  it("binds a credential by environment and SAP client, from plain rows", () => {
+    const sel = selectConnectionForEnvironment(estate, "TEST", "READ", "100");
+    expect(sel.ok).toBe(true);
+    if (sel.ok) {
+      expect(sel.connection.key).toBe("cust");
+      expect(sel.bindingUnverified).toBe(false);
+    }
+  });
+
+  it("refuses the same way the resolver does", async () => {
+    expect(selectConnectionForEnvironment(estate, "PROD", "READ", null)).toEqual({ ok: false, reason: "NO_MATCH_FOR_ENVIRONMENT" });
+    expect(selectConnectionForEnvironment(estate, "TEST", "READ", "080")).toEqual({ ok: false, reason: "NO_MATCH_FOR_CLIENT" });
+    expect(selectConnectionForEnvironment([], "TEST", "READ")).toEqual({ ok: false, reason: "NO_CONNECTION" });
+
+    // …and the decrypting path is this function applied to the decrypted rows.
+    mocks.findMany.mockResolvedValue([
+      row({ id: "dev", key: "dev", environment: "DEV", client: "080" }),
+      row({ id: "cust", key: "cust", environment: "TEST", client: "100" }),
+    ]);
+    const binding = await resolveSapConnectionForEnvironment("org_a", "s4hana", "TEST", "READ", "080");
+    expect(binding).toEqual({ ok: false, reason: "NO_MATCH_FOR_CLIENT" });
   });
 });

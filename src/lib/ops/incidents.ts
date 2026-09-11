@@ -124,7 +124,7 @@ export const INCIDENT_RULES = {
     whyThisSeverity:
       "A solution that believes it is integrated is not, and the failure is silent from the client's side beyond a 403 it cannot act on. It is critical rather than major because the broker is REFUSING to serve rather than serving something wrong — which is the safe behaviour, and is exactly why nothing else will ever surface it. Left unwatched, a credential can be live, granted and useless for as long as nobody calls it.",
     remediation:
-      "Declare a connection for that environment in Studio, or point the credential at an environment you have. AMBIGUOUS means two or more active connections claim the same environment for one product: leave exactly one active, because the broker refuses to guess which client system to send a call to.",
+      "Declare a connection for that environment in Studio, or point the credential at an environment you have. AMBIGUOUS means two or more active connections claim the same environment for one product: leave exactly one active, because the broker refuses to guess which client system to send a call to. NO_DECLARED_CANDIDATE means nothing claims that environment and several connections have declared none: set the environment on each undeclared connection.",
   },
   connectionUnhealthy: {
     id: "connection-unhealthy",
@@ -249,6 +249,14 @@ export const BINDING_REFUSAL_COVERAGE = {
   NO_MATCH_FOR_ENVIRONMENT: "counted",
   /** Several could serve it and none could be chosen. */
   AMBIGUOUS: "counted",
+  /**
+   * Nothing declares the caller's environment and several rows have declared
+   * none. Counted: same shape as AMBIGUOUS from the credential's side — live,
+   * granted, and every call refused — with a different fix (declare the
+   * undeclared rows). Split out of AMBIGUOUS because that word's remediation
+   * sent people looking for a duplicate that did not exist.
+   */
+  NO_DECLARED_CANDIDATE: "counted",
   /**
    * The environment is served, but no connection carries the credential's SAP
    * client. Counted for the same reason as the other two: the credential is

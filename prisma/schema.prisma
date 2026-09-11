@@ -1050,8 +1050,9 @@ model NorthboundAuditEvent {
 
   /// Why the broker refused before it reached a connection, or null if it did.
   ///
-  /// NO_CONNECTION | NO_MATCH_FOR_ENVIRONMENT | AMBIGUOUS |
-  /// UNDECLARED_ENVIRONMENT_WRITE
+  /// NO_CONNECTION | NO_MATCH_FOR_ENVIRONMENT | NO_MATCH_FOR_CLIENT | AMBIGUOUS |
+  /// NO_DECLARED_CANDIDATE | UNDECLARED_ENVIRONMENT_WRITE | CONNECTION_UNREADABLE |
+  /// UNKNOWN_PRODUCT — see ConnectionBindingFailure in connection-resolver.ts
   ///
   /// WITHOUT THIS, A BINDING REFUSAL IS INVISIBLE. It audits as HTTP 403 with a
   /// null connection — byte-identical to a grant-gate refusal, which is also 403
@@ -1073,6 +1074,16 @@ model NorthboundAuditEvent {
   /// Nullable because rows written before this column genuinely do not know —
   /// and a zero would read as "instant" rather than "unmeasured".
   durationMs Int?
+
+  /// WHY the upstream call failed, as a bounded code — ENOTFOUND, ECONNREFUSED,
+  /// CERT_HAS_EXPIRED, TIMEOUT, HTTP_503 — or null when it did not fail or was
+  /// never made. Never a host, URL or error message: the value is constrained
+  /// to /^[A-Z][A-Z0-9_]+$/ at the point it is derived (failure-reason.ts).
+  ///
+  /// Before this column a 502 audited as a bare 502. The correlation id a
+  /// caller was told to quote led to a row that could not say why, and every
+  /// class of upstream failure looked the same to the operations console.
+  failureReason String?
 
   /// TRUE when a builder ran this call from the Test Console's broker dry-run —
   /// the SAME pipeline (grant, binding, sapClient, connection, read) exercised

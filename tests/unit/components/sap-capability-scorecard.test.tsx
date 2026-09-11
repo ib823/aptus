@@ -141,3 +141,21 @@ describe("every status bucket is shown", () => {
     expect(screen.getByText("2,019")).toBeTruthy();
   });
 });
+
+describe("StatusBadge — ACTIVATED says which half it proved", () => {
+  it("'metadata only' vs 'read verified' ride on the badge and its accessible name", () => {
+    // Bank showed Activated on two real tenants while every data read returned
+    // 403: $metadata answered 200 and nothing on the badge said that was all.
+    render(
+      <div>
+        <StatusBadge status="ACTIVATED" evidence="metadata only" />
+        <StatusBadge status="ACTIVATED" evidence="read verified" />
+        <StatusBadge status="NEEDS_SETUP" evidence="read verified" />
+      </div>,
+    );
+    expect(screen.getByRole("status", { name: "Activated, metadata only" }).textContent).toContain("metadata only");
+    expect(screen.getByRole("status", { name: "Activated, read verified" }).textContent).toContain("read verified");
+    // The qualifier is ACTIVATED's alone — no other status may borrow it.
+    expect(screen.getByRole("status", { name: "Needs setup" }).textContent).not.toContain("verified");
+  });
+});

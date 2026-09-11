@@ -48,7 +48,11 @@ const WRITE_IFACE: RequestableInterface = {
   operation: "CREATE",
 };
 
-function renderScreen(interfaces: RequestableInterface[], canRequest = true) {
+function renderScreen(
+  interfaces: RequestableInterface[],
+  canRequest = true,
+  connectedEnvironments: readonly string[] = ["SANDBOX", "DEV", "TEST", "PROD"],
+) {
   return render(
     <AccessGrantsClient
       grants={[]}
@@ -57,6 +61,7 @@ function renderScreen(interfaces: RequestableInterface[], canRequest = true) {
       canDecide={true}
       canRequest={canRequest}
       requestableInterfaces={interfaces}
+      connectedEnvironments={connectedEnvironments}
     />,
   );
 }
@@ -132,6 +137,45 @@ describe("the capability is derived from the interface, never typed", () => {
     const body = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
     expect(body.operation).toBe("CREATE");
     expect(body.externalId).toBe(WRITE_IFACE.externalId);
+  });
+
+  it("submits the chosen expiry as the END of that day in UTC, not its first instant", async () => {
+    // A date input yields "2026-12-31"; sent bare, the server parsed it as
+    // midnight UTC, so a grant approved to run "until the 31st" was expired for
+    // the whole of the 31st. The ledger then showed the date the requester chose
+    // next to a status that contradicted it.
+    renderScreen([WRITE_IFACE]);
+    openWith(WRITE_IFACE);
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "The portal raises sales orders on behalf of the customer." },
+    });
+    fireEvent.change(screen.getByLabelText(/Expires/i), { target: { value: "2026-12-31" } });
+    fireEvent.click(screen.getByRole("button", { name: "Raise request" }));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+    expect(body.expiresAt).toBe("2026-12-31T23:59:59.999Z");
+  });
+});
+
+describe("the environment picker says which environments a connection serves", () => {
+  it("marks an environment no active connection declares, and warns when it is chosen", () => {
+    // A grant for PROD can be approved with nothing bound to PROD; every call
+    // under it is then refused with a binding message the requester never saw
+    // coming. The picker carries the fact the resolver will act on.
+    renderScreen([READ_IFACE], true, ["TEST"]);
+    openWith(READ_IFACE);
+
+    const picker = screen.getByRole("combobox", { name: /^Environment/ }) as HTMLSelectElement;
+    const labels = Array.from(picker.options).map((o) => o.textContent);
+    expect(labels).toContain("TEST");
+    expect(labels).toContain("PROD — no connection");
+
+    fireEvent.change(picker, { target: { value: "PROD" } });
+    expect(screen.getByText(/No active SAP connection declares PROD/)).toBeTruthy();
+
+    fireEvent.change(picker, { target: { value: "TEST" } });
+    expect(screen.queryByText(/No active SAP connection declares/)).toBeNull();
   });
 });
 

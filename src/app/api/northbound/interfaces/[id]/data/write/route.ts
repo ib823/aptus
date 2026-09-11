@@ -92,6 +92,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
      * to end.
      */
     bindingRefusal?: string | null,
+    /** Why the upstream call failed, from the write result. See failure-reason.ts. */
+    failureReason?: string | null,
   ) =>
     recordNorthboundCall({
       organizationId: client.organizationId,
@@ -108,6 +110,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       connectionEnvironment: conn?.environment ?? null,
       durationMs: durationMs ?? null,
       bindingRefusal: bindingRefusal ?? null,
+      failureReason: failureReason ?? null,
     });
 
   // 2 — the WRITE credential. A separate secret from the bearer token, so a
@@ -308,6 +311,15 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   // Persist the actual envelope: retries preserve interface metadata and the
   // original error code/body rather than translating a failure into CONFLICT.
   await completeIdempotencyKey(client.scope, reservation.recordId, status, await response.clone().json());
-  await audit(status, iface.id, iface.externalId, connection, durationMs);
+  await audit(status, iface.id, iface.externalId, connection, durationMs, undefined, result.failureReason);
+  // Same as the read route: the cause meets the correlation id here and only here.
+  if (result.failureReason) {
+    console.warn("[northbound] upstream write failed", {
+      correlationId,
+      failureReason: result.failureReason,
+      httpStatus: result.httpStatus,
+      durationMs,
+    });
+  }
   return response;
 }

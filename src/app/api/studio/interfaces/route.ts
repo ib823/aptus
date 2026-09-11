@@ -209,6 +209,7 @@ export async function PATCH(request: NextRequest) {
       mode: true,
       status: true,
       mappingVersion: true,
+      solutionId: true,
     },
   });
   if (!current) return studioError("NOT_FOUND", "Interface not found.");
@@ -240,6 +241,40 @@ export async function PATCH(request: NextRequest) {
       "VALIDATION_ERROR",
       "An interface cannot be activated without an entity set — the broker refuses every call on one. Set the entity set first.",
     );
+  }
+
+  /*
+   *   3. A WRITE interface needs a write credential before it is ACTIVE.
+   *      The whole write path — grant checklist, environment binding,
+   *      writeEnabled, idempotency, the ledger — runs only once the solution
+   *      holds a write key, and nothing in the Console issued one until the
+   *      write-credential route existed. A CREATE or UPDATE interface could be
+   *      defined, requested, approved and marked ACTIVE, and then never called:
+   *      the product let a developer build toward a call that could not
+   *      succeed. The order is now enforced where the developer is standing:
+   *      define → write grant approved → write credential issued → ACTIVE.
+   *      (The credential route already requires the approved write grant, so
+   *      this one check implies the rest.) Checked on PROMOTION only, like the
+   *      entity set: an interface already ACTIVE is not demoted by a later
+   *      credential revocation — the broker refuses that call itself.
+   */
+  if (input.status === "ACTIVE" && current.status !== "ACTIVE" && nextOperation !== "READ") {
+    const writeClient = await prisma.solutionClient.findFirst({
+      where: {
+        organizationId,
+        solutionId: current.solutionId,
+        isActive: true,
+        revokedAt: null,
+        NOT: { secretsCiphertext: null },
+      },
+      select: { id: true },
+    });
+    if (!writeClient) {
+      return studioError(
+        "VALIDATION_ERROR",
+        `A ${nextOperation} interface cannot be activated until its solution holds a write credential — the broker refuses every write without one, so activating now would build toward a call that cannot succeed. Get the write grant approved, issue the write credential under API Access, then activate.`,
+      );
+    }
   }
 
   // Bump the version only when the contract actually moved. A consumer pins a

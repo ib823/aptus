@@ -68,6 +68,20 @@ export interface NorthboundAuditInput {
    * Studio. Recorded, never omitted: it is real traffic on a real tenant.
    */
   dryRun?: boolean;
+  /**
+   * WHY the upstream call failed, as a bounded code — ENOTFOUND, ECONNREFUSED,
+   * CERT_HAS_EXPIRED, TIMEOUT, HTTP_503 — or null when it did not fail, or was
+   * never made. Never the host, the URL or the error text.
+   *
+   * Before this column the cause was discarded at the catch block: a 502 audited
+   * as a bare 502, and the correlation id the caller was told to quote led an
+   * operator to a row that could not say why. DNS failure, an expired
+   * certificate, a refused connection and a genuine SAP 500 were one thing. As
+   * a bounded code the reason is also COUNTABLE — "nine tenants failed TLS this
+   * morning" is a different alert from "nine tenants returned 500", and neither
+   * sentence could be said.
+   */
+  failureReason?: string | null;
 }
 
 export async function recordNorthboundCall(input: NorthboundAuditInput): Promise<void> {
@@ -89,6 +103,7 @@ export async function recordNorthboundCall(input: NorthboundAuditInput): Promise
         connectionId: input.connectionId ?? null,
         connectionEnvironment: input.connectionEnvironment ?? null,
         durationMs: input.durationMs ?? null,
+        failureReason: input.failureReason ?? null,
       },
     });
   } catch (err) {
