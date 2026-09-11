@@ -33,6 +33,7 @@ import { getSapProduct } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
+import { readyEnvironments, writeReadinessByEnvironment, writeReadinessRefusal } from "@/lib/studio/write-readiness";
 
 const bodySchema = z.object({
   solutionId: z.string().min(1),
@@ -210,6 +211,7 @@ export async function PATCH(request: NextRequest) {
       status: true,
       mappingVersion: true,
       solutionId: true,
+      externalId: true,
     },
   });
   if (!current) return studioError("NOT_FOUND", "Interface not found.");
@@ -244,36 +246,54 @@ export async function PATCH(request: NextRequest) {
   }
 
   /*
-   *   3. A WRITE interface needs a write credential before it is ACTIVE.
-   *      The whole write path — grant checklist, environment binding,
-   *      writeEnabled, idempotency, the ledger — runs only once the solution
-   *      holds a write key, and nothing in the Console issued one until the
-   *      write-credential route existed. A CREATE or UPDATE interface could be
-   *      defined, requested, approved and marked ACTIVE, and then never called:
-   *      the product let a developer build toward a call that could not
-   *      succeed. The order is now enforced where the developer is standing:
-   *      define → write grant approved → write credential issued → ACTIVE.
-   *      (The credential route already requires the approved write grant, so
-   *      this one check implies the rest.) Checked on PROMOTION only, like the
-   *      entity set: an interface already ACTIVE is not demoted by a later
-   *      credential revocation — the broker refuses that call itself.
+   *   3. A WRITE interface needs the FULL write chain in SOME environment
+   *      before it is ACTIVE. A write reaches SAP only when, in one
+   *      environment, a live credential carries a write key AND a live
+   *      approved write grant covers this capability (the broker checks both
+   *      at call time). The interim gate checked only "some credential of the
+   *      solution carries a write key", so a DEV write key beside a PROD-only
+   *      grant activated an interface no environment could call — the
+   *      developer built toward a wall with the gate's blessing. The order is
+   *      enforced where the developer is standing, per environment: write
+   *      grant approved for E → write credential issued for E → ACTIVE.
+   *      Checked on PROMOTION only, like the entity set: an interface already
+   *      ACTIVE is not demoted by a later revocation — the broker refuses that
+   *      call itself.
    */
   if (input.status === "ACTIVE" && current.status !== "ACTIVE" && nextOperation !== "READ") {
-    const writeClient = await prisma.solutionClient.findFirst({
-      where: {
-        organizationId,
-        solutionId: current.solutionId,
-        isActive: true,
-        revokedAt: null,
-        NOT: { secretsCiphertext: null },
-      },
-      select: { id: true },
+    const now = new Date();
+    const [liveCredentials, writeKeyHolders, grants] = await Promise.all([
+      prisma.solutionClient.findMany({
+        where: { organizationId, solutionId: current.solutionId, isActive: true, revokedAt: null },
+        select: { environment: true, expiresAt: true },
+      }),
+      // Which of them carry a write key — a filter on the sealed column,
+      // selecting the environment only; the value is never read.
+      prisma.solutionClient.findMany({
+        where: {
+          organizationId,
+          solutionId: current.solutionId,
+          isActive: true,
+          revokedAt: null,
+          NOT: { secretsCiphertext: null },
+        },
+        select: { environment: true },
+      }),
+      prisma.apiAccessGrant.findMany({
+        where: { organizationId, solutionId: current.solutionId, externalId: current.externalId, operation: nextOperation },
+        select: { environment: true, decision: true, expiresAt: true, revokedAt: true },
+      }),
+    ]);
+    const withWriteKey = new Set(writeKeyHolders.map((c) => c.environment));
+    const readiness = writeReadinessByEnvironment({
+      credentials: liveCredentials
+        .filter((c) => c.expiresAt === null || c.expiresAt.getTime() > now.getTime())
+        .map((c) => ({ environment: c.environment, hasWriteKey: withWriteKey.has(c.environment) })),
+      grants,
+      now,
     });
-    if (!writeClient) {
-      return studioError(
-        "VALIDATION_ERROR",
-        `A ${nextOperation} interface cannot be activated until its solution holds a write credential — the broker refuses every write without one, so activating now would build toward a call that cannot succeed. Get the write grant approved, issue the write credential under API Access, then activate.`,
-      );
+    if (readyEnvironments(readiness).length === 0) {
+      return studioError("VALIDATION_ERROR", writeReadinessRefusal(nextOperation, readiness));
     }
   }
 

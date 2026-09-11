@@ -13,7 +13,8 @@ const mocks = vi.hoisted(() => ({
   findFirstInterface: vi.fn(),
   updateInterface: vi.fn(),
   createAudit: vi.fn(),
-  findFirstClient: vi.fn(),
+  findManyClients: vi.fn(),
+  findManyGrants: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: mocks.getCurrentUser }));
@@ -26,7 +27,8 @@ vi.mock("@/lib/db/prisma", () => ({
       create: vi.fn(),
     },
     solution: { findFirst: vi.fn() },
-    solutionClient: { findFirst: mocks.findFirstClient },
+    solutionClient: { findMany: mocks.findManyClients },
+    apiAccessGrant: { findMany: mocks.findManyGrants },
     configAudit: { create: mocks.createAudit },
   },
 }));
@@ -45,7 +47,12 @@ const EXISTING = {
   status: "DRAFT",
   mappingVersion: null,
   solutionId: "sol_1",
+  externalId: "API_BUSINESS_PARTNER",
 };
+
+/** A live TEST credential; whether it carries a write key is decided per query below. */
+const TEST_CREDENTIAL = { environment: "TEST", expiresAt: null };
+const APPROVED_TEST_GRANT = { environment: "TEST", decision: "APPROVED", expiresAt: null, revokedAt: null };
 
 function req(body: unknown) {
   return new Request("http://localhost:3003/api/studio/interfaces", {
@@ -67,8 +74,21 @@ beforeEach(() => {
     Promise.resolve({ id: "if_1", version: 1, mappingVersion: null, ...data }),
   );
   mocks.createAudit.mockResolvedValue({ id: "a1" });
-  mocks.findFirstClient.mockResolvedValue(null);
+  mocks.findManyClients.mockResolvedValue([]);
+  mocks.findManyGrants.mockResolvedValue([]);
 });
+
+/**
+ * The route asks for live credentials twice: all of them, then the subset
+ * carrying a write key (a filter on the sealed column). Answer each by the
+ * shape of its where-clause.
+ */
+function credentials(all: { environment: string; expiresAt: Date | null }[], withWriteKey: string[]) {
+  mocks.findManyClients.mockImplementation(({ where }: { where: Record<string, unknown> }) =>
+    Promise.resolve("NOT" in where ? all.filter((c) => withWriteKey.includes(c.environment)) : all),
+  );
+}
+
 
 describe("ACTIVE has preconditions — the gate is the API, not the greyed button", () => {
   it("refuses to activate without an entity set", async () => {
@@ -80,7 +100,7 @@ describe("ACTIVE has preconditions — the gate is the API, not the greyed butto
     expect(mocks.updateInterface).not.toHaveBeenCalled();
   });
 
-  it("refuses to activate a WRITE interface whose solution holds no write credential", async () => {
+  it("refuses to activate a WRITE interface when no environment holds the full write chain", async () => {
     // A CREATE interface could be defined, requested, approved and marked
     // ACTIVE — then never called, because nothing had issued the write key
     // the broker checks first. The developer built toward a wall.
@@ -88,21 +108,56 @@ describe("ACTIVE has preconditions — the gate is the API, not the greyed butto
     const res = await PATCH(req({ id: "if_1", status: "ACTIVE" }));
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error.message).toMatch(/CREATE interface cannot be activated until its solution holds a write credential/);
-    expect(body.error.message).toMatch(/issue the write credential under API Access/);
+    expect(body.error.message).toMatch(/CREATE interface cannot be activated until some environment holds the full write chain/);
+    expect(body.error.message).toMatch(/No environment has a credential or a write grant yet/);
     expect(mocks.updateInterface).not.toHaveBeenCalled();
-    // The lookup is the solution's live, unrevoked credential WITH a sealed write secret, in this org.
-    expect(mocks.findFirstClient).toHaveBeenCalledWith(
+    // The write-key lookup is a FILTER on the sealed column, selecting the environment only.
+    const writeKeyQuery = mocks.findManyClients.mock.calls.find(
+      (c) => "NOT" in (c[0] as { where: Record<string, unknown> }).where,
+    )?.[0] as { where: Record<string, unknown>; select: Record<string, unknown> };
+    expect(writeKeyQuery.where).toMatchObject({
+      organizationId: "org_a",
+      solutionId: "sol_1",
+      isActive: true,
+      revokedAt: null,
+      NOT: { secretsCiphertext: null },
+    });
+    expect(writeKeyQuery.select).toEqual({ environment: true });
+    // …and the grants are this capability's, for THIS operation.
+    expect(mocks.findManyGrants).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({
-          organizationId: "org_a",
-          solutionId: "sol_1",
-          isActive: true,
-          revokedAt: null,
-          NOT: { secretsCiphertext: null },
-        }),
+        where: expect.objectContaining({ solutionId: "sol_1", externalId: "API_BUSINESS_PARTNER", operation: "CREATE" }),
       }),
     );
+  });
+
+  it("refuses when the write key and the approved grant sit in DIFFERENT environments — and says so per environment", async () => {
+    // The interim gate passed this: "some credential carries a write key".
+    // A DEV write key beside a PROD-only grant activates an interface that no
+    // environment can call.
+    mocks.findFirstInterface.mockResolvedValue({ ...EXISTING, operation: "CREATE", mode: "WRITE" });
+    credentials([{ environment: "DEV", expiresAt: null }, { environment: "PROD", expiresAt: null }], ["DEV"]);
+    mocks.findManyGrants.mockResolvedValue([{ ...APPROVED_TEST_GRANT, environment: "PROD" }]);
+    const res = await PATCH(req({ id: "if_1", status: "ACTIVE" }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.message).toContain("DEV: credential with write key · no write grant requested");
+    expect(body.error.message).toContain("PROD: credential without a write key · write grant approved");
+    expect(body.error.message).not.toMatch(/SANDBOX:|TEST:/); // nothing started there — not listed
+    expect(mocks.updateInterface).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the only approved grant is revoked or expired — the broker's own predicates", async () => {
+    mocks.findFirstInterface.mockResolvedValue({ ...EXISTING, operation: "CREATE", mode: "WRITE" });
+    credentials([TEST_CREDENTIAL], ["TEST"]);
+    mocks.findManyGrants.mockResolvedValue([{ ...APPROVED_TEST_GRANT, expiresAt: new Date("2020-01-01T00:00:00Z") }]);
+    let res = await PATCH(req({ id: "if_1", status: "ACTIVE" }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.message).toContain("TEST: credential with write key · write grant expired");
+
+    mocks.findManyGrants.mockResolvedValue([{ ...APPROVED_TEST_GRANT, revokedAt: new Date() }]);
+    res = await PATCH(req({ id: "if_1", status: "ACTIVE" }));
+    expect((await res.json()).error.message).toContain("write grant revoked");
   });
 
   it("…and the same for an interface being switched to UPDATE in the same edit", async () => {
@@ -111,18 +166,29 @@ describe("ACTIVE has preconditions — the gate is the API, not the greyed butto
     expect(mocks.updateInterface).not.toHaveBeenCalled();
   });
 
-  it("activates a WRITE interface once the write credential exists", async () => {
+  it("activates a WRITE interface once one environment holds credential-with-key AND approved grant", async () => {
     mocks.findFirstInterface.mockResolvedValue({ ...EXISTING, operation: "CREATE", mode: "WRITE" });
-    mocks.findFirstClient.mockResolvedValue({ id: "cl_1" });
+    credentials([TEST_CREDENTIAL], ["TEST"]);
+    mocks.findManyGrants.mockResolvedValue([APPROVED_TEST_GRANT]);
     const res = await PATCH(req({ id: "if_1", status: "ACTIVE" }));
     expect(res.status).toBe(200);
     expect(lastUpdateData().status).toBe("ACTIVE");
   });
 
-  it("never consults the write credential for a READ interface", async () => {
+  it("does not count an EXPIRED credential, even one carrying a write key", async () => {
+    mocks.findFirstInterface.mockResolvedValue({ ...EXISTING, operation: "CREATE", mode: "WRITE" });
+    credentials([{ environment: "TEST", expiresAt: new Date("2020-01-01T00:00:00Z") }], ["TEST"]);
+    mocks.findManyGrants.mockResolvedValue([APPROVED_TEST_GRANT]);
+    const res = await PATCH(req({ id: "if_1", status: "ACTIVE" }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.message).toContain("TEST: no live credential · write grant approved");
+  });
+
+  it("never consults credentials or grants for a READ interface", async () => {
     const res = await PATCH(req({ id: "if_1", status: "ACTIVE" }));
     expect(res.status).toBe(200);
-    expect(mocks.findFirstClient).not.toHaveBeenCalled();
+    expect(mocks.findManyClients).not.toHaveBeenCalled();
+    expect(mocks.findManyGrants).not.toHaveBeenCalled();
   });
 
   it("does not re-check on an interface that is already ACTIVE", async () => {
@@ -130,7 +196,7 @@ describe("ACTIVE has preconditions — the gate is the API, not the greyed butto
     mocks.findFirstInterface.mockResolvedValue({ ...EXISTING, operation: "CREATE", mode: "WRITE", status: "ACTIVE" });
     const res = await PATCH(req({ id: "if_1", status: "ACTIVE", name: "Renamed" }));
     expect(res.status).toBe(200);
-    expect(mocks.findFirstClient).not.toHaveBeenCalled();
+    expect(mocks.findManyClients).not.toHaveBeenCalled();
   });
 });
 

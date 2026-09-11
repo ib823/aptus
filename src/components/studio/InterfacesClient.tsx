@@ -25,6 +25,7 @@ import { useCallback, useState } from "react";
 
 import { ProductLabel } from "@/components/sap/ProductLabel";
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
+import { describeWriteReadiness, readyEnvironments, type WriteReadinessRow } from "@/lib/studio/write-readiness";
 
 export interface StudioInterface {
   id: string;
@@ -42,11 +43,13 @@ export interface StudioInterface {
    */
   suggestedEntitySet?: string | null;
   /**
-   * Whether the owning solution holds a live write credential. Only a WRITE
-   * interface reads it: the route refuses to activate one without it, and the
-   * button says so first. Absent means unknown → treated as not issued.
+   * The write chain per environment — live credential with a write key, and a
+   * live approved write grant for this capability. Only a WRITE interface
+   * carries it: the route refuses to activate one unless some environment is
+   * complete, and the card shows the table first. Absent means unknown →
+   * treated as not ready.
    */
-  writeCredentialIssued?: boolean;
+  writeReadiness?: readonly WriteReadinessRow[];
   mode: string;
   status: "DRAFT" | "ACTIVE" | "DEPRECATED";
   mappingVersion: number | null;
@@ -205,10 +208,22 @@ export function InterfacesClient({
               )}
             </Row>
             {selected.mode === "WRITE" && (
-              <Row label="Write credential">
-                {selected.writeCredentialIssued
-                  ? "issued — the solution can write once this interface is ACTIVE"
-                  : "not issued — the broker refuses every write without one, so this interface cannot be activated yet. Get the write grant approved, then issue the write credential under API Access."}
+              <Row label="Write chain">
+                {/* Per environment, both halves the broker checks at call time.
+                    "Ready" means a write in that environment would pass the
+                    gates; nothing ready means Mark ACTIVE is refused. */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  {(selected.writeReadiness ?? []).map((row) => (
+                    <span key={row.environment} style={{ color: row.ready ? "var(--status-signed-fg)" : "var(--ink-secondary)" }}>
+                      {describeWriteReadiness(row)}
+                    </span>
+                  ))}
+                  <span style={{ ...muted, marginTop: 4 }}>
+                    {readyEnvironments(selected.writeReadiness ?? []).length > 0
+                      ? `Ready in ${readyEnvironments(selected.writeReadiness ?? []).join(", ")} — the solution can write there once this interface is ACTIVE.`
+                      : "No environment is ready — the broker refuses every write that lacks a write key or an approved write grant, so this interface cannot be activated yet. Get the write grant approved for an environment, then issue that environment's write credential under API Access."}
+                  </span>
+                </div>
               </Row>
             )}
             <Row label="Version">v{selected.version}</Row>
@@ -268,13 +283,13 @@ export function InterfacesClient({
                   disabled={
                     busy ||
                     selected.entitySet === null ||
-                    (selected.mode === "WRITE" && !selected.writeCredentialIssued)
+                    (selected.mode === "WRITE" && readyEnvironments(selected.writeReadiness ?? []).length === 0)
                   }
                   title={
                     selected.entitySet === null
                       ? "Set the entity set first — an ACTIVE interface with none would refuse every read."
-                      : selected.mode === "WRITE" && !selected.writeCredentialIssued
-                        ? "Issue the solution's write credential first — a WRITE interface activated without one builds toward a call the broker refuses."
+                      : selected.mode === "WRITE" && readyEnvironments(selected.writeReadiness ?? []).length === 0
+                        ? "No environment holds the full write chain (credential with write key + approved write grant) — a WRITE interface activated now builds toward a call the broker refuses."
                         : undefined
                   }
                   onClick={() => patch({ id: selected.id, status: "ACTIVE" })}

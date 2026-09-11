@@ -14,6 +14,7 @@ import { prisma } from "@/lib/db/prisma";
 import { serviceApiId } from "@/lib/sap-public/hub-content";
 import { getSapProduct, getSapServices } from "@/lib/sap-public/tdd-connector";
 import { canMutateStudio } from "@/lib/studio/rbac";
+import { writeReadinessByEnvironment, type WriteReadinessRow } from "@/lib/studio/write-readiness";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Interfaces" };
@@ -23,7 +24,7 @@ export default async function StudioInterfacesPage() {
   if (!user) return null;
 
   const organizationId = user.organizationId;
-  const [rows, writeHolders] = await Promise.all([
+  const [rows, liveCredentials, writeKeyHolders, writeGrants] = await Promise.all([
     organizationId
       ? prisma.interface.findMany({
           where: { organizationId },
@@ -46,18 +47,41 @@ export default async function StudioInterfacesPage() {
           orderBy: [{ updatedAt: "desc" }],
         })
       : Promise.resolve([]),
-    // Which solutions hold a live write credential. A CREATE/UPDATE interface
-    // cannot be activated without one (the route refuses), and the button
-    // should say so before the click, not after. Metadata only — the sealed
-    // secret is never selected.
+    // The write chain, per solution and environment. A CREATE/UPDATE interface
+    // cannot be activated until some environment holds a live credential WITH
+    // a write key AND a live approved write grant for it (the route refuses),
+    // and the Contract card should show that table before the click, not
+    // after. Metadata only — the sealed secret is filtered on, never selected.
+    organizationId
+      ? prisma.solutionClient.findMany({
+          where: { organizationId, isActive: true, revokedAt: null },
+          select: { solutionId: true, environment: true, expiresAt: true },
+        })
+      : Promise.resolve([]),
     organizationId
       ? prisma.solutionClient.findMany({
           where: { organizationId, isActive: true, revokedAt: null, NOT: { secretsCiphertext: null } },
-          select: { solutionId: true },
+          select: { solutionId: true, environment: true },
+        })
+      : Promise.resolve([]),
+    organizationId
+      ? prisma.apiAccessGrant.findMany({
+          where: { organizationId, operation: { in: ["CREATE", "UPDATE"] } },
+          select: { solutionId: true, externalId: true, operation: true, environment: true, decision: true, expiresAt: true, revokedAt: true },
         })
       : Promise.resolve([]),
   ]);
-  const writeCredentialSolutions = new Set(writeHolders.map((c) => c.solutionId));
+
+  const now = new Date();
+  const writeKeyBySolution = new Set(writeKeyHolders.map((c) => `${c.solutionId}::${c.environment}`));
+  const writeReadinessFor = (solutionId: string, externalId: string, operation: string): WriteReadinessRow[] =>
+    writeReadinessByEnvironment({
+      credentials: liveCredentials
+        .filter((c) => c.solutionId === solutionId && (c.expiresAt === null || c.expiresAt.getTime() > now.getTime()))
+        .map((c) => ({ environment: c.environment, hasWriteKey: writeKeyBySolution.has(`${c.solutionId}::${c.environment}`) })),
+      grants: writeGrants.filter((g) => g.solutionId === solutionId && g.externalId === externalId && g.operation === operation),
+      now,
+    });
 
   /**
    * The entity set the curated registry names for a service, when it names
@@ -92,7 +116,7 @@ export default async function StudioInterfacesPage() {
     solutionId: r.solutionId,
     solutionName: r.solution.name,
     suggestedEntitySet: r.entitySet ? null : suggestEntitySet(r.sapProduct, r.externalId),
-    writeCredentialIssued: writeCredentialSolutions.has(r.solutionId),
+    ...(r.operation === "READ" ? {} : { writeReadiness: writeReadinessFor(r.solutionId, r.externalId, r.operation) }),
   }));
 
   return (
