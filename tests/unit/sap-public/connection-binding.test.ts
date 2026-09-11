@@ -32,6 +32,7 @@ vi.mock("@/lib/sap-public/connection-crypto", () => ({
 import {
   connectionRefusalMessage,
   resolveSapConnectionForEnvironment,
+  selectConnectionForEnvironment,
 } from "@/lib/sap-public/connection-resolver";
 
 /** A stored row as Prisma would return it. `environment: null` = undeclared. */
@@ -335,5 +336,38 @@ describe("a row that cannot be resolved refuses, never crashes", () => {
     } finally {
       cryptoMocks.openSecretsImpl = () => ({ username: "u", password: "p" });
     }
+  });
+});
+
+describe("selectConnectionForEnvironment — the decision without the secrets", () => {
+  // The Test Console previews the binding BEFORE Run from redacted rows; it
+  // must reach the same answer the decrypting resolver reaches on the same
+  // estate, or the preview is one more surface that says something untrue.
+  const estate = [
+    { key: "dev", label: "Development X5M/080", environment: "DEV", client: "080" },
+    { key: "cust", label: "Customizing X5M/100", environment: "TEST", client: "100" },
+  ];
+
+  it("binds a credential by environment and SAP client, from plain rows", () => {
+    const sel = selectConnectionForEnvironment(estate, "TEST", "READ", "100");
+    expect(sel.ok).toBe(true);
+    if (sel.ok) {
+      expect(sel.connection.key).toBe("cust");
+      expect(sel.bindingUnverified).toBe(false);
+    }
+  });
+
+  it("refuses the same way the resolver does", async () => {
+    expect(selectConnectionForEnvironment(estate, "PROD", "READ", null)).toEqual({ ok: false, reason: "NO_MATCH_FOR_ENVIRONMENT" });
+    expect(selectConnectionForEnvironment(estate, "TEST", "READ", "080")).toEqual({ ok: false, reason: "NO_MATCH_FOR_CLIENT" });
+    expect(selectConnectionForEnvironment([], "TEST", "READ")).toEqual({ ok: false, reason: "NO_CONNECTION" });
+
+    // …and the decrypting path is this function applied to the decrypted rows.
+    mocks.findMany.mockResolvedValue([
+      row({ id: "dev", key: "dev", environment: "DEV", client: "080" }),
+      row({ id: "cust", key: "cust", environment: "TEST", client: "100" }),
+    ]);
+    const binding = await resolveSapConnectionForEnvironment("org_a", "s4hana", "TEST", "READ", "080");
+    expect(binding).toEqual({ ok: false, reason: "NO_MATCH_FOR_CLIENT" });
   });
 });

@@ -7,7 +7,9 @@ import {
   hubApiToService,
   hubAvailabilityQualifier,
   httpToRuntimeStatus,
+  isProbeStale,
   isProbeable,
+  PROBE_MAX_AGE_DAYS,
   mergeStoredProbe,
   readStoredProbe,
   isHubContentType,
@@ -321,5 +323,22 @@ describe("hubApiToService", () => {
     expect(hubApiToService({ ...base, contentType: "CDS_VIEW", apiType: "CDS", externalId: "CDS_SALES" })).toBeNull();
     expect(hubApiToService({ ...base, contentType: "API", apiType: "SOAP", externalId: "X_IN" })).toBeNull();
     expect(hubApiToService({ ...base, contentType: "API", apiType: null, externalId: "AccountPlan" })).toBeNull();
+  });
+});
+
+describe("isProbeStale — a verdict has a shelf life", () => {
+  const now = new Date("2026-09-11T00:00:00Z");
+  const daysAgo = (d: number) => new Date(now.getTime() - d * 86_400_000).toISOString();
+
+  it("inside the window is fresh, outside it is stale", () => {
+    expect(isProbeStale(daysAgo(1), now)).toBe(false);
+    expect(isProbeStale(daysAgo(PROBE_MAX_AGE_DAYS), now)).toBe(false);
+    expect(isProbeStale(daysAgo(PROBE_MAX_AGE_DAYS + 1), now)).toBe(true);
+    expect(isProbeStale("2026-07-29T10:00:00Z", now)).toBe(true); // the 29 July probe on 11 September
+  });
+
+  it("an undated or unparseable timestamp cannot be aged — it keeps its verdict", () => {
+    expect(isProbeStale(undefined, now)).toBe(false);
+    expect(isProbeStale("not a date", now)).toBe(false);
   });
 });

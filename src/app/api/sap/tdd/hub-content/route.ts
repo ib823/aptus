@@ -34,6 +34,7 @@ import {
   hubApiToService,
   hubAvailabilityQualifier,
   isHubContentType,
+  isProbeStale,
   readStoredProbe,
   resolveHubStatus,
   serviceApiId,
@@ -296,14 +297,28 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
   const outcomes = new Map<string, number>();
   const capabilities = new Map<string, { read: boolean; write: boolean }>();
+  // When each row's stored probe ran (ISO), and which of them are too old to
+  // set a badge. A stale probe is withheld from `outcomes` — the row classifies
+  // NOT_CHECKED — but its date travels with the item so the reader can see
+  // there is a memory and how old it is. See isProbeStale.
+  const probedAt = new Map<string, string>();
+  const staleIds = new Set<string>();
   let lastProbedAt: string | null = null;
   let probed = 0;
+  let stale = 0;
+  const now = new Date();
   for (const r of allRows) {
     const p = tenantKey ? readStoredProbe(r.rawMetadataJson, tenantKey, defaultTenantKey) : null;
     if (!p) continue;
+    if (p.at) probedAt.set(r.externalId, p.at);
     if (typeof p.http === "number") {
-      outcomes.set(r.externalId, p.http);
-      probed++;
+      if (isProbeStale(p.at, now)) {
+        staleIds.add(r.externalId);
+        stale++;
+      } else {
+        outcomes.set(r.externalId, p.http);
+        probed++;
+      }
     }
     if (typeof p.read === "boolean") capabilities.set(r.externalId, { read: p.read, write: p.write === true });
     if (p.at && (!lastProbedAt || p.at > lastProbedAt)) lastProbedAt = p.at;
@@ -432,6 +447,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     dataConfirmed: dataConfirmed.has(r.externalId),
     // Real read/write for the ~60 probed rows (else undefined → "not probed").
     capability: capabilities.get(r.externalId) ?? null,
+    // WHEN the badge's evidence was gathered — a verdict without a date read as
+    // current however old it was. Stale = a memory this response declined to
+    // render as a status (the row is NOT_CHECKED above); a live overlay result
+    // for the same row is fresh and clears the flag.
+    probedAt: probedAt.get(r.externalId) ?? null,
+    probeStale: staleIds.has(r.externalId) && !outcomes.has(r.externalId),
     };
   });
 
@@ -492,7 +513,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       total,
       page,
       limit,
-      counts: { byType, byTypeItems, byTypeDeprecated, aiApis, byStatus, byLob, probeableRuntime, probed, lastProbedAt, dataConfirmed: dataConfirmed.size, dataProbe },
+      counts: { byType, byTypeItems, byTypeDeprecated, aiApis, byStatus, byLob, probeableRuntime, probed, stale, lastProbedAt, dataConfirmed: dataConfirmed.size, dataProbe },
       catalogueImported: true,
       tenant: tenant?.label ?? null,
       tenantKey: tenantKey ?? null,

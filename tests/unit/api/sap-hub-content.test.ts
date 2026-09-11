@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { HUB_CONTENT_TYPES } from "@/lib/sap-public/hub-content";
+import { HUB_CONTENT_TYPES, PROBE_MAX_AGE_DAYS } from "@/lib/sap-public/hub-content";
 
 const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
@@ -40,9 +40,16 @@ const TENANT = { key: "default", label: "ABeam TDD", baseUrl: "https://x.example
 
 // Status now derives from the PERSISTED probe on rawMetadataJson.probe, read for
 // the whole catalogue (allRows). The live probe only runs as an opt-in overlay.
+//
+// FRESH, BY CONSTRUCTION. A stored probe older than PROBE_MAX_AGE_DAYS no
+// longer sets a badge (isProbeStale), so a fixture pinned to a calendar date
+// would silently turn every ACTIVATED expectation below into NOT_CHECKED the
+// day it aged out. The fixtures are an hour old; the stale case is its own test.
+const FRESH_AT = new Date(Date.now() - 3_600_000).toISOString();
+const STALE_AT = new Date(Date.now() - (PROBE_MAX_AGE_DAYS + 14) * 86_400_000).toISOString();
 const stored = (http: number, read = false, write = false) => ({
   source: "s",
-  probe: { http, at: "2026-02-02T00:00:00Z", read, write },
+  probe: { http, at: FRESH_AT, read, write },
 });
 // Classification set (allRows): drives byStatus + the paged items' status.
 const ALL_ROWS = [
@@ -142,7 +149,7 @@ describe("GET /api/sap/tdd/hub-content", () => {
     expect(Object.keys(body.data.counts.byType).sort()).toEqual([...HUB_CONTENT_TYPES].sort());
     expect(body.data.counts.byType.API).toBe(5);
     expect(body.data.counts.probed).toBe(2); // API_PO + API_OLD carry a stored http
-    expect(body.data.counts.lastProbedAt).toBe("2026-02-02T00:00:00Z");
+    expect(body.data.counts.lastProbedAt).toBe(FRESH_AT);
     expect(body.data.tenant).toBe("ABeam TDD");
   });
 
@@ -210,7 +217,7 @@ describe("GET /api/sap/tdd/hub-content", () => {
 
   it("status is per REQUESTED tenant — one tenant's activation never leaks to another", async () => {
     // API_PO has a probe ONLY for 'customizing'; 'development' was never probed.
-    setStored("API_PO", { source: "s", probes: { customizing: { http: 200, at: "2026-07-11T14:20:51Z", read: true, write: true } } });
+    setStored("API_PO", { source: "s", probes: { customizing: { http: 200, at: FRESH_AT, read: true, write: true } } });
     mocks.getConfiguredSapTenants.mockReturnValue([
       { key: "customizing", label: "Customizing X5M/100", baseUrl: "https://c.example" },
       { key: "development", label: "Development X5M/080", baseUrl: "https://d.example" },
@@ -233,9 +240,49 @@ describe("GET /api/sap/tdd/hub-content", () => {
 
   it("legacy singular probe still resolves for the DEFAULT tenant (data preserved)", async () => {
     // A row migrated implicitly: legacy `probe`, no `probes` map. Default tenant sees it.
-    setStored("API_PO", { source: "s", probe: { http: 200, at: "2026-07-11T14:20:51Z", read: true, write: true } });
+    setStored("API_PO", { source: "s", probe: { http: 200, at: FRESH_AT, read: true, write: true } });
     // default tenant = getConfiguredSapTenants[0] = "default" (from beforeEach)
     const po = (await (await GET(makeRequest())).json()).data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
     expect(po.status).toBe("ACTIVATED");
+  });
+});
+
+describe("a stored probe ages out — a memory, not a status", () => {
+  it("older than PROBE_MAX_AGE_DAYS: the row is NOT_CHECKED, the date travels, and the count says so", async () => {
+    // Discover showed a 403 recorded on 29 July as "Needs setup" on 11
+    // September, while the same service answered 200 to a data read that day.
+    setStored("API_PO", { source: "s", probe: { http: 403, at: STALE_AT, read: false, write: false } });
+    const res = await GET(makeRequest());
+    const body = await res.json();
+    const po = body.data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
+    expect(po.status).toBe("NOT_CHECKED");
+    expect(po.probeStale).toBe(true);
+    expect(po.probedAt).toBe(STALE_AT);
+    expect(body.data.counts.byStatus.NEEDS_SETUP).toBe(0);
+    expect(body.data.counts.stale).toBe(1);
+    // The header's "last probed" is the newest across the catalogue — API_OLD's
+    // fresh probe here — and is unaffected by one row's memory ageing out.
+    expect(body.data.counts.lastProbedAt).toBe(FRESH_AT);
+  });
+
+  it("a fresh probe carries its date and is not stale", async () => {
+    setStored("API_PO", stored(200, true, true));
+    const res = await GET(makeRequest());
+    const body = await res.json();
+    const po = body.data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
+    expect(po.status).toBe("ACTIVATED");
+    expect(po.probeStale).toBe(false);
+    expect(po.probedAt).toBe(FRESH_AT);
+    expect(body.data.counts.stale).toBe(0);
+  });
+
+  it("an UNDATED probe cannot be aged and keeps its verdict", async () => {
+    setStored("API_PO", { source: "s", probe: { http: 200 } });
+    const res = await GET(makeRequest());
+    const body = await res.json();
+    const po = body.data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
+    expect(po.status).toBe("ACTIVATED");
+    expect(po.probeStale).toBe(false);
+    expect(po.probedAt).toBeNull();
   });
 });

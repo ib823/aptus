@@ -95,7 +95,13 @@ describe("the switcher states where it applies", () => {
     // A control that appears to govern seven pages while governing two is a lie
     // told by omission, even when every page behind it is individually correct.
     const src = read(TOPBAR);
-    expect(src).toContain("Discover and Test Console");
+    // …and a control that SAYS it governs the Test Console while a run binds by
+    // the credential's environment is the same lie the other way: one session
+    // showed the picker on X5M/080 DEV while the run reported "Bound to
+    // Customizing X5M/100 · TEST". The note names Discover alone and says why.
+    expect(src).toMatch(/Applies to\s+Discover\./);
+    expect(src).toMatch(/Test Console does not follow it/);
+    expect(src).not.toContain("Discover and Test Console");
     expect(src).toMatch(/scoped to your organization/);
   });
 });

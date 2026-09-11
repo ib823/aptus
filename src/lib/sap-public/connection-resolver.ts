@@ -259,39 +259,67 @@ export type ConnectionBinding =
   | { ok: true; connection: ResolvedSapConnection; bindingUnverified: boolean }
   | { ok: false; reason: ConnectionBindingFailure };
 
-function normalizedEnvironmentOf(conn: ResolvedSapConnection): string | null {
+/** The two fields the binding decides on — so the SELECTION can run on rows that were never decrypted. */
+export interface BindableConnection {
+  environment: string | null;
+  client: string | null;
+}
+
+/** A connection as the binding PREVIEW sees it: identity and the two binding fields, no secret. */
+export interface BindableConnectionSummary extends BindableConnection {
+  key: string;
+  label: string;
+  product: string;
+}
+
+/**
+ * The organization's active connections for a product, METADATA ONLY — the
+ * same rows resolveSapConnections opens, without opening them. For a surface
+ * that needs to say which connection a credential would bind to (the Test
+ * Console, before Run) and has no business holding a decrypted secret to say
+ * it. Same where-clause and order as the decrypting read, so the preview and
+ * the run see the same estate.
+ */
+export async function listBindableConnections(
+  organizationId: string,
+  product: string,
+): Promise<BindableConnectionSummary[]> {
+  if (!organizationId) return [];
+  return prisma.sapConnection.findMany({
+    where: { organizationId, product, isActive: true },
+    select: { key: true, label: true, product: true, environment: true, client: true },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+function normalizedEnvironmentOf(conn: BindableConnection): string | null {
   const raw = conn.environment?.trim();
   return raw ? raw.toUpperCase() : null;
 }
 
-export async function resolveSapConnectionForEnvironment(
-  organizationId: string,
-  product: string,
+export type ConnectionSelection<T extends BindableConnection> =
+  | { ok: true; connection: T; bindingUnverified: boolean }
+  | { ok: false; reason: Exclude<ConnectionBindingFailure, "CONNECTION_UNREADABLE" | "UNKNOWN_PRODUCT"> };
+
+/**
+ * THE DECISION, SEPARATED FROM THE SECRETS. Which connection a credential's
+ * environment + SAP client selects depends on nothing but `environment` and
+ * `client` across the organization's active rows — so it can be answered from
+ * redacted rows, before a run, without opening a single ciphertext. The Test
+ * Console uses that to say "this will bind to X5M/100 · TEST" BEFORE Run: a
+ * session showed the top bar on X5M/080 DEV while the run reported "Bound to
+ * Customizing X5M/100 · TEST", because the picker and the binding never
+ * shared a rule. Now they share this function.
+ *
+ * resolveSapConnectionForEnvironment calls exactly this on the decrypted rows,
+ * so the preview and the run cannot disagree.
+ */
+export function selectConnectionForEnvironment<T extends BindableConnection>(
+  all: readonly T[],
   environment: string,
   operation: "READ" | "WRITE",
-  /**
-   * The SAP client the CALLER'S CREDENTIAL is bound to, or null when it names
-   * none. Optional so the many callers on products without an SAP client stay
-   * unchanged; passing null and omitting it mean the same thing.
-   */
   sapClient?: string | null,
-): Promise<ConnectionBinding> {
-  /*
-   * A ROW THAT CANNOT BE RESOLVED IS A REFUSAL, NOT A CRASH. `resolveSapConnections`
-   * throws on an unrecognised authType or secrets that fail to open — and that
-   * throw used to escape the northbound routes as an unhandled 500 with no
-   * audit row. It is caught HERE and not per-caller so every binding path gets
-   * the same behaviour. Fail-closed on the whole set, deliberately: skipping
-   * just the bad row could bind the call to a DIFFERENT connection than the
-   * estate intended, which is the cross-landscape routing this module exists
-   * to prevent.
-   */
-  let all: ResolvedSapConnection[];
-  try {
-    all = await resolveSapConnections(organizationId, product);
-  } catch {
-    return { ok: false, reason: "CONNECTION_UNREADABLE" };
-  }
+): ConnectionSelection<T> {
   if (all.length === 0) return { ok: false, reason: "NO_CONNECTION" };
 
   const target = environment.trim().toUpperCase();
@@ -353,6 +381,37 @@ export async function resolveSapConnectionForEnvironment(
   // others: nothing declares the target, several could be it. Not AMBIGUOUS —
   // that word claims more than one connection DECLARES the environment.
   return { ok: false, reason: "NO_DECLARED_CANDIDATE" };
+}
+
+export async function resolveSapConnectionForEnvironment(
+  organizationId: string,
+  product: string,
+  environment: string,
+  operation: "READ" | "WRITE",
+  /**
+   * The SAP client the CALLER'S CREDENTIAL is bound to, or null when it names
+   * none. Optional so the many callers on products without an SAP client stay
+   * unchanged; passing null and omitting it mean the same thing.
+   */
+  sapClient?: string | null,
+): Promise<ConnectionBinding> {
+  /*
+   * A ROW THAT CANNOT BE RESOLVED IS A REFUSAL, NOT A CRASH. `resolveSapConnections`
+   * throws on an unrecognised authType or secrets that fail to open — and that
+   * throw used to escape the northbound routes as an unhandled 500 with no
+   * audit row. It is caught HERE and not per-caller so every binding path gets
+   * the same behaviour. Fail-closed on the whole set, deliberately: skipping
+   * just the bad row could bind the call to a DIFFERENT connection than the
+   * estate intended, which is the cross-landscape routing this module exists
+   * to prevent.
+   */
+  let all: ResolvedSapConnection[];
+  try {
+    all = await resolveSapConnections(organizationId, product);
+  } catch {
+    return { ok: false, reason: "CONNECTION_UNREADABLE" };
+  }
+  return selectConnectionForEnvironment(all, environment, operation, sapClient);
 }
 
 /**

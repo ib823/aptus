@@ -13,10 +13,12 @@ import { AlertTriangle, RefreshCw, Search } from "lucide-react";
 import {
   HUB_CONTENT_TYPE_META,
   HUB_STATUSES,
+  PROBE_MAX_AGE_DAYS,
   deprecationTooltip,
   type HubContentType,
   type HubStatus,
 } from "@/lib/sap-public/hub-content";
+import { formatDate } from "@/lib/format/date";
 import { PRODUCT_MARKS } from "@/lib/studio/product-marks";
 import { HARVEST_TYPES } from "@/lib/sap-public/hub-harvest-types";
 import { useAffirmLearn } from "@/components/affirm/learn/context";
@@ -52,6 +54,10 @@ interface HubItem {
   dataConfirmed?: boolean;
   /** Real read/write for the ~60 probed rows (else null → "not probed"). */
   capability?: { read: boolean; write: boolean } | null;
+  /** When the stored probe behind this row ran (ISO); null = never or undated. */
+  probedAt?: string | null;
+  /** The stored probe is too old to set a badge — the row is NOT_CHECKED with a memory. */
+  probeStale?: boolean;
 }
 interface HubData {
   note?: string;
@@ -554,8 +560,9 @@ export function SapCapabilityCatalogue({
               <span className="font-semibold uppercase tracking-wide" style={{ color: "var(--ink-secondary)" }}>Coverage</span>
               <span style={{ color: "var(--ink-muted)" }}>tiles —</span>
               <LegendSwatch filled label="Loaded" />
+              <LegendSwatch label="Partial" />
               <LegendSwatch label="Not loaded" />
-              <span style={{ color: "var(--ink-muted)" }}>have we imported SAP&apos;s published list for a type</span>
+              <span style={{ color: "var(--ink-muted)" }}>how much of SAP&apos;s published list for a type is imported</span>
             </div>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
               <span className="font-semibold uppercase tracking-wide" style={{ color: "var(--ink-secondary)" }}>Tenant status</span>
@@ -569,7 +576,9 @@ export function SapCapabilityCatalogue({
               <span style={{ color: "var(--ink-muted)" }}>whether an item is live on this tenant</span>
             </div>
             <p style={{ color: "var(--ink-muted)" }}>
-              Tiles never make a tenant claim; badges never claim coverage. A badge asserts only what a probe established.
+              Tiles count the catalogue imported for the selected tenant&apos;s <em>product</em> — they change
+              when the product changes, never with what a tenant has activated. Badges never claim coverage;
+              a badge asserts only what a probe established, and says when.
             </p>
           </div>
           <div data-tour="sap-tiles">
@@ -869,8 +878,35 @@ export function SapCapabilityCatalogue({
                                 status={effStatus}
                                 subscribe={item.availabilityNote === "subscribe"}
                                 tip={effStatus === "DEPRECATED" ? deprecationTooltip(item.successorExternalId) : undefined}
+                                // "Activated" meant "$metadata answered 200" and read as
+                                // "this works". Only a confirmed 1-row read earns the
+                                // stronger word; everything else is metadata only.
+                                evidence={
+                                  effStatus === "ACTIVATED"
+                                    ? item.dataConfirmed
+                                      ? "read verified"
+                                      : "metadata only"
+                                    : undefined
+                                }
                               />
                             </button>
+                            {/* WHEN the badge's evidence was gathered. A verdict with no
+                                date read as current however old it was; a stale one is
+                                no longer rendered as a verdict (see isProbeStale), and
+                                this is how the reader learns there is a memory to renew. */}
+                            {item.probedAt && !probedStatus[item.id] && (
+                              <span
+                                className="whitespace-nowrap text-[11px] tabular-nums"
+                                style={{ color: item.probeStale ? "var(--status-awaiting-fg)" : "var(--ink-muted)" }}
+                                title={
+                                  item.probeStale
+                                    ? `Last probed ${formatDate(item.probedAt)} — older than ${PROBE_MAX_AGE_DAYS} days, so it no longer sets a status. Re-probe to renew it.`
+                                    : `Probed ${formatDate(item.probedAt)}`
+                                }
+                              >
+                                {item.probeStale ? `stale · probed ${formatDate(item.probedAt)}` : `probed ${formatDate(item.probedAt)}`}
+                              </span>
+                            )}
                           </div>
                         </div>
                         {expanded && (

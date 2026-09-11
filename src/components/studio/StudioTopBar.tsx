@@ -277,8 +277,10 @@ export function StudioTopBar({
                 }}
               >
                 Resolved from your access — never typed into a URL. Applies to
-                Discover and Test Console; Solutions, Interfaces and API Access
-                are scoped to your organization, not to one tenant.
+                Discover. The Test Console does not follow it: a run binds to the
+                connection the solution credential&apos;s environment selects, and
+                says which before Run. Solutions, Interfaces and API Access are
+                scoped to your organization, not to one tenant.
               </div>
             </div>
           )}

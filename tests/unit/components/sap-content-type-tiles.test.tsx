@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { ContentTypeTiles } from "@/components/sap/capability/ContentTypeTiles";
+import { ContentTypeTiles, coverageOf } from "@/components/sap/capability/ContentTypeTiles";
 import { S4_PUBLIC_PUBLISHED_COUNTS, S4_PUBLIC_PUBLISHED_RELEASE } from "@/lib/sap-public/hub-content";
 
 // Tiles speak COVERAGE (Loaded / Not loaded), never tenant status.
@@ -90,5 +90,36 @@ describe("ContentTypeTiles — 'of which N deprecated' (2608 WS3)", () => {
     render(<ContentTypeTiles byType={{ EVENT: 0 }} byTypeDeprecated={{ EVENT: 8 }} />);
     const tile = screen.getByRole("tab", { name: /Events/i });
     expect(tile.textContent).not.toMatch(/deprecated/i);
+  });
+});
+
+describe("ContentTypeTiles — PARTIAL is a third state, not 'loaded'", () => {
+  it("five APIs out of 859 published read as partial, with both numbers", () => {
+    // Coverage was `count > 0`, so five rows read "LOADED" and the published
+    // figure appeared only on the empty tile — nothing on screen to compare.
+    render(<ContentTypeTiles byType={{ API: 5 }} byTypeItems={{ API: 5 }} />);
+    const tile = screen.getByRole("tab", { name: /APIs: 5 of 859 published, partial, runtime/i });
+    expect(tile.textContent).toMatch(/partial · 5 of 859 published \(2608\)/);
+    expect(tile.textContent).not.toMatch(/^.*\bloaded\b/i);
+    // Partial tiles are still selectable — there ARE rows to filter to.
+    expect((tile as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("within drift of the published figure is loaded, not partial", () => {
+    // SAP moves the figures ±5 a release; 850 of 859 is coverage, not a gap.
+    render(<ContentTypeTiles byType={{ API: 850 }} byTypeItems={{ API: 850 }} />);
+    const tile = screen.getByRole("tab", { name: /APIs/i });
+    expect(tile.textContent).not.toMatch(/partial/i);
+    expect(tile.getAttribute("aria-label")).toBe("APIs: 850 loaded, runtime");
+  });
+
+  it("coverageOf draws the line at the drift tolerance and never at equality", () => {
+    expect(coverageOf(0, 859)).toBe("empty");
+    expect(coverageOf(5, 859)).toBe("partial");
+    expect(coverageOf(816, 859)).toBe("partial"); // just under 95%
+    expect(coverageOf(817, 859)).toBe("loaded"); // 95%
+    expect(coverageOf(943, 859)).toBe("loaded"); // more than published: still loaded
+    expect(coverageOf(12, null)).toBe("loaded"); // nothing to compare against
+    expect(coverageOf(12, 0)).toBe("loaded"); // a measured zero is not a target
   });
 });
