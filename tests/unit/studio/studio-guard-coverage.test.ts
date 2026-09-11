@@ -69,6 +69,16 @@ const SECRET_REFERENCE_ALLOWANCES: ReadonlyArray<{ file: string; symbol: string;
     symbol: "secretsCiphertext",
     why: "Counts how many credentials HAVE a write secret, via `{ secretsCiphertext: { not: null } }`. A filter, never a select — the value is not read.",
   },
+  {
+    file: "src/app/api/studio/interfaces/route.ts",
+    symbol: "secretsCiphertext",
+    why: "Refuses to activate a WRITE interface whose solution holds no write credential, via `NOT: { secretsCiphertext: null }` on a live, unrevoked row. A filter that selects only the row id — the value is not read.",
+  },
+  {
+    file: "src/app/(studio)/studio/interfaces/page.tsx",
+    symbol: "secretsCiphertext",
+    why: "Lists which solutions hold a write credential so Mark ACTIVE can say why it is disabled, via the same `NOT: { secretsCiphertext: null }` filter, selecting solutionId only.",
+  },
 ];
 
 /**
