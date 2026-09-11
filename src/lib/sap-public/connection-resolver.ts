@@ -41,7 +41,20 @@ export type SapAuthType =
    * it, every SuccessFactors connection this product can express stops working
    * on that date.
    */
-  | "oauth-saml-bearer";
+  | "oauth-saml-bearer"
+  /**
+   * A static API key sent in its OWN header (AD-12) — `apikey` by default.
+   *
+   * The other four all produce `Authorization:`. SAP's Business Accelerator
+   * Hub sandbox requires `apikey` and ignores `Authorization` entirely, so
+   * the obvious first experiment against SAP failed after a real host had
+   * been typed into the form. Verified: `Authorization: Bearer dummy` to the
+   * sandbox answers "Failed to resolve API Key variable request.header.apikey".
+   */
+  | "api-key";
+
+/** The default header name for `api-key` — what SAP's sandbox reads. */
+export const DEFAULT_API_KEY_HEADER = "apikey";
 
 /** A fully-resolved connection with decrypted secrets — server-side only. */
 export interface ResolvedSapConnection {
@@ -109,12 +122,13 @@ function coerceAuthType(raw: string): SapAuthType {
     raw === "basic" ||
     raw === "bearer" ||
     raw === "oauth-client-credentials" ||
-    raw === "oauth-saml-bearer"
+    raw === "oauth-saml-bearer" ||
+    raw === "api-key"
   ) {
     return raw;
   }
   throw new Error(
-    `SapConnection.authType must be basic | bearer | oauth-client-credentials | oauth-saml-bearer (got "${raw}")`,
+    `SapConnection.authType must be basic | bearer | oauth-client-credentials | oauth-saml-bearer | api-key (got "${raw}")`,
   );
 }
 
@@ -474,16 +488,44 @@ export function toSapTenant(conn: ResolvedSapConnection): SapTenant {
      * secrets, lazily, only when a request is built.
      */
     authorization: () => buildAuthHeaderFromConnection(conn),
+    // The header PAIR — the form every request should spread, because an
+    // api-key connection has no Authorization value to give (AD-12).
+    authHeaders: () => buildAuthHeadersFromConnection(conn),
   };
 }
 
 /**
+ * THE REQUEST HEADERS a connection authenticates with — as a record, because
+ * the header is not always `Authorization`. Four types answer
+ * `{ Authorization: … }`; `api-key` answers `{ [apiKeyHeader]: apiKey }`.
+ * Every request path that reaches a stored connection spreads this; the
+ * string-returning builder below stays for the four types that have one.
+ */
+export async function buildAuthHeadersFromConnection(
+  conn: ResolvedSapConnection,
+): Promise<Record<string, string>> {
+  if (conn.authType === "api-key") {
+    const s = conn.secrets;
+    if (!s.apiKey) throw new Error(`Connection ${conn.key} is api-key auth but missing apiKey`);
+    return { [s.apiKeyHeader?.trim() || DEFAULT_API_KEY_HEADER]: s.apiKey };
+  }
+  return { Authorization: await buildAuthHeaderFromConnection(conn) };
+}
+
+/**
  * Build the Authorization header from a resolved connection — the DB-backed
- * sibling of the connector's env-based buildAuthHeader(prefix). Same three
- * shapes: basic, static bearer, oauth client-credentials.
+ * sibling of the connector's env-based buildAuthHeader(prefix). Same shapes:
+ * basic, static bearer, oauth client-credentials, SAML bearer. An `api-key`
+ * connection has NO Authorization value and throws here by design — its
+ * header comes from buildAuthHeadersFromConnection.
  */
 export async function buildAuthHeaderFromConnection(conn: ResolvedSapConnection): Promise<string> {
   const s = conn.secrets;
+  if (conn.authType === "api-key") {
+    throw new Error(
+      `Connection ${conn.key} authenticates with an API-key header, not Authorization — use buildAuthHeadersFromConnection`,
+    );
+  }
   if (conn.authType === "basic") {
     // SuccessFactors: warn while SAP still accepts Basic (retired 2026-11-20,
     // deletion tentative 2027-11-12), refuse only once it is actually deleted —

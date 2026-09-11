@@ -172,9 +172,17 @@ describe("no connector request can build its header from anything but the tenant
     expect(inAuthHeaderFor.slice(0, 300)).toContain("buildAuthHeader(prefix)");
   });
 
-  it("every Authorization header the connector sends goes through authHeaderFor", () => {
-    const headers = CONNECTOR.match(/Authorization: await [a-zA-Z]+\(/g) ?? [];
-    expect(headers.length).toBeGreaterThanOrEqual(7);
-    for (const h of headers) expect(h).toBe("Authorization: await authHeaderFor(");
+  it("every request the connector sends spreads authHeadersFor, and none builds Authorization by hand", () => {
+    // The header is not always `Authorization` any more (AD-12: an api-key
+    // connection sends `apikey`), so every request spreads the RECORD the
+    // tenant answers with — and authHeadersFor is the only thing that reaches
+    // authHeaderFor, which is the only thing that reaches buildAuthHeader.
+    const spreads = CONNECTOR.match(/\.\.\.\(await authHeadersFor\(prefix, tenant\)\)/g) ?? [];
+    expect(spreads.length).toBeGreaterThanOrEqual(7);
+    // The one place a string Authorization is still assembled is the door itself.
+    const direct = CONNECTOR.match(/Authorization: await [a-zA-Z]+\(/g) ?? [];
+    expect(direct).toEqual(["Authorization: await authHeaderFor("]);
+    const inAuthHeadersFor = CONNECTOR.slice(CONNECTOR.indexOf("async function authHeadersFor("));
+    expect(inAuthHeadersFor.slice(0, 400)).toContain("Authorization: await authHeaderFor(prefix, tenant)");
   });
 });

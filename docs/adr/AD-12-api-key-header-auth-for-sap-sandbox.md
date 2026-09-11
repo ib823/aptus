@@ -1,6 +1,6 @@
 # AD-12: The connection auth vocabulary has no API-key header, so CoreEdge cannot reach SAP's own sandbox
 
-**Status:** Proposed — owner decision required (raised 2026-09-11, findings register R22 / walkthrough F16)
+**Status:** Accepted — Option B (decided 2026-09-11; raised the same day from findings register R22 / walkthrough F16)
 
 ## Context
 
@@ -24,7 +24,11 @@ variables, which a stored connection cannot use.
 
 ## Decision
 
-_Not yet taken._ Two options, with a recommendation.
+**Option B.** `SapAuthType` gains `api-key`; its sealed secrets are
+`{ apiKey, apiKeyHeader? }` (header defaulting to `apikey`);
+`buildAuthHeadersFromConnection` returns the header record every request path
+spreads, so an api-key connection sends its own header and no `Authorization`.
+The two options as they were put:
 
 **Option A — declare the sandbox out of scope.** Say so on the Connections
 form ("SAP's public sandbox is not supported; connect a real tenant or a

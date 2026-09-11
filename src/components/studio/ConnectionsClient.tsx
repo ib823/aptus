@@ -347,8 +347,10 @@ function ConnectionForm() {
   const [baseUrl, setBaseUrl] = useState("");
   const [environment, setEnvironment] = useState("");
   const [authType, setAuthType] = useState<
-    "basic" | "bearer" | "oauth-client-credentials" | "oauth-saml-bearer"
+    "basic" | "bearer" | "oauth-client-credentials" | "oauth-saml-bearer" | "api-key"
   >("basic");
+  const [apiKey, setApiKey] = useState("");
+  const [apiKeyHeader, setApiKeyHeader] = useState("apikey");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [bearerToken, setBearerToken] = useState("");
@@ -384,6 +386,7 @@ function ConnectionForm() {
   if (!baseUrl.startsWith("https://")) missing.push("an https base URL");
   if (authType === "basic" && (!username.trim() || !password)) missing.push("a username and password");
   if (authType === "bearer" && !bearerToken) missing.push("a bearer token");
+  if (authType === "api-key" && !apiKey) missing.push("an API key");
   if (authType === "oauth-client-credentials" && (!clientId.trim() || !clientSecret || !oauthTokenUrl.startsWith("https://")))
     missing.push("a client id, secret and https token URL");
   if (
@@ -421,6 +424,9 @@ function ConnectionForm() {
             : {}),
           ...(authType === "basic" ? { username: username.trim(), password } : {}),
           ...(authType === "bearer" ? { bearerToken } : {}),
+          ...(authType === "api-key"
+            ? { apiKey, ...(apiKeyHeader.trim() ? { apiKeyHeader: apiKeyHeader.trim() } : {}) }
+            : {}),
           ...(authType === "oauth-saml-bearer"
             ? {
                 clientId: clientId.trim(),
@@ -479,7 +485,7 @@ function ConnectionForm() {
       setError(err instanceof Error ? err.message : "The connection could not be saved.");
       setBusy(false);
     }
-  }, [product, client, key, label, baseUrl, environment, authType, username, password, bearerToken, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion, apiPath, timeoutMs]);
+  }, [product, client, key, label, baseUrl, environment, authType, username, password, bearerToken, apiKey, apiKeyHeader, clientId, clientSecret, oauthTokenUrl, companyId, samlAssertion, apiPath, timeoutMs]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
@@ -652,6 +658,7 @@ function ConnectionForm() {
           <option value="bearer">Bearer token</option>
           <option value="oauth-client-credentials">OAuth client credentials</option>
           <option value="oauth-saml-bearer">OAuth SAML bearer — SuccessFactors</option>
+          <option value="api-key">API key header — SAP Business Accelerator Hub sandbox</option>
         </select>
       </Label>
 
@@ -669,6 +676,18 @@ function ConnectionForm() {
         <Label text="Bearer token">
           <input type="password" value={bearerToken} onChange={(e) => setBearerToken(e.target.value)} autoComplete="new-password" style={input} />
         </Label>
+      )}
+      {authType === "api-key" && (
+        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr" }}>
+          <Label text="API key">
+            <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="new-password" style={input} />
+          </Label>
+          <Label text="Header name">
+            {/* SAP's sandbox reads `apikey`; other API-key gateways name theirs
+                differently. Sent as its own header — no Authorization at all. */}
+            <input value={apiKeyHeader} onChange={(e) => setApiKeyHeader(e.target.value)} placeholder="apikey" style={input} />
+          </Label>
+        </div>
       )}
       {authType === "oauth-saml-bearer" && (
         <>

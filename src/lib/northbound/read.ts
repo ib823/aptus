@@ -16,7 +16,7 @@
  */
 
 import {
-  buildAuthHeaderFromConnection,
+  buildAuthHeadersFromConnection,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
@@ -140,7 +140,7 @@ export async function readEntitySet(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const authorization = await buildAuthHeaderFromConnection(connection);
+    const authHeaders = await buildAuthHeadersFromConnection(connection);
     const url = buildSapUrl({
       baseUrl: connection.baseUrl,
       path: `${input.servicePath}/${encodeURIComponent(input.entitySet)}`,
@@ -150,7 +150,7 @@ export async function readEntitySet(
 
     const res = await fetchImpl(url, {
       method: "GET",
-      headers: { Authorization: authorization, Accept: "application/json" },
+      headers: { ...authHeaders, Accept: "application/json" },
       signal: controller.signal,
       cache: "no-store",
     });
