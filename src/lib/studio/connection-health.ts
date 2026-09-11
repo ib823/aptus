@@ -22,7 +22,7 @@
  */
 
 import {
-  buildAuthHeaderFromConnection,
+  buildAuthHeadersFromConnection,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
 import { getSapProduct, getSapServices } from "@/lib/sap-public/tdd-connector";
@@ -107,12 +107,12 @@ export async function probeConnection(
   try {
     // Build the header inside the try: an OAuth exchange can itself fail, and a
     // credential problem should surface as UNAUTHORIZED rather than a crash.
-    const authorization = await buildAuthHeaderFromConnection(conn);
+    const authHeaders = await buildAuthHeadersFromConnection(conn);
     const res = await fetchImpl(
       buildSapUrl({ baseUrl: conn.baseUrl, path: `${path}/$metadata`, client: conn.client }),
       {
         method: "GET",
-        headers: { Authorization: authorization, Accept: "application/xml" },
+        headers: { ...authHeaders, Accept: "application/xml" },
         signal: controller.signal,
         cache: "no-store",
       },

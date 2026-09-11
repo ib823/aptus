@@ -46,6 +46,14 @@ export interface SapTenant {
    * when a request is actually built, and never serialised with the tenant.
    */
   authorization?: () => Promise<string>;
+  /**
+   * The same credentials as a header RECORD. Present on a tenant projected
+   * from a stored connection; preferred by every request path, because an
+   * `api-key` connection (AD-12) has no Authorization value at all — its
+   * secret travels in its own header. `authorization` stays for callers that
+   * can only take a string.
+   */
+  authHeaders?: () => Promise<Record<string, string>>;
 }
 
 export type SapODataProtocol = "ODATAV2" | "ODATAV4";
@@ -857,6 +865,18 @@ async function authHeaderFor(prefix: string, tenant: SapTenant): Promise<string>
   return buildAuthHeader(prefix);
 }
 
+/**
+ * THE HEADERS EVERY CONNECTOR REQUEST SPREADS. A stored connection answers
+ * with its own record (which may be an `apikey` header rather than
+ * `Authorization` — AD-12); an env tenant answers `{ Authorization }` from
+ * `{PREFIX}_*` as it always has. Still the one door: buildAuthHeader(prefix)
+ * is reached only through authHeaderFor, and authHeaderFor only through here.
+ */
+async function authHeadersFor(prefix: string, tenant: SapTenant): Promise<Record<string, string>> {
+  if (tenant.authHeaders) return tenant.authHeaders();
+  return { Authorization: await authHeaderFor(prefix, tenant) };
+}
+
 async function buildAuthHeader(prefix: string): Promise<string> {
   const authType = getAuthType(prefix);
   if (authType === "basic") {
@@ -1024,7 +1044,7 @@ export async function inspectSapService(
 ): Promise<{ entitySets: SapEntitySet[] }> {
   const response = await sapFetch(`${serviceUrl(tenant, service)}/$metadata`, {
     headers: {
-      Authorization: await authHeaderFor(prefix, tenant),
+      ...(await authHeadersFor(prefix, tenant)),
       Accept: "application/xml, text/xml, */*",
     },
   }, getRequestTimeoutMs(prefix));
@@ -1046,7 +1066,7 @@ export async function inspectSapServiceMetadata(
 ): Promise<{ entitySets: SapEntitySet[]; entityCapabilities: EntityCapability[]; flavor: MetadataFlavor }> {
   const response = await sapFetch(`${serviceUrl(tenant, service)}/$metadata`, {
     headers: {
-      Authorization: await authHeaderFor(prefix, tenant),
+      ...(await authHeadersFor(prefix, tenant)),
       Accept: "application/xml, text/xml, */*",
     },
   }, getRequestTimeoutMs(prefix));
@@ -1072,7 +1092,7 @@ export async function probeSapEntitySet(
     `${serviceUrl(tenant, service)}/${encodeURIComponent(entitySetName)}?$top=1&$format=json`,
     {
       headers: {
-        Authorization: await authHeaderFor(prefix, tenant),
+        ...(await authHeadersFor(prefix, tenant)),
         Accept: "application/json",
       },
     },
@@ -1122,7 +1142,7 @@ export async function previewSapEntitySet(
     `${serviceUrl(tenant, service)}/${encodeURIComponent(entitySetName)}?$top=${safeLimit}&$format=json`,
     {
       headers: {
-        Authorization: await authHeaderFor(prefix, tenant),
+        ...(await authHeadersFor(prefix, tenant)),
         Accept: "application/json",
       },
     },
@@ -1155,7 +1175,7 @@ async function fetchCsrfSession(
 ): Promise<{ token: string; cookie: string }> {
   const response = await sapFetch(`${serviceUrl(tenant, service)}/`, {
     headers: {
-      Authorization: await authHeaderFor(prefix, tenant),
+      ...(await authHeadersFor(prefix, tenant)),
       Accept: "application/json",
       "X-CSRF-Token": "Fetch",
     },
@@ -1185,7 +1205,7 @@ export async function createSapEntitySetRecord(
   const { token, cookie } = await fetchCsrfSession(prefix, tenant, service);
   const startedAt = Date.now();
   const headers: HeadersInit = {
-    Authorization: await authHeaderFor(prefix, tenant),
+    ...(await authHeadersFor(prefix, tenant)),
     Accept: "application/json",
     "Content-Type": "application/json",
     "X-CSRF-Token": token,
@@ -1237,7 +1257,7 @@ export async function deleteSapEntityByLocation(
         client: tenant.client,
       });
   const headers: HeadersInit = {
-    Authorization: await authHeaderFor(prefix, tenant),
+    ...(await authHeadersFor(prefix, tenant)),
     Accept: "application/json",
     "X-CSRF-Token": token,
   };

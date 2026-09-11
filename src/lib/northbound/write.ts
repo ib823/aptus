@@ -14,7 +14,7 @@
  */
 
 import {
-  buildAuthHeaderFromConnection,
+  buildAuthHeadersFromConnection,
   type ResolvedSapConnection,
 } from "@/lib/sap-public/connection-resolver";
 import { buildSapUrl } from "@/lib/sap-public/sap-url";
@@ -141,12 +141,12 @@ export async function writeEntitySet(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const authorization = await buildAuthHeaderFromConnection(connection);
+    const authHeaders = await buildAuthHeadersFromConnection(connection);
 
     // 1 — CSRF handshake against the service root, with the same credentials.
     const csrfRes = await fetchImpl(sapUrl("/"), {
       method: "GET",
-      headers: { Authorization: authorization, Accept: "application/json", "X-CSRF-Token": "Fetch" },
+      headers: { ...authHeaders, Accept: "application/json", "X-CSRF-Token": "Fetch" },
       signal: controller.signal,
       cache: "no-store",
     });
@@ -169,7 +169,7 @@ export async function writeEntitySet(
     }
 
     const headers: Record<string, string> = {
-      Authorization: authorization,
+      ...authHeaders,
       Accept: "application/json",
       "Content-Type": "application/json",
       "X-CSRF-Token": csrfToken,

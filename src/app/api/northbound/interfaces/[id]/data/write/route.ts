@@ -116,7 +116,9 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   // 2 — the WRITE credential. A separate secret from the bearer token, so a
   // leaked read token cannot write. Sent as its own header.
   const writeSecret = request.headers.get("x-coreedge-write-key");
-  const credentialOk = await verifyWriteCredential(client.scope, client.solutionId, writeSecret);
+  // Verified against THIS token's row: a write key minted for the TEST
+  // credential does not authorise a call made with the DEV one.
+  const credentialOk = await verifyWriteCredential(client.scope, client.clientId, writeSecret);
   if (!credentialOk) {
     await audit(403, id, "-");
     return northboundError(

@@ -12,9 +12,10 @@
  * sufficient on its own to conclude a credential is dormant and safe to revoke.
  * Presenting it as "last used" would invite exactly that conclusion.
  *
- * ONE CREDENTIAL PER SOLUTION. Issuance upserts on solutionId, so re-issuing
- * replaces the previous token and its environment rather than accumulating. The
- * response reports the count so a screen cannot imply concurrent credentials.
+ * ONE CREDENTIAL PER (SOLUTION, ENVIRONMENT) — AD-11. Issuance upserts on that
+ * pair, so re-issuing for an environment replaces its token rather than
+ * accumulating, while a second environment adds a row beside it. The response
+ * reports the count so a screen cannot imply more concurrency than that.
  */
 
 import type { NextRequest } from "next/server";
@@ -132,7 +133,7 @@ export async function GET(request: NextRequest) {
         "`revoked` is counted over every credential in scope. The other counts are over the rows listed below, which exclude revoked credentials unless includeRevoked=1 — so they will not sum to `revoked + listed` in the default view.",
       why: "lastUsedAt is written fire-and-forget and a serverless instance can freeze before it lands. It is last OBSERVED use, and is not on its own sufficient to conclude a credential is dormant.",
       oneCredentialPerSolution:
-        "Issuance upserts on solutionId — re-issuing replaces the previous token and its environment rather than adding one.",
+        "Issuance upserts on (solutionId, environment) — re-issuing for the same environment replaces the previous token rather than adding one; another environment adds a credential beside it.",
       writeCredentials:
         "Counted from stored credential presence, never by reading it. No code path issues a write credential yet, so a zero here is by design rather than by absence of activity.",
     },

@@ -45,6 +45,15 @@ export interface SapConnectionSecrets {
    */
   samlAssertion?: string;
   companyId?: string;
+  /**
+   * API-key header auth (AD-12). SAP's Business Accelerator Hub sandbox — the
+   * first thing a developer prototyping against SAP reaches for — requires an
+   * `apikey` request header and ignores `Authorization` entirely; every other
+   * type here produces an Authorization header. `apiKeyHeader` names the
+   * header (default "apikey"), so other API-key gateways work too.
+   */
+  apiKey?: string;
+  apiKeyHeader?: string;
   /** guarded-write secret (mirrors {PREFIX}_WRITE_SECRET) */
   writeSecret?: string;
 }
@@ -186,6 +195,8 @@ export function openSecrets(blob: string | null | undefined, aad?: string): SapC
     "writeSecret",
     "samlAssertion",
     "companyId",
+    "apiKey",
+    "apiKeyHeader",
   ] as const satisfies readonly (keyof SapConnectionSecrets)[];
   for (const key of KEYS) {
     if (typeof src[key] === "string") out[key] = src[key] as string;

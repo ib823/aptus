@@ -88,7 +88,7 @@ const upsertSchema = z
     key: z.string().min(1).max(60),
     label: z.string().min(2).max(120),
     baseUrl: httpsUrl,
-    authType: z.enum(["basic", "bearer", "oauth-client-credentials", "oauth-saml-bearer"]),
+    authType: z.enum(["basic", "bearer", "oauth-client-credentials", "oauth-saml-bearer", "api-key"]),
     environment: z.string().max(40).optional(),
     /**
      * The SAP client — "100", "080". Only meaningful for landscapes that
@@ -108,6 +108,13 @@ const upsertSchema = z
     samlAssertion: z.string().max(20000).optional(),
     clientId: z.string().max(200).optional(),
     clientSecret: z.string().max(500).optional(),
+    /** API-key header auth (AD-12): the key, and the header it travels in (default `apikey`). */
+    apiKey: z.string().max(2000).optional(),
+    apiKeyHeader: z
+      .string()
+      .max(80)
+      .regex(/^[A-Za-z0-9-]+$/, "apiKeyHeader must be a plain header name (letters, digits, hyphens)")
+      .optional(),
     oauthTokenUrl: httpsUrl.optional(),
     writeSecret: z.string().max(500).optional(),
     writeEnabled: z.boolean().optional(),
@@ -139,6 +146,7 @@ const upsertSchema = z
       need("clientSecret", "clientSecret is required for OAuth");
       need("oauthTokenUrl", "oauthTokenUrl is required for OAuth");
     }
+    if (v.authType === "api-key") need("apiKey", "apiKey is required for API-key header auth");
     /*
      * A CLIENT ON A PRODUCT THAT HAS NONE IS A LIE THE URL WOULD TELL.
      *
@@ -361,8 +369,10 @@ export async function POST(request: NextRequest) {
         ...(input.bearerToken ? { bearerToken: input.bearerToken } : {}),
         ...(input.clientId ? { clientId: input.clientId } : {}),
         ...(input.clientSecret ? { clientSecret: input.clientSecret } : {}),
-      ...(input.companyId ? { companyId: input.companyId } : {}),
-      ...(input.samlAssertion ? { samlAssertion: input.samlAssertion } : {}),
+        ...(input.companyId ? { companyId: input.companyId } : {}),
+        ...(input.samlAssertion ? { samlAssertion: input.samlAssertion } : {}),
+        ...(input.apiKey ? { apiKey: input.apiKey } : {}),
+        ...(input.apiKeyHeader ? { apiKeyHeader: input.apiKeyHeader } : {}),
         ...(input.writeSecret ? { writeSecret: input.writeSecret } : {}),
       },
       oauthTokenUrl: input.oauthTokenUrl ?? null,

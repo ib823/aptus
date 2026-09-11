@@ -17,7 +17,10 @@
  *   2. the solution exists in YOUR tenant
  *   3. all three owners are named            (accountability before capability)
  *   4. the issuer is NOT an owner            (SoD — same rule as the read token)
- *   5. a runtime credential exists and is active — the write key seals onto it
+ *   5. a runtime credential exists and is active for the named environment —
+ *      the write key seals onto THAT row (one credential per environment,
+ *      AD-11); with several live and none named, the call is refused rather
+ *      than guessed
  *   6. a LIVE WRITE grant covers the credential's environment: APPROVED (or
  *      SANDBOX_ONLY in SANDBOX), CREATE/UPDATE, unexpired, unrevoked. A write
  *      key with no live write grant would be a secret that authorises nothing
@@ -54,7 +57,17 @@ import { scopedById, scopedWhere, tenantScopeFor } from "@/lib/studio/tenant-sco
 
 export const dynamic = "force-dynamic";
 
-const bodySchema = z.object({ solutionId: z.string().min(1) });
+const bodySchema = z.object({
+  solutionId: z.string().min(1),
+  /**
+   * WHICH credential the write key seals onto. A solution holds one runtime
+   * credential per environment (AD-11); with more than one live, the caller
+   * must say which — a key minted onto "the first row" would authorise writes
+   * in an environment nobody chose. Optional only because a solution with
+   * exactly one live credential has nothing to choose.
+   */
+  environment: z.enum(["SANDBOX", "DEV", "TEST", "PROD"]).optional(),
+});
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
@@ -106,15 +119,31 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // The write key seals onto the solution's runtime credential row.
-  const client = await prisma.solutionClient.findFirst({
-    where: scopedWhere(scope, { solutionId: solution.id }),
-    select: { id: true, environment: true, isActive: true, revokedAt: true },
+  // The write key seals onto ONE of the solution's runtime credential rows —
+  // the one for the environment the caller named, or the only live one.
+  const liveClients = await prisma.solutionClient.findMany({
+    where: scopedWhere(scope, { solutionId: solution.id, isActive: true, revokedAt: null }),
+    select: { id: true, environment: true },
+    orderBy: { createdAt: "asc" },
   });
-  if (!client || !client.isActive || client.revokedAt !== null) {
+  if (liveClients.length === 0) {
     return studioError(
       "FORBIDDEN",
       "This solution has no active runtime credential. Issue the bearer credential first — the write key is sealed onto it.",
+    );
+  }
+  const client = parsed.data.environment
+    ? liveClients.find((c) => c.environment === parsed.data.environment)
+    : liveClients.length === 1
+      ? liveClients[0]
+      : undefined;
+  if (!client) {
+    const held = liveClients.map((c) => c.environment).join(", ");
+    return studioError(
+      "VALIDATION_ERROR",
+      parsed.data.environment
+        ? `This solution has no active runtime credential for ${parsed.data.environment} (it holds: ${held}). Issue one for that environment first, or name one it holds.`
+        : `This solution holds live credentials for ${held}. Say which environment the write key is for — a key sealed onto an unnamed one would authorise writes nobody chose.`,
     );
   }
 
@@ -143,7 +172,7 @@ export async function POST(request: NextRequest) {
   }
 
   const rawKey = generateWriteCredential();
-  const sealed = await setWriteCredential(scope, solution.id, rawKey);
+  const sealed = await setWriteCredential(scope, client.id, rawKey);
   if (!sealed) return studioError("NOT_FOUND", "Credential not found.");
 
   await writeConfigAudit({
@@ -170,8 +199,9 @@ export async function POST(request: NextRequest) {
       writeKey: rawKey,
       warning:
         "Copy this write key now — it is sealed server-side and cannot be shown again. " +
-        "Send it as X-CoreEdge-Write-Key alongside the bearer token, from your server only. " +
-        "Issuing again replaces it, and the previous key stops working immediately.",
+        `Send it as X-CoreEdge-Write-Key alongside the ${client.environment} bearer token, from your server only — ` +
+        "it is sealed onto that credential and does not authorise calls made with another environment's token. " +
+        "Issuing again for this environment replaces it, and the previous key stops working immediately.",
     },
     201,
   );

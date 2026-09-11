@@ -28,5 +28,5 @@ ADRs are immutable once accepted. Subsequent decisions supersede prior ones expl
 | [AD-8](./AD-8-five-step-ia-stays.md) | 5-step IA stays; sub-tab structure rebuilt | Accepted |
 | [AD-9](./AD-9-portfolio-surfaces.md) | Portfolio surfaces above the assessment shell | Accepted |
 | [AD-10](./AD-10-curation-to-db.md) | Curation moves to DB tables | Accepted |
-| [AD-11](./AD-11-one-runtime-credential-per-solution.md) | One runtime credential per solution, across all environments (CoreEdge R21) | Proposed — owner decision |
-| [AD-12](./AD-12-api-key-header-auth-for-sap-sandbox.md) | API-key header auth for SAP's sandbox (CoreEdge R22) | Proposed — owner decision |
+| [AD-11](./AD-11-one-runtime-credential-per-solution.md) | One runtime credential per (solution, environment) (CoreEdge R21) | Accepted |
+| [AD-12](./AD-12-api-key-header-auth-for-sap-sandbox.md) | API-key header auth for SAP's sandbox (CoreEdge R22) | Accepted |

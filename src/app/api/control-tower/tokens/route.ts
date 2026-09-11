@@ -130,7 +130,7 @@ export async function GET(_request: NextRequest) {
     ],
     provenance: {
       oneCredentialPerSolution:
-        "Issuance upserts on the solution, so re-issuing replaces the previous token and its environment rather than adding one. A solution never holds two live credentials, and this register must not be read as though it could.",
+        "Issuance upserts on (solution, environment): re-issuing for the same environment replaces the previous token rather than adding one, and a different environment adds a credential beside it. A solution holds at most one live credential per environment, so two rows for one solution are two environments, not a duplicate.",
       segregationIsRecorded:
         "issuedBy is checked against the solution's three owner slots. Issuance refuses an owner, so issuedByAnOwner should be zero — a non-zero means the control did not hold for that row and is worth investigating rather than dismissing.",
       lastUsedUnderReports:

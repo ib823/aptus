@@ -87,43 +87,53 @@ describe("the write credential is a SECOND secret", () => {
     expect(k).not.toBe(generateWriteCredential());
   });
 
+  // The row the CALLING token resolved to. Verification is per credential row
+  // (AD-11: one credential per environment), so the lookup is by client id and
+  // the AAD is rebuilt from the row's own solution.
+  const row = (secretsCiphertext: string | null) => ({ solutionId: "sol_1", secretsCiphertext });
+
   it("accepts the correct key", async () => {
-    mocks.findFirstClient.mockResolvedValue({ secretsCiphertext: sealed() });
-    expect(await verifyWriteCredential(SCOPE, "sol_1", raw)).toBe(true);
+    mocks.findFirstClient.mockResolvedValue(row(sealed()));
+    expect(await verifyWriteCredential(SCOPE, "client_1", raw)).toBe(true);
   });
 
   it("rejects a wrong key", async () => {
-    mocks.findFirstClient.mockResolvedValue({ secretsCiphertext: sealed() });
-    expect(await verifyWriteCredential(SCOPE, "sol_1", "cew_wrong_aaaaaaaaaaaaaaaa")).toBe(false);
+    mocks.findFirstClient.mockResolvedValue(row(sealed()));
+    expect(await verifyWriteCredential(SCOPE, "client_1", "cew_wrong_aaaaaaaaaaaaaaaa")).toBe(false);
   });
 
   it("rejects an absent header — a read token alone must not write", async () => {
-    mocks.findFirstClient.mockResolvedValue({ secretsCiphertext: sealed() });
-    expect(await verifyWriteCredential(SCOPE, "sol_1", null)).toBe(false);
+    mocks.findFirstClient.mockResolvedValue(row(sealed()));
+    expect(await verifyWriteCredential(SCOPE, "client_1", null)).toBe(false);
   });
 
   it("rejects when no credential is configured, without saying so", async () => {
     // "No write key is set" would tell an attacker they need only find one secret.
-    mocks.findFirstClient.mockResolvedValue({ secretsCiphertext: null });
-    expect(await verifyWriteCredential(SCOPE, "sol_1", raw)).toBe(false);
+    mocks.findFirstClient.mockResolvedValue(row(null));
+    expect(await verifyWriteCredential(SCOPE, "client_1", raw)).toBe(false);
   });
 
   it("rejects a blob sealed for a DIFFERENT solution", async () => {
     // AAD binding: lifting a ciphertext onto another row does not work.
-    mocks.findFirstClient.mockResolvedValue({ secretsCiphertext: sealed("org_a", "sol_other") });
-    expect(await verifyWriteCredential(SCOPE, "sol_1", raw)).toBe(false);
+    mocks.findFirstClient.mockResolvedValue(row(sealed("org_a", "sol_other")));
+    expect(await verifyWriteCredential(SCOPE, "client_1", raw)).toBe(false);
   });
 
   it("rejects a blob sealed for a different ORGANIZATION", async () => {
-    mocks.findFirstClient.mockResolvedValue({ secretsCiphertext: sealed("org_b", "sol_1") });
-    expect(await verifyWriteCredential(SCOPE, "sol_1", raw)).toBe(false);
+    mocks.findFirstClient.mockResolvedValue(row(sealed("org_b", "sol_1")));
+    expect(await verifyWriteCredential(SCOPE, "client_1", raw)).toBe(false);
   });
 
-  it("scopes the lookup to the caller's organization", async () => {
-    mocks.findFirstClient.mockResolvedValue({ secretsCiphertext: sealed() });
-    await verifyWriteCredential(SCOPE, "sol_1", raw);
+  it("looks the key up on the CALLING credential's row, scoped to the caller's organization", async () => {
+    // A write key minted for the TEST credential must not authorise a call
+    // made with the DEV token of the same solution — so the lookup is by the
+    // row that authenticated, never by "some credential of the solution".
+    mocks.findFirstClient.mockResolvedValue(row(sealed()));
+    await verifyWriteCredential(SCOPE, "client_1", raw);
     const where = mocks.findFirstClient.mock.calls[0]?.[0]?.where as Record<string, unknown>;
     expect(where.organizationId).toBe("org_a");
+    expect(where.id).toBe("client_1");
+    expect(where).not.toHaveProperty("solutionId");
   });
 });
 

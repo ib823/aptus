@@ -1,6 +1,6 @@
 # AD-11: One runtime credential per solution, across all environments
 
-**Status:** Proposed — owner decision required (raised 2026-09-11, findings register R21 / walkthrough F13)
+**Status:** Accepted — Option B (decided 2026-09-11; raised the same day from findings register R21 / walkthrough F13)
 
 ## Context
 
@@ -30,7 +30,11 @@ What holds this in place today:
 
 ## Decision
 
-_Not yet taken._ Two options, with a recommendation.
+**Option B.** `SolutionClient` is unique on `(organizationId, solutionId,
+environment)`; the write key seals onto, and is verified against, the
+credential row that authenticated the call; the write-credential route and
+the Test Console name which credential they act on. The two options as
+they were put:
 
 **Option A — keep v1 as is.** One identity per solution. Promotion = re-issue.
 Document it in the Studio help and on the issue dialog (already partly done).

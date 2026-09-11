@@ -154,7 +154,9 @@ export function ClientCredentials({
       <h2 style={h2}>Runtime credentials</h2>
       <p style={body}>
         A client credential is what a deployed application uses to call CoreEdge. It is issued
-        per solution and carries that solution&apos;s approved access — nothing more.
+        per solution <em>and environment</em> — one for DEV, one for TEST, one for PROD, each
+        carrying that solution&apos;s approved access in that environment and nothing more.
+        Re-issuing for an environment replaces that environment&apos;s token only.
       </p>
 
       {canIssue && solutions.length > 0 && (
