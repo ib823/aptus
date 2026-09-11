@@ -1,8 +1,47 @@
 import type { NextConfig } from "next";
 import { getSecurityHeaders } from "./src/lib/pwa/security-headers";
 
+/*
+ * IS THIS BUILD A CUSTOMER-FACING PRODUCTION DEPLOY?
+ *
+ * Same test as scripts/check-production-env.js, deliberately: on Vercel only
+ * the production environment is production, and Preview deployments legitimately
+ * carry the internal-testing surfaces. Off Vercel, NODE_ENV decides.
+ */
+const isProductionDeploy = process.env.VERCEL_ENV
+  ? process.env.VERCEL_ENV === "production"
+  : process.env.NODE_ENV === "production";
+
+/*
+ * THE INTERNAL-TESTING AUTH SURFACES ARE NOT COMPILED INTO A PRODUCTION BUILD.
+ *
+ * /api/auth/test-login and /dev-login mint a real session for a test user. They
+ * were protected by four runtime env gates and a secret, which is a good set of
+ * gates and still the wrong shape: every one of them is a condition evaluated by
+ * code that is present and reachable in the production bundle, so the whole
+ * backdoor hinges on four environment variables staying unset. One of them set
+ * by mistake — or set deliberately for an internal test deploy and never
+ * unset — and the only thing between the internet and a platform_admin session
+ * is E2E_TEST_SECRET.
+ *
+ * Naming those files `route.e2e.ts` / `page.e2e.tsx` and listing the `e2e.*`
+ * extensions only for non-production builds makes them absent rather than
+ * disabled: on a production deploy Next does not treat them as routes at all,
+ * the paths 404 from the router, and no env var can bring them back. The
+ * runtime gates stay exactly where they are — they are what protects a Preview
+ * deployment, which does compile them.
+ *
+ * Ordered before the defaults so an `e2e` file wins if both ever exist; the
+ * default list is restated because setting this option replaces it.
+ */
+const PAGE_EXTENSIONS = ["tsx", "ts", "jsx", "js"];
+const TEST_AUTH_PAGE_EXTENSIONS = ["e2e.tsx", "e2e.ts"];
+
 const nextConfig: NextConfig = {
   transpilePackages: [],
+  pageExtensions: isProductionDeploy
+    ? PAGE_EXTENSIONS
+    : [...TEST_AUTH_PAGE_EXTENSIONS, ...PAGE_EXTENSIONS],
   // /help/developer-guide reads this file at request time; without the trace
   // it exists in the repo and not in the deployed function, and the page's
   // fallback would report the document unreadable on every production request.

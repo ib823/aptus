@@ -1,5 +1,11 @@
 /** POST: E2E test login — creates a test user session and sets the cookie.
  *
+ * `.e2e.ts`, NOT `.ts`, AND THAT IS THE FIRST SAFEGUARD. `pageExtensions` in
+ * next.config.ts lists the `e2e.*` extensions only for non-production builds, so
+ * on a customer-facing deploy this file is not a route: the path 404s from the
+ * router and no environment variable can bring it back. Everything below
+ * protects a Preview deployment, which does compile it.
+ *
  * SAFEGUARDS:
  * 1. Only functional when E2E_TEST_SECRET env var is set (never in production)
  * 2. Requires the secret in the request body — can't be exploited without it
@@ -13,6 +19,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getClientIp } from "@/lib/security/client-ip";
 import { createSession, SESSION_COOKIE_NAME, getSessionCookieOptions } from "@/lib/auth/session";
 import { isIpAllowed, logBackdoorAttempt } from "@/lib/auth/test-backdoor-guards";
+import { ALL_USER_ROLES, type UserRole } from "@/types/assessment";
 
 const ALLOWED_TEST_DOMAINS = ["abeam.test", "e2e.test"];
 
@@ -99,8 +106,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { status: 400 },
     );
   }
-  // Optional: allow specifying a role for the test user
-  const role = body.role ?? TEST_USER_ROLE;
+  /*
+   * Optional: allow specifying a role for the test user.
+   *
+   * VALIDATED AGAINST THE REAL VOCABULARY. `body.role ?? TEST_USER_ROLE` went
+   * straight into `User.role`, so the secret holder could write any string at
+   * all — and a role nobody's permission table knows is not a harmless typo:
+   * every `role === "consultant"` check fails, every hierarchy comparison reads
+   * undefined, and the resulting session is one no screen in the product can
+   * reason about. A test fixture shaped unlike real data tests the wrong thing.
+   */
+  const requestedRole = body.role ?? TEST_USER_ROLE;
+  if (!(ALL_USER_ROLES as readonly string[]).includes(requestedRole)) {
+    return NextResponse.json(
+      { error: `Unknown role. Use one of: ${ALL_USER_ROLES.join(", ")}` },
+      { status: 400 },
+    );
+  }
+  const role = requestedRole as UserRole;
 
   // Upsert the test user
   let user = await prisma.user.findUnique({
