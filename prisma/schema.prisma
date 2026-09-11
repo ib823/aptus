@@ -971,8 +971,17 @@ model ConfigAudit {
 model SolutionClient {
   id             String @id @default(cuid())
   organizationId String
-  /// One runtime identity per solution in v1.
-  solutionId     String @unique
+  /// ONE RUNTIME IDENTITY PER (SOLUTION, ENVIRONMENT) — AD-11.
+  ///
+  /// This was `@unique` on its own: one credential per solution across every
+  /// environment, so an application promoted DEV → TEST → PROD could never
+  /// hold two at once, and issuing the second silently killed the first. The
+  /// runtime never needed the limit — a token resolves to exactly one
+  /// environment, and every grant, binding and audit row is already keyed by
+  /// it — so the key is now (organization, solution, environment): a
+  /// re-issue for the SAME environment still rotates, a different one adds a
+  /// credential beside it.
+  solutionId     String
 
   label       String
   /// SHA-256 of the issued token. The raw value is never persisted.
@@ -1013,16 +1022,13 @@ model SolutionClient {
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  /// Addressable by (organization, solution) as well as by solution alone.
-  ///
-  /// `solutionId` above is already globally unique, so this constraint adds no
-  /// new restriction on the data. It exists to give `issueClientToken` a unique
-  /// key that CONTAINS the organization: upserting on `{ solutionId }` alone
-  /// means the update branch — which rotates the token hash and revives a
-  /// revoked credential — carries no tenant in its `where`, and the boundary
-  /// lives in whichever caller looked the solution up first.
-  @@unique([organizationId, solutionId])
+  /// The upsert key for `issueClientToken`, and it CONTAINS the organization:
+  /// the update branch rotates the token hash and revives a revoked
+  /// credential, so if the tenant were not in this `where` the boundary would
+  /// live in whichever caller looked the solution up first.
+  @@unique([organizationId, solutionId, environment])
   @@index([organizationId])
+  @@index([organizationId, solutionId])
   @@index([tokenHash])
 }
 

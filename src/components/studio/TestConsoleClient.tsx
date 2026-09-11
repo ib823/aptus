@@ -65,6 +65,12 @@ export type BindingPreview =
       message: string;
     };
 
+/** One live credential of the interface's solution, and where a run as it would go. */
+export interface CredentialOption {
+  clientId: string;
+  binding: Exclude<BindingPreview, { kind: "no-credential" }>;
+}
+
 export interface TestableInterface {
   id: string;
   name: string;
@@ -73,7 +79,12 @@ export interface TestableInterface {
   entitySet: string | null;
   operation: string;
   solutionName: string;
-  binding: BindingPreview;
+  /**
+   * The solution's live credentials, one per environment (AD-11). Empty means
+   * the run will be refused before it reaches a tenant. With several, the
+   * developer picks which to run as — each binds to a different system.
+   */
+  credentials: readonly CredentialOption[];
 }
 
 interface RunState {
@@ -122,6 +133,15 @@ export function TestConsoleClient({
   const [files, setFiles] = useState<{ path: string; contents: string }[] | null>(null);
 
   const selected = interfaces.find((i) => i.id === selectedId) ?? null;
+
+  /*
+   * WHICH CREDENTIAL TO RUN AS. Chosen per interface (its solution's rows);
+   * defaults to the first, and the picker only appears when there is a
+   * choice. Sent to the broker as clientId so the run is the one previewed.
+   */
+  const [chosenClientId, setChosenClientId] = useState<string | null>(null);
+  const credential =
+    selected?.credentials.find((c) => c.clientId === chosenClientId) ?? selected?.credentials[0] ?? null;
 
   /*
    * SAVED CASES, FINALLY READABLE. "Save as test case" confirmed "Saved" and no
@@ -223,6 +243,7 @@ export function TestConsoleClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           interfaceId: selected.id,
+          ...(credential ? { clientId: credential.clientId } : {}),
           ...(entity ? { entity } : {}),
           limit: Math.min(limit, 50),
         }),
@@ -288,7 +309,7 @@ export function TestConsoleClient({
     } catch {
       setRun({ phase: "done", detail: "The run could not be completed." });
     }
-  }, [selected, entity, limit]);
+  }, [selected, credential, entity, limit]);
 
   const saveCase = useCallback(async () => {
     if (!selected || run.phase !== "done") return;
@@ -428,7 +449,14 @@ export function TestConsoleClient({
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
           <label style={{ display: "block" }}>
             <span style={labelText}>Interface</span>
-            <select value={selectedId ?? ""} onChange={(e) => setSelectedId(e.target.value)} style={field}>
+            <select
+              value={selectedId ?? ""}
+              onChange={(e) => {
+                setSelectedId(e.target.value);
+                setChosenClientId(null);
+              }}
+              style={field}
+            >
               {interfaces.map((i) => (
                 <option key={i.id} value={i.id}>
                   {i.name} · {i.solutionName}
@@ -492,7 +520,25 @@ export function TestConsoleClient({
             solution credential's environment, not the top-bar tenant picker;
             without this line the only way to learn which system a run would
             reach was to run it and read the "Bound to" that came back. */}
-        {selected && <BindingPreviewLine binding={selected.binding} />}
+        {selected && selected.credentials.length > 1 && (
+          <label style={{ display: "block", marginTop: 10 }}>
+            <span style={labelText}>Run as</span>
+            <select
+              value={credential?.clientId ?? ""}
+              onChange={(e) => setChosenClientId(e.target.value)}
+              style={{ ...field, width: 320 }}
+              aria-label="Run as credential"
+            >
+              {selected.credentials.map((c) => (
+                <option key={c.clientId} value={c.clientId}>
+                  {c.binding.credential.label} ({c.binding.credential.environment}
+                  {c.binding.credential.sapClient ? `/${c.binding.credential.sapClient}` : ""})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {selected && <BindingPreviewLine binding={credential?.binding ?? { kind: "no-credential" }} />}
         <p style={{ ...muted, marginTop: 10 }}>
           Nothing is read until you press Run. The run goes through the broker: the same
           grant check, the same environment binding, the same connection the deployed

@@ -17,9 +17,11 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TestConsoleClient, type TestableInterface } from "@/components/studio/TestConsoleClient";
+import { fireEvent } from "@testing-library/react";
 
-const BASE: Omit<TestableInterface, "binding"> = {
+import { TestConsoleClient, type CredentialOption, type TestableInterface } from "@/components/studio/TestConsoleClient";
+
+const BASE: Omit<TestableInterface, "credentials"> = {
   id: "i1",
   name: "Purchase orders",
   externalId: "CE_PURCHASEORDER_0001",
@@ -51,12 +53,17 @@ describe("the binding is stated before Run", () => {
         interfaces={[
           {
             ...BASE,
-            binding: {
-              kind: "bound",
-              credential: { label: "QA-E2E-Main · TEST", environment: "TEST", sapClient: "100" },
-              connection: { label: "Customizing X5M/100", environment: "TEST", sapClient: "100" },
-              bindingUnverified: false,
-            },
+            credentials: [
+              {
+                clientId: "cl_test",
+                binding: {
+                  kind: "bound",
+                  credential: { label: "QA-E2E-Main · TEST", environment: "TEST", sapClient: "100" },
+                  connection: { label: "Customizing X5M/100", environment: "TEST", sapClient: "100" },
+                  bindingUnverified: false,
+                },
+              },
+            ],
           },
         ]}
       />,
@@ -76,12 +83,17 @@ describe("the binding is stated before Run", () => {
         interfaces={[
           {
             ...BASE,
-            binding: {
-              kind: "refused",
-              credential: { label: "QA-E2E-Main · PROD", environment: "PROD", sapClient: null },
-              reason: "NO_MATCH_FOR_ENVIRONMENT",
-              message: "No SAP connection declares the PROD environment.",
-            },
+            credentials: [
+              {
+                clientId: "cl_prod",
+                binding: {
+                  kind: "refused",
+                  credential: { label: "QA-E2E-Main · PROD", environment: "PROD", sapClient: null },
+                  reason: "NO_MATCH_FOR_ENVIRONMENT",
+                  message: "No SAP connection declares the PROD environment.",
+                },
+              },
+            ],
           },
         ]}
       />,
@@ -90,8 +102,42 @@ describe("the binding is stated before Run", () => {
   });
 
   it("says when there is no credential to run as", () => {
-    render(<TestConsoleClient tenantKey={null} canSave interfaces={[{ ...BASE, binding: { kind: "no-credential" } }]} />);
+    render(<TestConsoleClient tenantKey={null} canSave interfaces={[{ ...BASE, credentials: [] }]} />);
     expect(screen.getByTestId("binding-preview").textContent).toMatch(/no live runtime credential/);
+  });
+
+  it("with one credential per environment (AD-11), the developer picks which to run as and the preview follows", async () => {
+    const dev: CredentialOption = {
+      clientId: "cl_dev",
+      binding: {
+        kind: "bound",
+        credential: { label: "QA-E2E-Main · DEV", environment: "DEV", sapClient: "080" },
+        connection: { label: "Development X5M/080", environment: "DEV", sapClient: "080" },
+        bindingUnverified: false,
+      },
+    };
+    const test: CredentialOption = {
+      clientId: "cl_test",
+      binding: {
+        kind: "bound",
+        credential: { label: "QA-E2E-Main · TEST", environment: "TEST", sapClient: "100" },
+        connection: { label: "Customizing X5M/100", environment: "TEST", sapClient: "100" },
+        bindingUnverified: false,
+      },
+    };
+    render(<TestConsoleClient tenantKey={null} canSave interfaces={[{ ...BASE, credentials: [dev, test] }]} />);
+
+    // Defaults to the first; the picker exists only because there is a choice.
+    expect(screen.getByTestId("binding-preview").textContent).toContain("will bind to Development X5M/080");
+    const picker = screen.getByRole("combobox", { name: "Run as credential" }) as HTMLSelectElement;
+    fireEvent.change(picker, { target: { value: "cl_test" } });
+    expect(screen.getByTestId("binding-preview").textContent).toContain("will bind to Customizing X5M/100");
+
+    // …and the run names that credential, so what was previewed is what runs.
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("broker-run"))).toBe(true));
+    const runCall = fetchMock.mock.calls.find((c) => String(c[0]).includes("broker-run"))!;
+    expect(JSON.parse((runCall[1] as { body: string }).body).clientId).toBe("cl_test");
   });
 });
 
@@ -101,7 +147,7 @@ describe("a saved PASS without a status is unevidenced", () => {
       { id: "old", name: "Bank - Read", interfaceId: "i1", request: null, lastOutcome: "PASS", httpStatus: null, lastRunAt: "2026-07-29T10:00:00Z" },
       { id: "new", name: "PO - Read", interfaceId: "i1", request: null, lastOutcome: "PASS", httpStatus: 200, lastRunAt: "2026-09-11T08:00:00Z" },
     ]);
-    render(<TestConsoleClient tenantKey={null} canSave interfaces={[{ ...BASE, binding: { kind: "no-credential" } }]} />);
+    render(<TestConsoleClient tenantKey={null} canSave interfaces={[{ ...BASE, credentials: [] }]} />);
     await waitFor(() => expect(screen.getByText("Bank - Read")).toBeTruthy());
 
     // Each summary is one span built from several JSX expressions, so match on

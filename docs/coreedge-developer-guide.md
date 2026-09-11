@@ -227,7 +227,9 @@ not become "approved forever".
 
 ## Credentials
 
-- A client credential is issued **per solution**, from the API Access screen.
+- A client credential is issued **per solution and environment**, from the API
+  Access screen — one for DEV, one for TEST, one for PROD. Re-issuing for an
+  environment replaces that environment's token only.
 - The raw token is shown **once**. Only its hash is stored, so it genuinely
   cannot be shown again — copy it when you issue it.
 - Keep it **server-side**. It is not a public API key and must never reach a

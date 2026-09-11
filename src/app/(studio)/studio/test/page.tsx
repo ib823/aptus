@@ -12,7 +12,7 @@ import { cookies } from "next/headers";
 import { ScopeNote } from "@/components/studio/ScopeNote";
 import {
   TestConsoleClient,
-  type BindingPreview,
+  type CredentialOption,
   type TestableInterface,
 } from "@/components/studio/TestConsoleClient";
 import { STUDIO_TENANT_COOKIE } from "@/lib/studio/tenants";
@@ -67,7 +67,7 @@ export default async function StudioTestPage() {
     organizationId
       ? prisma.solutionClient.findMany({
           where: { organizationId, isActive: true, revokedAt: null },
-          select: { solutionId: true, label: true, environment: true, sapClient: true, expiresAt: true },
+          select: { id: true, solutionId: true, label: true, environment: true, sapClient: true, expiresAt: true },
           orderBy: { createdAt: "asc" },
         })
       : Promise.resolve([]),
@@ -84,52 +84,62 @@ export default async function StudioTestPage() {
     ),
   );
 
-  const now = Date.now();
-  const previewBinding = (solutionId: string, sapProduct: string): BindingPreview => {
-    // Same pick as broker-run: the first live, unexpired credential row.
-    const client = clientRows.find(
-      (c) => c.solutionId === solutionId && (c.expiresAt === null || c.expiresAt.getTime() > now),
-    );
-    if (!client) return { kind: "no-credential" };
-    const credential = { label: client.label, environment: client.environment, sapClient: client.sapClient };
-    if (!getSapProduct(sapProduct)) {
-      return {
-        kind: "refused",
-        credential,
-        reason: "UNKNOWN_PRODUCT",
-        message: connectionRefusalMessage("UNKNOWN_PRODUCT", client.environment),
-      };
-    }
-    const selection = selectConnectionForEnvironment(
-      connectionsByProduct.get(sapProduct) ?? [],
-      client.environment,
-      "READ",
-      client.sapClient,
-    );
-    if (!selection.ok) {
-      return {
-        kind: "refused",
-        credential,
-        reason: selection.reason,
-        message: connectionRefusalMessage(selection.reason, client.environment),
-      };
-    }
-    return {
-      kind: "bound",
-      credential,
-      connection: {
-        label: selection.connection.label,
-        environment: selection.connection.environment,
-        sapClient: selection.connection.client,
-      },
-      bindingUnverified: selection.bindingUnverified,
-    };
-  };
-
   // Honour the remembered tenant only if it is one the caller may actually use —
   // the cookie is a view preference, never an authorization input.
   const remembered = (await cookies()).get(STUDIO_TENANT_COOKIE)?.value ?? null;
   const tenantKey = pickActiveTenant(tenants, remembered);
+
+  const now = Date.now();
+  // One preview PER LIVE CREDENTIAL. A solution holds one runtime credential
+  // per environment (AD-11), and each binds to a different system; the console
+  // lets the developer pick which to run as, and says where each would go.
+  const previewCredentials = (solutionId: string, sapProduct: string): CredentialOption[] =>
+    clientRows
+      .filter((c) => c.solutionId === solutionId && (c.expiresAt === null || c.expiresAt.getTime() > now))
+      .map((client) => {
+        const credential = { label: client.label, environment: client.environment, sapClient: client.sapClient };
+        if (!getSapProduct(sapProduct)) {
+          return {
+            clientId: client.id,
+            binding: {
+              kind: "refused",
+              credential,
+              reason: "UNKNOWN_PRODUCT",
+              message: connectionRefusalMessage("UNKNOWN_PRODUCT", client.environment),
+            },
+          };
+        }
+        const selection = selectConnectionForEnvironment(
+          connectionsByProduct.get(sapProduct) ?? [],
+          client.environment,
+          "READ",
+          client.sapClient,
+        );
+        if (!selection.ok) {
+          return {
+            clientId: client.id,
+            binding: {
+              kind: "refused",
+              credential,
+              reason: selection.reason,
+              message: connectionRefusalMessage(selection.reason, client.environment),
+            },
+          };
+        }
+        return {
+          clientId: client.id,
+          binding: {
+            kind: "bound",
+            credential,
+            connection: {
+              label: selection.connection.label,
+              environment: selection.connection.environment,
+              sapClient: selection.connection.client,
+            },
+            bindingUnverified: selection.bindingUnverified,
+          },
+        };
+      });
 
   const interfaces: TestableInterface[] = rows.map((r) => ({
     id: r.id,
@@ -139,7 +149,7 @@ export default async function StudioTestPage() {
     entitySet: r.entitySet,
     operation: r.operation,
     solutionName: r.solution.name,
-    binding: previewBinding(r.solutionId, r.sapProduct),
+    credentials: previewCredentials(r.solutionId, r.sapProduct),
   }));
 
   return (

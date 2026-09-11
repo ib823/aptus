@@ -54,11 +54,14 @@ export interface ClientSummary {
 }
 
 /**
- * Issue the runtime credential for a solution.
+ * Issue the runtime credential for a solution IN AN ENVIRONMENT.
  *
- * One client per solution in v1 (enforced by a unique constraint), so calling
- * this twice ROTATES rather than accumulating credentials — a solution with four
- * live tokens is four things to leak and four things to remember to revoke.
+ * One client per (solution, environment), enforced by a unique constraint, so
+ * calling this twice for the same environment ROTATES rather than accumulating
+ * — four live tokens for one environment is four things to leak and four to
+ * remember to revoke. A different environment is a different credential: an
+ * application promoted DEV → TEST → PROD holds one per stage, and issuing the
+ * TEST one no longer kills DEV (AD-11).
  */
 export async function issueClientToken(
   scope: TenantScope,
@@ -80,16 +83,17 @@ export async function issueClientToken(
   const tokenHash = hashClientToken(rawToken);
 
   const row = await prisma.solutionClient.upsert({
-    // Keyed by (organization, solution), never by solution alone. The update
-    // branch below rotates the token hash and revives a revoked credential —
-    // if the organization is not in this `where`, the only thing keeping that
-    // write inside the tenant is whichever caller scoped the solution lookup
-    // above it. Same reasoning, and the same shape, as
+    // Keyed by (organization, solution, environment), never by solution alone.
+    // The update branch below rotates the token hash and revives a revoked
+    // credential — if the organization is not in this `where`, the only thing
+    // keeping that write inside the tenant is whichever caller scoped the
+    // solution lookup above it. Same reasoning, and the same shape, as
     // `upsertSapConnection`'s organizationId_product_key.
     where: {
-      organizationId_solutionId: {
+      organizationId_solutionId_environment: {
         organizationId: scope.organizationId,
         solutionId: input.solutionId,
+        environment: input.environment,
       },
     },
     create: {
@@ -105,7 +109,6 @@ export async function issueClientToken(
     update: {
       label: input.label,
       tokenHash,
-      environment: input.environment,
       // Rotation re-states the binding rather than preserving it: the caller
       // just described the credential it wants, and a silently-kept client
       // from a previous issue would be a binding nobody chose.

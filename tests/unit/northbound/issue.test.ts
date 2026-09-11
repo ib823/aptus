@@ -110,11 +110,14 @@ describe("issuing", () => {
     expect(call.create.organizationId).toBe("org_a");
   });
 
-  it("upserts on (organization, solution), so it neither accumulates nor leaves the tenant", async () => {
-    // Two properties, and the second was missing until the compound key landed.
+  it("upserts on (organization, solution, environment), so it neither accumulates nor leaves the tenant", async () => {
+    // Three properties.
     //
-    // Keyed by solution: four live tokens is four things to leak and four to
-    // remember to revoke, so re-issuing must rotate rather than add.
+    // Keyed by solution AND environment (AD-11): four live tokens for one
+    // environment is four things to leak and four to remember to revoke, so
+    // re-issuing for the same environment must rotate rather than add — while
+    // a second environment adds a credential beside the first instead of
+    // killing it, which is what promotion through a landscape needs.
     //
     // Keyed by ORGANIZATION too: the update branch of this upsert rotates the
     // token hash and revives a revoked credential. Keyed on `{ solutionId }`
@@ -130,8 +133,21 @@ describe("issuing", () => {
     });
     const call = mocks.upsert.mock.calls[0]?.[0] as { where: Record<string, unknown> };
     expect(call.where).toEqual({
-      organizationId_solutionId: { organizationId: "org_a", solutionId: "sol_1" },
+      organizationId_solutionId_environment: { organizationId: "org_a", solutionId: "sol_1", environment: "PROD" },
     });
+  });
+
+  it("never rewrites the environment on rotation — it is the key, not a field", async () => {
+    // Under the old solution-only key a re-issue could reclassify a credential
+    // from DEV to PROD in place, voiding the grant that authorised it.
+    await issueClientToken(SCOPE, {
+      solutionId: "sol_1",
+      label: "x",
+      environment: "PROD",
+      createdById: "u",
+    });
+    const call = mocks.upsert.mock.calls[0]?.[0] as { update: Record<string, unknown> };
+    expect(call.update).not.toHaveProperty("environment");
   });
 
   it("re-issuing revives a revoked credential — that is what the request means", async () => {

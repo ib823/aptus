@@ -45,6 +45,14 @@ const bodySchema = z.object({
   interfaceId: z.string().min(1),
   entity: z.string().max(200).optional(),
   limit: z.number().int().min(1).max(50).optional(),
+  /**
+   * WHICH credential to run as. A solution holds one runtime credential per
+   * environment (AD-11), and the run binds by the credential's environment —
+   * so with several live, "the first row" would be a system nobody chose. The
+   * console always names one; the fallback below serves a solution with
+   * exactly one.
+   */
+  clientId: z.string().min(1).optional(),
 });
 
 /** The console renders refusals as outcomes, so they travel in the data. */
@@ -77,16 +85,33 @@ export async function POST(request: NextRequest) {
   // The solution's runtime credential row — the identity the deployed app
   // holds. No credential means the app's first call would 401; say exactly that.
   const now = new Date();
-  const client = await prisma.solutionClient.findFirst({
-    where: scopedWhere(scope, { solutionId: iface.solutionId, isActive: true, revokedAt: null }),
-    select: { id: true, environment: true, sapClient: true, expiresAt: true },
-  });
-  if (!client || (client.expiresAt !== null && client.expiresAt.getTime() <= now.getTime())) {
+  const liveClients = (
+    await prisma.solutionClient.findMany({
+      where: scopedWhere(scope, {
+        solutionId: iface.solutionId,
+        isActive: true,
+        revokedAt: null,
+        ...(input.clientId ? { id: input.clientId } : {}),
+      }),
+      select: { id: true, environment: true, sapClient: true, expiresAt: true },
+      orderBy: { createdAt: "asc" },
+    })
+  ).filter((c) => c.expiresAt === null || c.expiresAt.getTime() > now.getTime());
+  if (liveClients.length === 0) {
     return refusalOk(
       "NO_CREDENTIAL",
-      "This solution has no live runtime credential, so its deployed application cannot call anything. Issue one under API Access — this console runs with the same identity.",
+      input.clientId
+        ? "That credential is no longer live (revoked, expired or not this solution's). Pick another, or issue one under API Access."
+        : "This solution has no live runtime credential, so its deployed application cannot call anything. Issue one under API Access — this console runs with the same identity.",
     );
   }
+  if (liveClients.length > 1) {
+    return refusalOk(
+      "AMBIGUOUS_CREDENTIAL",
+      `This solution holds live credentials for ${liveClients.map((c) => c.environment).join(", ")}. Pick which one to run as — each binds to a different system.`,
+    );
+  }
+  const client = liveClients[0]!;
 
   const audit = (
     status: number,

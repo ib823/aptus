@@ -15,13 +15,18 @@
  * Stored sealed with AES-256-GCM, bound by AAD to (organization, solution), so a
  * ciphertext lifted onto another solution's row will not open. Verified in
  * constant time.
+ *
+ * ONE PER CREDENTIAL ROW. A solution holds one runtime credential per
+ * environment (AD-11); the write key seals onto the row whose environment the
+ * write grant covers, and is verified against the row that authenticated the
+ * call — never against a sibling environment's.
  */
 
 import { timingSafeEqual } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
 import { openSecrets, sealSecrets, solutionClientAad } from "@/lib/sap-public/connection-crypto";
-import { scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
+import { scopedById, scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
 
 /** Distinct prefix from the read token, so the two are never confused in a log. */
 export const WRITE_KEY_PREFIX = "cew_";
@@ -40,12 +45,17 @@ export function generateWriteCredential(): string {
  */
 export async function setWriteCredential(
   scope: TenantScope,
-  solutionId: string,
+  /**
+   * The credential ROW, not the solution. A solution holds one credential per
+   * environment (AD-11), and a write key belongs to exactly one of them — the
+   * one whose environment the write grant covers.
+   */
+  clientId: string,
   rawKey: string,
 ): Promise<boolean> {
   const client = await prisma.solutionClient.findFirst({
-    where: scopedWhere(scope, { solutionId }),
-    select: { id: true },
+    where: scopedById(scope, clientId),
+    select: { id: true, solutionId: true },
   });
   if (!client) return false;
 
@@ -54,7 +64,7 @@ export async function setWriteCredential(
     data: {
       secretsCiphertext: sealSecrets(
         { writeSecret: rawKey },
-        solutionClientAad(scope.organizationId, solutionId),
+        solutionClientAad(scope.organizationId, client.solutionId),
       ),
     },
   });
@@ -70,14 +80,20 @@ export async function setWriteCredential(
  */
 export async function verifyWriteCredential(
   scope: TenantScope,
-  solutionId: string,
+  /**
+   * The CALLING credential's row id — the token that authenticated this
+   * request. Verified against that row, never against "some credential of the
+   * solution": with one credential per environment, a write key minted for
+   * TEST must not authorise a call made with the DEV token.
+   */
+  clientId: string,
   presented: string | null,
 ): Promise<boolean> {
   if (!presented) return false;
 
   const client = await prisma.solutionClient.findFirst({
-    where: scopedWhere(scope, { solutionId }),
-    select: { secretsCiphertext: true },
+    where: scopedById(scope, clientId),
+    select: { solutionId: true, secretsCiphertext: true },
   });
   if (!client?.secretsCiphertext) return false;
 
@@ -85,7 +101,7 @@ export async function verifyWriteCredential(
   try {
     stored = openSecrets(
       client.secretsCiphertext,
-      solutionClientAad(scope.organizationId, solutionId),
+      solutionClientAad(scope.organizationId, client.solutionId),
     ).writeSecret;
   } catch {
     // A blob that will not open under this row's AAD is either corrupt or was
@@ -101,14 +117,14 @@ export async function verifyWriteCredential(
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** Is a write credential configured at all? Metadata for the UI — never the value. */
+/** Does ANY of the solution's credentials carry a write key? Metadata for the UI — never the value. */
 export async function hasWriteCredential(
   scope: TenantScope,
   solutionId: string,
 ): Promise<boolean> {
   const client = await prisma.solutionClient.findFirst({
-    where: scopedWhere(scope, { solutionId }),
-    select: { secretsCiphertext: true },
+    where: scopedWhere(scope, { solutionId, NOT: { secretsCiphertext: null } }),
+    select: { id: true },
   });
-  return Boolean(client?.secretsCiphertext);
+  return client !== null;
 }
