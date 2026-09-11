@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { inferResponseSchema, isCapturedSchema } from "@/lib/studio/schema-capture";
+import { inferResponseSchema, isCapturedSchema, MIN_SAMPLE_FOR_REQUIRED } from "@/lib/studio/schema-capture";
 
 const AT = new Date("2026-07-25T12:00:00Z");
 
@@ -51,14 +51,29 @@ describe("what it describes", () => {
 });
 
 describe("what it refuses to claim", () => {
-  it("marks a field required ONLY if it appeared in every row", () => {
+  it("marks a field required ONLY if it appeared in every row — of a sample large enough to say so", () => {
     // SAP omits nulls in OData v2 rather than sending them, so a field missing
-    // from one row of three is genuinely optional in THIS tenant.
+    // from one row of twenty is genuinely optional in THIS tenant.
+    const rows = Array.from({ length: MIN_SAMPLE_FOR_REQUIRED }, (_, i) => (i === 7 ? { A: 1 } : { A: 1, B: i }));
+    const s = inferResponseSchema(rows, AT);
+    expect(s!.required).toEqual(["A"]);
+    expect(s!["x-captured"].alwaysPresent).toEqual(["A"]);
+    expect(s!["x-captured"].note).toContain("marked required");
+  });
+
+  it("asserts NOTHING required from a small sample, and records the observation instead", () => {
+    // The contract marked all 71 fields of a V4 service required from five
+    // rows; a consumer's validator then rejected the first real row that
+    // omitted an optional field. Five rows that all carry a value prove
+    // nothing about the sixth.
     const s = inferResponseSchema(
       [{ A: 1, B: 2 }, { A: 1 }, { A: 1, B: 3 }],
       AT,
     );
-    expect(s!.required).toEqual(["A"]);
+    expect(s!.required).toEqual([]);
+    expect(s!["x-captured"].alwaysPresent).toEqual(["A"]);
+    expect(s!["x-captured"].note).toMatch(/below 20 rows, so no field is marked required/);
+    expect(s!["x-captured"].note).toMatch(/observation, not a guarantee/);
   });
 
   it("declares NO type when a field arrived as two different types", () => {

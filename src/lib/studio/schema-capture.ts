@@ -34,8 +34,29 @@ export interface CapturedSchema {
     sampleSize: number;
     capturedAt: string;
     note: string;
+    /**
+     * The fields present in EVERY sampled row — the observation `required` is
+     * drawn from, kept even when the sample is too small for `required` to
+     * assert it (see MIN_SAMPLE_FOR_REQUIRED). Absent on schemas captured
+     * before this field existed.
+     */
+    alwaysPresent?: string[];
   };
 }
+
+/**
+ * HOW MANY ROWS BEFORE "PRESENT IN EVERY ROW" MAY BECOME `required`.
+ *
+ * The generated contract marked all 71 fields of a V4 service required from a
+ * FIVE-row sample. The rule — required iff present in every sampled row — is
+ * right for V2, where SAP omits nulls, and wrong in effect for a small sample:
+ * five rows that all happen to carry a value prove nothing about the sixth,
+ * and a consumer's generated validator then rejects the first real row that
+ * omits an optional field. Below this floor nothing is asserted required; the
+ * observation is still recorded in x-captured.alwaysPresent, and the note says
+ * which case the reader is looking at.
+ */
+export const MIN_SAMPLE_FOR_REQUIRED = 20;
 
 /** OData v2 wraps metadata in `__metadata`; it describes the envelope, not the entity. */
 const ODATA_NOISE = new Set(["__metadata", "__deferred", "@odata.etag", "@odata.context"]);
@@ -91,7 +112,7 @@ export function inferResponseSchema(
   if (seenIn.size === 0) return null;
 
   const properties: CapturedSchema["properties"] = {};
-  const required: string[] = [];
+  const alwaysPresent: string[] = [];
 
   for (const [key, count] of [...seenIn.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
     const observed = types.get(key);
@@ -109,9 +130,13 @@ export function inferResponseSchema(
     if (sawNull.has(key)) prop.nullable = true;
 
     properties[key] = prop;
-    // Present in EVERY sampled row → required. See the header on v2 null-omission.
-    if (count === rows.length) required.push(key);
+    // Present in EVERY sampled row. See the header on v2 null-omission — and
+    // MIN_SAMPLE_FOR_REQUIRED on when that observation may become `required`.
+    if (count === rows.length) alwaysPresent.push(key);
   }
+
+  const assertRequired = rows.length >= MIN_SAMPLE_FOR_REQUIRED;
+  const required = assertRequired ? [...alwaysPresent] : [];
 
   return {
     type: "object",
@@ -124,7 +149,12 @@ export function inferResponseSchema(
       capturedAt: capturedAt.toISOString(),
       note:
         `Inferred from ${rows.length} live row${rows.length === 1 ? "" : "s"} returned by this tenant. ` +
-        "Fields absent from the sample are not described, and additionalProperties stays true.",
+        "Fields absent from the sample are not described, and additionalProperties stays true. " +
+        (assertRequired
+          ? `${alwaysPresent.length} field${alwaysPresent.length === 1 ? " was" : "s were"} present in every sampled row and ${alwaysPresent.length === 1 ? "is" : "are"} marked required.`
+          : `The sample is below ${MIN_SAMPLE_FOR_REQUIRED} rows, so no field is marked required — ` +
+            `${alwaysPresent.length} ${alwaysPresent.length === 1 ? "was" : "were"} present in every sampled row (x-captured.alwaysPresent), which is an observation, not a guarantee.`),
+      alwaysPresent,
     },
   };
 }

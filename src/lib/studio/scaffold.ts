@@ -93,6 +93,17 @@ export function buildOpenApi(iface: ScaffoldInterface, baseUrl = "https://coreed
           responses: {
             "200": {
               description: "Records, or an empty array meaning 'no records' — not an error.",
+              headers: {
+                "x-correlation-id": {
+                  description: "Quote this when raising a support request; it identifies the audit row for this call.",
+                  schema: { type: "string" },
+                },
+                "x-coreedge-interface-status": {
+                  description:
+                    "Present, with the value DRAFT, when the interface is still a draft in Developer Studio. A draft is served — premature is not wrong — but its contract may still change. Absent once the interface is ACTIVE.",
+                  schema: { type: "string", enum: ["DRAFT"] },
+                },
+              },
               content: {
                 "application/json": {
                   schema: {
@@ -101,10 +112,27 @@ export function buildOpenApi(iface: ScaffoldInterface, baseUrl = "https://coreed
                     properties: {
                       data: {
                         type: "object",
-                        required: ["records"],
+                        // Every field the broker sends on a 200, named. `empty`
+                        // is the one that tells a successful read of nothing
+                        // apart from a failure, and it was not in the contract.
+                        required: ["records", "count", "empty", "note", "interface"],
                         properties: {
                           records: { type: "array", items: { $ref: `#/components/schemas/${typeName}` } },
-                          count: { type: "integer" },
+                          count: { type: "integer", description: "records.length." },
+                          empty: {
+                            type: "boolean",
+                            description: "True when the service answered successfully and had nothing to return. This is data, not a failure.",
+                          },
+                          note: { type: "string", description: "A one-line, human-readable account of what came back." },
+                          interface: {
+                            type: "object",
+                            required: ["id", "name", "version"],
+                            properties: {
+                              id: { type: "string" },
+                              name: { type: "string" },
+                              version: { type: "integer", description: "The governed contract version that served this call." },
+                            },
+                          },
                         },
                       },
                     },
@@ -112,10 +140,19 @@ export function buildOpenApi(iface: ScaffoldInterface, baseUrl = "https://coreed
                 },
               },
             },
+            "400": {
+              description:
+                "The interface cannot be read as configured: it has no entity set (set one in Studio, or pass ?entity=), or its catalogue service could not be resolved. Fix the configuration — do not retry.",
+              content: errorContent(),
+            },
             "401": { description: "Missing, revoked or expired client token.", content: errorContent() },
             "403": {
               description:
                 "Not set up: no approved access grant for this interface in this environment, or the communication arrangement is missing.",
+              content: errorContent(),
+            },
+            "404": {
+              description: "No interface with this id belongs to the solution this token was issued for.",
               content: errorContent(),
             },
             "429": { description: "Rate limited — this endpoint reaches a live SAP tenant.", content: errorContent() },
@@ -175,6 +212,9 @@ function describeRecord(responseSchema: unknown): Record<string, unknown> {
   if (isCapturedSchema(responseSchema)) {
     return {
       ...responseSchema,
+      properties: Object.fromEntries(
+        Object.entries(responseSchema.properties).map(([name, prop]) => [name, toOpenApi31Property(prop)]),
+      ),
       description:
         "Fields observed in a live response from this tenant. Additional fields may exist on records outside the sample.",
     };
@@ -185,6 +225,24 @@ function describeRecord(responseSchema: unknown): Record<string, unknown> {
       "No live response has been captured for this interface yet, so its fields are not described. Run it in the Test Console and regenerate to get a precise contract.",
     additionalProperties: true,
   };
+}
+
+/**
+ * THE DOCUMENT SAYS 3.1.0, SO IT MUST SPEAK 3.1. The captured schema records a
+ * null it saw as `nullable: true` — the OpenAPI 3.0 keyword, which 3.1 dropped
+ * for JSON Schema's `type: [T, "null"]`. Generators reading a 3.1 document
+ * ignore `nullable` silently, so every nullable date came out untyped in the
+ * developer's client. The stored form is unchanged (the TypeScript emitter
+ * reads it); the translation happens here, at the sink that claims 3.1.
+ */
+function toOpenApi31Property(prop: { type?: string; format?: string; nullable?: boolean }): Record<string, unknown> {
+  const { nullable, type, ...rest } = prop;
+  if (!nullable) return type ? { ...rest, type } : rest;
+  // No consistent type observed AND a null: the value may be anything or null.
+  // JSON Schema has no way to say "unknown-or-null" narrower than no type at
+  // all, so the null is recorded in the description rather than invented.
+  if (!type) return { ...rest, description: "Observed as null in the sample; no consistent type otherwise." };
+  return { ...rest, type: [type, "null"] };
 }
 
 /** Map a captured JSON-schema type to its TypeScript equivalent. */
@@ -238,15 +296,30 @@ export function buildTypeScriptClient(
   baseUrl = "https://coreedge.example/api/northbound",
 ): string {
   const typeName = toTypeName(iface.entitySet ?? iface.name);
+  /*
+   * THE HEADER FOLLOWS THE SCHEMA. It said "This is a TEMPLATE … the record
+   * shape is intentionally open" unconditionally — directly above 54 typed
+   * fields, once a schema had been captured. The sentence was true the day it
+   * was written and the capture feature did not update it.
+   */
+  const shapeNote = isCapturedSchema(iface.responseSchema)
+    ? ` * The record type below was CAPTURED from ${iface.responseSchema["x-captured"].sampleSize} live row${
+        iface.responseSchema["x-captured"].sampleSize === 1 ? "" : "s"
+      } this tenant returned
+ * (${iface.responseSchema["x-captured"].capturedAt}). It describes what was observed, not
+ * SAP's full $metadata: fields outside the sample are not listed, and the index
+ * signature keeps them reachable. Fields are optional unless the sample was
+ * large enough to assert otherwise — see x-captured in openapi.json.`
+    : ` * This is a TEMPLATE, not generated from a live $metadata document. The record
+ * shape is intentionally open — run the interface in the Test Console, use
+ * Capture schema, and regenerate to get the fields this tenant actually returns.`;
   return `/**
  * ${safeName(iface.name)} — CoreEdge northbound client
  *
  * Generated by CoreEdge Developer Studio from governed interface configuration
  * (${iface.externalId}, v${iface.version}).
  *
- * This is a TEMPLATE, not generated from a live $metadata document. The record
- * shape is intentionally open — run the interface in the Test Console to see the
- * fields this tenant actually returns, then narrow the type yourself.
+${shapeNote}
  *
  * Not using TypeScript? Generate a client in your language from the OpenAPI
  * document shipped alongside this file:
@@ -264,9 +337,27 @@ export interface CoreEdgeErrorBody {
   error: { code: string; message: string; correlationId: string };
 }
 
+/** What a 200 carries — every field the broker sends, not only the records. */
 export interface ReadResult {
   records: ${typeName}[];
-  count?: number;
+  /** records.length. */
+  count: number;
+  /**
+   * True when the service answered successfully and had nothing to return.
+   * THIS IS DATA, NOT A FAILURE — the one field that tells an empty read apart
+   * from a refusal, and the reason a consumer must not key on records.length.
+   */
+  empty: boolean;
+  /** A one-line, human-readable account of what came back. */
+  note: string;
+  /** The governed interface (and contract version) that served the call. */
+  interface: { id: string; name: string; version: number };
+  /**
+   * True when the broker sent x-coreedge-interface-status: DRAFT — the
+   * interface is served but its builder has not marked it ACTIVE, so this
+   * contract may still change.
+   */
+  draft: boolean;
 }
 
 export interface CoreEdgeClientOptions {
@@ -306,7 +397,7 @@ export function createClient(options: CoreEdgeClientOptions) {
         \`\${options.baseUrl}/interfaces/\${interfaceId}/data?limit=\${limit}\`,
         { headers: { Authorization: \`Bearer \${options.token}\`, Accept: "application/json" } },
       );
-      const json = (await res.json()) as { data?: ReadResult } & Partial<CoreEdgeErrorBody>;
+      const json = (await res.json()) as { data?: Omit<ReadResult, "draft"> } & Partial<CoreEdgeErrorBody>;
       if (!res.ok) {
         throw new CoreEdgeError(
           json.error?.message ?? "Request failed",
@@ -315,7 +406,18 @@ export function createClient(options: CoreEdgeClientOptions) {
           json.error?.correlationId ?? "",
         );
       }
-      return json.data ?? { records: [] };
+      if (!json.data) {
+        // A 2xx without the data envelope is not "no records" — it is a
+        // response this client does not understand, and saying so beats
+        // inventing an empty result.
+        throw new CoreEdgeError(
+          "Response carried no data envelope",
+          res.status,
+          "MALFORMED_RESPONSE",
+          res.headers.get("x-correlation-id") ?? "",
+        );
+      }
+      return { ...json.data, draft: res.headers.get("x-coreedge-interface-status") === "DRAFT" };
     },
   };
 }
@@ -378,6 +480,7 @@ Your database, your framework, your language: untouched by any of this.
 | \`demo.mjs\` | A runnable read. Proves the loop end to end. |
 | \`mock.mjs\` + \`fixtures.json\` | An offline CoreEdge, serving responses recorded from real runs. No dependencies. |
 | \`.env.example\` | The two values you need. |
+| \`.gitignore\` | Keeps \`.env\` (your token) and \`fixtures.json\` (your customer's records) out of your repository by default. |
 
 ## Run it
 
@@ -400,6 +503,18 @@ ${fixtureSection}
 Point \`COREEDGE_BASE_URL\` at the live broker or at a local mock — **that one
 variable is the only difference**, so your tests can run offline against the mock
 and the same code path runs against the real tenant.
+
+## The fixture file holds your customer's data — treat it that way
+
+\`fixtures.json\` is recorded from **real reads of a real tenant**. A \`data\`
+fixture carries live master data — supplier numbers, user IDs, company codes,
+whatever the entity set returned. It is truncated to a sample, never redacted.
+
+- It is listed in \`.gitignore\`, so it stays out of your repository unless you
+  choose otherwise. Keep it that way, or redact it first.
+- Do not share this kit with anyone who is not cleared to see the tenant's data.
+- The other scenarios (\`empty\`, \`needs_setup\`, \`error\`) carry no records
+  and are safe to commit; split them out if your suite needs them in CI.
 
 ## Not a TypeScript shop?
 
@@ -471,11 +586,17 @@ function buildFixturesJson(
   fixtures: readonly ScaffoldFixture[],
 ): string {
   const unproven = fixtures.filter((f) => f.sourceStatus === null || f.sourceStatus === undefined);
+  const dataFixtures = fixtures.filter((f) => f.scenario === "data");
 
   return JSON.stringify(
     {
       interfaceId: iface.id,
       interfaceName: safeName(iface.name),
+      // First key in the file, so it is the first line anyone opening it reads.
+      warning: dataFixtures.length > 0
+        ? `CUSTOMER DATA. ${dataFixtures.length === 1 ? "The data fixture carries" : `${dataFixtures.length} fixtures carry`} live records read from a real tenant — master data, identifiers, amounts. ` +
+          "This file is listed in the kit's .gitignore; do not commit it to a shared repository or hand it to anyone not cleared to see the tenant's data. Redact before sharing."
+        : "No data fixture is captured, so this file carries no tenant records. A data capture will; see the README.",
       note:
         unproven.length === 0
           ? "Recorded from real runs in CoreEdge Developer Studio, each carrying the status the tenant returned. Serve them with `npm run mock`."
@@ -592,6 +713,7 @@ ${loadEnvPrelude()}
 const PORT = Number(process.env.PORT ?? 4010);
 const DEFAULT_SCENARIO = process.env.COREEDGE_SCENARIO ?? "data";
 const INTERFACE_ID = ${JSON.stringify(iface.id)};
+const INTERFACE = ${JSON.stringify({ id: iface.id, name: safeName(iface.name), version: iface.version })};
 
 function pick(scenario) {
   const found = fixtures.fixtures.find((f) => f.scenario === scenario);
@@ -634,7 +756,9 @@ createServer((req, res) => {
   }
 
   const fixture = pick(url.searchParams.get("scenario") ?? DEFAULT_SCENARIO);
-  const payload = fixture.status < 400 ? { data: fixture.body } : fixture.body;
+  // The same envelope the broker sends, "interface" included: the fixture body
+  // is what the run returned; which interface served it is the mock's to add.
+  const payload = fixture.status < 400 ? { data: { interface: INTERFACE, ...fixture.body } } : fixture.body;
   res.writeHead(fixture.status, { "content-type": "application/json", "x-correlation-id": "mock" });
   res.end(JSON.stringify(payload, null, 2));
 }).listen(PORT, () => {
@@ -756,6 +880,27 @@ if (note) console.log("note:", note);
 `;
 }
 
+/**
+ * .gitignore — the one line that stops customer data reaching a repository.
+ *
+ * The kit's premise is that you take it to your own repository, and the default
+ * path did exactly that with fixtures.json inside it: supplier numbers, SAP
+ * user IDs and company codes, recorded from a real tenant and described in the
+ * README as "responses recorded from real runs", walked into a developer's git
+ * history on the first commit. The token in .env was one `git add .` from the
+ * same fate. Both are ignored by default; un-ignoring is a decision.
+ */
+export function buildGitignore(): string {
+  return `# Your per-solution client token. Never commit it.
+.env
+
+# Recorded responses from a REAL tenant. The data fixture carries live customer
+# records (master data, identifiers, amounts) — truncated, never redacted.
+# Keep it out of shared history; redact it first if your suite must have it.
+fixtures.json
+`;
+}
+
 export interface ScaffoldFile {
   path: string;
   contents: string;
@@ -779,6 +924,7 @@ export function buildScaffold(
     { path: "openapi.json", contents: buildOpenApi(iface, baseUrl) },
     { path: "client.ts", contents: buildTypeScriptClient(iface, baseUrl) },
     { path: ".env.example", contents: buildEnvExample(baseUrl) },
+    { path: ".gitignore", contents: buildGitignore() },
     { path: "package.json", contents: buildPackageJson(iface) },
     { path: "demo.mjs", contents: buildDemo(iface) },
     { path: "mock.mjs", contents: buildMockServer(iface) },

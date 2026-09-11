@@ -154,8 +154,11 @@ describe("the generated mock is real, runnable JavaScript", () => {
     expect(src).toContain("FIXTURE_NOT_CAPTURED");
   });
 
-  it("wraps 2xx bodies in `data` exactly as the broker does", () => {
-    expect(src).toContain("fixture.status < 400 ? { data: fixture.body } : fixture.body");
+  it("wraps 2xx bodies in `data` exactly as the broker does — `interface` included", () => {
+    // The broker's 200 carries records, count, empty, note AND interface; the
+    // fixture body is what the run returned, so the mock adds the one field
+    // that identifies which interface served it.
+    expect(src).toContain("fixture.status < 400 ? { data: { interface: INTERFACE, ...fixture.body } } : fixture.body");
   });
 });
 
@@ -214,6 +217,7 @@ describe("the bundle", () => {
   it("ships everything needed to run offline", () => {
     expect(names).toEqual([
       ".env.example",
+      ".gitignore",
       "README.md",
       "client.ts",
       "demo.mjs",

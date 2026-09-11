@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildOpenApi, buildTypeScriptClient, type ScaffoldInterface } from "@/lib/studio/scaffold";
-import { inferResponseSchema } from "@/lib/studio/schema-capture";
+import { inferResponseSchema, MIN_SAMPLE_FOR_REQUIRED } from "@/lib/studio/schema-capture";
 
 const BASE: ScaffoldInterface = {
   id: "if_1",
@@ -22,7 +22,19 @@ const BASE: ScaffoldInterface = {
   solutionName: "Finance Accelerator",
 };
 
-const CAPTURED = inferResponseSchema(
+// Twenty rows — the floor above which "present in every row" may be asserted
+// as `required` (MIN_SAMPLE_FOR_REQUIRED). `Note` is absent from one row and
+// null in another, so it is optional AND nullable.
+const SAMPLE = Array.from({ length: MIN_SAMPLE_FOR_REQUIRED }, (_, i) => ({
+  BusinessPartner: String(1000 + i),
+  BusinessPartnerName: i % 2 ? "Acme" : "Globex",
+  IsBlocked: i % 3 === 0,
+  ...(i === 1 ? {} : { Note: i === 0 ? null : "n" }),
+}));
+const CAPTURED = inferResponseSchema(SAMPLE, new Date("2026-07-25T12:00:00Z"));
+
+// The same shape from two rows: too few to assert anything required.
+const CAPTURED_SMALL = inferResponseSchema(
   [
     { BusinessPartner: "1000", BusinessPartnerName: "Acme", IsBlocked: false, Note: null },
     { BusinessPartner: "1001", BusinessPartnerName: "Globex", IsBlocked: true },
@@ -63,8 +75,25 @@ describe("OpenAPI with a captured schema", () => {
   });
 
   it("marks only the always-present fields as required", () => {
-    // `Note` appeared in one row of two.
+    // `Note` was absent from one row of twenty.
     expect(schemaOf(doc).required).toEqual(["BusinessPartner", "BusinessPartnerName", "IsBlocked"]);
+  });
+
+  it("asserts nothing required from a two-row sample", () => {
+    const small = buildOpenApi({ ...BASE, responseSchema: CAPTURED_SMALL });
+    expect(schemaOf(small).required).toEqual([]);
+    const captured = schemaOf(small)["x-captured"] as { alwaysPresent: string[] };
+    expect(captured.alwaysPresent).toEqual(["BusinessPartner", "BusinessPartnerName", "IsBlocked"]);
+  });
+
+  it("speaks OpenAPI 3.1 for a nullable field — a type array, never the 3.0 `nullable` keyword", () => {
+    // The document declares 3.1.0; `nullable: true` is a 3.0 keyword that 3.1
+    // generators ignore silently, so every nullable date came out untyped.
+    const props = schemaOf(doc).properties as Record<string, Record<string, unknown>>;
+    expect(props.Note?.type).toEqual(["string", "null"]);
+    expect(props.Note).not.toHaveProperty("nullable");
+    expect(props.BusinessPartner?.type).toBe("string");
+    expect(doc).not.toContain('"nullable"');
   });
 
   it("keeps additionalProperties true even when precise", () => {
@@ -108,7 +137,15 @@ describe("TypeScript client with a captured schema", () => {
   });
 
   it("types a nullable field as `| null`", () => {
-    expect(src).toMatch(/Note\?: unknown \| null;/);
+    expect(src).toMatch(/Note\?: string \| null;/);
+  });
+
+  it("the header says the shape was CAPTURED, not that it is an open template", () => {
+    // "This is a TEMPLATE … the record shape is intentionally open" sat directly
+    // above 54 typed fields. The header follows the schema now.
+    expect(src).toContain("CAPTURED from 20 live rows");
+    expect(src).not.toContain("This is a TEMPLATE");
+    expect(buildTypeScriptClient(BASE)).toContain("This is a TEMPLATE");
   });
 
   it("KEEPS the index signature, because the sample is not a census", () => {
@@ -131,6 +168,6 @@ describe("TypeScript client with a captured schema", () => {
     expect(out).toContain('"Sales-Order"');
     expect(out).toContain('"2ndAddress"');
     // A normal name stays unquoted.
-    expect(out).toMatch(/^\s+ok: number;/m);
+    expect(out).toMatch(/^\s+ok\??: number;/m);
   });
 });

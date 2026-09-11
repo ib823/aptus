@@ -176,11 +176,14 @@ describe("env example", () => {
 describe("the bundle", () => {
   it("is exactly what a developer needs to build AND to test offline", () => {
     // The contract half (openapi/client), the runnable half (demo/mock/fixtures/
-    // package.json), and the two files that set expectations (README/.env).
-    // Anything more would be us having opinions about their project layout.
+    // package.json), the two files that set expectations (README/.env), and the
+    // .gitignore that keeps the token and the tenant's records out of their
+    // history by default. Anything more would be us having opinions about
+    // their project layout.
     const files = buildScaffold(IFACE);
     expect(files.map((f) => f.path).sort()).toEqual([
       ".env.example",
+      ".gitignore",
       "README.md",
       "client.ts",
       "demo.mjs",
