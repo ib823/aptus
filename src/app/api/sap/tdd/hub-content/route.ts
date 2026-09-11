@@ -311,16 +311,26 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const p = tenantKey ? readStoredProbe(r.rawMetadataJson, tenantKey, defaultTenantKey) : null;
     if (!p) continue;
     if (p.at) probedAt.set(r.externalId, p.at);
+    const staleProbe = isProbeStale(p.at, now);
+    if (staleProbe) staleIds.add(r.externalId);
     if (typeof p.http === "number") {
-      if (isProbeStale(p.at, now)) {
-        staleIds.add(r.externalId);
-        stale++;
-      } else {
+      if (staleProbe) stale++;
+      else {
         outcomes.set(r.externalId, p.http);
         probed++;
       }
     }
-    if (typeof p.read === "boolean") capabilities.set(r.externalId, { read: p.read, write: p.write === true });
+    /*
+     * The capability chips come from the SAME probe as the status badge, so
+     * they expire with it. Withholding the badge and keeping "Read · Write"
+     * was the louder half of the claim surviving the quieter one: a row would
+     * read NOT_CHECKED and still assert what the tenant supports, on a memory
+     * the page had just declared too old to classify. Either the probe is
+     * current enough to say something, or it says nothing.
+     */
+    if (!staleProbe && typeof p.read === "boolean") {
+      capabilities.set(r.externalId, { read: p.read, write: p.write === true });
+    }
     if (p.at && (!lastProbedAt || p.at > lastProbedAt)) lastProbedAt = p.at;
   }
 

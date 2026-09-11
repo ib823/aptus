@@ -18,6 +18,7 @@ import {
   openSecrets,
   sealSecrets,
   solutionClientAad,
+  solutionClientRowAad,
 } from "@/lib/sap-public/connection-crypto";
 
 const KEY = "SAP_CONNECTION_ENCRYPTION_KEY";
@@ -63,6 +64,28 @@ describe("a blob sealed for one row will not open on another", () => {
     expect(decryptSecret(blob, solutionClientAad("org_a", "sol_1"))).toBe("x");
     expect(() => decryptSecret(blob, solutionClientAad("org_a", "sol_2"))).toThrow();
     expect(() => decryptSecret(blob, solutionClientAad("org_b", "sol_1"))).toThrow();
+  });
+
+  /*
+   * AD-11 turned "one credential per solution" into "one per environment", and
+   * the solution-level AAD stopped identifying a row: every credential of a
+   * solution shared it, so a write key sealed for TEST opened on the DEV row and
+   * a DEV token carried TEST's write authority. The row id restores the binding.
+   */
+  it("binds a write key to ONE credential row, not to the solution", () => {
+    const forTest = encryptSecret("cew_test", solutionClientRowAad("org_a", "sol_1", "cli_test"));
+    expect(decryptSecret(forTest, solutionClientRowAad("org_a", "sol_1", "cli_test"))).toBe("cew_test");
+    // The sibling environment's row — same organization, same solution.
+    expect(() => decryptSecret(forTest, solutionClientRowAad("org_a", "sol_1", "cli_dev"))).toThrow();
+    expect(() => decryptSecret(forTest, solutionClientRowAad("org_a", "sol_2", "cli_test"))).toThrow();
+    expect(() => decryptSecret(forTest, solutionClientRowAad("org_b", "sol_1", "cli_test"))).toThrow();
+  });
+
+  it("the superseded solution-level AAD does not open a row-bound blob, or the reverse", () => {
+    const v2 = encryptSecret("x", solutionClientRowAad("org_a", "sol_1", "cli_test"));
+    expect(() => decryptSecret(v2, solutionClientAad("org_a", "sol_1"))).toThrow();
+    const v1 = encryptSecret("x", solutionClientAad("org_a", "sol_1"));
+    expect(() => decryptSecret(v1, solutionClientRowAad("org_a", "sol_1", "cli_test"))).toThrow();
   });
 
   it("does not mix vocabularies — a connection AAD is not a client AAD", () => {

@@ -14,13 +14,18 @@
  * five-gate refusal that says "forbidden" is a guessing game:
  *
  *   1. builder role + tenant scope           (requireBuilder — same as issue)
- *   2. the solution exists in YOUR tenant
+ *   2. the solution exists in YOUR tenant, and is not RETIRED — every call a
+ *      retired solution makes is already refused at authentication, so a write
+ *      key minted for one would be a secret that authorises nothing
  *   3. all three owners are named            (accountability before capability)
  *   4. the issuer is NOT an owner            (SoD — same rule as the read token)
- *   5. a runtime credential exists and is active for the named environment —
- *      the write key seals onto THAT row (one credential per environment,
- *      AD-11); with several live and none named, the call is refused rather
- *      than guessed
+ *   5. a runtime credential exists, is active AND UNEXPIRED for the named
+ *      environment — the write key seals onto THAT row (one credential per
+ *      environment, AD-11); with several live and none named, the call is
+ *      refused rather than guessed. Expiry is checked with the same predicate
+ *      authenticateClientToken uses: a key sealed onto an expired credential
+ *      can never be presented, because the bearer token it travels with is
+ *      already refused.
  *   6. a LIVE WRITE grant covers the credential's environment: APPROVED (or
  *      SANDBOX_ONLY in SANDBOX), CREATE/UPDATE, unexpired, unrevoked. A write
  *      key with no live write grant would be a secret that authorises nothing
@@ -91,12 +96,22 @@ export async function POST(request: NextRequest) {
     select: {
       id: true,
       name: true,
+      status: true,
       technicalOwnerId: true,
       businessOwnerId: true,
       supportOwnerId: true,
     },
   });
   if (!solution) return studioError("NOT_FOUND", "Solution not found.");
+
+  if (solution.status === "RETIRED") {
+    return studioError(
+      "FORBIDDEN",
+      "This solution is RETIRED, so authentication refuses every call it makes. A write key " +
+        "issued now would authorise nothing today and everything the moment someone reactivates " +
+        "the solution. Reactivate it first if the integration is meant to run.",
+    );
+  }
 
   const missing = missingOwners(solution);
   if (missing.length > 0) {
@@ -121,15 +136,19 @@ export async function POST(request: NextRequest) {
 
   // The write key seals onto ONE of the solution's runtime credential rows —
   // the one for the environment the caller named, or the only live one.
-  const liveClients = await prisma.solutionClient.findMany({
-    where: scopedWhere(scope, { solutionId: solution.id, isActive: true, revokedAt: null }),
-    select: { id: true, environment: true },
-    orderBy: { createdAt: "asc" },
-  });
+  const issuedAt = new Date();
+  const liveClients = (
+    await prisma.solutionClient.findMany({
+      where: scopedWhere(scope, { solutionId: solution.id, isActive: true, revokedAt: null }),
+      select: { id: true, environment: true, expiresAt: true },
+      orderBy: { createdAt: "asc" },
+    })
+  ).filter((c) => c.expiresAt === null || c.expiresAt.getTime() > issuedAt.getTime());
   if (liveClients.length === 0) {
     return studioError(
       "FORBIDDEN",
-      "This solution has no active runtime credential. Issue the bearer credential first — the write key is sealed onto it.",
+      "This solution has no live runtime credential — it has none, or the ones it has are expired or revoked. " +
+        "Issue the bearer credential first; the write key is sealed onto it and travels with it.",
     );
   }
   const client = parsed.data.environment
@@ -142,7 +161,7 @@ export async function POST(request: NextRequest) {
     return studioError(
       "VALIDATION_ERROR",
       parsed.data.environment
-        ? `This solution has no active runtime credential for ${parsed.data.environment} (it holds: ${held}). Issue one for that environment first, or name one it holds.`
+        ? `This solution has no live runtime credential for ${parsed.data.environment} (it holds: ${held}). Issue one for that environment first, or name one it holds.`
         : `This solution holds live credentials for ${held}. Say which environment the write key is for — a key sealed onto an unnamed one would authorise writes nobody chose.`,
     );
   }
@@ -152,7 +171,7 @@ export async function POST(request: NextRequest) {
     where: scopedWhere(scope, { solutionId: solution.id }),
     select: { decision: true, operation: true, environment: true, expiresAt: true, revokedAt: true },
   });
-  const now = Date.now();
+  const now = issuedAt.getTime();
   const environment = client.environment as GrantEnvironment;
   const hasLiveWriteGrant = grants.some(
     (g) =>

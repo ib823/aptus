@@ -1,0 +1,20 @@
+-- Write keys sealed under the pre-AD-11 binding are invalidated, not carried over.
+--
+-- A write key is sealed with AES-256-GCM and bound by AAD to the row it belongs
+-- to, so write access to this database is not enough to forge one: the
+-- encryption key lives outside it. The AAD was (organization, solution), which
+-- identified the row only while a solution could hold a single credential.
+-- AD-11 made that one credential per ENVIRONMENT, and the binding stopped
+-- binding — every credential of a solution shared an AAD, so a ciphertext
+-- copied from the TEST row onto the DEV row still opened, and a DEV token would
+-- have carried TEST's write authority.
+--
+-- The AAD now includes the credential row's id, which cannot be satisfied by
+-- re-encrypting anything here: sealing needs the key. So the blobs go, and the
+-- owner issues each write key again under API Access. That is a deliberate
+-- interruption of the write path rather than a silent one — a key left in place
+-- would be shown as issued by every screen and refused by every call.
+--
+-- Only the write key lives in this column (setWriteCredential writes the whole
+-- bundle and nothing else does), so clearing it loses nothing else.
+UPDATE "SolutionClient" SET "secretsCiphertext" = NULL WHERE "secretsCiphertext" IS NOT NULL;

@@ -33,7 +33,11 @@ import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { normalizeEnvironment, upsertSapConnection } from "@/lib/sap-public/connection-resolver";
+import {
+  isAllowedApiKeyHeader,
+  normalizeEnvironment,
+  upsertSapConnection,
+} from "@/lib/sap-public/connection-resolver";
 import { isValidSapClient } from "@/lib/sap-public/sap-url";
 import { sanitizeTenantKey, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
@@ -113,7 +117,10 @@ const upsertSchema = z
     apiKeyHeader: z
       .string()
       .max(80)
-      .regex(/^[A-Za-z0-9-]+$/, "apiKeyHeader must be a plain header name (letters, digits, hyphens)")
+      .refine(isAllowedApiKeyHeader, {
+        message:
+          "apiKeyHeader must be a plain header name (letters, digits, hyphens) and cannot be one the transport sets itself — Authorization, Cookie and Host among them.",
+      })
       .optional(),
     oauthTokenUrl: httpsUrl.optional(),
     writeSecret: z.string().max(500).optional(),

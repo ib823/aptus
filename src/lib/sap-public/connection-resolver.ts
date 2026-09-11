@@ -18,6 +18,10 @@
  * returned to a client (use `redactConnection` for anything client-facing).
  */
 import { prisma } from "@/lib/db/prisma";
+import {
+  DEFAULT_API_KEY_HEADER,
+  isAllowedApiKeyHeader,
+} from "@/lib/sap-public/api-key-header";
 import type { SapTenant } from "@/lib/sap-public/tdd-connector";
 import {
   connectionAad,
@@ -53,8 +57,12 @@ export type SapAuthType =
    */
   | "api-key";
 
-/** The default header name for `api-key` — what SAP's sandbox reads. */
-export const DEFAULT_API_KEY_HEADER = "apikey";
+/*
+ * The api-key header rule lives in its own module because the form that offers
+ * the field is a client component and cannot import anything that reaches
+ * prisma. Re-exported here so the existing server-side importers are unchanged.
+ */
+export { DEFAULT_API_KEY_HEADER, isAllowedApiKeyHeader } from "@/lib/sap-public/api-key-header";
 
 /** A fully-resolved connection with decrypted secrets — server-side only. */
 export interface ResolvedSapConnection {
@@ -507,7 +515,15 @@ export async function buildAuthHeadersFromConnection(
   if (conn.authType === "api-key") {
     const s = conn.secrets;
     if (!s.apiKey) throw new Error(`Connection ${conn.key} is api-key auth but missing apiKey`);
-    return { [s.apiKeyHeader?.trim() || DEFAULT_API_KEY_HEADER]: s.apiKey };
+    const header = s.apiKeyHeader?.trim() || DEFAULT_API_KEY_HEADER;
+    // A stored row can name a header the current validator would refuse. Fail
+    // the call rather than send the key in a header that means something else.
+    if (!isAllowedApiKeyHeader(header)) {
+      throw new Error(
+        `Connection ${conn.key} names "${header}" as its API-key header, which is reserved for the transport. Re-save the connection with a header of its own.`,
+      );
+    }
+    return { [header]: s.apiKey };
   }
   return { Authorization: await buildAuthHeaderFromConnection(conn) };
 }

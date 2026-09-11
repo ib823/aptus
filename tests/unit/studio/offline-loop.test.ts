@@ -158,7 +158,8 @@ describe("the generated mock is real, runnable JavaScript", () => {
     // The broker's 200 carries records, count, empty, note AND interface; the
     // fixture body is what the run returned, so the mock adds the one field
     // that identifies which interface served it.
-    expect(src).toContain("fixture.status < 400 ? { data: { interface: INTERFACE, ...fixture.body } } : fixture.body");
+    expect(src).toContain("{ data: { interface: INTERFACE, ...applyLimit(fixture.body,");
+    expect(src).toContain(": fixture.body;");
   });
 });
 

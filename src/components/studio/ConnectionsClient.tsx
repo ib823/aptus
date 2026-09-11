@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import { StudioStatusChip, type HonestStatus } from "@/components/studio/StudioStatusChip";
+import { isAllowedApiKeyHeader } from "@/lib/sap-public/api-key-header";
 import { PRODUCT_MARKS } from "@/lib/studio/product-marks";
 import { ProductLabel } from "@/components/sap/ProductLabel";
 
@@ -387,6 +388,12 @@ function ConnectionForm() {
   if (authType === "basic" && (!username.trim() || !password)) missing.push("a username and password");
   if (authType === "bearer" && !bearerToken) missing.push("a bearer token");
   if (authType === "api-key" && !apiKey) missing.push("an API key");
+  // The header the key travels in cannot be one the transport sets itself —
+  // sending a key as Authorization is not API-key auth, it is a different
+  // request. Said here as well as refused by the route, so the rule is visible
+  // where the field is typed rather than only after Save.
+  if (authType === "api-key" && apiKeyHeader.trim() && !isAllowedApiKeyHeader(apiKeyHeader))
+    missing.push("a header name of its own (not Authorization, Cookie or Host)");
   if (authType === "oauth-client-credentials" && (!clientId.trim() || !clientSecret || !oauthTokenUrl.startsWith("https://")))
     missing.push("a client id, secret and https token URL");
   if (
@@ -684,7 +691,8 @@ function ConnectionForm() {
           </Label>
           <Label text="Header name">
             {/* SAP's sandbox reads `apikey`; other API-key gateways name theirs
-                differently. Sent as its own header — no Authorization at all. */}
+                differently. Sent as its own header — no Authorization at all,
+                and never a header the transport sets for itself. */}
             <input value={apiKeyHeader} onChange={(e) => setApiKeyHeader(e.target.value)} placeholder="apikey" style={input} />
           </Label>
         </div>

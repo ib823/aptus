@@ -276,6 +276,32 @@ describe("a stored probe ages out — a memory, not a status", () => {
     expect(body.data.counts.stale).toBe(0);
   });
 
+  /*
+   * The capability chips came from the SAME probe as the status badge, and were
+   * left out of the staleness check: a row rendered NOT_CHECKED — the page
+   * having just declared the memory too old to classify — beside "Read · Write"
+   * asserted from that very memory. The louder half of the claim survived the
+   * quieter one. Either the probe is current enough to say something, or it
+   * says nothing.
+   */
+  it("a stale probe sets no capability chip either", async () => {
+    setStored("API_PO", { source: "s", probe: { http: 200, at: STALE_AT, read: true, write: true } });
+    const res = await GET(makeRequest());
+    const body = await res.json();
+    const po = body.data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
+    expect(po.status).toBe("NOT_CHECKED");
+    expect(po.probeStale).toBe(true);
+    expect(po.capability).toBeNull();
+  });
+
+  it("…and a fresh one still sets it", async () => {
+    setStored("API_PO", stored(200, true, false));
+    const res = await GET(makeRequest());
+    const body = await res.json();
+    const po = body.data.items.find((i: { externalId: string }) => i.externalId === "API_PO");
+    expect(po.capability).toEqual({ read: true, write: false });
+  });
+
   it("an UNDATED probe cannot be aged and keeps its verdict", async () => {
     setStored("API_PO", { source: "s", probe: { http: 200 } });
     const res = await GET(makeRequest());

@@ -83,6 +83,36 @@ export type ClientAuthResult =
   | { ok: true; client: AuthenticatedClient }
   | { ok: false; reason: ClientAuthFailure };
 
+/** The two solution-level refusals, separated so a caller can reuse the check. */
+export type SolutionRuntimeFailure = Extract<
+  ClientAuthFailure,
+  "SOLUTION_RETIRED" | "SOLUTION_MISSING"
+>;
+
+/**
+ * Is the solution that owns a credential still callable?
+ *
+ * Exported because the Test Console's dry run resolves a credential ROW rather
+ * than a bearer token, and so does not pass through authenticateClientToken. It
+ * used to skip this check entirely, which made the console the one place a
+ * RETIRED solution still appeared to work — the precise failure this gate was
+ * added to close. One function, so the two paths cannot drift again.
+ *
+ * Scoped by organization as well as id, like every other query on this path.
+ */
+export async function checkSolutionRuntime(
+  organizationId: string,
+  solutionId: string,
+): Promise<{ ok: true } | { ok: false; reason: SolutionRuntimeFailure }> {
+  const solution = await prisma.solution.findFirst({
+    where: { id: solutionId, organizationId },
+    select: { status: true },
+  });
+  if (!solution) return { ok: false, reason: "SOLUTION_MISSING" };
+  if (solution.status === "RETIRED") return { ok: false, reason: "SOLUTION_RETIRED" };
+  return { ok: true };
+}
+
 /**
  * Resolve a raw bearer token to the client it identifies.
  *
@@ -121,14 +151,9 @@ export async function authenticateClientToken(
   }
 
   // Checked LAST, after the token's own states: a revoked token on a retired
-  // solution should audit as REVOKED, which is the more specific event. Scoped
-  // by organization as well as id, like every other query on this path.
-  const solution = await prisma.solution.findFirst({
-    where: { id: row.solutionId, organizationId: row.organizationId },
-    select: { status: true },
-  });
-  if (!solution) return { ok: false, reason: "SOLUTION_MISSING" };
-  if (solution.status === "RETIRED") return { ok: false, reason: "SOLUTION_RETIRED" };
+  // solution should audit as REVOKED, which is the more specific event.
+  const solution = await checkSolutionRuntime(row.organizationId, row.solutionId);
+  if (!solution.ok) return { ok: false, reason: solution.reason };
 
   return {
     ok: true,

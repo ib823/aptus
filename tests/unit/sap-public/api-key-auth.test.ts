@@ -112,6 +112,23 @@ describe("the route and the form know the type", () => {
     expect(route).toContain("apiKeyHeader: input.apiKeyHeader");
   });
 
+  /*
+   * The header name is operator-supplied, and "letters, digits and hyphens"
+   * admits Authorization, Cookie and Host. The predicate is one module the
+   * route, the form and the header builder all use — a security rule copied
+   * into three files is a security rule that will disagree with itself.
+   */
+  it("the route and the form share the deny-list rather than each having a regex", () => {
+    for (const file of [
+      "src/app/api/studio/connections/route.ts",
+      "src/components/studio/ConnectionsClient.tsx",
+    ]) {
+      const src = read(file);
+      expect(src, file).toContain("isAllowedApiKeyHeader");
+      expect(src, file).not.toMatch(/regex\(\/\^\[A-Za-z0-9-\]\+\$\//);
+    }
+  });
+
   it("the form offers it, names SAP's sandbox, and defaults the header to apikey", () => {
     const ui = read("src/components/studio/ConnectionsClient.tsx");
     expect(ui).toMatch(/<option value="api-key">API key header — SAP Business Accelerator Hub sandbox<\/option>/);

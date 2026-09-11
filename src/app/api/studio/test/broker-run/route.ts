@@ -26,6 +26,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { resolveReadableInterface } from "@/lib/northbound/access";
+import { checkSolutionRuntime } from "@/lib/northbound/auth";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
 import { httpStatusFor, readEntitySet } from "@/lib/northbound/read";
 import { newCorrelationId } from "@/lib/northbound/respond";
@@ -81,6 +82,23 @@ export async function POST(request: NextRequest) {
     select: { id: true, name: true, solutionId: true, externalId: true, sapProduct: true, entitySet: true },
   });
   if (!iface) return studioError("NOT_FOUND", "Interface not found.");
+
+  /*
+   * 0 — the solution-level gate authenticateClientToken applies before anything
+   * else about the call is considered. This route resolves a credential ROW
+   * rather than a bearer token, so it never passed through that function, and a
+   * RETIRED solution's console run went on working after every deployed call
+   * against it had started failing. Same check, same function, stated first.
+   */
+  const runtime = await checkSolutionRuntime(scope.organizationId, iface.solutionId);
+  if (!runtime.ok) {
+    return refusalOk(
+      runtime.reason,
+      runtime.reason === "SOLUTION_RETIRED"
+        ? "This solution is RETIRED, so every call its deployed application makes is refused — this one included. Reactivate the solution to run against it."
+        : "The solution that owns this interface no longer exists. (This is the refusal the deployed application would receive.)",
+    );
+  }
 
   // The solution's runtime credential row — the identity the deployed app
   // holds. No credential means the app's first call would 401; say exactly that.

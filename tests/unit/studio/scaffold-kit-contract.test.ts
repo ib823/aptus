@@ -132,6 +132,8 @@ describe("R8 — the contract says exactly what the broker sends", () => {
   it("the mock serves the same envelope, `interface` included", () => {
     const mock = buildMockServer(IFACE);
     expect(mock).toContain('const INTERFACE = {"id":"if_po","name":"Purchase Order","version":3};');
-    expect(mock).toContain("{ data: { interface: INTERFACE, ...fixture.body } }");
+    // `applyLimit` truncates to ?limit= and leaves a short body untouched, so
+    // the envelope is the broker's either way.
+    expect(mock).toContain("{ data: { interface: INTERFACE, ...applyLimit(fixture.body,");
   });
 });
