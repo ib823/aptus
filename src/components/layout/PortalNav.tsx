@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import type { SessionUser } from "@/types/assessment";
+import { isAdminRoleName } from "@/lib/auth/role-migration";
 
 interface PortalNavProps {
   user: SessionUser;
@@ -82,7 +83,7 @@ export function PortalNav({ user }: PortalNavProps) {
     {
       label: UI_TEXT.nav.admin,
       href: "/admin",
-      show: ["platform_admin", "admin"].includes(user.role),
+      show: isAdminRoleName(user.role),
     },
   ];
 

@@ -53,6 +53,21 @@ export const dynamic = "force-dynamic";
 
 const bodySchema = z.object({
   record: z.record(z.string(), z.unknown()),
+  /*
+   * STILL ACCEPTED, NO LONGER OBEYED (audit E16).
+   *
+   * This used to WIN over the governed value — `parsed.data.entity ?? iface.entitySet`
+   * — which is the inverse of the read path and the more dangerous direction: the
+   * WRITE grant a second person approved names a service, and this field decided
+   * which table inside it a record was created in. A caller could be approved to
+   * write business partners and write somewhere else entirely.
+   *
+   * It is kept in the schema rather than dropped so that sending it is REFUSED
+   * rather than silently ignored. A field that is accepted and quietly discarded
+   * is how a client ends up believing it is writing to one dataset while the
+   * broker writes to another — the same class of confusion, arrived at from the
+   * other side. See the check below.
+   */
   entity: z.string().max(200).optional(),
 });
 
@@ -220,12 +235,27 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
   }
 
   const service = await resolveHubService(product!, iface.externalId);
-  const entitySet = parsed.data.entity ?? iface.entitySet;
+  // The governed value, and only it. A caller-supplied `entity` that disagrees is
+  // refused rather than ignored (see bodySchema); one that agrees is a harmless
+  // restatement and proceeds.
+  const entitySet = iface.entitySet;
+  if (parsed.data.entity !== undefined && parsed.data.entity !== entitySet) {
+    await audit(400, iface.id, iface.externalId, connection);
+    return northboundError(
+      "VALIDATION_ERROR",
+      "The dataset is part of this data feed's definition and cannot be chosen per call. " +
+        "Remove `entity` from the request body, or define a feed for the dataset you mean.",
+      400,
+      correlationId,
+    );
+  }
   if (!service || !entitySet) {
     await audit(400, iface.id, iface.externalId, connection);
     return northboundError(
       "VALIDATION_ERROR",
-      service ? "No entity set configured for this interface." : "The catalogue service could not be resolved.",
+      service
+        ? "This data feed names no dataset, so there is nowhere to write. Set its entity set in Studio."
+        : "The catalogue service could not be resolved.",
       400,
       correlationId,
     );

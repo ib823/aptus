@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { contentDisposition } from "@/lib/security/filename";
+import { isAdminRoleName } from "@/lib/auth/role-migration";
 
 interface RouteParams {
   params: Promise<{ guideId: string }>;
@@ -16,7 +17,7 @@ interface RouteParams {
 export async function GET(_request: Request, { params }: RouteParams): Promise<Response> {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (!["platform_admin", "admin"].includes(user.role)) {
+  if (!isAdminRoleName(user.role)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

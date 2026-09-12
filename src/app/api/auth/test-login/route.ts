@@ -18,7 +18,12 @@ import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/db/prisma";
 import { getClientIp } from "@/lib/security/client-ip";
 import { createSession, SESSION_COOKIE_NAME, getSessionCookieOptions } from "@/lib/auth/session";
-import { isIpAllowed, logBackdoorAttempt } from "@/lib/auth/test-backdoor-guards";
+import {
+  isIpAllowed,
+  logBackdoorAttempt,
+  productionBackdoorBlock,
+  recordBackdoorSuccess,
+} from "@/lib/auth/test-backdoor-guards";
 import { ALL_USER_ROLES, type UserRole } from "@/types/assessment";
 
 const ALLOWED_TEST_DOMAINS = ["abeam.test", "e2e.test"];
@@ -38,9 +43,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Gate 1: never available in production unless explicitly opted in
+  /*
+   * Gate 1: production.
+   *
+   * TWO CONDITIONS NOW, NOT ONE. `ALLOW_TEST_LOGIN_IN_PROD` was the whole gate,
+   * and it is a variable an operator can set in a dashboard after the build —
+   * which is exactly the case `scripts/strip-test-auth-for-production.mjs` warns
+   * about in its own header ("set deliberately for an internal test deploy and
+   * never unset"). `check-production-env.js` has always demanded a SECOND,
+   * deliberate signal before it will let such a deploy build at all; the runtime
+   * now demands the same one, so the build-time contract and the runtime
+   * contract cannot disagree.
+   */
+  const productionBlock = productionBackdoorBlock();
+  if (productionBlock) {
+    await logBackdoorAttempt({ endpoint: ENDPOINT, outcome: "denied:env", headers: request.headers });
+    return NextResponse.json({ error: "Not available" }, { status: 404 });
+  }
   if (process.env.NODE_ENV === "production" && process.env.ALLOW_TEST_LOGIN_IN_PROD !== "true") {
-    logBackdoorAttempt({ endpoint: ENDPOINT, outcome: "denied:env", headers: request.headers });
+    await logBackdoorAttempt({ endpoint: ENDPOINT, outcome: "denied:env", headers: request.headers });
     return NextResponse.json(
       { error: "Not available" },
       { status: 404 },
@@ -61,7 +82,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // secret in production is a configuration mistake — fail closed instead
   // of letting a 4-char secret protect platform_admin sessions.
   if (process.env.NODE_ENV === "production" && secret.length < 24) {
-    logBackdoorAttempt({ endpoint: ENDPOINT, outcome: "denied:env", headers: request.headers });
+    await logBackdoorAttempt({ endpoint: ENDPOINT, outcome: "denied:env", headers: request.headers });
     return NextResponse.json({ error: "Not available" }, { status: 404 });
   }
 
@@ -69,7 +90,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // When configured, the source IP must match. Defense in depth so an
   // accidentally-leaked secret can't be used from arbitrary networks.
   if (!isIpAllowed(request.headers, "TEST_LOGIN_ALLOWED_IPS")) {
-    logBackdoorAttempt({ endpoint: ENDPOINT, outcome: "denied:ip", headers: request.headers });
+    await logBackdoorAttempt({ endpoint: ENDPOINT, outcome: "denied:ip", headers: request.headers });
     return NextResponse.json({ error: "Not available" }, { status: 404 });
   }
 
@@ -89,7 +110,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     body.secret.length !== secret.length ||
     !timingSafeEqual(Buffer.from(body.secret), Buffer.from(secret))
   ) {
-    logBackdoorAttempt({ endpoint: ENDPOINT, outcome: "denied:secret", headers: request.headers });
+    await logBackdoorAttempt({ endpoint: ENDPOINT, outcome: "denied:secret", headers: request.headers });
     return NextResponse.json(
       { error: "Invalid secret" },
       { status: 403 },
@@ -101,6 +122,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // Validate email domain against allowlist
   const emailDomain = targetEmail.split("@")[1]?.toLowerCase();
   if (!emailDomain || !ALLOWED_TEST_DOMAINS.includes(emailDomain)) {
+    await logBackdoorAttempt({
+      endpoint: ENDPOINT,
+      outcome: "denied:user",
+      headers: request.headers,
+      email: targetEmail,
+    });
     return NextResponse.json(
       { error: "Email domain not allowed for test login" },
       { status: 400 },
@@ -118,6 +145,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
    */
   const requestedRole = body.role ?? TEST_USER_ROLE;
   if (!(ALL_USER_ROLES as readonly string[]).includes(requestedRole)) {
+    await logBackdoorAttempt({
+      endpoint: ENDPOINT,
+      outcome: "denied:role",
+      headers: request.headers,
+      email: targetEmail,
+    });
     return NextResponse.json(
       { error: `Unknown role. Use one of: ${ALL_USER_ROLES.join(", ")}` },
       { status: 400 },
@@ -191,6 +224,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
   }
 
+  /*
+   * RECORD BEFORE MINTING, AND REFUSE IF IT CANNOT BE RECORDED.
+   *
+   * Everywhere else in this codebase an audit failure is deliberately non-fatal:
+   * "losing the caller's data because the audit row failed would be a worse
+   * outcome than a visible gap in the trail" (northbound/audit.ts). That
+   * reasoning inverts here, because the caller's data IS a platform_admin session
+   * obtained without credentials. A gap in the trail is the worse outcome, so a
+   * session that cannot be written down is not issued.
+   */
+  const recorded = await recordBackdoorSuccess({
+    endpoint: ENDPOINT,
+    headers: request.headers,
+    email: targetEmail,
+    userId: user.id,
+  });
+  if (!recorded) {
+    return NextResponse.json(
+      { error: "Test login is unavailable: the attempt could not be audited." },
+      { status: 503 },
+    );
+  }
+
   // Create a real session (same path as production login)
   const trustedIp = getClientIp(request.headers);
   const ipAddress = trustedIp === "unknown" ? null : trustedIp;
@@ -207,8 +263,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   response.cookies.set(SESSION_COOKIE_NAME, token, {
     ...getSessionCookieOptions(),
   });
-
-  logBackdoorAttempt({ endpoint: ENDPOINT, outcome: "success", headers: request.headers, email: targetEmail });
 
   return response;
 }

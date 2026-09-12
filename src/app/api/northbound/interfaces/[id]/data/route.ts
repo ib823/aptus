@@ -163,7 +163,24 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   // `product!` is sound: a null product forces the binding to fail above, so we
   // cannot reach here without one. Same idiom as the write route.
   const service = await resolveHubService(product!, iface.externalId);
-  const entitySet = iface.entitySet ?? request.nextUrl.searchParams.get("entity");
+  /*
+   * THE GOVERNED ENTITY SET IS THE ONLY SOURCE (audit E16).
+   *
+   * This read `iface.entitySet ?? request.nextUrl.searchParams.get("entity")`.
+   * The fallback was there so an interface whose set had not been configured
+   * could still be exercised — but a fallback on this path is not a convenience,
+   * it is a hole: the grant that authorises the call names a SERVICE, and the
+   * entity set decides WHICH DATA inside that service leaves the customer's
+   * system. A caller holding a grant for one dataset could name another and the
+   * broker would fetch it, because nothing downstream re-checks.
+   *
+   * `?entity=` is no longer read here at all. An interface with no entity set is
+   * a configuration gap and is refused as one, below, rather than being papered
+   * over with whatever the caller happened to ask for. The discovery console
+   * (`/api/sap/tdd/preview`) is where a builder chooses a set; that is a
+   * different surface, with its own environment ceiling and its own audit row.
+   */
+  const entitySet = iface.entitySet;
   if (!service || !entitySet) {
     await recordNorthboundCall({
       organizationId: client.organizationId,
@@ -182,7 +199,9 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
     return northboundError(
       "VALIDATION_ERROR",
       service
-        ? "This interface has no entity set configured. Set one in Studio, or pass ?entity=."
+        ? iface.draft
+          ? "This data feed is still a draft and names no dataset yet. Set its entity set in Studio and publish it — the dataset is part of the feed's definition, not something a caller may choose."
+          : "This data feed names no dataset. Set its entity set in Studio — the dataset is part of the feed's definition, not something a caller may choose."
         : "The catalogue service for this interface could not be resolved.",
       400,
       correlationId,
