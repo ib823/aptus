@@ -186,7 +186,7 @@ describe("the page and the endpoint cannot drift apart", () => {
   });
 
   it("reads the same env var names the route gates on", () => {
-    const route = read("src/app/api/auth/test-login/route.e2e.ts");
+    const route = read("src/app/api/auth/test-login/route.ts");
     const lib = read("src/lib/auth/dev-login.ts");
     for (const v of ["E2E_TEST_SECRET", "TEST_LOGIN_ALLOWED_IPS"]) {
       expect(route, `route gates on ${v}`).toContain(v);
@@ -195,7 +195,7 @@ describe("the page and the endpoint cannot drift apart", () => {
   });
 
   it("keeps the production length minimum in step with the route", () => {
-    const route = read("src/app/api/auth/test-login/route.e2e.ts");
+    const route = read("src/app/api/auth/test-login/route.ts");
     const lib = read("src/lib/auth/dev-login.ts");
     // Both sides express the same threshold; a change to one without the other
     // makes the page's explanation false.

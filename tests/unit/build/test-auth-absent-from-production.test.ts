@@ -4,7 +4,7 @@
  * build, not disabled inside one.
  *
  * /api/auth/test-login and /dev-login mint a real session for a test user.
- * They were protected by four runtime environment gates, a secret, a minimum
+ * They are protected by four runtime environment gates, a secret, a minimum
  * secret length and an optional IP allow-list — a good set of gates, and still
  * the wrong shape: every one of them is a condition evaluated by code that is
  * present and reachable in the production bundle. The whole backdoor therefore
@@ -13,120 +13,136 @@
  * leaves E2E_TEST_SECRET as the only thing between the internet and a
  * platform_admin session.
  *
- * The fix is structural: the files are named `route.e2e.ts` / `page.e2e.tsx`,
- * and next.config.ts lists the `e2e.*` page extensions only for non-production
- * builds. On a customer-facing deploy Next does not treat them as routes at
- * all, so the paths 404 from the router and no environment variable can bring
- * them back.
+ * THE MECHANISM, AND THE ONE THAT DID NOT WORK. The first attempt renamed the
+ * files to `route.e2e.ts` / `page.e2e.tsx` and listed the `e2e.*` extensions in
+ * next.config only for non-production builds. `next build` accepted that
+ * happily, at both VERCEL_ENV values, on a machine and in CI — and Vercel
+ * rejected it: a route reached through a dotted page extension is emitted
+ * WITHOUT its `route_client-reference-manifest.js`, and Vercel's post-build
+ * tracing step (which runs AFTER `next build`, so no local build exercises it)
+ * died with ENOENT on that file. The giveaway in the build log was both routes
+ * listed at 0 B.
  *
- * This asserts the mechanism rather than the intention, because a rename is
- * exactly the kind of change a later refactor undoes without noticing: a file
- * moved back to `route.ts` is compiled into production again, silently, and
- * every runtime gate still passes its own tests.
+ * So the exclusion happens one step earlier instead: the files keep ordinary
+ * names, and scripts/strip-test-auth-for-production.mjs deletes their
+ * directories from the build workspace before `next build` runs. Next never
+ * discovers them, nothing unusual reaches the bundler, and nothing unusual
+ * reaches Vercel's tracer.
+ *
+ * These tests pin the DECISION and the WIRING rather than the intention,
+ * because both are exactly the kind of thing a later refactor undoes without
+ * noticing — and every runtime gate would still pass its own tests afterwards.
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+
+import {
+  isProductionDeploy,
+  isVercelBuild,
+  planRemoval,
+  TEST_AUTH_DIRS,
+} from "../../../scripts/strip-test-auth-for-production.mjs";
 
 const ROOT = resolve(__dirname, "../../..");
 const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
 
-/** Every surface whose only job is to sign someone in without credentials. */
-const TEST_AUTH_FILES = [
-  "src/app/api/auth/test-login/route.e2e.ts",
-  "src/app/(auth)/dev-login/page.e2e.tsx",
-];
-
-describe("the files are named so a production build does not pick them up", () => {
-  it.each(TEST_AUTH_FILES)("%s exists", (file) => {
-    expect(existsSync(join(ROOT, file))).toBe(true);
-  });
-
-  it("and the plain-extension versions do NOT — those would be compiled in", () => {
-    for (const file of ["src/app/api/auth/test-login/route.ts", "src/app/(auth)/dev-login/page.tsx"]) {
-      expect(existsSync(join(ROOT, file)), file).toBe(false);
+describe("the surfaces it covers", () => {
+  it("names both session-minting directories, and they exist", () => {
+    expect([...TEST_AUTH_DIRS].sort()).toEqual([
+      "src/app/(auth)/dev-login",
+      "src/app/api/auth/test-login",
+    ]);
+    for (const dir of TEST_AUTH_DIRS) {
+      expect(existsSync(join(ROOT, dir)), dir).toBe(true);
     }
   });
+
+  it("keeps ORDINARY file names — a dotted page extension is what broke Vercel", () => {
+    expect(existsSync(join(ROOT, "src/app/api/auth/test-login/route.ts"))).toBe(true);
+    expect(existsSync(join(ROOT, "src/app/(auth)/dev-login/page.tsx"))).toBe(true);
+    for (const f of [
+      "src/app/api/auth/test-login/route.e2e.ts",
+      "src/app/(auth)/dev-login/page.e2e.tsx",
+    ]) {
+      expect(existsSync(join(ROOT, f)), f).toBe(false);
+    }
+    // And next.config must not carry the extension list that caused the ENOENT.
+    expect(read("next.config.ts")).not.toContain("pageExtensions");
+  });
 });
 
-/*
- * The config is IMPORTED and its value read, rather than its source matched.
- * pageExtensions is the whole mechanism, so the test that matters is what the
- * option actually resolves to for each kind of deploy.
- */
-describe("the resolved pageExtensions", () => {
+describe("when the deletion happens", () => {
+  it("acts on a Vercel PRODUCTION deploy — the case this exists for", () => {
+    const plan = planRemoval({ VERCEL: "1", VERCEL_ENV: "production", NODE_ENV: "production" });
+    expect(plan.act).toBe(true);
+    expect(plan.reason).toBe("production-vercel-build");
+  });
+
+  it("leaves a Preview deploy alone — that is what the E2E suite runs against", () => {
+    const plan = planRemoval({ VERCEL: "1", VERCEL_ENV: "preview", NODE_ENV: "production" });
+    expect(plan.act).toBe(false);
+    expect(plan.reason).toBe("not-production");
+  });
+
   /*
-   * vi.stubEnv rather than assigning process.env directly: NODE_ENV is typed
-   * read-only (tsc --strict refuses the assignment), and the stub restores the
-   * real value for the rest of the suite.
+   * `next build` sets NODE_ENV=production itself, so an ordinary local build
+   * looks like production. Deleting a contributor's source files would be a
+   * worse failure than the one this prevents, so it reports instead.
    */
-  afterEach(() => {
-    vi.unstubAllEnvs();
+  it("never deletes from a checkout, even when NODE_ENV says production", () => {
+    const plan = planRemoval({ VERCEL_ENV: undefined, NODE_ENV: "production" });
+    expect(plan.act).toBe(false);
+    expect(plan.reason).toBe("not-vercel");
   });
 
-  async function pageExtensionsFor(env: { VERCEL_ENV?: string; NODE_ENV?: string }) {
-    vi.stubEnv("VERCEL_ENV", env.VERCEL_ENV);
-    vi.stubEnv("NODE_ENV", env.NODE_ENV as "production" | "development" | "test" | undefined);
-    vi.resetModules();
-    const mod = (await import("../../../next.config")) as { default: { pageExtensions?: string[] } };
-    return mod.default.pageExtensions ?? [];
-  }
-
-  it("omits the e2e extensions on a Vercel production deploy", async () => {
-    const exts = await pageExtensionsFor({ VERCEL_ENV: "production", NODE_ENV: "production" });
-    expect(exts).toEqual(["tsx", "ts", "jsx", "js"]);
-    expect(exts.some((e) => e.startsWith("e2e."))).toBe(false);
+  it("leaves development alone", () => {
+    expect(planRemoval({ NODE_ENV: "development" }).act).toBe(false);
   });
 
-  it("…and on a production build off Vercel", async () => {
-    const exts = await pageExtensionsFor({ NODE_ENV: "production" });
-    expect(exts.some((e) => e.startsWith("e2e."))).toBe(false);
-  });
-
-  it("includes them on a Preview deploy, which is what E2E runs against", async () => {
-    const exts = await pageExtensionsFor({ VERCEL_ENV: "preview", NODE_ENV: "production" });
-    expect(exts).toEqual(["e2e.tsx", "e2e.ts", "tsx", "ts", "jsx", "js"]);
-  });
-
-  it("includes them in development", async () => {
-    const exts = await pageExtensionsFor({ NODE_ENV: "development" });
-    expect(exts).toContain("e2e.ts");
-    // The defaults are never lost — dropping them would hide every real page.
-    for (const e of ["tsx", "ts", "jsx", "js"]) expect(exts, e).toContain(e);
-  });
-});
-
-describe("next.config.ts excludes the e2e extensions from a production build", () => {
-  const config = read("next.config.ts");
-
-  it("declares the e2e extensions and the defaults separately", () => {
-    // Restating the defaults matters: setting pageExtensions REPLACES them, so a
-    // list of only the e2e extensions would make every real page invisible.
-    expect(config).toContain('const PAGE_EXTENSIONS = ["tsx", "ts", "jsx", "js"];');
-    expect(config).toContain('const TEST_AUTH_PAGE_EXTENSIONS = ["e2e.tsx", "e2e.ts"];');
-  });
-
-  it("adds them only when the build is not a production deploy", () => {
-    expect(config).toContain("pageExtensions: isProductionDeploy");
-    expect(config).toMatch(/isProductionDeploy\s*\n?\s*\?\s*PAGE_EXTENSIONS/);
-    expect(config).toMatch(/:\s*\[\.\.\.TEST_AUTH_PAGE_EXTENSIONS,\s*\.\.\.PAGE_EXTENSIONS\]/);
+  it("reads the two environment signals the way the rest of the build does", () => {
+    expect(isProductionDeploy({ VERCEL_ENV: "production" })).toBe(true);
+    // VERCEL_ENV wins when present — a Preview deploy is not production even
+    // though its NODE_ENV is.
+    expect(isProductionDeploy({ VERCEL_ENV: "preview", NODE_ENV: "production" })).toBe(false);
+    expect(isProductionDeploy({ NODE_ENV: "production" })).toBe(true);
+    expect(isProductionDeploy({ NODE_ENV: "development" })).toBe(false);
+    expect(isVercelBuild({ VERCEL: "1" })).toBe(true);
+    expect(isVercelBuild({})).toBe(false);
   });
 
   it("decides 'production' the same way the env checker does", () => {
-    // Two different answers to "is this production" is how a surface ends up
-    // excluded from the build whose env check permitted it, or the reverse.
+    // Two different answers to that question is how a surface ends up excluded
+    // from a build whose env check permitted it, or the reverse.
+    const script = read("scripts/strip-test-auth-for-production.mjs");
     const check = read("scripts/check-production-env.js");
-    for (const src of [config, check]) {
-      expect(src).toContain('process.env.VERCEL_ENV === "production"');
-      expect(src).toContain('process.env.NODE_ENV === "production"');
+    for (const src of [script, check]) {
+      expect(src).toContain('VERCEL_ENV === "production"');
+      expect(src).toContain('NODE_ENV === "production"');
     }
+  });
+});
+
+describe("the build actually runs it", () => {
+  const pkg = JSON.parse(read("package.json")) as { scripts: Record<string, string> };
+
+  it("vercel-build strips BEFORE next build — after is too late", () => {
+    const cmd = pkg.scripts["vercel-build"]!;
+    expect(cmd).toContain("scripts/strip-test-auth-for-production.mjs");
+    expect(cmd.indexOf("strip-test-auth-for-production")).toBeLessThan(cmd.indexOf("next build"));
+  });
+
+  it("and fails the build if a deletion does not take", () => {
+    const script = read("scripts/strip-test-auth-for-production.mjs");
+    expect(script).toContain("Refusing to continue");
+    expect(script).toContain("process.exit(1)");
   });
 });
 
 describe("the runtime gates stay — they are what protects a Preview deployment", () => {
-  const route = read("src/app/api/auth/test-login/route.e2e.ts");
+  const route = read("src/app/api/auth/test-login/route.ts");
 
   it("still requires the flag, the non-production check, the secret and its length", () => {
     expect(route).toContain('process.env.ENABLE_TEST_LOGIN_ENDPOINT !== "true"');

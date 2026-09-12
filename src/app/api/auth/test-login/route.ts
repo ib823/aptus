@@ -1,10 +1,10 @@
 /** POST: E2E test login — creates a test user session and sets the cookie.
  *
- * `.e2e.ts`, NOT `.ts`, AND THAT IS THE FIRST SAFEGUARD. `pageExtensions` in
- * next.config.ts lists the `e2e.*` extensions only for non-production builds, so
- * on a customer-facing deploy this file is not a route: the path 404s from the
- * router and no environment variable can bring it back. Everything below
- * protects a Preview deployment, which does compile it.
+ * NOT IN A PRODUCTION BUILD AT ALL, AND THAT IS THE FIRST SAFEGUARD.
+ * scripts/strip-test-auth-for-production.mjs deletes this directory from the
+ * build workspace on a customer-facing Vercel deploy, before `next build` runs:
+ * the path 404s from the router and no environment variable can bring it back.
+ * Everything below protects a Preview deployment, which keeps the file.
  *
  * SAFEGUARDS:
  * 1. Only functional when E2E_TEST_SECRET env var is set (never in production)

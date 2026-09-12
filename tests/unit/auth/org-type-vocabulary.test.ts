@@ -116,7 +116,7 @@ describe("a recognised type always yields roles; an unrecognised one is refused 
  */
 const WRITERS = [
   "src/app/api/auth/signup/route.ts",
-  "src/app/api/auth/test-login/route.e2e.ts",
+  "src/app/api/auth/test-login/route.ts",
   "src/lib/db/organizations.ts",
 ];
 

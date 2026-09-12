@@ -1,11 +1,11 @@
 /**
  * /dev-login — the one-click internal-testing sign-in.
  *
- * `.e2e.tsx`, NOT `.tsx`. `pageExtensions` in next.config.ts lists the `e2e.*`
- * extensions only for non-production builds, so on a customer-facing deploy this
- * file is not a page: the path 404s from the router, and no environment variable
- * can bring it back. `isDevLoginEnabled()` below still guards the Preview
- * deployments that do compile it.
+ * NOT IN A PRODUCTION BUILD. scripts/strip-test-auth-for-production.mjs deletes
+ * this directory from the build workspace on a customer-facing Vercel deploy,
+ * so the path 404s from the router and no environment variable can bring it
+ * back. `isDevLoginEnabled()` below still guards the Preview deployments that
+ * keep it.
  */
 
 import type { Metadata } from "next";
