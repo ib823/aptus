@@ -1159,6 +1159,15 @@ model NorthboundAuditEvent {
 
   @@index([organizationId, solutionId, at])
   @@index([organizationId, clientTokenId, at])
+  /// EXACT-MATCH LOOKUP BY CORRELATION ID (PR-5, capability 9).
+  ///
+  /// The id was already generated, returned in the body and in an
+  /// x-correlation-id header, and stored non-null on every row — but there was
+  /// no index on it and no endpoint accepted it as a filter, so "paste the id
+  /// and get an answer" meant a sequential scan of the whole audit table or a
+  /// log grep. The organization leads the key so the lookup is tenant-scoped by
+  /// construction rather than by a filter someone can forget.
+  @@index([organizationId, correlationId])
 }
 
 /// Idempotency for northbound writes.
