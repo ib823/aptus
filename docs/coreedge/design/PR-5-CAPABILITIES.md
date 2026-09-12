@@ -254,6 +254,66 @@ retention sweep for `NorthboundAuditEvent` (the audit noted nothing deletes it �
 that is a separate decision with a compliance dimension), and the operator UI for
 closing a circuit early.
 
+## ⚠️ A cross-branch migration collision, found by the preview deploy
+
+The first Vercel preview of this PR failed, and it was a real defect rather than
+an environment artifact:
+
+```
+Applying migration `20260912050000_correlation_id_lookup`
+Error: P3018 / 42P07
+ERROR: relation "NorthboundAuditEvent_organizationId_correlationId_idx" already exists
+```
+
+**PR-0 creates an index with exactly this name and these columns**, in its own
+migration `20260912020000_northbound_audit_console_reads_and_retention`. The two
+branches were written independently, both need the index for the same reason, and
+neither depends on the other — so **whichever merged second would have failed its
+production deploy the same way**, and a failed Prisma migration blocks every later
+one until someone clears it by hand.
+
+Fixed with `CREATE INDEX IF NOT EXISTS`. The index is byte-identical in both
+migrations, so idempotency loses nothing: it creates the index when absent and
+no-ops when the other branch got there first. Deleting it here and depending on
+PR-0 would leave this PR's own lookup unindexed if PR-0 were ever dropped or
+reordered — and an unindexed lookup is the sequential scan capability 9 exists to
+eliminate.
+
+A second commit adds the migration to `KNOWN_AUTO_RECOVERABLE` in
+`migrate-deploy-with-retry.mjs`, to clear the failed row the first attempt left
+behind. That list's own documented purpose is "migrations whose SQL has been
+corrected post-failure", and its stated requirement — "MUST be idempotent against
+either schema state" — is met by the guarded `CREATE INDEX`. **It is marked for
+pruning** once the deploy is green: a one-shot recovery for a corrected mistake,
+not a standing exemption.
+
+### Why no GitHub check caught it
+
+`History-built DB + schema parity` passed throughout. That job builds a database
+from **one branch's history alone**, where the index does not pre-exist — a
+cross-branch collision is invisible to it by construction. Only a deploy against a
+database another branch has already touched can see one, which is exactly what the
+shared Vercel preview is.
+
+That remains true after retargeting the stack to `main`: `Quality Gates` builds
+from a single branch too. **The preview deploy is still the only check that can
+catch this class of defect.**
+
+Verified by reproducing the failure before the fix — a local PostgreSQL 16 put
+into the same state (history applied, PR-0's index created by hand, a failed
+`_prisma_migrations` row inserted as Prisma leaves one), then running the real
+deploy script against it:
+
+```
+[migrate-deploy-retry] Detected P3009 ... on the auto-recoverable list
+Migration 20260912050000_correlation_id_lookup marked as rolled back.
+All migrations have been successfully applied.
+[migrate-deploy-retry] Succeeded on attempt 2/5.
+```
+
+Afterwards `migrate diff --exit-code` reported no difference, and `pg_indexes`
+held exactly one index of that name. The real preview deploy then succeeded.
+
 ## Files
 
 | Added | |
