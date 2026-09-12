@@ -9,9 +9,41 @@
 -- organizationId leads the key so the lookup is tenant-scoped by construction
 -- rather than by a filter someone can forget to add.
 --
+--
+-- WHY `IF NOT EXISTS`, WHICH IS NOT DEFENSIVE PADDING.
+--
+-- PR-0 (the audit's section E fixes) creates an index with EXACTLY this name and
+-- these columns, in its own migration
+-- 20260912020000_northbound_audit_console_reads_and_retention. The two branches
+-- were written independently, both need the index for the same reason, and
+-- neither depends on the other.
+--
+-- Without this guard, whichever of the two merges SECOND fails its production
+-- deploy with 42P07 "relation already exists" — and a failed migration blocks
+-- every later one until someone resolves it by hand. That is exactly what
+-- happened on this branch's preview deploy, where PR-0's preview had already
+-- applied its copy to the shared database:
+--
+--     Applying migration `20260912050000_correlation_id_lookup`
+--     Error: P3018 / 42P07
+--     ERROR: relation "NorthboundAuditEvent_organizationId_correlationId_idx"
+--            already exists
+--
+-- The index is byte-identical in both migrations, so making this one idempotent
+-- loses nothing: it creates the index when it is absent and no-ops when the
+-- other branch got there first. The alternative — deleting it here and
+-- depending on PR-0 — would leave this PR's own lookup unindexed if PR-0 is
+-- ever dropped or reordered.
+--
+-- NOTE FOR THE MIGRATION-INTEGRITY GATE, which passed while this was broken:
+-- that job builds a database from THIS BRANCH's history alone, where the index
+-- does not pre-exist. A cross-branch collision is invisible to it by
+-- construction. Only a deploy against a database another branch has touched can
+-- see it.
+--
 -- CONCURRENTLY is deliberately NOT used: Prisma runs each migration inside a
 -- transaction, and CREATE INDEX CONCURRENTLY cannot run in one. On a table this
 -- size the brief lock is acceptable; if it ever is not, this index should be
 -- built out of band and the migration marked applied.
-CREATE INDEX "NorthboundAuditEvent_organizationId_correlationId_idx"
+CREATE INDEX IF NOT EXISTS "NorthboundAuditEvent_organizationId_correlationId_idx"
     ON "NorthboundAuditEvent"("organizationId", "correlationId");
