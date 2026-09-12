@@ -135,11 +135,29 @@ export async function GET(request: NextRequest) {
     if (byStatus.ok === 0) delete byStatus.ok;
   }
 
+  /*
+   * CONSOLE READS ARE COUNTED IN THE TOTAL AND IN NEITHER BREAKDOWN.
+   *
+   * A `/api/sap/tdd/*` read has no solution and no credential — it is a human in
+   * the console, recorded with an `actorUserId` instead. Both are real northbound
+   * traffic against a customer's tenant, so `total` and `byStatus` include them;
+   * "calls per solution" and "calls per credential" cannot, because there is no
+   * key to put them under. Bucketing them as "unknown" would invent a solution,
+   * and dropping them from the total would under-report the load on the tenant —
+   * the "floor, not census" note below is about a different omission and must not
+   * be read as covering this one, which is why the counts are stated separately.
+   */
   const bySolution: Record<string, number> = {};
-  for (const g of solutionGroups) bySolution[g.solutionId] = g._count._all;
+  for (const g of solutionGroups) {
+    if (g.solutionId === null) continue;
+    bySolution[g.solutionId] = g._count._all;
+  }
 
   const byToken: Record<string, number> = {};
-  for (const g of tokenGroups) byToken[g.clientTokenId] = g._count._all;
+  for (const g of tokenGroups) {
+    if (g.clientTokenId === null) continue;
+    byToken[g.clientTokenId] = g._count._all;
+  }
 
   // The environment pair. `environment` is the CREDENTIAL's declared value;
   // `connectionEnvironment` is the CONNECTION's own. Only the pair can show they

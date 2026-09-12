@@ -78,7 +78,10 @@ describe("when the deletion happens", () => {
   it("acts on a Vercel PRODUCTION deploy — the case this exists for", () => {
     const plan = planRemoval({ VERCEL: "1", VERCEL_ENV: "production", NODE_ENV: "production" });
     expect(plan.act).toBe(true);
-    expect(plan.reason).toBe("production-vercel-build");
+    // Renamed from "production-vercel-build" when the rule widened past Vercel
+    // (audit E14): every production PIPELINE strips these now, not only this one.
+    // See backdoor-audit-and-production.test.ts for the pipelines it recognises.
+    expect(plan.reason).toBe("production-pipeline-build");
   });
 
   it("leaves a Preview deploy alone — that is what the E2E suite runs against", () => {
@@ -95,7 +98,9 @@ describe("when the deletion happens", () => {
   it("never deletes from a checkout, even when NODE_ENV says production", () => {
     const plan = planRemoval({ VERCEL_ENV: undefined, NODE_ENV: "production" });
     expect(plan.act).toBe(false);
-    expect(plan.reason).toBe("not-vercel");
+    // "not-vercel" became "not-a-pipeline": the distinction that matters was
+    // never which host is building, it is whether the checkout is disposable.
+    expect(plan.reason).toBe("not-a-pipeline");
   });
 
   it("leaves development alone", () => {

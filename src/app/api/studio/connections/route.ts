@@ -38,6 +38,10 @@ import {
   normalizeEnvironment,
   upsertSapConnection,
 } from "@/lib/sap-public/connection-resolver";
+import {
+  ENVIRONMENT_VALUES,
+  isUnrecognisedEnvironment,
+} from "@/lib/sap-public/environment";
 import { isValidSapClient } from "@/lib/sap-public/sap-url";
 import { sanitizeTenantKey, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
@@ -114,7 +118,25 @@ const upsertSchema = z
     label: z.string().min(2).max(120),
     baseUrl: httpsUrl,
     authType: z.enum(["basic", "bearer", "oauth-client-credentials", "oauth-saml-bearer", "api-key"]),
-    environment: z.string().max(40).optional(),
+    /**
+     * The landscape this system serves — one of SANDBOX | DEV | TEST | PROD
+     * (settled decision D1).
+     *
+     * REFUSED RATHER THAN COERCED. The column is now an enum, so an
+     * unrecognised word can only be stored as NULL — "undeclared" — and a form
+     * that silently downgrades "Staging" to undeclared would leave the
+     * consultant looking at a connection they believe is declared while the
+     * broker refuses every write against it with UNDECLARED_ENVIRONMENT_WRITE.
+     * Blank still means undeclared, which is a legitimate answer; a word we do
+     * not accept is a mistake and is named as one.
+     */
+    environment: z
+      .string()
+      .max(40)
+      .optional()
+      .refine((v) => !isUnrecognisedEnvironment(v), {
+        message: `must be one of ${ENVIRONMENT_VALUES.join(", ")} — or left blank if the landscape is not yet known`,
+      }),
     /**
      * The SAP client — "100", "080". Only meaningful for landscapes that
      * address one; see the refinement below.
@@ -404,7 +426,7 @@ export async function POST(request: NextRequest) {
         ...(input.writeSecret ? { writeSecret: input.writeSecret } : {}),
       },
       oauthTokenUrl: input.oauthTokenUrl ?? null,
-      environment: input.environment ?? null,
+      environment,
       client: input.client ?? null,
       writeEnabled: input.writeEnabled ?? false,
       apiPath: input.apiPath ?? null,
@@ -433,7 +455,7 @@ export async function POST(request: NextRequest) {
       product: input.product,
       key,
       authType: input.authType,
-      environment: input.environment ?? null,
+      environment,
       writeEnabled: input.writeEnabled ?? false,
       secretsRotated: true,
     },

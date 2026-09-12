@@ -162,13 +162,36 @@ describe("#8 · the audit trail is append-only", () => {
     expect(config).not.toMatch(/configAudit\s*\.\s*(update|delete|upsert)/);
   });
 
-  it("no module ANYWHERE edits an audit row", () => {
-    // The guarantee is worthless if it only holds inside the audit modules —
-    // any route could reach for prisma.configAudit.update directly.
+  /*
+   * WHAT "APPEND-ONLY" GUARANTEES, stated precisely — because retention now
+   * exists and this rule had to say which half it protects.
+   *
+   * The property is INTEGRITY: no code path rewrites a recorded call to say
+   * something other than what happened. That is what makes the trail evidence,
+   * and it holds everywhere, with no exceptions, which is why `update`,
+   * `updateMany` and `upsert` are still forbidden in every file in `src`.
+   *
+   * Expiring a row WHOLE, by age, on a stated schedule is a different operation:
+   * it leaves no altered version behind and cannot make the trail say anything
+   * untrue. `reap.ts` set out the conditions for doing it — "a stated period, a
+   * legal basis and a tested exception" — and `retention.ts` meets all three.
+   * Append-only and bounded are compatible; append-only and unbounded is just a
+   * table nobody decided about, which is what the audit found (E14/E15: no
+   * retention, no index on correlationId, and a correlation id the caller was
+   * told to quote leading to a lookup with no query path).
+   *
+   * So deletion is allowed in exactly one named module, and the next two tests
+   * are what make that an exception rather than a hole.
+   */
+  const RETENTION_MODULE = "src/lib/northbound/retention.ts";
+
+  it("no module ANYWHERE rewrites an audit row", () => {
+    // No exceptions, including the retention module. An edited audit row is the
+    // one thing that would make the trail worthless.
     const offenders = walk(path.resolve(ROOT, "src"))
       .filter((f) => /\.tsx?$/.test(f))
       .filter((f) =>
-        /(configAudit|northboundAuditEvent)\s*\.\s*(update|updateMany|delete|deleteMany|upsert)/.test(
+        /(configAudit|northboundAuditEvent)\s*\.\s*(update|updateMany|upsert)/.test(
           readFileSync(f, "utf8"),
         ),
       )
@@ -176,8 +199,39 @@ describe("#8 · the audit trail is append-only", () => {
 
     expect(
       offenders,
-      `These modules mutate an audit trail:\n${offenders.join("\n")}`,
+      `These modules rewrite an audit trail:\n${offenders.join("\n")}`,
     ).toEqual([]);
+  });
+
+  it("only the retention module deletes an audit row", () => {
+    // The guarantee is worthless if it only holds inside the audit modules —
+    // any route could reach for prisma.configAudit.delete directly. One module
+    // may, and it is named here so adding a second is a decision somebody makes
+    // in review rather than a line nobody notices.
+    const deleters = walk(path.resolve(ROOT, "src"))
+      .filter((f) => /\.tsx?$/.test(f))
+      .filter((f) =>
+        /(configAudit|northboundAuditEvent)\s*\.\s*(delete|deleteMany)/.test(
+          readFileSync(f, "utf8"),
+        ),
+      )
+      .map((f) => f.replace(`${ROOT}/`, ""));
+
+    expect(deleters).toEqual([RETENTION_MODULE]);
+  });
+
+  it("and it deletes only by age, within a tenant", () => {
+    // What keeps the exception narrow. A delete that could select on anything
+    // but age would be a way to remove a specific inconvenient row, which is
+    // editing the trail by subtraction.
+    const retention = read(RETENTION_MODULE);
+    const deleteCall = /deleteMany\(\{([\s\S]*?)\}\);/.exec(retention)?.[1] ?? "";
+    expect(deleteCall, "the delete must exist").not.toBe("");
+    expect(deleteCall).toContain("organizationId");
+    // Re-checked at deletion time, not merely selected on in the scan above it.
+    expect(deleteCall).toMatch(/at:\s*\{\s*lt:\s*cutoff\s*\}/);
+    // ConfigAudit — the governance trail — is not swept at all.
+    expect(retention).not.toContain("configAudit");
   });
 });
 
