@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TOUCH_TARGETS } from "@/types/pwa";
+import { isAdminRoleName } from "@/lib/auth/role-migration";
 
 interface Tab {
   href: string;
@@ -35,7 +36,7 @@ interface MobileBottomTabBarProps {
 export function MobileBottomTabBar({ role }: MobileBottomTabBarProps) {
   const pathname = usePathname();
   const currentPath = pathname ?? "";
-  const canAccessAdmin = ["platform_admin", "admin"].includes(role);
+  const canAccessAdmin = isAdminRoleName(role);
   const visibleTabs = tabs.filter((tab) => !tab.adminOnly || canAccessAdmin);
 
   return (

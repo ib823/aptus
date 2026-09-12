@@ -98,6 +98,10 @@ export async function GET(request: NextRequest) {
   const headroomById = new Map(headroom.map((h) => [h.clientId, h]));
   const throttledById = new Map<string, number>();
   for (const g of throttled429) {
+    // A 429 with no credential is a console read refused by the edge bucket.
+    // This view is per-credential headroom, and there is no credential to
+    // attribute it to; it is counted on the traffic board instead.
+    if (g.clientTokenId === null) continue;
     throttledById.set(g.clientTokenId, (throttledById.get(g.clientTokenId) ?? 0) + g._count._all);
   }
 
