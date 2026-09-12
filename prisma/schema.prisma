@@ -1034,6 +1034,62 @@ model SolutionClient {
 
 /// Per-call audit for the northbound broker. APPEND-ONLY: there is no update or
 /// delete path onto this table. An audit trail that can be edited is not one.
+/// A one-time link that CREATES a key when it is opened.
+///
+/// THE ORDERING IS THE GUARANTEE, and it is the whole reason this table exists.
+/// The key does not exist before someone opens the link: no SolutionClient row,
+/// no token, no hash. Opening the link mints it, shows it once, and marks the
+/// link consumed. An expired link issues NOTHING — there is no key sitting
+/// behind it to leak, to find in a backup, or to hand to whoever opens the URL
+/// next.
+///
+/// The alternative — minting the key up front and merely revealing it — makes
+/// "shown once" a UI convention described as a guarantee, and makes the lane
+/// state after expiry a lie: the lane would read "no key" while a working
+/// credential existed.
+///
+/// NO PLAINTEXT IS STORED. `tokenHash` is SHA-256 of the link token, the same
+/// shape as SolutionClient.tokenHash, so a database copy grants nothing. The
+/// raw token exists only in the URL that was sent to the app owner.
+model KeyClaimLink {
+  id             String @id @default(cuid())
+  organizationId String
+  solutionId     String
+
+  /// Which environment's key this link will mint. One key per
+  /// (solution, environment), so a claim is also what decides the lane.
+  environment String
+
+  /// SHA-256 of the link token. Unique so a token identifies one link.
+  tokenHash String @unique
+
+  /// Who asked for the link to be sent.
+  createdById String
+  createdAt   DateTime @default(now())
+
+  /// After this instant the link mints nothing. Not a soft check: the claim
+  /// path refuses and the row stays unconsumed, so the lane can say
+  /// "link expired" rather than "no key" — a different sentence with a
+  /// different fix.
+  expiresAt DateTime
+
+  /// Set the moment the key is minted. A link with this set is spent, and
+  /// re-opening it issues nothing — that is what "one-time" means.
+  claimedAt       DateTime?
+  /// The SolutionClient this link created, once it has created one.
+  claimedClientId String?
+
+  /// Superseding a link (sending a new one) revokes the old rather than
+  /// deleting it, so "you were sent three links" stays answerable.
+  revokedAt     DateTime?
+  revokedReason String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, solutionId, environment])
+  @@index([organizationId, expiresAt])
+}
+
 model NorthboundAuditEvent {
   id             String  @id @default(cuid())
   organizationId String
@@ -2546,6 +2602,7 @@ model Organization {
 
   // CoreEdge runtime — per-solution client identities
   solutionClients SolutionClient[]
+  keyClaimLinks   KeyClaimLink[]
 
   @@index([slug])
   @@index([plan])
@@ -5105,7 +5162,7 @@ model AffirmBundle {
   /// "not stated", and a bundle that does not state a country is not filtered
   /// — silently dropping questions because a field was never filled in would
   /// be a worse failure than showing too many.
-  country  String?
+  country   String?
   /// 2608 WS14 — every country the engagement runs in, ISO-3166-1 alpha-2.
   ///
   /// `country` above is singular and stays: it is what the question filter
@@ -5123,7 +5180,7 @@ model AffirmBundle {
   countries String[] @default([])
   /// Free-form industry key, filtered against AffirmQuestion.industryScope on
   /// the same "null means do not filter" rule.
-  industry String?
+  industry  String?
 
   createdById  String?
   releasedById String?

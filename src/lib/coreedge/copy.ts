@@ -394,26 +394,24 @@ export function deactivateSapSystemConfirm(affectedLanes: readonly string[]): Co
  * ────────────────────────────────────────────────────────────────────────── */
 
 /**
- * Two of A6's strings describe capabilities the backend does not have, and the
- * build brief is explicit that "until they exist, that copy must not ship".
+ * Copy that describes a capability the backend does not have.
  *
- * They are named rather than written, so that a screen cannot reach for them by
- * accident and so the list of what is blocked is visible in code rather than
- * only in a document:
+ * The build brief is explicit: "until they exist, that copy must not ship."
+ * Phrases are NAMED here rather than written, so a screen cannot reach for one
+ * by accident and so the list of what is blocked is visible in code rather than
+ * only in a document. `tests/unit/coreedge/copy.test.ts` fails if any appears
+ * anywhere under src/.
  *
- *   · The one-time claim link — "Key ready · link expired" with "Send a new
- *     link". The whole shown-once guarantee rests on the key not existing before
- *     the link is opened. Claiming it over a key minted earlier makes "shown
- *     once" a UI convention described as a guarantee.
- *   · The CLI alternative — "or run `coreedge pull`", offered as an equal path
- *     in Home, the claim screen and the key rows. Shipping the link alone makes
- *     every "or" in that copy false.
+ * THE CLAIM-LINK PHRASES CAME OFF THIS LIST IN PR-5, because the capability
+ * landed. "Key ready · link expired" and "Send a new link" were blocked while
+ * the key was minted up front and merely revealed — which would have made
+ * "shown once" a UI convention described as a guarantee, and the lane state
+ * after expiry a lie. `src/lib/northbound/claim-link.ts` now mints the key
+ * inside the claim, so both sentences are true and may ship.
  *
- * Both land in PR-5. `tests/unit/coreedge/copy.test.ts` fails if either phrase
- * appears anywhere under src/.
+ * STILL BLOCKED: the CLI. "or run `coreedge pull`" is offered as an equal path
+ * in Home, the claim screen and the key rows. It is a separate distributable
+ * that does not exist in this repository, and shipping the link alone makes
+ * every "or" in that copy false.
  */
-export const COPY_BLOCKED_ON_BACKEND = [
-  "Key ready · link expired",
-  "Send a new link",
-  "coreedge pull",
-] as const;
+export const COPY_BLOCKED_ON_BACKEND = ["coreedge pull"] as const;
