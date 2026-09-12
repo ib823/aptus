@@ -259,6 +259,32 @@ describe("copy comes from the deck", () => {
   });
 });
 
+describe("the rail uses on-navy inks", () => {
+  /*
+   * THE RAIL IS THE ONE SURFACE THAT DOES NOT INVERT — A2 keeps it navy in both
+   * themes — so the inks that serve the page are wrong on it. The first version
+   * of Rail.tsx used text-ink and text-ink-soft, which in light are #1A1A1A and
+   * #4A4A4A: on #002B5C those measure 1.75:1 and 1.57:1 against a 4.5:1 floor.
+   * Dark was fine, because --ink-primary is already light there — which is why
+   * reading the token names is not enough and the axe scan found it.
+   */
+  const src = code("Rail.tsx");
+
+  it("reaches for --ink-on-navy rather than the page inks", () => {
+    expect(src).toContain("--ink-on-navy");
+  });
+
+  it("never puts a page ink on the navy ground", () => {
+    // `text-ink` as a whole class, and its -soft/-muted siblings. Matched by
+    // word boundary so `text-ink-on-navy`-style names could never trip it.
+    const pageInk = /\btext-ink(-soft|-muted)?(?=[\s"'`])/;
+    expect(
+      pageInk.test(src),
+      "Rail.tsx puts a page ink on the navy rail. Use --ink-on-navy.",
+    ).toBe(false);
+  });
+});
+
 describe("role gating never removes a place from the rail", () => {
   it("renders all six places and changes only the actions", () => {
     /*

@@ -64,7 +64,22 @@ export function Rail({ places, current, badges = {}, variant = "rail" }: RailPro
               (isTabBar
                 ? "flex flex-1 flex-col items-center gap-1 px-2 py-3 text-xs "
                 : "flex items-center justify-between rounded-[var(--radius-input)] px-3 py-2 text-sm ") +
-              (active ? "bg-rail-active text-ink " : "text-ink-soft hover:bg-rail-hover ") +
+              /*
+               * ON-NAVY INKS, NOT THE PAGE INKS. The rail is the one surface
+               * that does not invert — it is navy in both themes — so the inks
+               * that serve the page are wrong here. In light, --ink-primary is
+               * #1A1A1A and --ink-secondary #4A4A4A: on #002B5C those measure
+               * 1.75:1 and 1.57:1, against a 4.5:1 floor. A2 declares
+               * --ink-on-navy and --ink-on-navy-muted for exactly this, and the
+               * first version of this component reached for the page inks
+               * instead. The axe scan in
+               * tests/e2e/accessibility.coreedge.auth.spec.ts is what caught it,
+               * and it caught it in LIGHT only — dark was fine all along, since
+               * --ink-primary is already a light value there.
+               */
+              (active
+                ? "bg-rail-active text-[color:var(--ink-on-navy)] "
+                : "text-[color:var(--ink-on-navy-muted)] hover:bg-rail-hover ") +
               "focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring-navy"
             }
           >
