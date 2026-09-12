@@ -101,13 +101,31 @@ describe("the two name collisions stay apart", () => {
     } catch {
       hits = ""; // grep exits 1 when nothing matches, which is the pass case
     }
+    /*
+     * WHAT MAY IMPORT THESE COMPONENTS: the CoreEdge namespace, and nothing
+     * else. That is the components folder itself, the /coreedge routes, and the
+     * lib modules they share.
+     *
+     * The rule is about the COLLISION, not about isolation for its own sake:
+     * `OpsTable` and `ConfirmDialog` exist twice in this repo, and the two
+     * consoles must not reach across into each other's copy. PR-3's
+     * design-system page is inside the new console and imports all fourteen
+     * components by design — an earlier version of this filter would have
+     * called that a violation, which would have made the test an obstacle to
+     * the thing it exists to protect.
+     */
+    const ALLOWED_PREFIXES = [
+      path.join(ROOT, "src/components/coreedge/"),
+      path.join(ROOT, "src/app/(coreedge)/"),
+      path.join(ROOT, "src/lib/coreedge/"),
+    ];
     const outside = hits
       .split("\n")
       .filter(Boolean)
-      .filter((line) => !line.startsWith(path.join(ROOT, "src/components/coreedge/")));
+      .filter((line) => !ALLOWED_PREFIXES.some((prefix) => line.startsWith(prefix)));
     expect(
       outside,
-      `The existing console imports the new one:\n${outside.join("\n")}`,
+      `Imported from outside the CoreEdge console:\n${outside.join("\n")}`,
     ).toEqual([]);
   });
 });

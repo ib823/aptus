@@ -42,6 +42,20 @@ const SESSION: readonly string[] = [
   "(help)",
   "(portal)",
   "(workbench)",
+  /*
+   * `(coreedge)` is session-gated and ONLY session-gated, deliberately. Its
+   * layout redirects a caller with no user, like every group above — but unlike
+   * `(studio)` and `(operations)` it does NOT swap in a RoleGatedEmptyState for
+   * the wrong role. The CoreEdge rule is that every /coreedge route renders for
+   * every signed-in user and only the actions change, each disabled one carrying
+   * its reason, because a person who cannot approve access still needs to see
+   * that the request exists and who can act on it.
+   *
+   * That makes it a SESSION group in exactly the sense this file means: the
+   * layout resolves a user and redirects when there is none. The role behaviour
+   * is a separate decision and is asserted in the CoreEdge component tests.
+   */
+  "(coreedge)",
 ];
 
 /**

@@ -32,6 +32,19 @@ export const WORKBENCH_PATHS = [
   '/studio',            // CoreEdge Console — Developer Studio (auth + RBAC-gated under (studio))
   '/operations',        // CoreEdge Console — Operations Center (auth + RBAC-gated under (operations))
   '/control-tower',     // CoreEdge Console — Control Tower (auth + RBAC-gated under (control-tower))
+  /*
+   * The redesigned console's namespace. Session-gated under (coreedge), which
+   * redirects an anonymous caller and nobody else — role changes the actions
+   * inside, never the route.
+   *
+   * This is the fifth surface to need this line and the first to be caught by
+   * the test rather than by production: PR-3's only page,
+   * /coreedge/design-system, was redirected away here and the route would have
+   * existed and been unreachable, exactly as the header above describes twice
+   * over. Later routes in this namespace are covered by the prefix; the
+   * tokenised /claim/ surface is NOT, and belongs here when PR-4 adds it.
+   */
+  '/coreedge',          // CoreEdge Console — the redesign (auth-gated under (coreedge))
   '/c/',                // presales guest token surface (under (external))
   '/a/',                // affirm external executive guest surface (under (external))
   '/d/',                // discovery external guest journey (under (external)) — feature-gated by NEUTRAL_DISCOVERY_ENABLED
