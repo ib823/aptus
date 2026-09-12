@@ -11,8 +11,14 @@ import {
 } from "@/lib/sap-public/tdd-connector";
 import { getLiveCache, setLiveCache } from "@/lib/sap-public/live-cache";
 import { refuseUnlessMayProbeTenant } from "@/lib/sap-public/probe-guard";
+import {
+  decideConsoleRead,
+  DEPLOYMENT_AUDIT_SCOPE,
+  newCorrelationId,
+  recordConsoleRead,
+} from "@/lib/sap-public/console-read-guard";
 import { getCurrentUser } from "@/lib/auth/session";
-import { resolveReadTenant } from "@/lib/sap-public/tenant-for-read";
+import { resolveReadTenant, type ResolvedReadTenant } from "@/lib/sap-public/tenant-for-read";
 import { ERROR_CODES } from "@/types/api";
 
 function displayValue(value: unknown): string {
@@ -104,10 +110,15 @@ async function resolveTenant(
   product: SapOdataProduct,
   request: NextRequest,
   organizationId: string | null,
-): Promise<SapTenant | null> {
+): Promise<ResolvedReadTenant | null> {
   const tenantKey = request.nextUrl.searchParams.get("tenant");
-  if (tenantKey) return (await resolveReadTenant(product.envPrefix, product.key, organizationId, tenantKey))?.tenant ?? null;
-  return getConfiguredSapTenants(product.envPrefix)[0] ?? null;
+  if (tenantKey) {
+    return (await resolveReadTenant(product.envPrefix, product.key, organizationId, tenantKey)) ?? null;
+  }
+  // The documented default: the deployment's first configured tenant, which has
+  // no stored connection behind it.
+  const configured = getConfiguredSapTenants(product.envPrefix)[0];
+  return configured ? { tenant: configured, source: "deployment", connection: null } : null;
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -128,12 +139,70 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (refusal) return refusal;
 
   const viewer = await getCurrentUser();
-  const tenant = await resolveTenant(product, request, viewer?.organizationId ?? null);
-  if (!tenant) {
+  // The probe guard above has already established a session; this keeps the
+  // audit row's actor non-null, and a read we cannot attribute must not run.
+  if (!viewer) {
+    return NextResponse.json(
+      { error: { code: ERROR_CODES.UNAUTHORIZED, message: "Not authenticated" } },
+      { status: 401 },
+    );
+  }
+  const resolved = await resolveTenant(product, request, viewer.organizationId ?? null);
+  if (!resolved) {
     return NextResponse.json(
       { error: { code: ERROR_CODES.VALIDATION_ERROR, message: "No SAP tenant is configured" } },
       { status: 400 },
     );
+  }
+  const tenant = resolved.tenant;
+  const conn = resolved.connection;
+
+  const correlationId = newCorrelationId();
+  const auditEnvironment = conn?.environment ?? `deployment:${tenant.key}`;
+  /*
+   * ONE ROW FOR THE WHOLE DASHBOARD LOAD. This route runs one live read per
+   * curated section — four on S/4HANA today — against the same tenant in one
+   * request. `-operations-` is the scope sentinel (the convention the northbound
+   * routes use for `-discovery-` and `-schema-`), and `rowCount` carries how many
+   * sections actually reached the tenant, which is the number that says how much
+   * load this request caused.
+   */
+  const audit = (status: number, rowCount: number | null, durationMs?: number) =>
+    recordConsoleRead({
+      organizationId: viewer.organizationId ?? DEPLOYMENT_AUDIT_SCOPE,
+      actorUserId: viewer.id,
+      externalId: "-operations-",
+      environment: auditEnvironment,
+      status,
+      rowCount,
+      correlationId,
+      connectionId: conn?.id ?? null,
+      connectionEnvironment: conn?.environment ?? null,
+      ...(durationMs === undefined ? {} : { durationMs }),
+    });
+
+  // The environment ceiling. Only a stored connection has a landscape to cap.
+  if (conn && viewer.organizationId) {
+    /*
+     * BOTH CONDITIONS, AND THE SECOND IS NOT DEFENSIVE PADDING. `conn` is only
+     * ever set when `resolveReadTenant` matched a stored connection, and it will
+     * not look for one without an organization — so a connection implies an
+     * organization. Naming it here is what lets the guard take a real
+     * organization id rather than a fallback: a grant query against a sentinel
+     * would return nothing and refuse, which looks like a policy decision and is
+     * actually a missing value.
+     */
+    const decision = await decideConsoleRead({
+      organizationId: viewer.organizationId,
+      environment: conn.environment,
+    });
+    if (!decision.allowed) {
+      await audit(403, null);
+      return NextResponse.json(
+        { error: { code: ERROR_CODES.FORBIDDEN, message: decision.message, correlationId } },
+        { status: 403 },
+      );
+    }
   }
 
   // Short-TTL cache: 4 live SAP reads per request is expensive; a warm instance
@@ -146,17 +215,28 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!refresh) {
     const cached = getLiveCache<{ sections: unknown; generatedAt: string }>(cacheKey);
     if (cached) {
+      // A cache hit reached no tenant, so there is nothing to audit — the row
+      // would claim load this request did not cause.
       return NextResponse.json({
-        data: { tenant: tenantIdentity, generatedAt: cached.value.generatedAt, sections: cached.value.sections, fromCache: true },
+        data: { tenant: tenantIdentity, generatedAt: cached.value.generatedAt, sections: cached.value.sections, fromCache: true, correlationId },
       });
     }
   }
 
+  const startedAt = Date.now();
   const sections = await Promise.all(
     getSapOperations(product).map((config) => loadOperationSection(product, tenant, config)),
   );
   const generatedAt = new Date().toISOString();
   setLiveCache(cacheKey, { sections, generatedAt });
+
+  // Every section that answered at all counts as load on the tenant, whether it
+  // returned rows or an error: the request left and was served.
+  await audit(
+    sections.some((section) => section.ok) ? 200 : 502,
+    sections.length,
+    Date.now() - startedAt,
+  );
 
   return NextResponse.json({
     data: {
@@ -165,6 +245,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       generatedAt,
       sections,
       fromCache: false,
+      correlationId,
     },
   });
 }

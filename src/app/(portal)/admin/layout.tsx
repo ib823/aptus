@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { isAdminRoleName } from "@/lib/auth/role-migration";
 import { getCurrentUser } from "@/lib/auth/session";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 
@@ -9,7 +10,7 @@ export default async function AdminLayout({
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (!["platform_admin", "admin"].includes(user.role)) redirect("/dashboard");
+  if (!isAdminRoleName(user.role)) redirect("/dashboard");
 
   return (
     <div className="flex min-h-[calc(100vh-64px)]">

@@ -29,11 +29,20 @@
  * them back. Nothing unusual reaches the bundler, so nothing unusual reaches
  * Vercel's tracer either.
  *
- * ONLY ON VERCEL, AND ONLY IN PRODUCTION. A build off Vercel is somebody's
- * checkout: deleting source files there would be a worse failure than the one
- * this prevents, so the script reports and exits instead. The runtime gates
- * remain the protection everywhere this does not act — Preview deployments
- * included, which is what the E2E suite needs.
+ * ON EVERY PRODUCTION BUILD PIPELINE, NOT ONLY VERCEL'S. This used to require
+ * `VERCEL=1`, so a Docker image, a self-hosted runner or any other pipeline
+ * producing a production build shipped both endpoints and rested entirely on four
+ * environment variables staying unset. The condition that actually matters is not
+ * which host is building but whether the checkout is DISPOSABLE — see
+ * `isDisposableCheckout`.
+ *
+ * A CONTRIBUTOR'S MACHINE IS STILL NEVER TOUCHED. `next build` sets
+ * NODE_ENV=production locally too, and deleting source files from somebody's
+ * working tree would be a worse failure than the one this prevents. There the
+ * script reports and exits, and the runtime gates are the protection — which
+ * since audit E14 include the deploy-time acknowledgement
+ * (INTERNAL_TEST_DEPLOYMENT), checked at runtime and not only at build time, so a
+ * variable set after the build can no longer open either endpoint on its own.
  */
 
 import { existsSync, rmSync } from "node:fs";
@@ -69,6 +78,43 @@ export function isVercelBuild(env = process.env) {
 }
 
 /**
+ * Is this a BUILD PIPELINE of any kind, as opposed to a contributor's machine?
+ *
+ * WHY THIS EXISTS (audit E14). The removal used to require `VERCEL=1`, so the
+ * only production build these surfaces were stripped from was Vercel's. Every
+ * other way of producing a production build — a Docker image, a self-hosted
+ * runner, a GitHub Actions job that deploys somewhere else — shipped both
+ * session-minting endpoints and relied entirely on four environment variables
+ * staying unset. "Only on Vercel" was never the rule anyone wanted; it was the
+ * consequence of Vercel being the only pipeline that existed when this was
+ * written.
+ *
+ * THE DISTINCTION THAT ACTUALLY MATTERS is not which host is building, it is
+ * whether the checkout is disposable. Deleting source files from a contributor's
+ * working tree is a worse failure than the one this prevents, and that reasoning
+ * still holds — so the test is "a pipeline built this checkout", which every CI
+ * system on the market declares through `CI`, plus the named hosts, plus an
+ * explicit opt-in for a pipeline that declares neither.
+ *
+ * @param {Record<string, string | undefined>} [env]
+ */
+export function isDisposableCheckout(env = process.env) {
+  return (
+    env.VERCEL === "1" ||
+    env.CI === "true" ||
+    env.CI === "1" ||
+    env.NETLIFY === "true" ||
+    env.RENDER === "true" ||
+    Boolean(env.FLY_APP_NAME) ||
+    Boolean(env.GITHUB_ACTIONS) ||
+    // The escape hatch for a pipeline that declares none of the above — a plain
+    // `docker build`, for instance. Named for what it does, so nobody sets it by
+    // accident on a machine they care about.
+    env.STRIP_TEST_AUTH === "1"
+  );
+}
+
+/**
  * What this script would do for a given environment — exported so the decision
  * is testable without deleting anything.
  *
@@ -79,15 +125,19 @@ export function isVercelBuild(env = process.env) {
 export function planRemoval(env = process.env) {
   const production = isProductionDeploy(env);
   const vercel = isVercelBuild(env);
+  const pipeline = isDisposableCheckout(env);
   if (!production) {
-    return { act: false, reason: "not-production", production, vercel };
+    return { act: false, reason: "not-production", production, vercel, pipeline };
   }
-  if (!vercel) {
-    // A production build in a checkout — `next build` sets NODE_ENV=production,
-    // so this is the ordinary local case, not a deploy.
-    return { act: false, reason: "not-vercel", production, vercel };
+  if (!pipeline) {
+    // A production build in somebody's checkout — `next build` sets
+    // NODE_ENV=production, so this is the ordinary local case, not a deploy.
+    // Nothing is deleted from a working tree; the runtime gates hold here, and
+    // since audit E14 they include the deploy-time acknowledgement
+    // (INTERNAL_TEST_DEPLOYMENT) rather than a single feature flag.
+    return { act: false, reason: "not-a-pipeline", production, vercel, pipeline };
   }
-  return { act: true, reason: "production-vercel-build", production, vercel };
+  return { act: true, reason: "production-pipeline-build", production, vercel, pipeline };
 }
 
 function main() {
@@ -97,7 +147,7 @@ function main() {
     const why =
       plan.reason === "not-production"
         ? `VERCEL_ENV=${process.env.VERCEL_ENV ?? "(unset)"} / NODE_ENV=${process.env.NODE_ENV ?? "(unset)"} — not a production deploy`
-        : "not the Vercel builder; a local build must not delete files from your checkout";
+        : "not a build pipeline (no CI / VERCEL / GITHUB_ACTIONS / STRIP_TEST_AUTH=1); a local build must not delete files from your checkout";
     console.log(`[strip-test-auth] Keeping the internal-testing sign-in surfaces: ${why}.`);
     console.log(`[strip-test-auth] Their runtime environment gates are the protection here.`);
     return;
