@@ -82,6 +82,10 @@ prisma/dev.db
 *.docx
 *.xlsx
 *.xlsm
+# The design handoff's attachments are a set; A10 is the as-is UI inventory
+# that A1-A8 are read against. Narrow so it re-includes the attachment
+# folder only, and the blanket spreadsheet rule keeps applying everywhere else.
+!docs/coreedge/design/*.xlsx
 .env*.local
 
 # Design package — allow committed mocks (HTML, PNG, JPG, JSX) under docs/design/
