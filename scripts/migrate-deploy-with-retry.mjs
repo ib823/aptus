@@ -48,8 +48,37 @@ const COLD_START_PATTERNS = [
 // band-aid neither caused nor is resolved by that fix. It is retained
 // deliberately (removing it isn't proven safe against the Neon scenario it
 // guards); prune only once that recovery path is confirmed dead in prod.
+//
+// SECOND ENTRY (PR-5, CoreEdge capability 9) — and it meets the rule above:
+// the corrected migration's only statement is
+// `CREATE INDEX IF NOT EXISTS "NorthboundAuditEvent_organizationId_correlationId_idx"`,
+// which is idempotent against either schema state by construction.
+//
+// WHAT FAILED, so the next reader does not have to reconstruct it. PR-0 creates
+// an index with exactly this name and these columns in its own migration
+// (20260912020000_northbound_audit_console_reads_and_retention). The two
+// branches were written independently and neither depends on the other, so on
+// the SHARED preview database — where PR-0's deploy had already applied its
+// copy — PR-5's unguarded CREATE INDEX hit 42P07 "relation already exists" and
+// left a failed row in _prisma_migrations:
+//
+//     Applying migration `20260912050000_correlation_id_lookup`
+//     Error: P3018 / 42P07
+//
+// The SQL is fixed (e401ea2). This entry only clears the failed ROW that the
+// first attempt left behind, which Prisma will not retry on its own.
+//
+// WHY THE HISTORY-BUILT GATE DID NOT CATCH IT: that job builds a database from
+// one branch's history alone, where the index does not pre-exist. A
+// cross-branch collision is invisible to it by construction — only a deploy
+// against a database another branch has touched can see one.
+//
+// PRUNE THIS once the deploy is green and the failed row is gone. It is a
+// one-shot recovery for a mistake that is already corrected, not a standing
+// exemption.
 const KNOWN_AUTO_RECOVERABLE = new Set([
   "20260516220000_session_token_hashing",
+  "20260912050000_correlation_id_lookup",
 ]);
 
 function delay(ms) {
