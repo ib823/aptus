@@ -10,6 +10,8 @@ import {
   parseLaneEnvironment,
   type LaneEnvironment,
   type LaneVerdict,
+  type ProbeFacts,
+  type ReadFacts,
 } from "./lanes";
 import { LANE_ENVIRONMENTS } from "./lanes";
 
@@ -27,6 +29,32 @@ import { LANE_ENVIRONMENTS } from "./lanes";
  * say so (null), and the derivation turns that into `unknown` rather than a
  * guess.
  */
+
+
+/* --- narrowing the ledger's free-text columns, honestly ------------------ */
+
+const PROBE_STATUSES = ["OK", "UNAUTHORIZED", "NOT_FOUND", "TIMEOUT", "ERROR", "NO_PROBE_PATH"] as const;
+const READ_OUTCOMES = ["OK", "EMPTY", "FORBIDDEN", "TIMEOUT", "ERROR"] as const;
+
+/**
+ * The ledger stores these as `String?`, and the derivation takes a closed union.
+ *
+ * An unrecognised value becomes null — "we do not know" — rather than being
+ * cast into the union. A cast would let a status nobody has defined arrive at
+ * `deriveLaneStatus` and fall through to whichever branch happens to catch it,
+ * which is how a lane ends up claiming something no check established.
+ */
+function narrowProbeStatus(value: string | null): ProbeFacts["status"] {
+  return (PROBE_STATUSES as readonly string[]).includes(value ?? "")
+    ? (value as ProbeFacts["status"])
+    : null;
+}
+
+function narrowReadOutcome(value: string | null): ReadFacts["outcome"] {
+  return (READ_OUTCOMES as readonly string[]).includes(value ?? "")
+    ? (value as ReadFacts["outcome"])
+    : null;
+}
 
 export interface LaneRow {
   readonly appId: string;
@@ -110,7 +138,7 @@ export async function listLanes(
 
   const solutionIds = solutions.map((s) => s.id);
 
-  const [grants, clients, connections] = await Promise.all([
+  const [grants, clients, connections, checks] = await Promise.all([
     prisma.apiAccessGrant.findMany({
       where: { organizationId, solutionId: { in: solutionIds } },
       select: {
@@ -139,9 +167,33 @@ export async function listLanes(
       where: { organizationId, isActive: true },
       select: { id: true, label: true, environment: true },
     }),
+    /*
+     * The per-lane check ledger. One row per (solution, interface, environment),
+     * written by the scheduled lane sweep — see src/lib/ops/lane-check-sweep.ts.
+     * A lane with no row here has never been checked, and derives to `unknown`
+     * with "no check has ever run" rather than to a guess.
+     */
+    prisma.laneCheck.findMany({
+      where: { organizationId, solutionId: { in: solutionIds } },
+      select: {
+        solutionId: true,
+        interfaceId: true,
+        environment: true,
+        probeStatus: true,
+        probeAt: true,
+        readStatus: true,
+        readAt: true,
+        readRowCount: true,
+      },
+    }),
   ]);
 
   const connectionsByEnv = indexByEnvironment(connections);
+
+  /** Keyed exactly as the ledger's unique constraint is, so a lane has one row. */
+  const checkByLane = new Map(
+    checks.map((c) => [`${c.solutionId}::${c.interfaceId}::${c.environment}`, c]),
+  );
 
   const lanes: LaneRow[] = [];
 
@@ -171,6 +223,12 @@ export async function listLanes(
         );
 
         const envConnections = connectionsByEnv.get(environment) ?? [];
+
+        // This lane's own evidence row, or undefined when it has never been
+        // checked. Keyed by feed id rather than externalId: two feeds can read
+        // the same SAP service with different field lists, and they are
+        // different lanes with different proof.
+        const check = checkByLane.get(`${solution.id}::${feed.id}::${environment}`);
 
         // Nothing requested at all: a cell, not a failure.
         if (grant === undefined && client === undefined) {
@@ -214,16 +272,26 @@ export async function listLanes(
             secretUnreadable: false,
           },
           /*
-           * NO PROBE OR READ EVIDENCE IS JOINED HERE, deliberately, and this is
-           * why most lanes will read Unknown until PR-5 lands. The probe table
-           * is per-connection rather than per-lane, and there is no per-lane
-           * read ledger at all — so a board-wide claim of Live would be
-           * inferred from a connection-level green, which is exactly the
-           * reachable-means-readable overclaim the lane model exists to
-           * prevent. `unknown` is the honest answer and it says so in words.
+           * THE EVIDENCE, PER LANE. Both outcomes come from this lane's own
+           * ledger row rather than from the connection's health, because a
+           * connection-level green cannot support the claim that THIS app can
+           * read THIS dataset here — the reachable-means-readable overclaim
+           * the lane model exists to prevent.
+           *
+           * No row means no check has ever run, and the nulls below derive to
+           * `unknown` saying exactly that. That is still the honest answer; it
+           * is now the answer for lanes nobody has checked rather than for
+           * every lane.
            */
-          probe: { status: null, at: null },
-          read: { outcome: null, at: null, rows: null },
+          probe: {
+            status: narrowProbeStatus(check?.probeStatus ?? null),
+            at: check?.probeAt ?? null,
+          },
+          read: {
+            outcome: narrowReadOutcome(check?.readStatus ?? null),
+            at: check?.readAt ?? null,
+            rows: check?.readRowCount ?? null,
+          },
           now,
         });
 
