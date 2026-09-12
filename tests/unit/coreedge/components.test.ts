@@ -118,6 +118,14 @@ describe("the two name collisions stay apart", () => {
       path.join(ROOT, "src/components/coreedge/"),
       path.join(ROOT, "src/app/(coreedge)/"),
       path.join(ROOT, "src/lib/coreedge/"),
+      /*
+       * The claim surface is part of this console but deliberately lives in the
+       * TOKEN route group: the (coreedge) layout redirects a caller without a
+       * session, and the app owner receiving a claim link may have no console
+       * account. It is CoreEdge code at a non-CoreEdge path, so it is named
+       * exactly rather than by widening the prefix to all of src/app/(external).
+       */
+      path.join(ROOT, "src/app/(external)/claim/"),
     ];
     const outside = hits
       .split("\n")

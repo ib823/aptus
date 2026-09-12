@@ -45,6 +45,18 @@ export const WORKBENCH_PATHS = [
    * tokenised /claim/ surface is NOT, and belongs here when PR-4 adds it.
    */
   '/coreedge',          // CoreEdge Console — the redesign (auth-gated under (coreedge))
+  /*
+   * The claim surface, and it needs its OWN line: the '/coreedge' prefix above
+   * does not cover '/claim/'. PR-4's note said so before this existed, and
+   * without this entry the link would be delivered to an app owner and then
+   * redirected away on a Workbench host — the same silent failure this file's
+   * header describes four times over.
+   *
+   * Unauthenticated BY DESIGN, like '/c/' and '/a/': the token in the path is
+   * the credential, and the app owner receiving the link may have no console
+   * account at all.
+   */
+  '/claim/',            // CoreEdge one-time key claim link (token IS the credential)
   '/c/',                // presales guest token surface (under (external))
   '/a/',                // affirm external executive guest surface (under (external))
   '/d/',                // discovery external guest journey (under (external)) — feature-gated by NEUTRAL_DISCOVERY_ENABLED

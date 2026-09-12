@@ -855,6 +855,61 @@ model SapConnectionProbeEvent {
 /// reaper run last night?" and "did the probe sweep hit its cap?" had no
 /// answer anywhere in the product. Append-only; surfaced on the Operations
 /// home as the jobs strip.
+/// Metadata reachability and data readability, stored SEPARATELY, per service.
+///
+/// WHY TWO FACTS AND NOT ONE FLAG. The audit (F20) found the distinction drawn
+/// in code — probeConnection measures $metadata reachability, readEntitySet
+/// separates OK from EMPTY — but only metadata reachability PERSISTED. The
+/// readability facts lived in a short-TTL request cache, in a deployment-scoped
+/// blob keyed by tenant rather than by connection, and in NorthboundAuditEvent
+/// .rowCount as a side effect of real traffic. Nothing joined them.
+///
+/// The consequence is the reason this table exists: "one green dot per system
+/// sends half of all triage to the wrong person." A 401 on metadata is the
+/// platform admin's — the credential is wrong and EVERY lane on that system
+/// stops. A 403 on a data read is the client's SAP admin's — we signed in fine
+/// and ONE entity set is unauthorised. Collapsing them into "Reachable" loses
+/// exactly the information that decides who gets called.
+///
+/// THE UNIT IS THE SERVICE, not the connection. A system can serve one entity
+/// set and refuse another, so a per-connection verdict is an average of things
+/// that are not alike.
+model SapServiceHealth {
+  id             String @id @default(cuid())
+  organizationId String
+  connectionId   String
+
+  /// The OData service, e.g. API_PURCHASEORDER_PROCESS_SRV.
+  serviceName String
+  /// The entity set the data read was attempted against, when one was.
+  entitySet   String?
+
+  /// Did $metadata answer? OK | UNAUTHORIZED | NOT_FOUND | TIMEOUT | ERROR.
+  /// A 401 here is the platform admin's and stops every lane on the system.
+  metadataStatus String?
+  metadataAt     DateTime?
+
+  /// Did a real row come back? OK | EMPTY | FORBIDDEN | NOT_FOUND | TIMEOUT |
+  /// ERROR. A 403 here is the client SAP admin's and stops ONE lane.
+  ///
+  /// EMPTY is a success and is stored as one: SAP answered and had nothing to
+  /// return. Folding it into a failure is the single most common way this
+  /// product could lie about a healthy lane.
+  readStatus String?
+  readAt     DateTime?
+  /// How many rows the proving read returned. A count, never the rows.
+  readRowCount Int?
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  /// One row per (connection, service, entity set). The entity set is part of
+  /// the identity because a system can serve one and refuse another.
+  @@unique([connectionId, serviceName, entitySet])
+  @@index([organizationId, connectionId])
+  @@index([organizationId, readAt])
+}
+
 model CronRunLog {
   id  String @id @default(cuid())
   /// northbound-reap | northbound-retention | connection-probes | analytics | trials
@@ -1054,6 +1109,62 @@ model SolutionClient {
 
 /// Per-call audit for the northbound broker. APPEND-ONLY: there is no update or
 /// delete path onto this table. An audit trail that can be edited is not one.
+/// A one-time link that CREATES a key when it is opened.
+///
+/// THE ORDERING IS THE GUARANTEE, and it is the whole reason this table exists.
+/// The key does not exist before someone opens the link: no SolutionClient row,
+/// no token, no hash. Opening the link mints it, shows it once, and marks the
+/// link consumed. An expired link issues NOTHING — there is no key sitting
+/// behind it to leak, to find in a backup, or to hand to whoever opens the URL
+/// next.
+///
+/// The alternative — minting the key up front and merely revealing it — makes
+/// "shown once" a UI convention described as a guarantee, and makes the lane
+/// state after expiry a lie: the lane would read "no key" while a working
+/// credential existed.
+///
+/// NO PLAINTEXT IS STORED. `tokenHash` is SHA-256 of the link token, the same
+/// shape as SolutionClient.tokenHash, so a database copy grants nothing. The
+/// raw token exists only in the URL that was sent to the app owner.
+model KeyClaimLink {
+  id             String @id @default(cuid())
+  organizationId String
+  solutionId     String
+
+  /// Which environment's key this link will mint. One key per
+  /// (solution, environment), so a claim is also what decides the lane.
+  environment String
+
+  /// SHA-256 of the link token. Unique so a token identifies one link.
+  tokenHash String @unique
+
+  /// Who asked for the link to be sent.
+  createdById String
+  createdAt   DateTime @default(now())
+
+  /// After this instant the link mints nothing. Not a soft check: the claim
+  /// path refuses and the row stays unconsumed, so the lane can say
+  /// "link expired" rather than "no key" — a different sentence with a
+  /// different fix.
+  expiresAt DateTime
+
+  /// Set the moment the key is minted. A link with this set is spent, and
+  /// re-opening it issues nothing — that is what "one-time" means.
+  claimedAt       DateTime?
+  /// The SolutionClient this link created, once it has created one.
+  claimedClientId String?
+
+  /// Superseding a link (sending a new one) revokes the old rather than
+  /// deleting it, so "you were sent three links" stays answerable.
+  revokedAt     DateTime?
+  revokedReason String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, solutionId, environment])
+  @@index([organizationId, expiresAt])
+}
+
 model NorthboundAuditEvent {
   id             String  @id @default(cuid())
   organizationId String
@@ -2664,6 +2775,7 @@ model Organization {
 
   // CoreEdge runtime — per-solution client identities
   solutionClients SolutionClient[]
+  keyClaimLinks   KeyClaimLink[]
 
   @@index([slug])
   @@index([plan])
@@ -5223,7 +5335,7 @@ model AffirmBundle {
   /// "not stated", and a bundle that does not state a country is not filtered
   /// — silently dropping questions because a field was never filled in would
   /// be a worse failure than showing too many.
-  country  String?
+  country   String?
   /// 2608 WS14 — every country the engagement runs in, ISO-3166-1 alpha-2.
   ///
   /// `country` above is singular and stays: it is what the question filter
@@ -5241,7 +5353,7 @@ model AffirmBundle {
   countries String[] @default([])
   /// Free-form industry key, filtered against AffirmQuestion.industryScope on
   /// the same "null means do not filter" rule.
-  industry String?
+  industry  String?
 
   createdById  String?
   releasedById String?

@@ -51,7 +51,7 @@ const BODY = {
   product: "cloud-erp-private",
   key: "x5m-dev",
   label: "X5M Development",
-  baseUrl: "https://x5m.example.com",
+  baseUrl: "https://x5m.s4hana.cloud.sap",
   authType: "basic" as const,
   username: "u",
   password: "p",

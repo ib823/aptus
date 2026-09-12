@@ -45,6 +45,7 @@ import {
 import { isValidSapClient } from "@/lib/sap-public/sap-url";
 import { sanitizeTenantKey, SAP_ODATA_PRODUCTS } from "@/lib/sap-public/tdd-connector";
 import { studioError, studioOk } from "@/lib/studio/api";
+import { checkSapHost } from "@/lib/studio/sap-host-allowlist";
 import { isForbiddenBaseUrlHost } from "@/lib/studio/connection-url-guard";
 import { writeConfigAudit } from "@/lib/studio/audit";
 import { canAccessStudio, canMutateStudio, lacksStudioTenantScope } from "@/lib/studio/rbac";
@@ -88,6 +89,26 @@ const httpsUrl = z
   .refine((u) => !isForbiddenBaseUrlHost(u), {
     message:
       "must be a public hostname — IP literals, localhost and internal names are refused (the broker calls this URL with credentials attached)",
+  })
+  /*
+   * THE ALLOW-LIST, and its position in this chain is the security property.
+   *
+   * Zod refinements run during PARSE, which happens before the handler touches
+   * the database — so a host that is not SAP's is refused BEFORE any credential
+   * is stored. Validating after storage means the mistake has already happened:
+   * the secret is on an unknown host's row and revoking it becomes a cleanup
+   * job rather than a refusal.
+   *
+   * The deny-list above stays and still runs first. The two are not
+   * alternatives: a deny-list answers "is this one of the hosts we know is
+   * bad", and only an allow-list refuses https://sap-s4-prod.attacker.example,
+   * which passes every other check here.
+   */
+  .superRefine((u, ctx) => {
+    const verdict = checkSapHost(u);
+    if (!verdict.allowed) {
+      ctx.addIssue({ code: "custom", message: verdict.reason });
+    }
   });
 
 const upsertSchema = z

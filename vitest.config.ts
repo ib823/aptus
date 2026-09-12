@@ -65,6 +65,17 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      /*
+       * `server-only` is a build-time marker, not a real module: its package
+       * exports resolve to a file that throws when bundled into a client graph,
+       * which is what makes `import "server-only"` a guarantee rather than a
+       * comment. Vitest is neither graph, so the import cannot resolve and the
+       * modules it guards could not be unit-tested at all.
+       *
+       * The guarantee is unaffected — it lives in the bundler, and this alias is
+       * only reachable from vitest's own resolver.
+       */
+      "server-only": path.resolve(__dirname, "./tests/stubs/server-only.ts"),
     },
   },
 });
