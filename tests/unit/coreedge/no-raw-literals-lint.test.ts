@@ -151,11 +151,34 @@ describe("outside the scope", () => {
 });
 
 describe("the test writes nothing into src/", () => {
-  it("creates no route group, because route groups are PR-4's to create", async () => {
-    const { existsSync } = await import("node:fs");
-    // If this test ever goes back to writing fixtures, it takes
-    // route-group-gating.test.ts down with it — see the header.
-    expect(existsSync(path.resolve(ROOT, "src/app/(coreedge)"))).toBe(false);
+  it("leaves no fixture directory behind, anywhere under src/", async () => {
+    /*
+     * The property is that THIS TEST writes nothing — not that any particular
+     * directory is absent.
+     *
+     * The first version asserted `src/app/(coreedge)` did not exist, which was
+     * true when it was written and became wrong the moment PR-3 created the
+     * route group for real. That assertion was describing the symptom (a
+     * directory appeared) rather than the cause (this test created one), so it
+     * started failing on a change it had no opinion about. Fixture directories
+     * are the cause, and they are what is checked.
+     *
+     * If this test ever goes back to writing fixtures under src/, it takes
+     * route-group-gating.test.ts down with it — see the header.
+     */
+    const { execFileSync } = await import("node:child_process");
+    let found = "";
+    try {
+      found = execFileSync(
+        "find",
+        [path.resolve(ROOT, "src"), "-type", "d", "-name", "__fixtures__"],
+        { encoding: "utf8" },
+      );
+    } catch {
+      found = "";
+    }
+    const dirs = found.split("\n").filter(Boolean);
+    expect(dirs, `Fixture directories left under src/:\n${dirs.join("\n")}`).toEqual([]);
   });
 });
 
