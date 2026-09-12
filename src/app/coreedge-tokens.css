@@ -309,3 +309,20 @@
   font-size: var(--text-body);
   line-height: var(--leading-body);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Skeleton pulse (added in PR-2, for SkeletonRow)
+ *
+ * @keyframes cannot live inside a selector block, so the one animation the
+ * console uses is declared here beside the token that times it. --dur-skeleton
+ * is deliberately off the --dur-* scale, whose longest step is 320ms: those are
+ * transition durations for things that FINISH, and a loading pulse is a loop.
+ *
+ * Opacity rather than a colour change, so the pulse cannot fall out of step with
+ * the theme — it dims whatever ground it is drawn on, in both themes, with no
+ * second value to keep in sync.
+ * ────────────────────────────────────────────────────────────────────────── */
+@keyframes coreedge-skeleton {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
