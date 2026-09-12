@@ -122,3 +122,49 @@ test.describe("CoreEdge design system", () => {
     expect(railFill, "--surface-rail is not defined on .coreedge").not.toBe("");
   });
 });
+
+/**
+ * PR-6 · the seven remaining screens, scanned on the same terms.
+ *
+ * These are LIST AND DETAIL SCREENS, which is where contrast defects hide: a
+ * table's muted secondary line, a disabled control's reason, a status glyph on
+ * a tinted ground. PR-1 computed those ratios against declared tokens; this
+ * measures the rendered pixels, with `color-contrast` still enabled — the same
+ * bargain the design-system scan makes.
+ *
+ * Each one renders for any signed-in user by contract (role gating never
+ * redirects), so the authenticated project reaches all of them. A route that
+ * started redirecting on role would fail here by landing somewhere with no
+ * heading, which is the point.
+ *
+ * KNOWN LIMIT, stated so a green run is not read for more than it earns: in CI
+ * these render against an empty database, so what is scanned is the chrome,
+ * the headings, the legends and the EMPTY states — not populated table rows.
+ * The muted secondary lines and status glyphs inside a row are covered by the
+ * design-system scan above, which renders every component in every state; they
+ * are not covered here. A seeded fixture would close the gap and is not in this
+ * PR.
+ */
+const PR6_ROUTES = [
+  { path: "/coreedge/catalogue", heading: "Catalogue" },
+  { path: "/coreedge/passport", heading: "Passport" },
+  { path: "/coreedge/sap-systems", heading: "SAP systems" },
+  { path: "/coreedge/operations/keys", heading: "Keys" },
+] as const;
+
+test.describe("CoreEdge · the PR-6 screens", () => {
+  for (const route of PR6_ROUTES) {
+    test(`${route.path} has no serious or critical violations`, async ({ page }) => {
+      await page.goto(route.path);
+      await page.waitForLoadState("load");
+
+      // Session-gated like every /coreedge route: an anonymous run would land
+      // on the login screen and scan the wrong thing, passing for the wrong
+      // reason. Assert the heading before believing the result.
+      await expect(page.getByRole("heading", { name: route.heading })).toBeVisible();
+
+      const violations = await scan(page, ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]);
+      expect(report(violations)).toBe("");
+    });
+  }
+});

@@ -92,15 +92,31 @@ describe("every place in the rail opens", () => {
     ).toEqual([]);
   });
 
-  it("says 'not built' rather than faking a screen", () => {
-    // No fake rows, no skeleton implying something is loading, no chip claiming
-    // a status nothing measured. An empty screen that lies is worse than one
-    // that admits it is empty.
-    for (const slug of ["catalogue", "sap-systems", "passport"]) {
+  it("shows real data rather than faking a screen", () => {
+    /*
+     * These three were stubs that said "not built yet" — the honest form of an
+     * unbuilt place. PR-6 built them, so the assertion moves with them: what
+     * must stay true is that a rail place never fabricates. It either admits it
+     * is empty or renders something it actually read.
+     *
+     * The guard is that each reads through the queries module. A screen with
+     * rows hard-coded into the markup would pass a "renders a table" check and
+     * fail this one.
+     */
+    const QUERY_BY_SLUG: Readonly<Record<string, string>> = {
+      catalogue: "listCatalogue",
+      "sap-systems": "listSapSystemDetails",
+      passport: "listPassport",
+    };
+    for (const [slug, query] of Object.entries(QUERY_BY_SLUG)) {
       const src = code(path.join(COREEDGE_APP, `coreedge/${slug}/page.tsx`));
-      expect(src, `${slug}`).toContain("not built yet");
-      expect(src, `${slug} fakes a status`).not.toContain("StatusChip");
-      expect(src, `${slug} implies loading`).not.toContain("SkeletonRow");
+      expect(src, `${slug} still reads as an unbuilt stub`).not.toContain("not built yet");
+      expect(src, `${slug} does not read real data`).toContain(query);
+      expect(src, `${slug} should read through the queries module`).toContain(
+        "@/lib/coreedge/queries",
+      );
+      // An empty result still says so in words, from the copy deck.
+      expect(src, `${slug} has no empty state`).toContain("EMPTY_STATES");
     }
   });
 });

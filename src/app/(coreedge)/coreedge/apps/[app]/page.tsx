@@ -101,6 +101,19 @@ export default async function AppLaneBoard({
           </section>
         ))}
       </div>
+
+      {/*
+        * Both routes exist as pages; without these they would ship unreachable,
+        * which is how /coreedge/design-system nearly shipped in PR-3.
+        */}
+      <nav aria-label="App actions" className="flex flex-wrap gap-4">
+        <a href={`/coreedge/apps/${app}/add-feed`} className="text-sm text-ink-soft underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-navy">
+          Add data feed
+        </a>
+        <a href={`/coreedge/apps/${app}/settings`} className="text-sm text-ink-soft underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-navy">
+          App settings
+        </a>
+      </nav>
     </CoreEdgeShell>
   );
 }
