@@ -136,6 +136,12 @@ export default async function OperationsBoard(): Promise<ReactNode> {
           },
         ]}
       />
+
+      <nav aria-label="Operations sections" className="flex flex-wrap gap-4">
+        <a href="/coreedge/operations/keys" className="text-sm text-ink-soft underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring-navy">
+          Keys nobody is using
+        </a>
+      </nav>
     </CoreEdgeShell>
   );
 }

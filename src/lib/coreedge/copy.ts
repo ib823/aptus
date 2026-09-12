@@ -303,6 +303,34 @@ export const EMPTY_STATES = {
     message: "No records. SAP answered successfully and had nothing to return.",
     action: null,
   },
+  catalogueNone: {
+    message:
+      "No data feeds yet. A feed appears here once an app declares it, with what has been proven about it in each environment.",
+    action: null,
+  },
+  catalogueNoMatch: {
+    message: "No lane, app or call matches that.",
+    action: null,
+  },
+  keysNone: {
+    message: "No keys have been issued yet. A key is created when its owner opens a claim link.",
+    action: null,
+  },
+  keysAllInUse: {
+    message: "Every key has been used in the last 30 days. Nothing to question.",
+    action: null,
+  },
+  passportNone: {
+    message:
+      "No approved access. Nothing is being read from this SAP system by any ABeam app.",
+    action: null,
+  },
+  servicesNoneProbed: {
+    message:
+      "No service has been probed on this system yet, so there is nothing to report per service.",
+    action: null,
+  },
+  appNoFeeds: { message: "This app has no data feeds.", action: null },
 } as const satisfies Record<string, EmptyStateCopy>;
 
 /**
@@ -334,6 +362,17 @@ export const DISABLED_REASONS = {
   noProdSystem:
     "There's no Prod SAP system yet, so a Prod key would connect to nothing. Platform admin has been asked.",
   noPermission: "Only consultants can change this. Ask in #coreedge-support.",
+  platformAdminOnly: "Only a platform admin can do this.",
+  revokeNotOperator:
+    "Revoking is for a platform admin or a reviewer. An operator flags and notifies.",
+  addressMustMatch: "Type the app’s address to confirm.",
+  noFieldSelectionStore:
+    "CoreEdge can't record which fields a feed is approved for yet, so this can't be saved.",
+  noWritePathYet: "This action isn't wired up yet, so nothing would happen.",
+  noContractYet:
+    "This lane has never returned a successful read, so there is no captured contract to build from.",
+  alreadyDeactivated: "Already deactivated.",
+  alreadyRevoked: "Already revoked.",
 } as const;
 
 export type DisabledReasonKey = keyof typeof DISABLED_REASONS;
@@ -366,7 +405,70 @@ export const CONFIRMATIONS = {
     cancel: "Cancel",
     reasonRequired: true,
   },
+  deactivateSystem: {
+    title: "Deactivate this SAP system?",
+    // Navy, not red: A03 is explicit that nothing is destroyed. The lanes read
+    // "System off", never "SAP refused", because a person decided this.
+    body: "Lanes reading this system stop returning data until you activate it again. Nothing is destroyed: no access is withdrawn and no key is revoked.",
+    confirm: "Deactivate system",
+    cancel: "Cancel",
+    reasonRequired: true,
+  },
+  rotateSecret: {
+    title: "Rotate secret",
+    body: "CoreEdge probes with the new secret while the old one still serves traffic, swaps only if the probe passes, and keeps the old one for five minutes so calls in flight can finish.",
+    confirm: "Save and probe",
+    cancel: "Cancel",
+    reasonRequired: false,
+  },
+  retireApp: {
+    title: "Retire this app?",
+    body: "Retiring is permanent. Every key this app holds stops, in every environment, and Try it refuses too — there is no read-only afterlife. The timeline and audit record are kept.",
+    confirm: "Retire app",
+    cancel: "Cancel",
+    reasonRequired: true,
+  },
+  addFeed: {
+    title: "Add data feed",
+    body: "A Sandbox lane opens immediately. Dev, Test and Prod need a review each.",
+    confirm: "Add data feed",
+    cancel: "Cancel",
+    reasonRequired: false,
+  },
 } as const satisfies Record<string, ConfirmCopy>;
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * PR-6 screen prose
+ *
+ * Lines the seven remaining screens show. They live here for the same reason
+ * every other string does: one place to read the product's voice, and one place
+ * to change it. Each is transcribed from the scenario it belongs to rather than
+ * written fresh.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export const SCREEN_NOTES = {
+  /** O05 — why every lane in a contested environment refuses. */
+  environmentContested:
+    "Two connected systems both claim this environment. CoreEdge won't guess which one it means, so every lane there refuses to bind — loudly, and before any data moves. The fix is to leave one system claiming it.",
+  /** A02 — why the matrix has two columns and never one dot. */
+  twoFactsNeverMerged:
+    "Metadata reachable says the service exists and we can describe it. Data readable says the communication user is authorised for the entity behind it. SAP grants them separately, so CoreEdge reports them separately.",
+  /** O08 — a suggestion, not a sweep. */
+  keysSuggestionNotSweep:
+    "An unused key is a risk with no benefit, but unused is not proof of unwanted. CoreEdge suggests, the owner is told, and nothing expires on its own.",
+  /** X06 — the passport has no actions, deliberately. */
+  passportReadOnly:
+    "Read-only. There is no revoke button here: a CIO who wants something stopped says so, and an ABeam reviewer does it with a reason on the record — governance, not a kill switch.",
+  /** X06 — what the fields column would say if the backend could say it. */
+  passportFieldsUnknown:
+    "CoreEdge does not yet record which fields each approval covers, so this column would be a guess. It is left blank rather than filled with the number of fields SAP happens to describe.",
+  /** A06 — why the address, not the name. */
+  retireTypeAddress:
+    "The address, not the name — two apps can share a name, and that is exactly how the wrong one gets retired.",
+  /** S03 — a field change re-opens the review. */
+  fieldsChangeReopensReview:
+    "Pick the fields your app needs. You can change them later — a change re-opens the review.",
+} as const;
 
 /**
  * A6's third confirmation names the lanes it will stop — "4 lanes use this
