@@ -835,6 +835,61 @@ model SapConnectionProbeEvent {
 /// reaper run last night?" and "did the probe sweep hit its cap?" had no
 /// answer anywhere in the product. Append-only; surfaced on the Operations
 /// home as the jobs strip.
+/// Metadata reachability and data readability, stored SEPARATELY, per service.
+///
+/// WHY TWO FACTS AND NOT ONE FLAG. The audit (F20) found the distinction drawn
+/// in code — probeConnection measures $metadata reachability, readEntitySet
+/// separates OK from EMPTY — but only metadata reachability PERSISTED. The
+/// readability facts lived in a short-TTL request cache, in a deployment-scoped
+/// blob keyed by tenant rather than by connection, and in NorthboundAuditEvent
+/// .rowCount as a side effect of real traffic. Nothing joined them.
+///
+/// The consequence is the reason this table exists: "one green dot per system
+/// sends half of all triage to the wrong person." A 401 on metadata is the
+/// platform admin's — the credential is wrong and EVERY lane on that system
+/// stops. A 403 on a data read is the client's SAP admin's — we signed in fine
+/// and ONE entity set is unauthorised. Collapsing them into "Reachable" loses
+/// exactly the information that decides who gets called.
+///
+/// THE UNIT IS THE SERVICE, not the connection. A system can serve one entity
+/// set and refuse another, so a per-connection verdict is an average of things
+/// that are not alike.
+model SapServiceHealth {
+  id             String @id @default(cuid())
+  organizationId String
+  connectionId   String
+
+  /// The OData service, e.g. API_PURCHASEORDER_PROCESS_SRV.
+  serviceName String
+  /// The entity set the data read was attempted against, when one was.
+  entitySet   String?
+
+  /// Did $metadata answer? OK | UNAUTHORIZED | NOT_FOUND | TIMEOUT | ERROR.
+  /// A 401 here is the platform admin's and stops every lane on the system.
+  metadataStatus String?
+  metadataAt     DateTime?
+
+  /// Did a real row come back? OK | EMPTY | FORBIDDEN | NOT_FOUND | TIMEOUT |
+  /// ERROR. A 403 here is the client SAP admin's and stops ONE lane.
+  ///
+  /// EMPTY is a success and is stored as one: SAP answered and had nothing to
+  /// return. Folding it into a failure is the single most common way this
+  /// product could lie about a healthy lane.
+  readStatus String?
+  readAt     DateTime?
+  /// How many rows the proving read returned. A count, never the rows.
+  readRowCount Int?
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  /// One row per (connection, service, entity set). The entity set is part of
+  /// the identity because a system can serve one and refuse another.
+  @@unique([connectionId, serviceName, entitySet])
+  @@index([organizationId, connectionId])
+  @@index([organizationId, readAt])
+}
+
 model CronRunLog {
   id  String @id @default(cuid())
   /// northbound-reap | connection-probes | analytics | trials
