@@ -38,7 +38,13 @@ interface SavedCase {
   id: string;
   name: string;
   interfaceId: string;
-  request: { entity?: string; limit?: number } | null;
+  /**
+   * What was run. `environment` is the credential the run used: a solution now
+   * holds one per environment (AD-11), so without it a replay cannot know which
+   * system the recorded outcome came from. Cases saved before this field
+   * existed have none, and the replay says so rather than guessing.
+   */
+  request: { entity?: string; limit?: number; environment?: string } | null;
   lastOutcome: "PASS" | "FAIL" | "NOT_RUN";
   httpStatus: number | null;
   lastRunAt: string | null;
@@ -167,8 +173,44 @@ export function TestConsoleClient({
     void loadCases();
   }, [loadCases]);
 
+  /**
+   * WHICH credential a replay runs as.
+   *
+   * Replay sent no clientId at all, so a solution holding credentials for more
+   * than one environment — the normal shape since AD-11 — had every replay
+   * refused as AMBIGUOUS_CREDENTIAL, and a saved case became unreplayable the
+   * moment a second environment was issued one. The case records the
+   * environment it ran against; the replay resolves that environment's live
+   * credential, and refuses locally rather than silently running against a
+   * different system.
+   */
+  const replayCredential = useCallback(
+    (c: SavedCase): { ok: true; clientId?: string } | { ok: false; message: string } => {
+      const creds = interfaces.find((i) => i.id === c.interfaceId)?.credentials ?? [];
+      const env = c.request?.environment;
+      if (env) {
+        const match = creds.find((x) => x.binding.credential.environment === env);
+        return match
+          ? { ok: true, clientId: match.clientId }
+          : {
+              ok: false,
+              message: `no live ${env} credential — this case was recorded against ${env}, and replaying as another environment would test a different system`,
+            };
+      }
+      // Recorded before the environment was stored. One credential is
+      // unambiguous; several are not, and the broker says so in its own words.
+      return creds.length === 1 ? { ok: true, clientId: creds[0]!.clientId } : { ok: true };
+    },
+    [interfaces],
+  );
+
   const replayCase = useCallback(
     async (c: SavedCase) => {
+      const cred = replayCredential(c);
+      if (!cred.ok) {
+        setCaseResult((m) => ({ ...m, [c.id]: `refused — ${cred.message}` }));
+        return;
+      }
       setCaseBusy(c.id);
       try {
         const res = await fetch("/api/studio/test/broker-run", {
@@ -176,6 +218,7 @@ export function TestConsoleClient({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             interfaceId: c.interfaceId,
+            ...(cred.clientId ? { clientId: cred.clientId } : {}),
             ...(c.request?.entity ? { entity: c.request.entity } : {}),
             limit: Math.min(c.request?.limit ?? 10, 50),
           }),
@@ -199,7 +242,7 @@ export function TestConsoleClient({
         setCaseBusy(null);
       }
     },
-    [],
+    [replayCredential],
   );
 
   const deleteCase = useCallback(
@@ -321,7 +364,15 @@ export function TestConsoleClient({
         body: JSON.stringify({
           interfaceId: selected.id,
           name: `${selected.name} — ${entity || selected.entitySet || "default"} (${limit})`,
-          request: { entity: entity || selected.entitySet, limit, tenant: tenantKey },
+          request: {
+            entity: entity || selected.entitySet,
+            limit,
+            tenant: tenantKey,
+            // WHICH system this outcome came from. A replay that ran as a
+            // different environment's credential would be comparing a result
+            // against a tenant that never produced it.
+            ...(credential ? { environment: credential.binding.credential.environment } : {}),
+          },
           // The outcome is what actually happened, never inferred — and the
           // status it happened against travels with it, so a stored PASS can be
           // checked rather than trusted.
@@ -338,7 +389,7 @@ export function TestConsoleClient({
     } finally {
       setSaving(false);
     }
-  }, [selected, run, entity, limit, tenantKey, loadCases]);
+  }, [selected, credential, run, entity, limit, tenantKey, loadCases]);
 
   /**
    * Turn the rows we just saw into a described contract.

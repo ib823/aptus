@@ -1,3 +1,13 @@
+/**
+ * /dev-login — the one-click internal-testing sign-in.
+ *
+ * NOT IN A PRODUCTION BUILD. scripts/strip-test-auth-for-production.mjs deletes
+ * this directory from the build workspace on a customer-facing Vercel deploy,
+ * so the path 404s from the router and no environment variable can bring it
+ * back. `isDevLoginEnabled()` below still guards the Preview deployments that
+ * keep it.
+ */
+
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";

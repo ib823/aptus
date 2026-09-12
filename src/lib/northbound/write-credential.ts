@@ -12,8 +12,9 @@
  * per product, so every solution would share it: a leak anywhere would be a leak
  * everywhere, and revoking it would break every integration at once.
  *
- * Stored sealed with AES-256-GCM, bound by AAD to (organization, solution), so a
- * ciphertext lifted onto another solution's row will not open. Verified in
+ * Stored sealed with AES-256-GCM, bound by AAD to (organization, solution,
+ * CREDENTIAL ROW), so a ciphertext lifted onto another row will not open —
+ * another solution's, and since AD-11 another environment's too. Verified in
  * constant time.
  *
  * ONE PER CREDENTIAL ROW. A solution holds one runtime credential per
@@ -25,7 +26,12 @@
 import { timingSafeEqual } from "crypto";
 
 import { prisma } from "@/lib/db/prisma";
-import { openSecrets, sealSecrets, solutionClientAad } from "@/lib/sap-public/connection-crypto";
+import {
+  openSecrets,
+  sealSecrets,
+  solutionClientAad,
+  solutionClientRowAad,
+} from "@/lib/sap-public/connection-crypto";
 import { scopedById, scopedWhere, type TenantScope } from "@/lib/studio/tenant-scope";
 
 /** Distinct prefix from the read token, so the two are never confused in a log. */
@@ -64,7 +70,7 @@ export async function setWriteCredential(
     data: {
       secretsCiphertext: sealSecrets(
         { writeSecret: rawKey },
-        solutionClientAad(scope.organizationId, client.solutionId),
+        solutionClientRowAad(scope.organizationId, client.solutionId, client.id),
       ),
     },
   });
@@ -93,7 +99,7 @@ export async function verifyWriteCredential(
 
   const client = await prisma.solutionClient.findFirst({
     where: scopedById(scope, clientId),
-    select: { solutionId: true, secretsCiphertext: true },
+    select: { id: true, solutionId: true, secretsCiphertext: true },
   });
   if (!client?.secretsCiphertext) return false;
 
@@ -101,11 +107,28 @@ export async function verifyWriteCredential(
   try {
     stored = openSecrets(
       client.secretsCiphertext,
-      solutionClientAad(scope.organizationId, client.solutionId),
+      solutionClientRowAad(scope.organizationId, client.solutionId, client.id),
     ).writeSecret;
   } catch {
-    // A blob that will not open under this row's AAD is either corrupt or was
-    // sealed for a different row. Either way it is not a valid credential here.
+    /*
+     * A blob that will not open under this row's AAD is corrupt, was sealed for
+     * a different row, or predates the per-row binding.
+     *
+     * NOT ACCEPTED in any of those cases — accepting a v1 blob would keep the
+     * hole open exactly where it was: every credential of a solution shared the
+     * v1 AAD, so a ciphertext copied from the TEST row onto the DEV row opened,
+     * and accepting it here would make the copy permanent on first use. The
+     * migration that introduced the row binding clears v1 blobs for this
+     * reason, so a deployment should hold none; it is reported rather than
+     * swallowed, because "re-issue the write key" is a fixable answer and a
+     * silent 403 is not.
+     */
+    if (isLegacySealed(client.secretsCiphertext, scope.organizationId, client.solutionId)) {
+      console.warn(
+        "[northbound] write key sealed under the pre-AD-11 binding; it is refused and must be re-issued",
+        { clientId: client.id, solutionId: client.solutionId },
+      );
+    }
     return false;
   }
   if (!stored) return false;
@@ -115,6 +138,19 @@ export async function verifyWriteCredential(
   // Length is compared first because timingSafeEqual throws on a mismatch; the
   // length of a secret is not the part worth protecting.
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/**
+ * Would this blob have opened under the superseded (organization, solution)
+ * binding? Diagnosis only — the value is never read out and never accepted.
+ */
+function isLegacySealed(ciphertext: string, organizationId: string, solutionId: string): boolean {
+  try {
+    openSecrets(ciphertext, solutionClientAad(organizationId, solutionId));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Does ANY of the solution's credentials carry a write key? Metadata for the UI — never the value. */

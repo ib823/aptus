@@ -103,9 +103,35 @@ export function connectionAad(organizationId: string, product: string, key: stri
   return `sapconn:v1:${organizationId}:${product}:${key}`;
 }
 
-/** AAD for a per-solution runtime client (Phase D). */
+/**
+ * AAD for a per-solution runtime client (Phase D).
+ *
+ * SUPERSEDED by solutionClientRowAad — kept so a v1 blob can be RECOGNISED and
+ * reported, never accepted. See the note there.
+ */
 export function solutionClientAad(organizationId: string, solutionId: string): string {
   return `solclient:v1:${organizationId}:${solutionId}`;
+}
+
+/**
+ * AAD for ONE runtime credential row.
+ *
+ * v1 bound a sealed write key to (organization, solution), which identified the
+ * row only while a solution could hold a single credential. AD-11 made that one
+ * row per ENVIRONMENT, and the binding silently stopped being a binding: every
+ * credential of a solution shared an AAD, so a ciphertext moved from the TEST
+ * row onto the DEV row still opened — and the whole point of the AAD is that
+ * write access to the database is not enough to forge a write key, because the
+ * encryption key lives outside it.
+ *
+ * The clientId restores that: a blob opens on exactly the row it was sealed for.
+ */
+export function solutionClientRowAad(
+  organizationId: string,
+  solutionId: string,
+  clientId: string,
+): string {
+  return `solclient:v2:${organizationId}:${solutionId}:${clientId}`;
 }
 
 /**

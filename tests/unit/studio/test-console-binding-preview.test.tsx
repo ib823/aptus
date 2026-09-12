@@ -141,6 +141,148 @@ describe("the binding is stated before Run", () => {
   });
 });
 
+/*
+ * REPLAY, AND THE CREDENTIAL IT RUNS AS.
+ *
+ * Replay sent no clientId at all. The broker refuses an unnamed credential when
+ * a solution holds more than one live — the normal shape since AD-11 — so every
+ * saved case became unreplayable the moment a second environment was issued
+ * one, with "AMBIGUOUS_CREDENTIAL" as the only explanation. Worse, had the
+ * broker picked a row instead, a replay would have compared a recorded outcome
+ * against a different system. The case records the environment it ran against
+ * and the replay runs as that environment's credential, or refuses.
+ */
+describe("a replay runs as the credential its case was recorded against", () => {
+  const dev: CredentialOption = {
+    clientId: "cl_dev",
+    binding: {
+      kind: "bound",
+      credential: { label: "QA-E2E-Main · DEV", environment: "DEV", sapClient: "080" },
+      connection: { label: "Development X5M/080", environment: "DEV", sapClient: "080" },
+      bindingUnverified: false,
+    },
+  };
+  const test: CredentialOption = {
+    clientId: "cl_test",
+    binding: {
+      kind: "bound",
+      credential: { label: "QA-E2E-Main · TEST", environment: "TEST", sapClient: "100" },
+      connection: { label: "Customizing X5M/100", environment: "TEST", sapClient: "100" },
+      bindingUnverified: false,
+    },
+  };
+
+  async function replay(cases: unknown[], credentials: CredentialOption[]) {
+    stubCases(cases);
+    render(<TestConsoleClient tenantKey={null} canSave interfaces={[{ ...BASE, credentials }]} />);
+    await waitFor(() => expect(screen.getByText("PO - Read")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Replay" }));
+    return () => fetchMock.mock.calls.find((c) => String(c[0]).includes("broker-run"));
+  }
+
+  const CASE = (request: unknown) => [
+    { id: "c1", name: "PO - Read", interfaceId: "i1", request, lastOutcome: "PASS", httpStatus: 200, lastRunAt: "2026-09-11T08:00:00Z" },
+  ];
+
+  it("names the TEST credential for a case recorded against TEST", async () => {
+    const runCall = await replay(CASE({ entity: "PurchaseOrder", limit: 5, environment: "TEST" }), [dev, test]);
+    await waitFor(() => expect(runCall()).toBeTruthy());
+    const body = JSON.parse((runCall()![1] as { body: string }).body) as Record<string, unknown>;
+    expect(body.clientId).toBe("cl_test");
+    expect(body.entity).toBe("PurchaseOrder");
+    expect(body.limit).toBe(5);
+  });
+
+  it("refuses locally when that environment has no live credential any more", async () => {
+    const runCall = await replay(CASE({ environment: "PROD" }), [dev, test]);
+    await waitFor(() =>
+      expect(screen.getByText(/no live PROD credential/)).toBeTruthy(),
+    );
+    // Nothing was sent: a replay as DEV would have tested a different system.
+    expect(runCall()).toBeUndefined();
+  });
+
+  it("a case recorded before the environment was stored replays as the only credential", async () => {
+    const runCall = await replay(CASE(null), [test]);
+    await waitFor(() => expect(runCall()).toBeTruthy());
+    expect(JSON.parse((runCall()![1] as { body: string }).body).clientId).toBe("cl_test");
+  });
+
+  it("…and with several, it asks the broker, which names them", async () => {
+    const runCall = await replay(CASE(null), [dev, test]);
+    await waitFor(() => expect(runCall()).toBeTruthy());
+    expect(JSON.parse((runCall()![1] as { body: string }).body).clientId).toBeUndefined();
+  });
+});
+
+/*
+ * The other half of the round trip: a case that does not record which
+ * environment produced it cannot be replayed against the same system later.
+ */
+describe("saving a case records the environment it ran as", () => {
+  it("puts the chosen credential's environment in the saved request", async () => {
+    const calls: { url: string; body: Record<string, unknown> }[] = [];
+    fetchMock = vi.fn(async (url: string, init?: { body?: string }) => {
+      calls.push({ url: String(url), body: init?.body ? JSON.parse(init.body) : {} });
+      if (String(url).includes("broker-run")) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: {
+              outcome: "ran",
+              status: "OK",
+              httpStatus: 200,
+              records: [{ PurchaseOrder: "4500000001" }],
+              count: 1,
+              note: "1 record.",
+              draft: false,
+              boundTo: { label: "Customizing X5M/100", environment: "TEST", sapClient: "100", bindingUnverified: false },
+            },
+          }),
+        };
+      }
+      if (String(url).includes("test-cases")) {
+        return { ok: true, json: async () => ({ data: { testCases: [], name: "saved" } }) };
+      }
+      return { ok: true, json: async () => ({ data: {} }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <TestConsoleClient
+        tenantKey={null}
+        canSave
+        interfaces={[
+          {
+            ...BASE,
+            credentials: [
+              {
+                clientId: "cl_test",
+                binding: {
+                  kind: "bound",
+                  credential: { label: "QA-E2E-Main · TEST", environment: "TEST", sapClient: "100" },
+                  connection: { label: "Customizing X5M/100", environment: "TEST", sapClient: "100" },
+                  bindingUnverified: false,
+                },
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save as test case" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Save as test case" }));
+
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.includes("test-cases") && c.body.request !== undefined)).toBe(true),
+    );
+    const save = calls.find((c) => c.url.includes("test-cases") && c.body.request !== undefined)!;
+    expect((save.body.request as { environment?: string }).environment).toBe("TEST");
+  });
+});
+
 describe("a saved PASS without a status is unevidenced", () => {
   it("renders the pre-provenance PASS as unevidenced and the evidenced one as PASS · HTTP 200", async () => {
     stubCases([

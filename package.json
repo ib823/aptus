@@ -20,7 +20,7 @@
     "predb:seed": "node scripts/check-node-version.mjs",
     "dev": "next dev -p 3003",
     "build": "node scripts/check-runtime-assets.mjs && prisma generate && NODE_OPTIONS=--max-old-space-size=4096 next build && node scripts/check-runtime-assets.mjs --built",
-    "vercel-build": "node scripts/check-runtime-assets.mjs && node scripts/check-production-env.js && node scripts/migrate-deploy-with-retry.mjs && prisma generate && tsx scripts/assert-content-release-landed.ts && NODE_OPTIONS=--max-old-space-size=4096 next build && node scripts/check-runtime-assets.mjs --built",
+    "vercel-build": "node scripts/check-runtime-assets.mjs && node scripts/check-production-env.js && node scripts/strip-test-auth-for-production.mjs && node scripts/migrate-deploy-with-retry.mjs && prisma generate && tsx scripts/assert-content-release-landed.ts && NODE_OPTIONS=--max-old-space-size=4096 next build && node scripts/check-runtime-assets.mjs --built",
     "prebuild:production": "node scripts/check-production-env.js",
     "start": "next start -p 3003",
     "lint": "eslint",

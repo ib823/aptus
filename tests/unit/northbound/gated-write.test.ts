@@ -31,7 +31,11 @@ import {
   verifyWriteCredential,
   WRITE_KEY_PREFIX,
 } from "@/lib/northbound/write-credential";
-import { sealSecrets, solutionClientAad } from "@/lib/sap-public/connection-crypto";
+import {
+  sealSecrets,
+  solutionClientAad,
+  solutionClientRowAad,
+} from "@/lib/sap-public/connection-crypto";
 import { tenantScopeOf } from "@/lib/studio/tenant-scope";
 
 const SCOPE = tenantScopeOf("org_a");
@@ -75,8 +79,8 @@ beforeEach(() => {
 describe("the write credential is a SECOND secret", () => {
   const raw = "cew_testkey_abcdefghijklmnop";
 
-  function sealed(org = "org_a", sol = "sol_1") {
-    return sealSecrets({ writeSecret: raw }, solutionClientAad(org, sol));
+  function sealed(org = "org_a", sol = "sol_1", client = "client_1") {
+    return sealSecrets({ writeSecret: raw }, solutionClientRowAad(org, sol, client));
   }
 
   it("is generated with its own distinct prefix", () => {
@@ -90,7 +94,11 @@ describe("the write credential is a SECOND secret", () => {
   // The row the CALLING token resolved to. Verification is per credential row
   // (AD-11: one credential per environment), so the lookup is by client id and
   // the AAD is rebuilt from the row's own solution.
-  const row = (secretsCiphertext: string | null) => ({ solutionId: "sol_1", secretsCiphertext });
+  const row = (secretsCiphertext: string | null) => ({
+    id: "client_1",
+    solutionId: "sol_1",
+    secretsCiphertext,
+  });
 
   it("accepts the correct key", async () => {
     mocks.findFirstClient.mockResolvedValue(row(sealed()));
@@ -121,6 +129,26 @@ describe("the write credential is a SECOND secret", () => {
 
   it("rejects a blob sealed for a different ORGANIZATION", async () => {
     mocks.findFirstClient.mockResolvedValue(row(sealed("org_b", "sol_1")));
+    expect(await verifyWriteCredential(SCOPE, "client_1", raw)).toBe(false);
+  });
+
+  /*
+   * THE SIBLING ENVIRONMENT. The AAD was (organization, solution), which
+   * identified the row only while a solution could hold one credential; AD-11
+   * made that one per environment, so every row of a solution shared an AAD and
+   * a write key sealed for TEST opened on the DEV row. The row id closes it.
+   */
+  it("rejects a blob sealed for a SIBLING credential of the same solution", async () => {
+    mocks.findFirstClient.mockResolvedValue(row(sealed("org_a", "sol_1", "client_dev")));
+    expect(await verifyWriteCredential(SCOPE, "client_1", raw)).toBe(false);
+  });
+
+  it("rejects a key sealed under the superseded solution-level binding, rather than upgrading it", async () => {
+    // Accepting it would make a lifted legacy blob permanent on first use. The
+    // migration clears these; the owner re-issues.
+    mocks.findFirstClient.mockResolvedValue(
+      row(sealSecrets({ writeSecret: raw }, solutionClientAad("org_a", "sol_1"))),
+    );
     expect(await verifyWriteCredential(SCOPE, "client_1", raw)).toBe(false);
   });
 
