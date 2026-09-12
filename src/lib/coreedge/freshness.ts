@@ -28,12 +28,18 @@
 export const LANE_PROOF_TTL_MS = 24 * 60 * 60 * 1000;
 
 /**
- * A catalogue badge expires at 7 days, not 24 hours. A5's note on the
- * NOT_CHECKED/STALE row reads "TTL 30 d"; the handoff's capability row says
- * "Catalogue badges expire at 7 days". They disagree, and 7 days is taken
- * because it is the tighter of the two and the one stated as a requirement
- * rather than as an observation. Recorded here rather than resolved silently —
- * see PR-5's write-up.
+ * A catalogue badge expires at 7 days, not 24 hours.
+ *
+ * RESOLVED, not merely recorded. A5's note on the NOT_CHECKED/STALE row reads
+ * "TTL 30 d" and the handoff's capability row says "Catalogue badges expire at
+ * 7 days". PR-5 took 7 days and left the disagreement standing as an open
+ * question; it is now settled at 7 — the tighter of the two, and the one stated
+ * as a requirement rather than as an observation.
+ *
+ * Consumed by the catalogue and the add-feed picker, which render a badge older
+ * than this as stale rather than dropping it: "it worked last month" and "it has
+ * never worked" are different facts for someone deciding whether to build on a
+ * feed.
  */
 export const CATALOGUE_BADGE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 

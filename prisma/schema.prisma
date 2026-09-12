@@ -874,6 +874,57 @@ model SapConnectionProbeEvent {
 /// THE UNIT IS THE SERVICE, not the connection. A system can serve one entity
 /// set and refuse another, so a per-connection verdict is an average of things
 /// that are not alike.
+/// THE PER-LANE CHECK LEDGER.
+///
+/// A lane is DERIVED, never stored — `deriveLaneStatus` turns facts into one of
+/// the eighteen statuses and that stays true. What is stored here is the
+/// EVIDENCE a derivation needs and could not otherwise have: the outcome of the
+/// last probe and the last data read for one (solution, interface, environment),
+/// each with the instant it was established.
+///
+/// WHY PER LANE AND NOT PER CONNECTION. SapConnectionProbeEvent records that a
+/// SYSTEM answered. A lane's claim is that THIS app can read THIS dataset in
+/// THIS environment, and a connection-level green cannot support it — that is
+/// the reachable-means-readable overclaim the lane model exists to prevent.
+///
+/// WHY TWO OUTCOMES AND NOT ONE. SAP grants metadata reachability and data
+/// readability separately, so they are two columns here for the same reason
+/// they are two columns on the per-service matrix.
+///
+/// Rows are UPSERTED per sweep, not appended: this is the current evidence, and
+/// the history of probes already lives in SapConnectionProbeEvent.
+model LaneCheck {
+  id             String @id @default(cuid())
+  organizationId String
+
+  solutionId  String
+  interfaceId String
+  /// SANDBOX | DEV | TEST | PROD — the lane's environment, stored as written.
+  environment String
+
+  /// The connection the check ran against, when one was bound.
+  connectionId String?
+
+  /// OK | UNAUTHORIZED | NOT_FOUND | TIMEOUT | ERROR — metadata reachability.
+  probeStatus String?
+  probeAt     DateTime?
+
+  /// OK | EMPTY | FORBIDDEN | NOT_FOUND | TIMEOUT | ERROR — data readability.
+  readStatus   String?
+  readAt       DateTime?
+  readRowCount Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// One row per lane. The upsert target.
+  @@unique([solutionId, interfaceId, environment])
+  /// The board reads every lane in one organization.
+  @@index([organizationId])
+  /// The freshness sweep finds the stalest first.
+  @@index([organizationId, readAt])
+}
+
 model SapServiceHealth {
   id             String @id @default(cuid())
   organizationId String

@@ -23,6 +23,8 @@
  * admits it does not know, because the guess is indistinguishable from evidence.
  */
 
+import { LANE_PROOF_TTL_MS } from "./freshness";
+
 import type { LaneHop, LaneStatus } from "./status-vocabulary";
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -75,8 +77,16 @@ export const ENVIRONMENT_LABELS: Readonly<Record<LaneEnvironment, string>> = {
  * makes it testable at all — and the screens pass real rows in.
  * ────────────────────────────────────────────────────────────────────────── */
 
-/** How stale a check may be before the lane admits it does not know. */
-export const CHECK_TTL_MS = 24 * 60 * 60 * 1000;
+/**
+ * How stale a check may be before the lane admits it does not know.
+ *
+ * RE-EXPORTED, NOT REDECLARED. This was a second 24-hour literal sitting beside
+ * LANE_PROOF_TTL_MS in freshness.ts — two constants for one rule, which is one
+ * edit away from a lane that fades at 24 h while its age renders against 48.
+ * The definition lives with the other freshness rules; this name stays so the
+ * derivation reads in its own vocabulary.
+ */
+export const CHECK_TTL_MS = LANE_PROOF_TTL_MS;
 
 export interface KeyFacts {
   readonly exists: boolean;
