@@ -1,0 +1,45 @@
+ID,Role,Journey,Scenario,Screen (Lanes IA),Design must show,States to draw,Priority
+S01,Builder,Start,"First visit, empty org: no apps, no SAP systems",Home,Empty state that says what to do first and who can connect SAP,default; loading; empty; success; refused (with Why?); mobile,P1
+S02,Builder,Create app,Create app with three owners; name already exists,Apps,Uniqueness warning with slug; owners picker shows names,default; loading; empty; success; refused (with Why?); mobile,P1
+S03,Builder,Add feed,"Search catalogue for ""purchase orders"", add feed, pick 12 of 71 fields from $metadata",Catalogue → App,Field picker; SAP names in details; badge shows age of proof,default; loading; empty; success; refused (with Why?); mobile,P0
+S04,Builder,Sandbox lane,Feed gets an instant Sandbox lane against the API Hub sandbox,App lane board,A·S·K·T all green in Sandbox within minutes,default; loading; empty; success; refused (with Why?); mobile,P0
+S05,Builder,Collect key,Key ready; collect via CLI or claim link; never shown to issuer,Needs you / Lane,"Masked key, fingerprint, ""stored it"" confirmation",default; loading; empty; success; refused (with Why?); mobile,P0
+S06,Builder,Try it,Run a read in Sandbox and Test; result OK with rows,Lane › Try it,Binding shown before run; rows; correlation ID,default; loading; empty; success; refused (with Why?); mobile,P0
+S07,Builder,Try it,Read returns EMPTY (DEV X5M/080 has no POs),Lane › Try it,"Empty is success; ""no records"" not error",default; loading; empty; success; refused (with Why?); mobile,P0
+S08,Builder,Promote,Promote Purchase orders Sandbox → Dev → Test,App lane board,Promote opens a pre-filled request with expiry,default; loading; empty; success; refused (with Why?); mobile,P0
+S09,Builder,Promote,Promote to Prod when no Prod SAP system exists,Request review,Blocked check names the missing system and who is asked,default; loading; empty; success; refused (with Why?); mobile,P0
+S10,Builder,Download SDK,Download typed client + OpenAPI + mock for a lane,Lane,Kit reflects captured contract; fixture masked,default; loading; empty; success; refused (with Why?); mobile,P1
+S11,Builder,Failure,First call returns 403 from SAP (Bank details),Lane › Why?,Trace stops at SAP data read; owner = client SAP admin,default; loading; empty; success; refused (with Why?); mobile,P0
+S12,Builder,Failure,Call refused: no access for this environment,Lane › Why?,Broken hop = Access; one-click request,default; loading; empty; success; refused (with Why?); mobile,P0
+S13,Builder,Failure,Key expired / revoked / app retired,Lane › Why?,Broken hop = Key; renew / contact reviewer,default; loading; empty; success; refused (with Why?); mobile,P1
+S14,Builder,Failure,Rate limited (429),Lane › traffic,Retry-after shown; usage vs limit,default; loading; empty; success; refused (with Why?); mobile,P1
+S15,Builder,Change,Change fields or dataset on an approved lane,App,Change re-opens review; old version keeps serving until approved,default; loading; empty; success; refused (with Why?); mobile,P1
+S16,Builder,Two environments,App has DEV and TEST keys; replay a saved test,Lane › Try it,Environment is explicit; no ambiguity refusal,default; loading; empty; success; refused (with Why?); mobile,P1
+R01,Reviewer,Review,Request with all checks green,Requests,Approve in one click; confirmation summary,queue empty; one waiting; checks running; check failed; approved toast; rejected with reason,P0
+R02,Reviewer,Review,Request with a failing check (no Prod system),Requests,Approve disabled with reason; request changes,queue empty; one waiting; checks running; check failed; approved toast; rejected with reason,P0
+R03,Reviewer,Review,Own request (SoD),Requests,Plain explanation; route to a colleague,queue empty; one waiting; checks running; check failed; approved toast; rejected with reason,P0
+R04,Reviewer,Review,Write access request with checklist,Requests,Checklist inline; approval records acknowledgement,queue empty; one waiting; checks running; check failed; approved toast; rejected with reason,P1
+R05,Reviewer,Review,Reject with reason,Requests,Reason required; requester notified,queue empty; one waiting; checks running; check failed; approved toast; rejected with reason,P1
+R06,Reviewer,Queue,"Requests waiting > 4 h, several reviewers",Needs you,"Ageing, assignment, no double-approval",queue empty; one waiting; checks running; check failed; approved toast; rejected with reason,P1
+R07,Reviewer,Renew,Access expiring in 12 days,Needs you,Renew keeps key and contract,queue empty; one waiting; checks running; check failed; approved toast; rejected with reason,P1
+O01,Operator,Board,"Morning check: 11 lanes, 3 need attention",Operations board,Sorted by attention; age of every check,all healthy; needs attention; stale; drill-in; handoff sent; resolved,P0
+O02,Operator,Triage,SAP 403 on Bank details (metadata 200),Lane › Why? + timeline,Send-to-SAP-admin note drafted; builder sees status,all healthy; needs attention; stale; drill-in; handoff sent; resolved,P0
+O03,Operator,Triage,SAP 401 — comm user password wrong,Lane › Why?,Distinct from 403; owner = platform admin,all healthy; needs attention; stale; drill-in; handoff sent; resolved,P1
+O04,Operator,Triage,SAP timeout / 5xx spike,Board › traffic,"Latency, error rate, circuit state",all healthy; needs attention; stale; drill-in; handoff sent; resolved,P1
+O05,Operator,Triage,Binding refused: two systems claim TEST (AMBIGUOUS),SAP systems,Names both systems; fix = declare environment/client,all healthy; needs attention; stale; drill-in; handoff sent; resolved,P1
+O06,Operator,Triage,Stored secret unreadable,SAP systems,Re-save secret; lanes affected listed,all healthy; needs attention; stale; drill-in; handoff sent; resolved,P1
+O07,Operator,Hygiene,Stale checks (> TTL),Board,Fade to Unknown; re-check all,all healthy; needs attention; stale; drill-in; handoff sent; resolved,P1
+O08,Operator,Keys,Key never used / not used in 30 days,Operations › keys,Suggest revoke; owner notified,all healthy; needs attention; stale; drill-in; handoff sent; resolved,P1
+O09,Operator,Audit,Find a call by correlation ID,Operations,"Search returns the lane, hop and outcome",all healthy; needs attention; stale; drill-in; handoff sent; resolved,P1
+A01,Platform admin,Connect SAP,Add SAP system (basic / OAuth / API key) for an environment,SAP systems,Environment required; host allowlist; test on save,no systems; testing; OK; metadata OK/data refused; unreadable; deactivate impact,P0
+A02,Platform admin,Health,Probe shows metadata OK but data read 403 for one service,SAP systems,"Per-service matrix, not one ""Reachable""",no systems; testing; OK; metadata OK/data refused; unreadable; deactivate impact,P0
+A03,Platform admin,Change,Deactivate a SAP system used by 4 lanes,SAP systems,Impact list; confirm; lanes go amber,no systems; testing; OK; metadata OK/data refused; unreadable; deactivate impact,P1
+A04,Platform admin,Rotate,Rotate comm-user secret,SAP systems,No downtime; probe after save,no systems; testing; OK; metadata OK/data refused; unreadable; deactivate impact,P1
+A05,Platform admin,Revoke,Revoke a leaked key immediately,Operations › keys,Terminal; audit reason; owner told,no systems; testing; OK; metadata OK/data refused; unreadable; deactivate impact,P1
+A06,Platform admin,Retire,"Retire an app (e.g., empty twin)",Apps,Keys stop; Try it refuses too,no systems; testing; OK; metadata OK/data refused; unreadable; deactivate impact,P1
+X01,Any,Role,Admin opens Studio without write rights,Any,Controls visible but disabled with reason,as described,P0
+X02,Any,Mobile,Reviewer approves from phone (375 px),Requests,Card layout; actions visible,as described,P0
+X03,Any,Search,"Ask ""why is purchase orders failing in Test?""",Command bar,Answer links to the trace,as described,P1
+X04,Any,Accessibility,Keyboard-only through review and Try it,All,"Focus order, visible focus, row keyboard access",as described,P1
+X05,Any,Time zone,"Consultant in MYT sets expiry ""10 Dec""",Requests,Ends 23:59 MYT; shown with zone,as described,P1
+X06,Client IT (explore),Passport,Client CIO views what data leaves SAP,Passport (read-only),"Apps, feeds, fields, approvals, expiry",read-only,P1

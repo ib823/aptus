@@ -1,0 +1,56 @@
+Domain,Code(s) in the API/database,Shown today as,Use this plain label,Chip token,Note
+Solution status,DRAFT,Draft,Draft,gate-off,Being set up; not callable if RETIRED only
+Solution status,ACTIVE,Active,Active,gate-ok,Owners assigned
+Solution status,RESTRICTED,Restricted,Needs an owner,gate-wait,Lost an owner; still served
+Solution status,RETIRED,Retired,Retired,status-expired,Northbound refuses (R3)
+Interface status,DRAFT,draft,Draft feed,,Served with DRAFT header
+Interface status,ACTIVE,active,Published feed,,
+Interface status,DEPRECATED,deprecated,Retiring,,Refused
+Grant decision,REQUESTED,Requested,Waiting for review,gate-wait,
+Grant decision,APPROVED,Approved,Access approved,gate-ok,
+Grant decision,SANDBOX_ONLY,Sandbox only,Approved for Sandbox,gate-ok,
+Grant decision,READ_ONLY,Read only,Approved read-only,gate-ok,
+Grant decision,REJECTED,Rejected,Declined,gate-bad,reason not captured
+Grant decision,EXPIRED,Expired,Access ended,status-expired,
+Grant decision,REVOKED,Revoked,Access withdrawn,gate-bad,admin only
+Grant rule,SELF_APPROVAL,(403),You raised this — a colleague must review,gate-wait,
+Grant rule,GRANT_REQUIRES_EXPIRY,(403),Needs an end date before approval,gate-wait,
+Grant rule,WRITE_CHECKLIST_REQUIRED,(403),Confirm the write checklist,gate-wait,
+Credential,active / expired / revoked / never used,text,Key: live / ended / withdrawn / not yet used,,
+Token auth,NO_TOKEN / UNKNOWN_TOKEN / INACTIVE / EXPIRED / REVOKED / SOLUTION_RETIRED / SOLUTION_MISSING,401 (all),Key missing or not valid,gate-bad,one uniform 401 by design
+Access refusal,NO_APPROVED_GRANT,403,No access approved for this environment,gate-bad,
+Access refusal,GRANT_EXPIRED,403,Access ended on <date>,gate-bad,
+Access refusal,GRANT_REVOKED,403,Access withdrawn,gate-bad,
+Access refusal,INTERFACE_NOT_FOUND / NOT_THIS_SOLUTION,404,No such data feed,gate-bad,
+Access refusal,INTERFACE_DEPRECATED,403,Feed retired,gate-bad,
+Access refusal,WRITE_NOT_SERVED / READ_ONLY_INTERFACE / INTERFACE_NOT_ACTIVE,403,Writes not allowed on this feed,gate-bad,
+Binding refusal,NO_CONNECTION,403,No SAP system connected,gate-bad,
+Binding refusal,NO_MATCH_FOR_ENVIRONMENT,403,No SAP system for this environment,gate-bad,
+Binding refusal,NO_MATCH_FOR_CLIENT,403,No SAP system for this SAP client,gate-bad,
+Binding refusal,AMBIGUOUS,403,Two SAP systems claim this environment,gate-bad,
+Binding refusal,NO_DECLARED_CANDIDATE,403,SAP systems have no environment set,gate-bad,
+Binding refusal,UNDECLARED_ENVIRONMENT_WRITE,403,Set the SAP system environment before writing,gate-bad,
+Binding refusal,CONNECTION_UNREADABLE,403/409,SAP system secrets unreadable — re-save,gate-bad,
+Binding refusal,UNKNOWN_PRODUCT,403,Feed names an unknown SAP product,gate-bad,
+Read result,OK,200,Data,gate-ok,
+Read result,EMPTY,200,No records (not an error),gate-info,
+Read result,NEEDS_SETUP,403,SAP refused (credentials or authorisation),gate-bad,401 vs 403 now in detail text
+Read result,NOT_FOUND,404,Dataset not on this SAP system,gate-bad,
+Read result,TIMEOUT,504,SAP too slow,gate-bad,
+Read result,ERROR,502,SAP error,gate-bad,
+Connection health,OK,Reachable · last 200,Metadata OK,,probes one service only
+Connection health,UNAUTHORIZED,Probe failed,SAP rejected the credentials,,
+Connection health,NOT_FOUND,Probe failed,Probed service missing,,
+Connection health,TIMEOUT,Probe failed,No answer,,
+Connection health,NO_PROBE_PATH,—,Nothing to probe,,
+Catalogue badge,ACTIVATED,Activated · metadata only / read verified,Reachable (metadata) / Reads proven,,
+Catalogue badge,NEEDS_SETUP,Needs setup,SAP refused,,
+Catalogue badge,AVAILABLE,Available,Event — subscribe only,,
+Catalogue badge,NOT_PROBEABLE,Not probeable,No OData endpoint,,
+Catalogue badge,REFERENCE,Reference,Design-time content,,
+Catalogue badge,NOT_CHECKED / STALE,Not checked · stale · probed <date>,Unknown · last proven <age>,,TTL 30 d
+Catalogue badge,NOT_FOUND,Not found,Not on this SAP system,,
+Broker-run,NO_CREDENTIAL,refused,No key for this app yet,gate-wait,
+Broker-run,AMBIGUOUS_CREDENTIAL,refused,Pick which environment to run as,gate-wait,Replay bug
+Broker-run,NO_ENTITY_SET,refused,Choose a dataset,gate-wait,
+API error code,UNAUTHENTICATED / FORBIDDEN / NOT_FOUND / VALIDATION_ERROR / RATE_LIMITED / CONNECTION_NOT_CONFIGURED / UPSTREAM_ERROR / UPSTREAM_TIMEOUT / CONFLICT / INTERNAL,envelope code,"(developer-facing; keep codes, add reason)",,

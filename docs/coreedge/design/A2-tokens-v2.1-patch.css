@@ -1,0 +1,118 @@
+/* CoreEdge design tokens — v2.1 patch over A2-coreedge-tokens-v2.css
+ *
+ * PROVENANCE, because this file was not in the handoff bundle. The build brief
+ * names "A2-tokens-v2.1-patch.css" and lists its seven tokens, but no such file
+ * ships in CoreEdge_Console_Redesign_Claude_Design.zip. The values below are
+ * transcribed from the two places that DO carry them:
+ *
+ *   · "CoreEdge Engineering Handoff.dc.html", section 3 "Tokens added or
+ *     changed" — a seven-row table of Token | Light | Dark | Why. This is the
+ *     authoritative source and every value here comes from it verbatim.
+ *   · The bundle README's "Design Tokens" section, which repeats three of them
+ *     in prose with the same figures.
+ *
+ * Nothing here is invented. Where the handoff states a contrast ratio it is
+ * reproduced in the comment, and every one of them has been recomputed and
+ * verified — see tests/unit/coreedge/token-contrast.test.ts, which asserts the
+ * same numbers against these same values so the two cannot drift.
+ *
+ * WHAT "PATCH" MEANS: three of the seven CORRECT a value A2 already shipped
+ * (--ink-disabled, --border-strong, and --focus-ring-navy's role), and four ADD
+ * a token that did not exist. The handoff's own note is worth keeping: three
+ * were found only because the dark screens are a mechanical token map of the
+ * light ones, so any colour the light theme hard-codes rather than tokenises
+ * shows up immediately as an unreadable pair.
+ */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * LIGHT
+ * ────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Focus is not a status. Navy in both themes; red stays exclusively for
+   * irreversible actions. A2 already declared this; it is restated here because
+   * the patch is also what makes --focus-ring point at it in both themes.
+   * 13.29:1 on --surface-cream. */
+  --focus-ring-navy: #002B5C;
+  --focus-ring: var(--focus-ring-navy);
+
+  /* The rail hover fill was an unnamed literal in five places. White at 8% OVER
+   * --surface-rail — the same value works in both themes, which is why it is
+   * alpha rather than a hex. */
+  --rail-hover: rgba(255, 255, 255, 0.08);
+
+  /* Current-place fill, white at 12% over the same ground, with the label at
+   * --ink-primary.
+   *
+   * THE PHONE TAB BAR DIVERGES DELIBERATELY: its current tab is opaque #002B5C
+   * over #0A1F3D with a 2px inset #8FB4E8 top edge, because a 12% wash is not
+   * legible enough to mark position on a 56px tab. That is a component rule, not
+   * a token — see the Rail/TabBar entry in the handoff's component inventory. */
+  --rail-active: rgba(255, 255, 255, 0.12);
+
+  /* CORRECTS A2, which shipped #C4C4C4 in light — 1.56:1 on --surface-ink-tint.
+   *
+   * The handoff's stated reason is about the dark value, and it applies with
+   * equal force here: "a disabled label carries the reason a control is
+   * unavailable, so it must clear 4.5:1". #C4C4C4 does not come close. The
+   * handoff's Light column reads #6B6B6B, which is 4.76:1 on ink-tint and
+   * 5.06:1 on cream — and is the same value as --ink-muted, deliberately: a
+   * disabled control's reason is muted, not invisible. */
+  --ink-disabled: #6B6B6B;
+
+  /* Unchanged from A2, and recorded here because the dark half changes.
+   *
+   * ⚠ 1.84:1 on --surface-paper. The dark value was raised specifically to clear
+   * the 3:1 non-text floor ("so inputs read as plain text"); the light value was
+   * not, and sits below that same floor. The handoff does not address this and
+   * this patch does not invent a replacement — choosing one is a design
+   * decision, not a transcription. The contrast test pins the measured value so
+   * the gap is visible in CI rather than only in a document. */
+  --border-strong: #C4BFAE;
+
+  /* The in-review accent was a light-only literal with no dark counterpart.
+   * Naming it is what prevents the same miss next time.
+   * 7.21:1 on --status-sent-bg, the ground an in-review chip actually sits on. */
+  --status-inreview-fg: #1E40AF;
+
+  /* Skeleton pulse, paired with --ease-calm.
+   *
+   * DELIBERATELY OFF THE --dur-* SCALE, whose longest step is 320ms: those are
+   * transition durations for things that FINISH, and a loading pulse is a loop.
+   * It needs its own name rather than an abuse of --dur-hero. */
+  --dur-skeleton: 1200ms;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * DARK
+ *
+ * Every ratio below is measured against the surface the token actually renders
+ * on, not against the page ground — which is why --ink-disabled is quoted on the
+ * nocheck chip and --status-inreview-fg on the sent chip. Measuring a chip
+ * foreground against the page behind the chip would report a number nobody ever
+ * sees.
+ * ────────────────────────────────────────────────────────────────────────── */
+:root[data-theme="dark"] {
+  /* 8.67:1 on --surface-cream. */
+  --focus-ring-navy: #8FB4E8;
+  --focus-ring: var(--focus-ring-navy);
+
+  /* Alpha over --surface-rail: one value, both themes. */
+  --rail-hover: rgba(255, 255, 255, 0.08);
+  --rail-active: rgba(255, 255, 255, 0.12);
+
+  /* CORRECTS A2, which shipped #5A5A5A — 2.26:1 on --surface-ink-tint. A
+   * disabled label carries the reason a control is unavailable, so it must clear
+   * 4.5:1. Now 5.55:1 on --status-nocheck-bg (5.98:1 on --surface-ink-tint). */
+  --ink-disabled: #A3A09A;
+
+  /* CORRECTS A2, which shipped #3A4454 — 1.72:1 on --surface-paper, under even
+   * the 3:1 non-text floor, so inputs read as plain text. Now 3.73:1. */
+  --border-strong: #6B7789;
+
+  /* A2 had NO dark value at all: the light literal #1E40AF survived the theme
+   * map at 1.94:1 on --surface-paper. Now 8.15:1 on --status-sent-bg. */
+  --status-inreview-fg: #9CC6EA;
+
+  /* A loop, not a transition — same in both themes. */
+  --dur-skeleton: 1200ms;
+}

@@ -1,0 +1,87 @@
+{
+  "_note": "Realistic content for every screen. Systems, SAP APIs, datasets, statuses and PO rows are real from the X5M test landscape (10-11 Sep 2026). App names and people are examples. Never show a full key.",
+  "viewer": { "name": "Ikmal", "roles": ["Builder", "Reviewer"], "timezone": "Asia/Kuala_Lumpur (MYT, UTC+8)", "org": "ABeam Malaysia" },
+  "people": [
+    { "name": "Ikmal", "role": "Builder (app owner)" },
+    { "name": "Nadia", "role": "Reviewer · Support owner of Delivery Tracker only" },
+    { "name": "Aisyah", "role": "Support owner (Purchase Order Tracker, Supplier Spend)" },
+    { "name": "Farid", "role": "Builder" },
+    { "name": "Mei Ling", "role": "Operator · Reviewer (second reviewer on the queue)" },
+    { "name": "Arjun", "role": "Platform admin" },
+    { "name": "Client SAP admin", "role": "External (client IT)" }
+  ],
+  "sapSystems": [
+    { "name": "Development X5M/080", "environment": "DEV", "host": "my403871-api.s4hana.cloud.sap", "auth": "Basic (communication user)", "metadata": { "status": 200, "checked": "2 m ago" }, "dataRead": { "purchaseOrders": "200 · 0 rows", "bankDetails": "403" }, "usedByLanes": 2 },
+    { "name": "Customizing X5M/100", "environment": "TEST", "host": "my403706-api.s4hana.cloud.sap", "auth": "Basic (communication user)", "metadata": { "status": 200, "checked": "2 m ago" }, "dataRead": { "purchaseOrders": "200 · 5 rows", "bankDetails": "403" }, "usedByLanes": 3 },
+    { "name": "SAP API Hub sandbox", "environment": "SANDBOX", "host": "sandbox.api.sap.com", "auth": "API key header", "metadata": { "status": 200, "checked": "5 m ago" }, "usedByLanes": 4 },
+    { "name": "(none)", "environment": "PROD", "note": "No Prod system connected yet" }
+  ],
+  "apps": [
+    {
+      "name": "Purchase Order Tracker", "owners": { "technical": "Ikmal", "business": "Ikmal", "support": "Aisyah" }, "status": "Active",
+      "feeds": [
+        { "name": "Purchase orders", "sapApi": "CE_PURCHASEORDER_0001", "dataset": "PurchaseOrder", "protocol": "OData V4", "fields": "12 of 71",
+          "lanes": {
+            "SANDBOX": { "state": "Live", "gates": { "A": "ok", "S": "ok", "K": "ok", "T": "ok" }, "detail": "API Hub sandbox" },
+            "DEV":     { "state": "No data", "gates": { "A": "ok", "S": "ok", "K": "ok", "T": "info" }, "detail": "0 rows · checked 4 m ago · not an error" },
+            "TEST":    { "state": "Live", "gates": { "A": "ok", "S": "ok", "K": "ok", "T": "ok" }, "detail": "5 rows · checked 2 m ago", "access": "until 10 Dec 2026, 23:59 MYT · approved by Nadia", "key": "…Gu4 · collected via claim link", "traffic": "42 calls today · 0 errors · p95 610 ms" },
+            "PROD":    { "state": "Promote →", "gates": { "A": "off", "S": "bad", "K": "off", "T": "off" }, "detail": "No Prod SAP system yet" }
+          } },
+        { "name": "Bank details", "sapApi": "API_BANKDETAIL_SRV", "dataset": "A_BankDetail", "protocol": "OData V2", "fields": "8 of 23",
+          "lanes": {
+            "SANDBOX": { "state": "Live", "gates": { "A": "ok", "S": "ok", "K": "ok", "T": "ok" } },
+            "DEV":     { "state": "SAP refused", "gates": { "A": "ok", "S": "bad", "K": "ok", "T": "off" }, "detail": "Metadata 200 · data read 403 · 4 m ago" },
+            "TEST":    { "state": "Promote →", "promoteDisabledReason": "Promote after Dev works", "gates": { "A": "off", "S": "off", "K": "off", "T": "off" } },
+            "PROD":    { "state": "—" }
+          } }
+      ]
+    },
+    { "name": "Supplier Spend", "owners": { "technical": "Farid", "business": "Farid", "support": "Aisyah" }, "status": "Active",
+      "feeds": [ { "name": "Supplier invoices", "sapApi": "API_SUPPLIERINVOICE_PROCESS_SRV", "dataset": "A_SupplierInvoice", "lanes": { "SANDBOX": { "state": "Live" }, "DEV": { "state": "Live" }, "TEST": { "state": "In review", "detail": "Waiting on Ikmal · 2 h" }, "PROD": { "state": "—" } } } ] },
+    { "name": "Delivery Tracker", "owners": { "technical": "Farid", "business": "Farid", "support": "Nadia" }, "status": "Active",
+      "feeds": [ { "name": "Attachments", "sapApi": "API_CV_ATTACHMENT_SRV", "lanes": { "TEST": { "state": "Live", "detail": "Access expires in 12 days" } } } ] }
+  ],
+  "needsYou": [
+    { "type": "review", "title": "Review access · Supplier Spend → Test", "detail": "Requested by Farid · 3 checks green, 1 running · waiting 2 h", "action": "Review" },
+    { "type": "key", "title": "Key ready · Purchase orders · Test", "detail": "Collect it with a one-time claim link · access until 10 Dec 2026 · or pull it with `coreedge pull --env test`", "action": "Collect key" },
+    { "type": "blocked", "title": "Bank details · Dev is blocked by SAP", "detail": "Data read 403, metadata OK · Mei Ling sent it to the client's SAP admin", "action": "Open" },
+    { "type": "expiring", "title": "Access ends in 12 days · Attachments · Test", "detail": "Renewing keeps the same key and fields", "action": "Renew access" }
+  ],
+  "request": {
+    "title": "Promote Purchase orders to Prod", "app": "Purchase Order Tracker", "requester": "Ikmal", "reviewer": "Nadia", "expiry": "9 Dec 2026, 23:59 MYT (90 days)",
+    "checks": [
+      { "name": "Contract unchanged since Test", "result": "pass", "detail": "Same 12 fields, same dataset" },
+      { "name": "Test lane healthy for 7 days", "result": "pass", "detail": "1,204 calls · 0 errors" },
+      { "name": "Owners assigned, separate reviewer", "result": "pass", "detail": "Reviewer didn't request this and doesn't own the app" },
+      { "name": "Prod SAP system connected", "result": "fail", "detail": "No Prod system. Platform admin (Arjun) has been asked." }
+    ],
+    "fields": ["PurchaseOrder", "PurchaseOrderType", "CompanyCode", "PurchasingOrganization", "PurchasingGroup", "Supplier", "PurchaseOrderDate", "DocumentCurrency", "PurchasingProcessingStatus", "PaymentTerms", "CreatedByUser", "LastChangeDateTime"]
+  },
+  "trace_bankDetails_dev": [
+    { "hop": "Key", "result": "ok", "detail": "valid · Dev" },
+    { "hop": "Access", "result": "ok", "detail": "approved · until 10 Dec" },
+    { "hop": "Binding", "result": "ok", "detail": "Dev → Development X5M/080" },
+    { "hop": "SAP metadata", "result": "ok", "detail": "200" },
+    { "hop": "SAP data read", "result": "fail", "detail": "403 · communication user not authorised to read A_BankDetail", "owner": "Client SAP admin" },
+    { "hop": "Your app", "result": "none" }
+  ],
+  "timeline_bankDetails_dev": [
+    { "at": "11 Sep 09:12", "by": "Mei Ling (Operator)", "event": "Sent the SAP authorisation note to the client's SAP admin" },
+    { "at": "11 Sep 09:10", "by": "CoreEdge", "event": "Scheduled check: metadata 200, data read 403. Lane left Live" },
+    { "at": "10 Sep 22:34", "by": "App", "event": "First call refused by SAP · correlation 82fa4a8e-de92-41bf-a061-fc3e27355153" },
+    { "at": "10 Sep 22:33", "by": "Nadia (Reviewer)", "event": "Access approved for Dev until 10 Dec" }
+  ],
+  "operationsBoard": [
+    { "lane": "Bank details · Dev", "app": "Purchase Order Tracker", "system": "X5M/080", "state": "SAP refused", "brokenHop": "SAP data read", "calls24h": 3, "errors": 3, "owner": "Client SAP admin", "checked": "4 m" },
+    { "lane": "Supplier invoices · Test", "app": "Supplier Spend", "system": "X5M/100", "state": "In review", "brokenHop": "Access", "calls24h": 0, "errors": 0, "owner": "Reviewer · 2 h", "checked": "2 m" },
+    { "lane": "Attachments · Test", "app": "Delivery Tracker", "system": "X5M/100", "state": "Expires in 12 d", "brokenHop": "—", "calls24h": 88, "errors": 0, "owner": "Builder", "checked": "6 m" },
+    { "lane": "Purchase orders · Test", "app": "Purchase Order Tracker", "system": "X5M/100", "state": "Live", "brokenHop": "—", "calls24h": 42, "errors": 0, "owner": "Builder", "checked": "2 m" }
+  ],
+  "purchaseOrderRows_TEST": [
+    { "PurchaseOrder": "1", "PurchaseOrderType": "NB", "CompanyCode": "5410", "Supplier": "54300006", "PurchaseOrderDate": "2023-04-19", "DocumentCurrency": "MYR", "PurchasingProcessingStatus": "02" },
+    { "PurchaseOrder": "2", "PurchaseOrderType": "NB", "CompanyCode": "5410", "Supplier": "54300006", "PurchaseOrderDate": "2023-05-03", "DocumentCurrency": "MYR", "PurchasingProcessingStatus": "02" },
+    { "PurchaseOrder": "4100000888", "PurchaseOrderType": "NB", "CompanyCode": "54DM", "Supplier": "CC001", "PurchaseOrderDate": "2025-11-19", "DocumentCurrency": "MYR", "PurchasingProcessingStatus": "05" },
+    { "PurchaseOrder": "4500000000", "PurchaseOrderType": "NB", "CompanyCode": "5410", "Supplier": "54300001", "PurchaseOrderDate": "2023-02-23", "DocumentCurrency": "MYR", "PurchasingProcessingStatus": "05" },
+    { "PurchaseOrder": "4500000001", "PurchaseOrderType": "NB", "CompanyCode": "5410", "Supplier": "54300001", "PurchaseOrderDate": "2023-01-03", "DocumentCurrency": "MYR", "PurchasingProcessingStatus": "05" }
+  ]
+}

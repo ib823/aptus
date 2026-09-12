@@ -1,5 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* The CoreEdge Console's token scope. Declares nothing at :root — see the file
+ * header for why the new console's vocabulary is scoped rather than global. */
+@import "./coreedge-tokens.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -50,6 +53,36 @@
   --color-status-revoked-fg:  var(--status-revoked-fg);
   --color-status-nocheck-bg:  var(--status-nocheck-bg);
   --color-status-nocheck-fg:  var(--status-nocheck-fg);
+
+  /* ─── CoreEdge Console (PR-1) ──────────────────────────────────────────
+   * The tokens the lanes redesign adds, exposed so `bg-gate-ok`,
+   * `text-status-inreview-fg`, `bg-rail-hover` and the rest are real utility
+   * classes rather than inline `var(--…)` in component code — which is the
+   * habit the raw-literal lint rule exists to break.
+   *
+   * The VALUES live in coreedge-tokens.css under `.coreedge`, so a utility
+   * generated here resolves to the console's palette inside the scope and to
+   * whatever the surrounding page declares outside it. That is deliberate:
+   * `@theme` decides which utilities EXIST, the scope decides what they MEAN. */
+  --color-gate-ok-bg:         var(--gate-ok-bg);
+  --color-gate-ok-fg:         var(--gate-ok-fg);
+  --color-gate-wait-bg:       var(--gate-wait-bg);
+  --color-gate-wait-fg:       var(--gate-wait-fg);
+  --color-gate-bad-bg:        var(--gate-bad-bg);
+  --color-gate-bad-fg:        var(--gate-bad-fg);
+  --color-gate-info-bg:       var(--gate-info-bg);
+  --color-gate-info-fg:       var(--gate-info-fg);
+  --color-gate-off-bg:        var(--gate-off-bg);
+  --color-gate-off-fg:        var(--gate-off-fg);
+  --color-status-inreview-fg: var(--status-inreview-fg);
+  --color-surface-rail:       var(--surface-rail);
+  --color-rail-hover:         var(--rail-hover);
+  --color-rail-active:        var(--rail-active);
+  --color-focus-ring-navy:    var(--focus-ring-navy);
+  --color-success:            var(--success);
+  --color-warning:            var(--warning);
+  --color-danger:             var(--danger);
+  --color-info:               var(--info);
 
   --radius-input: 8px;
   --radius-card-warm: 12px;
@@ -333,7 +366,33 @@
  * presales brand/ink/surface + status + decision tokens. Scoped to
  * [data-cap-catalogue] so it flips ONLY within the catalogue (no effect on
  * presales UI). See docs/design/sap-capability-catalogue-tokens.md. */
-.dark [data-cap-catalogue] {
+/*
+ * THE DARK PALETTE THAT NOTHING COULD REACH (audit §D12).
+ *
+ * This block was scoped `.dark [data-cap-catalogue]`, and `data-cap-catalogue`
+ * is set on exactly ONE element in the entire codebase —
+ * components/sap/SapCapabilityCatalogue.tsx. So in dark mode a Studio,
+ * Operations or Control Tower status chip kept its LIGHT background against a
+ * dark page: the values below were correct, committed, and applied nowhere the
+ * console could see them.
+ *
+ * The scope was not wrong when it was written — it was a deliberate hedge to
+ * avoid re-baselining visual-regression snapshots, and the same comment that
+ * records that hedge (see --ink-muted above) also records why it bought
+ * nothing: "the entire snapshot suite is 43 images covering assessments,
+ * dashboard, login and the report contact sheets. NOTHING covers affirm,
+ * workbench, studio, control tower, operations, presales or discovery."
+ *
+ * So the attribute selector is dropped and these become the app's dark values.
+ * The catalogue keeps rendering exactly as before — it sits inside `.dark` like
+ * everything else — and every other surface stops rendering a light chip on a
+ * dark ground.
+ *
+ * THIS DOES NOT SERVE THE NEW CONSOLE. `.coreedge` carries its own complete
+ * pair (coreedge-tokens.css) and does not inherit from here; the redesign moved
+ * several of these values and must not be silently pinned to the old ones.
+ */
+.dark {
   --surface-cream: var(--background);
   --surface-paper: var(--card);
   --surface-ink-tint: var(--muted);
