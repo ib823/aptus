@@ -69,18 +69,35 @@ test.describe("CoreEdge design system", () => {
   });
 
   test("has no serious or critical violations in dark", async ({ page }) => {
-    await page.goto(ROUTE);
-    await page.waitForLoadState("load");
-
     /*
      * next-themes runs with attribute="class", so dark is `.dark` on <html> and
      * NOTHING sets data-theme anywhere — which is the reachability bug PR-1
-     * fixed. Setting the class directly is what a user picking dark actually
-     * produces; emulating prefers-color-scheme would only match when the user's
-     * stored preference is "system", so it would silently skip the dark pass on
-     * any run where it is not.
+     * fixed.
+     *
+     * WHY THE PREFERENCE IS SEEDED BEFORE NAVIGATION, and not the class added
+     * after it. This test first did `classList.add("dark")` on the loaded page.
+     * That is a race, and it lost on main at 3daf844: next-themes reads its
+     * stored preference during hydration and WRITES the resolved theme onto
+     * <html>, so an added class survives only when hydration happens to have
+     * finished first. When it had not, the class was replaced by `light` and
+     * the assertion saw "… light" — on the first run and both retries. A dark
+     * scan that silently measures the light palette is worse than no dark scan,
+     * so the fix seeds the same store next-themes reads.
+     *
+     * The provider takes no `storageKey`, so the default "theme" is the real
+     * key; if that ever changes, the assertion below fails loudly rather than
+     * letting the scan quietly run against light. `enableSystem` is why
+     * emulating prefers-color-scheme is not used instead: it would only take
+     * effect when the stored preference is "system", and would silently skip
+     * the dark pass on any run where it is not.
      */
-    await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await page.addInitScript(() => {
+      window.localStorage.setItem("theme", "dark");
+    });
+
+    await page.goto(ROUTE);
+    await page.waitForLoadState("load");
+
     await expect(page.locator("html")).toHaveClass(/dark/);
 
     const violations = await scan(page, ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]);
