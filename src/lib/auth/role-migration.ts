@@ -50,3 +50,30 @@ export function mapLegacyRole(role: string): UserRole {
 export function isLegacyRole(role: string): boolean {
   return role === "admin" || role === "executive";
 }
+
+/**
+ * Is this role an admin-level role, after legacy mapping?
+ *
+ * THE DEAD STRING THIS REPLACES (audit E14, P2). Four places hand-wrote
+ * `["platform_admin", "admin"].includes(user.role)` — the admin layout, the
+ * brownfield guide content route, the portal nav and the mobile tab bar.
+ * `"admin"` is a `LegacyUserRole` and not a member of `UserRole`, so as a literal
+ * it is dead: no session carries it, and TypeScript cannot say so because
+ * `.includes` on a `string[]` accepts anything.
+ *
+ * IT IS NOT DELETED, IT IS MOVED TO WHERE IT IS ALREADY HANDLED. Simply dropping
+ * `"admin"` from those arrays would change behaviour for any row still holding
+ * the legacy value — locking a real administrator out rather than tidying a
+ * string. `mapLegacyRole` already maps it to `platform_admin`, has done since
+ * Phase 17, and is the function `isAdminRole` in `lib/auth/permissions` already
+ * delegates to. So the four copies become one call to the rule that was always
+ * the real one.
+ *
+ * LIVES HERE, NOT IN `permissions.ts`, because two of the four callers are client
+ * components and `permissions.ts` imports prisma. This module imports nothing but
+ * types; `lib-layering.test.ts` is what keeps that true.
+ */
+export function isAdminRoleName(role: string | null | undefined): boolean {
+  if (!role) return false;
+  return mapLegacyRole(role) === "platform_admin";
+}

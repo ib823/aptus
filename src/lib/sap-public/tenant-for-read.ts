@@ -37,6 +37,7 @@
  * redirect an existing one somewhere new.
  */
 
+import type { SapEnvironment } from "./environment";
 import { getSapTenant, type SapTenant } from "./tdd-connector";
 import { resolveSapConnection, toSapTenant } from "./connection-resolver";
 
@@ -45,6 +46,19 @@ export type TenantSource = "deployment" | "connection";
 export interface ResolvedReadTenant {
   tenant: SapTenant;
   source: TenantSource;
+  /**
+   * The stored connection this tenant came from, when it came from one.
+   *
+   * NULL FOR A DEPLOYMENT TENANT, which has no row and belongs to no
+   * organization. The console read guard needs both fields: the id to record
+   * which system a read actually reached, and the environment to decide whether
+   * reading it needs an approved grant. `toSapTenant` carries the environment
+   * onto the projection already, but as an optional STRING (SapTenant is the
+   * connector's currency and predates the enum), and the guard must not re-parse
+   * a value that has already been parsed once — so the row's own typed value is
+   * carried here instead.
+   */
+  connection: { id: string; environment: SapEnvironment | null } | null;
 }
 
 /**
@@ -63,14 +77,18 @@ export async function resolveReadTenant(
   if (!key) return null;
 
   const configured = getSapTenant(envPrefix, key);
-  if (configured) return { tenant: configured, source: "deployment" };
+  if (configured) return { tenant: configured, source: "deployment", connection: null };
 
   if (!organizationId) return null;
 
   const connection = await resolveSapConnection(organizationId, product, key);
   if (!connection) return null;
 
-  return { tenant: toSapTenant(connection), source: "connection" };
+  return {
+    tenant: toSapTenant(connection),
+    source: "connection",
+    connection: { id: connection.id, environment: connection.environment },
+  };
 }
 
 /**

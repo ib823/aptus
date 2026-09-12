@@ -22,6 +22,7 @@ import {
   DEFAULT_API_KEY_HEADER,
   isAllowedApiKeyHeader,
 } from "@/lib/sap-public/api-key-header";
+import { parseSapEnvironment, type SapEnvironment } from "@/lib/sap-public/environment";
 import type { SapTenant } from "@/lib/sap-public/tdd-connector";
 import {
   connectionAad,
@@ -82,12 +83,12 @@ export interface ResolvedSapConnection {
   apiPath: string | null;
   timeoutMs: number | null;
   /**
-   * Which SAP landscape this row points at — "DEV" | "TEST" | "PROD", or a
-   * landscape's own name. NULL means UNDECLARED, and undeclared is a state in
-   * its own right, never a default: see `resolveSapConnectionForEnvironment`,
-   * where it permits a read (marked unverified) and refuses a write outright.
+   * Which SAP landscape this row points at. NULL means UNDECLARED, and
+   * undeclared is a state in its own right, never a default: see
+   * `resolveSapConnectionForEnvironment`, where it permits a read (marked
+   * unverified) and refuses a write outright.
    */
-  environment: string | null;
+  environment: SapEnvironment | null;
   /**
    * The SAP client — "100", "080" — or NULL where the product has none.
    *
@@ -713,12 +714,15 @@ export interface UpsertSapConnectionInput {
   timeoutMs?: number | null;
   isActive?: boolean;
   /**
-   * Which SAP environment this points at — "DEV" | "TEST" | "PROD", or the
-   * landscape's own name. Omitted stays NULL, and NULL renders no chip in the
-   * console: an undeclared environment must never be guessed at on the control
-   * that guards production writes.
+   * The landscape this system serves. Omitted or NULL stays undeclared, and
+   * undeclared renders no chip in the console: it must never be guessed at on
+   * the control that guards production writes.
+   *
+   * Typed as the enum rather than a string so a caller cannot hand in a word the
+   * column cannot hold and discover, at the database, that it became NULL.
+   * `parseSapEnvironment` is where a string crosses over.
    */
-  environment?: string | null;
+  environment?: SapEnvironment | null;
   /**
    * The SAP client — "100", "080" — or null where the product has none.
    *
@@ -743,10 +747,8 @@ export interface UpsertSapConnectionInput {
  * function produced. A second spelling of "normalize" there would let
  * "dev" slip past a row stored as "DEV" — one fact, one definition.
  */
-export function normalizeEnvironment(value: string | null | undefined): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed.toUpperCase() : null;
+export function normalizeEnvironment(value: string | null | undefined): SapEnvironment | null {
+  return parseSapEnvironment(value);
 }
 
 export async function upsertSapConnection(input: UpsertSapConnectionInput): Promise<RedactedSapConnection> {

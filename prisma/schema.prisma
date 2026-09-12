@@ -655,12 +655,22 @@ model SapConnection {
   baseUrl           String
   /// "basic" | "bearer" | "oauth-client-credentials".
   authType          String
-  /// Which SAP environment this points at — "DEV" | "TEST" | "PROD", free text
-  /// so a landscape with other names is not forced to lie. NULL means unknown,
-  /// and unknown renders no environment chip: a guess printed as a fact on the
-  /// control that exists to stop an accidental write to production would be
-  /// worse than saying nothing.
-  environment       String?
+  /// Which SAP environment this points at. NULL means UNDECLARED, and undeclared
+  /// renders no environment chip: a guess printed as a fact on the control that
+  /// exists to stop an accidental write to production would be worse than
+  /// saying nothing.
+  ///
+  /// WAS FREE TEXT, NOW AN ENUM (settled decision D1). "Free text so a landscape
+  /// with other names is not forced to lie" was the original reasoning, and the
+  /// cost of it was that `resolveSapConnectionForEnvironment` matched on an
+  /// upper-cased string: "Dev", "dev " and "DEV" were one landscape only because
+  /// `normalizeEnvironment` happened to run on the write path, and nothing
+  /// stopped a row reaching the table by any other route. A credential is bound
+  /// to one of exactly four trust levels (SolutionClient.environment,
+  /// ApiAccessGrant.environment), so a connection that claims a fifth could
+  /// never be bound to anything — it was not expressiveness, it was a value the
+  /// binding could not use.
+  environment       SapEnvironment?
   /// OAuth token endpoint — non-secret; null unless authType is oauth.
   oauthTokenUrl     String?
   /// AES-256-GCM sealed JSON bundle of the secret fields. Never logged/returned.
@@ -704,12 +714,22 @@ model SapConnection {
   /// ALSO CONSTRAINED BY A PARTIAL UNIQUE INDEX Prisma cannot express:
   /// SapConnection_active_binding_tuple on (organizationId, product,
   /// environment, client) NULLS NOT DISTINCT, WHERE isActive AND environment
-  /// IS NOT NULL — see migrations/20260731010000_connection_binding_tuple.
+  /// IS NOT NULL — created by migrations/20260731010000_connection_binding_tuple
+  /// and RECREATED by 20260912010000_sap_environment_enum, which retypes the
+  /// column the index is built on (Postgres drops an index when its column's
+  /// type changes, so the migration that changes the type owns rebuilding it).
   /// It stops two ACTIVE connections becoming indistinguishable to
   /// resolveSapConnectionForEnvironment, which would otherwise refuse every
-  /// request for that environment as AMBIGUOUS. Because it lives only in
-  /// SQL, `prisma db push` against a scratch database will not create it —
-  /// migrate, don't push.
+  /// request for that environment as AMBIGUOUS.
+  ///
+  /// BECAUSE IT LIVES ONLY IN SQL, `prisma db push` against a scratch database
+  /// will not create it — and ci.yml's fast jobs use exactly that. So the
+  /// invariant is enforced TWICE on purpose: here in the database for every
+  /// environment built from migration history, and in the API at
+  /// api/studio/connections POST, which refuses the twin with a sentence naming
+  /// the other connection while the consultant is still looking at the form.
+  /// The route check is what a db-push database has; the index is what stops a
+  /// row arriving by any other door. Neither alone is enough.
   @@unique([organizationId, product, key])
   @@index([organizationId, product])
   @@index([organizationId, isActive])
@@ -837,7 +857,7 @@ model SapConnectionProbeEvent {
 /// home as the jobs strip.
 model CronRunLog {
   id  String @id @default(cuid())
-  /// northbound-reap | connection-probes | analytics | trials
+  /// northbound-reap | northbound-retention | connection-probes | analytics | trials
   job String
 
   startedAt   DateTime
@@ -1037,7 +1057,21 @@ model SolutionClient {
 model NorthboundAuditEvent {
   id             String  @id @default(cuid())
   organizationId String
-  solutionId     String
+  /// Which solution made the call — NULL when no solution did.
+  ///
+  /// NULLABLE SINCE THE CONSOLE READS BECAME AUDITED. `/api/sap/tdd/preview`,
+  /// `/entities` and `/operations` reach a customer's SAP system on a human's
+  /// behalf, with no solution and no credential anywhere in the request: the
+  /// caller is a signed-in consultant, the tenant comes from a query parameter,
+  /// and the row that proves the read happened has no solution to name. It was
+  /// previously NOT NULL, which is the reason those reads were unaudited — there
+  /// was no honest value to put here, and a sentinel like "-console-" would have
+  /// invented a solution that does not exist and then grouped every console read
+  /// in the estate under it on the operations board.
+  ///
+  /// So: a machine call names its solution, a console read names its actor in
+  /// `actorUserId`, and exactly one of the two is set on every row.
+  solutionId     String?
   interfaceId    String?
 
   /// READ | WRITE
@@ -1052,7 +1086,21 @@ model NorthboundAuditEvent {
 
   correlationId String
   /// Which SolutionClient was used, so a leaked token can be traced and revoked.
-  clientTokenId String
+  /// NULL on a console read, which presents no credential — see `solutionId`.
+  clientTokenId String?
+
+  /// Which USER caused this read, when a human did.
+  ///
+  /// The console counterpart of `clientTokenId`: the two answer the same
+  /// question — "who is accountable for this call?" — for the two kinds of
+  /// caller the broker serves. Set on `/api/sap/tdd/*` reads, NULL on every
+  /// machine call, and the pair is what makes "a read nobody is accountable
+  /// for" (the sentence in probe-guard.ts's own header) impossible to write.
+  ///
+  /// Not a relation: this table is append-only and must outlive the user row it
+  /// names. A foreign key with a cascade would delete audit history when an
+  /// employee leaves, which is the one edit an audit trail must not permit.
+  actorUserId   String?
 
   /// Why the broker refused before it reached a connection, or null if it did.
   ///
@@ -1103,6 +1151,17 @@ model NorthboundAuditEvent {
 
   @@index([organizationId, solutionId, at])
   @@index([organizationId, clientTokenId, at])
+  /// EXACT-MATCH CORRELATION LOOKUP. Every northbound response hands the caller a
+  /// correlationId and the manual tells them to quote it; until this index existed
+  /// there was no query path that could find the row again, on a table with no
+  /// retention that only ever grew. Scoped by organization because every read of
+  /// this table is, and because an unscoped equality on a shared id column is a
+  /// cross-tenant lookup waiting to be written.
+  @@index([organizationId, correlationId])
+  @@index([organizationId, actorUserId, at])
+  /// The retention sweep deletes by age, oldest first. Without this it is a
+  /// sequential scan of the whole table on every run.
+  @@index([at])
 }
 
 /// Idempotency for northbound writes.
@@ -1171,6 +1230,65 @@ model MockFixture {
   capturedAt DateTime @default(now())
 
   @@index([organizationId, interfaceId, scenario])
+}
+
+/// Every attempt to use one of the two intentional auth backdoors.
+///
+/// WHY A TABLE AND NOT A LOG LINE. `logBackdoorAttempt` wrote `console.warn`,
+/// under a doc comment calling it "audit-logged" and claiming the shape was
+/// "stable enough for log-based alerting". A successful sign-in as
+/// `platform_admin` through `/api/auth/test-login` therefore left NO trace inside
+/// the product: nothing queryable, nothing joinable to a session, and a retention
+/// window set by whoever operates the log sink rather than by this repository.
+/// The audit that found this could only establish the endpoint existed, not
+/// whether anyone had ever used it.
+///
+/// APPEND-ONLY, like the northbound trail: the module that writes it exposes a
+/// write and nothing else. Deliberately NOT related to `User` — an attempt
+/// records an email that frequently belongs to no user at all (a wrong guess, a
+/// disallowed domain), and a foreign key would make the failed attempts, which
+/// are the interesting ones, unrecordable.
+model BackdoorAttempt {
+  id String @id @default(cuid())
+
+  /// "/api/auth/test-login" | "/api/auth/verify-izzat"
+  endpoint String
+  /// success | denied:disabled | denied:env | denied:secret | denied:ip | denied:user | denied:role
+  outcome  String
+
+  /// From the Vercel-trusted, non-spoofable header — see lib/security/client-ip.
+  ipAddress String?
+  /// Truncated at the call site; a UA is attacker-controlled and unbounded.
+  userAgent String?
+  /// The email the caller asked for, which may belong to no user.
+  email     String?
+  /// Set only when an attempt actually minted a session for an existing user.
+  userId    String?
+
+  at DateTime @default(now())
+
+  @@index([at])
+  @@index([endpoint, at])
+  @@index([outcome, at])
+}
+
+/// The four trust levels a SAP landscape can be declared at.
+///
+/// The SAME four words `SolutionClient.environment` and `ApiAccessGrant.environment`
+/// use, which is the point: the binding compares a credential's environment with a
+/// connection's, so a value one side can hold and the other cannot is a row that can
+/// never bind. Those two columns stay `String` for now — they are written by paths
+/// this migration does not touch — and `parseSapEnvironment` is the one gate between
+/// a string and this type.
+///
+/// NULL on SapConnection.environment is NOT a member of this enum and never becomes
+/// one: "undeclared" is the absence of a declaration, and the resolver treats it as
+/// such (a read proceeds flagged `bindingUnverified`, a write refuses outright).
+enum SapEnvironment {
+  SANDBOX
+  DEV
+  TEST
+  PROD
 }
 
 enum SolutionKind {
