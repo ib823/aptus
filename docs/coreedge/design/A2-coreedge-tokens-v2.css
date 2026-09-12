@@ -1,0 +1,104 @@
+/* CoreEdge design tokens v2 — complete set for the Lanes redesign.
+ * Colour values are the ones SHIPPING in src/app/globals.css (:root) today — where
+ * docs/coreedge/CoreEdge-Design-Tokens.md disagrees (--ink-muted, --decision-custom,
+ * --decision-open) the code wins. Everything under "NEW" fills the gaps found in the
+ * 11 Sep 2026 UI inventory (17 font sizes, 57 paddings, 15 radii in code).
+ * Light theme = :root. Dark theme = [data-theme="dark"] (NEW — the console has none today).
+ */
+:root{
+  /* ── Brand ─────────────────────────────── */
+  --brand-navy:#002B5C; --brand-navy-hover:#001E40; --brand-navy-soft:#E6EBF1; --brand-navy-border:#CFD7E0;
+  --cta-red:#C8102E; --cta-red-hover:#A30D26; --cta-red-focus:#FBE9EC;   /* red = irreversible commit ONLY */
+
+  /* ── Surfaces & ink ────────────────────── */
+  --surface-cream:#FAF9F5;   /* app ground */
+  --surface-paper:#FFFFFE;   /* cards, panels, inputs */
+  --surface-ink-tint:#F4F2EB;/* table headers, subtle fills */
+  --surface-banner-warn:#FDF7E6;
+  --surface-rail:#002B5C;    /* NEW alias: left navigation */
+  --ink-primary:#1A1A1A; --ink-secondary:#4A4A4A; --ink-muted:#6B6B6B; --ink-disabled:#C4C4C4;
+  --ink-on-navy:#FFFFFF; --ink-on-navy-muted:rgba(255,255,255,0.72);
+  --border-default:#E5E1D6; --border-strong:#C4BFAE; --border-focus:var(--brand-navy);
+  --focus-ring-navy:#002B5C;          /* NEW v1.1: focus is not a status — navy, not CTA red */
+  --focus-ring:var(--focus-ring-navy);
+
+  /* ── Semantic ──────────────────────────── */
+  --success:#166534; --warning:#B45309; --danger:#991B1B; --info:#1E40AF;
+
+  /* ── Status pairs (bg / fg) ────────────── */
+  --status-draft-bg:#F4F2EB;   --status-draft-fg:#4A4A4A;
+  --status-sent-bg:#E0EBF4;    --status-sent-fg:#1A4D6F;
+  --status-awaiting-bg:#FBE9D1;--status-awaiting-fg:#8B5A00;
+  --status-signed-bg:#DCEBE3;  --status-signed-fg:#166534;
+  --status-expired-bg:#EAEAE6; --status-expired-fg:#5C5C5C;
+  --status-revoked-bg:#F4DEDB; --status-revoked-fg:#8E2A26;
+  --status-nocheck-bg:#EFEDE6; --status-nocheck-fg:#5F5F5F;
+
+  /* ── NEW: lane gates (A·S·K·T) — aliases onto status pairs ── */
+  --gate-ok-bg:var(--status-signed-bg);     --gate-ok-fg:var(--status-signed-fg);      /* proven, current */
+  --gate-wait-bg:var(--status-awaiting-bg); --gate-wait-fg:var(--status-awaiting-fg);  /* in review / pending */
+  --gate-bad-bg:var(--status-revoked-bg);   --gate-bad-fg:var(--status-revoked-fg);    /* broken hop */
+  --gate-info-bg:var(--status-sent-bg);     --gate-info-fg:var(--status-sent-fg);      /* informational (empty, expiring) */
+  --gate-off-bg:var(--status-nocheck-bg);   --gate-off-fg:var(--status-nocheck-fg);    /* not started / unknown / stale */
+
+  /* ── Decision palette (catalogue classification) ── */
+  --decision-standard:#0F766E; --decision-configure:#1D4ED8; --decision-custom:#9A4A08; --decision-open:#6B6B6B;
+
+  /* ── NEW: type ─────────────────────────── */
+  --font-sans:"Geist","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"Geist Mono","SF Mono",Consolas,monospace;       /* identifiers: SAP API ids, PO numbers, keys */
+  --font-serif:"Source Serif 4","Tiempos Headline",Georgia,serif;/* display + section titles only */
+  --text-caption:11px;  --leading-caption:16px;   /* uppercase labels, tracking-caps */
+  --text-small:12px;    --leading-small:18px;
+  --text-body-sm:13px;  --leading-body-sm:20px;
+  --text-body:14px;     --leading-body:22px;      /* default */
+  --text-h3:16px;       --leading-h3:24px;
+  --text-h2:20px;       --leading-h2:28px;
+  --text-h1:24px;       --leading-h1:32px;
+  --text-display:32px;  --leading-display:40px;   /* serif */
+  --weight-regular:400; --weight-medium:500; --weight-semibold:600; --weight-bold:700;
+  --tracking-tight:-0.01em; --tracking-normal:0; --tracking-caps:0.06em;
+
+  /* ── NEW: space (4-pt) ─────────────────── */
+  --space-0:0; --space-1:2px; --space-2:4px; --space-3:6px; --space-4:8px; --space-5:12px;
+  --space-6:16px; --space-7:20px; --space-8:24px; --space-9:32px; --space-10:40px; --space-11:48px;
+
+  /* ── Radius ────────────────────────────── */
+  --radius-xs:4px; --radius-sm:6px; --radius-input:8px; --radius-card-warm:12px; --radius-pill:9999px;
+
+  /* ── Elevation ─────────────────────────── */
+  --shadow-card-warm:0 1px 2px rgba(20,20,20,0.04),0 1px 0 rgba(20,20,20,0.02);
+  --shadow-card-warm-hover:0 4px 10px rgba(20,20,20,0.06),0 2px 4px rgba(20,20,20,0.04);
+  --shadow-raised:0 8px 24px rgba(0,43,92,0.08);   /* NEW: popovers, sheets */
+  --shadow-overlay:0 16px 40px rgba(0,43,92,0.12); /* NEW: dialogs */
+
+  /* ── Motion (existing) ─────────────────── */
+  --ease-snap:cubic-bezier(0.2,0,0.13,1); --ease-calm:cubic-bezier(0.4,0,0.2,1); --ease-hero:cubic-bezier(0.16,1,0.3,1);
+  --dur-snap:100ms; --dur-calm:200ms; --dur-hero:320ms;
+
+  /* ── NEW: layout ───────────────────────── */
+  --rail-width:220px; --topbar-height:56px; --content-max:1280px; --panel-width:420px;
+  --bp-phone:520px; --bp-tablet:900px; --bp-desktop:1280px;
+  --z-sticky:10; --z-popover:40; --z-sheet:50; --z-dialog:60; --z-toast:70;
+  --target-min:32px; /* WCAG 2.2 target size floor used by CoreEdge */
+}
+
+/* NEW: dark theme — same token names, values tuned for contrast on a navy-black ground */
+:root[data-theme="dark"]{
+  --brand-navy:#8FB4E8; --brand-navy-hover:#AFC9EE; --brand-navy-soft:#1B2A40; --brand-navy-border:#2B3D57;
+  --cta-red:#F0707F; --cta-red-hover:#F48C98; --cta-red-focus:#3A1C22;
+  --surface-cream:#0F141C; --surface-paper:#161D28; --surface-ink-tint:#1C2431; --surface-banner-warn:#2A2415; --surface-rail:#0A1F3D;
+  --ink-primary:#ECEAE3; --ink-secondary:#C3C0B7; --ink-muted:#8F8C84; --ink-disabled:#5A5A5A;
+  --border-default:#2A3240; --border-strong:#3A4454;
+  --focus-ring-navy:#8FB4E8; --focus-ring:var(--focus-ring-navy);
+  --success:#7FD29A; --warning:#F2C069; --danger:#F2A097; --info:#9CC6EA;
+  --status-draft-bg:#1C2431;   --status-draft-fg:#C3C0B7;
+  --status-sent-bg:#172A3C;    --status-sent-fg:#9CC6EA;
+  --status-awaiting-bg:#33260F;--status-awaiting-fg:#F2C069;
+  --status-signed-bg:#16301F;  --status-signed-fg:#7FD29A;
+  --status-expired-bg:#222A35; --status-expired-fg:#A3A09A;
+  --status-revoked-bg:#3A1C1A; --status-revoked-fg:#F2A097;
+  --status-nocheck-bg:#222A35; --status-nocheck-fg:#A3A09A;
+  --shadow-card-warm:0 1px 2px rgba(0,0,0,0.3); --shadow-card-warm-hover:0 4px 12px rgba(0,0,0,0.35);
+  --shadow-raised:0 8px 24px rgba(0,0,0,0.4); --shadow-overlay:0 16px 40px rgba(0,0,0,0.5);
+}

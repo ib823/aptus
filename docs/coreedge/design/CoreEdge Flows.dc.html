@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; }
+  a { color: #002B5C; text-decoration: none; }
+  a:hover { color: #001E40; text-decoration: underline; }
+</style>
+</helmet>
+
+<div style="--mono:'Geist Mono','SF Mono',Consolas,monospace;--serif:'Source Serif 4','Tiempos Headline',Georgia,serif;font-family:Geist,Inter,system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px;line-height:22px;color:#1A1A1A;background:#F4F2EB;min-height:100vh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased">
+
+  <div style="flex:none;padding:24px 32px 16px;display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:flex-end;border-bottom:1px solid #E5E1D6;background:#FAF9F5">
+    <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+      <div style="font-family:var(--mono);font-size:11px;line-height:16px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B">CoreEdge · clickable flows</div>
+      <h1 style="margin:0;font-family:var(--serif);font-size:24px;line-height:32px;font-weight:600">{{ flowTitle }}</h1>
+      <div style="font-size:13px;line-height:20px;color:#4A4A4A;max-width:80ch">{{ flowSub }}</div>
+    </div>
+    <div style="flex:none;display:flex;gap:8px">
+      <button type="button" onClick="{{ pickA }}" style="{{ tabAStyle }}">Flow A · Builder golden path</button>
+      <button type="button" onClick="{{ pickB }}" style="{{ tabBStyle }}">Flow B · Operator failure</button>
+    </div>
+  </div>
+
+  <div style="flex:1;display:grid;grid-template-columns:288px minmax(0,1fr);align-items:stretch">
+
+    <div style="border-right:1px solid #E5E1D6;background:#FAF9F5;padding:16px;display:flex;flex-direction:column;gap:2px">
+      <div style="font-family:var(--mono);font-size:11px;line-height:16px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;padding:0 8px 8px">{{ stepCount }}</div>
+      <sc-for list="{{ steps }}" as="s" hint-placeholder-count="12">
+        <button type="button" onClick="{{ s.go }}" style="{{ s.railStyle }}">
+          <span style="{{ s.numStyle }}">{{ s.num }}</span>
+          <span style="min-width:0;flex:1;text-align:left">
+            <span style="{{ s.labelStyle }}">{{ s.label }}</span>
+            <span style="display:block;font-size:11px;line-height:16px;color:#6B6B6B">{{ s.who }}</span>
+          </span>
+        </button>
+      </sc-for>
+      <div style="margin-top:auto;padding:12px 8px 0;border-top:1px solid #E5E1D6;font-size:12px;line-height:18px;color:#4A4A4A">Role changes are shown as a different person&rsquo;s screen. Nobody signs out, and no step asks you to.</div>
+    </div>
+
+    <div style="min-width:0;padding:24px;display:flex;flex-direction:column;gap:16px">
+
+      <sc-if value="{{ handover }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:12px;align-items:center;background:#002B5C;color:#FFFFFF;border-radius:8px;padding:12px 16px">
+          <span aria-hidden="true" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:9999px;background:#FFFFFF;color:#002B5C;font-size:12px;font-weight:700">{{ handoverInitial }}</span>
+          <div style="min-width:0;flex:1">
+            <div style="font-size:13px;line-height:20px;font-weight:600">{{ handoverTitle }}</div>
+            <div style="font-size:12px;line-height:18px;color:#CFD7E0">{{ handoverBody }}</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:flex-end">
+        <div style="min-width:0">
+          <div style="font-family:var(--mono);font-size:11px;line-height:16px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B">{{ stagePlace }}</div>
+          <div style="font-family:var(--serif);font-size:20px;line-height:28px;font-weight:600">{{ stageTitle }}</div>
+        </div>
+        <div style="flex:none;display:flex;gap:8px;align-items:center">
+          <button type="button" onClick="{{ prev }}" style="min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #C4BFAE;background:#FFFFFE;color:#002B5C;font-family:inherit;font-size:13px;line-height:20px;font-weight:500;cursor:pointer">&larr; Back</button>
+          <span style="font-family:var(--mono);font-size:12px;color:#6B6B6B">{{ position }}</span>
+        </div>
+      </div>
+
+      <div style="min-width:0;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden;box-shadow:0 1px 2px rgba(20,20,20,0.04)">
+        <div style="padding:10px 16px;background:#FAF9F5;border-bottom:1px solid #E5E1D6;display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:#4A4A4A">{{ frameCrumb }}</span>
+          <span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#E6EBF1;color:#002B5C;font-size:12px;font-weight:600">{{ persona }}</span>
+        </div>
+        <div style="padding:16px;background:#F4F2EB">
+
+          <sc-if value="{{ a1 }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#FAF9F5;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+              <div style="padding:16px;background:#FFFFFE;border-bottom:1px solid #E5E1D6;display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;align-items:flex-end">
+                <div><h2 style="margin:0;font-family:var(--serif);font-size:24px;line-height:32px;font-weight:600">Needs you</h2><div style="font-size:13px;color:#4A4A4A">4 things, most urgent first · Thursday 11 Sep 2026, 09:41 MYT</div></div>
+                <button type="button" onClick="{{ next }}" style="min-height:36px;white-space:nowrap;padding:0 16px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Find a data feed</button>
+              </div>
+              <div style="padding:16px;display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;align-items:center;gap:12px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:12px 16px;padding-left:0;overflow:hidden">
+                  <div style="width:4px;align-self:stretch;background:#991B1B;flex:none"></div>
+                  <div style="min-width:0;flex:1"><div style="font-weight:500">Bank details · Dev is blocked by SAP</div><div style="font-size:12px;line-height:18px;color:#4A4A4A">Data read 403, metadata OK · Mei Ling sent it to the client's SAP admin · 32 m ago</div></div>
+                  <span style="flex:none;display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#F4DEDB;color:#8E2A26;font-size:12px;font-weight:600;white-space:nowrap">✕ SAP refused</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:12px 16px;padding-left:0;overflow:hidden">
+                  <div style="width:4px;align-self:stretch;background:#B45309;flex:none"></div>
+                  <div style="min-width:0;flex:1"><div style="font-weight:500">Access ends in 12 days · Attachments · Test</div><div style="font-size:12px;line-height:18px;color:#4A4A4A">Renewing keeps the same key and fields · ends 23 Sep 2026, 23:59 MYT</div></div>
+                  <button type="button" style="flex:none;min-height:32px;white-space:nowrap;padding:0 16px;border:1px solid #C4BFAE;border-radius:8px;background:#FFFFFE;color:#002B5C;font-family:inherit;font-size:13px;line-height:20px;font-weight:500;cursor:pointer">Renew access</button>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:12px 16px;padding-left:0;overflow:hidden">
+                  <div style="width:4px;align-self:stretch;background:#1E40AF;flex:none"></div>
+                  <div style="min-width:0;flex:1"><div style="font-weight:500">Review access · Supplier Spend → Test</div><div style="font-size:12px;line-height:18px;color:#4A4A4A">Requested by Farid · 3 checks green, 1 running · waiting 2 h</div></div>
+                  <span style="flex:none;display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#FBE9D1;color:#8B5A00;font-size:12px;font-weight:600;white-space:nowrap">… In review</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:12px 16px;padding-left:0;overflow:hidden">
+                  <div style="width:4px;align-self:stretch;background:#5F5F5F;flex:none"></div>
+                  <div style="min-width:0;flex:1"><div style="font-weight:500">Attachments · Dev has not been checked since 9 Sep <span style="font-family:var(--mono);font-size:11px;color:#6B6B6B;border:1px solid #E5E1D6;border-radius:4px;padding:0 4px">example</span></div><div style="font-size:12px;line-height:18px;color:#4A4A4A">Past the 24 h expiry, so CoreEdge stops claiming to know · last proven 9 Sep 14:20 MYT</div></div>
+                  <button type="button" style="flex:none;min-height:32px;white-space:nowrap;padding:0 16px;border:1px solid #C4BFAE;border-radius:8px;background:#FFFFFE;color:#002B5C;font-family:inherit;font-size:13px;line-height:20px;font-weight:500;cursor:pointer">Re-check</button>
+                </div>
+                <div style="font-family:var(--mono);font-size:11px;line-height:16px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;padding-top:8px">My apps · 2</div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap">
+                  <div style="flex:1;min-width:240px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:12px 16px"><div style="font-weight:500">Purchase Order Tracker</div><div style="font-size:12px;color:#6B6B6B">1 feed · 4 lanes · 1 refused</div></div>
+                  <div style="flex:1;min-width:240px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:12px 16px"><div style="font-weight:500">Delivery Tracker <span style="font-family:var(--mono);font-size:11px;color:#6B6B6B;border:1px solid #E5E1D6;border-radius:4px;padding:0 4px">example</span></div><div style="font-size:12px;color:#6B6B6B">1 feed · 4 lanes · 1 ends in 12 d</div></div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ a2 }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+              <div style="padding:16px;border-bottom:1px solid #E5E1D6;display:flex;flex-direction:column;gap:12px">
+                <div style="font-size:12px;color:#6B6B6B">Catalogue › purchase orders</div>
+                <div style="display:flex;align-items:center;gap:8px;min-height:40px;padding:8px 12px;border:1px solid #002B5C;border-radius:8px;background:#FFFFFE;outline:2px solid #002B5C;outline-offset:1px"><span style="font-size:14px">purchase orders</span><span style="margin-left:auto;flex:none;font-size:12px;color:#166534;font-weight:500">2 results</span></div>
+              </div>
+              <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+                <div style="border:2px solid #002B5C;border-radius:8px;padding:16px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;background:#FAF9F5">
+                  <div style="min-width:0;flex:1">
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline"><span style="font-size:15px;font-weight:600">Purchase orders</span><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:12px;font-weight:600">✓ Proven · 7 d</span></div>
+                    <div style="font-family:var(--mono);font-size:12px;color:#6B6B6B">CE_PURCHASEORDER_0001 · PurchaseOrder · 71 fields</div>
+                    <div style="font-size:12px;line-height:18px;color:#4A4A4A;padding-top:4px">Purchase order headers. Used by 2 apps, read-only in every environment.</div>
+                  </div>
+                  <button type="button" onClick="{{ next }}" style="flex:none;min-height:44px;padding:0 20px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Add to Purchase Order Tracker</button>
+                </div>
+                <div style="border:1px solid #E5E1D6;border-radius:8px;padding:16px;display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+                  <div style="min-width:0;flex:1">
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline"><span style="font-size:15px;font-weight:600">Purchase requisitions</span><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:12px;font-weight:600">✓ Proven · 7 d</span></div>
+                    <div style="font-family:var(--mono);font-size:12px;color:#6B6B6B">API_PURCHASEREQ_PROCESS_SRV · 48 fields</div>
+                  </div>
+                  <button type="button" style="flex:none;min-height:44px;padding:0 20px;border:1px solid #C4BFAE;border-radius:8px;background:#FFFFFE;color:#002B5C;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Add</button>
+                </div>
+                <div style="font-size:12px;line-height:18px;color:#6B6B6B">Plain words first, the SAP identifier underneath. Nothing here reveals whether you have access — that is the lane's job, not the catalogue's.</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ a3 }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+              <div style="padding:16px;border-bottom:1px solid #E5E1D6"><div style="font-family:var(--serif);font-size:20px;line-height:28px;font-weight:600">Which fields should leave SAP?</div><div style="font-size:12px;color:#6B6B6B">Purchase orders · PurchaseOrder</div></div>
+              <div style="padding:16px;display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;align-items:start">
+                <div style="border:1px solid #E5E1D6;border-radius:8px;overflow:hidden">
+                  <div style="padding:8px 12px;background:#F4F2EB;border-bottom:1px solid #E5E1D6"><span style="font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;font-weight:600;white-space:nowrap">12 of 71 chosen</span></div>
+                  <div style="display:flex;flex-direction:column">
+                    <label style="display:flex;gap:12px;align-items:center;padding:8px 12px;border-bottom:1px solid #E5E1D6"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:#002B5C;color:#FFFFFF;font-size:11px;font-weight:700">✓</span><span style="min-width:0;flex:1;font-family:var(--mono);font-size:13px">PurchaseOrder</span><span style="flex:none;font-size:11px;color:#6B6B6B">key</span></label>
+                    <label style="display:flex;gap:12px;align-items:center;padding:8px 12px;border-bottom:1px solid #E5E1D6"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:#002B5C;color:#FFFFFF;font-size:11px;font-weight:700">✓</span><span style="min-width:0;flex:1;font-family:var(--mono);font-size:13px">PurchaseOrderType</span></label>
+                    <label style="display:flex;gap:12px;align-items:center;padding:8px 12px;border-bottom:1px solid #E5E1D6"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:#002B5C;color:#FFFFFF;font-size:11px;font-weight:700">✓</span><span style="min-width:0;flex:1;font-family:var(--mono);font-size:13px">CompanyCode</span></label>
+                    <label style="display:flex;gap:12px;align-items:center;padding:8px 12px;border-bottom:1px solid #E5E1D6"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:#002B5C;color:#FFFFFF;font-size:11px;font-weight:700">✓</span><span style="min-width:0;flex:1;font-family:var(--mono);font-size:13px">Supplier</span></label>
+                    <label style="display:flex;gap:12px;align-items:center;padding:8px 12px;border-bottom:1px solid #E5E1D6"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:#002B5C;color:#FFFFFF;font-size:11px;font-weight:700">✓</span><span style="min-width:0;flex:1;font-family:var(--mono);font-size:13px">PurchaseOrderDate</span></label>
+                    <label style="display:flex;gap:12px;align-items:center;padding:8px 12px;border-bottom:1px solid #E5E1D6"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:#002B5C;color:#FFFFFF;font-size:11px;font-weight:700">✓</span><span style="min-width:0;flex:1;font-family:var(--mono);font-size:13px">DocumentCurrency</span></label>
+                    <label style="display:flex;gap:12px;align-items:center;padding:8px 12px;border-bottom:1px solid #E5E1D6"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:#002B5C;color:#FFFFFF;font-size:11px;font-weight:700">✓</span><span style="min-width:0;flex:1;font-family:var(--mono);font-size:13px">PurchasingOrganization</span></label>
+                    <label style="display:flex;gap:12px;align-items:center;padding:8px 12px;border-bottom:1px solid #E5E1D6"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:#002B5C;color:#FFFFFF;font-size:11px;font-weight:700">✓</span><span style="min-width:0;flex:1;font-family:var(--mono);font-size:13px">PurchasingGroup</span></label>
+                    <label style="display:flex;gap:12px;align-items:center;padding:8px 12px;border-bottom:1px solid #E5E1D6"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:#002B5C;color:#FFFFFF;font-size:11px;font-weight:700">✓</span><span style="min-width:0;flex:1;font-family:var(--mono);font-size:13px">PurchasingProcessingStatus</span></label>
+                    <label style="display:flex;gap:12px;align-items:center;padding:8px 12px;border-bottom:1px solid #E5E1D6"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:#002B5C;color:#FFFFFF;font-size:11px;font-weight:700">✓</span><span style="min-width:0;flex:1;font-family:var(--mono);font-size:13px">PaymentTerms</span></label>
+                    <label style="display:flex;gap:12px;align-items:center;padding:8px 12px;border-bottom:1px solid #E5E1D6"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:#002B5C;color:#FFFFFF;font-size:11px;font-weight:700">✓</span><span style="min-width:0;flex:1;font-family:var(--mono);font-size:13px">CreatedByUser</span></label>
+                    <label style="display:flex;gap:12px;align-items:center;padding:8px 12px;border-bottom:1px solid #E5E1D6"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:4px;background:#002B5C;color:#FFFFFF;font-size:11px;font-weight:700">✓</span><span style="min-width:0;flex:1;font-family:var(--mono);font-size:13px">LastChangeDateTime</span></label>
+                    <label style="display:flex;gap:12px;align-items:center;padding:8px 12px;color:#6B6B6B"><span style="flex:none;width:18px;height:18px;border-radius:4px;border:1px solid #C4BFAE;background:#FFFFFE"></span><span style="min-width:0;flex:1;font-family:var(--mono);font-size:13px">59 more fields</span></label>
+                  </div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:12px">
+                  <div style="border:1px solid #E5E1D6;border-radius:8px;padding:12px;background:#FAF9F5;display:flex;flex-direction:column;gap:8px"><div style="font-size:13px;font-weight:600">What a reviewer will see</div><div style="font-size:12px;line-height:18px;color:#4A4A4A">Exactly this list: <span style="font-weight:500">12 of 71</span>, read-only. Widening it later is a new decision, not an edit.</div><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:12px;font-weight:600;width:fit-content">✓ Read-only</span></div>
+                  <button type="button" onClick="{{ next }}" style="min-height:44px;padding:0 20px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Create the feed · Sandbox first</button>
+                  <div style="font-size:11px;line-height:16px;color:#6B6B6B">Sandbox needs no review: the SAP API Hub, no client data.</div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ a4 }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FAF9F5;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+              <div style="padding:16px;background:#FFFFFE;border-bottom:1px solid #E5E1D6;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-end">
+                <div><div style="font-family:var(--serif);font-size:20px;line-height:28px;font-weight:600">4 lanes</div><div style="font-size:12px;color:#6B6B6B">Purchase orders · 12 of 71 fields</div></div>
+                <span style="display:inline-flex;align-items:center;min-height:26px;padding:2px 8px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:12px;font-weight:600">✓ Sandbox live · just now</span>
+              </div>
+              <div style="padding:16px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+                <div style="background:#FFFFFE;border:1px solid #DCEBE3;border-top:3px solid #166534;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px">
+                  <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span style="font-size:13px;font-weight:600">Sandbox</span><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:12px;font-weight:600">✓ Live</span></div>
+                  <div style="font-size:11px;line-height:16px;color:#6B6B6B">SAP API Hub · no client data</div>
+                  <div style="display:flex;gap:4px;font-family:var(--mono);font-size:11px;color:#166534">A✓ S✓ K– T–</div>
+                  <div style="font-size:11px;line-height:16px;color:#4A4A4A">No key collected yet</div>
+                  <button type="button" onClick="{{ next }}" style="min-height:44px;padding:0 12px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:13px;line-height:20px;font-weight:500;cursor:pointer">Collect key</button>
+                </div>
+                <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-top:3px solid #C4BFAE;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px">
+                  <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span style="font-size:13px;font-weight:600">Dev</span><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#EFEDE6;color:#5F5F5F;font-size:12px;font-weight:600">– Not started</span></div>
+                  <div style="font-size:11px;line-height:16px;color:#6B6B6B">X5M/080</div>
+                  <div style="display:flex;gap:4px;font-family:var(--mono);font-size:11px;color:#6B6B6B">A– S– K– T–</div>
+                  <div style="font-size:11px;line-height:16px;color:#4A4A4A">Nothing requested</div>
+                  <button type="button" style="min-height:44px;padding:0 12px;border:1px solid #C4BFAE;border-radius:8px;background:#FFFFFE;color:#002B5C;font-family:inherit;font-size:13px;line-height:20px;font-weight:500;cursor:pointer">Request Dev</button>
+                </div>
+                <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-top:3px solid #C4BFAE;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px">
+                  <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span style="font-size:13px;font-weight:600">Test</span><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#EFEDE6;color:#5F5F5F;font-size:12px;font-weight:600">– Not started</span></div>
+                  <div style="font-size:11px;line-height:16px;color:#6B6B6B">X5M/100</div>
+                  <div style="display:flex;gap:4px;font-family:var(--mono);font-size:11px;color:#6B6B6B">A– S– K– T–</div>
+                  <div style="font-size:11px;line-height:16px;color:#4A4A4A">Needs a reviewer</div>
+                  <button type="button" style="min-height:44px;padding:0 12px;border:1px solid #C4BFAE;border-radius:8px;background:#FFFFFE;color:#002B5C;font-family:inherit;font-size:13px;line-height:20px;font-weight:500;cursor:pointer">Request Test</button>
+                </div>
+                <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-top:3px solid #C4BFAE;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px">
+                  <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span style="font-size:13px;font-weight:600">Prod</span><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#EFEDE6;color:#5F5F5F;font-size:12px;font-weight:600">– Not started</span></div>
+                  <div style="font-size:11px;line-height:16px;color:#6B6B6B">No system connected</div>
+                  <div style="display:flex;gap:4px;font-family:var(--mono);font-size:11px;color:#6B6B6B">A– S– K– T–</div>
+                  <div style="font-size:11px;line-height:16px;color:#4A4A4A">Promote after Test works</div>
+                  <button type="button" disabled="disabled" style="min-height:44px;padding:0 12px;border:1px solid #E5E1D6;border-radius:8px;background:#EFEDE6;color:#6B6B6B;font-family:inherit;font-size:13px;line-height:20px;font-weight:500;cursor:not-allowed">Promote →</button>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ a5 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+              <div style="flex:1;min-width:420px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden;box-shadow:0 16px 40px rgba(0,43,92,0.12)">
+                <div style="padding:16px;border-bottom:1px solid #E5E1D6"><div style="font-family:var(--serif);font-size:20px;line-height:28px;font-weight:600">Your Sandbox key</div><div style="font-size:12px;color:#6B6B6B">Purchase Order Tracker · created just now, when you opened this link</div></div>
+                <div style="padding:16px;display:flex;flex-direction:column;gap:16px">
+                  <div style="display:flex;gap:8px;align-items:center;padding:12px;border:1px solid #C4BFAE;border-radius:8px;background:#FAF9F5"><span style="min-width:0;flex:1;font-family:var(--mono);font-size:15px">ce_••••••7Kd</span><button type="button" style="flex:none;min-height:36px;padding:0 12px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:13px;line-height:20px;font-weight:500;cursor:pointer">Copy</button></div>
+                  <div style="display:flex;gap:12px;background:#FDF7E6;border:1px solid #E5E1D6;border-radius:8px;padding:12px"><span aria-hidden="true" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:9999px;background:#FBE9D1;color:#8B5A00;font-size:11px;font-weight:700">!</span><div style="font-size:12px;line-height:18px;color:#4A4A4A">Shown once. CoreEdge stores it one-way and cannot show it again — if it is lost, the app owner asks for a new link and this key stops working.</div></div>
+                  <div style="font-size:12px;line-height:18px;color:#4A4A4A">One key per app per environment, shared by every data feed the app is approved for. This is the app's <span style="font-weight:500">Sandbox</span> key.</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px solid #E5E1D6;padding-top:16px"><button type="button" onClick="{{ next }}" style="min-height:44px;padding:0 20px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Try it</button><span style="font-size:12px;color:#6B6B6B">or <span style="font-family:var(--mono);font-size:12px">coreedge pull --env sandbox</span></span></div>
+                </div>
+              </div>
+              <div style="flex:none;width:280px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:8px"><div style="font-size:13px;font-weight:600">If the link had expired</div><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#FBE9D1;color:#8B5A00;font-size:12px;font-weight:600;width:fit-content">… Key ready · link expired</span><div style="font-size:12px;line-height:18px;color:#4A4A4A">No key would exist at all — an expired link issues nothing. The lane keeps this state and offers <span style="font-weight:500">Send a new link</span>.</div></div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ a6 }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+              <div style="padding:16px;border-bottom:1px solid #E5E1D6;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-end">
+                <div><div style="font-family:var(--serif);font-size:20px;line-height:28px;font-weight:600">200 · 5 rows · 610 ms</div><div style="font-size:12px;color:#6B6B6B">Purchase orders · Sandbox · real rows, unmasked</div></div>
+                <span style="display:inline-flex;align-items:center;min-height:26px;padding:2px 8px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:12px;font-weight:600">✓ Live</span>
+              </div>
+              <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:#4A4A4A"><span style="border:1px solid #E5E1D6;border-radius:4px;padding:2px 8px;background:#FAF9F5">Sandbox</span><span style="border:1px solid #E5E1D6;border-radius:4px;padding:2px 8px;background:#FAF9F5">SAP API Hub</span><span style="border:1px solid #E5E1D6;border-radius:4px;padding:2px 8px;background:#FAF9F5;font-family:var(--mono)">ce_••••••7Kd</span><span style="border:1px solid #E5E1D6;border-radius:4px;padding:2px 8px;background:#FAF9F5">Purchase orders · 12 fields</span></div>
+                <div style="border:1px solid #E5E1D6;border-radius:8px;overflow:hidden">
+                  <table style="border-collapse:collapse;width:100%;font-size:12px">
+                    <thead><tr style="background:#F4F2EB"><th scope="col" style="text-align:left;padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;font-weight:600;white-space:nowrap">PurchaseOrder</th><th scope="col" style="text-align:left;padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;font-weight:600;white-space:nowrap">Type</th><th scope="col" style="text-align:left;padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;font-weight:600;white-space:nowrap">CompanyCode</th><th scope="col" style="text-align:left;padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;font-weight:600;white-space:nowrap">Supplier</th><th scope="col" style="text-align:left;padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;font-weight:600;white-space:nowrap">Date</th><th scope="col" style="text-align:left;padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;font-weight:600;white-space:nowrap">Currency</th></tr></thead>
+                    <tbody>
+                      <tr><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">4500000123</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">NB</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">1710</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">10300001</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">2026-09-02</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">MYR</td></tr>
+                      <tr><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">4500000124</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">NB</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">1710</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">10300007</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">2026-09-03</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">MYR</td></tr>
+                      <tr><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">4500000125</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">FO</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">1710</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">10300002</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">2026-09-05</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">MYR</td></tr>
+                      <tr><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">4500000126</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">NB</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">1720</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">10300011</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">2026-09-08</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);white-space:nowrap">MYR</td></tr>
+                      <tr><td style="padding:6px 12px;font-family:var(--mono);white-space:nowrap">4500000127</td><td style="padding:6px 12px;font-family:var(--mono);white-space:nowrap">NB</td><td style="padding:6px 12px;font-family:var(--mono);white-space:nowrap">1710</td><td style="padding:6px 12px;font-family:var(--mono);white-space:nowrap">10300004</td><td style="padding:6px 12px;font-family:var(--mono);white-space:nowrap">2026-09-10</td><td style="padding:6px 12px;font-family:var(--mono);white-space:nowrap">MYR</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px solid #E5E1D6;padding-top:12px">
+                  <button type="button" onClick="{{ next }}" style="min-height:44px;padding:0 20px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Promote to Test</button>
+                  <button type="button" style="min-height:44px;padding:0 16px;border:1px solid #C4BFAE;border-radius:8px;background:#FFFFFE;color:#002B5C;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Save this test</button>
+                  <span style="min-width:0;flex:1;font-size:12px;line-height:18px;color:#6B6B6B">Real rows from the API Hub, unmasked. Masking applies only to the fixture in the downloaded kit.</span>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ a7 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+              <div style="flex:1;min-width:440px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden;box-shadow:0 16px 40px rgba(0,43,92,0.12)">
+                <div style="padding:16px;border-bottom:1px solid #E5E1D6"><div style="font-family:var(--serif);font-size:20px;line-height:28px;font-weight:600">Promote to Test</div><div style="font-size:12px;color:#6B6B6B">Purchase orders · Purchase Order Tracker</div></div>
+                <div style="padding:16px;display:flex;flex-direction:column;gap:16px">
+                  <div style="display:flex;flex-direction:column;gap:8px"><span style="font-size:13px;font-weight:500">Fields · unchanged from Sandbox</span><div style="display:flex;flex-wrap:wrap;gap:4px">
+                    <span style="font-family:var(--mono);font-size:11px;border:1px solid #E5E1D6;border-radius:4px;padding:2px 6px;background:#FAF9F5">PurchaseOrder</span><span style="font-family:var(--mono);font-size:11px;border:1px solid #E5E1D6;border-radius:4px;padding:2px 6px;background:#FAF9F5">PurchaseOrderType</span><span style="font-family:var(--mono);font-size:11px;border:1px solid #E5E1D6;border-radius:4px;padding:2px 6px;background:#FAF9F5">CompanyCode</span><span style="font-family:var(--mono);font-size:11px;border:1px solid #E5E1D6;border-radius:4px;padding:2px 6px;background:#FAF9F5">Supplier</span><span style="font-family:var(--mono);font-size:11px;border:1px solid #E5E1D6;border-radius:4px;padding:2px 6px;background:#FAF9F5">PurchaseOrderDate</span><span style="font-family:var(--mono);font-size:11px;border:1px solid #E5E1D6;border-radius:4px;padding:2px 6px;background:#FAF9F5">DocumentCurrency</span><span style="font-family:var(--mono);font-size:11px;border:1px solid #E5E1D6;border-radius:4px;padding:2px 6px;background:#FAF9F5">PurchasingOrganization</span><span style="font-family:var(--mono);font-size:11px;border:1px solid #E5E1D6;border-radius:4px;padding:2px 6px;background:#FAF9F5">PurchasingGroup</span><span style="font-family:var(--mono);font-size:11px;border:1px solid #E5E1D6;border-radius:4px;padding:2px 6px;background:#FAF9F5">PurchasingProcessingStatus</span><span style="font-family:var(--mono);font-size:11px;border:1px solid #E5E1D6;border-radius:4px;padding:2px 6px;background:#FAF9F5">PaymentTerms</span><span style="font-family:var(--mono);font-size:11px;border:1px solid #E5E1D6;border-radius:4px;padding:2px 6px;background:#FAF9F5">CreatedByUser</span><span style="font-family:var(--mono);font-size:11px;border:1px solid #E5E1D6;border-radius:4px;padding:2px 6px;background:#FAF9F5">LastChangeDateTime</span>
+                  </div><span style="font-size:12px;color:#6B6B6B">12 of 71 · read-only</span></div>
+                  <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:13px;font-weight:500">Access ends</span><input type="text" value="10 Dec 2026" style="min-height:36px;padding:8px 12px;border:1px solid #002B5C;border-radius:8px;background:#FFFFFE;font-family:inherit;font-size:14px;line-height:22px;color:#1A1A1A;outline:2px solid #002B5C;outline-offset:1px" /></label>
+                  <div style="background:#E6EBF1;border:1px solid #CFD7E0;border-radius:8px;padding:12px"><div style="font-size:13px;font-weight:600;color:#002B5C">Access ends 10 Dec 2026, 23:59 MYT (UTC+8)</div><div style="font-size:12px;line-height:18px;color:#1A4D6F">The end of the day you picked, in your time zone. 90 days from today.</div></div>
+                  <label style="display:flex;flex-direction:column;gap:8px"><span style="font-size:13px;font-weight:500">Why you need it</span><textarea rows="2" style="padding:8px 12px;border:1px solid #C4BFAE;border-radius:8px;background:#FFFFFE;font-family:inherit;font-size:13px;line-height:20px;color:#1A1A1A;resize:vertical">Sandbox is proven. Test needs real purchase orders to validate the supplier matching.</textarea></label>
+                  <div style="display:flex;gap:8px;border-top:1px solid #E5E1D6;padding-top:16px"><button type="button" onClick="{{ next }}" style="min-height:44px;padding:0 20px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Send the request</button><button type="button" style="min-height:44px;padding:0 16px;border:1px solid #C4BFAE;border-radius:8px;background:#FFFFFE;color:#002B5C;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Cancel</button></div>
+                </div>
+              </div>
+              <div style="flex:none;width:280px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:8px"><div style="font-size:13px;font-weight:600">Who decides</div><div style="font-size:12px;line-height:18px;color:#4A4A4A">Nadia, or any reviewer who is not you and does not own this app. You cannot approve your own request, whatever else you are.</div><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#FBE9D1;color:#8B5A00;font-size:12px;font-weight:600;width:fit-content">… In review on send</span><div style="font-size:12px;line-height:18px;color:#4A4A4A">If this is the app's first Test access, a Test key goes to the app owner. Otherwise the existing Test key simply gains this feed.</div></div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ a8 }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FAF9F5;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+              <div style="padding:16px;background:#FFFFFE;border-bottom:1px solid #E5E1D6"><div style="font-family:var(--serif);font-size:20px;line-height:28px;font-weight:600">Requests</div><div style="font-size:12px;color:#4A4A4A">Nadia · 2 waiting on you · sorted by how long they have waited</div></div>
+              <div style="padding:16px;display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;align-items:center;gap:12px;background:#FFFFFE;border:2px solid #002B5C;border-radius:8px;padding:12px 16px">
+                  <div style="min-width:0;flex:1"><div style="font-weight:500">Purchase orders → Test</div><div style="font-size:12px;line-height:18px;color:#4A4A4A">Ikmal · Purchase Order Tracker · 6 of 71 fields, read-only · 4 checks green</div></div>
+                  <span style="flex:none;display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#FBE9D1;color:#8B5A00;font-size:12px;font-weight:600;white-space:nowrap">… 18 m</span>
+                  <button type="button" onClick="{{ next }}" style="flex:none;min-height:44px;padding:0 20px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Review</button>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:12px 16px">
+                  <div style="min-width:0;flex:1"><div style="font-weight:500">Supplier invoices → Test</div><div style="font-size:12px;line-height:18px;color:#4A4A4A">Farid · Supplier Spend · 3 checks green, 1 running</div></div>
+                  <span style="flex:none;display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#FBE9D1;color:#8B5A00;font-size:12px;font-weight:600;white-space:nowrap">… 2 h</span>
+                  <button type="button" style="flex:none;min-height:44px;padding:0 20px;border:1px solid #C4BFAE;border-radius:8px;background:#FFFFFE;color:#002B5C;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Review</button>
+                </div>
+                <div style="font-size:12px;line-height:18px;color:#6B6B6B;padding-top:4px">Nothing here is assigned. Both reviewers see both requests, and the first to decide closes it — the queue shows who is looking, so nobody decides twice.</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ a9 }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+              <div style="padding:16px;border-bottom:1px solid #E5E1D6;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-end">
+                <div><div style="font-family:var(--serif);font-size:20px;line-height:28px;font-weight:600">Purchase orders → Test</div><div style="font-size:12px;color:#4A4A4A">Ikmal · raised 09:23 MYT · 18 m ago</div></div>
+                <span style="display:inline-flex;align-items:center;min-height:26px;padding:2px 8px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:12px;font-weight:600">✓ 4 of 4 checks</span>
+              </div>
+              <div style="padding:16px;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start">
+                <div style="border:1px solid #E5E1D6;border-radius:8px;overflow:hidden">
+                  <div style="display:flex;gap:12px;padding:12px 16px;border-bottom:1px solid #E5E1D6;align-items:flex-start"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:11px;font-weight:700">✓</span><div style="min-width:0"><div style="font-size:13px;font-weight:500">Contract unchanged since Sandbox</div><div style="font-size:12px;line-height:18px;color:#4A4A4A">The same 12 fields, read-only. Nothing widened between environments.</div></div></div>
+                  <div style="display:flex;gap:12px;padding:12px 16px;border-bottom:1px solid #E5E1D6;align-items:flex-start"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:11px;font-weight:700">✓</span><div style="min-width:0"><div style="font-size:13px;font-weight:500">Sandbox lane proven</div><div style="font-size:12px;line-height:18px;color:#4A4A4A">200 · 5 rows · 610 ms, 12 minutes ago.</div></div></div>
+                  <div style="display:flex;gap:12px;padding:12px 16px;border-bottom:1px solid #E5E1D6;align-items:flex-start"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:11px;font-weight:700">✓</span><div style="min-width:0"><div style="font-size:13px;font-weight:500">A Test SAP system is connected</div><div style="font-size:12px;line-height:18px;color:#4A4A4A"><span style="font-family:var(--mono);font-size:12px">X5M/100</span> · data read 200 · probed 6 m ago.</div></div></div>
+                  <div style="display:flex;gap:12px;padding:12px 16px;align-items:flex-start"><span style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:11px;font-weight:700">✓</span><div style="min-width:0"><div style="font-size:13px;font-weight:500">Owners assigned, separate reviewer</div><div style="font-size:12px;line-height:18px;color:#4A4A4A">You didn't request this and don't own Purchase Order Tracker.</div></div></div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:12px">
+                  <div style="border:1px solid #E5E1D6;border-radius:8px;padding:16px;background:#FAF9F5;display:flex;flex-direction:column;gap:8px"><div style="font-size:13px;font-weight:600">What approving does</div><div style="font-size:12px;line-height:18px;color:#4A4A4A">Issues a Test key to Ikmal behind a one-time claim link, opens the Test lane for this feed only, and ends access on 10 Dec 2026, 23:59 MYT.</div></div>
+                  <button type="button" onClick="{{ next }}" style="min-height:44px;padding:0 20px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Approve</button>
+                  <button type="button" style="min-height:44px;padding:0 16px;border:1px solid #C4BFAE;border-radius:8px;background:#FFFFFE;color:#002B5C;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Approve until 11 Oct 2026</button>
+                  <button type="button" style="min-height:44px;padding:0 16px;border:1px solid transparent;border-radius:8px;background:transparent;color:#002B5C;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Reject…</button>
+                  <div style="font-size:11px;line-height:16px;color:#6B6B6B">A shorter end date is the narrower option here. Sandbox never appears as a choice: it needs no review at all.</div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ a10 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+              <div style="flex:1;min-width:420px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+                <div style="padding:16px;border-bottom:1px solid #E5E1D6"><div style="font-family:var(--serif);font-size:20px;line-height:28px;font-weight:600">Approved</div><div style="font-size:12px;color:#6B6B6B">Purchase orders → Test · Purchase Order Tracker</div></div>
+                <div style="padding:16px;display:flex;flex-direction:column;gap:16px">
+                  <div style="display:inline-flex;align-items:flex-start;gap:12px;background:#002B5C;color:#FFFFFF;border-radius:8px;padding:12px 16px"><span aria-hidden="true" style="flex:none;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:11px;font-weight:700">✓</span><div><div style="font-size:13px;line-height:20px;font-weight:600">Approved · Ikmal told</div><div style="font-size:12px;line-height:18px;color:#CFD7E0">A one-time claim link is on its way to the app owner.</div></div></div>
+                  <div style="border:1px solid #E5E1D6;border-radius:8px;padding:0 16px">
+                    <div style="display:grid;grid-template-columns:132px minmax(0,1fr);gap:8px;font-size:13px;padding:8px 0;border-bottom:1px solid #E5E1D6"><span style="color:#6B6B6B">Decided by</span><span>Nadia · 11 Sep 2026, 09:59 MYT</span></div>
+                    <div style="display:grid;grid-template-columns:132px minmax(0,1fr);gap:8px;font-size:13px;padding:8px 0;border-bottom:1px solid #E5E1D6"><span style="color:#6B6B6B">Terms</span><span>12 of 71 fields · read-only · ends 10 Dec 2026, 23:59 MYT</span></div>
+                    <div style="display:grid;grid-template-columns:132px minmax(0,1fr);gap:8px;font-size:13px;padding:8px 0"><span style="color:#6B6B6B">Key</span><span>Goes to Ikmal. Nadia never sees it.</span></div>
+                  </div>
+                  <button type="button" onClick="{{ next }}" style="min-height:44px;padding:0 20px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer;width:fit-content">Back to Ikmal's screen</button>
+                </div>
+              </div>
+              <div style="flex:none;width:280px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:8px"><div style="font-size:13px;font-weight:600">Ikmal's lane, right now</div><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#FBE9D1;color:#8B5A00;font-size:12px;font-weight:600;width:fit-content">… No key · Purchase orders · Test</span><div style="font-size:12px;line-height:18px;color:#4A4A4A">Not <span style="font-weight:500">No access</span> — access is approved. The gate still open is the key.</div></div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ a11 }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FAF9F5;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+              <div style="padding:16px;background:#FFFFFE;border-bottom:1px solid #E5E1D6"><h2 style="margin:0;font-family:var(--serif);font-size:24px;line-height:32px;font-weight:600">Needs you</h2><div style="font-size:13px;color:#4A4A4A">Ikmal · 4 things · 09:59 MYT</div></div>
+              <div style="padding:16px;display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;align-items:center;gap:12px;background:#FFFFFE;border:2px solid #002B5C;border-radius:8px;padding:12px 16px;padding-left:0;overflow:hidden">
+                  <div style="width:4px;align-self:stretch;background:#166534;flex:none"></div>
+                  <div style="min-width:0;flex:1"><div style="font-weight:500">Key ready · Purchase orders · Test</div><div style="font-size:12px;line-height:18px;color:#4A4A4A">Collect it with a one-time claim link · access until 10 Dec 2026, 23:59 MYT <span style="color:#6B6B6B">· or</span> <span style="font-family:var(--mono)">coreedge pull --env test</span></div></div>
+                  <button type="button" onClick="{{ next }}" style="flex:none;min-height:44px;padding:0 20px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Collect key</button>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:12px 16px;padding-left:0;overflow:hidden">
+                  <div style="width:4px;align-self:stretch;background:#991B1B;flex:none"></div>
+                  <div style="min-width:0;flex:1"><div style="font-weight:500">Bank details · Dev is blocked by SAP</div><div style="font-size:12px;line-height:18px;color:#4A4A4A">Data read 403, metadata OK · Mei Ling is on it</div></div>
+                  <span style="flex:none;display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#F4DEDB;color:#8E2A26;font-size:12px;font-weight:600;white-space:nowrap">✕ SAP refused</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:12px 16px;padding-left:0;overflow:hidden">
+                  <div style="width:4px;align-self:stretch;background:#B45309;flex:none"></div>
+                  <div style="min-width:0;flex:1"><div style="font-weight:500">Access ends in 12 days · Attachments · Test</div><div style="font-size:12px;line-height:18px;color:#4A4A4A">Renewing keeps the same key and fields · ends 23 Sep 2026, 23:59 MYT</div></div>
+                  <button type="button" style="flex:none;min-height:32px;white-space:nowrap;padding:0 16px;border:1px solid #C4BFAE;border-radius:8px;background:#FFFFFE;color:#002B5C;font-family:inherit;font-size:13px;line-height:20px;font-weight:500;cursor:pointer">Renew access</button>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:12px 16px;padding-left:0;overflow:hidden">
+                  <div style="width:4px;align-self:stretch;background:#1E40AF;flex:none"></div>
+                  <div style="min-width:0;flex:1"><div style="font-weight:500">Review access · Supplier Spend → Test</div><div style="font-size:12px;line-height:18px;color:#4A4A4A">Requested by Farid · 3 checks green, 1 running · waiting 2 h</div></div>
+                  <span style="flex:none;display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#FBE9D1;color:#8B5A00;font-size:12px;font-weight:600;white-space:nowrap">… In review</span>
+                </div>
+                <div style="font-size:12px;line-height:18px;color:#6B6B6B;padding-top:4px">The request row became a key row. Ikmal was not told to go looking — the thing that changed is the thing at the top.</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ a12 }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FAF9F5;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+              <div style="padding:16px;background:#FFFFFE;border-bottom:1px solid #E5E1D6;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-end">
+                <div><div style="font-family:var(--serif);font-size:20px;line-height:28px;font-weight:600">Test is Live</div><div style="font-size:12px;color:#6B6B6B">Purchase orders · 4 lanes</div></div>
+                <span style="display:inline-flex;align-items:center;min-height:26px;padding:2px 8px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:12px;font-weight:600">✓ 200 · 5 rows · just now</span>
+              </div>
+              <div style="padding:16px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+                <div style="background:#FFFFFE;border:1px solid #DCEBE3;border-top:3px solid #166534;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span style="font-size:13px;font-weight:600">Sandbox</span><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:12px;font-weight:600">✓ Live</span></div><div style="font-size:11px;color:#6B6B6B">API Hub</div><div style="display:flex;gap:4px;font-family:var(--mono);font-size:11px;color:#166534">A✓ S✓ K✓ T✓</div></div>
+                <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-top:3px solid #C4BFAE;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span style="font-size:13px;font-weight:600">Dev</span><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#EFEDE6;color:#5F5F5F;font-size:12px;font-weight:600">– Not started</span></div><div style="font-size:11px;color:#6B6B6B">X5M/080</div><div style="display:flex;gap:4px;font-family:var(--mono);font-size:11px;color:#6B6B6B">A– S– K– T–</div></div>
+                <div style="background:#FFFFFE;border:2px solid #166534;border-top:3px solid #166534;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span style="font-size:13px;font-weight:600">Test</span><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:12px;font-weight:600">✓ Live</span></div><div style="font-size:11px;color:#6B6B6B">X5M/100 · real client data</div><div style="display:flex;gap:4px;font-family:var(--mono);font-size:11px;color:#166534">A✓ S✓ K✓ T✓</div><div style="font-size:11px;line-height:16px;color:#4A4A4A">12 of 71 fields · ends 10 Dec</div><button type="button" onClick="{{ next }}" style="min-height:44px;padding:0 12px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:13px;line-height:20px;font-weight:500;cursor:pointer">Start Flow B</button></div>
+                <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-top:3px solid #C4BFAE;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span style="font-size:13px;font-weight:600">Prod</span><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#F4DEDB;color:#8E2A26;font-size:12px;font-weight:600">✕ No SAP system</span></div><div style="font-size:11px;color:#6B6B6B">Nothing connected</div><div style="display:flex;gap:4px;font-family:var(--mono);font-size:11px;color:#6B6B6B">A– S✕ K– T–</div><button type="button" disabled="disabled" style="min-height:44px;padding:0 12px;border:1px solid #E5E1D6;border-radius:8px;background:#EFEDE6;color:#6B6B6B;font-family:inherit;font-size:13px;line-height:20px;font-weight:500;cursor:not-allowed">Promote →</button><div style="font-size:11px;line-height:16px;color:#6B6B6B">Ask Arjun to connect Prod</div></div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ b1 }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FAF9F5;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+              <div style="padding:16px;background:#FFFFFE;border-bottom:1px solid #E5E1D6;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-end">
+                <div><div style="font-family:var(--serif);font-size:20px;line-height:28px;font-weight:600">Operations</div><div style="font-size:12px;color:#4A4A4A">Mei Ling · Operator and Reviewer · 11 Sep 2026, 08:05 MYT</div></div>
+                <button type="button" style="min-height:36px;white-space:nowrap;padding:0 16px;border:1px solid #C4BFAE;border-radius:8px;background:#FFFFFE;color:#002B5C;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Re-check all</button>
+              </div>
+              <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+                  <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:12px"><div style="font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B">Lanes</div><div style="font-family:var(--mono);font-size:20px;line-height:28px;font-weight:600">11</div></div>
+                  <div style="background:#FFFFFE;border:1px solid #F4DEDB;border-radius:8px;padding:12px"><div style="font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#8E2A26">Need attention</div><div style="font-family:var(--mono);font-size:20px;line-height:28px;font-weight:600;color:#8E2A26">4</div></div>
+                  <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:12px"><div style="font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#8B5A00">Expiring in 30 d</div><div style="font-family:var(--mono);font-size:20px;line-height:28px;font-weight:600;color:#8B5A00">1</div></div>
+                  <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:12px"><div style="font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B">Oldest check</div><div style="font-family:var(--mono);font-size:20px;line-height:28px;font-weight:600">2 d</div></div>
+                </div>
+                <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;overflow:hidden">
+                  <table style="border-collapse:collapse;width:100%;font-size:13px">
+                    <thead><tr style="background:#F4F2EB"><th scope="col" style="text-align:left;padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;font-weight:600;white-space:nowrap">Lane</th><th scope="col" style="text-align:left;padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;font-weight:600;white-space:nowrap">State</th><th scope="col" style="text-align:left;padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;font-weight:600;white-space:nowrap">Broken hop</th><th scope="col" style="text-align:left;padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;font-weight:600;white-space:nowrap">Owner</th><th scope="col" style="text-align:right;padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;font-weight:600;white-space:nowrap">Checked</th></tr></thead>
+                    <tbody>
+                      <tr style="border-left:4px solid #991B1B"><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap"><span style="font-weight:500">Bank details · Dev</span></td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap"><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#F4DEDB;color:#8E2A26;font-size:12px;font-weight:600">✕ SAP refused</span></td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap">SAP data read · 403</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap;color:#4A4A4A">Client SAP admin</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;text-align:right;white-space:nowrap;color:#4A4A4A">4 m</td></tr>
+                      <tr style="border-left:4px solid #B45309"><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap"><span style="font-weight:500">Cost centres · Test</span> <span style="font-family:var(--mono);font-size:11px;color:#6B6B6B;border:1px solid #E5E1D6;border-radius:4px;padding:0 4px">example</span></td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap"><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#FBE9D1;color:#8B5A00;font-size:12px;font-weight:600">… No key</span></td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap">Key · never collected</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap;color:#4A4A4A">App owner · Farid</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;text-align:right;white-space:nowrap;color:#4A4A4A">7 m</td></tr>
+                      <tr style="border-left:4px solid #5F5F5F"><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap"><span style="font-weight:500">Attachments · Dev</span> <span style="font-family:var(--mono);font-size:11px;color:#6B6B6B;border:1px solid #E5E1D6;border-radius:4px;padding:0 4px">example</span></td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap"><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#EFEDE6;color:#5F5F5F;font-size:12px;font-weight:600">– Unknown</span></td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap;color:#6B6B6B">9 Sep 14:20</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap;color:#4A4A4A">Operator · you</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;text-align:right;white-space:nowrap;color:#8B5A00">2 d</td></tr>
+                      <tr><td style="padding:6px 12px;color:#6B6B6B" colspan="5">8 more lanes are Live, No data, In review or Unknown · all checked within 7 minutes</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+                  <button type="button" onClick="{{ next }}" style="min-height:44px;padding:0 20px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Open the SAP refusal</button>
+                  <span style="min-width:0;flex:1;font-size:12px;line-height:18px;color:#6B6B6B">Mei Ling holds Operator <span style="font-weight:500">and</span> Reviewer, so she can approve access and revoke keys. She is doing neither here — she is triaging, and this row's owner is someone else entirely.</span>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ b2 }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+              <div style="padding:16px;border-bottom:1px solid #E5E1D6;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-end">
+                <div><div style="font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B">Why?</div><div style="font-family:var(--serif);font-size:20px;line-height:28px;font-weight:600">Bank details · Dev</div><div style="font-family:var(--mono);font-size:11px;color:#6B6B6B">API_BANKDETAIL_SRV / A_BankDetail · X5M/080</div></div>
+                <span style="display:inline-flex;align-items:center;min-height:26px;padding:2px 8px;border-radius:9999px;background:#F4DEDB;color:#8E2A26;font-size:12px;font-weight:600">✕ SAP refused · 4 m ago</span>
+              </div>
+              <div style="padding:16px;display:flex;flex-direction:column;gap:16px">
+                <div style="display:flex;flex-wrap:nowrap;align-items:stretch">
+                  <div style="padding:8px 12px;border:1px solid #DCEBE3;border-radius:8px;background:#DCEBE3;flex:1 1 0;min-width:0"><div style="font-size:12px;font-weight:600;color:#166534;white-space:nowrap">✓ Key</div><div style="font-size:11px;line-height:16px;color:#166534">valid · Dev</div></div>
+                  <div style="flex:none;align-self:center;width:12px;height:2px;background:#C4BFAE"></div>
+                  <div style="padding:8px 12px;border:1px solid #DCEBE3;border-radius:8px;background:#DCEBE3;flex:1.1 1 0;min-width:0"><div style="font-size:12px;font-weight:600;color:#166534;white-space:nowrap">✓ Access</div><div style="font-size:11px;line-height:16px;color:#166534">until 10 Dec</div></div>
+                  <div style="flex:none;align-self:center;width:12px;height:2px;background:#C4BFAE"></div>
+                  <div style="padding:8px 12px;border:1px solid #DCEBE3;border-radius:8px;background:#DCEBE3;flex:1 1 0;min-width:0"><div style="font-size:12px;font-weight:600;color:#166534;white-space:nowrap">✓ Binding</div><div style="font-size:11px;line-height:16px;color:#166534">Dev → X5M/080</div></div>
+                  <div style="flex:none;align-self:center;width:12px;height:2px;background:#C4BFAE"></div>
+                  <div style="padding:8px 12px;border:1px solid #DCEBE3;border-radius:8px;background:#DCEBE3;flex:1.35 1 0;min-width:0"><div style="font-size:12px;font-weight:600;color:#166534;white-space:nowrap">✓ SAP metadata</div><div style="font-size:11px;line-height:16px;color:#166534">200 · 4 m ago</div></div>
+                  <div style="flex:none;align-self:center;width:12px;height:2px;background:#8E2A26"></div>
+                  <div style="padding:8px 12px;border:2px solid #8E2A26;border-radius:8px;background:#F4DEDB;flex:1.5 1 0;min-width:0"><div style="font-size:12px;font-weight:700;color:#8E2A26;white-space:nowrap">✕ SAP data read</div><div style="font-size:11px;line-height:16px;color:#8E2A26">403 · not authorised for A_BankDetail</div></div>
+                  <div style="flex:none;align-self:center;width:12px;height:2px;background:#E5E1D6"></div>
+                  <div style="padding:8px 12px;border:1px dashed #C4BFAE;border-radius:8px;background:#FAF9F5;flex:0.95 1 0;min-width:0"><div style="font-size:12px;font-weight:600;color:#5F5F5F;white-space:nowrap">– Your app</div><div style="font-size:11px;line-height:16px;color:#5F5F5F">never reached</div></div>
+                </div>
+                <div style="border:1px solid #E5E1D6;border-left:4px solid #8E2A26;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px">
+                  <div style="font-family:var(--serif);font-size:20px;line-height:28px;font-weight:600">SAP signed us in, then refused this one entity.</div>
+                  <div style="font-size:13px;line-height:20px;color:#4A4A4A;max-width:76ch">The key and the access are proven, and the metadata call returns 200 — so this is neither Ikmal's problem nor CoreEdge's. A 403 means the communication user lacks read authorisation on <span style="font-family:var(--mono);font-size:13px">A_BankDetail</span>, and only the client's SAP admin can grant it.</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#F4F2EB;color:#4A4A4A;font-size:12px;font-weight:600">Owner · client SAP admin</span><span style="font-family:var(--mono);font-size:11px;color:#6B6B6B">correlation 82fa4a8e-de92-41bf-a061-fc3e27355153</span></div>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px"><button type="button" onClick="{{ next }}" style="min-height:44px;padding:0 20px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Draft the handoff</button><button type="button" style="min-height:44px;padding:0 16px;border:1px solid #C4BFAE;border-radius:8px;background:#FFFFFE;color:#002B5C;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Re-check now</button></div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ b3 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+              <div style="flex:1;min-width:440px;border:2px solid #002B5C;border-radius:12px;overflow:hidden;background:#FFFFFE">
+                <div style="padding:8px 16px;background:#E6EBF1;border-bottom:1px solid #CFD7E0;display:flex;justify-content:space-between;gap:12px;align-items:baseline"><span style="font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B">Note to the client SAP admin · drafted for you</span><span style="font-size:11px;color:#002B5C">Editable before it goes</span></div>
+                <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+                  <div style="font-size:13px;line-height:20px;color:#1A1A1A">CoreEdge's communication user <span style="font-family:var(--mono);font-size:12px">CE_COMM_01</span> <span style="font-family:var(--mono);font-size:11px;color:#6B6B6B;border:1px solid #E5E1D6;border-radius:4px;padding:0 4px">example</span> on <span style="font-family:var(--mono);font-size:12px">X5M/080</span> can read the metadata of <span style="font-family:var(--mono);font-size:12px">API_BANKDETAIL_SRV</span> (200) but is refused on the entity <span style="font-family:var(--mono);font-size:12px">A_BankDetail</span> (403).<br /><br />Please grant read authorisation for that entity to the user, or tell us which role to request. Correlation <span style="font-family:var(--mono);font-size:12px">82fa4a8e-de92-41bf-a061-fc3e27355153</span>, first seen 10 Sep 22:34 MYT.</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px solid #E5E1D6;padding-top:12px"><button type="button" onClick="{{ next }}" style="min-height:44px;padding:0 20px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Send to SAP admin</button><button type="button" style="min-height:44px;padding:0 16px;border:1px solid #C4BFAE;border-radius:8px;background:#FFFFFE;color:#002B5C;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Edit note</button></div>
+                  <div style="font-size:11px;line-height:16px;color:#6B6B6B">Everything in the note is a fact CoreEdge observed. There is no guess about which SAP role is missing, because getting that wrong wastes the round trip.</div>
+                </div>
+              </div>
+              <div style="flex:none;width:280px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:8px"><div style="font-size:13px;font-weight:600">Sending is not fixing</div><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#F4DEDB;color:#8E2A26;font-size:12px;font-weight:600;width:fit-content">✕ SAP refused</span><div style="font-size:12px;line-height:18px;color:#4A4A4A">The lane keeps its red gate until a check actually passes. The timeline records the handoff, and the builder sees who holds it.</div></div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ b4 }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FAF9F5;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+              <div style="padding:16px;background:#FFFFFE;border-bottom:1px solid #E5E1D6"><h2 style="margin:0;font-family:var(--serif);font-size:24px;line-height:32px;font-weight:600">Needs you</h2><div style="font-size:13px;color:#4A4A4A">Ikmal · 09:12 MYT</div></div>
+              <div style="padding:16px;display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;align-items:center;gap:12px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:12px 16px;padding-left:0;overflow:hidden">
+                  <div style="width:4px;align-self:stretch;background:#991B1B;flex:none"></div>
+                  <div style="min-width:0;flex:1"><div style="font-weight:500">Bank details · Dev is blocked by SAP</div><div style="font-size:12px;line-height:18px;color:#4A4A4A">Data read 403, metadata OK · Mei Ling sent it to the client's SAP admin · just now</div></div>
+                  <div style="flex:none;display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+                    <span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#F4DEDB;color:#8E2A26;font-size:12px;font-weight:600;white-space:nowrap">✕ SAP refused</span>
+                    <span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#FBE9D1;color:#8B5A00;font-size:12px;font-weight:600;white-space:nowrap">… Mei Ling is on it</span>
+                  </div>
+                </div>
+                <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:16px;display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+                  <div style="min-width:0;flex:1;font-size:12px;line-height:18px;color:#4A4A4A"><span style="color:#1A1A1A;font-weight:500">There is nothing here for Ikmal to do, and the row says so.</span> His key and access are fine; the gate that broke belongs to the client's SAP admin, and an operator is already holding it. Offering him a button would be inventing work.</div>
+                  <button type="button" onClick="{{ next }}" style="flex:none;min-height:44px;padding:0 20px;border:1px solid #C4BFAE;border-radius:8px;background:#FFFFFE;color:#002B5C;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Why? · see the trace</button>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ b5 }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+              <div style="padding:16px;border-bottom:1px solid #E5E1D6;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-end">
+                <div><div style="font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B">Why? · 11:40 MYT</div><div style="font-family:var(--serif);font-size:20px;line-height:28px;font-weight:600">Bank details · Dev</div></div>
+                <span style="display:inline-flex;align-items:center;min-height:26px;padding:2px 8px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:12px;font-weight:600">✓ 200 · 5 rows · just now</span>
+              </div>
+              <div style="padding:16px;display:flex;flex-direction:column;gap:16px">
+                <div style="display:flex;flex-wrap:nowrap;align-items:stretch">
+                  <div style="padding:8px 12px;border:1px solid #DCEBE3;border-radius:8px;background:#DCEBE3;flex:1 1 0;min-width:0"><div style="font-size:12px;font-weight:600;color:#166534;white-space:nowrap">✓ Key</div><div style="font-size:11px;line-height:16px;color:#166534">unchanged</div></div>
+                  <div style="flex:none;align-self:center;width:12px;height:2px;background:#166534"></div>
+                  <div style="padding:8px 12px;border:1px solid #DCEBE3;border-radius:8px;background:#DCEBE3;flex:1.1 1 0;min-width:0"><div style="font-size:12px;font-weight:600;color:#166534;white-space:nowrap">✓ Access</div><div style="font-size:11px;line-height:16px;color:#166534">never lapsed</div></div>
+                  <div style="flex:none;align-self:center;width:12px;height:2px;background:#166534"></div>
+                  <div style="padding:8px 12px;border:1px solid #DCEBE3;border-radius:8px;background:#DCEBE3;flex:1 1 0;min-width:0"><div style="font-size:12px;font-weight:600;color:#166534;white-space:nowrap">✓ Binding</div><div style="font-size:11px;line-height:16px;color:#166534">Dev → X5M/080</div></div>
+                  <div style="flex:none;align-self:center;width:12px;height:2px;background:#166534"></div>
+                  <div style="padding:8px 12px;border:1px solid #DCEBE3;border-radius:8px;background:#DCEBE3;flex:1.35 1 0;min-width:0"><div style="font-size:12px;font-weight:600;color:#166534;white-space:nowrap">✓ SAP metadata</div><div style="font-size:11px;line-height:16px;color:#166534">200</div></div>
+                  <div style="flex:none;align-self:center;width:12px;height:2px;background:#166534"></div>
+                  <div style="padding:8px 12px;border:2px solid #166534;border-radius:8px;background:#DCEBE3;flex:1.5 1 0;min-width:0"><div style="font-size:12px;font-weight:700;color:#166534;white-space:nowrap">✓ SAP data read</div><div style="font-size:11px;line-height:16px;color:#166534">200 · 5 rows · just now</div></div>
+                  <div style="flex:none;align-self:center;width:12px;height:2px;background:#166534"></div>
+                  <div style="padding:8px 12px;border:1px solid #DCEBE3;border-radius:8px;background:#DCEBE3;flex:0.95 1 0;min-width:0"><div style="font-size:12px;font-weight:600;color:#166534;white-space:nowrap">✓ Your app</div><div style="font-size:11px;line-height:16px;color:#166534">rows delivered</div></div>
+                </div>
+                <div style="border:1px solid #E5E1D6;border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:8px">
+                  <div style="font-size:13px;font-weight:600">Timeline</div>
+                  <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;line-height:18px;color:#4A4A4A">
+                    <div><span style="font-family:var(--mono);color:#1A1A1A;font-weight:500">11:40</span> · data read 200 · 5 rows · lane returns to Live</div>
+                    <div><span style="font-family:var(--mono);color:#1A1A1A;font-weight:500">11:31</span> · client SAP admin granted read on <span style="font-family:var(--mono)">A_BankDetail</span></div>
+                    <div><span style="font-family:var(--mono);color:#1A1A1A;font-weight:500">09:12</span> · Mei Ling sent the handoff</div>
+                    <div><span style="font-family:var(--mono);color:#1A1A1A;font-weight:500">22:34</span> · first 403, yesterday</div>
+                  </div>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;border-top:1px solid #E5E1D6;padding-top:12px">
+                  <button type="button" onClick="{{ next }}" style="min-height:44px;padding:0 20px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">See the board</button>
+                  <span style="min-width:0;flex:1;font-size:12px;line-height:18px;color:#6B6B6B">No review, no new key: access was approved on 10 Sep and never changed. Only the gate that broke had to clear.</span>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ b6 }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#FAF9F5;border:1px solid #E5E1D6;border-radius:12px;overflow:hidden">
+              <div style="padding:16px;background:#FFFFFE;border-bottom:1px solid #E5E1D6;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-end">
+                <div><div style="font-family:var(--serif);font-size:20px;line-height:28px;font-weight:600">Operations</div><div style="font-size:12px;color:#4A4A4A">Mei Ling · 11 Sep 2026, 11:40 MYT</div></div>
+                <span style="display:inline-flex;align-items:center;min-height:26px;padding:2px 8px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:12px;font-weight:600">✓ 3 need attention · was 4</span>
+              </div>
+              <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+                <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;overflow:hidden">
+                  <table style="border-collapse:collapse;width:100%;font-size:13px">
+                    <thead><tr style="background:#F4F2EB"><th scope="col" style="text-align:left;padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;font-weight:600;white-space:nowrap">Lane</th><th scope="col" style="text-align:left;padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;font-weight:600;white-space:nowrap">State</th><th scope="col" style="text-align:left;padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;font-weight:600;white-space:nowrap">Broken hop</th><th scope="col" style="text-align:right;padding:6px 12px;border-bottom:1px solid #E5E1D6;font-family:var(--mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B;font-weight:600;white-space:nowrap">Checked</th></tr></thead>
+                    <tbody>
+                      <tr style="border-left:4px solid #166534"><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap"><span style="font-weight:500">Bank details · Dev</span></td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap"><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#DCEBE3;color:#166534;font-size:12px;font-weight:600">✓ Live</span></td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap;color:#6B6B6B">—</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;text-align:right;white-space:nowrap;color:#4A4A4A">just now</td></tr>
+                      <tr style="border-left:4px solid #B45309"><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap"><span style="font-weight:500">Cost centres · Test</span> <span style="font-family:var(--mono);font-size:11px;color:#6B6B6B;border:1px solid #E5E1D6;border-radius:4px;padding:0 4px">example</span></td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap"><span style="display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border-radius:9999px;background:#FBE9D1;color:#8B5A00;font-size:12px;font-weight:600">… No key</span></td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;white-space:nowrap">Key · never collected</td><td style="padding:6px 12px;border-bottom:1px solid #E5E1D6;text-align:right;white-space:nowrap;color:#4A4A4A">2 m</td></tr>
+                      <tr><td style="padding:6px 12px;color:#6B6B6B" colspan="4">9 more lanes · 2 still Unknown, past the 24 h TTL</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div style="background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:16px;display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+                  <div style="min-width:0;flex:1;font-size:12px;line-height:18px;color:#4A4A4A">The 403 stays on the timeline as a fact about the client system — not about the app, and not about the builder. Three and a half hours, one handoff, no re-approval.</div>
+                  <button type="button" onClick="{{ next }}" style="flex:none;min-height:44px;padding:0 20px;border:1px solid #002B5C;border-radius:8px;background:#002B5C;color:#FFFFFF;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer">Start Flow A</button>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+        </div>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:16px">
+        <div style="flex:1;min-width:280px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:4px">
+          <div style="font-family:var(--mono);font-size:11px;line-height:16px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B">What changed</div>
+          <div style="font-size:12px;line-height:18px;color:#4A4A4A">{{ changed }}</div>
+        </div>
+        <div style="flex:1;min-width:280px;background:#FFFFFE;border:1px solid #E5E1D6;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:4px">
+          <div style="font-family:var(--mono);font-size:11px;line-height:16px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B6B">Full frame</div>
+          <a href="{{ sourceHref }}" style="display:inline-flex;align-items:center;gap:6px;min-height:32px;font-size:12px;line-height:18px;font-weight:500">{{ source }} <span aria-hidden="true">&rarr;</span></a>
+          <div style="font-size:11px;line-height:16px;color:#6B6B6B">{{ sourceFile }}</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:900}}">
+const A = [
+  { label:'Home · Needs you', who:'Ikmal · Builder', place:'Home', title:'Four things, most urgent first',
+    crumb:'Home',
+    changed:'Nothing yet — this is the entry point. No key for Purchase orders exists: that is what the next eleven steps earn.', source:'Core screen 01 · Home', href:'CoreEdge%20Core%20Screens.dc.html#s01', file:'CoreEdge Core Screens.dc.html' },
+  { label:'Catalogue · search', who:'Ikmal · Builder', place:'Catalogue', title:'"purchase orders" · 2 results',
+    crumb:'Catalogue › search',
+    changed:'A dataset is chosen. No access requested yet.', source:'S03 · Catalogue search → field picker', href:'CoreEdge%20Builder%20P0%20Scenarios.dc.html#s03', file:'CoreEdge Builder P0 Scenarios.dc.html' },
+  { label:'Add data feed · fields', who:'Ikmal · Builder', place:'Apps › Purchase Order Tracker', title:'12 of 71 fields',
+    crumb:'Apps › Purchase Order Tracker › Add data feed',
+    changed:'A data feed exists, scoped to 12 fields.', source:'S03 · Add a data feed', href:'CoreEdge%20Builder%20P0%20Scenarios.dc.html#s03', file:'CoreEdge Builder P0 Scenarios.dc.html' },
+  { label:'Sandbox lane · Live', who:'Ikmal · Builder', place:'Apps › Purchase Order Tracker', title:'Sandbox is Live in seconds',
+    crumb:'Apps › Purchase Order Tracker › Purchase orders',
+    changed:'The Sandbox lane is Live, waiting for a key.', source:'S04 · Sandbox lane live', href:'CoreEdge%20Builder%20P0%20Scenarios.dc.html#s04', file:'CoreEdge Builder P0 Scenarios.dc.html' },
+  { label:'Collect key · claim link', who:'Ikmal · Builder', place:'Claim link', title:'The key is created when you open the link',
+    crumb:'Claim link · one-time',
+    changed:'The app holds a Sandbox key. Nothing read from SAP yet.', source:'S05 · Key ready · claim link', href:'CoreEdge%20Builder%20P0%20Scenarios.dc.html#s05', file:'CoreEdge Builder P0 Scenarios.dc.html' },
+  { label:'Try it · 5 rows', who:'Ikmal · Builder', place:'Apps › Purchase Order Tracker', title:'200 · 5 rows · 610 ms',
+    crumb:'Try it · Sandbox',
+    changed:'The feed works in Sandbox, with real unmasked rows. Test is the first thing needing approval.', source:'S06 · Try it · 5 rows', href:'CoreEdge%20Builder%20P0%20Scenarios.dc.html#s06', file:'CoreEdge Builder P0 Scenarios.dc.html' },
+  { label:'Promote to Test', who:'Ikmal · Builder', place:'Apps › Purchase Order Tracker', title:'Ask for Test · 12 fields, 90 days',
+    crumb:'Promote Purchase orders to Test',
+    changed:'A request exists. Ikmal is done until someone decides.', source:'S08 · Promote request', href:'CoreEdge%20Builder%20P0%20Scenarios.dc.html#s08', file:'CoreEdge Builder P0 Scenarios.dc.html' },
+  { label:'Needs you · queue', who:'Nadia · Reviewer', place:'Requests', title:'Two waiting on you',
+    crumb:'Requests',
+    changed:'The request has surfaced in a reviewer\u2019s queue.', source:'R06 · review queue, ageing', href:'CoreEdge%20Reviewer%20Scenarios.dc.html#r06', file:'CoreEdge Reviewer Scenarios.dc.html',
+    handover:{ initial:'N', title:'You are now looking at Nadia\u2019s screen', body:'Reviewer, and support owner of Delivery Tracker. Nobody signed out — this is the same moment seen by the person who decides.' } },
+  { label:'Review · all green', who:'Nadia · Reviewer', place:'Requests › review', title:'Four checks, all green',
+    crumb:'Requests › Purchase orders → Test',
+    changed:'Nothing yet. The last moment before the decision.', source:'R01 · request with all checks green', href:'CoreEdge%20Reviewer%20Scenarios.dc.html#r01', file:'CoreEdge Reviewer Scenarios.dc.html' },
+  { label:'Approved', who:'Nadia · Reviewer', place:'Requests › review', title:'Approved · Ikmal told',
+    crumb:'Requests › Purchase orders → Test',
+    changed:'Access is approved. The key has not been collected.', source:'R01 · the approved confirmation, lower in the same frame', href:'CoreEdge%20Reviewer%20Scenarios.dc.html#r01', file:'CoreEdge Reviewer Scenarios.dc.html' },
+  { label:'Key ready', who:'Ikmal · Builder', place:'Home', title:'Key ready · Purchase orders · Test',
+    crumb:'Home',
+    changed:'The key row replaced the request row on Home.', source:'Core screen 01 · Home', href:'CoreEdge%20Core%20Screens.dc.html#s01', file:'CoreEdge Core Screens.dc.html',
+    handover:{ initial:'I', title:'Back on Ikmal\u2019s screen', body:'The builder who asked. He never saw Nadia\u2019s queue, and she never saw his key.' } },
+  { label:'Test Live · done', who:'Ikmal · Builder', place:'Apps › Purchase Order Tracker', title:'Test is Live · 5 rows from the client system',
+    crumb:'Apps › Purchase Order Tracker › Purchase orders',
+    changed:'The golden path is complete.', source:'Core screen 02 · lane board', href:'CoreEdge%20Core%20Screens.dc.html#s02', file:'CoreEdge Core Screens.dc.html' }
+];
+
+const B = [
+  { label:'Operations board', who:'Mei Ling · Operator', place:'Operations', title:'11 lanes · 4 need attention',
+    crumb:'Operations',
+    changed:'Nothing yet — this is the entry point. Mei Ling could approve access or revoke a key; neither is what this row needs.', source:'Core screen 05 · Operations board', href:'CoreEdge%20Core%20Screens.dc.html#s05', file:'CoreEdge Core Screens.dc.html',
+    handover:{ initial:'M', title:'You are now looking at Mei Ling\u2019s screen', body:'Operator and Reviewer — she can approve access and revoke keys. She is doing neither here: she is triaging, and this lane\u2019s owner is the client\u2019s SAP admin.' } },
+  { label:'Lane · Why?', who:'Mei Ling · Operator', place:'Operations › lane', title:'Six hops, one broken',
+    crumb:'Bank details · Dev › Why?',
+    changed:'The cause is identified and attributed.', source:'Core screen 04 · Why? + timeline', href:'CoreEdge%20Core%20Screens.dc.html#s04', file:'CoreEdge Core Screens.dc.html' },
+  { label:'Send to SAP admin', who:'Mei Ling · Operator', place:'Operations › lane', title:'A note made of observed facts',
+    crumb:'Handoff · client SAP admin',
+    changed:'A handoff exists, with an owner and a timestamp.', source:'O02 · Handoff note', href:'CoreEdge%20Operator%20Admin%20Scenarios.dc.html#o02', file:'CoreEdge Operator Admin Scenarios.dc.html' },
+  { label:'Builder sees it', who:'Ikmal · Builder', place:'Home', title:'Blocked by SAP · Mei Ling is on it',
+    crumb:'Home',
+    changed:'The builder knows the state and the owner.', source:'Core screen 01 · Home', href:'CoreEdge%20Core%20Screens.dc.html#s01', file:'CoreEdge Core Screens.dc.html',
+    handover:{ initial:'I', title:'You are now looking at Ikmal\u2019s screen', body:'The builder whose lane is broken. Same lane, same facts, different next action — his is to wait.' } },
+  { label:'Re-check · later', who:'Mei Ling · Operator', place:'Operations › lane', title:'The client granted the authorisation',
+    crumb:'Bank details · Dev › Why?',
+    changed:'The 403 is resolved at source.', source:'S11 · SAP 403 · resolved', href:'CoreEdge%20Builder%20P0%20Scenarios.dc.html#s11', file:'CoreEdge Builder P0 Scenarios.dc.html',
+    handover:{ initial:'M', title:'Back on Mei Ling\u2019s screen', body:'Two and a half hours later. The handoff is the only thing that happened in between.' } },
+  { label:'Live · done', who:'Mei Ling · Operator', place:'Operations', title:'Bank details · Dev is Live',
+    crumb:'Operations',
+    changed:'The failure path is complete.', source:'Core screen 05 · Operations board', href:'CoreEdge%20Core%20Screens.dc.html#s05', file:'CoreEdge Core Screens.dc.html' }
+];
+
+class Component extends DCLogic {
+  state = { flow: 'A', i: 0 };
+
+  pick(flow) { this.setState({ flow: flow, i: 0 }); }
+  goTo(i) { this.setState({ i: i }); }
+
+  renderVals() {
+    const list = this.state.flow === 'A' ? A : B;
+    const i = Math.min(this.state.i, list.length - 1);
+    const step = list[i];
+    const isA = this.state.flow === 'A';
+    const tab = on => 'min-height:36px;padding:0 16px;border-radius:8px;font-family:inherit;font-size:14px;line-height:22px;font-weight:500;cursor:pointer;border:1px solid ' +
+      (on ? '#002B5C;background:#002B5C;color:#FFFFFF' : '#C4BFAE;background:#FFFFFE;color:#002B5C');
+
+    const steps = list.map((s, n) => {
+      const cur = n === i, done = n < i;
+      return {
+        num: done ? '✓' : String(n + 1),
+        label: s.label,
+        who: s.who,
+        labelStyle: 'display:block;font-size:13px;line-height:20px;font-weight:' + (cur ? '600' : '400'),
+        numStyle: 'flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:9999px;font-family:var(--mono);font-size:11px;font-weight:600;' +
+          (cur ? 'background:#002B5C;color:#FFFFFF' : done ? 'background:#DCEBE3;color:#166534' : 'background:#EFEDE6;color:#6B6B6B'),
+        railStyle: 'display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;min-height:44px;padding:8px;border-radius:8px;cursor:pointer;font-family:inherit;border:1px solid ' +
+          (cur ? '#002B5C;background:#FFFFFE' : 'transparent;background:transparent'),
+        go: () => this.goTo(n)
+      };
+    });
+
+    const last = i === list.length - 1;
+    const k = (isA ? 'a' : 'b') + (i + 1);
+    return {
+      steps: steps,
+      stepCount: list.length + ' steps · click any one',
+      flowTitle: isA ? 'Flow A · Builder golden path' : 'Flow B · Operator failure',
+      flowSub: isA
+        ? 'Empty app to real client data in twelve clicks, with one decision by one reviewer. The role changes twice; nobody signs out.'
+        : 'A lane breaks in SAP, is attributed to the right person, and recovers — with the builder informed and asked to do nothing he cannot do.',
+      tabAStyle: tab(isA), tabBStyle: tab(!isA),
+      pickA: () => this.pick('A'), pickB: () => this.pick('B'),
+      prev: () => this.goTo(Math.max(0, i - 1)),
+      next: () => { if (last) { this.pick(isA ? 'B' : 'A'); } else { this.goTo(i + 1); } },
+      position: (i + 1) + ' / ' + list.length,
+      stagePlace: step.place, stageTitle: step.title,
+      frameCrumb: step.crumb, persona: step.who,
+      key: (isA ? 'a' : 'b') + (i + 1),
+      scaleWrap: 'transform:scale(0.62);transform-origin:top left;width:1440px',
+      scaleBox: 'height:' + Math.round(900 * 0.62) + 'px;overflow:hidden',
+      changed: step.changed, source: step.source,
+      sourceHref: step.href, sourceFile: step.file,
+      a1: k === 'a1', a2: k === 'a2', a3: k === 'a3', a4: k === 'a4', a5: k === 'a5', a6: k === 'a6',
+      a7: k === 'a7', a8: k === 'a8', a9: k === 'a9', a10: k === 'a10', a11: k === 'a11', a12: k === 'a12',
+      b1: k === 'b1', b2: k === 'b2', b3: k === 'b3', b4: k === 'b4', b5: k === 'b5', b6: k === 'b6',
+      handover: !!step.handover,
+      handoverInitial: step.handover ? step.handover.initial : '',
+      handoverTitle: step.handover ? step.handover.title : '',
+      handoverBody: step.handover ? step.handover.body : ''
+    };
+  }
+}
+</script>
+</body>
+</html>

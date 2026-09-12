@@ -1,0 +1,657 @@
+<title>CoreEdge Lanes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap">
+<style>
+:root{
+  --navy:#002B5C; --navy-hover:#001E40; --navy-soft:#E6EBF1; --navy-line:#CFD7E0;
+  --red:#C8102E;
+  --ground:#FAF9F5; --paper:#FFFFFE; --tint:#F4F2EB; --warnbg:#FDF7E6;
+  --ink:#1A1A1A; --ink2:#4A4A4A; --muted:#7C7A73; --line:#E5E1D6; --line2:#C4BFAE;
+  --ok-bg:#DCEBE3; --ok:#166534; --wait-bg:#FBE9D1; --wait:#8B5A00;
+  --bad-bg:#F4DEDB; --bad:#8E2A26; --info-bg:#E0EBF4; --info:#1A4D6F;
+  --off-bg:#EFEDE6; --off:#6B6B6B;
+  --chrome:#002B5C; --chrome-ink:#E6EBF1; --chrome-soft:rgba(255,255,255,.12);
+  --shadow:0 1px 2px rgba(0,43,92,.06),0 8px 24px rgba(0,43,92,.07);
+  --serif:"Source Serif 4","Tiempos Headline",Georgia,serif;
+  --sans:"Geist","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Geist Mono","SF Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --navy:#8FB4E8; --navy-hover:#AFC9EE; --navy-soft:#1B2A40; --navy-line:#2B3D57;
+    --red:#F0707F;
+    --ground:#0F141C; --paper:#161D28; --tint:#1C2431; --warnbg:#2A2415;
+    --ink:#ECEAE3; --ink2:#C3C0B7; --muted:#8F8C84; --line:#2A3240; --line2:#3A4454;
+    --ok-bg:#16301F; --ok:#7FD29A; --wait-bg:#33260F; --wait:#F2C069;
+    --bad-bg:#3A1C1A; --bad:#F2A097; --info-bg:#172A3C; --info:#9CC6EA;
+    --off-bg:#222A35; --off:#A3A09A;
+    --chrome:#0A1F3D; --chrome-ink:#D5E0EE; --chrome-soft:rgba(255,255,255,.08);
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+    --navy:#8FB4E8; --navy-hover:#AFC9EE; --navy-soft:#1B2A40; --navy-line:#2B3D57;
+    --red:#F0707F;
+    --ground:#0F141C; --paper:#161D28; --tint:#1C2431; --warnbg:#2A2415;
+    --ink:#ECEAE3; --ink2:#C3C0B7; --muted:#8F8C84; --line:#2A3240; --line2:#3A4454;
+    --ok-bg:#16301F; --ok:#7FD29A; --wait-bg:#33260F; --wait:#F2C069;
+    --bad-bg:#3A1C1A; --bad:#F2A097; --info-bg:#172A3C; --info:#9CC6EA;
+    --off-bg:#222A35; --off:#A3A09A;
+    --chrome:#0A1F3D; --chrome-ink:#D5E0EE; --chrome-soft:rgba(255,255,255,.08);
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--ground);color:var(--ink);font:15px/1.6 var(--sans);-webkit-font-smoothing:antialiased;padding-inline:20px}
+a{color:var(--navy)}
+:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
+.wrap{max-width:1120px;margin:0 auto;padding-block:40px 96px}
+.prose{max-width:68ch}
+h1,h2,h3{text-wrap:balance;margin:0}
+h1{font:600 clamp(34px,5vw,50px)/1.08 var(--serif);letter-spacing:-.015em;color:var(--ink)}
+h2{font:600 30px/1.2 var(--serif);letter-spacing:-.01em;margin-bottom:12px}
+h3{font:600 17px/1.35 var(--sans);margin-bottom:6px}
+p{margin:0 0 14px}
+.eyebrow{font:500 12px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:18.5px;line-height:1.55;color:var(--ink2);max-width:62ch}
+.mono{font-family:var(--mono);font-size:.9em}
+section{padding-block:56px 8px;border-top:1px solid var(--line);margin-top:56px}
+section:first-of-type{border-top:0;margin-top:24px}
+.sec-head{display:flex;gap:18px;align-items:baseline;margin-bottom:18px;flex-wrap:wrap}
+.sec-head .eyebrow{min-width:120px}
+
+/* hero */
+.hero{display:grid;grid-template-columns:1.25fr .9fr;gap:40px;align-items:end;padding-top:12px}
+.hero .meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.tag{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);border-radius:999px;padding:4px 11px;font-size:12.5px;color:var(--ink2);background:var(--paper)}
+.thesis{background:var(--navy);color:#fff;border-radius:14px;padding:24px 24px 22px;box-shadow:var(--shadow)}
+:root[data-theme="dark"] .thesis{color:#0F141C}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .thesis{color:#0F141C}}
+.thesis .eyebrow{color:inherit;opacity:.75}
+.thesis p{font:500 21px/1.35 var(--serif);margin:10px 0 0}
+.thesis small{display:block;margin-top:14px;font-size:13px;opacity:.8}
+
+/* path diagram */
+.path{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:18px 2px 6px}
+.step{flex:0 0 auto;min-width:128px;border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:10px 12px;font-size:13px;position:relative}
+.step b{display:block;font-weight:600;font-size:13.5px}
+.step span{color:var(--muted);font-size:12px}
+.arrow{flex:0 0 26px;display:flex;align-items:center;justify-content:center;color:var(--line2)}
+.switch{flex:0 0 auto;align-self:center;font:500 11px/1.2 var(--mono);color:var(--wait);background:var(--wait-bg);border-radius:6px;padding:5px 7px;margin:0 4px;text-align:center}
+.flag{position:absolute;top:-10px;right:-6px;font:600 10.5px/1 var(--sans);background:var(--bad-bg);color:var(--bad);border-radius:999px;padding:4px 7px}
+.causes{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:22px}
+.cause{padding:14px 16px;border-left:3px solid var(--line2);background:var(--paper);border-radius:0 10px 10px 0}
+.cause h3{font-size:15px}
+.cause p{font-size:14px;color:var(--ink2);margin:0}
+
+/* principles */
+.principles{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px 36px;margin-top:10px}
+.pr{display:grid;grid-template-columns:34px 1fr;gap:4px 12px;padding:14px 0;border-bottom:1px solid var(--line)}
+.pr .k{font:600 22px/1 var(--serif);color:var(--navy)}
+.pr h3{margin:0}
+.pr p{grid-column:2;font-size:14px;color:var(--ink2);margin:0}
+
+/* tables */
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--paper);margin-top:18px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{font:500 11.5px/1.2 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;background:var(--tint);padding:10px 12px;white-space:nowrap}
+td{padding:11px 12px;border-top:1px solid var(--line);vertical-align:top}
+td .sub{display:block;color:var(--ink2);font-size:13px;margin-top:2px}
+.dots{font-family:var(--mono);letter-spacing:2px;color:var(--navy);white-space:nowrap}
+.dots i{font-style:normal;color:var(--line2)}
+.verdict{font:600 11.5px/1 var(--sans);border-radius:999px;padding:5px 9px;white-space:nowrap;display:inline-block}
+.v-core{background:var(--navy);color:var(--paper)}
+.v-next{background:var(--info-bg);color:var(--info)}
+.v-explore{background:var(--tint);color:var(--ink2);border:1px solid var(--line2)}
+.v-park{background:var(--off-bg);color:var(--off)}
+
+/* model */
+.model{display:grid;grid-template-columns:220px 1fr;gap:0;border:1px solid var(--line);border-radius:14px;background:var(--paper);overflow:hidden;margin-top:18px}
+.model .app{background:var(--navy-soft);padding:20px;border-right:1px solid var(--line)}
+.model .app h3{font:600 20px/1.2 var(--serif)}
+.model .app p{font-size:13.5px;color:var(--ink2)}
+.grid-scroll{overflow-x:auto}
+.lanes{display:grid;grid-template-columns:150px repeat(4,minmax(150px,1fr));min-width:760px}
+.lanes > div{padding:12px;border-bottom:1px solid var(--line);border-left:1px solid var(--line)}
+.lanes .hd{font:500 11.5px/1.2 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--tint)}
+.lanes .feed{font-weight:600;font-size:14px;border-left:0}
+.lanes .feed span{display:block;font:400 11.5px/1.4 var(--mono);color:var(--muted);margin-top:2px}
+.gates{display:flex;gap:4px;margin-top:6px}
+.g{font:600 10.5px/1 var(--mono);border-radius:5px;padding:4px 5px;background:var(--off-bg);color:var(--off)}
+.g.ok{background:var(--ok-bg);color:var(--ok)}
+.g.wait{background:var(--wait-bg);color:var(--wait)}
+.g.bad{background:var(--bad-bg);color:var(--bad)}
+.cellstate{font-size:13px;font-weight:600}
+.cellstate small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--ink2);margin-top:14px}
+.legend b{font-family:var(--mono);color:var(--ink)}
+
+/* personas */
+.people{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:18px}
+.person{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px}
+.person .role{font:600 18px/1.2 var(--serif)}
+.person q{display:block;font-style:italic;color:var(--ink2);font-size:14px;margin:8px 0 10px;quotes:none}
+.person ul{margin:0;padding-left:18px;font-size:13.5px;color:var(--ink2)}
+.person .home{margin-top:10px;font-size:12.5px;color:var(--muted)}
+
+/* storyboard */
+.story{list-style:none;margin:20px 0 0;padding:0;position:relative}
+.story li{display:grid;grid-template-columns:86px 26px 1fr;gap:0 14px;padding-bottom:18px}
+.story .t{font:500 13px/1.4 var(--mono);color:var(--muted);text-align:right;padding-top:2px}
+.story .dot{position:relative}
+.story .dot::before{content:"";position:absolute;left:11px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--paper);border:2px solid var(--navy)}
+.story .dot::after{content:"";position:absolute;left:16px;top:18px;bottom:-22px;width:2px;background:var(--line)}
+.story li:last-child .dot::after{display:none}
+.story .who{font:600 11px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--navy);margin-bottom:4px}
+.story p{margin:0;font-size:14.5px}
+.story .old{display:block;color:var(--muted);font-size:13px;margin-top:3px}
+.twocol{display:grid;grid-template-columns:1fr 1fr;gap:40px}
+
+/* mock screens */
+.exhibit{margin-top:26px}
+.exhibit .cap{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;margin-bottom:10px}
+.exhibit .cap b{font:600 19px/1.3 var(--serif)}
+.exhibit .cap span{color:var(--ink2);font-size:14px}
+.frame-scroll{overflow-x:auto;padding-bottom:6px}
+.frame{min-width:900px;border:1px solid var(--line2);border-radius:12px;overflow:hidden;background:var(--ground);box-shadow:var(--shadow);display:grid;grid-template-columns:186px 1fr}
+.side{background:var(--chrome);color:var(--chrome-ink);padding:14px 10px;font-size:13px}
+.side .brand{font:600 14px/1 var(--sans);padding:4px 8px 16px;letter-spacing:.01em}
+.side a{display:flex;justify-content:space-between;align-items:center;color:inherit;text-decoration:none;padding:7px 8px;border-radius:7px;opacity:.85}
+.side a.on{background:var(--chrome-soft);opacity:1;font-weight:600}
+.side .n{font:600 11px/1 var(--mono);background:var(--red);color:#fff;border-radius:999px;padding:3px 6px}
+.side .who{margin-top:18px;padding:10px 8px 0;border-top:1px solid var(--chrome-soft);font-size:12px;opacity:.75}
+.main{padding:18px 20px 22px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.mhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.mhead h4{margin:0;font:600 20px/1.2 var(--serif)}
+.mhead .sub{font-size:12.5px;color:var(--muted)}
+.btn{display:inline-flex;align-items:center;gap:6px;font:600 12.5px/1 var(--sans);border-radius:8px;padding:8px 11px;border:1px solid var(--line2);background:var(--paper);color:var(--ink);white-space:nowrap}
+.btn.primary{background:var(--navy);color:var(--paper);border-color:var(--navy)}
+.btn.ghost{background:transparent}
+.btn[aria-disabled="true"]{opacity:.45}
+.cmd{flex:1;min-width:200px;max-width:340px;border:1px solid var(--line2);border-radius:8px;padding:7px 10px;font-size:12.5px;color:var(--muted);background:var(--paper);display:flex;justify-content:space-between}
+.cmd kbd{font:500 11px/1 var(--mono);border:1px solid var(--line);border-radius:4px;padding:2px 5px}
+.pn{background:var(--paper);border:1px solid var(--line);border-radius:10px}
+.pn-h{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.task{display:grid;grid-template-columns:8px 1fr auto;gap:12px;align-items:center;padding:12px 14px;border-top:1px solid var(--line)}
+.task:first-of-type{border-top:0}
+.sev{width:8px;align-self:stretch;border-radius:4px;background:var(--line2)}
+.sev.bad{background:var(--bad)} .sev.wait{background:var(--wait)} .sev.ok{background:var(--ok)} .sev.info{background:var(--info)}
+.task b{font-size:13.5px;display:block}
+.task span{font-size:12.5px;color:var(--ink2)}
+.chip{display:inline-flex;align-items:center;gap:5px;font:600 11px/1 var(--sans);border-radius:999px;padding:4px 8px;white-space:nowrap}
+.c-ok{background:var(--ok-bg);color:var(--ok)} .c-wait{background:var(--wait-bg);color:var(--wait)} .c-bad{background:var(--bad-bg);color:var(--bad)} .c-info{background:var(--info-bg);color:var(--info)} .c-off{background:var(--off-bg);color:var(--off)}
+.row2{display:grid;grid-template-columns:1.35fr 1fr;gap:14px}
+.board{display:grid;grid-template-columns:150px repeat(4,1fr)}
+.board > div{padding:10px 11px;border-top:1px solid var(--line);border-left:1px solid var(--line);font-size:12.5px}
+.board .bh{border-top:0;font:500 11px/1.2 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--tint)}
+.board .bf{border-left:0;font-weight:600;font-size:13px}
+.board .bf span{display:block;font:400 11px/1.4 var(--mono);color:var(--muted)}
+.board .sel{outline:2px solid var(--navy);outline-offset:-2px;background:var(--navy-soft)}
+.board .cellstate{font-size:12.5px}
+.promote{color:var(--navy);font-weight:600}
+.gate{display:grid;grid-template-columns:22px 1fr auto;gap:10px;padding:10px 14px;border-top:1px solid var(--line);align-items:start;font-size:13px}
+.gate:first-of-type{border-top:0}
+.gate .ic{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font:700 11px/1 var(--sans)}
+.ic.ok{background:var(--ok-bg);color:var(--ok)} .ic.bad{background:var(--bad-bg);color:var(--bad)} .ic.wait{background:var(--wait-bg);color:var(--wait)}
+.gate b{display:block}
+.gate span{color:var(--ink2);font-size:12.5px}
+.gate em{font-style:normal;font:500 11.5px/1.4 var(--mono);color:var(--muted);white-space:nowrap}
+.code{font:12px/1.6 var(--mono);background:var(--tint);border:1px solid var(--line);border-radius:8px;padding:10px 12px;color:var(--ink);overflow-x:auto;white-space:pre}
+.actions{display:flex;gap:8px;flex-wrap:wrap;padding:12px 14px;border-top:1px solid var(--line)}
+.trace{display:flex;align-items:center;gap:0;overflow-x:auto;padding:14px}
+.hop{flex:0 0 auto;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:12px;background:var(--paper);min-width:112px}
+.hop b{display:block;font-size:12.5px}
+.hop.ok{border-color:var(--ok);} .hop.bad{border-color:var(--bad);background:var(--bad-bg)}
+.hop em{font-style:normal;font:500 11px/1.4 var(--mono);color:var(--muted)}
+.hop.bad em{color:var(--bad)}
+.link{flex:0 0 18px;height:2px;background:var(--line2)}
+.explain{margin:0 14px 14px;padding:12px 14px;border-radius:9px;background:var(--warnbg);border:1px solid var(--line);font-size:13px}
+.explain b{display:block;margin-bottom:3px}
+.tl{list-style:none;margin:0;padding:6px 14px 12px}
+.tl li{display:grid;grid-template-columns:92px 1fr;gap:10px;padding:7px 0;border-top:1px dashed var(--line);font-size:12.5px}
+.tl li:first-child{border-top:0}
+.tl time{font:500 11.5px/1.5 var(--mono);color:var(--muted)}
+.tl .by{color:var(--muted)}
+.mtable{width:100%;border-collapse:collapse;font-size:12.5px}
+.mtable th{font-size:10.5px;padding:8px 10px}
+.mtable td{padding:9px 10px;font-variant-numeric:tabular-nums}
+.num{text-align:right}
+.filters{display:flex;gap:8px;flex-wrap:wrap}
+.pill{font:500 12px/1 var(--sans);border:1px solid var(--line2);border-radius:999px;padding:6px 10px;background:var(--paper);color:var(--ink2)}
+.pill.on{background:var(--navy);color:var(--paper);border-color:var(--navy)}
+.checks .gate{grid-template-columns:22px 1fr auto}
+.diff{font:12px/1.7 var(--mono);padding:10px 14px}
+.diff .add{color:var(--ok)} .diff .ctx{color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.kpi{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.kpi b{display:block;font:600 22px/1.1 var(--serif);font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--ink2)}
+.example{font:500 11.5px/1 var(--sans);color:var(--muted);border:1px dashed var(--line2);border-radius:6px;padding:4px 7px}
+
+/* vocab + phases */
+.vocab{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:0 28px;margin-top:18px}
+.w{display:grid;grid-template-columns:1fr 20px 1fr;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.w s{color:var(--muted);text-decoration-color:var(--line2)}
+.w .to{font-weight:600}
+.w i{color:var(--line2);font-style:normal;text-align:center}
+.phases{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:18px}
+.phase{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:8px}
+.phase .when{font:500 12px/1 var(--mono);color:var(--muted)}
+.phase h3{font:600 20px/1.2 var(--serif);margin:0}
+.phase ul{margin:0;padding-left:18px;font-size:13.5px;color:var(--ink2)}
+.phase .exit{margin-top:auto;padding-top:10px;border-top:1px solid var(--line);font-size:13px}
+.prereq{margin-top:16px;padding:14px 16px;border-radius:10px;background:var(--bad-bg);color:var(--bad);font-size:14px}
+.prereq b{color:inherit}
+.decisions{counter-reset:d;list-style:none;padding:0;margin:18px 0 0;display:grid;gap:12px}
+.decisions li{counter-increment:d;display:grid;grid-template-columns:40px 1fr;gap:12px;padding:14px 16px;background:var(--paper);border:1px solid var(--line);border-radius:10px}
+.decisions li::before{content:counter(d);font:600 22px/1 var(--serif);color:var(--navy)}
+.decisions b{display:block;margin-bottom:3px}
+.decisions span{font-size:14px;color:var(--ink2)}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:18px}
+.metric{padding:14px 0;border-top:2px solid var(--navy)}
+.metric .from{font-size:13px;color:var(--muted)}
+.metric .to{font:600 24px/1.2 var(--serif);margin:4px 0}
+.metric p{font-size:13.5px;color:var(--ink2);margin:0}
+.model > *,.twocol > *,.row2 > *,.hero > *,.phases > *{min-width:0}
+.pr h3{align-self:end}
+footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+
+@media (max-width:860px){
+  .hero,.twocol,.row2{grid-template-columns:1fr}
+  .phases{grid-template-columns:1fr}
+  .model{grid-template-columns:1fr}
+  .model .app{border-right:0;border-bottom:1px solid var(--line)}
+  .story li{grid-template-columns:62px 22px 1fr}
+}
+</style>
+
+<div class="wrap">
+
+<header class="hero">
+  <div>
+    <div class="eyebrow">CoreEdge · redesign concept · 11 Sep 2026</div>
+    <h1 style="margin-top:14px">CoreEdge Lanes</h1>
+    <p class="lede" style="margin-top:16px">A rethink of CoreEdge around the work people actually do, rather than the tables it stores. It is built for ABeam consultants first: those who build client apps, those who approve their access, and the operators who keep them running.</p>
+    <div class="meta">
+      <span class="tag">For: CoreEdge product team</span>
+      <span class="tag">Grounded in the 10–11 Sep end-to-end run</span>
+      <span class="tag">Status: concept for decision</span>
+    </div>
+  </div>
+  <aside class="thesis" aria-label="The idea in one sentence">
+    <div class="eyebrow">The idea</div>
+    <p>Stop asking people to line up six objects across three screens. Give every app one <em>lane</em> per environment, where access, SAP system and key either match by construction or say exactly what is missing.</p>
+    <small>The governance engine stays as it is: grants checked on every call, environment binding, honest status, audit. What changes is how people see it and act on it.</small>
+  </aside>
+</header>
+
+<section id="why">
+  <div class="sec-head"><span class="eyebrow">Why it confuses</span><h2>The path to one working call, as it is today</h2></div>
+  <p class="prose">This is the route we took on 10–11 September to get a single purchase-order read from Customizing X5M/100. Every screen was accurate. The route itself was the problem.</p>
+  <div class="path" role="list" aria-label="Today's path">
+    <div class="step" role="listitem"><b>Connections</b><span>Is SAP up?</span></div>
+    <div class="arrow" aria-hidden="true">→</div>
+    <div class="step" role="listitem"><span class="flag">hidden rule</span><b>Discover</b><span>Find the API</span></div>
+    <div class="arrow" aria-hidden="true">→</div>
+    <div class="step" role="listitem"><b>Interfaces</b><span>Set entity set</span></div>
+    <div class="arrow" aria-hidden="true">→</div>
+    <div class="step" role="listitem"><span class="flag">hidden rule</span><b>API Access</b><span>Request, with expiry</span></div>
+    <div class="switch">switch<br>account</div>
+    <div class="step" role="listitem"><span class="flag">hidden rule</span><b>API Access</b><span>Approve, then issue key</span></div>
+    <div class="switch">switch<br>account</div>
+    <div class="step" role="listitem"><b>Interfaces</b><span>New feed, grant</span></div>
+    <div class="switch">switch<br>account</div>
+    <div class="step" role="listitem"><span class="flag">hidden rule</span><b>Test Console</b><span>Run, capture</span></div>
+  </div>
+  <div class="causes">
+    <div class="cause"><h3>Navigation mirrors the database</h3><p>Six tabs, one per stored object. A builder's one job is spread across all six, in an order nobody explains.</p></div>
+    <div class="cause"><h3>One console for four jobs</h3><p>Builder, reviewer, operator and admin share screens. Roles hide buttons rather than giving each person a view of their own work.</p></div>
+    <div class="cause"><h3>The rule that matters is invisible</h3><p>Access environment = key environment = SAP system environment. You only learn it by failing, which is how a key landed on the empty twin solution.</p></div>
+    <div class="cause"><h3>Fourteen nouns before a first call</h3><p>Solution, interface, capability, catalogue service, entity set, grant, credential, client, connection, tenant, environment, binding, broker, northbound.</p></div>
+    <div class="cause"><h3>Signals that contradict</h3><p>"Reachable" while reads return 403. "Activated" on one screen, "Needs setup" on another. "PASS · unevidenced".</p></div>
+    <div class="cause"><h3>Handoffs happen off-screen</h3><p>Nothing tells the approver a request is waiting, or the builder that a key is ready. People coordinate in chat.</p></div>
+  </div>
+</section>
+
+<section id="principles">
+  <div class="sec-head"><span class="eyebrow">The shift</span><h2>Six rules the new design has to obey</h2></div>
+  <div class="principles">
+    <div class="pr"><span class="k">1</span><h3>Organise around the job, not the table</h3><p>The screen is "my app's purchase orders in Test", not "the grants ledger". Objects show up only inside the job that needs them.</p></div>
+    <div class="pr"><span class="k">2</span><h3>Make the mismatch impossible, not explained</h3><p>If access, key and SAP system always belong to one lane, they can't disagree. A whole class of error disappears.</p></div>
+    <div class="pr"><span class="k">3</span><h3>Every person starts from "what needs me"</h3><p>One queue per person across roles: review this, collect that key, fix this failing read. Nobody goes looking for work.</p></div>
+    <div class="pr"><span class="k">4</span><h3>Proof, with its age</h3><p>A status is a check that ran: what it tested, when, and what it doesn't prove. Old proof fades to "unknown" by itself.</p></div>
+    <div class="pr"><span class="k">5</span><h3>Every refusal is a route to its fix</h3><p>A failed call traces itself hop by hop, names the broken hop and its owner, and offers the one action that fixes it.</p></div>
+    <div class="pr"><span class="k">6</span><h3>Plain words up front, SAP terms one click away</h3><p>"Purchase orders" and "Test", with <span class="mono">CE_PURCHASEORDER_0001 / PurchaseOrder</span> in a details drawer for the consultant who wants it.</p></div>
+  </div>
+</section>
+
+<section id="brainstorm">
+  <div class="sec-head"><span class="eyebrow">Brainstorm</span><h2>Fifteen ideas, scored and sorted</h2></div>
+  <p class="prose">Each idea is scored for impact on consultant and operator time, build effort against the current codebase, and how far it moves CoreEdge beyond a typical API console. Core bets make up the concept below. The rest stay on the table, sequenced.</p>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Idea</th><th>Impact</th><th>Effort</th><th>Novelty</th><th>Verdict</th></tr></thead>
+      <tbody>
+        <tr><td><b>Lanes</b><span class="sub">One object per app × data × environment, holding its access, SAP system, key and traffic together.</span></td><td class="dots">●●●</td><td class="dots">●●<i>●</i></td><td class="dots">●●●</td><td><span class="verdict v-core">Core bet</span></td></tr>
+        <tr><td><b>Promote, don't re-request</b><span class="sub">Sandbox → Dev → Test → Prod as a pipeline. "Promote" carries the contract forward and opens the review automatically.</span></td><td class="dots">●●●</td><td class="dots">●●<i>●</i></td><td class="dots">●●<i>●</i></td><td><span class="verdict v-core">Core bet</span></td></tr>
+        <tr><td><b>Access review with built-in checks</b><span class="sub">Like a pull request: what changes, which checks passed, who asked, until when. Approve only when checks are green.</span></td><td class="dots">●●●</td><td class="dots">●●<i>●</i></td><td class="dots">●●<i>●</i></td><td><span class="verdict v-core">Core bet</span></td></tr>
+        <tr><td><b>"Needs you" queue</b><span class="sub">One queue per person across roles: reviews, keys to collect, failing lanes, expiring access.</span></td><td class="dots">●●●</td><td class="dots">●<i>●●</i></td><td class="dots">●<i>●●</i></td><td><span class="verdict v-core">Core bet</span></td></tr>
+        <tr><td><b>Why? trace</b><span class="sub">Any failed call walked hop by hop (key → access → binding → SAP metadata → SAP data), naming the broken hop, its owner and the fix.</span></td><td class="dots">●●●</td><td class="dots">●<i>●●</i></td><td class="dots">●●●</td><td><span class="verdict v-core">Core bet</span></td></tr>
+        <tr><td><b>Shared lane timeline</b><span class="sub">Builder, reviewer and operator read the same event stream: requested, approved, key collected, first call, SAP refused. Handoffs become visible.</span></td><td class="dots">●●<i>●</i></td><td class="dots">●<i>●●</i></td><td class="dots">●●<i>●</i></td><td><span class="verdict v-core">Core bet</span></td></tr>
+        <tr><td><b>Always-on checks with age</b><span class="sub">Per-lane metadata and 1-row data probes on a schedule; every badge shows when it was last proven.</span></td><td class="dots">●●●</td><td class="dots">●●<i>●</i></td><td class="dots">●<i>●●</i></td><td><span class="verdict v-core">Core bet</span></td></tr>
+        <tr><td><b>Keys you never copy</b><span class="sub"><span class="mono">coreedge pull</span> writes <span class="mono">.env</span> for the app owner, or a one-time claim link. It also closes the "issuer sees the owner's token" gap.</span></td><td class="dots">●●<i>●</i></td><td class="dots">●●<i>●</i></td><td class="dots">●●<i>●</i></td><td><span class="verdict v-next">Next</span></td></tr>
+        <tr><td><b>Instant sandbox lane</b><span class="sub">Every new feed works within minutes against SAP's API Hub sandbox (API-key auth already shipped as AD-12). No approval needed to start building.</span></td><td class="dots">●●●</td><td class="dots">●<i>●●</i></td><td class="dots">●●<i>●</i></td><td><span class="verdict v-next">Next</span></td></tr>
+        <tr><td><b>Field-level contracts</b><span class="sub">Pick the fields the app needs from <span class="mono">$metadata</span>. The reviewer approves fields, not whole services, and the typed client is generated from the same pick.</span></td><td class="dots">●●●</td><td class="dots">●●●</td><td class="dots">●●<i>●</i></td><td><span class="verdict v-next">Next</span></td></tr>
+        <tr><td><b>Lane blueprints</b><span class="sub">ABeam-packaged sets such as "Procure-to-pay read pack", reusable across clients: presales leverage and faster delivery.</span></td><td class="dots">●●<i>●</i></td><td class="dots">●<i>●●</i></td><td class="dots">●●<i>●</i></td><td><span class="verdict v-next">Next</span></td></tr>
+        <tr><td><b>CoreEdge for AI assistants (MCP)</b><span class="sub">Consultants building in Claude Code call governed lanes directly, with the same grants, audit and keys as any other app.</span></td><td class="dots">●●<i>●</i></td><td class="dots">●●<i>●</i></td><td class="dots">●●●</td><td><span class="verdict v-explore">Explore</span></td></tr>
+        <tr><td><b>Client integration passport</b><span class="sub">A read-only page for the client's IT: which data leaves SAP, to which app, approved by whom, until when. A trust tool and a differentiator in pitches.</span></td><td class="dots">●●<i>●</i></td><td class="dots">●<i>●●</i></td><td class="dots">●●●</td><td><span class="verdict v-explore">Explore</span></td></tr>
+        <tr><td><b>Ask CoreEdge</b><span class="sub">A command bar that answers "why is purchase orders failing in Test?" from the trace and the timeline.</span></td><td class="dots">●●<i>●</i></td><td class="dots">●●<i>●</i></td><td class="dots">●●<i>●</i></td><td><span class="verdict v-explore">Explore</span></td></tr>
+        <tr><td><b>Visual mapping canvas</b><span class="sub">Drag-and-drop field mapping and flows. It pulls CoreEdge into Integration Suite territory and against the "no BTP" pitch.</span></td><td class="dots">●<i>●●</i></td><td class="dots">●●●</td><td class="dots">●<i>●●</i></td><td><span class="verdict v-park">Park</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="model">
+  <div class="sec-head"><span class="eyebrow">The new model</span><h2>An app has data feeds; each feed has a lane per environment</h2></div>
+  <p class="prose">A lane is the unit people reason about. It holds four gates, always in the same order, so everyone reads the same state the same way. The environment belongs to the lane, not to each object separately, so the three-way match can't be broken.</p>
+  <div class="model">
+    <div class="app">
+      <div class="eyebrow">App</div>
+      <h3 style="margin-top:6px">Purchase Order Tracker</h3>
+      <p>Built by an ABeam consultant for the X5M client landscape. Owners: tech, business, support.</p>
+      <p class="mono" style="font-size:12px;color:var(--muted)">today: Solution cms5aboxe…</p>
+    </div>
+    <div class="grid-scroll">
+      <div class="lanes">
+        <div class="hd">Data feed</div><div class="hd">Sandbox</div><div class="hd">Dev · X5M/080</div><div class="hd">Test · X5M/100</div><div class="hd">Prod</div>
+        <div class="feed">Purchase orders<span>CE_PURCHASEORDER_0001</span></div>
+        <div><div class="cellstate">Live<small>API Hub sandbox</small></div><div class="gates"><span class="g ok">A</span><span class="g ok">S</span><span class="g ok">K</span><span class="g ok">T</span></div></div>
+        <div><div class="cellstate">Ready, no data<small>0 rows · checked 4 m ago</small></div><div class="gates"><span class="g ok">A</span><span class="g ok">S</span><span class="g ok">K</span><span class="g">T</span></div></div>
+        <div><div class="cellstate">Live<small>5 rows · checked 2 m ago</small></div><div class="gates"><span class="g ok">A</span><span class="g ok">S</span><span class="g ok">K</span><span class="g ok">T</span></div></div>
+        <div><div class="cellstate" style="color:var(--navy)">Promote →<small>no Prod SAP system yet</small></div><div class="gates"><span class="g">A</span><span class="g bad">S</span><span class="g">K</span><span class="g">T</span></div></div>
+        <div class="feed">Bank details<span>API_BANKDETAIL_SRV</span></div>
+        <div><div class="cellstate">Live<small>API Hub sandbox</small></div><div class="gates"><span class="g ok">A</span><span class="g ok">S</span><span class="g ok">K</span><span class="g ok">T</span></div></div>
+        <div><div class="cellstate" style="color:var(--bad)">SAP refuses reads<small>403 · metadata OK · 4 m ago</small></div><div class="gates"><span class="g ok">A</span><span class="g bad">S</span><span class="g ok">K</span><span class="g">T</span></div></div>
+        <div><div class="cellstate" style="color:var(--navy)">Promote →<small>blocked until Dev works</small></div><div class="gates"><span class="g">A</span><span class="g">S</span><span class="g">K</span><span class="g">T</span></div></div>
+        <div><div class="cellstate" style="color:var(--muted)">—</div><div class="gates"><span class="g">A</span><span class="g">S</span><span class="g">K</span><span class="g">T</span></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="legend">
+    <span><b>A</b> Access: approved for this environment, not expired</span>
+    <span><b>S</b> SAP system: connected, metadata and data read proven, with age</span>
+    <span><b>K</b> Key: issued for this lane and collected by the owner</span>
+    <span><b>T</b> Traffic: calls seen, errors, last success</span>
+  </div>
+  <p class="prose" style="margin-top:14px;color:var(--ink2);font-size:14px">Sandbox and Dev data here reflect what we saw on 10–11 Sep (Dev empty for procurement, Bank reads refused by SAP on both X5M tenants). The Sandbox column is the proposed instant-sandbox lane.</p>
+</section>
+
+<section id="people">
+  <div class="sec-head"><span class="eyebrow">Who it's for</span><h2>Four ABeam roles, each with a home screen</h2></div>
+  <div class="people">
+    <div class="person"><div class="role">Builder</div><q>"Get me this client's purchase orders in my app today."</q><ul><li>Adds data feeds from the catalogue</li><li>Builds on Sandbox, promotes lanes</li><li>Collects keys, downloads the typed client</li></ul><div class="home">Home: My apps + Needs you</div></div>
+    <div class="person"><div class="role">Reviewer</div><q>"Let me decide safely in one minute, with evidence."</q><ul><li>Reviews access with checks attached</li><li>Sees exactly which fields and which system</li><li>Approves, requests changes or rejects with a reason</li></ul><div class="home">Home: Requests (reviews waiting on me)</div></div>
+    <div class="person"><div class="role">Operator</div><q>"Show me what's breaking, for which client, and who to tell."</q><ul><li>Watches all lanes across clients</li><li>Opens the Why trace and the timeline</li><li>Hands off to the builder or the client's SAP admin in one click</li></ul><div class="home">Home: Operations board</div></div>
+    <div class="person"><div class="role">Platform admin</div><q>"Keep each client's SAP systems connected, healthy and rotated."</q><ul><li>Connects SAP systems per environment</li><li>Sees which lanes depend on each system</li><li>Rotates secrets, revokes keys</li></ul><div class="home">Home: SAP systems</div></div>
+  </div>
+</section>
+
+<section id="flow">
+  <div class="sec-head"><span class="eyebrow">The golden path</span><h2>From idea to Test data, and a failure that handles itself</h2></div>
+  <div class="twocol">
+    <div>
+      <h3>A builder's first data feed</h3>
+      <ol class="story">
+        <li><span class="t">0:00</span><span class="dot"></span><div><div class="who">Builder</div><p>Creates "Purchase Order Tracker". Types "purchase orders" in the catalogue and adds the feed; the fields come from <span class="mono">$metadata</span>.</p><span class="old">Today: Discover → Add to interface → Interfaces → set entity set by hand.</span></div></li>
+        <li><span class="t">0:03</span><span class="dot"></span><div><div class="who">CoreEdge</div><p>Opens a Sandbox lane at once, with a key the builder collects via <span class="mono">coreedge pull</span>. The typed client works against sandbox data.</p><span class="old">Today: no path to any data without an approved grant.</span></div></li>
+        <li><span class="t">0:40</span><span class="dot"></span><div><div class="who">Builder</div><p>Clicks <b>Promote to Test</b>. The review opens pre-filled: fields, system X5M/100, expiry 90 days, checks already running.</p><span class="old">Today: raise a grant, remembering to pick an expiry and the right environment.</span></div></li>
+        <li><span class="t">0:52</span><span class="dot"></span><div><div class="who">Reviewer</div><p>Sees it at the top of Needs you. All checks green, so approves with one click. SoD is enforced, and shown in plain words.</p><span class="old">Today: someone has to tell them in chat; then sign-out, sign-in as another account.</span></div></li>
+        <li><span class="t">0:53</span><span class="dot"></span><div><div class="who">CoreEdge</div><p>Issues the Test key to the owner. The builder's queue says "Key ready"; <span class="mono">coreedge pull --env test</span> updates <span class="mono">.env</span>.</p><span class="old">Today: a different person issues the key, sees the token, pastes it somewhere.</span></div></li>
+        <li><span class="t">0:55</span><span class="dot"></span><div><div class="who">Builder</div><p>First Test call returns 5 rows. The lane's T gate turns green; the timeline logs "first call".</p></div></li>
+      </ol>
+    </div>
+    <div>
+      <h3>A failure, operator to builder</h3>
+      <ol class="story">
+        <li><span class="t">09:10</span><span class="dot"></span><div><div class="who">CoreEdge</div><p>The scheduled check on Bank details · Dev reads metadata 200 but data 403. The S gate turns red and the lane fades out of "Live".</p><span class="old">Today: "Reachable" stays green; Discover says "Activated".</span></div></li>
+        <li><span class="t">09:10</span><span class="dot"></span><div><div class="who">Operator</div><p>Sees it on the board with the owner and client. Opens Why: the broken hop is "SAP data read", owned by the client's SAP admin.</p></div></li>
+        <li><span class="t">09:12</span><span class="dot"></span><div><div class="who">Operator</div><p>Clicks <b>Send to SAP admin</b>. CoreEdge drafts the note: communication user, service, entity set, the 403 and what to check.</p><span class="old">Today: someone reads the code to work out a 401 from a 403.</span></div></li>
+        <li><span class="t">09:12</span><span class="dot"></span><div><div class="who">Builder</div><p>Their queue shows "Bank details · Dev blocked by SAP, operator on it". There's nothing to debug, and the timeline shows who is doing what.</p></div></li>
+        <li><span class="t">14:30</span><span class="dot"></span><div><div class="who">CoreEdge</div><p>The next check passes. The lane goes live and both people get "Resolved · SAP authorisation fixed", linked to the timeline entry.</p></div></li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<section id="screens">
+  <div class="sec-head"><span class="eyebrow">Screen concepts</span><h2>Five screens replace twenty</h2></div>
+  <p class="prose">Illustrative, drawn with the CoreEdge tokens. The systems, services and statuses are real from the X5M landscape; people and the app name are examples.</p>
+
+  <div class="exhibit">
+    <div class="cap"><b>Home · Needs you</b><span>The first screen for every role. Work arrives here, it isn't hunted for.</span></div>
+    <div class="frame-scroll"><div class="frame" role="img" aria-label="Mockup: Home screen with a Needs you queue and app lanes">
+      <nav class="side"><div class="brand">CoreEdge</div><a class="on">Home <span class="n">4</span></a><a>Apps</a><a>Catalogue</a><a>Requests <span class="n">1</span></a><a>SAP systems</a><a>Operations</a><div class="who">Signed in: Builder · Reviewer<br>ABeam Malaysia</div></nav>
+      <div class="main">
+        <div class="mhead"><div><h4>Good morning. 4 things need you.</h4><div class="sub">Across 2 apps, 1 client landscape</div></div><div class="cmd">Ask or jump to…<kbd>⌘K</kbd></div></div>
+        <div class="row2">
+          <div class="pn">
+            <div class="pn-h"><span>Needs you</span><span>oldest first</span></div>
+            <div class="task"><span class="sev wait"></span><div><b>Review access · Supplier Spend → Test</b><span>Requested by Farid · 3 checks green, 1 running · waits 2 h</span></div><span class="btn primary">Review</span></div>
+            <div class="task"><span class="sev ok"></span><div><b>Key ready · Purchase orders · Test</b><span>Collect with <span class="mono">coreedge pull --env test</span> · expires 10 Dec 2026</span></div><span class="btn">Collect</span></div>
+            <div class="task"><span class="sev bad"></span><div><b>Bank details · Dev is blocked by SAP</b><span>Data read 403, metadata OK · operator has sent it to the client's SAP admin</span></div><span class="btn ghost">Open</span></div>
+            <div class="task"><span class="sev info"></span><div><b>Access expires in 12 days · Attachments · Test</b><span>Renewing keeps the same key and contract</span></div><span class="btn">Renew</span></div>
+          </div>
+          <div class="pn">
+            <div class="pn-h"><span>My apps</span><span>S · D · T · P</span></div>
+            <div class="task"><span class="sev ok"></span><div><b>Purchase Order Tracker</b><span>2 feeds · Test live · Prod not connected</span></div><span class="gates"><span class="g ok">S</span><span class="g bad">D</span><span class="g ok">T</span><span class="g">P</span></span></div>
+            <div class="task"><span class="sev wait"></span><div><b>Supplier Spend</b><span>1 feed · Test in review</span></div><span class="gates"><span class="g ok">S</span><span class="g ok">D</span><span class="g wait">T</span><span class="g">P</span></span></div>
+            <div class="task"><span class="sev"></span><div><b>New app</b><span>Start from a blueprint or an empty app</span></div><span class="btn">Create</span></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="exhibit">
+    <div class="cap"><b>App · lane board</b><span>One screen for the whole app: every feed across every environment, with the selected lane's gates beside it.</span></div>
+    <div class="frame-scroll"><div class="frame" role="img" aria-label="Mockup: App page with a lane board and a selected lane panel">
+      <nav class="side"><div class="brand">CoreEdge</div><a>Home <span class="n">4</span></a><a class="on">Apps</a><a>Catalogue</a><a>Requests <span class="n">1</span></a><a>SAP systems</a><a>Operations</a><div class="who">Signed in: Builder</div></nav>
+      <div class="main">
+        <div class="mhead"><div><h4>Purchase Order Tracker</h4><div class="sub">Owners: Ikmal (tech, business), Nadia (support) · Client landscape X5M</div></div><div style="display:flex;gap:8px"><span class="btn">+ Add data feed</span><span class="btn">Download SDK</span></div></div>
+        <div class="row2">
+          <div class="pn" style="overflow:hidden">
+            <div class="board">
+              <div class="bh">Feed</div><div class="bh">Sandbox</div><div class="bh">Dev</div><div class="bh">Test</div><div class="bh">Prod</div>
+              <div class="bf">Purchase orders<span>12 of 71 fields</span></div>
+              <div><span class="chip c-ok">Live</span></div>
+              <div><span class="chip c-info">No data</span></div>
+              <div class="sel"><span class="chip c-ok">Live · 5 rows</span></div>
+              <div><span class="promote">Promote →</span></div>
+              <div class="bf">Bank details<span>8 of 23 fields</span></div>
+              <div><span class="chip c-ok">Live</span></div>
+              <div><span class="chip c-bad">SAP refused</span></div>
+              <div><span class="chip c-off">Blocked</span></div>
+              <div style="color:var(--muted)">—</div>
+            </div>
+          </div>
+          <div class="pn">
+            <div class="pn-h"><span>Purchase orders · Test</span><span class="chip c-ok">Live</span></div>
+            <div class="gate"><span class="ic ok">✓</span><div><b>Access approved</b><span>by Nadia · until 10 Dec 2026, 23:59 MYT</span></div><em>10 Sep</em></div>
+            <div class="gate"><span class="ic ok">✓</span><div><b>SAP system · Customizing X5M/100</b><span>Metadata 200 · data read 200 (5 rows)</span></div><em>2 m ago</em></div>
+            <div class="gate"><span class="ic ok">✓</span><div><b>Key collected</b><span>…Gu4 · owner Ikmal · via CLI</span></div><em>11 Sep</em></div>
+            <div class="gate"><span class="ic ok">✓</span><div><b>Traffic</b><span>42 calls today · 0 errors · p95 610 ms</span></div><em>1 m ago</em></div>
+            <div class="actions"><span class="btn primary">Try it</span><span class="btn">Timeline</span><span class="btn">Promote to Prod</span></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="exhibit">
+    <div class="cap"><b>Requests · review with checks</b><span>The reviewer sees what changes and what has been proven. A missing Prod system blocks approval before it can break a call.</span></div>
+    <div class="frame-scroll"><div class="frame" role="img" aria-label="Mockup: Access review page with automatic checks">
+      <nav class="side"><div class="brand">CoreEdge</div><a>Home <span class="n">3</span></a><a>Apps</a><a>Catalogue</a><a class="on">Requests <span class="n">1</span></a><a>SAP systems</a><a>Operations</a><div class="who">Signed in: Reviewer</div></nav>
+      <div class="main">
+        <div class="mhead"><div><h4>Promote Purchase orders to Prod</h4><div class="sub">Purchase Order Tracker · requested by Ikmal · 90-day access until 9 Dec 2026, 23:59 MYT</div></div><span class="chip c-wait">Waiting on 1 check</span></div>
+        <div class="row2">
+          <div class="pn checks">
+            <div class="pn-h"><span>Checks</span><span>run automatically</span></div>
+            <div class="gate"><span class="ic ok">✓</span><div><b>Contract unchanged since Test</b><span>Same 12 fields, same dataset</span></div><em>now</em></div>
+            <div class="gate"><span class="ic ok">✓</span><div><b>Test lane healthy for 7 days</b><span>1,204 calls · 0 errors</span></div><em>now</em></div>
+            <div class="gate"><span class="ic ok">✓</span><div><b>Owners assigned, separate reviewer</b><span>You didn't request this and don't own the app</span></div><em>now</em></div>
+            <div class="gate"><span class="ic bad">✕</span><div><b>No Prod SAP system connected</b><span>A Prod key would bind to nothing. Platform admin has been asked.</span></div><em>now</em></div>
+            <div class="actions"><span class="btn primary" aria-disabled="true">Approve</span><span class="btn">Request changes</span><span class="btn">Reject…</span></div>
+          </div>
+          <div class="pn">
+            <div class="pn-h"><span>What changes</span><span>Prod</span></div>
+            <div class="diff"><span class="add">+ Purchase orders → Prod (read only)</span><br><span class="ctx">  fields: PurchaseOrder, PurchaseOrderType,</span><br><span class="ctx">          CompanyCode, Supplier, PurchaseOrderDate,</span><br><span class="ctx">          DocumentCurrency, … 6 more</span><br><span class="add">+ key for Prod, delivered to owner only</span><br><span class="ctx">  SAP: CE_PURCHASEORDER_0001 / PurchaseOrder</span></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="exhibit">
+    <div class="cap"><b>Lane · Why? and timeline</b><span>The trace we worked out by hand on 10 Sep, shown for any failed lane with the owner and the fix.</span></div>
+    <div class="frame-scroll"><div class="frame" role="img" aria-label="Mockup: Lane detail with a hop-by-hop trace and a shared timeline">
+      <nav class="side"><div class="brand">CoreEdge</div><a>Home</a><a class="on">Apps</a><a>Catalogue</a><a>Requests</a><a>SAP systems</a><a>Operations</a><div class="who">Signed in: Operator</div></nav>
+      <div class="main">
+        <div class="mhead"><div><h4>Bank details · Dev</h4><div class="sub">Purchase Order Tracker · Development X5M/080 · <span class="mono">API_BANKDETAIL_SRV / A_BankDetail</span></div></div><span class="chip c-bad">SAP refuses reads</span></div>
+        <div class="pn">
+          <div class="pn-h"><span>Why isn't this working?</span><span>traced 4 m ago</span></div>
+          <div class="trace">
+            <div class="hop ok"><b>Key</b><em>valid · Dev</em></div><span class="link"></span>
+            <div class="hop ok"><b>Access</b><em>approved · 10 Dec</em></div><span class="link"></span>
+            <div class="hop ok"><b>Binding</b><em>Dev → X5M/080</em></div><span class="link"></span>
+            <div class="hop ok"><b>SAP metadata</b><em>200</em></div><span class="link"></span>
+            <div class="hop bad"><b>SAP data read</b><em>403</em></div><span class="link"></span>
+            <div class="hop"><b>Your app</b><em>—</em></div>
+          </div>
+          <div class="explain"><b>SAP refused the read, so the fix is in SAP, not in CoreEdge.</b>The communication user can open the service but isn't authorised to read <span class="mono">A_BankDetail</span>. Owner: the client's SAP admin. Same result on X5M/100.</div>
+          <div class="actions" style="border-top:0;padding-top:0"><span class="btn primary">Send to SAP admin</span><span class="btn">Re-check now</span><span class="btn ghost">Copy details</span></div>
+        </div>
+        <div class="pn">
+          <div class="pn-h"><span>Timeline</span><span>shared by builder, reviewer, operator</span></div>
+          <ul class="tl">
+            <li><time>11 Sep 09:12</time><span>Operator sent the SAP authorisation note to the client's SAP admin <span class="by">· Nadia</span></span></li>
+            <li><time>11 Sep 09:10</time><span>Scheduled check: metadata 200, data read 403. Lane left "Live" <span class="by">· CoreEdge</span></span></li>
+            <li><time>10 Sep 22:34</time><span>First call refused by SAP · <span class="mono">82fa4a8e…</span> <span class="by">· app</span></span></li>
+            <li><time>10 Sep 22:33</time><span>Access approved for Dev until 10 Dec <span class="by">· reviewer</span></span></li>
+          </ul>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="exhibit">
+    <div class="cap"><b>Operations · the board</b><span>Every lane across clients, sorted by what needs a human. Operations Center and Control Tower become one workspace.</span></div>
+    <div class="frame-scroll"><div class="frame" role="img" aria-label="Mockup: Operations board listing lanes by attention">
+      <nav class="side"><div class="brand">CoreEdge</div><a>Home</a><a>Apps</a><a>Catalogue</a><a>Requests</a><a>SAP systems</a><a class="on">Operations <span class="n">3</span></a><div class="who">Signed in: Operator</div></nav>
+      <div class="main">
+        <div class="mhead"><div><h4>Operations</h4><div class="sub">All client landscapes · live · checks every 15 min</div></div><div class="filters"><span class="pill on">Needs attention · 3</span><span class="pill">Expiring · 2</span><span class="pill">Stale checks · 0</span><span class="pill">All lanes · 11</span></div></div>
+        <div class="kpis">
+          <div class="kpi"><b>11</b><span>lanes live</span></div>
+          <div class="kpi"><b>3</b><span>need attention</span></div>
+          <div class="kpi"><b>2</b><span>requests waiting &gt; 4 h</span></div>
+          <div class="kpi"><b>100%</b><span>statuses proven &lt; 15 min</span></div>
+        </div>
+        <div class="pn" style="overflow:hidden">
+          <table class="mtable">
+            <thead><tr><th>Lane</th><th>Client · system</th><th>State</th><th>Broken hop</th><th class="num">Calls 24 h</th><th class="num">Errors</th><th>Owner</th><th>Checked</th></tr></thead>
+            <tbody>
+              <tr><td><b>Bank details · Dev</b><span class="sub">Purchase Order Tracker</span></td><td>X5M · X5M/080</td><td><span class="chip c-bad">SAP refused</span></td><td>SAP data read</td><td class="num">3</td><td class="num">3</td><td>client SAP admin</td><td class="mono">4 m</td></tr>
+              <tr><td><b>Supplier Spend · Test</b><span class="sub">Supplier Spend</span></td><td>X5M · X5M/100</td><td><span class="chip c-wait">In review</span></td><td>Access</td><td class="num">0</td><td class="num">0</td><td>reviewer · 2 h</td><td class="mono">2 m</td></tr>
+              <tr><td><b>Attachments · Test</b><span class="sub">Delivery Tracker</span></td><td>X5M · X5M/100</td><td><span class="chip c-info">Expires 12 d</span></td><td>—</td><td class="num">88</td><td class="num">0</td><td>builder</td><td class="mono">6 m</td></tr>
+              <tr><td><b>Purchase orders · Test</b><span class="sub">Purchase Order Tracker</span></td><td>X5M · X5M/100</td><td><span class="chip c-ok">Live</span></td><td>—</td><td class="num">42</td><td class="num">0</td><td>builder</td><td class="mono">2 m</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div></div>
+  </div>
+</section>
+
+<section id="ia">
+  <div class="sec-head"><span class="eyebrow">Structure &amp; words</span><h2>Twenty screens become six places, and fourteen nouns become seven words</h2></div>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>New place</th><th>Who lives there</th><th>Absorbs today's screens</th></tr></thead>
+      <tbody>
+        <tr><td><b>Home</b><span class="sub">Needs you + my apps</span></td><td>Everyone</td><td>Studio Home, the topology map (as the app board)</td></tr>
+        <tr><td><b>Apps</b><span class="sub">Lane board, lane detail, Try it, SDK</span></td><td>Builder</td><td>Solutions, Interfaces, Test Console, credential issue, scaffold</td></tr>
+        <tr><td><b>Catalogue</b><span class="sub">Find SAP data, see where it's proven</span></td><td>Builder</td><td>Discover</td></tr>
+        <tr><td><b>Requests</b><span class="sub">Reviews with checks, history</span></td><td>Reviewer</td><td>API Access (grants ledger), Control Tower · grants</td></tr>
+        <tr><td><b>SAP systems</b><span class="sub">Per-environment connections and health</span></td><td>Platform admin</td><td>Connections, Ops · connections, Control Tower · connections</td></tr>
+        <tr><td><b>Operations</b><span class="sub">The board, traffic, audit, tokens</span></td><td>Operator</td><td>Operations Center (7 screens) and Control Tower (6 screens)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="vocab" aria-label="Vocabulary changes">
+    <div class="w"><s>Solution</s><i>→</i><span class="to">App</span></div>
+    <div class="w"><s>Interface · capability · catalogue service</s><i>→</i><span class="to">Data feed</span></div>
+    <div class="w"><s>Entity set</s><i>→</i><span class="to">Dataset (in details)</span></div>
+    <div class="w"><s>Grant · API access</s><i>→</i><span class="to">Access</span></div>
+    <div class="w"><s>Credential · client token</s><i>→</i><span class="to">Key</span></div>
+    <div class="w"><s>Connection · tenant</s><i>→</i><span class="to">SAP system</span></div>
+    <div class="w"><s>Environment + binding</s><i>→</i><span class="to">Lane</span></div>
+    <div class="w"><s>Broker · northbound</s><i>→</i><span class="to">CoreEdge API</span></div>
+    <div class="w"><s>Test Console</s><i>→</i><span class="to">Try it</span></div>
+  </div>
+</section>
+
+<section id="build">
+  <div class="sec-head"><span class="eyebrow">What stays underneath</span><h2>The engine is good. The lane is a new way to read it.</h2></div>
+  <div class="twocol">
+    <div class="prose">
+      <p>Nothing in CoreEdge's governance has to be thrown away. Grants still gate every call, the environment binding still refuses cross-landscape reads, secrets stay sealed, and every call is audited. A lane starts as a <b>read model</b> that joins what already exists:</p>
+      <p class="code">Lane(app, feed, environment) =
+  Solution        → app
+  Interface       → feed (+ dataset, fields)
+  ApiAccessGrant  → A gate
+  SapConnection   → S gate (+ probes, age)
+  SolutionClient  → K gate   (per env since AD-11)
+  NorthboundAudit → T gate + timeline</p>
+    </div>
+    <div class="prose">
+      <h3>New pieces, in build order</h3>
+      <p><b>Lane endpoint.</b> <span class="mono">GET /apps/:id/lanes</span> composes the joins above with the broker's own predicates, so the board can never disagree with a real call.</p>
+      <p><b>Per-lane checks.</b> A scheduled metadata probe plus a 1-row data read per lane, stored with timestamps (review item TECH-05).</p>
+      <p><b>Promote action.</b> Opens the access request pre-filled for the next environment with an expiry, then issues the key to the owner when it's approved.</p>
+      <p><b>Timeline and queue.</b> An event stream built from audit, grant, key and probe records, plus a per-person "needs you" query over it.</p>
+    </div>
+  </div>
+</section>
+
+<section id="plan">
+  <div class="sec-head"><span class="eyebrow">Plan</span><h2>Three phases, each shippable on its own</h2></div>
+  <div class="phases">
+    <div class="phase"><span class="when">Phase 1 · ~4 weeks</span><h3>See it</h3><ul><li>Lane endpoint and the app lane board</li><li>Needs you queue (read-only)</li><li>Why? trace on every refusal</li><li>New words across the UI</li></ul><div class="exit"><b>Exit:</b> a consultant new to CoreEdge gets a first Test read in under 30 minutes without help.</div></div>
+    <div class="phase"><span class="when">Phase 2 · ~6 weeks</span><h3>Flow it</h3><ul><li>Promote and review with checks</li><li>Scheduled per-lane checks with age</li><li>Keys delivered to the owner (claim link, then CLI)</li><li>Shared timeline; one Operations workspace</li></ul><div class="exit"><b>Exit:</b> zero account-switching to hand work over; reviews answered within 4 hours.</div></div>
+    <div class="phase"><span class="when">Phase 3 · next quarter</span><h3>Scale it</h3><ul><li>Instant sandbox lanes (AD-12)</li><li>Field-level contracts and typed SDK from <span class="mono">$metadata</span></li><li>ABeam lane blueprints</li><li>Explore: MCP access, client passport, Ask CoreEdge</li></ul><div class="exit"><b>Exit:</b> a second client landscape onboarded from a blueprint in a day.</div></div>
+  </div>
+  <div class="prereq"><b>Before Phase 1 ships to anyone outside the team:</b> close the three open P0s from the fix verification: the dev-login backdoor live in production, the ungoverned Studio explorer read path, and caller-chosen entity sets. A friendlier front door on an open back door makes the risk worse.</div>
+  <div class="metrics">
+    <div class="metric"><div class="from">Today: most of a working session</div><div class="to">&lt; 30 min</div><p>Time from new app to first Test read</p></div>
+    <div class="metric"><div class="from">Today: 6 screens, 3 account switches</div><div class="to">1 screen</div><p>Places a builder must visit for one feed</p></div>
+    <div class="metric"><div class="from">Today: possible, silent</div><div class="to">Impossible</div><p>Environment mismatches between access, key and SAP system</p></div>
+    <div class="metric"><div class="from">Today: badges up to 6 weeks old</div><div class="to">&lt; 15 min</div><p>Age of the proof behind every status</p></div>
+  </div>
+</section>
+
+<section id="decide">
+  <div class="sec-head"><span class="eyebrow">Your call</span><h2>Six decisions that shape the build</h2></div>
+  <ol class="decisions">
+    <li><div><b>Adopt the lane as CoreEdge's core object and rename the product vocabulary?</b><span>Everything else follows from this. The database keeps its names; the UI and docs change.</span></div></li>
+    <li><div><b>Merge Operations Center and Control Tower into one Operations workspace?</b><span>Operators and admins currently split across 13 screens; the board plus drill-downs covers both.</span></div></li>
+    <li><div><b>Key delivery: claim link first, or CLI first?</b><span>The claim link is quicker to build; the CLI is what builders will actually use daily. Both remove "the issuer sees the token".</span></div></li>
+    <li><div><b>Instant sandbox: who holds the SAP API Hub key?</b><span>One ABeam-owned key per CoreEdge deployment is simplest; per-consultant keys are cleaner for audit.</span></div></li>
+    <li><div><b>Keep SAP terms visible for consultants, or behind a details drawer?</b><span>Consultants read <span class="mono">CE_PURCHASEORDER_0001</span> fluently; client users and new joiners don't. A per-person "show SAP names" toggle serves both.</span></div></li>
+    <li><div><b>Put the client integration passport into the next pitch?</b><span>It turns governance into something a client CIO can see, and no one else in this market shows it.</span></div></li>
+  </ol>
+</section>
+
+<footer>Grounded in the CoreEdge end-to-end run of 10–11 Sep 2026, the improvement review and the fix verification at <span class="mono">1a873e3</span>. Screens are concepts, not the shipped product. Tokens: CoreEdge Design Tokens (navy #002B5C, Geist, Source Serif 4).</footer>
+</div>
