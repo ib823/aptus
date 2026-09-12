@@ -151,6 +151,21 @@ describe("the migration", () => {
   });
 
   it("matches the schema, which also declares it optional", () => {
-    expect(schema).toMatch(/environment\s+String\?/);
+    /*
+     * THE COLUMN IS NOW AN ENUM (settled decision D1, migration
+     * 20260912010000_sap_environment_enum). It shipped as TEXT — "free text so a
+     * landscape with other names is not forced to lie" — and the cost was that
+     * the binding matched on an upper-cased string, so a value the resolver could
+     * never bind to could still be stored by any path that skipped
+     * `normalizeEnvironment`.
+     *
+     * WHAT THIS TEST WAS ALWAYS PROTECTING IS UNCHANGED, AND IS THE HALF THAT
+     * MATTERS: the column stays OPTIONAL. "Undeclared" is a real state the
+     * resolver models (a read proceeds flagged bindingUnverified, a write refuses
+     * with UNDECLARED_ENVIRONMENT_WRITE), and making it required would have
+     * deleted that state and forced an operator to guess — which is the exact
+     * failure the migration above refuses to commit.
+     */
+    expect(schema).toMatch(/environment\s+SapEnvironment\?/);
   });
 });

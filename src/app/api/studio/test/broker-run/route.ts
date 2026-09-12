@@ -26,7 +26,8 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { resolveReadableInterface } from "@/lib/northbound/access";
-import { checkSolutionRuntime } from "@/lib/northbound/auth";
+import { checkSolutionRuntime, touchClientLastUsed } from "@/lib/northbound/auth";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/security/rate-limit";
 import { recordNorthboundCall } from "@/lib/northbound/audit";
 import { httpStatusFor, readEntitySet } from "@/lib/northbound/read";
 import { newCorrelationId } from "@/lib/northbound/respond";
@@ -44,6 +45,19 @@ export const dynamic = "force-dynamic";
 
 const bodySchema = z.object({
   interfaceId: z.string().min(1),
+  /*
+   * ACCEPTED, NO LONGER OBEYED (audit E16) — same rule as the write path.
+   *
+   * This route's whole purpose is to answer "what would the deployed application
+   * see?", and the deployed application cannot choose a dataset: the read path
+   * takes `Interface.entitySet` and nothing else. A console that could override it
+   * would answer a question nobody asked and, worse, would report a green run for
+   * a dataset the real call never touches.
+   *
+   * Kept in the schema so that sending a DIFFERENT one is refused out loud rather
+   * than silently discarded; the Test Console's saved cases replay the value they
+   * recorded, and a case recorded before the feed's set changed should say so.
+   */
   entity: z.string().max(200).optional(),
   limit: z.number().int().min(1).max(50).optional(),
   /**
@@ -131,6 +145,55 @@ export async function POST(request: NextRequest) {
   }
   const client = liveClients[0]!;
 
+  /*
+   * THE SAME PER-CREDENTIAL BUCKET THE NORTHBOUND ROUTES USE (audit E18).
+   *
+   * This route runs the real read pipeline against a real tenant, so it is the
+   * one console surface that amplifies onto a customer's SAP system exactly like
+   * a deployed application — and it was covered only by middleware's IP-keyed
+   * `sapLive` bucket. An IP key is the wrong shape here for the same two reasons
+   * it is wrong on the data route: several consultants behind one office address
+   * throttle each other, and the budget is not the one the credential being
+   * exercised actually has.
+   *
+   * Keyed `northbound:` — the READ bucket, deliberately, not a third one. The
+   * point of the dry run is that it spends what the real call would spend, so a
+   * console session that would exhaust the application's budget exhausts it here
+   * too and the builder finds out in Studio rather than in production.
+   */
+  const rate = await checkRateLimit(`northbound:${client.id}`, RATE_LIMITS.northbound);
+  if (!rate.allowed) {
+    await recordNorthboundCall({
+      organizationId: scope.organizationId,
+      solutionId: iface.solutionId,
+      interfaceId: iface.id,
+      operation: "READ",
+      externalId: iface.externalId,
+      environment: client.environment,
+      status: 429,
+      rowCount: null,
+      correlationId,
+      clientTokenId: client.id,
+      dryRun: true,
+    });
+    return refusalOk(
+      "RATE_LIMITED",
+      `This credential has spent its budget of ${RATE_LIMITS.northbound.limit} calls a minute — the same budget the deployed application shares. ` +
+        `Wait ${Math.ceil(rate.resetMs / 1000)}s and run again.`,
+    );
+  }
+
+  /*
+   * AND RECORD THE USE. `lastUsedAt` is how an unused credential is spotted and
+   * retired, and how a leaked one shows activity. The deployed application's own
+   * calls update it (`touchClientLastUsed`); a console run exercises the same
+   * credential against the same tenant and left it untouched, so a credential
+   * used daily from Studio looked dormant on the operations board. Fire-and-
+   * forget, exactly as the northbound routes do it: failing to stamp a timestamp
+   * must never fail the run.
+   */
+  void touchClientLastUsed(client.id, scope.organizationId);
+
   const audit = (
     status: number,
     rowCount: number | null,
@@ -188,13 +251,25 @@ export async function POST(request: NextRequest) {
   const connection = binding.connection;
 
   const service = await resolveHubService(product!, iface.externalId);
-  const entitySet = input.entity ?? iface.entitySet;
+  const entitySet = iface.entitySet;
+  if (input.entity !== undefined && input.entity !== entitySet) {
+    await audit(400, null, { connectionId: connection.id, connectionEnvironment: connection.environment });
+    return refusalOk(
+      "ENTITY_NOT_YOURS_TO_CHOOSE",
+      `This run asked for "${input.entity}", but this feed serves ${entitySet ? `"${entitySet}"` : "no dataset yet"}. ` +
+        "The dataset is part of the feed's definition — the deployed application cannot choose one either, " +
+        "so a run against a different dataset would not tell you anything about the real call. " +
+        "Change the feed's dataset in Studio, or re-record this case.",
+    );
+  }
   if (!service || !entitySet) {
     await audit(400, null, { connectionId: connection.id, connectionEnvironment: connection.environment });
     return refusalOk(
       "NO_ENTITY_SET",
       service
-        ? "This interface has no entity set configured. Set one on the interface, or pass one here."
+        ? access.iface.draft
+          ? "This feed is still a draft and names no dataset yet. Set its entity set in Studio — the deployed application reads that value and nothing else."
+          : "This feed names no dataset. Set its entity set in Studio — the deployed application reads that value and nothing else."
         : "The catalogue service for this interface could not be resolved.",
     );
   }

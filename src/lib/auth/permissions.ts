@@ -5,7 +5,7 @@ import type { SessionUser, UserRole } from "@/types/assessment";
 import { PROFILE_COMPLETENESS_GATE } from "@/types/assessment";
 import { calculateProfileCompleteness } from "@/lib/assessment/profile-completeness";
 import { ERROR_CODES } from "@/types/api";
-import { mapLegacyRole } from "@/lib/auth/role-migration";
+import { isAdminRoleName, mapLegacyRole } from "@/lib/auth/role-migration";
 import { TRANSITION_ROLES_V2 } from "@/lib/assessment/status-machine";
 
 export interface PermissionResult {
@@ -378,8 +378,11 @@ export function requiresMfaEnrollment(user: SessionUser): boolean {
  * Check if a user role is an admin-level role (can access admin panel).
  */
 export function isAdminRole(role: string): boolean {
-  const mapped = normalizeRole(role);
-  return mapped === "platform_admin";
+  // ONE DEFINITION. `isAdminRoleName` lives in role-migration because two
+  // client components need it and this module imports prisma; this wrapper stays
+  // so the many server-side importers are unchanged, and delegates so the two
+  // cannot answer differently.
+  return isAdminRoleName(role);
 }
 
 /**

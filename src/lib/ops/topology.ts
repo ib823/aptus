@@ -530,11 +530,22 @@ export function deriveCredential(c: CredentialInput, now: Date): DerivedGrant {
  * product and the graph needs sums, not rows.
  */
 export interface AuditSlice {
-  solutionId: string;
+  /**
+   * The solution that made the call, or null when no solution did.
+   *
+   * NULL IS A CONSOLE READ — `/api/sap/tdd/*`, triggered by a signed-in human
+   * with no solution and no credential anywhere in the request. Such a row is
+   * real traffic against a customer's tenant and belongs in the audit feed, but
+   * it has no place in a graph whose every node is a solution, a credential, a
+   * grant or an interface. It is skipped below rather than bucketed, because a
+   * node for "the calls that belong to nothing" is not a thing the topology is
+   * describing.
+   */
+  solutionId: string | null;
   interfaceId: string | null;
   connectionId: string | null;
-  /** The SolutionClient whose token was presented. Never null on a real row. */
-  clientTokenId: string;
+  /** The SolutionClient whose token was presented. Null on a console read. */
+  clientTokenId: string | null;
   externalId: string;
   operation: string;
   environment: string;
@@ -635,13 +646,21 @@ export function attributeCalls(rows: readonly AuditSlice[]): Attribution {
   for (const row of rows) {
     const calls = row.count;
     const failures = row.status >= 400 ? row.count : 0;
-    const gk = grantKey(row.solutionId, row.externalId, row.operation, row.environment);
 
-    add(a.bySolution, row.solutionId, calls, failures);
+    // A row with no solution is a console read (see AuditSlice.solutionId). The
+    // graph is drawn entirely from solutions and the things attached to them, so
+    // there is nothing here for such a row to attach to — and a grant key built
+    // from a null solution would collide every console read in the estate onto
+    // one imaginary grant.
+    if (row.solutionId === null) continue;
+    const solutionId = row.solutionId;
+    const gk = grantKey(solutionId, row.externalId, row.operation, row.environment);
+
+    add(a.bySolution, solutionId, calls, failures);
     add(a.byGrant, gk, calls, failures);
     if (row.clientTokenId) {
       add(a.byCredential, row.clientTokenId, calls, failures);
-      add(a.byCredentialSolution, pairKey(row.clientTokenId, row.solutionId), calls, failures);
+      add(a.byCredentialSolution, pairKey(row.clientTokenId, solutionId), calls, failures);
     }
     if (row.interfaceId) {
       add(a.byInterface, row.interfaceId, calls, failures);

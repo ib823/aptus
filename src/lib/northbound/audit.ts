@@ -19,7 +19,14 @@ import { prisma } from "@/lib/db/prisma";
 
 export interface NorthboundAuditInput {
   organizationId: string;
-  solutionId: string;
+  /**
+   * The solution that made the call, or null when no solution did.
+   *
+   * Null is the CONSOLE READ case — `/api/sap/tdd/*`, where a signed-in human
+   * causes a live read with no solution and no credential in the request. Those
+   * rows carry `actorUserId` instead; see `recordConsoleRead`.
+   */
+  solutionId: string | null;
   interfaceId: string | null;
   operation: "READ" | "WRITE";
   externalId: string;
@@ -28,7 +35,17 @@ export interface NorthboundAuditInput {
   status: number;
   rowCount: number | null;
   correlationId: string;
-  clientTokenId: string;
+  /** The credential presented, or null on a console read. */
+  clientTokenId: string | null;
+  /**
+   * The user who caused this read, when a human did.
+   *
+   * Exactly one of `clientTokenId` and `actorUserId` is set on every row: a
+   * machine names its credential, a human names themselves. A row with neither
+   * is a call nobody is accountable for, which is the thing this column exists
+   * to make unwritable.
+   */
+  actorUserId?: string | null;
   /**
    * Which SapConnection served the call, and the landscape that row declared.
    *
@@ -100,6 +117,7 @@ export async function recordNorthboundCall(input: NorthboundAuditInput): Promise
         rowCount: input.rowCount,
         correlationId: input.correlationId,
         clientTokenId: input.clientTokenId,
+        actorUserId: input.actorUserId ?? null,
         connectionId: input.connectionId ?? null,
         connectionEnvironment: input.connectionEnvironment ?? null,
         durationMs: input.durationMs ?? null,
