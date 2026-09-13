@@ -35,8 +35,18 @@ const TEST_USER_ROLE = "platform_admin";
 const ENDPOINT = "/api/auth/test-login";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  // Gate 0: endpoint must be explicitly enabled
+  // Gate 0: endpoint must be explicitly enabled.
+  //
+  // The refusal is RECORDED. This returned 404 silently, so a caller probing a
+  // production deploy for this endpoint left no trace at all — and the trail
+  // exists precisely to show that somebody went looking. `denied:disabled` is
+  // the outcome the guard module has always declared for this case.
   if (process.env.ENABLE_TEST_LOGIN_ENDPOINT !== "true") {
+    await logBackdoorAttempt({
+      endpoint: ENDPOINT,
+      outcome: "denied:disabled",
+      headers: request.headers,
+    });
     return NextResponse.json(
       { error: "Not available" },
       { status: 404 },
@@ -70,8 +80,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const secret = process.env.E2E_TEST_SECRET;
 
-  // Gate 2: endpoint is a no-op unless E2E_TEST_SECRET is configured
+  // Gate 2: endpoint is a no-op unless E2E_TEST_SECRET is configured.
+  // Recorded for the same reason as gate 0 — enabled but unconfigured is a
+  // state somebody can probe, and an unrecorded refusal is a blind spot.
   if (!secret) {
+    await logBackdoorAttempt({
+      endpoint: ENDPOINT,
+      outcome: "denied:disabled",
+      headers: request.headers,
+    });
     return NextResponse.json(
       { error: "Not available" },
       { status: 404 },
