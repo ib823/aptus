@@ -14,6 +14,9 @@
  *      acknowledgement — the exact case the strip script's own header warns of.
  */
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ create: vi.fn() }));
@@ -47,11 +50,29 @@ beforeEach(() => {
 });
 
 describe("excluded from every production build, not only Vercel's", () => {
-  it("still removes both directories, and only those", () => {
-    expect(TEST_AUTH_DIRS).toEqual([
-      "src/app/api/auth/test-login",
+  it("removes every session-minting directory, and only those", () => {
+    // verify-izzat mints a session from a shared secret exactly as the other
+    // two do, and was absent — so it shipped in every production bundle while
+    // its neighbours were deleted.
+    expect([...TEST_AUTH_DIRS].sort()).toEqual([
       "src/app/(auth)/dev-login",
+      "src/app/api/auth/test-login",
+      "src/app/api/auth/verify-izzat",
     ]);
+  });
+
+  it("runs from the ordinary build, not only from vercel-build", () => {
+    /*
+     * The script was correct and unreachable: wired into `vercel-build` alone,
+     * while CI and every self-hosted or container production build run `build`.
+     * Both entrypoints call it now, and planRemoval is what keeps a
+     * contributor's checkout safe.
+     */
+    const pkg = JSON.parse(
+      readFileSync(resolve(__dirname, "../../../package.json"), "utf8"),
+    ) as { scripts: Record<string, string> };
+    expect(pkg.scripts.build).toContain("strip-test-auth-for-production.mjs");
+    expect(pkg.scripts["vercel-build"]).toContain("strip-test-auth-for-production.mjs");
   });
 
   it("acts on a Vercel production build", () => {
@@ -239,5 +260,51 @@ describe("the IP allow-list still fails closed in production", () => {
     expect(isIpAllowed(HEADERS(), "TEST_LOGIN_ALLOWED_IPS")).toBe(true);
     const other = new Headers({ "x-vercel-forwarded-for": "198.51.100.99" });
     expect(isIpAllowed(other, "TEST_LOGIN_ALLOWED_IPS")).toBe(false);
+  });
+});
+
+
+describe("the disabled refusal is recorded, not silent", () => {
+  /*
+   * `denied:disabled` was declared in the BackdoorOutcome union and emitted by
+   * nothing. Both endpoints returned 404 from their "not enabled" gate without
+   * writing a row, so a caller probing a production deploy for either surface
+   * left no trace — and the trail exists to show that somebody went looking.
+   *
+   * These assert the call sites rather than the union: a type that lists an
+   * outcome proves only that someone intended it.
+   */
+  /**
+   * Comments are stripped before counting. An assertion that can be satisfied by
+   * a comment MENTIONING the outcome is satisfied by prose rather than by code —
+   * and prose is exactly what was already there while nothing emitted it.
+   */
+  const source = (p: string) =>
+    readFileSync(resolve(__dirname, "../../..", p), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+
+  it("test-login records its disabled and unconfigured gates", () => {
+    const body = source("src/app/api/auth/test-login/route.ts");
+    expect(body.match(/denied:disabled/g) ?? []).toHaveLength(2);
+  });
+
+  it("verify-izzat records its disabled gate", () => {
+    expect(source("src/app/api/auth/verify-izzat/route.ts")).toContain("denied:disabled");
+  });
+
+  it("every declared outcome is emitted somewhere", () => {
+    const guards = source("src/lib/auth/test-backdoor-guards.ts");
+    const declared = [...guards.matchAll(/\|\s*"(denied:[a-z]+|success)"/g)].map((m) => m[1]!);
+    expect(declared.length).toBeGreaterThan(4);
+    const callSites =
+      source("src/app/api/auth/test-login/route.ts") +
+      source("src/app/api/auth/verify-izzat/route.ts") +
+      guards;
+    for (const outcome of declared) {
+      expect(callSites.includes(`"${outcome}"`), `${outcome} is declared but never emitted`).toBe(
+        true,
+      );
+    }
   });
 });

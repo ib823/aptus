@@ -32,7 +32,15 @@ export async function POST(request: NextRequest) {
   const bridgeEnabled = process.env.ENABLE_SIMULATION_BRIDGE === "true";
   const bridgeSecret = process.env.SIMULATION_BRIDGE_SECRET;
 
+  // Recorded, so the header above is true of every path rather than of most of
+  // them: this returned 404 without writing a row, which made "every attempt is
+  // audit-logged" a claim the code did not keep.
   if (!bridgeEnabled || !bridgeSecret) {
+    await logBackdoorAttempt({
+      endpoint: ENDPOINT,
+      outcome: "denied:disabled",
+      headers: request.headers,
+    });
     return NextResponse.json({ error: "Not available" }, { status: 404 });
   }
 

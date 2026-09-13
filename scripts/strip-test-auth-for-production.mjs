@@ -43,6 +43,14 @@
  * since audit E14 include the deploy-time acknowledgement
  * (INTERNAL_TEST_DEPLOYMENT), checked at runtime and not only at build time, so a
  * variable set after the build can no longer open either endpoint on its own.
+ *
+ * RUN FROM BOTH BUILD ENTRYPOINTS. This was wired into `vercel-build` only, so
+ * a production build that did not go through Vercel — self-hosted, a container
+ * image, anything running `pnpm build` — shipped every one of these surfaces
+ * with only their runtime gates. `build` runs it too now. The guard in
+ * planRemoval is what keeps that safe: it acts only on a production build
+ * inside a disposable checkout, so a developer running `pnpm build` locally
+ * still loses nothing from their working tree.
  */
 
 import { existsSync, rmSync } from "node:fs";
@@ -51,10 +59,19 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Every directory whose only purpose is signing in without real credentials. */
+/**
+ * Every directory whose only purpose is signing in without real credentials.
+ *
+ * verify-izzat is here for the same reason the other two are: it mints a
+ * session from a shared secret. It was omitted, so it shipped in every
+ * production bundle while the two beside it were deleted — the runtime gates
+ * were the only thing standing between it and a caller who learned the secret.
+ * A surface that can issue a session belongs on this list whatever it is named.
+ */
 export const TEST_AUTH_DIRS = [
   "src/app/api/auth/test-login",
   "src/app/(auth)/dev-login",
+  "src/app/api/auth/verify-izzat",
 ];
 
 /**
