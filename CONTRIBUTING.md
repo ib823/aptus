@@ -12,7 +12,21 @@ Workflow rules for the Aptus repo. Concise on purpose.
 
 **`main` is always deployable.** Every commit on `main` must produce a successful Vercel build. If a commit can't deploy, it's not done.
 
-The pre-push hook (`.githooks/pre-push`) runs `next build` before allowing a push, blocking broken commits before they reach Vercel. It auto-installs after `pnpm install`. A `SKIP_PRE_PUSH=1` escape hatch exists in the hook; the standing rule on this repo is **do not use it** (see below).
+The pre-push hook (`.githooks/pre-push`) runs `pnpm typecheck:strict` and `pnpm lint:strict` before allowing a push. It auto-installs after `pnpm install`. A `SKIP_PRE_PUSH=1` escape hatch exists in the hook; the standing rule on this repo is **do not use it** (see below).
+
+### Where a type error is caught
+
+`next build` no longer type-checks or lints — `next.config.ts` sets `typescript.ignoreBuildErrors` and `eslint.ignoreDuringBuilds`, because the build-time type-check cost 1.6 GB of peak memory and ran Vercel's 8 GB build container out of RAM (exit 137, SIGKILL) on 2026-09-13. The comment in that file carries the measurements.
+
+So a type error is caught in **three** places, and deploy is deliberately not one of them:
+
+| Where | What runs |
+|---|---|
+| Your editor | continuously, as you type |
+| The pre-push hook | `pnpm typecheck:strict` + `pnpm lint:strict` |
+| CI Quality Gates | the same two scripts, as separate failing steps, before `pnpm build` |
+
+All three are **stricter** than the check the build used to run — `next build` ran neither `--strict` nor `--max-warnings 0`. Nothing was traded away for the memory; the gate moved earlier and got tighter.
 
 ## Workflow
 
@@ -21,7 +35,7 @@ The pre-push hook (`.githooks/pre-push`) runs `next build` before allowing a pus
 ```bash
 git switch -c feat/short-name        # branch from main
 # ... commit work in small chunks ...
-git push -u origin feat/short-name   # pre-push hook runs build
+git push -u origin feat/short-name   # pre-push hook: strict type-check + lint
 gh pr create --fill                  # creates PR; Vercel auto-deploys to preview URL
 ```
 
@@ -86,7 +100,7 @@ Until step 3 happens, treat a red `visual-regression` check as a known-flaky sig
 
 ## Local validation before push
 
-The pre-push hook handles `next build` (~80s on this repo). For faster iteration loops while developing:
+The pre-push hook handles `typecheck:strict` and `lint:strict`. For faster iteration loops while developing:
 
 ```bash
 pnpm test:unit                        # ~6s — typed contract checks
@@ -99,7 +113,9 @@ Use `pnpm typecheck:strict`, never a bare `npx tsc --noEmit`. The script sets
 default heap on this repo and aborts — see the next section for how that hid a
 broken type check for an unknown period.
 
-If `next build` fails locally, **fix it before pushing**. Vercel runs the same command — if it fails locally it'll fail there, and you'll have polluted the deployment history.
+If either hook check fails locally, **fix it before pushing**. CI runs the same two scripts and would reject the pull request anyway.
+
+CI still runs `pnpm build` on every pull request, so a genuine build failure is caught before merge — just not before push.
 
 ### Never pipe a command whose exit code you are relying on
 
@@ -128,19 +144,19 @@ CI was never affected — `.github/workflows/ci.yml` runs the script unpiped, so
 
 `SKIP_PRE_PUSH=1` exists in the hook. **The standing rule is that it is not used.**
 
-Every argument for bypassing is an argument that the build is fine, which is
+Every argument for bypassing is an argument that the code is fine, which is
 exactly the claim the hook exists to check. The two that sound most reasonable
 are the two that have actually broken `main`:
 
-- *"It's docs-only, the build is unrelated"* — until the change touches a path
+- *"It's docs-only, the checks are unrelated"* — until the change touches a path
   a doc-adjacent import resolves through, or a `.md` file a test reads. Both
   have happened here.
 - *"I already validated locally and the hook is slow"* — then the hook takes
-  ~80s to agree with you, which is cheaper than a red `main`.
+  under a minute to agree with you, which is cheaper than a red `main`.
 
 And these are never acceptable:
 
-- "I'll fix the build in the next commit" — push a working commit instead.
+- "I'll fix it in the next commit" — push a working commit instead.
 - "It's just a small change" — small changes break builds too.
 - Anything pushed to `main` directly.
 
@@ -163,14 +179,29 @@ If you push to `main` and any of these go red, fix it before doing anything else
 
 Email goes to one inbox; commit status is right there on the GitHub PR/commit page; Actions email is filterable in your inbox. Different humans react to different signals. Pick one — but don't disable the others.
 
-## When the build fails on Vercel anyway
+## When the build fails on Vercel
 
-If a push slipped through (someone bypassed, or the hook missed something), you'll get a Vercel email. Triage:
+The hook no longer builds, so a Vercel build failure is now the *expected* place
+to find build-only problems — the ones neither the type-check nor the lint can
+see. You'll get a Vercel email. Triage:
 
 1. Open the failed deployment URL from the email
-2. Click "View Build Logs" — find the first error line
+2. **Read the build log before forming a theory.** Click "View Build Logs" and
+   find the first error line, or run
+   `npx vercel inspect <deployment-id> --logs`
 3. Reproduce locally with `npx next build`
 4. Fix and re-push (don't bypass the hook this time)
+
+**Step 2 is not a formality.** On 2026-09-13 a failed deploy was diagnosed twice
+from circumstantial evidence — how long the build ran, and which file in the diff
+Vercel reads that CI does not — and both diagnoses were wrong. The log said exit
+137, an out-of-memory kill, in a step neither theory had considered. Duration,
+timing and "what changed" are inference. The log is evidence. Read it first.
+
+Not every failed deploy is the pushed commit's fault: an OOM kill is a property
+of the whole build's memory ceiling, so measure the base branch before blaming a
+diff. `free -m` sampled once a second during `pnpm build`, run on each branch, is
+enough to tell them apart.
 
 Don't let failed deploys pile up. They make rollback harder and mask real outages.
 
