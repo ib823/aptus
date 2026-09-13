@@ -169,7 +169,8 @@ export async function listLanes(
     }),
     /*
      * The per-lane check ledger. One row per (solution, interface, environment),
-     * written by the scheduled lane sweep — see src/lib/ops/lane-check-sweep.ts.
+     * written by `sweepLaneChecks` — src/lib/ops/lane-check-sweep.ts, run nightly
+     * by GET /api/cron/lane-checks (vercel.json, 04:30 UTC) and by hand.
      * A lane with no row here has never been checked, and derives to `unknown`
      * with "no check has ever run" rather than to a guess.
      */
