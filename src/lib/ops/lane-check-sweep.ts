@@ -1,5 +1,11 @@
 /**
- * The scheduled LANE check sweep — the evidence behind every lane status.
+ * The LANE check sweep — the evidence behind every lane status.
+ *
+ * ITS CALLER IS GET /api/cron/lane-checks, nightly at 04:30 UTC per vercel.json.
+ * Naming the caller is the point: this header said "scheduled" for a release in
+ * which nothing called this function at all, so the ledger stayed empty and
+ * every lane in production rendered "never checked". A sweep with no caller is
+ * not a sweep, and a comment is not a schedule.
  *
  * WHAT WAS MISSING. `sweepConnectionProbes` proves that a SYSTEM answers. A
  * lane's claim is narrower and stronger: that THIS app can read THIS dataset in
