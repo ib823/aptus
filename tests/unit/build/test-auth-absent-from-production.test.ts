@@ -50,10 +50,17 @@ const ROOT = resolve(__dirname, "../../..");
 const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
 
 describe("the surfaces it covers", () => {
-  it("names both session-minting directories, and they exist", () => {
+  it("names every session-minting directory, and they exist", () => {
+    /*
+     * verify-izzat was missing from this list and therefore from the exact-match
+     * assertion that would have caught it: the test asserted the list was
+     * exactly the two surfaces the list happened to contain, so it agreed with
+     * the omission. Any surface that can mint a session belongs here.
+     */
     expect([...TEST_AUTH_DIRS].sort()).toEqual([
       "src/app/(auth)/dev-login",
       "src/app/api/auth/test-login",
+      "src/app/api/auth/verify-izzat",
     ]);
     for (const dir of TEST_AUTH_DIRS) {
       expect(existsSync(join(ROOT, dir)), dir).toBe(true);
