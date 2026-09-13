@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { OpsTable } from "@/components/coreedge/OpsTable";
 import { StatusChip } from "@/components/coreedge/StatusChip";
 import { EMPTY_STATES } from "@/lib/coreedge/copy";
+import { describeAge } from "@/lib/coreedge/freshness";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
 import { GATE_GLYPHS } from "@/lib/coreedge/status-vocabulary";
 import { listOpenRequests } from "@/lib/coreedge/queries";
@@ -36,6 +37,7 @@ export default async function RequestsList(): Promise<ReactNode> {
     );
   }
 
+  const now = new Date();
   const requests = await listOpenRequests(user.organizationId);
 
   return (
@@ -82,6 +84,19 @@ export default async function RequestsList(): Promise<ReactNode> {
               r.environment === null ? r.environmentRaw : ENVIRONMENT_LABELS[r.environment],
           },
           { key: "status", header: "Status", cell: () => <StatusChip status="inReview" /> },
+          {
+            /*
+             * WAITING, NOT CHECKED. Every status renders with an age (handoff
+             * §4), but a review has no check behind it — StatusChip's age is
+             * announced as "checked …", which would be false here. The age that
+             * matters for a queue is how long it has waited, so it is its own
+             * fact beside the chip rather than inside it. R06 is the scenario:
+             * requests waiting over four hours, with several reviewers.
+             */
+            key: "waiting",
+            header: "Waiting",
+            cell: (r) => describeAge(r.createdAt, now) ?? "just now",
+          },
           {
             key: "who",
             header: "Requested by",

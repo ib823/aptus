@@ -6,6 +6,7 @@ import { GateStrip, hopsFromBreak } from "@/components/coreedge/GateStrip";
 import { StatusChip } from "@/components/coreedge/StatusChip";
 import { WhyTrace } from "@/components/coreedge/WhyTrace";
 import { WHY_CASE_HOP, type WhyCase } from "@/lib/coreedge/copy";
+import { proofAge } from "@/lib/coreedge/freshness";
 import { ENVIRONMENT_LABELS, parseLaneEnvironment } from "@/lib/coreedge/lanes";
 import {
   LANE_STATUS_VOCABULARY,
@@ -72,6 +73,10 @@ export default async function LaneDetail({
   const lane = lanes.find((l) => l.feedId === feed && l.environment === environment);
   if (lane === undefined) notFound();
 
+
+  // One instant for the whole render.
+  const now = new Date();
+
   const def = LANE_STATUS_VOCABULARY[lane.verdict.status];
   const whyCase = WHY_FOR_STATUS[lane.verdict.status];
   const correlationId = `${lane.appSlug}.${lane.feedId}.${environment}`.toLowerCase();
@@ -83,7 +88,7 @@ export default async function LaneDetail({
       subtitle={lane.appName}
     >
       <div className="flex flex-wrap items-center gap-4">
-        <StatusChip status={lane.verdict.status} />
+        <StatusChip status={lane.verdict.status} age={proofAge(lane.verdict.checkedAt, now)} />
         <span className="text-sm text-ink-soft">{lane.verdict.because}</span>
       </div>
 
@@ -100,7 +105,10 @@ export default async function LaneDetail({
             hops={hopsFromBreak(def.brokenHop)}
             {...(lane.verdict.checkedAt === null
               ? {}
-              : { checkedAt: lane.verdict.checkedAt.toISOString() })}
+              : {
+                  checkedAt: lane.verdict.checkedAt.toISOString(),
+                  checkedAge: proofAge(lane.verdict.checkedAt, now),
+                })}
           />
           {def.owner === null ? null : (
             <p className="text-xs text-ink-muted">{OWNER_LABELS[def.owner]} owns this.</p>

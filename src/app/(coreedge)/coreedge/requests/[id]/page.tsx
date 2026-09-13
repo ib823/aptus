@@ -6,6 +6,7 @@ import { CheckList, type Check } from "@/components/coreedge/CheckList";
 import { DecisionBar } from "@/components/coreedge/DecisionBar";
 import { StatusChip } from "@/components/coreedge/StatusChip";
 import { ACTIONS, DISABLED_REASONS } from "@/lib/coreedge/copy";
+import { describeAge } from "@/lib/coreedge/freshness";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
 import { getRequest, listSapSystems } from "@/lib/coreedge/queries";
 import { getCurrentUser } from "@/lib/auth/session";
@@ -40,6 +41,7 @@ export default async function RequestReview({
   if (user.organizationId === null) notFound();
 
   const { id } = await params;
+  const now = new Date();
   const request = await getRequest(user.organizationId, id);
   if (request === null) notFound();
 
@@ -122,6 +124,12 @@ export default async function RequestReview({
           {request.requestedById === user.id
             ? "by you"
             : `by ${request.requestedByName ?? "a colleague"}`}
+          {/*
+            * How long it has waited — the age that means something for a
+            * review. Not passed to the chip: StatusChip announces its age as
+            * "checked …", and nothing has checked a request.
+            */}
+          {` · waiting ${describeAge(request.createdAt, now) ?? "just now"}`}
         </span>
       </div>
 

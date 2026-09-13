@@ -8,6 +8,8 @@ import { ENVIRONMENT_LABELS, LANE_ENVIRONMENTS } from "@/lib/coreedge/lanes";
 import { listLanes } from "@/lib/coreedge/queries";
 import { getCurrentUser } from "@/lib/auth/session";
 
+import { proofAge } from "@/lib/coreedge/freshness";
+
 import { CoreEdgeShell } from "../../CoreEdgeShell";
 
 /**
@@ -36,6 +38,8 @@ export default async function AppLaneBoard({
   if (user.organizationId === null) notFound();
 
   const { app } = await params;
+  // One instant for the whole board.
+  const now = new Date();
   const lanes = await listLanes(user.organizationId, { appSlug: app });
   if (lanes.length === 0) notFound();
 
@@ -86,6 +90,17 @@ export default async function AppLaneBoard({
                     env={ENVIRONMENT_LABELS[env]}
                     system={lane.system}
                     status={lane.verdict.status}
+                    /*
+                     * LaneCard has rendered facts.checkedAgo since PR-2 and this
+                     * board passed no facts at all, so every card on it showed a
+                     * status with no evidence beside it. The row count rides
+                     * along for the same reason: "Live · 5 rows · 4 minutes ago"
+                     * is a claim someone can check.
+                     */
+                    facts={{
+                      checkedAgo: proofAge(lane.verdict.checkedAt, now),
+                      ...(lane.rows === null ? {} : { rows: lane.rows }),
+                    }}
                     action={
                       <a
                         href={`/coreedge/apps/${lane.appSlug}/${lane.feedId}/${env}`}

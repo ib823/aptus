@@ -110,3 +110,18 @@ export function stalenessReason(at: Date | null | undefined, ttlMs: number, now:
     }
   }
 }
+
+/**
+ * The age of proof as a screen renders it — always a phrase, never nothing.
+ *
+ * `describeAge` returns null when there is no instant, which a caller can only
+ * turn into an omitted age; an omitted age is indistinguishable from a fresh
+ * one at a glance, and that is the exact overclaim this product exists to
+ * prevent. So "never checked" is a phrase rather than an absence.
+ *
+ * Use this wherever a status is rendered. The handoff's rule is unqualified:
+ * "Every status renders with the age of the check behind it."
+ */
+export function proofAge(at: Date | null | undefined, now: Date = new Date()): string {
+  return describeAge(at, now) ?? "never checked";
+}

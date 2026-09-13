@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { NeedsYouRow } from "@/components/coreedge/NeedsYouRow";
 import { StatusChip } from "@/components/coreedge/StatusChip";
 import { EMPTY_STATES } from "@/lib/coreedge/copy";
+import { proofAge } from "@/lib/coreedge/freshness";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
 import { LANE_STATUS_VOCABULARY, OWNER_LABELS } from "@/lib/coreedge/status-vocabulary";
 import { listLanes, listOpenRequests } from "@/lib/coreedge/queries";
@@ -60,6 +61,10 @@ export default async function CoreEdgeHome(): Promise<ReactNode> {
       </CoreEdgeShell>
     );
   }
+
+  // One instant for the whole render, so two chips on the same screen cannot
+  // disagree about what "4 minutes ago" means.
+  const now = new Date();
 
   const [lanes, requests] = await Promise.all([
     listLanes(user.organizationId),
@@ -154,7 +159,15 @@ export default async function CoreEdgeHome(): Promise<ReactNode> {
                   ? lane.verdict.because
                   : `${lane.verdict.because} ${OWNER_LABELS[def.owner]} fixes this.`
               }
-              chips={<StatusChip status={lane.verdict.status} />}
+              /*
+               * THE AGE OF PROOF, which the verdict has carried since PR-4 and
+               * nothing rendered. A status without it is a claim with no
+               * evidence: "Live" means proven as of the age shown, and a lane
+               * whose check has never run says so rather than looking current.
+               */
+              chips={
+                <StatusChip status={lane.verdict.status} age={proofAge(lane.verdict.checkedAt, now)} />
+              }
               action={
                 <a
                   href={`/coreedge/apps/${lane.appSlug}/${lane.feedId}/${lane.environment}`}

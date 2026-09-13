@@ -25,8 +25,15 @@ import {
  *
  * `age` is rendered beside the chip rather than inside it, because "Live" is a
  * claim about the past: it means proven as of the age shown. A Live chip with no
- * age is a claim with no evidence behind it, so `title` says so where a caller
- * omits one.
+ * age is a claim with no evidence behind it.
+ *
+ * That sentence used to end "…so `title` says so where a caller omits one".
+ * There is no `title` here and there never was — and there must not be: this
+ * folder's contract is that an explanation is a sibling string a keyboard user
+ * can reach, never a `title` only a mouse discovers. The claim is deleted
+ * rather than implemented. What the component actually does is announce the
+ * age when it has one; a caller that omits it renders a chip with no evidence
+ * beside it, visibly and audibly.
  */
 
 const TONE: Readonly<Record<GateToken | "status-expired", string>> = {
@@ -87,9 +94,20 @@ export function StatusChip({ status, age, onClick }: StatusChipProps): ReactNode
 
   return (
     <span className="inline-flex items-baseline gap-2">
-      {/* Read aloud as one phrase: "✕ No access. No approved access for…" */}
+      {/*
+        * Read aloud as one phrase: "✕ No access. No approved access for…,
+        * checked 4 minutes ago."
+        *
+        * THE AGE IS ANNOUNCED. It used to sit only inside the aria-hidden
+        * wrapper below, so a screen reader heard the status and its meaning
+        * while the one fact that says whether to believe it — how old the
+        * check is — was silent. "Age of proof" is the product's central claim
+        * (handoff §4), and a claim only sighted users can hear is not a claim
+        * the product makes.
+        */}
       <span className="sr-only">
         {glyph === "✓" ? "Live" : def.label}. {def.means}
+        {age === undefined ? "" : `, checked ${age}.`}
       </span>
       <span aria-hidden="true" className="inline-flex items-baseline gap-2">
         {body}
