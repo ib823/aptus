@@ -1058,3 +1058,51 @@ function fieldNamesOf(schema: unknown): readonly string[] {
       : record;
   return Object.keys(source).sort((a, b) => a.localeCompare(b));
 }
+
+/** Traffic for one lane over a window: what the board's Calls and Errors say. */
+export interface LaneTraffic {
+  readonly calls: number;
+  readonly errors: number;
+}
+
+export const TRAFFIC_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Calls and errors per lane in the last 24 hours, keyed as the ledger is.
+ *
+ * COUNTED FROM THE AUDIT TABLE, which is the record of what actually happened —
+ * not from the lane's status, which is a claim about the last check. A lane can
+ * be Live and failing right now, and the board exists to show exactly that gap.
+ *
+ * AN ERROR IS A 4xx OR 5xx RESPONSE. A refusal CoreEdge issued before anything
+ * reached SAP is still an error from the caller's point of view: their call did
+ * not return data. Counting only 5xx would let a wall of 403s read as healthy.
+ *
+ * Lanes with no traffic are absent from the map rather than present with zero.
+ * "No calls" and "calls that all failed" are different facts and the board
+ * renders them differently.
+ */
+export async function listLaneTraffic(
+  organizationId: string,
+  now: Date = new Date(),
+): Promise<Map<string, LaneTraffic>> {
+  const since = new Date(now.getTime() - TRAFFIC_WINDOW_MS);
+  const events = await prisma.northboundAuditEvent.findMany({
+    where: { organizationId, at: { gte: since }, dryRun: false },
+    select: { solutionId: true, interfaceId: true, environment: true, status: true },
+  });
+
+  const byLane = new Map<string, { calls: number; errors: number }>();
+  for (const e of events) {
+    if (e.solutionId === null || e.interfaceId === null) continue;
+    const environment = parseLaneEnvironment(e.environment);
+    if (environment === null) continue;
+    const key = `${e.solutionId}::${e.interfaceId}::${environment}`;
+    const current = byLane.get(key) ?? { calls: 0, errors: 0 };
+    byLane.set(key, {
+      calls: current.calls + 1,
+      errors: current.errors + (e.status >= 400 ? 1 : 0),
+    });
+  }
+  return byLane;
+}

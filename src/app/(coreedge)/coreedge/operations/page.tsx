@@ -13,7 +13,8 @@ import {
   LANE_STATUS_VOCABULARY,
   OWNER_LABELS,
 } from "@/lib/coreedge/status-vocabulary";
-import { listLanes } from "@/lib/coreedge/queries";
+import { proofAge } from "@/lib/coreedge/freshness";
+import { listLaneTraffic, listLanes } from "@/lib/coreedge/queries";
 import { getCurrentUser } from "@/lib/auth/session";
 
 import { CoreEdgeShell } from "../CoreEdgeShell";
@@ -59,10 +60,27 @@ export default async function OperationsBoard(): Promise<ReactNode> {
     );
   }
 
-  const lanes = (await listLanes(user.organizationId)).sort((a, b) => {
+  const now = new Date();
+  const [allLanes, traffic] = await Promise.all([
+    listLanes(user.organizationId),
+    listLaneTraffic(user.organizationId, now),
+  ]);
+
+  const lanes = allLanes.sort((a, b) => {
     const ua = URGENCY[LANE_STATUS_VOCABULARY[a.verdict.status].token] ?? 9;
     const ub = URGENCY[LANE_STATUS_VOCABULARY[b.verdict.status].token] ?? 9;
     if (ua !== ub) return ua - ub;
+    /*
+     * THEN BY AGE OF PROOF, oldest first — which is what the caption has
+     * always promised and the sort did not do. Within one urgency band the
+     * lane nobody has checked for longest is the one most likely to be
+     * claiming something that is no longer true, so it belongs at the top.
+     * A lane that has never been checked sorts above every dated one: no
+     * evidence is older than any evidence.
+     */
+    const ta = a.verdict.checkedAt?.getTime() ?? Number.NEGATIVE_INFINITY;
+    const tb = b.verdict.checkedAt?.getTime() ?? Number.NEGATIVE_INFINITY;
+    if (ta !== tb) return ta - tb;
     return a.appName.localeCompare(b.appName);
   });
 
@@ -118,13 +136,55 @@ export default async function OperationsBoard(): Promise<ReactNode> {
           // An absent system is a reason, not a blank cell: the audit found an
           // absence rendered as empty, which reads as a bug rather than a fact.
           { key: "system", header: "SAP system", cell: (l) => l.system ?? "None connected" },
-          { key: "status", header: "Status", cell: (l) => <StatusChip status={l.verdict.status} /> },
+          {
+            key: "status",
+            header: "Status",
+            cell: (l) => (
+              <StatusChip status={l.verdict.status} age={proofAge(l.verdict.checkedAt, now)} />
+            ),
+          },
           {
             key: "hops",
             header: "Hops",
             cell: (l) => (
               <GateStrip hops={hopsFromBreak(LANE_STATUS_VOCABULARY[l.verdict.status].brokenHop)} dense />
             ),
+          },
+          {
+            /*
+             * CALLS AND ERRORS COME FROM THE AUDIT TABLE, not from the status.
+             * A lane can read Live and be failing right now — the status is a
+             * claim about the last check, traffic is what happened — and the
+             * board exists to show exactly that gap.
+             */
+            key: "calls",
+            header: "Calls 24 h",
+            cell: (l) => {
+              const t = traffic.get(`${l.appId}::${l.feedId}::${l.environment}`);
+              return t === undefined ? <span className="text-ink-muted">None</span> : String(t.calls);
+            },
+          },
+          {
+            key: "errors",
+            header: "Errors",
+            cell: (l) => {
+              const t = traffic.get(`${l.appId}::${l.feedId}::${l.environment}`);
+              if (t === undefined) return <span className="text-ink-muted">—</span>;
+              return t.errors === 0 ? (
+                "0"
+              ) : (
+                <span className="text-gate-bad-fg">
+                  {GATE_GLYPHS["gate-bad"]} {t.errors}
+                </span>
+              );
+            },
+          },
+          {
+            // The age of proof, as its own column, because the board is where
+            // an operator decides what to believe before deciding what to do.
+            key: "checked",
+            header: "Checked",
+            cell: (l) => proofAge(l.verdict.checkedAt, now),
           },
           {
             key: "owner",

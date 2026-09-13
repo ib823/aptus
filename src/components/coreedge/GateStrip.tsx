@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { ProvenAt } from "./primitives/ProvenAt";
+
 import {
   HOP_LABELS,
   LANE_HOPS,
@@ -48,8 +50,15 @@ export function hopsFromBreak(brokenAt: LaneHop | null): GateHop[] {
 
 export interface GateStripProps {
   readonly hops: readonly GateHop[];
-  /** "2 m ago". A strip with no age is a claim with no evidence. */
+  /**
+   * The stored UTC instant, ISO 8601. Rendered in the reader's zone with the
+   * zone named — a strip with no age is a claim with no evidence, and a strip
+   * showing the stored instant makes the reader do timezone arithmetic to
+   * answer the one question the line exists to answer.
+   */
   readonly checkedAt?: string;
+  /** The relative age, the helper beside it. Never the fact on its own. */
+  readonly checkedAge?: string;
   /** The compact four-letter form used in dense table rows. */
   readonly dense?: boolean;
 }
@@ -73,7 +82,7 @@ function worst(states: readonly HopState[]): HopState {
   return "ok";
 }
 
-export function GateStrip({ hops, checkedAt, dense = false }: GateStripProps): ReactNode {
+export function GateStrip({ hops, checkedAt, checkedAge, dense = false }: GateStripProps): ReactNode {
   const byHop = new Map(hops.map((h) => [h.hop, h.state]));
 
   if (dense) {
@@ -92,7 +101,9 @@ export function GateStrip({ hops, checkedAt, dense = false }: GateStripProps): R
           );
         })}
         {checkedAt === undefined ? null : (
-          <span className="text-ink-muted">{checkedAt}</span>
+          <span className="text-ink-muted">
+            <ProvenAt iso={checkedAt} age={checkedAge ?? "age not recorded"} />
+          </span>
         )}
       </span>
     );
@@ -123,7 +134,9 @@ export function GateStrip({ hops, checkedAt, dense = false }: GateStripProps): R
         );
       })}
       {checkedAt === undefined ? null : (
-        <li className="text-xs text-ink-muted">checked {checkedAt}</li>
+        <li className="text-xs text-ink-muted">
+          checked <ProvenAt iso={checkedAt} age={checkedAge ?? "age not recorded"} />
+        </li>
       )}
     </ol>
   );
