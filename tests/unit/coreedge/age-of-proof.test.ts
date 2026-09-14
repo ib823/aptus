@@ -32,27 +32,53 @@ describe("proofAge is always a phrase", () => {
   });
 });
 
+/**
+ * These assert `laneCheckedAge`, not `proofAge`, since PR-7b.
+ *
+ * `proofAge` renders an instant and has one answer for every lane without one:
+ * "never checked". That phrase was covering six different situations — nobody
+ * requested this lane, the app is not live, the feed names no dataset, no
+ * system is connected, the secret would not open, the nightly run has not
+ * reached it — and an operator could not tell which. `laneCheckedAge` takes the
+ * whole verdict, so it still calls `proofAge` where there IS an age and names
+ * the reason where there is not. The guard below keeps any screen from going
+ * back to the bare call and collapsing the six again.
+ */
 describe("every status renders with its age", () => {
   it("Home passes the age to its lane chips", () => {
     const body = code("src/app/(coreedge)/coreedge/page.tsx");
-    expect(body).toContain("proofAge(lane.verdict.checkedAt");
+    expect(body).toContain("laneCheckedAge(lane.verdict");
   });
 
   it("the app board passes facts to LaneCard, which it did not", () => {
     const body = code("src/app/(coreedge)/coreedge/apps/[app]/page.tsx");
-    expect(body).toContain("checkedAgo: proofAge(");
+    expect(body).toContain("checkedAgo: laneCheckedAge(");
   });
 
   it("the lane detail passes the age to the chip and the strip", () => {
     const body = code("src/app/(coreedge)/coreedge/apps/[app]/[feed]/[env]/page.tsx");
-    expect(body).toContain("age={proofAge(");
-    expect(body).toContain("checkedAge: proofAge(");
+    expect(body).toContain("age={laneCheckedAge(");
+    expect(body).toContain("checkedAge: laneCheckedAge(");
   });
 
   it("the operations board shows it as a column and in the chip", () => {
     const body = code("src/app/(coreedge)/coreedge/operations/page.tsx");
     expect(body).toContain('header: "Checked"');
-    expect(body).toContain("age={proofAge(");
+    expect(body).toContain("age={laneCheckedAge(");
+  });
+
+  it("no screen renders a verdict's age with the bare helper", () => {
+    // The regression this file now exists to prevent. `proofAge` is still the
+    // right call for any OTHER instant on these pages — the sweep's last run
+    // time, for one — so the guard is narrow: never on a lane verdict.
+    for (const rel of [
+      "src/app/(coreedge)/coreedge/page.tsx",
+      "src/app/(coreedge)/coreedge/operations/page.tsx",
+      "src/app/(coreedge)/coreedge/apps/[app]/page.tsx",
+      "src/app/(coreedge)/coreedge/apps/[app]/[feed]/[env]/page.tsx",
+    ]) {
+      expect(code(rel), rel).not.toMatch(/proofAge\(\s*\w+\.verdict\.checkedAt/);
+    }
   });
 
   it("the requests screens show waiting time, which is their age", () => {

@@ -52,6 +52,7 @@ describe("a stored check becomes a lane status", () => {
     key: { exists: true, revokedAt: null, expiresAt: null, isActive: true },
     access: { decision: "APPROVED" as const, expiresAt: null, revokedAt: null },
     binding: { matchingConnections: 1, secretUnreadable: false },
+    sweep: { appIsActive: true, feedHasDataset: true },
     now,
   };
 

@@ -128,7 +128,17 @@ export async function listLanes(
       name: true,
       status: true,
       interfaces: {
-        select: { id: true, name: true, externalId: true, operation: true, status: true },
+        // `entitySet` is selected for the sweep facts below, not for display:
+        // a feed that names none is one the nightly check cannot target, and
+        // the lane has to be able to say so.
+        select: {
+          id: true,
+          name: true,
+          externalId: true,
+          operation: true,
+          status: true,
+          entitySet: true,
+        },
         orderBy: { name: "asc" },
       },
     },
@@ -293,6 +303,17 @@ export async function listLanes(
             at: check?.readAt ?? null,
             rows: check?.readRowCount ?? null,
           },
+          /*
+           * WHETHER A CHECK WAS EVER COMING. These two mirror the filters in
+           * `laneTargets()` (src/lib/ops/lane-check-sweep.ts) exactly: ACTIVE
+           * apps only, feeds that name an entity set only. They change no
+           * status — only the words a lane uses when it has no age to show,
+           * so "never checked" stops meaning six different things at once.
+           */
+          sweep: {
+            appIsActive: solution.status === "ACTIVE",
+            feedHasDataset: feed.entitySet !== null && feed.entitySet !== "",
+          },
           now,
         });
 
@@ -313,6 +334,65 @@ export async function listLanes(
   }
 
   return lanes;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * The sweep's own numbers
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export interface LaneSweepRun {
+  readonly startedAt: Date;
+  readonly finishedAt: Date;
+  readonly ok: boolean;
+  /**
+   * The four counts `sweepLaneChecks` returns, as the cron route recorded them.
+   * Null where the row does not carry the figure — a failed run records an error
+   * and no counts, and "not recorded" is the honest rendering of that rather
+   * than a zero, which would read as "it checked nothing" instead of "we do not
+   * know what it checked".
+   */
+  readonly checked: number | null;
+  readonly skippedNoConnection: number | null;
+  readonly skippedNoEntitySet: number | null;
+  readonly unreadable: number | null;
+}
+
+/** `summaryJson` is Json, so every figure is proven a finite number or dropped. */
+function summaryCount(summary: unknown, key: string): number | null {
+  if (typeof summary !== "object" || summary === null || Array.isArray(summary)) return null;
+  const value = (summary as Record<string, unknown>)[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * The most recent lane-check sweep, as the cron route recorded it.
+ *
+ * WHY A SCREEN NEEDS THIS. Every lane status on the Operations board is a claim
+ * about the last check, and until now the board showed the claims without ever
+ * showing whether the check ran. A board of Unknowns means one thing if the
+ * sweep ran at 04:30 and skipped them and something else entirely if the sweep
+ * has never run; those were indistinguishable.
+ *
+ * NOT TENANT-SCOPED, because `CronRunLog` is not: one fleet-wide job writes one
+ * row per run. The counts are lane totals across every organization, which the
+ * screen says out loud rather than letting an operator read them as their own.
+ */
+export async function lastLaneSweep(): Promise<LaneSweepRun | null> {
+  const row = await prisma.cronRunLog.findFirst({
+    where: { job: "lane-checks" },
+    orderBy: { startedAt: "desc" },
+    select: { startedAt: true, finishedAt: true, ok: true, summaryJson: true },
+  });
+  if (row === null) return null;
+  return {
+    startedAt: row.startedAt,
+    finishedAt: row.finishedAt,
+    ok: row.ok,
+    checked: summaryCount(row.summaryJson, "checked"),
+    skippedNoConnection: summaryCount(row.summaryJson, "skippedNoConnection"),
+    skippedNoEntitySet: summaryCount(row.summaryJson, "skippedNoEntitySet"),
+    unreadable: summaryCount(row.summaryJson, "unreadable"),
+  };
 }
 
 export interface AppSummary {

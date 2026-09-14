@@ -4,8 +4,7 @@ import type { ReactNode } from "react";
 
 import { NeedsYouRow } from "@/components/coreedge/NeedsYouRow";
 import { StatusChip } from "@/components/coreedge/StatusChip";
-import { EMPTY_STATES } from "@/lib/coreedge/copy";
-import { proofAge } from "@/lib/coreedge/freshness";
+import { EMPTY_STATES, laneCheckedAge } from "@/lib/coreedge/copy";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
 import { LANE_STATUS_VOCABULARY, OWNER_LABELS } from "@/lib/coreedge/status-vocabulary";
 import { listLanes, listOpenRequests } from "@/lib/coreedge/queries";
@@ -163,10 +162,12 @@ export default async function CoreEdgeHome(): Promise<ReactNode> {
                * THE AGE OF PROOF, which the verdict has carried since PR-4 and
                * nothing rendered. A status without it is a claim with no
                * evidence: "Live" means proven as of the age shown, and a lane
-               * whose check has never run says so rather than looking current.
+               * whose check has never run says WHY it has not — `laneCheckedAge`
+               * keeps the six reasons apart where `proofAge` alone collapsed
+               * them into "never checked".
                */
               chips={
-                <StatusChip status={lane.verdict.status} age={proofAge(lane.verdict.checkedAt, now)} />
+                <StatusChip status={lane.verdict.status} age={laneCheckedAge(lane.verdict, now)} />
               }
               action={
                 <a
