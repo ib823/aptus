@@ -1140,6 +1140,47 @@ function fieldNamesOf(schema: unknown): readonly string[] {
   return Object.keys(source).sort((a, b) => a.localeCompare(b));
 }
 
+/**
+ * The last recorded call on one lane — a REAL correlation id, or nothing.
+ *
+ * WHY THIS EXISTS. The lane page rendered `${appSlug}.${feedId}.${environment}`
+ * as its "Reference". That string is a lane identity, not a correlation id: it
+ * is the same on every visit, it is not in `NorthboundAuditEvent`, and
+ * `lookupCorrelationId` — the tool whose whole job is turning one of these into
+ * an answer — returns "not found" for it. A person quoting it to support would
+ * have sent them hunting for a call that was never recorded under that name.
+ *
+ * Returns null where the lane has never been called, which the screen says out
+ * loud. An invented id is worse than an admitted absence, because only one of
+ * them wastes somebody else's afternoon.
+ *
+ * `dryRun` rows are excluded for the same reason the traffic count excludes
+ * them: they are rehearsals, and quoting one as the failure would mislead.
+ */
+export async function lastLaneCall(
+  organizationId: string,
+  solutionId: string,
+  interfaceId: string,
+  environment: LaneEnvironment,
+): Promise<{ readonly correlationId: string; readonly at: Date; readonly status: number } | null> {
+  const rows = await prisma.northboundAuditEvent.findMany({
+    where: { organizationId, solutionId, interfaceId, dryRun: false },
+    select: { correlationId: true, at: true, status: true, environment: true },
+    orderBy: { at: "desc" },
+    /*
+     * `environment` is a free-text column, so it cannot be matched in the WHERE
+     * without reintroducing the "prod" / "PROD" split `parseLaneEnvironment`
+     * exists to close. A small bounded page is fetched and folded here instead.
+     */
+    take: 50,
+  });
+  for (const row of rows) {
+    if (parseLaneEnvironment(row.environment) !== environment) continue;
+    return { correlationId: row.correlationId, at: row.at, status: row.status };
+  }
+  return null;
+}
+
 /** Traffic for one lane over a window: what the board's Calls and Errors say. */
 export interface LaneTraffic {
   readonly calls: number;

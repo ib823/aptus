@@ -312,3 +312,85 @@ describe("Home groups its work and counts all of it", () => {
     );
   });
 });
+
+describe("the lane page does not contradict itself", () => {
+  const lane = () =>
+    code(path.join(COREEDGE_APP, "coreedge/apps/[app]/[feed]/[env]/page.tsx"));
+
+  it("renders one gate strip, not two drawn from two sources", () => {
+    /*
+     * The page had the trace's own strip and a second "The six hops" section
+     * below it. One was built from `WHY_CASE_HOP`, the other from the
+     * vocabulary's per-status hop — two answers to one question, on one screen,
+     * free to disagree. A reader cannot tell which to believe, and neither can
+     * the next person to edit the page.
+     */
+    const src = lane();
+    expect(src.match(/<GateStrip\b/g) ?? []).toHaveLength(1);
+    expect(src).not.toContain("The six hops");
+  });
+
+  it("draws the strip from the verdict, the same object the chip comes from", () => {
+    const src = lane();
+    expect(src).toContain("hopsFromBreak(lane.verdict.brokenHop)");
+    // The vocabulary's fixed per-status hop is not a per-lane fact — see the
+    // contradiction pinned in lanes.test.ts.
+    expect(src).not.toMatch(/hopsFromBreak\(\s*def\.brokenHop/);
+    expect(src).not.toMatch(/hopsFromBreak\(\s*WHY_CASE_HOP/);
+  });
+
+  it("never builds a correlation id out of the lane's own slugs", () => {
+    /*
+     * That string is a lane identity: stable across renders, which was the
+     * stated goal, and absent from NorthboundAuditEvent — so `lookupCorrelationId`
+     * returns "not found" and quoting it to support starts a hunt for a call
+     * nobody recorded.
+     */
+    const src = lane();
+    expect(src).not.toMatch(/const correlationId\s*=\s*`/);
+    expect(src).toContain("lastLaneCall(");
+    // And where there is no recorded call, the page says so rather than
+    // omitting the line, which would read as a rendering fault.
+    expect(src).toContain("WHY_NO_RECORDED_CALL");
+  });
+
+  it("passes the lane's own reason into the trace", () => {
+    // A6 writes one Key row covering four causes; the derivation knows which.
+    expect(lane()).toContain("because={lane.verdict.because}");
+  });
+});
+
+describe("the boards draw their hops from the verdict too", () => {
+  it("the operations strip uses the lane's break, not the status's", () => {
+    const ops = code(path.join(COREEDGE_APP, "coreedge/operations/page.tsx"));
+    expect(ops).toContain("hopsFromBreak(l.verdict.brokenHop)");
+    expect(ops).not.toMatch(/hopsFromBreak\(LANE_STATUS_VOCABULARY/);
+  });
+});
+
+describe("the app card's A·S·K·T comes from the lane, not the status", () => {
+  it("passes the verdict's broken hop into LaneCard", () => {
+    // Without it the card falls back to the vocabulary's per-status hop, and a
+    // lane whose SAP system timed out at the metadata probe shows S passed
+    // beside a chip reading "SAP unavailable".
+    const app = code(path.join(COREEDGE_APP, "coreedge/apps/[app]/page.tsx"));
+    expect(app).toContain("brokenHop={lane.verdict.brokenHop}");
+  });
+});
+
+describe("the living reference does not teach the wrong contract", () => {
+  it("passes GateStrip a stored instant, not a relative phrase", () => {
+    /*
+     * `checkedAt` is documented as "the stored UTC instant, ISO 8601" and the
+     * demo passed "2 m ago". `new Date("2 m ago")` is NaN, so ProvenAt fell
+     * back to printing the string and the age slot read "age not recorded" —
+     * on the page whose whole job is to show what the props mean.
+     */
+    const ds = code(
+      path.join(COREEDGE_APP, "coreedge/design-system/DesignSystemClient.tsx"),
+    );
+    for (const value of [...ds.matchAll(/checkedAt="([^"]*)"/g)].map((m) => m[1] ?? "")) {
+      expect(Number.isNaN(new Date(value).getTime()), `checkedAt="${value}"`).toBe(false);
+    }
+  });
+});

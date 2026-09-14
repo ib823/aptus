@@ -323,3 +323,32 @@ describe("role gating never removes a place from the rail", () => {
     expect(src).toContain("places.map");
   });
 });
+
+describe("WhyTrace shows the one action and claims no prop it ignores", () => {
+  it("has no brokenAt prop, which it declared and never read", () => {
+    /*
+     * An unused prop is a claim: this one said the component positions a marker
+     * at the broken hop. It does not — `hops` arrives with the break already
+     * resolved — so every caller was passing a fact that changed nothing, and
+     * the next reader would have trusted it.
+     */
+    const src = code("WhyTrace.tsx");
+    expect(src).not.toMatch(/\bbrokenAt\b/);
+  });
+
+  it("renders A6's action when the caller supplies no control", () => {
+    // `whyExplanation` gives exactly one action per case. They were written,
+    // typed and tested, and appeared on no screen: the lane page passes no
+    // control, so the one thing to do next was invisible on the screen whose
+    // entire purpose is to name it.
+    const src = code("WhyTrace.tsx");
+    expect(src).toContain("why.action");
+    expect(src).toContain("WHY_NEXT_STEP");
+  });
+
+  it("treats the correlation id as optional and never invents one", () => {
+    const src = code("WhyTrace.tsx");
+    expect(src).toMatch(/correlationId\?:\s*string/);
+    expect(src).toContain("WHY_NO_RECORDED_CALL");
+  });
+});
