@@ -4,7 +4,13 @@ import type { ReactNode } from "react";
 
 import { NeedsYouRow } from "@/components/coreedge/NeedsYouRow";
 import { StatusChip } from "@/components/coreedge/StatusChip";
-import { EMPTY_STATES, HOME_SECTIONS, homeShowingOf, laneAge } from "@/lib/coreedge/copy";
+import {
+  DISABLED_REASONS,
+  EMPTY_STATES,
+  HOME_SECTIONS,
+  homeShowingOf,
+  laneAge,
+} from "@/lib/coreedge/copy";
 import { ENVIRONMENT_LABELS } from "@/lib/coreedge/lanes";
 import { LANE_STATUS_VOCABULARY, OWNER_LABELS } from "@/lib/coreedge/status-vocabulary";
 import { listLanes, listOpenRequests } from "@/lib/coreedge/queries";
@@ -138,7 +144,7 @@ export default async function CoreEdgeHome(): Promise<ReactNode> {
               }`}
               detail={
                 r.requestedById === user.id
-                  ? "You raised this, so a colleague has to approve it."
+                  ? DISABLED_REASONS.ownRequest
                   : `Requested by ${r.requestedByName ?? "a colleague"} · ${r.feedLabel}`
               }
               chips={<StatusChip status="inReview" />}

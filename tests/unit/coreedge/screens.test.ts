@@ -13,6 +13,13 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
 const COREEDGE_APP = path.resolve(ROOT, "src/app/(coreedge)");
+/*
+ * The client islands the screens delegate pressing to. A rule about what the
+ * review screen offers is now split across two files — the server component
+ * that decides what is blocked, and the island that renders the bar — so an
+ * assertion that reads only the page would pass by looking in the wrong place.
+ */
+const COREEDGE_ACTIONS = path.resolve(ROOT, "src/components/coreedge/actions");
 
 /** Every page and layout under the CoreEdge route group. */
 function screenFiles(): string[] {
@@ -209,11 +216,14 @@ describe("the screens do not invent facts", () => {
     const review = code(
       path.join(COREEDGE_APP, "coreedge/requests/[id]/page.tsx"),
     );
+    const bar = code(path.join(COREEDGE_ACTIONS, "ReviewDecision.tsx"));
     // The disabled reasons are A6's, verbatim, via copy.ts.
     expect(review).toContain("DISABLED_REASONS");
-    expect(review).toContain("ACTIONS.approve.button");
-    // And not retyped.
+    // The labels moved to the island that presses; the rule did not move.
+    expect(bar).toContain("ACTIONS.approve.button");
+    // And not retyped — in either half.
     expect(review).not.toContain("You asked for this, so a colleague");
+    expect(bar).not.toContain("You asked for this, so a colleague");
   });
 
   it("never renders an absence as a blank cell", () => {
@@ -241,8 +251,27 @@ describe("the review screen refuses self-approval visibly", () => {
      * or the product lacks a feature. A disabled one with its reason answers
      * both — and DecisionBar keeps it in the tab order.
      */
-    expect(review).toContain("disabledReason");
+    const bar = code(path.join(COREEDGE_ACTIONS, "ReviewDecision.tsx"));
+    expect(bar).toContain("disabledReason");
     expect(review).toContain("DISABLED_REASONS.ownRequest");
+  });
+
+  it("gates on the same function the route runs", () => {
+    /*
+     * The reason rendered BEFORE the click and the reason returned AFTER it
+     * have to be one sentence from one source. The screen used to reach its own
+     * verdict inline, which is how two doors on the same rule drift apart —
+     * and there was no route to drift from until now.
+     */
+    expect(review).toContain("refuseDecision");
+  });
+
+  it("does not press from the server component", () => {
+    // The page loads the grant and builds the checks; the island owns pressing.
+    // Moving the whole page to the client to make four buttons work would put
+    // the grant query in the browser.
+    expect(review).not.toContain('"use client"');
+    expect(review).toContain("<ReviewDecision");
   });
 
   it("does not offer sandbox-only approval (DECISION D2)", () => {

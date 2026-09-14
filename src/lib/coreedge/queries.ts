@@ -749,6 +749,8 @@ export async function listCatalogue(organizationId: string): Promise<CatalogueEn
 /** One issued key, as the keys screen lists it. Never the key itself. */
 export interface KeyRow {
   readonly id: string;
+  /** The app this key belongs to. Needed to send a claim link for it. */
+  readonly solutionId: string;
   readonly appName: string;
   readonly appSlug: string;
   readonly environment: LaneEnvironment | null;
@@ -797,6 +799,7 @@ export async function listKeys(organizationId: string): Promise<KeyRow[]> {
     const solution = solutionById.get(c.solutionId);
     return {
       id: c.id,
+      solutionId: c.solutionId,
       appName: solution?.name ?? c.solutionId,
       appSlug: solution?.slug ?? "",
       environment: parseLaneEnvironment(c.environment),
@@ -1227,4 +1230,45 @@ export async function listLaneTraffic(
     });
   }
   return byLane;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * The link that has been sent but not opened
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/** A claim link that was sent and has not yet minted a key. */
+export interface PendingClaimLink {
+  readonly expiresAt: Date;
+  /** True once the window has closed. The link mints nothing after this. */
+  readonly expired: boolean;
+}
+
+/**
+ * The live claim link for one lane, if one was sent and never opened.
+ *
+ * THIS IS WHAT SEPARATES TWO SENTENCES THAT LOOK THE SAME. A lane with no key
+ * reads "No key · collect or renew the key" — go and send one. A lane whose
+ * link was sent and ran out reads "Key ready · link expired" — the sending
+ * already happened, the recipient did not open it in time, and the fix is
+ * "Send a new link" rather than chasing the app owner for a key they were never
+ * able to collect. Without this query both cases show the first sentence, and
+ * the second person is sent to do something they already did.
+ *
+ * A CLAIMED LINK IS NOT PENDING, and neither is a revoked one: `createClaimLink`
+ * revokes the previous link when a new one is sent, so the newest unclaimed,
+ * unrevoked row is the only one that can still be opened.
+ */
+export async function pendingClaimLink(
+  organizationId: string,
+  solutionId: string,
+  environment: LaneEnvironment,
+  now: Date = new Date(),
+): Promise<PendingClaimLink | null> {
+  const link = await prisma.keyClaimLink.findFirst({
+    where: { organizationId, solutionId, environment, claimedAt: null, revokedAt: null },
+    select: { expiresAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+  if (link === null) return null;
+  return { expiresAt: link.expiresAt, expired: link.expiresAt.getTime() <= now.getTime() };
 }

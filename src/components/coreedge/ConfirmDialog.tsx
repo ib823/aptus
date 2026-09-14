@@ -57,10 +57,66 @@ export function ConfirmDialog({
   const [reason, setReason] = useState("");
   const [typed, setTyped] = useState("");
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  /*
+   * The control that opened the dialog, remembered at open so focus can be put
+   * back on it at close. Without this, dismissing returns focus to <body> and a
+   * keyboard user restarts from the top of the page — having pressed Escape
+   * precisely because they did not want to move.
+   */
+  const openerRef = useRef<Element | null>(null);
 
   useEffect(() => {
-    if (open) headingRef.current?.focus();
+    if (!open) return;
+    openerRef.current = document.activeElement;
+    headingRef.current?.focus();
+    return () => {
+      const opener = openerRef.current;
+      if (opener instanceof HTMLElement) opener.focus();
+    };
   }, [open]);
+
+  /*
+   * ESCAPE, AND A REAL FOCUS TRAP. `aria-modal="true"` was asserted here from
+   * the start and nothing enforced it: Tab walked straight out into the page
+   * behind, and the only way out was the Cancel button. A dialog that announces
+   * itself as modal and is not is worse than one that never claimed to be —
+   * a screen-reader user is told the rest of the page is inert while their
+   * focus is standing in it.
+   *
+   * Escape cancels rather than confirms, always, including while submitting:
+   * the escape hatch on a destructive confirmation must never be the thing that
+   * fires it.
+   */
+  useEffect(() => {
+    if (!open) return undefined;
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onCancel();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const panel = panelRef.current;
+      if (panel === null) return;
+      const focusable = panel.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input, textarea, select, [tabindex]:not([tabindex="-1"])',
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (first === undefined || last === undefined) return;
+      // Wrap at both ends, so Tab and Shift+Tab stay inside the panel.
+      if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [open, onCancel]);
 
   if (!open) return null;
 
@@ -79,6 +135,7 @@ export function ConfirmDialog({
 
   return (
     <div
+      ref={panelRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby={`${id}-title`}

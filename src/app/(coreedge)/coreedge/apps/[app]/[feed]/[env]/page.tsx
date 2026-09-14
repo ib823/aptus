@@ -5,7 +5,12 @@ import type { ReactNode } from "react";
 import { GateStrip } from "@/components/coreedge/GateStrip";
 import { StatusChip } from "@/components/coreedge/StatusChip";
 import { WhyTrace } from "@/components/coreedge/WhyTrace";
+import { RecheckLane } from "@/components/coreedge/actions/RecheckLane";
+import { SendClaimLink } from "@/components/coreedge/actions/SendClaimLink";
+import { refuseRecheck, refuseSendClaimLink } from "@/lib/coreedge/authz";
 import {
+  CLAIM_LINK_COPY,
+  DISABLED_REASONS,
   HOPS_AFTER_THE_BREAK,
   laneAge,
   UNCHECKED_EXPLANATION,
@@ -18,7 +23,7 @@ import {
   OWNER_LABELS,
   type LaneStatus,
 } from "@/lib/coreedge/status-vocabulary";
-import { lastLaneCall, listLanes } from "@/lib/coreedge/queries";
+import { lastLaneCall, listLanes, pendingClaimLink } from "@/lib/coreedge/queries";
 import { getCurrentUser } from "@/lib/auth/session";
 
 import { CoreEdgeShell } from "../../../../CoreEdgeShell";
@@ -105,6 +110,35 @@ export default async function LaneDetail({
   const hops = lane.verdict.hops;
 
   const lastCall = await lastLaneCall(user.organizationId, lane.appId, lane.feedId, environment);
+  const link = await pendingClaimLink(user.organizationId, lane.appId, environment, now);
+
+  /*
+   * THE TWO VERBS THIS SCREEN OFFERS, and why each is offered at all.
+   *
+   * Until now this page had none: every CoreEdge control rendered disabled with
+   * "This action isn't wired up yet", so a lane reading "No key · collect or
+   * renew the key" gave the reader the instruction and no way to follow it.
+   *
+   * The gates come from the same functions the routes run, so the reason shown
+   * before the press and the reason returned after it are one sentence from one
+   * source.
+   */
+  const sendRefusal = refuseSendClaimLink(user.role);
+  const recheckRefusal = refuseRecheck(user.role);
+
+  const keyHop = hops.find((h) => h.hop === "key");
+  /*
+   * Offer the link where the key is what stopped the chain, or where one is
+   * already out — sending a link on a lane whose key works would revoke a
+   * working credential to solve a problem nobody has.
+   */
+  const offerLink = keyHop?.state === "broken" || link !== null;
+  const sendBlockedBecause =
+    lane.appStatus === "retired"
+      ? CLAIM_LINK_COPY.appRetired
+      : sendRefusal === null
+        ? null
+        : DISABLED_REASONS[sendRefusal];
 
   return (
     <CoreEdgeShell
@@ -190,6 +224,47 @@ export default async function LaneDetail({
           {...(lastCall === null ? {} : { correlationId: lastCall.correlationId })}
         />
       )}
+
+      {/*
+        THE ACTIONS, and they are at the bottom on purpose: this screen exists to
+        explain, and a reader who has not yet read what broke cannot choose
+        between sending a key and re-checking.
+      */}
+      <section aria-label="What you can do" className="flex flex-wrap items-start gap-6">
+        {offerLink ? (
+          <span className="flex flex-col items-start gap-1">
+            {link === null ? null : (
+              <span className="text-sm text-ink-soft">
+                {/*
+                  THE DESIGN'S EXPIRED CASE. "No key" and "link expired" look the
+                  same from the lane's side and have different fixes: the first
+                  needs a link sent, the second needs a NEW one because the
+                  window closed before the app owner opened it.
+                */}
+                {link.expired ? CLAIM_LINK_COPY.laneLinkExpired : CLAIM_LINK_COPY.linkSentNotOpened}
+              </span>
+            )}
+            <SendClaimLink
+              solutionId={lane.appId}
+              environment={environment}
+              expired={link?.expired ?? false}
+              {...(sendBlockedBecause === null ? {} : { blockedBecause: sendBlockedBecause })}
+              idPrefix="lane"
+            />
+            {link === null || link.expired || sendBlockedBecause !== null ? null : (
+              <span className="text-xs text-ink-muted">{CLAIM_LINK_COPY.sendingAgainRevokes}</span>
+            )}
+          </span>
+        ) : null}
+
+        <RecheckLane
+          solutionId={lane.appId}
+          interfaceId={lane.feedId}
+          environment={environment}
+          {...(recheckRefusal === null ? {} : { blockedBecause: DISABLED_REASONS[recheckRefusal] })}
+          idPrefix="lane"
+        />
+      </section>
     </CoreEdgeShell>
   );
 }

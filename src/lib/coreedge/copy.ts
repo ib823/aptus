@@ -305,6 +305,50 @@ export const WHY_NO_RECORDED_CALL =
   "No call has been recorded for this lane, so there is no reference to quote.";
 
 /* ─────────────────────────────────────────────────────────────────────────────
+ * Sending a key
+ *
+ * These came off COPY_BLOCKED_ON_BACKEND in PR-5 — the backend was finished
+ * then. What was missing until now was a caller, so the words shipped and the
+ * button did not.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export const CLAIM_LINK_COPY = {
+  send: "Send a link",
+  /** The design's expired case: the lane reads "Key ready · link expired". */
+  sendAgain: "Send a new link",
+  laneLinkExpired: "Key ready · link expired",
+  /*
+   * Says "copy it now" because it means it: the link is never stored — the row
+   * holds only its hash — so this is the only time it can be read. Asking again
+   * issues a new one and revokes this one.
+   */
+  linkReady: "One-time link, valid 72 hours. Copy it now — it is not stored.",
+  /*
+   * The OTHER pending state, and it needs its own sentence for the same reason
+   * the expired one does: a lane whose link is still live has already been
+   * acted on, and someone told "collect or renew the key" would send a second
+   * link — which revokes the first, so the app owner's link stops working the
+   * moment a colleague tries to help.
+   */
+  linkSentNotOpened: "A link has been sent and not opened yet.",
+  /** Sending again is safe, and this says what it costs. */
+  sendingAgainRevokes: "Sending a new link revokes the one already out.",
+  /** A retired app's keys are refused, so a link for it would deliver nothing. */
+  appRetired: "This app is retired, so a key for it would not work.",
+} as const;
+
+/** The one action the re-check offers, and what it says while it runs. */
+export const RECHECK_COPY = {
+  running: "Checking…",
+  /** A skip is a result, not a failure — each has its own words already. */
+  skipped: {
+    noEntitySet: "Nothing to check: this feed names no dataset.",
+    noConnection: "Nothing to check: no SAP system is connected for this environment.",
+    unreadable: "Could not check: the SAP system's secret would not open.",
+  },
+} as const;
+
+/* ─────────────────────────────────────────────────────────────────────────────
  * Empty states
  * ────────────────────────────────────────────────────────────────────────── */
 

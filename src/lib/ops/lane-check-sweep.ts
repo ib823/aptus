@@ -236,6 +236,71 @@ export async function sweepLaneChecks(now: Date = new Date()): Promise<LaneSweep
   return result;
 }
 
+/**
+ * Re-check ONE lane, now, because a person asked.
+ *
+ * THE SAME WORK THE SWEEP DOES, not a second implementation of it. It resolves
+ * the connection through the same resolver and calls the same `checkOneLane`,
+ * so a lane re-checked by hand and a lane re-checked at 04:30 write the same
+ * two rows and produce the same status. A "quick" variant that probed without
+ * reading would re-introduce the reachable-means-readable overclaim this whole
+ * module exists to remove.
+ *
+ * THE REFUSALS ARE THE SWEEP'S OWN SKIPS, named. A caller gets back which of
+ * them applied rather than a bare failure, because the screen already has words
+ * for each: a feed with no dataset has nothing to read, and no amount of
+ * re-checking will change that.
+ */
+export type LaneRecheckOutcome =
+  | { readonly ok: true; readonly readStatus: string; readonly checkedAt: Date }
+  | { readonly ok: false; readonly skipped: "noEntitySet" | "noConnection" | "unreadable" };
+
+export async function recheckOneLane(
+  organizationId: string,
+  solutionId: string,
+  interfaceId: string,
+  environment: string,
+  now: Date = new Date(),
+): Promise<LaneRecheckOutcome> {
+  // Scoped to one lane, so no cross-tenant permit is taken out: unlike the
+  // fleet sweep, this read belongs to the caller's own organization.
+  const feed = await prisma.interface.findFirst({
+    where: { id: interfaceId, solutionId, organizationId },
+    select: { id: true, sapProduct: true, externalId: true, entitySet: true },
+  });
+  if (feed === null || feed.entitySet === null || feed.entitySet === "") {
+    return { ok: false, skipped: "noEntitySet" };
+  }
+
+  let resolved: ResolvedSapConnection[];
+  try {
+    resolved = await resolveSapConnections(organizationId, feed.sapProduct);
+  } catch {
+    return { ok: false, skipped: "unreadable" };
+  }
+
+  const target: LaneTarget = {
+    organizationId,
+    solutionId,
+    interfaceId: feed.id,
+    environment,
+    product: feed.sapProduct,
+    externalId: feed.externalId,
+    entitySet: feed.entitySet,
+  };
+
+  const connection = resolved.find((c) => parseLaneEnvironment(c.environment ?? null) === environment);
+  if (connection === undefined) return { ok: false, skipped: "noConnection" };
+
+  const tally = { checked: 0, byReadStatus: {} as Record<string, number> };
+  await checkOneLane(target, connection, now, tally);
+
+  // `checkOneLane` records exactly one read status; naming it back to the
+  // caller is what lets the screen say what changed without a second query.
+  const readStatus = Object.keys(tally.byReadStatus)[0] ?? "ERROR";
+  return { ok: true, readStatus, checkedAt: now };
+}
+
 async function checkOneLane(
   target: LaneTarget,
   connection: ResolvedSapConnection,

@@ -86,6 +86,15 @@ export const WORKBENCH_PATHS = [
   '/api/discovery/',    // neutral-discovery REST API
   '/api/tobe/',         // To-Be Process Pack REST API (generate / export)
   '/api/studio/',       // CoreEdge Console REST API
+  /*
+   * The redesigned console's write paths. API routes already fall through the
+   * WORKBENCH_ONLY branch unconditionally, so this is not what makes them
+   * reachable — it is here so the allow-list stays a complete description of
+   * the surfaces this deployment serves, alongside '/api/studio/' and
+   * '/api/ops/'. The day that fall-through is narrowed, a missing line here is
+   * exactly the silent failure this file's header describes four times over.
+   */
+  '/api/coreedge/',     // CoreEdge Console — the redesign's four write verbs
   '/help',              // CoreEdge Console manual — not role-gated, see (help)/layout
   '/api/ops/',          // CoreEdge Console — Operations Center read endpoints
   '/api/health',        // probes
