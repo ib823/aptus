@@ -69,8 +69,19 @@ test.describe("CoreEdge · every route renders", () => {
        * Session-gated, so an unauthenticated run would land on the sign-in page
        * — which is itself a 200 and would pass the assertion above for entirely
        * the wrong reason. The rail only renders inside the console.
+       *
+       * `.first()` because the count is not one everywhere, and both cases are
+       * correct. CoreEdgeShell renders the rail twice — a sidebar and a tab bar
+       * — and at this viewport the tab bar is `sm:hidden`, so `display: none`
+       * keeps it out of the accessibility tree and exactly one matches. But
+       * /coreedge/design-system uses no shell at all: it is a showcase, and it
+       * renders BOTH Rail variants as visible demos. Asserting a count of one
+       * would fail there for being a design system, which is not a defect.
+       * Presence is what this assertion is for.
        */
-      await expect(page.getByRole("navigation", { name: "CoreEdge" })).toBeAttached();
+      await expect(
+        page.getByRole("navigation", { name: "CoreEdge" }).first(),
+      ).toBeAttached();
 
       /*
        * And the organization must be attached, or we are reading the early
